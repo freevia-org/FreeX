@@ -95,11 +95,18 @@ public sealed class MultilevelListDialogVisualParityTests
             "tools",
             "FreeW.DialogVisualHarness.Avalonia",
             "Program.cs"));
+        var catalog = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "tools",
+            "FreeW.DialogVisualHarness",
+            "FreeWDialogEvidenceCatalog.cs"));
 
-        source.Should().Contain(
-            "scenario.RouteId is \"accessibility-report\" or \"font\" or \"paragraph\" or \"multilevel-list\" or \"paste-special\" or \"style\" or \"manage-styles\"");
-        source.Should().Contain("if (scenario.RouteId == \"multilevel-list\")");
-        source.Should().Contain("clientWidth++");
+        source.Should().Contain("plan.UseWpfAuthoritySize");
+        source.Should().Contain("plan.ClientWidthAdjustment");
+        source.Should().Contain("clientWidth += plan.ClientWidthAdjustment");
+        catalog.Should().Contain("Pair(\"multilevel-list\", \"MultilevelListDialog\"");
+        catalog.Should().Contain("avaloniaClientWidthAdjustment: 1");
     }
 
     // AvaloniaDialogButtonContent wraps mnemonic-bearing text ("_OK") in an AccessText so Avalonia's

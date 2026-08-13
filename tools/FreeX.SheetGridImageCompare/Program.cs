@@ -10,12 +10,14 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeX.App.Presentation.Filtering;
-using FreeX.App.UI;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Sparklines;
+using FreeX.App.UI;
 using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using Free.ToolsShared;
 using FreeX.ToolsShared;
 using FreeX.ToolsShared.Wpf;
 using static FreeX.ToolsShared.Wpf.WpfImageDiff;
@@ -480,9 +482,9 @@ internal static class Program
         // Surface native slicers/timelines anchored on this sheet, mirroring MainWindow.Viewport: resolve
         // each slicer's available items (table-column distinct values / pivot cache shared items) into
         // AvailableItems, then hand the visible set to the GridView so it draws the slicer boxes.
-        var nativeVisualFilters = FreeX.App.Host.SlicerTimelinePlanner.GetNativeVisualFilters(workbook, sheet);
+        var nativeVisualFilters = FreeX.App.Presentation.SlicerTimeline.SlicerTimelinePanePlanner.GetNativeVisualFilters(workbook, sheet);
         if (nativeVisualFilters.Slicers.Count > 0)
-            FreeX.Core.Commands.SlicerItemResolver.PopulateAvailableItems(workbook);
+            FreeX.App.Presentation.SlicerTimeline.SlicerItemResolver.PopulateAvailableItems(workbook);
 
         // Step 3: Configure GridView
         var grid = new GridView
@@ -520,10 +522,8 @@ internal static class Program
             AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
                 ? autoFilterRange
                 : null;
-        grid.PivotHeaderDropdowns = FreeX.App.Host.PivotHeaderDropdownPlanner.BuildTargets(workbook, sheet)
-            .Select(target => new PivotHeaderDropdownButton(target.HeaderCell, target.IsActive))
-            .ToArray();
-        grid.PivotRowLabelAdornments = FreeX.App.Host.PivotRowLabelAdornmentPlanner.BuildAdornments(workbook, sheet);
+        grid.PivotHeaderDropdowns = PivotGridAdornmentPlanner.BuildHeaderTargets(workbook, sheet);
+        grid.PivotRowLabelAdornments = PivotGridAdornmentPlanner.BuildRowLabelAdornments(workbook, sheet);
 
         // Step 4: Off-screen layout pass
         grid.Measure(new Size(viewW, viewH));
@@ -598,7 +598,7 @@ internal static class Program
         ref double totalColWidth,
         ref double totalRowHeight)
     {
-        var nativeFilters = FreeX.App.Host.SlicerTimelinePlanner.GetNativeVisualFilters(workbook, sheet);
+        var nativeFilters = FreeX.App.Presentation.SlicerTimeline.SlicerTimelinePanePlanner.GetNativeVisualFilters(workbook, sheet);
         bool hasObjects =
             sheet.Charts.Count > 0 ||
             sheet.Pictures.Count > 0 ||
@@ -863,7 +863,7 @@ internal static class Program
         uint endCol = usedRange?.End.Col ?? 1;
         var includedNativeFilters = false;
 
-        var nativeFilters = FreeX.App.Host.SlicerTimelinePlanner.GetNativeVisualFilters(workbook, sheet);
+        var nativeFilters = FreeX.App.Presentation.SlicerTimeline.SlicerTimelinePanePlanner.GetNativeVisualFilters(workbook, sheet);
         foreach (var slicer in nativeFilters.Slicers)
             if (slicer.DrawingAnchor is { } anchor)
                 IncludeDrawingAnchorCells(sheet, anchor, ref endRow, ref endCol, ref includedNativeFilters);
@@ -1802,14 +1802,14 @@ internal static class Program
 
     private static string DescribePivotDropdownTargets(Workbook workbook, Sheet sheet)
     {
-        var targets = FreeX.App.Host.PivotHeaderDropdownPlanner.BuildTargets(workbook, sheet);
+        var targets = PivotGridAdornmentPlanner.BuildHeaderTargets(workbook, sheet);
         if (targets.Count == 0)
             return "";
 
         return string.Join("; ", targets.Select(target =>
         {
             var active = target.IsActive ? "*" : "";
-            return $"{target.Axis}:{ToA1(target.HeaderCell)}:{target.FieldCaption}{active}";
+            return $"{target.MenuTarget.Area}:{ToA1(target.HeaderCell)}:{target.MenuTarget.FieldCaption}{active}";
         }));
     }
 

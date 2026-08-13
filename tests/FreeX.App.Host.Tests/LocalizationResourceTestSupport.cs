@@ -14,6 +14,10 @@ internal static class LocalizationResourceTestSupport
     public static Dictionary<string, string> ReadResxValues(string fileName) =>
         ResxResourceTestSupport.ReadResxValues(ResourceDirectory, fileName);
 
+    public static Dictionary<string, string> ReadEffectiveNeutralValues() =>
+        UiText.GetNeutralResourceKeys()
+            .ToDictionary(key => key, UiText.GetNeutral, StringComparer.Ordinal);
+
     public static HashSet<string> CompositePlaceholderTokens(string value) =>
         ResxResourceTestSupport.CompositePlaceholderTokens(value);
 

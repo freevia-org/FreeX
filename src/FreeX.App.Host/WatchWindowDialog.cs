@@ -16,7 +16,7 @@ public sealed class WatchWindowDialog : Window
     private readonly Func<string> _getSelectionText;
     private readonly Action<CellAddress> _navigateTo;
     private readonly Action<CellAddress> _removeWatch;
-    private readonly ObservableCollection<WatchWindowRow> _rows = [];
+    private readonly ObservableCollection<WatchWindowRowPlan> _rows = [];
     private readonly ListView _listView;
     private readonly Button _deleteButton;
 
@@ -122,12 +122,12 @@ public sealed class WatchWindowDialog : Window
         {
             Columns =
             {
-                new GridViewColumn { Header = UiText.Get("WatchWindow_Book"), Width = WatchWindowDialogPlanner.BookColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Book)) },
-                new GridViewColumn { Header = UiText.Get("WatchWindow_Sheet"), Width = WatchWindowDialogPlanner.SheetColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Sheet)) },
-                new GridViewColumn { Header = UiText.Get("WatchWindow_Name"), Width = WatchWindowDialogPlanner.NameColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Name)) },
-                new GridViewColumn { Header = UiText.Get("WatchWindow_Cell"), Width = WatchWindowDialogPlanner.CellColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Cell)) },
-                new GridViewColumn { Header = UiText.Get("WatchWindow_Value"), Width = WatchWindowDialogPlanner.ValueColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Value)) },
-                new GridViewColumn { Header = UiText.Get("WatchWindow_Formula"), Width = WatchWindowDialogPlanner.FormulaColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Formula)) }
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Book"), Width = WatchWindowDialogPlanner.BookColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRowPlan.Book)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Sheet"), Width = WatchWindowDialogPlanner.SheetColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRowPlan.Sheet)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Name"), Width = WatchWindowDialogPlanner.NameColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRowPlan.Name)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Cell"), Width = WatchWindowDialogPlanner.CellColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRowPlan.Cell)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Value"), Width = WatchWindowDialogPlanner.ValueColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRowPlan.Value)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Formula"), Width = WatchWindowDialogPlanner.FormulaColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRowPlan.Formula)) }
             }
         };
         listPanel.Children.Add(_listView);
@@ -146,21 +146,14 @@ public sealed class WatchWindowDialog : Window
         try
         {
             var selectedAddresses = _listView.SelectedItems
-                .OfType<WatchWindowRow>()
+                .OfType<WatchWindowRowPlan>()
                 .Select(row => row.Address)
                 .ToHashSet();
             _rows.Clear();
-            foreach (var entry in _getEntries())
-            {
-                _rows.Add(new WatchWindowRow(
-                    UiText.Get("WatchWindow_ThisWorkbook"),
-                    entry.SheetName,
-                    "",
-                    entry.Address.ToA1(),
-                    entry.ValueText,
-                    entry.FormulaText ?? "",
-                    entry.Address));
-            }
+            foreach (var row in WatchWindowDialogPlanner.CreateRows(
+                         _getEntries(),
+                         UiText.Get("WatchWindow_ThisWorkbook")))
+                _rows.Add(row);
             RestoreSelection(selectedAddresses);
             UpdateDeleteButtonState();
         }
@@ -182,9 +175,9 @@ public sealed class WatchWindowDialog : Window
     private void DeleteSelectedWatch()
     {
         var selectedIndex = _listView.SelectedIndex;
-        var fallbackAddress = (_listView.SelectedItem as WatchWindowRow)?.Address;
+        var fallbackAddress = (_listView.SelectedItem as WatchWindowRowPlan)?.Address;
         var targets = WatchWindowService.GetDeleteTargets(
-            _listView.SelectedItems.OfType<WatchWindowRow>().Select(row => row.Address),
+            _listView.SelectedItems.OfType<WatchWindowRowPlan>().Select(row => row.Address),
             fallbackAddress);
         if (targets.Count == 0)
             return;
@@ -200,7 +193,7 @@ public sealed class WatchWindowDialog : Window
 
     private void ListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (_listView.SelectedItem is WatchWindowRow row)
+        if (_listView.SelectedItem is WatchWindowRowPlan row)
         {
             _navigateTo(row.Address);
             e.Handled = true;
@@ -229,13 +222,4 @@ public sealed class WatchWindowDialog : Window
         _listView.Focus();
         Keyboard.Focus(_listView);
     }
-
-    private sealed record WatchWindowRow(
-        string Book,
-        string Sheet,
-        string Name,
-        string Cell,
-        string Value,
-        string Formula,
-        CellAddress Address);
 }

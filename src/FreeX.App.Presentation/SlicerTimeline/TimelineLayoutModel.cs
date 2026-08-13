@@ -71,6 +71,8 @@ public sealed record TimelineLayoutModel(
     bool HasActiveFilter,
     string DateLabel,
     TimelineGranularity Granularity,
+    string GranularityLabel,
+    string ClearFilterGlyph,
     LayoutRect Bounds,
     LayoutRect HeaderRect,
     LayoutRect CaptionRect,
@@ -103,6 +105,8 @@ public sealed record TimelineLayoutModel(
 /// </summary>
 public static class TimelineLayoutBuilder
 {
+    public const string ClearFilterGlyph = "\u00D7";
+
     // Faithful to the source desktop renderer's timeline math + new structural rows.
     private const double HeaderMaxHeight = 22;
     private const double DateLabelTopInset = 22;
@@ -254,6 +258,8 @@ public static class TimelineLayoutBuilder
             HasActiveFilter: hasActiveFilter,
             DateLabel: FormatDateLabel(timeline, granularity),
             Granularity: granularity,
+            GranularityLabel: FormatGranularityLabel(granularity),
+            ClearFilterGlyph: ClearFilterGlyph,
             Bounds: bounds,
             HeaderRect: headerRect,
             CaptionRect: captionRect,
@@ -278,6 +284,16 @@ public static class TimelineLayoutBuilder
             GranularityDropdownRect: granDropdownRect,
             ClearFilterIconRect: clearFilterRect);
     }
+
+    public static string FormatGranularityLabel(TimelineGranularity granularity) =>
+        granularity switch
+        {
+            TimelineGranularity.Year => "YEARS \u25BE",
+            TimelineGranularity.Quarter => "QUARTERS \u25BE",
+            TimelineGranularity.Month => "MONTHS \u25BE",
+            TimelineGranularity.Day => "DAYS \u25BE",
+            _ => throw new ArgumentOutOfRangeException(nameof(granularity), granularity, null)
+        };
 
     // Computes the header chrome rects for the timeline:
     // - GranularityDropdownRect: "MONTHS ▾" label area, right-of-center in the header.

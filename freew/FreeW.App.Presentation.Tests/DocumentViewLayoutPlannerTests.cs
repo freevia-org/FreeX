@@ -1511,7 +1511,11 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         avaloniaSource.Should().NotContain("DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(");
         avaloniaSource.Should().NotContain("DocumentViewLayoutPlanner.BuildTopAndBottomWrapExclusionBottom(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingHandleRects(");
-        avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingResizeRect(");
+        avaloniaSource.Should().Contain("DocumentFloatingDragSession _floatingDrag = new();");
+        avaloniaSource.Should().NotContain("DocumentViewLayoutPlanner.BuildFloatingMoveRect(");
+        avaloniaSource.Should().NotContain("DocumentViewLayoutPlanner.BuildFloatingResizeRect(");
+        avaloniaSource.Should().NotContain("DocumentViewLayoutPlanner.BuildFloatingGroupChildMoveRectThroughGroupChain(");
+        avaloniaSource.Should().NotContain("DocumentViewLayoutPlanner.BuildFloatingGroupChildResizeRectThroughGroupChain(");
         avaloniaSource.Should().Contain("BuildGridlines(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildRulerTicks(");
         avaloniaSource.Should().Contain("DrawingObjectVisualPlanner.BuildVisualPlan(");

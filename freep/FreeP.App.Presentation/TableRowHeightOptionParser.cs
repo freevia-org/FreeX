@@ -6,14 +6,21 @@ namespace FreeP.App.Compositor;
 public static class TableRowHeightOptionParser
 {
     private const long EmuPerInch = 914400;
+    private const long MaximumHeightEmu = 12 * EmuPerInch;
 
-    public static bool TryParse(string? value, out long heightEmu)
+    public static bool TryParse(object? value, out long heightEmu)
     {
         heightEmu = 0;
-        if (string.IsNullOrWhiteSpace(value))
+        if (FreePRibbonChoiceCatalog.TryResolve(
+                value,
+                FreePRibbonChoiceCatalog.TableRowHeightChoices,
+                out heightEmu))
+            return heightEmu is >= 0 and <= MaximumHeightEmu;
+
+        if (value is not string text || string.IsNullOrWhiteSpace(text))
             return false;
 
-        var setting = value.Trim();
+        var setting = text.Trim();
         if (setting.Equals("automatic", StringComparison.OrdinalIgnoreCase) ||
             setting.Equals("auto", StringComparison.OrdinalIgnoreCase) ||
             setting.Equals("default", StringComparison.OrdinalIgnoreCase))

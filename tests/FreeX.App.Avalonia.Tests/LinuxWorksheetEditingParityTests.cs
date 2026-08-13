@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using FluentAssertions;
@@ -46,7 +47,7 @@ public sealed class LinuxWorksheetEditingParityTests
             window.Measure(new Size(1120, 720));
             window.Arrange(new Rect(0, 0, 1120, 720));
 
-            var buttons = window.GetVisualDescendants()
+            var buttons = window.RibbonControlForTest!.GetLogicalDescendants()
                 .OfType<Button>()
                 .Where(button => button.Tag is "Fill Color" or "Font Color")
                 .ToDictionary(button => (string)button.Tag!);
@@ -270,12 +271,6 @@ public sealed class LinuxWorksheetEditingParityTests
     private static string RepoFile(params string[] parts) =>
         Path.Combine(FindRepoRoot(), Path.Combine(parts));
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FreeX.slnx")))
-            dir = dir.Parent;
-
-        return dir?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
-    }
+    private static string FindRepoRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

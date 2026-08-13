@@ -449,95 +449,13 @@ internal static class XlsxDataValidationNativeMetadataMapper
         var ranges = new List<GridRange>();
         foreach (var reference in sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            if (!TryParseSqrefToken(reference, sheetId, out var range))
+            if (!XlsxSqrefParser.TryParseRangeToken(reference, sheetId, out var range))
                 throw new FormatException($"Invalid dataValidation sqref token: '{reference}'");
 
             ranges.Add(range);
         }
 
         return ranges;
-    }
-
-    /// <summary>
-    /// Parses a single sqref token: a single cell ("A1"), a bounded range ("A1:C10"), or a
-    /// collapsed whole-column ("A:A") / whole-row ("1:1") reference (R100). Plain
-    /// <see cref="CellAddress.Parse"/>/<see cref="GridRange.Parse"/> always require both a column
-    /// and a row on each side and reject that form outright, which used to throw here and (via the
-    /// caller's catch-and-skip in <see cref="Read"/>) silently drop native-attribute preservation
-    /// (e.g. xr:uid, imeMode) for any whole-column/row data validation.
-    ///
-    /// Mirrors <see cref="XlsxAllowEditRangeMapper"/> and <see cref="XlsxX14DataValidationReader"/>'s
-    /// identical whole-column/row sqref handling.
-    /// </summary>
-    private static bool TryParseSqrefToken(string token, SheetId sheetId, out GridRange range)
-    {
-        range = default;
-        var parts = token.Split(':');
-        if (parts.Length == 1)
-        {
-            if (!CellAddress.TryParse(parts[0], sheetId, out var address))
-                return false;
-
-            range = new GridRange(address, address);
-            return true;
-        }
-
-        if (parts.Length != 2)
-            return false;
-
-        if (CellAddress.TryParse(parts[0], sheetId, out var start) &&
-            CellAddress.TryParse(parts[1], sheetId, out var end))
-        {
-            range = new GridRange(start, end);
-            return true;
-        }
-
-        return TryParseWholeColumnOrRowSqrefRange(parts[0], parts[1], sheetId, out range);
-    }
-
-    private static bool TryParseWholeColumnOrRowSqrefRange(
-        string startToken,
-        string endToken,
-        SheetId sheetId,
-        out GridRange range)
-    {
-        range = default;
-
-        var startCol = CellAddress.ColumnNameToNumber(startToken);
-        var endCol = CellAddress.ColumnNameToNumber(endToken);
-        if (startCol is > 0 and <= CellAddress.MaxCol && endCol is > 0 and <= CellAddress.MaxCol)
-        {
-            range = new GridRange(
-                new CellAddress(sheetId, 1, startCol),
-                new CellAddress(sheetId, CellAddress.MaxRow, endCol));
-            return true;
-        }
-
-        if (IsAsciiDigitsOnly(startToken) && IsAsciiDigitsOnly(endToken) &&
-            uint.TryParse(startToken, out var startRow) && uint.TryParse(endToken, out var endRow) &&
-            startRow is > 0 and <= CellAddress.MaxRow && endRow is > 0 and <= CellAddress.MaxRow)
-        {
-            range = new GridRange(
-                new CellAddress(sheetId, startRow, 1),
-                new CellAddress(sheetId, endRow, CellAddress.MaxCol));
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool IsAsciiDigitsOnly(string value)
-    {
-        if (value.Length == 0)
-            return false;
-
-        foreach (var c in value)
-        {
-            if (c is < '0' or > '9')
-                return false;
-        }
-
-        return true;
     }
 
     private static string ToSqref(DataValidation validation)

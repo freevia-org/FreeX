@@ -34,38 +34,51 @@ public sealed partial class GridViewRenderPerformanceTests
         var calculateLayout = source[
             source.IndexOf("public static SplitDividerLayout CalculateSplitDividerLayout", StringComparison.Ordinal)..
             source.IndexOf("public static SplitPaneScrollbarChrome CalculateSplitPaneScrollbarChrome", StringComparison.Ordinal)];
+        var sharedPlanner = WorkspaceFileLocator.ReadAllTextWithFailureMessage(
+            "Unable to locate workspace file",
+            "src",
+            "FreeX.App.Presentation",
+            "GridInteraction",
+            "SplitPanePointerPlanner.cs");
 
-        calculateLayout.Should().Contain("FindRowMetric(viewport.RowMetrics, splitRow)");
-        calculateLayout.Should().Contain("FindColMetric(viewport.ColMetrics, splitColumn)");
-        calculateLayout.Should().Contain("SumRowHeights(pinnedRows)");
-        calculateLayout.Should().Contain("SumColumnWidths(pinnedColumns)");
+        calculateLayout.Should().Contain("SplitPanePointerPlanner.CalculateDividerLayout(");
+        sharedPlanner.Should().Contain("FindRowMetric(viewport.RowMetrics, splitRow)");
+        sharedPlanner.Should().Contain("FindColumnMetric(viewport.ColMetrics, splitColumn)");
+        sharedPlanner.Should().Contain("SumRowHeights(pinnedRows)");
+        sharedPlanner.Should().Contain("SumColumnWidths(pinnedColumns)");
         calculateLayout.Should().NotContain("FirstOrDefault");
         calculateLayout.Should().NotContain(".Sum(");
-        source.Should().NotContain(".Sum(");
+        sharedPlanner.Should().NotContain("FirstOrDefault");
+        sharedPlanner.Should().NotContain(".Sum(");
     }
 
     [Fact]
     public void CalculateSplitDividerDragTarget_StopsSortedMetricScansAfterPointer()
     {
-        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
+        var source = WorkspaceFileLocator.ReadAllTextWithFailureMessage(
+            "Unable to locate workspace file",
+            "src",
+            "FreeX.App.Presentation",
+            "GridInteraction",
+            "SplitPanePointerPlanner.cs");
         var findSplitRow = source[
             source.IndexOf("private static uint? FindSplitRow", StringComparison.Ordinal)..
             source.IndexOf("private static uint? FindSplitColumn", StringComparison.Ordinal)];
         var findSplitColumn = source[
             source.IndexOf("private static uint? FindSplitColumn", StringComparison.Ordinal)..
-            source.IndexOf("private static uint IncrementWithinLimit", StringComparison.Ordinal)];
+            source.IndexOf("private static uint TranslateMetricIndexFromSplitAnchor", StringComparison.Ordinal)];
 
         findSplitRow.Should().Contain("foreach (var row in mainRows)");
         findSplitRow.Should().Contain("if (y < top)");
         findSplitRow.Should().Contain("break;");
         findSplitRow.IndexOf("if (y < top)", StringComparison.Ordinal)
-            .Should().BeLessThan(findSplitRow.IndexOf("if (y >= top && y <= top + row.Height)", StringComparison.Ordinal));
+            .Should().BeLessThan(findSplitRow.IndexOf("if (y <= top + row.Height", StringComparison.Ordinal));
 
         findSplitColumn.Should().Contain("foreach (var column in mainColumns)");
         findSplitColumn.Should().Contain("if (x < left)");
         findSplitColumn.Should().Contain("break;");
         findSplitColumn.IndexOf("if (x < left)", StringComparison.Ordinal)
-            .Should().BeLessThan(findSplitColumn.IndexOf("if (x >= left && x <= left + column.Width)", StringComparison.Ordinal));
+            .Should().BeLessThan(findSplitColumn.IndexOf("if (x <= left + column.Width", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -153,75 +166,14 @@ public sealed partial class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void SplitPaneCellLayoutPlanner_BuildsMetricLookupsAndLazyOccupiedCellsWithoutLinqPipelines()
+    public void SplitPaneCellLayoutPlanner_IsAThinPortablePlannerAdapter()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("SplitPaneCellLayoutPlanner.cs");
-        var calculateLayouts = source[
-            source.IndexOf("public static IReadOnlyList<SplitPaneCellLayout> CalculateLayouts", StringComparison.Ordinal)..
-            source.IndexOf("private static bool CanOverflowSplitPaneText", StringComparison.Ordinal)];
-        var buildOccupiedCells = source[
-            source.IndexOf("private static SplitPaneOccupiedCellMap BuildOccupiedCells", StringComparison.Ordinal)..
-            source.IndexOf("private static double SumEmptyOverflowColumnWidths", StringComparison.Ordinal)];
-        var mergeRangeIndex = source[
-            source.IndexOf("public static MergeRangeIndex Create", StringComparison.Ordinal)..
-            source.IndexOf("public GridRange? Find", StringComparison.Ordinal)];
-
-        calculateLayouts.Should().Contain("new SplitPaneRowMetricLookup(topRows)");
-        calculateLayouts.Should().Contain("new SplitPaneRowMetricLookup(bottomLeftRows)");
-        calculateLayouts.Should().Contain("new SplitPaneColumnMetricLookup(leftColumns)");
-        calculateLayouts.Should().Contain("new SplitPaneColumnMetricLookup(topRightColumns)");
-        calculateLayouts.Should().Contain("private readonly struct SplitPaneRowMetricLookup");
-        calculateLayouts.Should().Contain("private readonly struct SplitPaneColumnMetricLookup");
-        calculateLayouts.Should().Contain("FindSortedRowMetric(_rows, row, _firstRow, _lastRow)");
-        calculateLayouts.Should().Contain("FindSortedColumnMetric(_columns, column, _firstColumn, _lastColumn)");
-        calculateLayouts.Should().Contain("var directIndex = row - firstRow;");
-        calculateLayouts.Should().Contain("var directIndex = column - firstColumn;");
-        calculateLayouts.Should().Contain("while (low <= high)");
-        calculateLayouts.Should().Contain("ResolveSplitPaneRegion(isTopPane, isLeftPane)");
-        calculateLayouts.Should().Contain("if (cells.Count == 0)");
-        calculateLayouts.Should().Contain("var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);");
-        calculateLayouts.Should().Contain("var verticalX = dividerLayout.VerticalX ?? rowHeaderWidth;");
-        calculateLayouts.Should().Contain("? rowHeaderWidth + column.LeftOffset");
-        calculateLayouts.Should().Contain("VisitLayouts(viewport, mergedRegions, editingCell, ref consumer);");
-        calculateLayouts.Should().Contain("private struct SplitPaneCellLayoutCollector");
-        calculateLayouts.Should().Contain("new SplitPaneCellLayoutList(");
-        calculateLayouts.Should().Contain("_cellIndexes = new int[capacity]");
-        calculateLayouts.Should().Contain("SplitPaneOccupiedCellMap? occupied = null;");
-        calculateLayouts.Should().Contain("occupied ??= BuildOccupiedCells(cells, editingCell)");
-        calculateLayouts.Should().Contain("SumEmptyOverflowColumnWidths(cell, colMetrics, occupied.Value)");
-        calculateLayouts.Should().Contain("foreach (var cell in cells)");
-        calculateLayouts.Should().Contain("consumer.AcceptLayout(new SplitPaneCellLayout");
-        calculateLayouts.IndexOf("if (cells.Count == 0)", StringComparison.Ordinal)
-            .Should()
-            .BeLessThan(calculateLayouts.IndexOf("new SplitPaneRowMetricLookup(topRows)", StringComparison.Ordinal));
-        calculateLayouts.IndexOf("var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);", StringComparison.Ordinal)
-            .Should()
-            .BeLessThan(calculateLayouts.IndexOf("foreach (var cell in cells)", StringComparison.Ordinal));
-        calculateLayouts[
-            calculateLayouts.IndexOf("foreach (var cell in cells)", StringComparison.Ordinal)..]
-            .Should()
-            .NotContain("GridView.CalculateRowHeaderWidth(viewport)");
-        buildOccupiedCells.Should().Contain("spansByRow.Add(cell.Row, spans)");
-        buildOccupiedCells.Should().Contain("Dictionary<uint, OccupiedColumnSpans>");
-        buildOccupiedCells.Should().Contain("AddOccupiedColumn(ref spans, cell.Col, ref needsNormalize)");
-        buildOccupiedCells.Should().Contain("HashSet<uint>? rowsNeedingNormalize = null;");
-        buildOccupiedCells.Should().Contain("(rowsNeedingNormalize ??= []).Add(cell.Row);");
-        buildOccupiedCells.Should().Contain("NormalizeOccupiedColumnSpans(spansByRow, rowsNeedingNormalize)");
-        buildOccupiedCells.Should().Contain("private struct OccupiedColumnSpans");
-        buildOccupiedCells.Should().Contain("private List<OccupiedColumnSpan>? _overflow;");
-        buildOccupiedCells.Should().Contain("new SplitPaneOccupiedCellMap(spansByRow)");
-        buildOccupiedCells.Should().NotContain("Keys.ToArray()");
-        mergeRangeIndex.Should().Contain("var queryCells = BuildQueryCells(cells);");
-        mergeRangeIndex.Should().Contain("mergedRegion.End.Row < queryCells.MinRow");
-        mergeRangeIndex.Should().Contain("mergedRegion.Start.Row > queryCells.MaxRow");
-        mergeRangeIndex.Should().Contain("mergedRegion.End.Col < queryCells.MinCol");
-        mergeRangeIndex.Should().Contain("mergedRegion.Start.Col > queryCells.MaxCol");
-        mergeRangeIndex.Should().Contain("foreach (var row in queryCells.Rows)");
-        calculateLayouts.Should().NotContain(".ToDictionary(");
-        calculateLayouts.Should().NotContain(".Where(");
-        calculateLayouts.Should().NotContain(".Select(");
-        calculateLayouts.Should().NotContain("new Dictionary<uint, RowMetric>");
-        calculateLayouts.Should().NotContain("new Dictionary<uint, ColMetric>");
+        source.Should().Contain("ViewportGeometryPlanner.CalculateSplitPaneLayouts(");
+        source.Should().Contain("ViewportGeometryPlanner.VisitSplitPaneLayouts(");
+        source.Should().Contain("private static Rect ToWpf(LayoutRect rect)");
+        source.Should().NotContain("SplitPaneOccupiedCellMap");
+        source.Should().NotContain("MergeRangeIndex");
     }
 
     [Fact]
@@ -229,8 +181,8 @@ public sealed partial class GridViewRenderPerformanceTests
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("SplitPaneCellLayoutPlanner.cs");
 
-        source.Should().Contain("SplitPaneOccupiedCellMap? occupied = null;");
-        source.Should().Contain("occupied ??= BuildOccupiedCells(cells, editingCell);");
+        source.Should().Contain("ViewportGeometryPlanner.CalculateSplitPaneLayouts(");
+        source.Should().NotContain("BuildOccupiedCells");
 
         var sheetId = SheetId.New();
         var cells = new List<DisplayCell>();
@@ -383,8 +335,8 @@ public sealed partial class GridViewRenderPerformanceTests
         renderSplitPaneCells.Should().Contain("dc.DrawRectangle(fill, gridPen, rect);");
         renderSplitPaneCells.IndexOf("if (fill is not null || gridPen is not null)", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(renderSplitPaneCells.IndexOf("DrawFillPattern(dc, rect, style", StringComparison.Ordinal));
-        renderSplitPaneCells.IndexOf("DrawFillPattern(dc, rect, style", StringComparison.Ordinal)
+            .BeLessThan(renderSplitPaneCells.IndexOf("DrawFillPattern(dc, rect, fillPlan", StringComparison.Ordinal));
+        renderSplitPaneCells.IndexOf("DrawFillPattern(dc, rect, fillPlan", StringComparison.Ordinal)
             .Should()
             .BeLessThan(renderSplitPaneCells.IndexOf("if (style is not null && HasVisibleCellBorder(style))", StringComparison.Ordinal));
     }

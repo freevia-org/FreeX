@@ -80,6 +80,11 @@ internal sealed class BackstageRailHarness : IDisposable
     public bool IsBackstageVisible =>
         ((UIElement)_window.FindName("StartScreenOverlay")).Visibility == Visibility.Visible;
 
+    public string? CurrentEntryId =>
+        (string?)_frame.GetType()
+            .GetProperty("CurrentEntryId", BindingFlags.Instance | BindingFlags.Public)!
+            .GetValue(_frame);
+
     /// <summary>Invoke a private MainWindow method by name (e.g. ShowInfoView/ShowPrintView/HideStartScreen).</summary>
     public void Invoke(string methodName)
     {

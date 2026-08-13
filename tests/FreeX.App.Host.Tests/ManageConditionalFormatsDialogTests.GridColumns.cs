@@ -21,7 +21,7 @@ public sealed partial class ManageConditionalFormatsDialogTests
         source.Should().Contain("AutomationProperties.NameProperty, UiText.Get(\"ManageConditionalFormats_SelectAppliesToRange\")");
         source.Should().Contain("AutomationProperties.HelpTextProperty, UiText.Get(\"ManageConditionalFormats_SelectAppliesToRangeHelpText\")");
         source.Should().Contain("RangePickerButton_Click");
-        source.Should().Contain("AppliesToRangeSelectionRequest = CreateAppliesToRangeSelectionRequest");
+        source.Should().Contain(".CreateAppliesToRangeSelectionRequest(rule.Id, rangeBox.Text)");
         source.Should().Contain("_requestAppliesToRangeSelection?.Invoke(AppliesToRangeSelectionRequest)");
         source.Should().Contain("RelativeSourceMode.FindAncestor, typeof(ListViewItem), 1");
         source.Should().Contain("SetBinding(UIElement.IsEnabledProperty, new Binding(\"IsSelected\")");
@@ -32,7 +32,7 @@ public sealed partial class ManageConditionalFormatsDialogTests
     {
         var ruleId = Guid.NewGuid();
 
-        ManageConditionalFormatsDialog.CreateAppliesToRangeSelectionRequest(ruleId, " $A$1:$C$5 ")
+        ManageConditionalFormatsPlanner.CreateAppliesToRangeSelectionRequest(ruleId, " $A$1:$C$5 ")
             .Should()
             .Be(new ConditionalFormatAppliesToRangeSelectionRequest(ruleId, "$A$1:$C$5", CollapseDialog: true));
     }

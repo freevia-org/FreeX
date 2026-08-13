@@ -5,17 +5,33 @@ namespace FreeW.App.Host.Tests;
 public sealed class FileCommandWorkflowSourceTests
 {
     [Theory]
-    [InlineData("freew", "FreeW.App.Host")]
-    [InlineData("freep", "FreeP.App.Host")]
-    public void SisterAppFileCommands_UseSharedWorkflow(string appFolder, string projectFolder)
+    [InlineData("freew", "FreeW.App.Host", "FileCommands.cs")]
+    [InlineData("freep", "FreeP.App.Host", "WpfPresentationFileCommandPorts.cs")]
+    public void SisterAppFileCommands_UseSharedWorkflow(
+        string appFolder,
+        string projectFolder,
+        string sourceFileName)
     {
         var source = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
             appFolder,
             projectFolder,
-            "FileCommands.cs"));
+            sourceFileName));
 
         source.Should().Contain("SisterWpfFileCommandWorkflow");
+        if (appFolder == "freep")
+        {
+            source.Should().Contain("PresentationFileCommandSession");
+            source.Should().Contain("new PresentationFileLifecycleAdapter(workflow.Workflow)");
+            source.Should().NotContain("WpfPresentationFileLifecyclePort");
+            source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+            source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
+            source.Should().Contain("_workflow.ShowError(");
+            source.Should().NotContain("new FileCommandSession");
+            source.Should().NotContain("FileLifecyclePlanner.PlanSave(");
+            return;
+        }
+
         source.Should().Contain("_workflow.New(");
         source.Should().Contain("_workflow.Open(");
         source.Should().Contain("_workflow.Save(");
@@ -28,20 +44,27 @@ public sealed class FileCommandWorkflowSourceTests
         if (appFolder == "freew")
         {
             source.Should().Contain("DocumentPersistenceWorkflow");
-            source.Should().Contain("_persistence.Open(path)");
-            source.Should().Contain("_persistence.Save(_editor.Model, target)");
+            source.Should().Contain("FreeWDocumentFileWorkflow");
+            source.Should().Contain("FreeWDocumentFileCommandSession");
+            source.Should().Contain("FreeWDocumentFileCommandPorts");
+            source.Should().Contain("FreeWFileCommandLifecyclePorts");
             source.Should().Contain("_persistence.BuildSaveDialogPlan(");
             source.Should().Contain("OpenRecentPath(string path)");
-            source.Should().Contain("_workflow.Open(\"opening another document\", () => path, OpenPath)");
+            source.Should().Contain("_fileCommands.OpenSelectedPathAsync(path)");
             source.Should().Contain("OpenFromFolder(string folderPath)");
-            source.Should().Contain("PromptOpenPath(folderPath)");
+            source.Should().Contain("_fileCommands.OpenAsync(folderPath)");
             source.Should().Contain("initialDirectory: initialDirectory");
             source.Should().Contain("SaveAsSuggested(string? suggestedFileName, string? preferredExtension)");
-            source.Should().Contain("TryPromptSaveTarget(preferredExtension, suggestedFileName");
+            source.Should().Contain(".SaveAsAsync(suggestedFileName, preferredExtension)");
             source.Should().NotContain("DocumentFileFormatResolver.FindOpenAdapter");
             source.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter");
             source.Should().NotContain("FileDialogSaveSelectionResolver.ResolveAdapter");
-            source.Should().NotContain("ExportAtomicWriter.CreateTempPath");
+            source.Should().NotContain("AtomicFileWriter.CreateTempPath");
+            source.Should().NotContain("_persistence.Open(path)");
+            source.Should().NotContain("_persistence.Save(_editor.Model, target)");
+            source.Should().NotContain("_persistence.TryResolveSaveTarget(");
+            source.Should().NotContain("new DocumentOpenExecutionRequest(");
+            source.Should().NotContain("new DocumentSaveExecutionRequest(");
         }
         source.Should().NotContain("new FileCommandSession");
         source.Should().NotContain("FileLifecyclePlanner.PlanSave(");

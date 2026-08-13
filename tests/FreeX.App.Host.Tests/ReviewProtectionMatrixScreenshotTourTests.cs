@@ -17,11 +17,11 @@ public sealed class ReviewProtectionMatrixScreenshotTourTests
         dispatcherSource.Should().Contain("[JsonSerializable(typeof(ReviewProtectionMatrixTourManifest))]");
 
         tourSource.Should().Contain("new PasswordProtectionDialog(");
-        tourSource.Should().Contain("SheetProtectionPermissionLabels.FormatSheetPermission(SheetProtectionPermission.SelectUnlockedCells)");
-        tourSource.Should().Contain("SheetProtectionPermissionLabels.FormatSheetPermission(SheetProtectionPermission.Sort)");
-        tourSource.Should().Contain("SheetProtectionPermissionLabels.FormatSheetPermission(SheetProtectionPermission.UseAutoFilter)");
-        tourSource.Should().Contain("SheetProtectionWorkflow.CreateCommand(");
-        tourSource.Should().Contain("WorkbookProtectionWorkflow.CreateCommand(_workbook, context.Password)");
+        tourSource.Should().Contain("LocalizeReviewProtectionPermission(SheetProtectionPermission.SelectUnlockedCells)");
+        tourSource.Should().Contain("LocalizeReviewProtectionPermission(SheetProtectionPermission.Sort)");
+        tourSource.Should().Contain("LocalizeReviewProtectionPermission(SheetProtectionPermission.UseAutoFilter)");
+        tourSource.Should().Contain("ProtectionWorkflowSession.CreateSheetCommandPlan(");
+        tourSource.Should().Contain("ProtectionWorkflowSession.CreateWorkbookCommandPlan(_workbook, context.Password)");
         tourSource.Should().Contain("new AllowEditRangeCommand(sheet.Id, allowEditRange)");
         tourSource.Should().Contain("EditCellsCommand.ForValue(context.Sheet.Id, context.LockedCell");
         tourSource.Should().Contain("new UnprotectSheetCommand(context.Sheet.Id, \"wrong-password\")");

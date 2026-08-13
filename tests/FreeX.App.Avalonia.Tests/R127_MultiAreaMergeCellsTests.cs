@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless;
@@ -35,7 +34,7 @@ public sealed class R127_MultiAreaMergeCellsTests
             var areaE = new GridRange(new CellAddress(sheet.Id, 1, 5), new CellAddress(sheet.Id, 1, 6)); // E1:F1 -- active
             window.Session.SelectRanges(areaE, [areaB, areaE]);
 
-            await InvokePrivateAsync(window, "MergeSelectedRangeAsync");
+            await window.MergeSelectedRangeForTestAsync();
 
             // Before the fix, only E1:F1 (the active area) was merged; B1:C1 was silently left
             // untouched.
@@ -62,7 +61,7 @@ public sealed class R127_MultiAreaMergeCellsTests
             var areaE = new GridRange(new CellAddress(sheet.Id, 1, 5), new CellAddress(sheet.Id, 2, 6)); // E1:F2 -- active
             window.Session.SelectRanges(areaE, [areaB, areaE]);
 
-            await InvokePrivateAsync(window, "MergeAcrossSelectedRangeAsync");
+            await window.MergeAcrossSelectedRangeForTestAsync();
 
             // Merge Across merges each ROW of each area independently: B1:C1, B2:C2, E1:F1, E2:F2.
             sheet.MergedRegions.Should().Contain(new GridRange(new CellAddress(sheet.Id, 1, 2), new CellAddress(sheet.Id, 1, 3)), "row 1 of the disjoint B area must be merged");
@@ -91,7 +90,7 @@ public sealed class R127_MultiAreaMergeCellsTests
             var range = new GridRange(new CellAddress(sheet.Id, 3, 2), new CellAddress(sheet.Id, 3, 3)); // B3:C3
             window.Session.SelectRange(range);
 
-            await InvokePrivateAsync(window, "MergeSelectedRangeAsync");
+            await window.MergeSelectedRangeForTestAsync();
 
             sheet.MergedRegions.Should().ContainSingle();
             sheet.MergedRegions.Should().Contain(range);
@@ -103,12 +102,4 @@ public sealed class R127_MultiAreaMergeCellsTests
         }, CancellationToken.None);
     }
 
-    private static async Task InvokePrivateAsync(MainWindow window, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        var task = (Task)method.Invoke(window, null)!;
-        await task;
-    }
 }

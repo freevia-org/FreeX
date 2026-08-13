@@ -162,51 +162,45 @@ public sealed partial class MainWindow
         if (result is not { } edited)
             return;
 
-        var plan = ChartMovePlanner.Plan(edited, name => _session.Workbook.GetSheet(name) is not null);
-        if (!plan.IsValid)
-        {
-            RefreshShell(plan.Error ?? UiText.Get("ChartLoc_MoveChartFailed"));
-            return;
-        }
-
         if (!TryGetSelectedChart(command, out chart))
             return;
 
-        if (plan.TargetKind == ChartMoveTargetKind.NewSheet)
+        var movePlan = ChartCommandWorkflowPlanner.PlanMoveCommand(
+            _session.Workbook,
+            _session.ActiveSheet.Id,
+            chart,
+            edited);
+        if (!movePlan.CanExecute)
         {
-            var commandResult = _session.ExecuteReviewCommand(
-                new MoveChartToNewSheetCommand(_session.ActiveSheet.Id, chart.Id, plan.TargetName));
-            if (!commandResult.Success)
-            {
-                RefreshShell(commandResult.ErrorMessage ?? UiText.Get("ChartLoc_MoveChartFailed"));
-                return;
-            }
-
-            ClearSelectedDrawingObject();
-            if (_session.Workbook.GetSheet(plan.TargetName) is { } createdSheet)
-                _session.SelectSheet(createdSheet.Id);
-            RefreshShell(UiText.Format("ChartLoc_MovedChartToNewSheet", plan.TargetName));
+            RefreshShell(movePlan.Error ?? UiText.Get("ChartLoc_MoveChartFailed"));
             return;
         }
 
-        var targetSheet = _session.Workbook.GetSheet(plan.TargetName);
-        if (targetSheet is null)
+        var sourceSheetId = _session.ActiveSheet.Id;
+        var commandResult = _session.ExecuteReviewCommand(movePlan.Command!);
+        if (!commandResult.Success)
         {
-            RefreshShell(UiText.Format("ChartLoc_NoSheetNamed", plan.TargetName));
-            return;
-        }
-
-        var moveResult = _session.ExecuteReviewCommand(
-            new MoveChartCommand(_session.ActiveSheet.Id, chart.Id, targetSheet.Id));
-        if (!moveResult.Success)
-        {
-            RefreshShell(moveResult.ErrorMessage ?? UiText.Get("ChartLoc_MoveChartFailed"));
+            RefreshShell(commandResult.ErrorMessage ?? UiText.Get("ChartLoc_MoveChartFailed"));
             return;
         }
 
         ClearSelectedDrawingObject();
+        var targetSheet = movePlan.ExistingTargetSheetId is { } existingTargetSheetId
+            ? _session.Workbook.GetSheet(existingTargetSheetId)
+            : _session.Workbook.GetSheet(movePlan.TargetName);
+        if (targetSheet is null)
+        {
+            _session.SelectSheet(sourceSheetId);
+            RefreshShell(UiText.Get("ChartLoc_MoveChartFailed"));
+            return;
+        }
+
         _session.SelectSheet(targetSheet.Id);
-        RefreshShell(UiText.Format("ChartLoc_MovedChartTo", plan.TargetName));
+        RefreshShell(UiText.Format(
+            movePlan.ExistingTargetSheetId is null
+                ? "ChartLoc_MovedChartToNewSheet"
+                : "ChartLoc_MovedChartTo",
+            movePlan.TargetName));
     }
 
     private async Task<ChartMoveInput?> ShowMoveChartDialogAsync(ChartMoveInput current)
@@ -478,13 +472,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(issue switch
-                {
-                    ChartAreaFormatParseIssue.PlotAreaBorderThickness => UiText.Get("ChartAreaLegend_InvalidPlotAreaBorderWidthMessage"),
-                    ChartAreaFormatParseIssue.LegendBorderThickness => UiText.Get("ChartAreaLegend_InvalidLegendBorderWidthMessage"),
-                    ChartAreaFormatParseIssue.LegendFontSize => UiText.Get("ChartAreaLegend_InvalidLegendFontSizeMessage"),
-                    _ => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                });
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 

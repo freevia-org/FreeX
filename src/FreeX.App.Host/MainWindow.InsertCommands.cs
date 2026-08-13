@@ -24,7 +24,6 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? [range.Start]);
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
@@ -88,39 +87,32 @@ public partial class MainWindow
         var useDialogLocationForInitialInsert = true;
         IWorkbookCommand CreateCommand()
         {
-            // Every member of the group must share one nonzero GroupId so the group survives an
-            // XLSX round-trip as a single <x14:sparklineGroup>; a lone member is simplest left
-            // ungrouped (GroupId 0), matching an independently-inserted sparkline.
-            if (members.Count == 1)
-            {
-                var currentRange = useDialogLocationForInitialInsert
-                    ? fallbackLocationRange
-                    : SheetGrid.SelectedRange ?? fallbackLocationRange;
-                return new AddSparklineCommand(_currentSheetId, members[0].DataRange, currentRange.Start, kind);
-            }
-
+            var currentRange = useDialogLocationForInitialInsert
+                ? fallbackLocationRange
+                : SheetGrid.SelectedRange ?? fallbackLocationRange;
             var sheet = _workbook.GetSheet(_currentSheetId);
             if (sheet is null)
-                return new AddSparklineCommand(_currentSheetId, members[0].DataRange, members[0].Location, kind);
-            var groupId = SparklineGroupIdAllocator.NextGroupId(sheet.Sparklines);
-            var commands = members
-                .Select(member => (IWorkbookCommand)new AddSparklineCommand(
-                    _currentSheetId, member.DataRange, member.Location, kind, groupId))
-                .ToList();
-            return new CompositeWorkbookCommand("Insert Sparkline", commands);
+            {
+                return SparklinePlanner.BuildInsertCommand(
+                    _currentSheetId,
+                    [members[0]],
+                    kind,
+                    [],
+                    members.Count == 1 ? currentRange.Start : null);
+            }
+
+            return SparklinePlanner.BuildInsertCommand(
+                _currentSheetId,
+                members,
+                kind,
+                sheet.Sparklines,
+                currentRange.Start);
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        var executed = TryExecuteRepeatableCommand(CreateCommand, "Insert Sparkline", out _);
         useDialogLocationForInitialInsert = false;
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Insert Sparkline");
+        if (!executed)
             return;
-        }
-
-        MarkWorkbookDirty();
-        _repeatPostAction = null;
-        InvalidateNavigationCaches();
 
         SetActiveCell(firstLocation);
         EnsureCellVisible(firstLocation);
@@ -164,7 +156,7 @@ public partial class MainWindow
                         dialog.Result.Target,
                         dialog.Result.DisplayText,
                         new HyperlinkMetadata(
-                            ToCoreHyperlinkTargetKind(dialog.Result.LinkType),
+                            dialog.Result.LinkType,
                             dialog.Result.ScreenTip,
                             dialog.Result.Bookmark));
                 }))
@@ -197,16 +189,16 @@ public partial class MainWindow
             return true;
         }
 
-        switch (ExternalUrlLauncher.Open(plan.Target))
+        switch (DesktopExternalUriLauncher.Open(plan.Target))
         {
-            case ExternalUrlLaunchResult.BlockedScheme:
+            case ExternalUriLaunchResult.BlockedScheme:
                 ShowOwnedMessage(
                     UiText.Get("MainWindowMessage_OpenHyperlinkBlockedScheme"),
                     UiText.Get("MainWindowMessage_OpenHyperlinkTitle"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
                 break;
-            case ExternalUrlLaunchResult.LaunchFailed:
+            case ExternalUriLaunchResult.LaunchFailed:
                 ShowOwnedMessage(
                     UiText.Get("MainWindowMessage_OpenHyperlinkOpenFailed"),
                     UiText.Get("MainWindowMessage_OpenHyperlinkTitle"),
@@ -276,15 +268,6 @@ public partial class MainWindow
         return true;
     }
 
-    private static HyperlinkTargetKind ToCoreHyperlinkTargetKind(HyperlinkLinkType linkType) =>
-        linkType switch
-        {
-            HyperlinkLinkType.CreateNewDocument => HyperlinkTargetKind.CreateNewDocument,
-            HyperlinkLinkType.PlaceInThisDocument => HyperlinkTargetKind.PlaceInThisDocument,
-            HyperlinkLinkType.EmailAddress => HyperlinkTargetKind.EmailAddress,
-            _ => HyperlinkTargetKind.ExistingFileOrWebPage
-        };
-
     private void InsertCommentBtn_Click(object sender, RoutedEventArgs e) => ReviewNewThreadedCommentBtn_Click(sender, e);
 
     private void HeaderFooterBtn_Click(object sender, RoutedEventArgs e)
@@ -300,25 +283,7 @@ public partial class MainWindow
                 "Header & Footer",
                 sheetId => PageSetupCommandFactory.BuildHeaderFooterCommand(
                     sheetId,
-                    new PageSetupHeaderFooterRequest
-                    {
-                        Header = dialog.Header,
-                        Footer = dialog.Footer,
-                        FirstPageHeader = dialog.FirstPageHeader,
-                        FirstPageFooter = dialog.FirstPageFooter,
-                        EvenPageHeader = dialog.EvenPageHeader,
-                        EvenPageFooter = dialog.EvenPageFooter,
-                        DifferentFirstPage = dialog.DifferentFirstPage,
-                        DifferentOddEvenPages = dialog.DifferentOddEvenPages,
-                        ScaleHeaderFooterWithDocument = dialog.ScaleWithDocument,
-                        AlignHeaderFooterWithMargins = dialog.AlignWithMargins,
-                        HeaderPictures = dialog.HeaderPictures,
-                        FooterPictures = dialog.FooterPictures,
-                        FirstPageHeaderPictures = dialog.FirstPageHeaderPictures,
-                        FirstPageFooterPictures = dialog.FirstPageFooterPictures,
-                        EvenPageHeaderPictures = dialog.EvenPageHeaderPictures,
-                        EvenPageFooterPictures = dialog.EvenPageFooterPictures
-                    })))
+                    dialog.ResultState)))
             return;
 
         UpdateViewport();

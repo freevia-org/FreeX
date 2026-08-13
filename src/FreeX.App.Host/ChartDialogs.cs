@@ -7,19 +7,10 @@ using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.Charts.Editing;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
-
-public sealed record ChartTitlesDialogResult(string ChartTitle, string XAxisTitle, string YAxisTitle)
-{
-    public ChartLayoutOptions ToOptions() => new(
-        Title: ChartTitle,
-        XAxisTitle: XAxisTitle,
-        YAxisTitle: YAxisTitle);
-}
 
 public sealed class ChartTitlesDialog : Window
 {
@@ -27,11 +18,14 @@ public sealed class ChartTitlesDialog : Window
     private readonly TextBox _xAxisTitleBox = new();
     private readonly TextBox _yAxisTitleBox = new();
 
-    public ChartTitlesDialogResult Result { get; private set; }
+    public ChartTitlesInput Result { get; private set; }
 
     public ChartTitlesDialog(string? chartTitle, string? xAxisTitle, string? yAxisTitle)
     {
-        Result = CreateResult(chartTitle, xAxisTitle, yAxisTitle);
+        Result = ChartTitlesPlanner.Normalize(new ChartTitlesInput(
+            chartTitle ?? string.Empty,
+            xAxisTitle ?? string.Empty,
+            yAxisTitle ?? string.Empty));
         Title = UiText.Get("ChartTitles_Title");
         Width = 380;
         Height = 240;
@@ -52,18 +46,15 @@ public sealed class ChartTitlesDialog : Window
         AddInput(stack, UiText.Get("ChartTitles_YAxisTitleLabel"), _yAxisTitleBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(() =>
         {
-            Result = CreateResult(_chartTitleBox.Text, _xAxisTitleBox.Text, _yAxisTitleBox.Text);
+            Result = ChartTitlesPlanner.Normalize(new ChartTitlesInput(
+                _chartTitleBox.Text,
+                _xAxisTitleBox.Text,
+                _yAxisTitleBox.Text));
             DialogResult = true;
         }));
         Content = stack;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
-
-    public static ChartTitlesDialogResult CreateResult(string? chartTitle, string? xAxisTitle, string? yAxisTitle) =>
-        new(
-            (chartTitle ?? "").Trim(),
-            (xAxisTitle ?? "").Trim(),
-            (yAxisTitle ?? "").Trim());
 
     private static void AddInput(Panel stack, string label, TextBox box)
     {
@@ -80,17 +71,15 @@ public sealed class ChartTitlesDialog : Window
     }
 }
 
-public sealed record ChartStyleDialogResult(int? ChartStyleId);
-
 public sealed class ChartStyleDialog : Window
 {
     private readonly ListBox _styleGallery = new();
 
-    public ChartStyleDialogResult Result { get; private set; }
+    public ChartStyleInput Result { get; private set; }
 
     public ChartStyleDialog(ChartModel chart)
     {
-        Result = FromChart(chart);
+        Result = ChartStylePlanner.Read(chart);
         Title = UiText.Get("ChartStyle_Title");
         Width = 480;
         Height = 350;
@@ -104,7 +93,7 @@ public sealed class ChartStyleDialog : Window
         var itemsPanelFactory = new FrameworkElementFactory(typeof(UniformGrid), "ChartStyleGalleryPanel");
         itemsPanelFactory.SetValue(UniformGrid.ColumnsProperty, 4);
         _styleGallery.ItemsPanel = new ItemsPanelTemplate(itemsPanelFactory);
-        _styleGallery.SelectedIndex = ChartStylePlanner.FindStyleOptionIndex(Result.ChartStyleId);
+        _styleGallery.SelectedIndex = ChartStylePlanner.FindStyleOptionIndex(Result.StyleId);
         _styleGallery.Margin = new Thickness(0, 0, 0, 16);
         _styleGallery.Height = 230;
         AutomationProperties.SetName(_styleGallery, UiText.Get("ChartStyle_GalleryAutomationName"));
@@ -117,12 +106,6 @@ public sealed class ChartStyleDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static ChartStyleDialogResult FromChart(ChartModel chart) =>
-        new(ChartStylePlanner.Read(chart).StyleId);
-
-    public static ChartStyleDialogResult CreateResult(int? chartStyleId) =>
-        new(ChartStylePlanner.CreateResult(chartStyleId).StyleId);
-
     public static IReadOnlyList<ChartStyleOption> GetStyleOptions() =>
         ChartStylePlanner.GetStyleOptions()
             .Select(CreateStyleOption)
@@ -131,8 +114,8 @@ public sealed class ChartStyleDialog : Window
     private void Accept()
     {
         Result = _styleGallery.SelectedItem is ChartStyleOption option
-            ? CreateResult(option.StyleId)
-            : CreateResult(null);
+            ? ChartStylePlanner.CreateResult(option.StyleId)
+            : ChartStylePlanner.CreateResult(null);
         DialogResult = true;
     }
 
@@ -208,21 +191,13 @@ public sealed class ChartStyleDialog : Window
 
 public sealed record ChartStyleOption(int? StyleId, string DisplayName, string PreviewLabel);
 
-public enum MoveChartTargetKind
-{
-    ObjectInSheet,
-    NewChartSheet
-}
-
-public sealed record MoveChartDialogResult(MoveChartTargetKind TargetKind, string TargetName);
-
 public sealed class MoveChartDialog : Window
 {
     private readonly RadioButton _objectInSheet = new() { Content = MoveTargetLabel(ChartMoveTargetKind.ObjectInSheet), IsChecked = true };
     private readonly RadioButton _newChartSheet = new() { Content = MoveTargetLabel(ChartMoveTargetKind.NewSheet), Margin = new Thickness(0, 4, 0, 8) };
     private readonly TextBox _targetBox = new();
 
-    public MoveChartDialogResult Result { get; private set; }
+    public ChartMoveInput Result { get; private set; }
 
     public MoveChartDialog(string currentSheetName)
     {
@@ -251,10 +226,10 @@ public sealed class MoveChartDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static MoveChartDialogResult CreateObjectResult(string? sheetName) =>
+    public static ChartMoveInput CreateObjectResult(string? sheetName) =>
         CreateResult(ChartMoveTargetKind.ObjectInSheet, sheetName);
 
-    public static MoveChartDialogResult CreateNewSheetResult(string? sheetName) =>
+    public static ChartMoveInput CreateNewSheetResult(string? sheetName) =>
         CreateResult(ChartMoveTargetKind.NewSheet, sheetName);
 
     private void Accept()
@@ -288,19 +263,14 @@ public sealed class MoveChartDialog : Window
         Keyboard.Focus(_targetBox);
     }
 
-    private static MoveChartDialogResult CreateResult(ChartMoveTargetKind kind, string? name)
+    private static ChartMoveInput CreateResult(ChartMoveTargetKind kind, string? name)
     {
         var plan = ChartMovePlanner.Plan(new ChartMoveInput(kind, name ?? string.Empty), _ => true);
         if (!plan.IsValid)
             throw new ArgumentException(UiText.Get("MoveChart_TargetNameRequiredMessage"), nameof(name));
 
-        return new MoveChartDialogResult(ToDialogTargetKind(plan.TargetKind), plan.TargetName);
+        return new ChartMoveInput(plan.TargetKind, plan.TargetName);
     }
-
-    private static MoveChartTargetKind ToDialogTargetKind(ChartMoveTargetKind kind) =>
-        kind == ChartMoveTargetKind.NewSheet
-            ? MoveChartTargetKind.NewChartSheet
-            : MoveChartTargetKind.ObjectInSheet;
 
     private static ChartMoveDialogTargetDescriptor MoveTargetDescriptor(ChartMoveTargetKind kind) =>
         ChartMovePlanner.GetTargetChoices().Single(choice => choice.TargetKind == kind);

@@ -1,16 +1,13 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
 public sealed class SortOptionsDialog : Window
 {
-    private const string NormalFirstKeySortOrder = "Normal";
-
-    private sealed record FirstKeySortOrderChoice(string Label, string Value);
-
     private readonly CheckBox _caseSensitiveBox;
     private readonly ComboBox _firstKeySortOrderBox;
     private readonly RadioButton _topToBottomButton;
@@ -22,7 +19,8 @@ public sealed class SortOptionsDialog : Window
     {
         current ??= new SortDialogOptions();
         Result = current;
-        Title = UiText.Get("SortOptions_SortOptions");
+        var presentation = SortOptionsDialogCatalog.Create(UiText.Get);
+        Title = presentation.Title;
         Width = 330;
         Height = 260;
         ResizeMode = ResizeMode.NoResize;
@@ -36,7 +34,7 @@ public sealed class SortOptionsDialog : Window
 
         _caseSensitiveBox = new CheckBox
         {
-            Content = UiText.Get("SortOptions_CaseSensitive"),
+            Content = presentation.CaseSensitive,
             IsChecked = current.CaseSensitive,
             Margin = new Thickness(0, 0, 0, 10)
         };
@@ -55,37 +53,40 @@ public sealed class SortOptionsDialog : Window
         // CustomSortOrder exactly like a built-in choice does.
         _firstKeySortOrderBox = new ComboBox
         {
-            ItemsSource = CreateFirstKeySortOrders(),
-            DisplayMemberPath = nameof(FirstKeySortOrderChoice.Label),
-            SelectedValuePath = nameof(FirstKeySortOrderChoice.Value),
+            ItemsSource = presentation.FirstKeySortOrders,
+            DisplayMemberPath = nameof(SortOptionsFirstKeyOrderChoice.Label),
+            SelectedValuePath = nameof(SortOptionsFirstKeyOrderChoice.Value),
             IsEditable = true,
             IsTextSearchEnabled = true,
             Margin = new Thickness(0, 0, 0, 10)
         };
-        var initialFirstKeySortOrder = NormalizeFirstKeySortOrder(current.FirstKeySortOrder);
-        _firstKeySortOrderBox.SelectedValue = initialFirstKeySortOrder;
-        if (_firstKeySortOrderBox.SelectedValue is null)
+        var firstKeySelection = SortOptionsPolicy.ResolveFirstKeyOrderSelection(
+            current.FirstKeySortOrder,
+            presentation.FirstKeySortOrders,
+            preserveUnlistedEditorText: true);
+        _firstKeySortOrderBox.SelectedItem = firstKeySelection.SelectedChoice;
+        if (firstKeySelection.SelectedChoice is null)
         {
             // Not one of the 4 built-ins (and not "Normal") -- a previously-authored custom list
             // (e.g. round-tripped from WorksheetSortStateModel.CustomList). Show its literal text
             // directly in the editable box instead of silently reverting the choice to "Normal".
-            _firstKeySortOrderBox.Text = initialFirstKeySortOrder;
+            _firstKeySortOrderBox.Text = firstKeySelection.EditorText;
         }
         body.Children.Add(new Label
         {
-            Content = UiText.Get("SortOptions_FirstKeySortOrderLabel"),
+            Content = presentation.FirstKeySortOrderLabel,
             Target = _firstKeySortOrderBox,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 0, 3)
         });
         body.Children.Add(_firstKeySortOrderBox);
 
-        _topToBottomButton = new RadioButton { Content = UiText.Get("SortOptions_SortTopToBottom"), IsChecked = !current.LeftToRight };
-        _leftToRightButton = new RadioButton { Content = UiText.Get("SortOptions_SortLeftToRight"), IsChecked = current.LeftToRight };
+        _topToBottomButton = new RadioButton { Content = presentation.SortTopToBottom, IsChecked = !current.LeftToRight };
+        _leftToRightButton = new RadioButton { Content = presentation.SortLeftToRight, IsChecked = current.LeftToRight };
 
         var orientation = new GroupBox
         {
-            Header = UiText.Get("SortOptions_Orientation"),
+            Header = presentation.Orientation,
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 10),
             Content = new StackPanel
@@ -101,18 +102,13 @@ public sealed class SortOptionsDialog : Window
 
         var buttons = DialogButtonRowFactory.Create(() =>
         {
-            // SelectedValue is non-null only when one of the predefined items (Normal or a built-in
-            // day/month list) is actually chosen; a typed custom list clears SelectedValue (WPF
-            // editable-combo behavior once the text no longer matches any item), so fall back to the
-            // raw typed Text in that case -- the user's own custom list.
-            var firstKeySortOrder = _firstKeySortOrderBox.SelectedValue as string
-                ?? (string.IsNullOrWhiteSpace(_firstKeySortOrderBox.Text)
-                    ? NormalFirstKeySortOrder
-                    : _firstKeySortOrderBox.Text.Trim());
-            Result = new SortDialogOptions(
-                CaseSensitive: _caseSensitiveBox.IsChecked == true,
-                LeftToRight: _leftToRightButton.IsChecked == true,
-                FirstKeySortOrder: firstKeySortOrder);
+            // SelectedItem is a catalog choice only for Normal or a built-in day/month list. WPF
+            // clears it when editable text no longer matches an item, leaving the custom list in Text.
+            Result = SortOptionsPolicy.CreateResult(
+                _caseSensitiveBox.IsChecked == true,
+                _leftToRightButton.IsChecked == true,
+                _firstKeySortOrderBox.SelectedItem as SortOptionsFirstKeyOrderChoice,
+                _firstKeySortOrderBox.Text);
             DialogResult = true;
         }, buttonWidth: 72);
         buttons.VerticalAlignment = VerticalAlignment.Bottom;
@@ -120,33 +116,6 @@ public sealed class SortOptionsDialog : Window
         root.Children.Add(buttons);
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
-    }
-
-    private static IReadOnlyList<FirstKeySortOrderChoice> CreateFirstKeySortOrders() =>
-        [
-            new(UiText.Get("SortOptions_FirstKeyNormal"), NormalFirstKeySortOrder),
-            new(UiText.Get("SortOptions_FirstKeySunToSatShort"), "Sun, Mon, Tue, Wed, Thu, Fri, Sat"),
-            new(UiText.Get("SortOptions_FirstKeySundayToSaturday"), "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday"),
-            new(UiText.Get("SortOptions_FirstKeyJanToDecShort"), "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec"),
-            new(UiText.Get("SortOptions_FirstKeyJanuaryToDecember"), "January, February, March, April, May, June, July, August, September, October, November, December")
-        ];
-
-    private static string NormalizeFirstKeySortOrder(string? value)
-    {
-        foreach (var order in CreateFirstKeySortOrders())
-        {
-            if (string.Equals(order.Value, value, StringComparison.Ordinal) ||
-                string.Equals(order.Label, value, StringComparison.Ordinal))
-            {
-                return order.Value;
-            }
-        }
-
-        // R91-commands-sort-customlist-5-3: a value that isn't one of the 4 built-ins is now a
-        // legitimate user-authored custom list (e.g. round-tripped from
-        // WorksheetSortStateModel.CustomList, or re-opening this dialog after typing one in) --
-        // preserve it verbatim instead of silently discarding the user's choice back to "Normal".
-        return string.IsNullOrWhiteSpace(value) ? NormalFirstKeySortOrder : value;
     }
 
     private void FocusInitialKeyboardTarget()

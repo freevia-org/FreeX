@@ -27,7 +27,7 @@ public sealed class RibbonCommandIconPackagingTests
         foreach (var include in new[]
         {
             @"..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg",
-            @"..\FreeW.App.Host\Resources\CommandIconsSvg\**\*.svg",
+            @"..\FreeW.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg",
         })
         {
             var canonicalIcons = project
@@ -96,17 +96,6 @@ public sealed class RibbonCommandIconPackagingTests
         }
     }
 
-    private static string FindRepositoryFile(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException($"Could not find repository file from {AppContext.BaseDirectory}.");
-    }
+    private static string FindRepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

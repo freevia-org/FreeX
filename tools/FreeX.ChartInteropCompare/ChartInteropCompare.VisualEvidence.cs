@@ -7,6 +7,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Free.ToolsShared;
 using FreeX.ToolsShared;
 
 internal static partial class ChartInteropCompare

@@ -1,8 +1,10 @@
 using System.IO;
-using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -14,46 +16,67 @@ namespace FreeP.App.Rendering.Wpf;
 /// </summary>
 internal static class WpfRichTextClipboardAdapter
 {
-    /// <summary>
-    /// Test seam: when set, replaces the real <see cref="Clipboard.SetDataObject(DataObject, bool)"/>
-    /// call so tests can force an in-place Copy/Cut write failure deterministically without locking
-    /// the process's actual OS clipboard. Null (default) uses the real WPF clipboard.
-    /// </summary>
-    internal static Action<DataObject>? SetDataObjectForTests { get; set; }
-
-    internal static bool TryCopy(RichTextBox box, TextBody? originalBody) =>
-        TryCopy(box, originalBody, out _);
-
-    /// <param name="errorMessage">
-    /// Set to the OS-clipboard write failure's message when this returns false because the write
-    /// itself failed (locked by another process, unsupported format, etc.). Null when there was
-    /// nothing to copy (not a failure) or the copy succeeded, so callers can distinguish a real
-    /// failure worth surfacing to the user from an ordinary empty-selection no-op.
-    /// </param>
-    internal static bool TryCopy(RichTextBox box, TextBody? originalBody, out string? errorMessage)
+    internal static async ValueTask<WpfRichTextClipboardPreviewResult> HandlePreviewKeyDownAsync(
+        KeyEventArgs eventArgs,
+        RichTextBox box,
+        TextBody? originalBody,
+        IPlatformClipboard? clipboard = null,
+        CancellationToken cancellationToken = default)
     {
-        errorMessage = null;
+        ArgumentNullException.ThrowIfNull(eventArgs);
+        WpfRichTextClipboardPreviewResult result;
+        if (eventArgs.Key == Key.C)
+        {
+            var write = await TryCopyResultAsync(box, originalBody, clipboard, cancellationToken);
+            result = new WpfRichTextClipboardPreviewResult(write.IsSuccess, FailureMessage: write.ErrorMessage);
+        }
+        else if (eventArgs.Key == Key.X)
+        {
+            var write = await TryCutResultAsync(box, originalBody, clipboard, cancellationToken);
+            result = new WpfRichTextClipboardPreviewResult(write.IsSuccess, FailureMessage: write.ErrorMessage);
+        }
+        else if (eventArgs.Key == Key.V)
+        {
+            result = await PastePreviewAsync(
+                box,
+                originalBody,
+                clipboard,
+                cancellationToken);
+        }
+        else
+        {
+            result = default;
+        }
+        eventArgs.Handled = result.Handled;
+        return result;
+    }
+
+    internal static async ValueTask<bool> TryCopyAsync(
+        RichTextBox box,
+        TextBody? originalBody,
+        IPlatformClipboard? clipboard = null,
+        CancellationToken cancellationToken = default) =>
+        (await TryCopyResultAsync(box, originalBody, clipboard, cancellationToken)).IsSuccess;
+
+    private static async ValueTask<PlatformClipboardWriteResult> TryCopyResultAsync(
+        RichTextBox box,
+        TextBody? originalBody,
+        IPlatformClipboard? clipboard,
+        CancellationToken cancellationToken)
+    {
         var payload = CreatePayload(box, originalBody);
         if (payload is null)
-            return false;
+            return PlatformClipboardWriteResult.Unavailable();
 
-        try
-        {
-            var data = BuildDataObject(box, payload);
-            if (SetDataObjectForTests is { } testWrite)
-                testWrite(data);
-            else
-                Clipboard.SetDataObject(data, copy: true);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            // The OS clipboard write failed (locked by another process, unsupported format, etc.).
-            // Record the message so the caller can surface it instead of the user believing the
-            // in-place copy succeeded and later pasting stale data.
-            errorMessage = ex.Message;
-            return false;
-        }
+        var content = BuildClipboardContent(box, payload);
+        var result = await PresentationRichTextClipboardWorkflow.WriteAsync(
+            clipboard ?? new WpfPlatformClipboard(),
+            content,
+            PlatformClipboardFormatScope.Platform,
+            DataFormats.XamlPackage,
+            DataFormats.Rtf,
+            cancellationToken);
+        return result;
     }
 
     internal static InCanvasRichClipboardPayload? CreatePayload(
@@ -70,33 +93,58 @@ internal static class WpfRichTextClipboardAdapter
         return payload.PlainText.Length == 0 ? null : payload;
     }
 
-    internal static bool TryCut(RichTextBox box, TextBody? originalBody) =>
-        TryCut(box, originalBody, out _);
-
-    /// <param name="errorMessage">See <see cref="TryCopy(RichTextBox, TextBody?, out string?)"/>.</param>
-    internal static bool TryCut(RichTextBox box, TextBody? originalBody, out string? errorMessage)
-    {
-        if (!TryCopy(box, originalBody, out errorMessage))
-            return false;
-
-        box.Selection.Text = string.Empty;
-        return true;
-    }
-
-    internal static bool TryPaste(
+    internal static async ValueTask<bool> TryCutAsync(
         RichTextBox box,
         TextBody? originalBody,
-        out TextBody? updatedBody)
+        IPlatformClipboard? clipboard = null,
+        CancellationToken cancellationToken = default) =>
+        (await TryCutResultAsync(box, originalBody, clipboard, cancellationToken)).IsSuccess;
+
+    private static async ValueTask<PlatformClipboardWriteResult> TryCutResultAsync(
+        RichTextBox box,
+        TextBody? originalBody,
+        IPlatformClipboard? clipboard,
+        CancellationToken cancellationToken)
     {
-        try
-        {
-            return TryPasteDataObject(box, originalBody, Clipboard.GetDataObject(), out updatedBody);
-        }
-        catch
-        {
-            updatedBody = null;
-            return false;
-        }
+        var write = await TryCopyResultAsync(box, originalBody, clipboard, cancellationToken);
+        if (!write.IsSuccess)
+            return write;
+
+        box.Selection.Text = string.Empty;
+        return write;
+    }
+
+    internal static async ValueTask<WpfRichTextClipboardPasteResult> TryPasteAsync(
+        RichTextBox box,
+        TextBody? originalBody,
+        IPlatformClipboard? clipboard = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await PresentationRichTextClipboardWorkflow.ReadAsync(
+            clipboard ?? new WpfPlatformClipboard(),
+            cancellationToken);
+        if (!result.IsSuccess || result.Value is null)
+            return default;
+
+        return TryPasteContent(box, originalBody, result.Value, out var updatedBody)
+            ? new WpfRichTextClipboardPasteResult(true, updatedBody)
+            : default;
+    }
+
+    private static async ValueTask<WpfRichTextClipboardPreviewResult> PastePreviewAsync(
+        RichTextBox box,
+        TextBody? originalBody,
+        IPlatformClipboard? clipboard,
+        CancellationToken cancellationToken)
+    {
+        var result = await TryPasteAsync(
+            box,
+            originalBody,
+            clipboard,
+            cancellationToken);
+        return new WpfRichTextClipboardPreviewResult(
+            result.Applied,
+            result.UpdatedBody);
     }
 
     internal static bool TryPasteDataObject(
@@ -105,42 +153,24 @@ internal static class WpfRichTextClipboardAdapter
         IDataObject? data,
         out TextBody? updatedBody)
     {
+        var read = WpfPlatformClipboard.ReadDataObject(
+            data,
+            PresentationClipboardPlatformMapper.RichTextReadRequest);
+        var content = read.IsSuccess && read.Value is not null
+            ? PresentationClipboardPlatformMapper.FromPlatformContent(read.Value)
+            : new PresentationClipboardContent();
+        return TryPasteContent(box, originalBody, content, out updatedBody);
+    }
+
+    private static bool TryPasteContent(
+        RichTextBox box,
+        TextBody? originalBody,
+        PresentationClipboardContent content,
+        out TextBody? updatedBody)
+    {
         updatedBody = null;
-        byte[]? bytes;
-        try
-        {
-            bytes = ReadBytes(data, PresentationClipboardFormats.RichText);
-        }
-        catch
-        {
-            return false;
-        }
 
-        var payload = InCanvasRichClipboardPlanner.Deserialize(bytes);
-        if (payload is null)
-        {
-            payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
-                ReadBytes(data, DataFormats.XamlPackage));
-        }
-
-        if (payload is null)
-        {
-            // WPF's native RTF loader is authoritative for the control itself. FreeP's
-            // TextBody has no inline table node, however, so use the shared bounded planner
-            // before plain-text fallback to preserve the same logical tab/row projection in
-            // both hosts without making the shared parser a platform fork.
-            try
-            {
-                var externalPayload = ExternalRichTextClipboardPlanner.TryParseRtf(
-                    ReadBytes(data, DataFormats.Rtf));
-                payload = externalPayload ?? ReadPlainTextPayload(data);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
+        var payload = InCanvasRichClipboardFormatResolver.Resolve(content).Payload;
         if (payload is null)
             return false;
 
@@ -164,69 +194,33 @@ internal static class WpfRichTextClipboardAdapter
         RichTextBox box,
         InCanvasRichClipboardPayload payload)
     {
-        var data = new DataObject();
-        var range = new TextRange(box.Selection.Start, box.Selection.End);
-
-        TrySetNativeFormat(data, range, DataFormats.Rtf);
-        TrySetNativeFormat(data, range, DataFormats.XamlPackage);
-        data.SetText(payload.PlainText, TextDataFormat.UnicodeText);
-        data.SetData(
-            PresentationClipboardFormats.RichText,
-            new MemoryStream(InCanvasRichClipboardPlanner.Serialize(payload)),
-            autoConvert: false);
-        return data;
+        var content = BuildClipboardContent(box, payload);
+        return WpfPlatformClipboard.BuildDataObject(
+            PresentationClipboardPlatformMapper.ToPlatformContent(
+                content,
+                PlatformClipboardFormatScope.Platform,
+                DataFormats.XamlPackage,
+                DataFormats.Rtf));
     }
 
-    private static void TrySetNativeFormat(DataObject data, TextRange range, string format)
+    private static PresentationClipboardContent BuildClipboardContent(
+        RichTextBox box,
+        InCanvasRichClipboardPayload payload)
+    {
+        var range = new TextRange(box.Selection.Start, box.Selection.End);
+        return PresentationRichTextClipboardWorkflow.CreateWriteContent(
+            payload,
+            TrySaveNativeFormat(range, DataFormats.XamlPackage),
+            TrySaveNativeFormat(range, DataFormats.Rtf));
+    }
+
+    private static byte[]? TrySaveNativeFormat(TextRange range, string format)
     {
         try
         {
             using var stream = new MemoryStream();
             range.Save(stream, format);
-            data.SetData(format, new MemoryStream(stream.ToArray(), writable: false), autoConvert: false);
-        }
-        catch
-        {
-            // Some WPF hosts do not expose every rich format; Unicode text and FreeP's payload
-            // remain available in that case.
-        }
-    }
-
-    private static byte[]? ReadBytes(IDataObject? data, string format)
-    {
-        if (data is null || !data.GetDataPresent(format, autoConvert: false))
-            return null;
-
-        var value = data.GetData(format, autoConvert: false);
-        return value switch
-        {
-            byte[] bytes => bytes,
-            MemoryStream stream => stream.ToArray(),
-            Stream stream => ReadStream(stream),
-            string text => Encoding.Default.GetBytes(text),
-            _ => null,
-        };
-    }
-
-    private static InCanvasRichClipboardPayload? ReadPlainTextPayload(IDataObject? data)
-    {
-        if (data is null || !data.GetDataPresent(DataFormats.UnicodeText, autoConvert: false))
-            return null;
-
-        return data.GetData(DataFormats.UnicodeText, autoConvert: false) is string text
-            ? InCanvasRichClipboardPayload.FromPlainText(text)
-            : null;
-    }
-
-    private static byte[]? ReadStream(Stream stream)
-    {
-        try
-        {
-            if (stream.CanSeek)
-                stream.Position = 0;
-            using var copy = new MemoryStream();
-            stream.CopyTo(copy);
-            return copy.ToArray();
+            return stream.ToArray();
         }
         catch
         {
@@ -298,3 +292,12 @@ internal static class WpfRichTextClipboardAdapter
         return remaining == 0 ? document.ContentEnd : null;
     }
 }
+
+internal readonly record struct WpfRichTextClipboardPasteResult(
+    bool Applied,
+    TextBody? UpdatedBody);
+
+internal readonly record struct WpfRichTextClipboardPreviewResult(
+    bool Handled,
+    TextBody? UpdatedBody = null,
+    string? FailureMessage = null);

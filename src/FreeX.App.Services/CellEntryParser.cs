@@ -176,10 +176,10 @@ public static class CellEntryParser
             return new DateTimeValue(fakeLeapDaySerial);
         }
 
-        if (TryParseCurrentCultureDate(text, out var dateTime))
+        if (ExcelDateEntryParser.TryParseCurrentCulture(text, allowTimeOnly: true, out var dateTime))
         {
             // A time-only literal (e.g. "15:30", "3:30 PM") has no date component;
-            // TryParseCurrentCultureDate's NoCurrentDateDefault parse synthesizes
+            // ExcelDateEntryParser's NoCurrentDateDefault parse synthesizes
             // DateTime.MinValue's date (0001-01-01) for the missing date part rather than
             // today's date. Such a value is an Excel time-of-day serial (< 1, e.g. 0.645833...
             // for 15:30), not a real date, so it must bypass DateTimeValue.FromDateTime's OADate
@@ -210,7 +210,7 @@ public static class CellEntryParser
         if (double.TryParse(text, NumberEntryStyles, CultureInfo.CurrentCulture, out number) &&
             double.IsFinite(number))
         {
-            number = RoundToSignificantDigits(number, 15);
+            number = ExcelNumericPrecision.CapSignificantDigits(number);
             return true;
         }
 
@@ -228,41 +228,11 @@ public static class CellEntryParser
         if (double.TryParse(text, NumberEntryStyles, CultureInfo.InvariantCulture, out number) &&
             double.IsFinite(number))
         {
-            number = RoundToSignificantDigits(number, 15);
+            number = ExcelNumericPrecision.CapSignificantDigits(number);
             return true;
         }
 
         return false;
-    }
-
-    /// <summary>
-    /// Round <paramref name="value"/> to at most <paramref name="digits"/> significant decimal
-    /// digits, matching Excel's storage precision cap (any typed/pasted literal number is capped
-    /// at 15 significant digits, unconditionally). Mirrors RecalcEngine's and
-    /// DelimitedTextWorkbookReader's own RoundToSignificantDigits helper (this project cannot
-    /// reference FreeX.Core.Calc's internal copy, so the identical logic is duplicated here).
-    /// </summary>
-    private static double RoundToSignificantDigits(double value, int digits)
-    {
-        if (value == 0)
-            return 0;
-
-        var scale = digits - (int)Math.Floor(Math.Log10(Math.Abs(value))) - 1;
-        if (scale < 0)
-        {
-            // The value has more integer digits than the significant-digit cap (e.g. an 18-digit
-            // integer). Excel does not round such values to the nearest 10^-scale -- it truncates
-            // (chops) the excess low-order digits to zero, matching its 15-significant-digit storage
-            // cap. Math.Round(double, int) only accepts digits in [0, 15] and cannot express a
-            // negative scale, so replicate the truncation directly instead of clamping to a no-op.
-            var divisor = Math.Pow(10, -scale);
-            return Math.Truncate(value / divisor) * divisor;
-        }
-
-        // Math.Round(double,int) only accepts digits in [0, 15]; a small-magnitude value (|value| <
-        // 0.1) gives scale > 15, which would throw. A double already carries at most ~15-17
-        // significant digits, so rounding at the 15th place is a safe no-op for those values.
-        return Math.Round(value, Math.Min(scale, 15), MidpointRounding.AwayFromZero);
     }
 
     // Trailing '%' (e.g. "50%") -> Excel stores the underlying fraction (0.5), not the literal 50.
@@ -294,7 +264,7 @@ public static class CellEntryParser
             return false;
         }
 
-        value = RoundToSignificantDigits(value, 15);
+        value = ExcelNumericPrecision.CapSignificantDigits(value);
         return true;
     }
 
@@ -327,59 +297,4 @@ public static class CellEntryParser
         return true;
     }
 
-    // Only attempt a date parse when the text already "looks like" a date (at least two digit
-    // groups, plus either a recognized date separator with 3+ groups or a letter, e.g. a month
-    // name) - otherwise DateTime.TryParse is lenient enough to misread plain numbers/fractions.
-    private static bool TryParseCurrentCultureDate(string text, out DateTime dateTime)
-    {
-        dateTime = default;
-        if (string.IsNullOrEmpty(CultureInfo.CurrentCulture.Name) || !LooksLikeDateCandidate(text))
-            return false;
-
-        // Clone so the two-digit-year window can be overridden to Excel's documented 1930-2029
-        // rule (30-99 -> 19xx, 00-29 -> 20xx). .NET's default Calendar.TwoDigitYearMax is 2049,
-        // which would misdate e.g. "6/15/45" to 2045 instead of Excel's 1945.
-        var culture = (CultureInfo)CultureInfo.CurrentCulture.Clone();
-        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
-
-        if (!DateTime.TryParse(text, culture, DateTimeStyles.NoCurrentDateDefault, out dateTime))
-            return false;
-
-        // A time-only literal (e.g. "15:30", "3:30 PM") has no date component at all;
-        // NoCurrentDateDefault synthesizes DateTime.MinValue's date (0001-01-01) for the missing
-        // date part rather than today's date. Judge these by their time-of-day instead of the
-        // synthesized date -- the pre-1900 guard below exists to reject genuine out-of-range date
-        // literals (e.g. "1/1/1850"), not every time-only entry, which would otherwise always
-        // synthesize a date far earlier than 1900.
-        if (dateTime.Date == DateTime.MinValue.Date)
-            return true;
-
-        // Excel's earliest representable date is 1/1/1900 (serial 1); text that parses to an
-        // earlier date is left as plain text instead of becoming a negative-serial DateTimeValue.
-        return dateTime.Date >= new DateTime(1900, 1, 1);
-    }
-
-    // '/' and '-' are universally treated by Excel as date separators regardless of locale; '.'
-    // only counts when it is the current culture's own actual date separator (e.g. de-DE/it-IT),
-    // otherwise a plain decimal-looking string like "1.2.3" under en-US (whose date separator is
-    // '/') would be misread as a date instead of staying text. ':' is Excel's universal time
-    // separator regardless of locale (e.g. "15:30"), so a bare "H:MM"/"H:MM:SS" literal with no
-    // AM/PM letter must still be treated as a date/time candidate -- otherwise a 24-hour time-only
-    // entry never even reaches the DateTime.TryParse attempt below (colonAlwaysQualifies: true).
-    // See DateEntryShapeRecognizer for the shared, single-source implementation of the underlying
-    // digit-group/date-separator shape check (also used by DelimitedTextWorkbookReader's CSV
-    // import and TextToColumnsValueConverter's Text-to-Columns "General" column conversion) --
-    // including its year-less two-digit-group "M/d"/"M-d" rule (e.g. a bare "3/4" is a date to
-    // Excel, matching CSV import; a bare "1/2" with no leading whole part/space is likewise a
-    // date, not a fraction -- see TryParseMixedFraction's own comment for that distinction).
-    private static bool LooksLikeDateCandidate(string text)
-    {
-        var cultureDateSeparator = CultureInfo.CurrentCulture.DateTimeFormat.DateSeparator;
-        var dotCountsAsDateSeparator = cultureDateSeparator.Length == 1 && cultureDateSeparator[0] == '.';
-
-        return DateEntryShapeRecognizer.LooksLikeDateCandidate(
-            text.AsSpan(),
-            dotCountsAsDateSeparator,
-            colonAlwaysQualifies: true);
-    }
 }

@@ -171,4 +171,26 @@ public sealed class DialogVisualHarnessSemanticTextTests
         avalonia.Should().Contain("dialog.GetVisualDescendants().OfType<Button>()",
             "logical descendants from inactive tabs must not change the selected dialog's action order");
     }
+
+    [Fact]
+    public void Visual_harnesses_use_typed_routes_for_private_ui_behavior()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var harnessRoots = new[]
+        {
+            Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness.Wpf"),
+            Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness.Avalonia"),
+        };
+
+        var sources = harnessRoots
+            .SelectMany(path => Directory.EnumerateFiles(path, "*.cs", SearchOption.TopDirectoryOnly))
+            .Select(path => (Path: path, Source: File.ReadAllText(path)))
+            .ToArray();
+
+        sources.Should().OnlyContain(file => !file.Source.Contains("GetField(\"", StringComparison.Ordinal));
+        sources.Should().OnlyContain(file => !file.Source.Contains("GetMethod(\"", StringComparison.Ordinal));
+        sources.Should().OnlyContain(file => !file.Source.Contains("GetProperty(\"", StringComparison.Ordinal));
+        sources.Select(file => file.Source).Should().Contain(source =>
+            source.Contains("every generic dialog remains constructible", StringComparison.Ordinal));
+    }
 }

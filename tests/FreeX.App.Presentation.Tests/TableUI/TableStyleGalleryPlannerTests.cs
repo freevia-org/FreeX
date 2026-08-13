@@ -270,8 +270,7 @@ public sealed class TableStyleGalleryPlannerTests
     public void HostTableStyleGalleryFacade_IsRemoved()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "TableStyleGalleryPlanner.cs"))
             .Should()

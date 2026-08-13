@@ -1,5 +1,7 @@
 using FluentAssertions;
 using FreeX.App.Services;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
 
@@ -49,5 +51,38 @@ public sealed class WatchWindowDialogPlannerTests
         WatchWindowDialogPlanner.Height.Should().Be(320);
         WatchWindowDialogPlanner.MinWidth.Should().Be(720);
         WatchWindowDialogPlanner.MinHeight.Should().Be(220);
+    }
+
+    [Fact]
+    public void CreateRows_ProjectsDisplayFieldsAndPreservesEntryOrder()
+    {
+        var sheetId = SheetId.New();
+        var laterAddress = new CellAddress(sheetId, 4, 2);
+        var earlierAddress = new CellAddress(sheetId, 1, 1);
+        var entries = new[]
+        {
+            new WatchWindowEntry(sheetId, "Totals", laterAddress, "120", "=SUM(A1:A3)"),
+            new WatchWindowEntry(sheetId, "Input", earlierAddress, "Ready", null),
+        };
+
+        WatchWindowDialogPlanner.CreateRows(entries, "This Workbook")
+            .Should()
+            .Equal(
+                new WatchWindowRowPlan(
+                    "This Workbook",
+                    "Totals",
+                    string.Empty,
+                    "B4",
+                    "120",
+                    "=SUM(A1:A3)",
+                    laterAddress),
+                new WatchWindowRowPlan(
+                    "This Workbook",
+                    "Input",
+                    string.Empty,
+                    "A1",
+                    "Ready",
+                    string.Empty,
+                    earlierAddress));
     }
 }

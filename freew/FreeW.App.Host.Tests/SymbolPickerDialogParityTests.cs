@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
@@ -25,11 +26,18 @@ public sealed class SymbolPickerDialogParityTests
                 && button.Height == FreeWSymbolPickerDialogPlanner.ButtonSize
                 && button.Margin == new Thickness(FreeWSymbolPickerDialogPlanner.ButtonMargin)
                 && button.FontSize == FreeWSymbolPickerDialogPlanner.ButtonFontSize);
+            grid.Children.OfType<Button>().Select(AutomationProperties.GetAutomationId)
+                .Should().Equal(FreeWSymbolPickerDialogPlanner.Glyphs
+                    .Select(glyph => FreeWSymbolPickerDialogPlanner.BuildSemantic(glyph).AutomationId));
+            grid.Children.OfType<Button>().Select(AutomationProperties.GetName)
+                .Should().Equal(FreeWSymbolPickerDialogPlanner.Glyphs);
 
             var cancel = (Button)panel.Children[1];
             cancel.Content.Should().Be(FreeWSymbolPickerDialogPlanner.CancelText);
             cancel.MinWidth.Should().Be(FreeWSymbolPickerDialogPlanner.FooterButtonMinWidth);
             cancel.HorizontalAlignment.Should().Be(HorizontalAlignment.Right);
+            AutomationProperties.GetAutomationId(cancel).Should()
+                .Be(FreeWSymbolPickerDialogPlanner.CancelAutomationId);
         }
         finally
         {
@@ -58,17 +66,6 @@ public sealed class SymbolPickerDialogParityTests
                 yield return child;
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

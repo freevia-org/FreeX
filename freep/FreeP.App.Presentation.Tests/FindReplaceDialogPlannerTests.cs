@@ -6,6 +6,43 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class FindReplaceDialogPlannerTests
 {
+    [Fact]
+    public void BuildSurfacePlan_OwnsLabelsAndOrderedOptionCatalogs()
+    {
+        var surface = FindReplaceDialogPlanner.BuildSurfacePlan();
+
+        surface.FindLabel.Should().Be("Find what:");
+        surface.ReplaceLabel.Should().Be("Replace with:");
+        surface.Options.Should().Equal(
+            new FindReplaceDialogOption(FindReplaceDialogOptionKind.MatchCase, "Match case"),
+            new FindReplaceDialogOption(FindReplaceDialogOptionKind.WholeWord, "Whole word"));
+        surface.Actions.Should().Equal(
+            new FindReplaceDialogActionOption(FindReplaceDialogAction.FindNext, "Find Next"),
+            new FindReplaceDialogActionOption(FindReplaceDialogAction.FindPrevious, "Find Previous"),
+            new FindReplaceDialogActionOption(FindReplaceDialogAction.ReplaceCurrent, "Replace"),
+            new FindReplaceDialogActionOption(FindReplaceDialogAction.ReplaceAll, "Replace All"));
+        surface.CloseLabel.Should().Be("Close");
+        surface.Schema.Fields.Select(field => field.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Schema.Actions.Select(action => action.AutomationId).Should().OnlyHaveUniqueItems();
+        surface.Action(FindReplaceDialogAction.FindNext).IsDefault.Should().BeTrue();
+        surface.Action(FindReplaceDialogAction.Close).IsCancel.Should().BeTrue();
+        surface.Field(FindReplaceDialogField.Query).HelpText.Should().Be("Enter text to find.");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildInitialState_OwnsEmptyInputAndOptionDefaults(bool showReplace)
+    {
+        FindReplaceDialogPlanner.BuildInitialState(showReplace).Should().Be(
+            new FindReplaceDialogInitialState(
+                showReplace,
+                string.Empty,
+                string.Empty,
+                MatchCase: false,
+                WholeWord: false));
+    }
+
     [Theory]
     [InlineData(false, FindReplaceDialogPlanner.FindTitle)]
     [InlineData(true, FindReplaceDialogPlanner.FindAndReplaceTitle)]

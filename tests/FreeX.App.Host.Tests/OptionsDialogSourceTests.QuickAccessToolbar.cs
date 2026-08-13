@@ -54,7 +54,7 @@ public sealed partial class OptionsDialogSourceTests
 
         xaml.Should().Contain("x:Name=\"QuickAccessImportExportButton\"");
 
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"QuickAccessToolbarImportExportButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"{x:Static presentation:FreeXAutomationIdCatalog.QuickAccessToolbarImportExportButton}\"");
 
         xaml.Should().Contain("Click=\"QuickAccessResetButton_Click\"");
 
@@ -68,16 +68,14 @@ public sealed partial class OptionsDialogSourceTests
 
         source.Should().Contain("PanelQuickAccessToolbar.Visibility = selectedIndex == 8 ? Visibility.Visible : Visibility.Collapsed;");
 
-        source.Should().Contain("QuickAccessToolbarCatalog.NormalizeCommandIds(_opts.QuickAccessToolbarCommands)");
+        source.Should().Contain("_quickAccessSession = _dialogSession.QuickAccessToolbar;");
 
-        source.Should().Contain("QuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true");
+        source.Should().Contain("_quickAccessSession.SetPlacement(QuickAccessBelowRibbonCheckBox.IsChecked == true)");
 
-        source.Should().Contain("QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList()");
-
-        source.Should().Contain("QuickAccessToolbarCustomizationPlanner.FilterAvailable(");
-        source.Should().Contain("QuickAccessToolbarCustomizationPlanner.Apply(");
-        source.Should().Contain("QuickAccessToolbarCustomizationPlanner.Move(");
-        source.Should().Contain("QuickAccessToolbarCustomizationPlanner.Reset()");
+        source.Should().Contain("_quickAccessSession.FilterAvailable(");
+        source.Should().Contain("_quickAccessSession.Apply(");
+        source.Should().Contain("_quickAccessSession.Move(");
+        source.Should().Contain("_quickAccessSession.Reset()");
         source.Should().NotContain("QuickAccessCommandMatchesFilter");
 
         source.Should().Contain("QuickAccessSearchBox_TextChanged");
@@ -106,9 +104,9 @@ public sealed partial class OptionsDialogSourceTests
 
         source.Should().Contain("e.Handled = true;");
 
-        source.Should().Contain("QuickAccessToolbarCustomizationFile.TryLoad(pickerResult.FileName!)");
+        source.Should().Contain("_quickAccessSession.TryImport(pickerResult.FileName!)");
 
-        source.Should().Contain("QuickAccessToolbarCustomizationFile.TrySave(");
+        source.Should().Contain("_quickAccessSession.TryExport(pickerResult.FileName!, out var errorMessage)");
 
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
 
@@ -188,7 +186,7 @@ public sealed partial class OptionsDialogSourceTests
 
             "AutomationProperties.HelpText=\"Restore the default Quick Access Toolbar commands.\"",
 
-            "AutomationProperties.AutomationId=\"QuickAccessToolbarImportExportButton\"",
+            "AutomationProperties.AutomationId=\"{x:Static presentation:FreeXAutomationIdCatalog.QuickAccessToolbarImportExportButton}\"",
 
             "AutomationProperties.HelpText=\"Import or export FreeX Quick Access Toolbar customization.\""
 
@@ -214,7 +212,7 @@ public sealed partial class OptionsDialogSourceTests
 
         {
 
-            var dialog = new OptionsDialog(new FreeXOptions());
+            var dialog = new OptionsDialog(new AppOptions());
 
             dialog.Show();
 
@@ -292,7 +290,7 @@ public sealed partial class OptionsDialogSourceTests
 
         {
 
-            var dialog = new OptionsDialog(new FreeXOptions());
+            var dialog = new OptionsDialog(new AppOptions());
 
             dialog.Show();
 
@@ -384,7 +382,7 @@ public sealed partial class OptionsDialogSourceTests
 
         {
 
-            var dialog = new OptionsDialog(new FreeXOptions());
+            var dialog = new OptionsDialog(new AppOptions());
 
             dialog.Show();
 

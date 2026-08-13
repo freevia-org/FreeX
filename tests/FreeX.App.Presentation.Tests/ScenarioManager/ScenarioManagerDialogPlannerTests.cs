@@ -7,6 +7,17 @@ namespace FreeX.App.Presentation.Tests.ScenarioManager;
 public sealed class ScenarioManagerDialogPlannerTests
 {
     [Fact]
+    public void MergeWorkflowText_IsOwnedByPortableResourceDescriptors()
+    {
+        ScenarioManagerDialogPlanner.Title.ResourceKey
+            .Should().Be("MainWindowMessage_ScenarioManagerTitle");
+        ScenarioManagerDialogPlanner.MergeDialogTitle.ResourceKey
+            .Should().Be("ScenarioManager_MergeScenariosDialogTitle");
+        ScenarioManagerDialogPlanner.MergeOpenFailedMessage.ResourceKey
+            .Should().Be("ScenarioManager_MergeOpenFailedMessage");
+    }
+
+    [Fact]
     public void BuildItems_ProjectsScenarioFieldsAndFormattedChangingCells()
     {
         var workbook = CreateWorkbook(out var sheet);
@@ -94,15 +105,16 @@ public sealed class ScenarioManagerDialogPlannerTests
     }
 
     [Theory]
-    [InlineData(ScenarioManagerDialogAction.Add, true)]
-    [InlineData(ScenarioManagerDialogAction.Edit, true)]
-    [InlineData(ScenarioManagerDialogAction.Save, true)]
-    [InlineData(ScenarioManagerDialogAction.Show, false)]
-    [InlineData(ScenarioManagerDialogAction.Delete, false)]
-    [InlineData(ScenarioManagerDialogAction.List, false)]
-    [InlineData(ScenarioManagerDialogAction.Report, false)]
+    [InlineData(ScenarioManagerAction.Add, true)]
+    [InlineData(ScenarioManagerAction.Edit, true)]
+    [InlineData(ScenarioManagerAction.Save, true)]
+    [InlineData(ScenarioManagerAction.Show, false)]
+    [InlineData(ScenarioManagerAction.Delete, false)]
+    [InlineData(ScenarioManagerAction.List, false)]
+    [InlineData(ScenarioManagerAction.Report, false)]
+    [InlineData(ScenarioManagerAction.Merge, false)]
     public void RequiresScenarioName_OnlyRequiresNamesForSaveActions(
-        ScenarioManagerDialogAction action,
+        ScenarioManagerAction action,
         bool expected)
     {
         ScenarioManagerDialogPlanner.RequiresScenarioName(action).Should().Be(expected);
@@ -115,7 +127,7 @@ public sealed class ScenarioManagerDialogPlannerTests
         SheetId? ResolveSheet(string name) => name == sheet.Name ? sheet.Id : null;
 
         ScenarioManagerDialogPlanner.ValidateAcceptRequest(
-                ScenarioManagerDialogAction.Add,
+                ScenarioManagerAction.Add,
                 " ",
                 "A1",
                 "",
@@ -127,7 +139,7 @@ public sealed class ScenarioManagerDialogPlannerTests
                 ScenarioManagerDialogValidationField.ScenarioName));
 
         ScenarioManagerDialogPlanner.ValidateAcceptRequest(
-                ScenarioManagerDialogAction.Add,
+                ScenarioManagerAction.Add,
                 "Scenario 1",
                 "not a range",
                 "",
@@ -139,7 +151,7 @@ public sealed class ScenarioManagerDialogPlannerTests
                 ScenarioManagerDialogValidationField.ChangingCells));
 
         ScenarioManagerDialogPlanner.ValidateAcceptRequest(
-                ScenarioManagerDialogAction.Report,
+                ScenarioManagerAction.Report,
                 "",
                 "",
                 "not a range",
@@ -151,7 +163,7 @@ public sealed class ScenarioManagerDialogPlannerTests
                 ScenarioManagerDialogValidationField.ResultCells));
 
         ScenarioManagerDialogPlanner.ValidateAcceptRequest(
-                ScenarioManagerDialogAction.Report,
+                ScenarioManagerAction.Report,
                 "",
                 "",
                 "A1,Sheet1!B2:C2",
@@ -174,7 +186,7 @@ public sealed class ScenarioManagerDialogPlannerTests
         };
 
         ScenarioManagerDialogPlanner.ValidateAcceptRequest(
-                ScenarioManagerDialogAction.Edit,
+                ScenarioManagerAction.Edit,
                 "Upside",
                 "A1:B2,Sheet2!C3:C4,Sheet1!E5",
                 "",
@@ -237,7 +249,7 @@ public sealed class ScenarioManagerDialogPlannerTests
             Locked: false);
 
         var result = ScenarioManagerDialogPlanner.ProjectAcceptResult(
-            ScenarioManagerDialogAction.Edit,
+            ScenarioManagerAction.Edit,
             selected,
             newScenarioName: "Better Case",
             changingCellsText: "C3",
@@ -247,7 +259,7 @@ public sealed class ScenarioManagerDialogPlannerTests
             hidden: true);
 
         result.Should().Be(new ScenarioManagerDialogAcceptResult(
-            ScenarioManagerDialogAction.Edit,
+            ScenarioManagerAction.Edit,
             "Best Case",
             "Better Case",
             "C3",
@@ -258,29 +270,28 @@ public sealed class ScenarioManagerDialogPlannerTests
     }
 
     [Fact]
-    public void ScenarioManagerDialogPlanning_IsPortableAndHostUsesItAsAdapter()
+    public void ScenarioManagerDialogPlanning_IsPortableAndHostUsesItDirectly()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var plannerSource = File.ReadAllText(Path.Combine(
             presentationRoot,
             "ScenarioManager",
             "ScenarioManagerDialogPlanner.cs"));
-        var hostPlanningSource = File.ReadAllText(Path.Combine(
+        var compatibilityFacadePath = Path.Combine(
             repoRoot,
             "src",
             "FreeX.App.Host",
-            "ScenarioManagerDialog.Planning.cs"));
+            "ScenarioManagerDialog.Planning.cs");
         var hostDialogSource = File.ReadAllText(Path.Combine(
             repoRoot,
             "src",
             "FreeX.App.Host",
             "ScenarioManagerDialog.cs"));
-        var hostSource = hostPlanningSource + hostDialogSource;
-
         plannerSource.Should().Contain("public sealed record ScenarioManagerDialogItem");
         plannerSource.Should().Contain("public sealed record ScenarioManagerDialogAcceptResult");
+        plannerSource.Should().Contain("public enum ScenarioManagerAction");
+        plannerSource.Should().Contain("Merge");
         plannerSource.Should().Contain("WorkbookRangeTextCodec.TryParse");
         plannerSource.Should().Contain("WorkbookRangeTextCodec.TryParseMany");
         plannerSource.Should().NotContain("UiText");
@@ -288,28 +299,27 @@ public sealed class ScenarioManagerDialogPlannerTests
         plannerSource.Should().NotContain("Avalonia");
         plannerSource.Should().NotContain("FreeX.App.Host");
 
-        hostPlanningSource.Should().Contain("public static IReadOnlyList<ScenarioManagerDialogItem> BuildScenarioItems");
-        hostSource.Should().Contain("SharedScenarioManagerDialogPlanner.BuildItems");
-        hostSource.Should().Contain("SharedScenarioManagerDialogPlanner.ValidateAcceptRequest");
-        hostSource.Should().Contain("SharedScenarioManagerDialogPlanner.ProjectSelectionFields");
-        hostSource.Should().Contain("SharedScenarioManagerDialogPlanner.ProjectAcceptResult");
-        hostSource.Should().Contain("LocalizeValidationError");
-        hostSource.Should().Contain("ScenarioManagerDialogSelectionFields");
-        hostSource.Should().Contain("ScenarioManagerDialogAcceptResult");
-        hostSource.Should().Contain("ScenarioManagerDialogValidationField");
-        hostSource.Should().NotContain("ScenarioManagerItem");
-        hostSource.Should().NotContain("ScenarioManagerSelectionFields");
-        hostSource.Should().NotContain("ScenarioManagerAcceptResult");
-        hostSource.Should().NotContain("ScenarioManagerValidationField");
-        hostSource.Should().NotContain("ToHostItem");
-        hostSource.Should().NotContain("ToPlannerItem");
-        hostSource.Should().NotContain("ToHostSelectionFields");
-        hostSource.Should().NotContain("ToHostAcceptResult");
-        hostSource.Should().NotContain("ToHostValidationField");
-        hostSource.Should().NotContain("WorkbookRangeTextCodec.TryParse");
-        hostSource.Should().NotContain("WorkbookRangeTextCodec.TryParseMany");
-        hostSource.Should().NotContain("new GridRange");
-        hostSource.Should().NotContain("scenario.ChangingCells.Min");
+        File.Exists(compatibilityFacadePath)
+            .Should()
+            .BeFalse("WPF should use the canonical Presentation contract without an adapter");
+        hostDialogSource.Should().Contain("ScenarioManagerDialogPlanner.BuildItems");
+        hostDialogSource.Should().Contain("ScenarioManagerDialogPlanner.ValidateAcceptRequest");
+        hostDialogSource.Should().Contain("ScenarioManagerDialogPlanner.ProjectSelectionFields");
+        hostDialogSource.Should().Contain("ScenarioManagerDialogPlanner.ProjectAcceptResult");
+        hostDialogSource.Should().Contain("DescribeValidationFailure(failure)");
+        hostDialogSource.Should().Contain("ScenarioManagerDialogSelectionFields");
+        hostDialogSource.Should().Contain("ScenarioManagerDialogAcceptResult");
+        hostDialogSource.Should().Contain("ScenarioManagerDialogValidationField");
+        hostDialogSource.Should().NotContain("SharedScenarioManagerDialogPlanner");
+        hostDialogSource.Should().NotContain("ToHostItem");
+        hostDialogSource.Should().NotContain("ToPlannerItem");
+        hostDialogSource.Should().NotContain("ToHostSelectionFields");
+        hostDialogSource.Should().NotContain("ToHostAcceptResult");
+        hostDialogSource.Should().NotContain("ToHostValidationField");
+        hostDialogSource.Should().NotContain("WorkbookRangeTextCodec.TryParse");
+        hostDialogSource.Should().NotContain("WorkbookRangeTextCodec.TryParseMany");
+        hostDialogSource.Should().NotContain("new GridRange");
+        hostDialogSource.Should().NotContain("scenario.ChangingCells.Min");
     }
 
     private static Workbook CreateWorkbook(out Sheet sheet)

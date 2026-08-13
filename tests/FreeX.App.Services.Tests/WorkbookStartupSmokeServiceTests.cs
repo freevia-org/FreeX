@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreeX.Core.Calc;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.Validation.Avalonia;
 
 namespace FreeX.App.Services.Tests;
 

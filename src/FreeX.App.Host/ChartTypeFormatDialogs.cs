@@ -2,46 +2,22 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.Charts.Editing;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
 
-public sealed record ChartBarFormatDialogResult(int BarGapWidth, int BarOverlap)
-{
-    public ChartLayoutOptions ToOptions() =>
-        ChartBarFormatPlanner.Plan(ToInput());
-
-    public static ChartBarFormatDialogResult FromChart(ChartModel chart) =>
-        FromInput(ChartBarFormatPlanner.Read(chart));
-
-    public static ChartBarFormatDialogResult CreateResult(int barGapWidth, int barOverlap) =>
-        FromInput(new ChartBarFormatInput(barGapWidth, barOverlap));
-
-    private ChartBarFormatInput ToInput() =>
-        new(BarGapWidth, BarOverlap);
-
-    private static ChartBarFormatDialogResult FromInput(ChartBarFormatInput input)
-    {
-        var normalized = ChartBarFormatPlanner.Normalize(input);
-        return new(
-            normalized.BarGapWidth,
-            normalized.BarOverlap);
-    }
-}
-
 public sealed class ChartBarFormatDialog : Window
 {
     private readonly TextBox _gapWidthBox = new();
     private readonly TextBox _overlapBox = new();
 
-    public ChartBarFormatDialogResult Result { get; private set; }
+    public ChartBarFormatInput Result { get; private set; }
 
     public ChartBarFormatDialog(ChartModel chart)
     {
-        Result = ChartBarFormatDialogResult.FromChart(chart);
+        Result = ChartBarFormatPlanner.Read(chart);
         Title = UiText.Get("ChartBarFormat_Title");
         Width = 340;
         Height = 230;
@@ -65,7 +41,7 @@ public sealed class ChartBarFormatDialog : Window
         return root;
     }
 
-    private void Load(ChartBarFormatDialogResult result)
+    private void Load(ChartBarFormatInput result)
     {
         _gapWidthBox.Text = result.BarGapWidth.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _overlapBox.Text = result.BarOverlap.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -86,16 +62,14 @@ public sealed class ChartBarFormatDialog : Window
                 out var input,
                 out var issue))
         {
-            var (message, target) = issue switch
-            {
-                ChartBarFormatParseIssue.Overlap => (UiText.Get("ChartBarFormat_InvalidOverlapMessage"), _overlapBox),
-                _ => (UiText.Get("ChartBarFormat_InvalidGapWidthMessage"), _gapWidthBox)
-            };
-            ShowInvalidInputWarning(message, target);
+            var presentation = ChartValidationPresentationPlanner.Describe(issue);
+            ShowInvalidInputWarning(
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                presentation.FocusTarget == ChartBarFormatDialogFieldId.Overlap ? _overlapBox : _gapWidthBox);
             return;
         }
 
-        Result = ChartBarFormatDialogResult.CreateResult(input.BarGapWidth, input.BarOverlap);
+        Result = input;
         DialogResult = true;
     }
 
@@ -103,31 +77,6 @@ public sealed class ChartBarFormatDialog : Window
     {
         DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return true;
-    }
-}
-
-public sealed record ChartPieFormatDialogResult(int FirstSliceAngle, int ExplodedSliceIndex, double ExplodedSliceDistance, double DoughnutHoleSize)
-{
-    public ChartLayoutOptions ToOptions() =>
-        ChartPieFormatPlanner.Plan(ToInput());
-
-    public static ChartPieFormatDialogResult FromChart(ChartModel chart) =>
-        FromInput(ChartPieFormatPlanner.Read(chart));
-
-    public static ChartPieFormatDialogResult CreateResult(int firstSliceAngle, int explodedSliceIndex, double explodedSliceDistance, double doughnutHoleSize) =>
-        FromInput(new ChartPieFormatInput(firstSliceAngle, explodedSliceIndex, explodedSliceDistance, doughnutHoleSize));
-
-    private ChartPieFormatInput ToInput() =>
-        new(FirstSliceAngle, ExplodedSliceIndex, ExplodedSliceDistance, DoughnutHoleSize);
-
-    private static ChartPieFormatDialogResult FromInput(ChartPieFormatInput input)
-    {
-        var normalized = ChartPieFormatPlanner.Normalize(input);
-        return new(
-            normalized.FirstSliceAngle,
-            normalized.ExplodedSliceIndex,
-            normalized.ExplodedSliceDistance,
-            normalized.DoughnutHoleSize);
     }
 }
 
@@ -139,12 +88,12 @@ public sealed class ChartPieFormatDialog : Window
     private readonly TextBox _holeBox = new();
     private readonly bool _isDoughnut;
 
-    public ChartPieFormatDialogResult Result { get; private set; }
+    public ChartPieFormatInput Result { get; private set; }
 
     public ChartPieFormatDialog(ChartModel chart)
     {
         _isDoughnut = ChartPieFormatPlanner.SupportsHoleSize(chart);
-        Result = ChartPieFormatDialogResult.FromChart(chart);
+        Result = ChartPieFormatPlanner.Read(chart);
         Title = UiText.Get("ChartPieFormat_Title");
         Width = 360;
         Height = _isDoughnut ? 310 : 270;
@@ -171,7 +120,7 @@ public sealed class ChartPieFormatDialog : Window
         return root;
     }
 
-    private void Load(ChartPieFormatDialogResult result)
+    private void Load(ChartPieFormatInput result)
     {
         _sliceAngleBox.Text = result.FirstSliceAngle.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _explodedIndexBox.Text = result.ExplodedSliceIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -197,22 +146,19 @@ public sealed class ChartPieFormatDialog : Window
                 out var input,
                 out var issue))
         {
-            var (message, target) = issue switch
+            var presentation = ChartValidationPresentationPlanner.Describe(issue);
+            var target = presentation.FocusTarget switch
             {
-                ChartPieFormatParseIssue.ExplodedSliceIndex => (UiText.Get("ChartPieFormat_InvalidExplodedSliceIndexMessage"), _explodedIndexBox),
-                ChartPieFormatParseIssue.ExplodedSliceDistance => (UiText.Get("ChartPieFormat_InvalidExplodedDistanceMessage"), _explodedDistBox),
-                ChartPieFormatParseIssue.DoughnutHoleSize => (UiText.Get("ChartPieFormat_InvalidHoleSizeMessage"), _holeBox),
-                _ => (UiText.Get("ChartPieFormat_InvalidFirstSliceAngleMessage"), _sliceAngleBox)
+                ChartPieFormatDialogFieldId.ExplodedSliceIndex => _explodedIndexBox,
+                ChartPieFormatDialogFieldId.ExplodedSliceDistance => _explodedDistBox,
+                ChartPieFormatDialogFieldId.DoughnutHoleSize => _holeBox,
+                _ => _sliceAngleBox
             };
-            ShowInvalidInputWarning(message, target);
+            ShowInvalidInputWarning(presentation.Message.Resolve(UiText.Get, UiText.Format), target);
             return;
         }
 
-        Result = ChartPieFormatDialogResult.CreateResult(
-            input.FirstSliceAngle,
-            input.ExplodedSliceIndex,
-            input.ExplodedSliceDistance,
-            input.DoughnutHoleSize);
+        Result = input;
         DialogResult = true;
     }
 
@@ -224,41 +170,17 @@ public sealed class ChartPieFormatDialog : Window
 
 }
 
-public sealed record ChartBubbleFormatDialogResult(int BubbleScale, bool ShowNegativeBubbles, ChartBubbleSizeRepresents BubbleSizeRepresents)
-{
-    public ChartLayoutOptions ToOptions() =>
-        ChartBubbleFormatPlanner.Plan(ToInput());
-
-    public static ChartBubbleFormatDialogResult FromChart(ChartModel chart) =>
-        FromInput(ChartBubbleFormatPlanner.Read(chart));
-
-    public static ChartBubbleFormatDialogResult CreateResult(int bubbleScale, bool showNegativeBubbles, ChartBubbleSizeRepresents sizeRepresents) =>
-        FromInput(new ChartBubbleFormatInput(bubbleScale, showNegativeBubbles, sizeRepresents));
-
-    private ChartBubbleFormatInput ToInput() =>
-        new(BubbleScale, ShowNegativeBubbles, BubbleSizeRepresents);
-
-    private static ChartBubbleFormatDialogResult FromInput(ChartBubbleFormatInput input)
-    {
-        var normalized = ChartBubbleFormatPlanner.Normalize(input);
-        return new(
-            normalized.BubbleScale,
-            normalized.ShowNegativeBubbles,
-            normalized.BubbleSizeRepresents);
-    }
-}
-
 public sealed class ChartBubbleFormatDialog : Window
 {
     private readonly TextBox _bubbleScaleBox = new();
     private readonly CheckBox _negBubblesBox = new() { Content = UiText.Get("ChartBubbleFormat_ShowNegativeBubbles") };
     private readonly ComboBox _sizeRepresentsBox = new();
 
-    public ChartBubbleFormatDialogResult Result { get; private set; }
+    public ChartBubbleFormatInput Result { get; private set; }
 
     public ChartBubbleFormatDialog(ChartModel chart)
     {
-        Result = ChartBubbleFormatDialogResult.FromChart(chart);
+        Result = ChartBubbleFormatPlanner.Read(chart);
         Title = UiText.Get("ChartBubbleFormat_Title");
         Width = 360;
         Height = 270;
@@ -283,7 +205,7 @@ public sealed class ChartBubbleFormatDialog : Window
         return root;
     }
 
-    private void Load(ChartBubbleFormatDialogResult result)
+    private void Load(ChartBubbleFormatInput result)
     {
         _bubbleScaleBox.Text = result.BubbleScale.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _negBubblesBox.IsChecked = result.ShowNegativeBubbles;
@@ -304,77 +226,23 @@ public sealed class ChartBubbleFormatDialog : Window
                 _negBubblesBox.IsChecked == true,
                 SelectedSizeRepresents(),
                 out var input,
-                out _))
+                out var issue))
         {
-            DialogFocus.ShowWarningAndFocus(this, UiText.Get("ChartBubbleFormat_InvalidBubbleScaleMessage"), Title, _bubbleScaleBox);
+            var presentation = ChartValidationPresentationPlanner.Describe(issue);
+            DialogFocus.ShowWarningAndFocus(
+                this,
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                Title,
+                _bubbleScaleBox);
             return;
         }
 
-        Result = ChartBubbleFormatDialogResult.CreateResult(
-            input.BubbleScale,
-            input.ShowNegativeBubbles,
-            input.BubbleSizeRepresents);
+        Result = input;
         DialogResult = true;
     }
 
     private ChartBubbleSizeRepresents? SelectedSizeRepresents() =>
         _sizeRepresentsBox.SelectedItem is ChartBubbleSizeRepresents value ? value : null;
-}
-
-public sealed record ChartStockFormatDialogResult(
-    int UpDownBarGapWidth,
-    CellColor? UpBarFillColor,
-    CellColor? UpBarBorderColor,
-    CellColor? DownBarFillColor,
-    CellColor? DownBarBorderColor,
-    CellColor? HighLowLineColor,
-    double HighLowLineThickness)
-{
-    public ChartLayoutOptions ToOptions() =>
-        ChartStockFormatPlanner.Plan(ToInput());
-
-    public static ChartStockFormatDialogResult FromChart(ChartModel chart) =>
-        FromInput(ChartStockFormatPlanner.Read(chart));
-
-    public static ChartStockFormatDialogResult CreateResult(
-        int upDownBarGapWidth,
-        CellColor? upBarFillColor,
-        CellColor? upBarBorderColor,
-        CellColor? downBarFillColor,
-        CellColor? downBarBorderColor,
-        CellColor? highLowLineColor,
-        double highLowLineThickness) =>
-        FromInput(new ChartStockFormatInput(
-            upDownBarGapWidth,
-            upBarFillColor,
-            upBarBorderColor,
-            downBarFillColor,
-            downBarBorderColor,
-            highLowLineColor,
-            highLowLineThickness));
-
-    private ChartStockFormatInput ToInput() =>
-        new(
-            UpDownBarGapWidth,
-            UpBarFillColor,
-            UpBarBorderColor,
-            DownBarFillColor,
-            DownBarBorderColor,
-            HighLowLineColor,
-            HighLowLineThickness);
-
-    private static ChartStockFormatDialogResult FromInput(ChartStockFormatInput input)
-    {
-        var normalized = ChartStockFormatPlanner.Normalize(input);
-        return new(
-            normalized.UpDownBarGapWidth,
-            normalized.UpBarFillColor,
-            normalized.UpBarBorderColor,
-            normalized.DownBarFillColor,
-            normalized.DownBarBorderColor,
-            normalized.HighLowLineColor,
-            normalized.HighLowLineThickness);
-    }
 }
 
 public sealed class ChartStockFormatDialog : Window
@@ -387,11 +255,11 @@ public sealed class ChartStockFormatDialog : Window
     private readonly TextBox _highLowColorBox = new();
     private readonly TextBox _thicknessBox = new();
 
-    public ChartStockFormatDialogResult Result { get; private set; }
+    public ChartStockFormatInput Result { get; private set; }
 
     public ChartStockFormatDialog(ChartModel chart)
     {
-        Result = ChartStockFormatDialogResult.FromChart(chart);
+        Result = ChartStockFormatPlanner.Read(chart);
         Title = UiText.Get("ChartStockFormat_Title");
         Width = 380;
         Height = 490;
@@ -420,7 +288,7 @@ public sealed class ChartStockFormatDialog : Window
         return root;
     }
 
-    private void Load(ChartStockFormatDialogResult result)
+    private void Load(ChartStockFormatInput result)
     {
         _gapWidthBox.Text = result.UpDownBarGapWidth.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _upFillBox.Text = ChartDialogHelpers.FormatColor(result.UpBarFillColor);
@@ -451,23 +319,16 @@ public sealed class ChartStockFormatDialog : Window
                 out var input,
                 out var issue))
         {
-            var (message, target) = issue switch
-            {
-                ChartStockFormatParseIssue.HighLowLineThickness => (UiText.Get("ChartStockFormat_InvalidLineThicknessMessage"), _thicknessBox),
-                _ => (UiText.Get("ChartStockFormat_InvalidGapWidthMessage"), _gapWidthBox)
-            };
-            ShowInvalidInputWarning(message, target);
+            var presentation = ChartValidationPresentationPlanner.Describe(issue);
+            ShowInvalidInputWarning(
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                presentation.FocusTarget == ChartStockFormatDialogFieldId.HighLowLineThickness
+                    ? _thicknessBox
+                    : _gapWidthBox);
             return;
         }
 
-        Result = ChartStockFormatDialogResult.CreateResult(
-            input.UpDownBarGapWidth,
-            input.UpBarFillColor,
-            input.UpBarBorderColor,
-            input.DownBarFillColor,
-            input.DownBarBorderColor,
-            input.HighLowLineColor,
-            input.HighLowLineThickness);
+        Result = input;
         DialogResult = true;
     }
 

@@ -18,17 +18,7 @@ public sealed partial class TA11yColorSwatchAutomationNameTests
 
     private static readonly string[] SwatchClickHandlers =
     [
-        "DlgFontColorSwatchButton_Click",
-        "DlgBorderLineColorSwatchButton_Click",
-        "DlgFillSwatchButton_Click",
-        "DlgFillPatternSwatchButton_Click"
-    ];
-
-    private static readonly string[] MoreColorsClickHandlers =
-    [
-        "DlgBorderLineColorPickerButton_Click",
-        "DlgFillColorPickerButton_Click",
-        "DlgFillPatternColorPickerButton_Click"
+        "DlgFontColorSwatchButton_Click"
     ];
 
     [Fact]
@@ -36,21 +26,15 @@ public sealed partial class TA11yColorSwatchAutomationNameTests
     {
         var xaml = DialogSourceTestSupport.ReadHostSourceFile("FormatCellsDialog.xaml");
 
-        // Plain color swatches (Font/Border/Fill/Pattern) plus the three dot-content "More ...
-        // Colors" pickers -- excludes the separate, already-labeled "Pick"/"Pick2" text buttons
-        // that share the same Click handlers but already have visible Content.
+        // Font swatches remain declarative. Fill and border palettes are validated below at their
+        // typed dynamic construction sites.
         var swatchButtons = ButtonElementPattern().Matches(xaml)
             .Select(m => m.Value)
-            .Where(button =>
-                SwatchClickHandlers.Any(handler => button.Contains($"Click=\"{handler}\"", StringComparison.Ordinal)) ||
-                (MoreColorsClickHandlers.Any(handler => button.Contains($"Click=\"{handler}\"", StringComparison.Ordinal)) &&
-                 button.Contains("Content=\"...\"", StringComparison.Ordinal)))
+            .Where(button => SwatchClickHandlers.Any(handler =>
+                button.Contains($"Click=\"{handler}\"", StringComparison.Ordinal)))
             .ToList();
 
-        // Sanity check: this must actually exercise the ~54 swatch/picker buttons described by
-        // the finding (Font 8 + Border 7 + Fill 29 + Pattern 7, plus the 3 "More ... Colors"
-        // pickers), not silently match zero elements if the XAML shape changes.
-        swatchButtons.Should().HaveCountGreaterThanOrEqualTo(54);
+        swatchButtons.Should().HaveCountGreaterThanOrEqualTo(8);
 
         foreach (var button in swatchButtons)
         {
@@ -65,18 +49,26 @@ public sealed partial class TA11yColorSwatchAutomationNameTests
     }
 
     [Fact]
+    public void FormatCellsDialog_DynamicBorderPalette_AssignsLocalizedAccessibleNames()
+    {
+        var source = DialogSourceTestSupport.ReadHostSourceFile("FormatCellsDialog.Border.cs");
+
+        source.Should().Contain("foreach (var entry in FormatCellsBorderPalettePlanner.ColorEntries)");
+        source.Should().Contain("var label = UiText.Get(entry.ResourceKey);");
+        source.Should().Contain("AutomationProperties.SetName(button, label);");
+        source.Should().Contain("ToolTip = label");
+    }
+
+    [Fact]
     public void FormatCellsDialog_MoreColorsPickerButtons_HaveNonDotAccessibleNames()
     {
-        var xaml = DialogSourceTestSupport.ReadHostSourceFile("FormatCellsDialog.xaml");
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "FormatCellsDialog.Fill.cs",
+            "FormatCellsDialog.Border.cs");
 
-        foreach (var clickHandler in MoreColorsClickHandlers)
-        {
-            var button = ButtonElementPattern().Matches(xaml)
-                .Select(m => m.Value)
-                .Single(b => b.Contains($"Click=\"{clickHandler}\"", StringComparison.Ordinal)
-                    && b.Contains("Content=\"...\"", StringComparison.Ordinal));
-
-            button.Should().MatchRegex("AutomationProperties\\.Name=\"\\{local:Loc Key=[A-Za-z0-9_]+\\}\"");
-        }
+        source.Should().Contain("var label = UiText.Get(entry.ResourceKey);");
+        source.Should().Contain("AutomationProperties.SetName(button, label);");
+        source.Should().Contain("Content = entry.IsMore ? \"...\" : null");
+        source.Should().Contain("button.Content = \"...\";");
     }
 }

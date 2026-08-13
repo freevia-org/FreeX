@@ -374,6 +374,46 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void SetTableCellBorder_UndoRestoresDetachedBorderSnapshot()
+    {
+        var (_, bus, shape) = MakeTable(1, 1);
+        var originalLeft = new ShapeOutline.Visible(ThemeAwareColor.Black, 0.75);
+        var originalTop = ShapeOutline.None.Instance;
+        var replacementBottom = new ShapeOutline.Visible(ThemeAwareColor.Black, 1.5);
+        var originalBorders = new TableCellBorders
+        {
+            Left = originalLeft,
+            Top = originalTop,
+        };
+        var cell = shape.Table!.Rows[0].Cells[0];
+        cell.Borders = originalBorders;
+
+        bus.Execute(new SetTableCellBorderCommand(
+            0, shape.Id, 0, 0, TableCellBorderSide.Bottom, replacementBottom));
+
+        cell.Borders.Should().NotBeNull();
+        var editedBorders = cell.Borders!;
+        editedBorders.Should().NotBeSameAs(originalBorders);
+        editedBorders.Left.Should().BeSameAs(originalLeft);
+        editedBorders.Top.Should().BeSameAs(originalTop);
+        editedBorders.Bottom.Should().BeSameAs(replacementBottom);
+
+        originalBorders.Left = null;
+        originalBorders.Top = null;
+        editedBorders.Left = null;
+
+        bus.Undo();
+
+        cell.Borders.Should().NotBeNull();
+        var restoredBorders = cell.Borders!;
+        restoredBorders.Should().NotBeSameAs(originalBorders);
+        restoredBorders.Should().NotBeSameAs(editedBorders);
+        restoredBorders.Left.Should().BeSameAs(originalLeft);
+        restoredBorders.Top.Should().BeSameAs(originalTop);
+        restoredBorders.Bottom.Should().BeNull();
+    }
+
+    [Fact]
     public void SetTableCellDiagonalBorder_UndoRedo_Works()
     {
         var (p, bus, shape) = MakeTable();

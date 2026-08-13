@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.FormatCells;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
@@ -123,6 +124,57 @@ public sealed class FormatCellsDialogPlannerTests
     }
 
     [Fact]
+    public void TryCreateResult_AcceptsExcelMaximumFontSize()
+    {
+        var input = ValidInput() with
+        {
+            Font = ValidInput().Font with { FontSizeText = "409" }
+        };
+
+        FormatCellsDialogPlanner.TryCreateResult(new CellStyle(), input, out var result, out var validation)
+            .Should()
+            .BeTrue();
+
+        validation.Should().BeNull();
+        result!.Diff.FontSize.Should().Be(FormatCellsInputParser.MaxFontSize);
+    }
+
+    [Theory]
+    [InlineData("409.01")]
+    [InlineData("410")]
+    [InlineData("5000")]
+    public void TryCreateResult_RejectsFontSizesAboveExcelMaximum(string fontSizeText)
+    {
+        var input = ValidInput() with
+        {
+            Font = ValidInput().Font with { FontSizeText = fontSizeText }
+        };
+
+        AssertValidation(
+            input,
+            FormatCellsDialogPlannerTab.Font,
+            FormatCellsDialogValidationTarget.FontSize,
+            "FormatCells_InvalidFontSizeMessage");
+    }
+
+    [Fact]
+    public void ParsingHelpers_UseNeutralFormatCellsInputParserContract()
+    {
+        FormatCellsDialogPlanner.TryParseFontSize("409.01")
+            .Should()
+            .Be(FormatCellsInputParser.TryParseFontSize("409.01"));
+        FormatCellsDialogPlanner.TryParseIndentLevel("99")
+            .Should()
+            .Be(FormatCellsInputParser.TryParseIndentLevel("99"));
+        FormatCellsDialogPlanner.TryParseSupportedTextRotation("255")
+            .Should()
+            .Be(FormatCellsInputParser.TryParseSupportedTextRotation("255"));
+        FormatCellsDialogPlanner.IsSupportedCustomNumberFormat("0;0;0;@;extra")
+            .Should()
+            .Be(FormatCellsInputParser.IsSupportedCustomNumberFormat("0;0;0;@;extra"));
+    }
+
+    [Fact]
     public void TryCreateResult_AllowsBlankSideColorsWhenBorderSideIsNone()
     {
         var current = new CellStyle
@@ -172,6 +224,64 @@ public sealed class FormatCellsDialogPlannerTests
         FormatCellsDialogPlanner.CreateSelectedBorderLine("not-real", "#7030A0")
             .Should()
             .Be(new CellBorder(BorderStyle.Thin, new CellColor(112, 48, 160)));
+    }
+
+    [Fact]
+    public void TryCreateCompactPlan_BuildsOnlyChangedRendererNeutralValues()
+    {
+        var input = ValidCompactInput() with
+        {
+            WrapText = true,
+            FontSizeText = "12",
+            FillColorText = "#010203",
+            BorderPreset = CellBorderPreset.Outside,
+            BorderStyle = BorderStyle.Medium,
+            BorderColor = new CellColor(4, 5, 6)
+        };
+
+        FormatCellsDialogPlanner.TryCreateCompactPlan(input, out var plan, out var validation)
+            .Should()
+            .BeTrue();
+
+        validation.Should().BeNull();
+        plan!.Request.WrapText.Should().BeTrue();
+        plan.Request.FontSize.Should().Be(12);
+        plan.Request.FillColor.Should().Be(new CellColor(1, 2, 3));
+        plan.Request.Bold.Should().BeNull();
+        plan.BorderPreset.Should().Be(CellBorderPreset.Outside);
+        plan.BorderStyle.Should().Be(BorderStyle.Medium);
+        plan.BorderColor.Should().Be(new CellColor(4, 5, 6));
+    }
+
+    [Fact]
+    public void TryCreateCompactPlan_UsesExcelFontLimitAndSharedValidationDescriptor()
+    {
+        var input = ValidCompactInput() with { FontSizeText = "410" };
+
+        FormatCellsDialogPlanner.TryCreateCompactPlan(input, out var plan, out var validation)
+            .Should()
+            .BeFalse();
+
+        plan.Should().BeNull();
+        validation.Should().Be(new FormatCellsDialogValidation(
+            FormatCellsDialogPlannerTab.Font,
+            FormatCellsDialogValidationTarget.FontSize,
+            "FormatCells_InvalidFontSizeMessage"));
+    }
+
+    [Fact]
+    public void AvaloniaFormatCells_DelegatesParsingAndRequestAssemblyToSharedPlanner()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.cs"));
+
+        source.Should().Contain("FormatCellsDialogPlanner.TryCreateCompactPlan(")
+            .And.NotContain("TryReadFormatCellsFontSize")
+            .And.NotContain("TryReadFormatCellsIndentLevel")
+            .And.NotContain("TryReadFormatCellsTextRotation")
+            .And.NotContain("new FormatCellsCompactRequest(");
     }
 
     private static void AssertValidation(
@@ -238,6 +348,53 @@ public sealed class FormatCellsDialogPlannerTests
             Protection: new FormatCellsDialogProtectionInput(
                 Locked: false,
                 Hidden: true));
+
+    private static FormatCellsCompactDialogInput ValidCompactInput()
+    {
+        var current = CellStyle.Default.Clone();
+        return new FormatCellsCompactDialogInput(
+            CurrentStyle: current,
+            CurrentNumberFormat: current.NumberFormat,
+            InitialMergeCells: false,
+            Number: new FormatCellsDialogNumberInput(
+                Category: "General",
+                FormatText: "General",
+                FormatSelectedIndex: 0,
+                DecimalPlacesText: "2",
+                Symbol: "$",
+                NegativeIndex: 0),
+            HorizontalAlignment: current.HorizontalAlignment,
+            VerticalAlignment: current.VerticalAlignment,
+            WrapText: current.WrapText,
+            ShrinkToFit: current.ShrinkToFit,
+            MergeCells: false,
+            IndentLevelText: current.IndentLevel.ToString(),
+            TextRotationText: current.TextRotation.ToString(),
+            UseNormalFont: false,
+            Bold: current.Bold,
+            Italic: current.Italic,
+            Underline: current.Underline,
+            DoubleUnderline: current.DoubleUnderline,
+            Strikethrough: current.Strikethrough,
+            Superscript: current.Superscript,
+            Subscript: current.Subscript,
+            FontNameText: current.FontName,
+            FontSizeText: current.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            FontColor: current.FontColor,
+            FillColorText: "",
+            ClearFill: false,
+            FillPatternStyle: current.FillPatternStyle,
+            FillPatternColorText: "",
+            Locked: current.Locked,
+            Hidden: current.Hidden,
+            BorderPreset: null,
+            BorderStyle: BorderStyle.Thin,
+            BorderColor: null,
+            BorderTop: null,
+            BorderRight: null,
+            BorderBottom: null,
+            BorderLeft: null);
+    }
 
     private static FormatCellsDialogFontLabels Labels { get; } =
         new(

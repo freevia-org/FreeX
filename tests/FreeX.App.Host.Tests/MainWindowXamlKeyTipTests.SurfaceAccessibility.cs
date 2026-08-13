@@ -11,14 +11,14 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void NonRibbonTooltipClickButtons_HaveAccessibleNames()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace ribbonWpf = "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         var missing = document
             .Descendants(presentation + "Button")
             .Where(button => button.Attribute("Click") is not null)
-            .Where(button => button.Attribute(local + "RibbonTooltip.Title") is null)
+            .Where(button => button.Attribute(ribbonWpf + "RibbonTooltip.Title") is null)
             .Where(button => button.Attribute("AutomationProperties.Name") is null)
             .Select(button =>
                 button.Attribute(x + "Name")?.Value ??

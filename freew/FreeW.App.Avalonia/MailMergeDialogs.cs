@@ -24,11 +24,14 @@ internal static class MailMergeDialogs
     /// already has merge fields, <paramref name="seedHeader"/> pre-fills the header line as a hint. Returns
     /// the entered CSV text, or <c>null</c> if cancelled / empty.
     /// </summary>
-    public static async Task<string?> AskRecipientCsvAsync(Window owner, string seedHeader)
+    public static async Task<string?> AskRecipientCsvAsync(
+        Window owner,
+        string seedHeader,
+        string? initialCsv = null)
     {
         var dialog = new Window
         {
-            Title = "Select Recipients",
+            Title = MailMergeDialogMetadata.SelectRecipientsTitle,
             Width = 460,
             Height = 320,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -37,7 +40,7 @@ internal static class MailMergeDialogs
 
         var hint = new TextBlock
         {
-            Text = "Type or paste a recipient list as CSV. The first line is the column headers.",
+            Text = MailMergeDialogMetadata.RecipientCsvHint,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(16, 14, 16, 6),
         };
@@ -49,15 +52,16 @@ internal static class MailMergeDialogs
             TextWrapping = TextWrapping.NoWrap,
             FontFamily = new FontFamily("Consolas, Courier New, monospace"),
             Margin = new Thickness(16, 0, 16, 0),
-            Text = string.IsNullOrWhiteSpace(seedHeader) ? string.Empty : seedHeader + "\n",
-            PlaceholderText ="FirstName,LastName,City…",
+            Text = initialCsv ??
+                (string.IsNullOrWhiteSpace(seedHeader) ? string.Empty : seedHeader + "\n"),
+            PlaceholderText = MailMergeDialogMetadata.RecipientCsvPlaceholder,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(editor, DialogChromeStyle, fixedHeight: false);
         Grid.SetRow(editor, 1);
 
         string? result = null;
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
+        var ok = new Button { Content = MailMergeDialogMetadata.OkLabel, IsDefault = true, MinWidth = 72 };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         ok.Click += (_, _) =>
         {
@@ -65,7 +69,7 @@ internal static class MailMergeDialogs
             result = string.IsNullOrWhiteSpace(text) ? null : text;
             dialog.Close();
         };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+        var cancel = new Button { Content = MailMergeDialogMetadata.CancelLabel, IsCancel = true, MinWidth = 72 };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => { result = null; dialog.Close(); };
 
@@ -92,7 +96,7 @@ internal static class MailMergeDialogs
     {
         var dialog = new Window
         {
-            Title = "Insert Merge Field",
+            Title = MailMergeDialogMetadata.InsertMergeFieldTitle,
             Width = 320,
             Height = 160,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -101,7 +105,7 @@ internal static class MailMergeDialogs
 
         var label = new TextBlock
         {
-            Text = "Field name:",
+            Text = MailMergeDialogMetadata.FieldNameLabel,
             Margin = new Thickness(16, 16, 16, 4),
         };
         Grid.SetRow(label, 0);
@@ -119,7 +123,7 @@ internal static class MailMergeDialogs
         // Also allow free text entry for a field not in the loaded list.
         var freeText = new TextBox
         {
-            PlaceholderText ="…or type a field name",
+            PlaceholderText = MailMergeDialogMetadata.MergeFieldPlaceholder,
             Margin = new Thickness(16, 8, 16, 0),
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(freeText, DialogChromeStyle);
@@ -127,7 +131,7 @@ internal static class MailMergeDialogs
 
         string? result = null;
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
+        var ok = new Button { Content = MailMergeDialogMetadata.OkLabel, IsDefault = true, MinWidth = 72 };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         ok.Click += (_, _) =>
         {
@@ -137,7 +141,7 @@ internal static class MailMergeDialogs
                 : combo.SelectedItem as string;
             dialog.Close();
         };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+        var cancel = new Button { Content = MailMergeDialogMetadata.CancelLabel, IsCancel = true, MinWidth = 72 };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => { result = null; dialog.Close(); };
 
@@ -159,13 +163,13 @@ internal static class MailMergeDialogs
         Window owner,
         MailMergeStartType selectedType = MailMergeStartType.Letters)
     {
-        var dialog = CreateDialog("Start Mail Merge", 330, 175);
+        var dialog = CreateDialog(MailMergeDialogMetadata.StartMailMergeTitle, 330, 175);
         var plan = MailMergeStartDialogPlanner.GetChoices();
         var typeCombo = CreateChoiceCombo(
             plan.Select(choice => choice.Label),
             MailMergeStartDialogPlanner.GetSelectedIndex(selectedType));
         MailMergeStartType? result = null;
-        var content = CreateForm(("Document type:", (Control)typeCombo));
+        var content = CreateForm((MailMergeDialogMetadata.DocumentTypeLabel, (Control)typeCombo));
         AddActions(dialog, content, () => result = MailMergeStartDialogPlanner.GetType(typeCombo.SelectedIndex));
         await dialog.ShowDialog(owner);
         return result;
@@ -176,7 +180,7 @@ internal static class MailMergeDialogs
         IReadOnlyList<string> header,
         FieldMapping current)
     {
-        var dialog = CreateDialog("Match Fields", 455, 520);
+        var dialog = CreateDialog(MailMergeDialogMetadata.MatchFieldsTitle, 455, 520);
         var dialogPlan = MailMergeMatchFieldsDialogPlanner.GetRolePlans(header, current);
         var columnChoices = MailMergeMatchFieldsDialogPlanner.GetColumnChoices(header);
         var combos = new Dictionary<FieldRole, ComboBox>();
@@ -202,18 +206,18 @@ internal static class MailMergeDialogs
 
     public static async Task<MergeData?> AskFilterSortRecipientsAsync(Window owner, MergeData data)
     {
-        var dialog = CreateDialog("Filter and Sort Recipients", 560, 470);
+        var dialog = CreateDialog(MailMergeDialogMetadata.FilterSortRecipientsTitle, 560, 470);
         var plan = MailMergeFilterSortDialogPlanner.CreatePlan(data);
         var sortCombo = CreateChoiceCombo(plan.SortColumns, 0);
-        var ascending = new RadioButton { Content = "Ascending", IsChecked = true, GroupName = "sort" };
-        var descending = new RadioButton { Content = "Descending", GroupName = "sort" };
+        var ascending = new RadioButton { Content = MailMergeDialogMetadata.AscendingLabel, IsChecked = true, GroupName = "sort" };
+        var descending = new RadioButton { Content = MailMergeDialogMetadata.DescendingLabel, GroupName = "sort" };
         var sortRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "Sort by:", VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = MailMergeDialogMetadata.SortByLabel, VerticalAlignment = VerticalAlignment.Center },
                 sortCombo,
                 ascending,
                 descending,
@@ -243,7 +247,7 @@ internal static class MailMergeDialogs
             Margin = new Thickness(16, 16, 16, 0),
             Children =
             {
-                new TextBlock { Text = "Check recipients to include, then choose a sort order." },
+                new TextBlock { Text = MailMergeDialogMetadata.FilterInstruction },
                 sortRow,
                 scroll,
             },
@@ -264,7 +268,7 @@ internal static class MailMergeDialogs
     public static async Task<EnvelopeSetupResult?> AskEnvelopeAsync(Window owner)
     {
         var plan = MailingsEnvelopeLabelPlanner.CreateEnvelopeDialogPlan();
-        var dialog = CreateDialog("Envelopes", 365, 230);
+        var dialog = CreateDialog(MailMergeDialogMetadata.EnvelopesTitle, 365, 230);
         var combo = CreateChoiceCombo(plan.Sizes.Select(size => size.Name), plan.SelectedIndex);
         var note = new TextBlock
         {
@@ -274,8 +278,8 @@ internal static class MailMergeDialogs
         };
         EnvelopeSetupResult? result = null;
         var content = CreateForm(
-            ("Envelope size:", (Control)combo),
-            ("Note:", note));
+            (MailMergeDialogMetadata.EnvelopeSizeLabel, (Control)combo),
+            (MailMergeDialogMetadata.NoteLabel, note));
         AddActions(dialog, content, () => result = MailingsEnvelopeLabelPlanner.PlanEnvelope(combo.SelectedIndex));
         await dialog.ShowDialog(owner);
         return result;
@@ -284,7 +288,7 @@ internal static class MailMergeDialogs
     public static async Task<LabelSetupResult?> AskLabelsAsync(Window owner)
     {
         var plan = MailingsEnvelopeLabelPlanner.CreateLabelDialogPlan();
-        var dialog = CreateDialog("Labels", 400, 270);
+        var dialog = CreateDialog(MailMergeDialogMetadata.LabelsTitle, 400, 270);
         var combo = CreateChoiceCombo(plan.Presets.Select(preset => preset.Name), plan.SelectedIndex);
         var rowsBox = CreateTextBox(plan.CustomRowsText, "Rows");
         var columnsBox = CreateTextBox(plan.CustomColumnsText, "Columns");
@@ -295,8 +299,8 @@ internal static class MailMergeDialogs
             IsVisible = plan.ShowCustomGrid,
             Children =
             {
-                new TextBlock { Text = "Rows:", VerticalAlignment = VerticalAlignment.Center }, rowsBox,
-                new TextBlock { Text = "Columns:", VerticalAlignment = VerticalAlignment.Center }, columnsBox,
+                new TextBlock { Text = MailMergeDialogMetadata.RowsLabel, VerticalAlignment = VerticalAlignment.Center }, rowsBox,
+                new TextBlock { Text = MailMergeDialogMetadata.ColumnsLabel, VerticalAlignment = VerticalAlignment.Center }, columnsBox,
             },
         };
         combo.SelectionChanged += (_, _) =>
@@ -311,7 +315,7 @@ internal static class MailMergeDialogs
             Margin = new Thickness(16, 16, 16, 0),
             Children =
             {
-                new TextBlock { Text = "Label product:" }, combo, customPanel,
+                new TextBlock { Text = MailMergeDialogMetadata.LabelProductLabel }, combo, customPanel,
             },
         };
         AddActions(dialog, content, () =>
@@ -329,12 +333,12 @@ internal static class MailMergeDialogs
         int recordCount)
     {
         var plan = MailMergePreviewDialogPlanner.CreatePlan(currentIndex, recordCount);
-        var dialog = CreateDialog("Preview Results", 350, 170);
+        var dialog = CreateDialog(MailMergeDialogMetadata.PreviewResultsTitle, 350, 170);
         var label = new TextBlock { Text = plan.RecordLabel, Margin = new Thickness(16, 16, 16, 8) };
-        var previous = new Button { Content = "Previous", IsEnabled = plan.CanGoPrevious };
-        var next = new Button { Content = "Next", IsEnabled = plan.CanGoNext };
-        var done = new Button { Content = "Done", IsDefault = true };
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var previous = new Button { Content = MailMergeDialogMetadata.PreviousLabel, IsEnabled = plan.CanGoPrevious };
+        var next = new Button { Content = MailMergeDialogMetadata.NextLabel, IsEnabled = plan.CanGoNext };
+        var done = new Button { Content = MailMergeDialogMetadata.DoneLabel, IsDefault = true };
+        var cancel = new Button { Content = MailMergeDialogMetadata.CancelLabel, IsCancel = true };
         foreach (var button in new[] { previous, next, done, cancel })
             AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 72, isDefault: button == done);
 
@@ -355,10 +359,10 @@ internal static class MailMergeDialogs
         Window owner,
         string? initialQuery = null)
     {
-        var dialog = CreateDialog("Find Recipient", 360, 155);
-        var queryBox = CreateTextBox(initialQuery ?? string.Empty, "Name, company, or other value");
+        var dialog = CreateDialog(MailMergeDialogMetadata.FindRecipientTitle, 360, 155);
+        var queryBox = CreateTextBox(initialQuery ?? string.Empty, MailMergeDialogMetadata.FindPlaceholder);
         string? result = null;
-        var content = CreateForm(("Find:", queryBox));
+        var content = CreateForm((MailMergeDialogMetadata.FindLabel, queryBox));
         AddActions(dialog, content, () =>
         {
             var value = queryBox.Text?.Trim();
@@ -374,7 +378,7 @@ internal static class MailMergeDialogs
         int currentRecordIndex)
     {
         var dialogPlan = MailMergeFinishPlanner.CreateDialogPlan(recordCount, currentRecordIndex);
-        var dialog = CreateDialog("Finish and Merge", 430, 275);
+        var dialog = CreateDialog(MailMergeDialogMetadata.FinishAndMergeTitle, 430, 275);
         var destination = CreateChoiceCombo(dialogPlan.Destinations.Select(choice => choice.Label), dialogPlan.DestinationIndex);
         var scope = CreateChoiceCombo(dialogPlan.Scopes.Select(choice => choice.Label), dialogPlan.ScopeIndex);
         var from = CreateTextBox(dialogPlan.FromRecordText, "From record");
@@ -385,8 +389,8 @@ internal static class MailMergeDialogs
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "From:", VerticalAlignment = VerticalAlignment.Center }, from,
-                new TextBlock { Text = "To:", VerticalAlignment = VerticalAlignment.Center }, to,
+                new TextBlock { Text = MailMergeDialogMetadata.FromLabel, VerticalAlignment = VerticalAlignment.Center }, from,
+                new TextBlock { Text = MailMergeDialogMetadata.ToLabel, VerticalAlignment = VerticalAlignment.Center }, to,
             },
         };
         var validation = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = Brushes.Gray };
@@ -403,7 +407,9 @@ internal static class MailMergeDialogs
         void Refresh()
         {
             var current = CurrentPlan();
-            validation.Text = current.Success ? "Ready to finish the merge." : $"Finish and merge: {current.Issue}.";
+            validation.Text = current.Success
+                ? MailMergeDialogMetadata.ReadyToFinishMessage
+                : MailMergeDialogMetadata.FormatFinishIssue(current.Issue);
             if (okButton is not null)
                 okButton.IsEnabled = current.Success;
         }
@@ -413,10 +419,10 @@ internal static class MailMergeDialogs
         from.TextChanged += (_, _) => Refresh();
         to.TextChanged += (_, _) => Refresh();
         var content = CreateForm(
-            ("Destination:", (Control)destination),
-            ("Records:", (Control)scope),
-            ("Range:", range),
-            ("Validation:", validation));
+            (MailMergeDialogMetadata.DestinationLabel, (Control)destination),
+            (MailMergeDialogMetadata.RecordsLabel, (Control)scope),
+            (MailMergeDialogMetadata.RangeLabel, range),
+            (MailMergeDialogMetadata.ValidationLabel, validation));
         MailMergeFinishPlan? result = null;
         AddActions(dialog, content, () => result = CurrentPlan(), ok => okButton = ok);
         Refresh();
@@ -426,11 +432,11 @@ internal static class MailMergeDialogs
 
     public static async Task<MailMergeCheckForErrorsMode?> AskCheckForErrorsAsync(Window owner)
     {
-        var dialog = CreateDialog("Check for Errors", 520, 220);
+        var dialog = CreateDialog(MailMergeDialogMetadata.CheckForErrorsTitle, 520, 220);
         var choices = MailMergeCheckForErrorsPlanner.GetChoices();
         var combo = CreateChoiceCombo(choices.Select(choice => choice.Label), 0);
         MailMergeCheckForErrorsMode? result = null;
-        var content = CreateForm(("How should errors be checked?", (Control)combo));
+        var content = CreateForm((MailMergeDialogMetadata.CheckForErrorsLabel, (Control)combo));
         AddActions(dialog, content, () => result = MailMergeCheckForErrorsPlanner.GetMode(combo.SelectedIndex));
         await dialog.ShowDialog(owner);
         return result;
@@ -443,7 +449,7 @@ internal static class MailMergeDialogs
         IReadOnlyList<int> selectedRecordIndexes)
     {
         var dialogPlan = MailMergeEmailDeliveryPlanner.CreateDialogPlan(data, currentRecordIndex, selectedRecordIndexes);
-        var dialog = CreateDialog("Send E-mail Messages", 430, 315);
+        var dialog = CreateDialog(MailMergeDialogMetadata.SendEmailTitle, 430, 315);
 
         var fieldCombo = new ComboBox
         {
@@ -482,7 +488,7 @@ internal static class MailMergeDialogs
             var plan = MailMerge.CreateEmailDeliveryPlan(data, CurrentIntent());
             var messages = MailMergeEmailDeliveryPlanner.GetValidationMessages(plan);
             validation.Text = messages.Count == 0
-                ? "Ready to prepare an e-mail merge plan. No messages will be sent."
+                ? MailMergeDialogMetadata.ReadyEmailMessage
                 : string.Join(Environment.NewLine, messages);
             if (okButton is not null)
                 okButton.IsEnabled = plan.Errors.Count == 0;
@@ -495,12 +501,12 @@ internal static class MailMergeDialogs
         scopeCombo.SelectionChanged += (_, _) => RefreshValidation();
 
         var content = CreateForm(
-            ("To field:", (Control)fieldCombo),
-            ("Subject:", subjectBox),
-            ("Output:", outputCombo),
-            ("Body format:", bodyCombo),
-            ("Send records:", scopeCombo),
-            ("Validation:", validation));
+            (MailMergeDialogMetadata.ToFieldLabel, (Control)fieldCombo),
+            (MailMergeDialogMetadata.SubjectLabel, subjectBox),
+            (MailMergeDialogMetadata.OutputLabel, outputCombo),
+            (MailMergeDialogMetadata.BodyFormatLabel, bodyCombo),
+            (MailMergeDialogMetadata.SendRecordsLabel, scopeCombo),
+            (MailMergeDialogMetadata.ValidationLabel, validation));
 
         AddActions(dialog, content, () =>
         {
@@ -512,21 +518,46 @@ internal static class MailMergeDialogs
         return result;
     }
 
+    public static async ValueTask<MailMergeRuleDialogResponse?> AskMergeRuleAsync(
+        Window owner,
+        MailMergeRuleDialogRequest request) =>
+        request switch
+        {
+            MailMergeRuleIfDialogRequest typed =>
+                await AskMergeRuleIfAsync(owner, typed) is { } result
+                    ? new MailMergeRuleIfDialogResponse(result)
+                    : null,
+            MailMergeRuleConditionDialogRequest typed =>
+                await AskMergeRuleConditionAsync(owner, typed) is { } result
+                    ? new MailMergeRuleConditionDialogResponse(result)
+                    : null,
+            MailMergeRulePromptDialogRequest typed =>
+                await AskMergeRulePromptAsync(owner, typed) is { } result
+                    ? new MailMergeRulePromptDialogResponse(result)
+                    : null,
+            MailMergeRuleNameValueDialogRequest typed =>
+                await AskMergeRuleNameValueAsync(owner, typed) is { } result
+                    ? new MailMergeRuleNameValueDialogResponse(result)
+                    : null,
+            _ => throw new ArgumentOutOfRangeException(nameof(request), request, null),
+        };
+
     public static async Task<MailMergeRuleIfDialogResult?> AskMergeRuleIfAsync(
         Window owner,
-        IReadOnlyList<string> fieldNames)
+        MailMergeRuleIfDialogRequest request)
     {
-        var dialog = CreateDialog("If...Then...Else", 380, 300);
-        var fieldBox = CreateTextBox(fieldNames.FirstOrDefault() ?? string.Empty, "Field name");
-        var opCombo = CreateOperatorCombo();
-        var valueBox = CreateTextBox(string.Empty, "Comparison value");
-        var trueBox = CreateTextBox(string.Empty, "Text if true");
-        var falseBox = CreateTextBox(string.Empty, "Text if false");
+        var session = new MailMergeRuleConditionDialogSession(request.FieldNames);
+        var dialog = CreateDialog(request.Title, 380, 300);
+        var fieldBox = CreateTextBox(session.InitialFieldName, request.FieldNameLabel);
+        var opCombo = CreateOperatorCombo(session.ConditionOperators);
+        var valueBox = CreateTextBox(string.Empty, request.CompareToLabel);
+        var trueBox = CreateTextBox(string.Empty, request.TrueTextLabel);
+        var falseBox = CreateTextBox(string.Empty, request.FalseTextLabel);
 
         void RefreshValueEnabled()
         {
-            var op = MailMergeRuleDialogPlanner.GetConditionOperator(opCombo.SelectedIndex);
-            valueBox.IsEnabled = MailMergeRuleDialogPlanner.IsComparisonValueEnabled(op);
+            session.SelectOperator(opCombo.SelectedIndex);
+            valueBox.IsEnabled = session.IsComparisonValueEnabled;
         }
 
         opCombo.SelectionChanged += (_, _) => RefreshValueEnabled();
@@ -534,16 +565,15 @@ internal static class MailMergeDialogs
 
         MailMergeRuleIfDialogResult? result = null;
         var content = CreateForm(
-            ("Field name:", (Control)fieldBox),
-            ("Comparison:", opCombo),
-            ("Compare to:", valueBox),
-            ("Then insert:", trueBox),
-            ("Otherwise insert:", falseBox));
+            (request.FieldNameLabel, (Control)fieldBox),
+            (request.ComparisonLabel, opCombo),
+            (request.CompareToLabel, valueBox),
+            (request.TrueTextLabel, trueBox),
+            (request.FalseTextLabel, falseBox));
         AddActions(dialog, content, () =>
         {
-            result = MailMergeRuleDialogPlanner.CreateIfResult(
+            result = session.AcceptIf(
                 fieldBox.Text,
-                opCombo.SelectedIndex,
                 valueBox.Text,
                 trueBox.Text,
                 falseBox.Text);
@@ -555,18 +585,18 @@ internal static class MailMergeDialogs
 
     public static async Task<MailMergeRuleConditionDialogResult?> AskMergeRuleConditionAsync(
         Window owner,
-        IReadOnlyList<string> fieldNames,
-        string title)
+        MailMergeRuleConditionDialogRequest request)
     {
-        var dialog = CreateDialog(title, 360, 230);
-        var fieldBox = CreateTextBox(fieldNames.FirstOrDefault() ?? string.Empty, "Field name");
-        var opCombo = CreateOperatorCombo();
-        var valueBox = CreateTextBox(string.Empty, "Comparison value");
+        var session = new MailMergeRuleConditionDialogSession(request.FieldNames);
+        var dialog = CreateDialog(request.Title, 360, 230);
+        var fieldBox = CreateTextBox(session.InitialFieldName, request.FieldNameLabel);
+        var opCombo = CreateOperatorCombo(session.ConditionOperators);
+        var valueBox = CreateTextBox(string.Empty, request.CompareToLabel);
 
         void RefreshValueEnabled()
         {
-            var op = MailMergeRuleDialogPlanner.GetConditionOperator(opCombo.SelectedIndex);
-            valueBox.IsEnabled = MailMergeRuleDialogPlanner.IsComparisonValueEnabled(op);
+            session.SelectOperator(opCombo.SelectedIndex);
+            valueBox.IsEnabled = session.IsComparisonValueEnabled;
         }
 
         opCombo.SelectionChanged += (_, _) => RefreshValueEnabled();
@@ -574,20 +604,24 @@ internal static class MailMergeDialogs
 
         MailMergeRuleConditionDialogResult? result = null;
         var content = CreateForm(
-            ("Field name:", (Control)fieldBox),
-            ("Comparison:", opCombo),
-            ("Compare to:", valueBox));
+            (request.FieldNameLabel, (Control)fieldBox),
+            (request.ComparisonLabel, opCombo),
+            (request.CompareToLabel, valueBox));
         AddActions(dialog, content, () =>
         {
-            result = MailMergeRuleDialogPlanner.CreateConditionResult(
+            result = session.AcceptCondition(
                 fieldBox.Text,
-                opCombo.SelectedIndex,
                 valueBox.Text);
         });
 
         await dialog.ShowDialog(owner);
         return result;
     }
+
+    public static async Task<string?> AskMergeRulePromptAsync(
+        Window owner,
+        MailMergeRulePromptDialogRequest request) =>
+        await AskMergeRulePromptAsync(owner, request.Title, request.Prompt);
 
     public static async Task<string?> AskMergeRulePromptAsync(
         Window owner,
@@ -610,21 +644,19 @@ internal static class MailMergeDialogs
 
     public static async Task<MailMergeRuleNameValueDialogResult?> AskMergeRuleNameValueAsync(
         Window owner,
-        string title,
-        string valueLabel)
+        MailMergeRuleNameValueDialogRequest request)
     {
-        var dialog = CreateDialog(title, 360, 210);
-        var nameBox = CreateTextBox(string.Empty, "Bookmark name");
-        var valueBox = CreateTextBox(string.Empty, valueLabel);
+        var session = new MailMergeRuleNameValueDialogSession();
+        var dialog = CreateDialog(request.Title, 360, 210);
+        var nameBox = CreateTextBox(string.Empty, request.NameLabel);
+        var valueBox = CreateTextBox(string.Empty, request.ValueLabel);
         MailMergeRuleNameValueDialogResult? result = null;
         var content = CreateForm(
-            ("Bookmark name:", (Control)nameBox),
-            (valueLabel, (Control)valueBox));
+            (request.NameLabel, (Control)nameBox),
+            (request.ValueLabel, (Control)valueBox));
         AddActions(dialog, content, () =>
         {
-            result = string.IsNullOrWhiteSpace(nameBox.Text)
-                ? null
-                : MailMergeRuleDialogPlanner.CreateNameValueResult(nameBox.Text.Trim(), valueBox.Text);
+            result = session.Accept(nameBox.Text, valueBox.Text);
         });
 
         await dialog.ShowDialog(owner);
@@ -653,11 +685,12 @@ internal static class MailMergeDialogs
         return box;
     }
 
-    private static ComboBox CreateOperatorCombo()
+    private static ComboBox CreateOperatorCombo(
+        IReadOnlyList<MailMergeConditionOperatorChoice> choices)
     {
         var combo = new ComboBox
         {
-            ItemsSource = MailMergeRuleDialogPlanner.GetConditionOperators()
+            ItemsSource = choices
                 .Select(choice => choice.Label)
                 .ToArray(),
             SelectedIndex = 0,
@@ -717,7 +750,7 @@ internal static class MailMergeDialogs
         Action onOk,
         Action<Button>? configureOk = null)
     {
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
+        var ok = new Button { Content = MailMergeDialogMetadata.OkLabel, IsDefault = true, MinWidth = 72 };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         configureOk?.Invoke(ok);
         ok.Click += (_, _) =>
@@ -725,7 +758,7 @@ internal static class MailMergeDialogs
             onOk();
             dialog.Close();
         };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+        var cancel = new Button { Content = MailMergeDialogMetadata.CancelLabel, IsCancel = true, MinWidth = 72 };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => dialog.Close();
 

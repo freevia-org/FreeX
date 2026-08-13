@@ -25,11 +25,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+$resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 $fixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx"
 $fixtureFileName = Split-Path -Leaf $fixturePath
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
@@ -51,71 +48,20 @@ $requiredIds = @(
     "replace-shortcut-lifecycle"
 )
 
-function Invoke-External {
-    param(
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [string]$WorkingDirectory = $repoRoot
-    )
-
-    Push-Location $WorkingDirectory
-    try {
-        & $FilePath @Arguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "$FilePath exited with code $LASTEXITCODE."
-        }
-    } finally {
-        Pop-Location
-    }
-}
-
-function Add-ResultEvidence {
-    param(
-        [Parameter(Mandatory = $true)]$Result,
-        [Parameter(Mandatory = $true)][string[]]$Names
-    )
-
-    $evidence = [System.Collections.Generic.List[string]]::new()
-    foreach ($name in @($Result.evidence)) {
-        if (-not [string]::IsNullOrWhiteSpace([string]$name) -and -not $evidence.Contains([string]$name)) {
-            $evidence.Add([string]$name)
-        }
-    }
-    foreach ($name in $Names) {
-        if (-not $evidence.Contains($name)) {
-            $evidence.Add($name)
-        }
-    }
-    $Result.evidence = $evidence.ToArray()
-}
-
 function Assert-ManifestContract {
     param(
         [Parameter(Mandatory = $true)][string]$ManifestPath,
         [Parameter(Mandatory = $true)][string]$EvidenceDirectory
     )
 
-    if (-not (Test-Path -LiteralPath $schemaPath -PathType Leaf)) {
-        throw "Manifest schema is missing: $schemaPath"
-    }
-    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
-    if ($schema.'$schema' -notmatch "json-schema.org") {
-        throw "Manifest contract reference is not a JSON Schema document."
-    }
-
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-    if ($manifest.contractValidation.status -ne "pending") {
-        throw "Probe must leave contractValidation pending until the runner passes strict validation."
-    }
+    $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath
+    Assert-ManifestContractPending -Manifest $manifest
     $expectedScope = "physical FreeP file/slideshow shortcut evidence lane"
-    if ($manifest.schemaVersion -ne 1 -or
-        $manifest.suite -ne "freep-linux-file-slideshow-shortcut-physical" -or
-        $manifest.platform -ne "linux" -or
-        $manifest.shell -ne "avalonia" -or
-        $manifest.app -ne "FreeP" -or
-        $manifest.baseline -ne $false -or
-        $manifest.appSurface -ne "document-editor-file-slideshow-shortcuts" -or
-        $manifest.coverage.exhaustive -ne $false -or
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "freep-linux-file-slideshow-shortcut-physical"; platform = "linux"
+        shell = "avalonia"; app = "FreeP"; baseline = $false; appSurface = "document-editor-file-slideshow-shortcuts"
+    }) -FailureMessage "FreeP file/slideshow shortcut manifest header does not satisfy its dedicated contract."
+    if ($manifest.coverage.exhaustive -ne $false -or
         $manifest.coverage.scope -ne $expectedScope -or
         $manifest.window.pattern -ne $fixtureFileName -or
         $manifest.window.visible -ne $true -or
@@ -125,68 +71,20 @@ function Assert-ManifestContract {
     }
 
     $results = @($manifest.results)
-    $ids = @($results | ForEach-Object { [string]$_.id })
-    if ($results.Count -ne $requiredIds.Count -or
-        $ids.Count -ne ($ids | Select-Object -Unique).Count) {
-        throw "FreeP file/slideshow shortcut manifest must contain exactly ten unique result rows."
-    }
-    foreach ($requiredId in $requiredIds) {
-        if ($ids -notcontains $requiredId) {
-            throw "Manifest is missing required result '$requiredId'."
-        }
-    }
-    $unexpectedIds = @($ids | Where-Object { $requiredIds -notcontains $_ })
-    if ($unexpectedIds.Count -gt 0) {
-        throw "Manifest contains unexpected result ID(s): $([string]::Join(', ', $unexpectedIds))."
-    }
+    Assert-ManifestResultIds -Results $results -ExpectedIds $requiredIds -AllowAnyOrder `
+        -FailureMessage "FreeP file/slideshow shortcut manifest must contain exactly ten unique result rows."
 
-    $passed = @($results | Where-Object { $_.status -eq "passed" }).Count
-    $failed = @($results | Where-Object { $_.status -eq "failed" }).Count
-    if ($manifest.summary.total -ne 10 -or
-        $manifest.summary.passed -ne $passed -or
-        $manifest.summary.failed -ne $failed -or
-        ($passed + $failed) -ne 10) {
-        throw "Manifest summary does not match its ten result rows."
-    }
+    Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 10 `
+        -RequireCompleteStatuses -FailureMessage "Manifest summary does not match its ten result rows."
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
-    foreach ($result in $results) {
-        if ($result.category -ne "physical-x11-file-slideshow-shortcut" -or
-            $result.evidenceLevel -ne "physical-x11-input" -or
-            @($result.evidence).Count -lt 1 -or
-            [string]::IsNullOrWhiteSpace([string]$result.note)) {
-            throw "Result '$($result.id)' is missing physical evidence metadata."
-        }
-        foreach ($evidence in @($result.evidence)) {
-            $name = [string]$evidence
-            if ([string]::IsNullOrWhiteSpace($name) -or
-                [IO.Path]::IsPathRooted($name) -or
-                [IO.Path]::GetFileName($name) -ne $name -or
-                $name.Contains("/") -or $name.Contains("\") -or
-                -not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) {
-                throw "Result '$($result.id)' references missing, empty, or non-basename evidence '$name'."
-            }
-        }
-    }
-    foreach ($screenshot in @($manifest.screenshots)) {
-        $name = [string]$screenshot.name
-        if ($screenshot.kind -ne "screenshot" -or
-            [string]::IsNullOrWhiteSpace($name) -or
-            [IO.Path]::IsPathRooted($name) -or
-            [IO.Path]::GetFileName($name) -ne $name -or
-            $name.Contains("/") -or $name.Contains("\") -or
-            -not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) {
-            throw "Manifest references missing, empty, or non-basename screenshot '$name'."
-        }
-    }
+    Assert-ManifestResultEvidence -Results $results -FileMap $fileMap `
+        -Category "physical-x11-file-slideshow-shortcut" -EvidenceLevel "physical-x11-input" -RequireNote
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $fileMap -RequireKind
 
-    $manifest | Add-Member -NotePropertyName contractValidation -NotePropertyValue ([pscustomobject]@{
-            status = "passed"
-            validator = "tools/Run-FreePFileSlideshowShortcutValidation.ps1"
-            contractReference = "tools/LinuxInteractiveDocker/freep-file-slideshow-shortcut-validation.schema.json"
-        }) -Force
-    $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
-    return $manifest
+    return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
+        -Validator "tools/Run-FreePFileSlideshowShortcutValidation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/freep-file-slideshow-shortcut-validation.schema.json" -JsonDepth 16
 }
 
 if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) {
@@ -214,7 +112,7 @@ try {
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
-    Invoke-External -FilePath "powershell.exe" -Arguments $startArguments
+    Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
     $started = $true
 
     $sessionMetadataPath = Join-Path $resolvedOutputRoot "freep/current-session.json"
@@ -355,7 +253,7 @@ try {
         if ($null -eq $saveResult) {
             throw "Probe manifest is missing file-save-shortcut-current-path."
         }
-        Add-ResultEvidence -Result $saveResult -Names @(
+        Add-VisualEvidenceResultReferences -Result $saveResult -Names @(
             "fixture-source-before.sha256.txt",
             "fixture-source-after.sha256.txt",
             "fixture-mounted-before.sha256.txt",
@@ -421,10 +319,10 @@ try {
 } finally {
     if ($started -and -not $KeepContainer) {
         try {
-            Invoke-External -FilePath "powershell.exe" -Arguments @(
+            Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot
-            )
+            ) -WorkingDirectory $repoRoot
         } catch {
             Write-Warning "Could not stop harness-owned FreeP container on port ${Port}: $($_.Exception.Message)"
         }

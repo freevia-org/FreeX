@@ -56,12 +56,13 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
-        var workbookAssignment = mainSource.IndexOf("_workbook = workbook;", StringComparison.Ordinal);
-        var currentSheetAssignment = mainSource.IndexOf("_currentSheetId = _workbook.Sheets[0].Id;", StringComparison.Ordinal);
+        var sessionAssignment = mainSource.IndexOf("_session = workbookSession ??", StringComparison.Ordinal);
+        var currentSheetAssignment = mainSource.IndexOf("_currentSheetId = _session.ActiveSheet.Id;", StringComparison.Ordinal);
         var initializeComponentCall = mainSource.IndexOf("InitializeComponent();", StringComparison.Ordinal);
 
-        workbookAssignment.Should().BeGreaterThanOrEqualTo(0);
-        currentSheetAssignment.Should().BeGreaterThan(workbookAssignment);
+        mainSource.Should().Contain("private Workbook _workbook => _session.Workbook;");
+        sessionAssignment.Should().BeGreaterThanOrEqualTo(0);
+        currentSheetAssignment.Should().BeGreaterThan(sessionAssignment);
         currentSheetAssignment.Should().BeLessThan(initializeComponentCall);
     }
 
@@ -314,11 +315,12 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
-        viewportSource.Should().Contain("SlicerTimelinePlanner.GetNativeVisualFilters(_workbook, sheet)");
+        viewportSource.Should().Contain("SlicerTimelinePanePlanner.GetNativeVisualFilters(_workbook, sheet)");
+        viewportSource.Should().Contain("new SlicerTimelineSourceSession(_workbook).PopulateAvailableItems(nativeVisualFilters.Slicers)");
         viewportSource.Should().Contain("SheetGrid.NativeSlicers = nativeVisualFilters?.Slicers;");
         viewportSource.Should().Contain("SheetGrid.NativeTimelines = nativeVisualFilters?.Timelines;");
-        viewportSource.Should().NotContain("SlicerTimelinePlanner.GetNativeVisualSlicers(_workbook, sheet)");
-        viewportSource.Should().NotContain("SlicerTimelinePlanner.GetNativeVisualTimelines(_workbook, sheet)");
+        viewportSource.Should().NotContain("SlicerTimelinePanePlanner.GetNativeVisualSlicers(_workbook, sheet)");
+        viewportSource.Should().NotContain("SlicerTimelinePanePlanner.GetNativeVisualTimelines(_workbook, sheet)");
     }
 
     [Fact]
@@ -341,8 +343,10 @@ public sealed partial class MainWindowSourceHygieneTests
         var startupSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Startup.cs");
         // After the ribbon XAML→declarative cutover the Home Number Format combo is populated on the
         // *rendered* declarative ribbon by PopulateAndWireRenderedHomeCombos (MainWindow.RibbonDeclarative.cs),
-        // which startup reaches via TryApplyDeclarativeRibbon(). The planner no longer feeds a startup stub.
+        // which startup reaches via TryApplyDeclarativeRibbon(). Portable choices are injected by the
+        // shared composition planner before either renderer sees the definition.
         var declarativeSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDeclarative.cs");
+        var compositionSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("FreeXRibbonCompositionPlanner.cs");
 
         mainSource.Should().NotContain("private void MainWindow_Loaded(");
         mainSource.Should().NotContain("HomeNumberFormatDropdownPlanner");
@@ -350,9 +354,12 @@ public sealed partial class MainWindowSourceHygieneTests
         startupSource.Should().Contain("private void MainWindow_Loaded(");
         startupSource.Should().NotContain("HomeNumberFormatDropdownPlanner");
         startupSource.Should().Contain("TryApplyDeclarativeRibbon();");
-        declarativeSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options");
+        startupSource.IndexOf("TryApplyDeclarativeRibbon();", StringComparison.Ordinal).Should().BeLessThan(
+            startupSource.IndexOf("ApplyOptionsToView();", StringComparison.Ordinal));
+        declarativeSource.Should().Contain("FreeXRibbonCompositionPlanner.Compose(FreeXRibbon.Build(), UiText.Get)");
+        compositionSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options");
         startupSource.Should().Contain("CreateNewWorkbook();");
-        startupSource.Should().Contain("NormalizeRibbonSurface(forceCompact: true);");
+        startupSource.Should().NotContain("UpdateRibbonCompactMode");
     }
 
     [Fact]

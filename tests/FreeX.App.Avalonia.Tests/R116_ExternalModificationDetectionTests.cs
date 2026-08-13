@@ -33,7 +33,7 @@ namespace FreeX.App.Avalonia.Tests;
 ///
 /// These tests drive the REAL production entry points directly via the internal test seams
 /// <c>OpenWorkbookFromTargetAsyncForTest</c>/<c>SaveWorkbookToTargetAsyncForTest</c> (mirroring the
-/// <c>ApplyReadOnlyRecommendedPromptIfNeededForTest</c> convention) -- the fixture file on disk is
+/// <c>ApplyWorkbookReadOnlyOpenPolicyForTest</c> convention) -- the fixture file on disk is
 /// produced by <see cref="XlsxFileAdapter"/> itself (our own writer), never hand-authored XML, so the
 /// open/save round-trip is real.
 /// </summary>
@@ -48,7 +48,7 @@ public sealed class R116_ExternalModificationDetectionTests
     {
         await Session.Dispatch(async () =>
         {
-            using var tempDir = new R116TempDirectory();
+            using var tempDir = new TestTemporaryDirectory("R116-");
             var path = Path.Combine(tempDir.Path, "Book1.xlsx");
             var adapter = new XlsxFileAdapter();
             var format = new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true);
@@ -119,7 +119,7 @@ public sealed class R116_ExternalModificationDetectionTests
         // content actually lands on disk.
         await Session.Dispatch(async () =>
         {
-            using var tempDir = new R116TempDirectory();
+            using var tempDir = new TestTemporaryDirectory("R116-");
             var path = Path.Combine(tempDir.Path, "Book1.xlsx");
             var adapter = new XlsxFileAdapter();
             var format = new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true);
@@ -182,17 +182,4 @@ public sealed class R116_ExternalModificationDetectionTests
         adapter.Save(workbook, stream);
     }
 
-    private sealed class R116TempDirectory : IDisposable
-    {
-        public string Path { get; } =
-            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "R116-" + Guid.NewGuid().ToString("N"));
-
-        public R116TempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
 }

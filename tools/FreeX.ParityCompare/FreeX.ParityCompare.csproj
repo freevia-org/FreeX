@@ -11,6 +11,7 @@
   <Import Project="..\ToolProjects.props" />
 
   <ItemGroup>
+    <ProjectReference Include="..\Free.ToolsShared\Free.ToolsShared.csproj" />
     <ProjectReference Include="..\FreeX.ParityCompare.Core\FreeX.ParityCompare.Core.csproj" />
   </ItemGroup>
 

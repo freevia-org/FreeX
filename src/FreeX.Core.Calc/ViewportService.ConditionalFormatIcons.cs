@@ -28,7 +28,7 @@ public sealed partial class ViewportService
                 return null;
 
             var style = string.IsNullOrWhiteSpace(rule.IconSetStyle) ? "3TrafficLights1" : rule.IconSetStyle!;
-            var iconCount = ViewportConditionalFormatEvaluator.GetIconSetCount(style);
+            var iconCount = ConditionalFormatEvaluationMath.GetIconSetCount(style);
             cfContext.Aggregates.TryGetValue(rule, out var cache);
             var bucketIndex = ResolveIconSetIndex(rule, cellValue, cache, sheet, workbook, addr, iconCount, cfContext);
             if (!bucketIndex.HasValue)
@@ -51,7 +51,7 @@ public sealed partial class ViewportService
                 // shape/color/rating-bar math downstream keys off IconCount, so it must reflect
                 // the override's OWN family size, not the rule-bucket count used to resolve
                 // which threshold bucket we're in.
-                var overrideIconCount = ViewportConditionalFormatEvaluator.GetIconSetCount(ovr.IconSet);
+                var overrideIconCount = ConditionalFormatEvaluationMath.GetIconSetCount(ovr.IconSet);
                 return new ConditionalFormatIcon(ovr.IconSet, ovr.IconId, overrideIconCount, rule.IconSetShowValue);
             }
 
@@ -74,7 +74,7 @@ public sealed partial class ViewportService
         var thresholdCount = iconCount - 1;
         if (cfContext.IconSetThresholds.TryGetValue(rule, out var cachedThresholds))
         {
-            return ResolveIconSetIndexFromThresholds(
+            return ConditionalFormatEvaluationMath.ResolveIconBucket(
                 value,
                 cachedThresholds.Values,
                 cachedThresholds.GreaterThanOrEqual,
@@ -97,37 +97,10 @@ public sealed partial class ViewportService
                 thresholdValues,
                 thresholdComparisons))
         {
-            return ResolveIconSetIndexFromThresholds(value, thresholdValues, thresholdComparisons, iconCount);
+            return ConditionalFormatEvaluationMath.ResolveIconBucket(value, thresholdValues, thresholdComparisons, iconCount);
         }
 
-        return ResolveInterpolatedIconSetIndex(value, cache.Min, cache.Max, iconCount);
-    }
-
-    private static int ResolveIconSetIndexFromThresholds(
-        double value,
-        ReadOnlySpan<double> thresholdValues,
-        ReadOnlySpan<bool> thresholdComparisons,
-        int iconCount)
-    {
-        var index = 0;
-        for (var i = 0; i < thresholdValues.Length; i++)
-        {
-            if (thresholdComparisons[i] ? value >= thresholdValues[i] : value > thresholdValues[i])
-                index++;
-        }
-
-        return Math.Clamp(index, 0, iconCount - 1);
-    }
-
-    private static int ResolveInterpolatedIconSetIndex(double value, double min, double max, int iconCount)
-    {
-        if (!double.IsFinite(value) || !double.IsFinite(min) || !double.IsFinite(max))
-            return 0;
-        if (max <= min)
-            return iconCount - 1;
-
-        var t = Math.Clamp((value - min) / (max - min), 0d, 1d);
-        return Math.Clamp((int)Math.Floor(t * iconCount), 0, iconCount - 1);
+        return ConditionalFormatEvaluationMath.ResolveInterpolatedIconBucket(value, cache.Min, cache.Max, iconCount);
     }
 
     private static bool TryResolveIconSetThresholds(
@@ -144,7 +117,7 @@ public sealed partial class ViewportService
         if (rule.IconSetThresholds.Count < iconCount - 1)
             return false;
 
-        var thresholdStartIndex = ViewportConditionalFormatEvaluator.GetIconSetThresholdStartIndex(rule, iconCount);
+        var thresholdStartIndex = ConditionalFormatEvaluationMath.GetIconSetThresholdStartIndex(rule.IconSetThresholds.Count, iconCount);
         if (rule.IconSetThresholds.Count - thresholdStartIndex < iconCount - 1)
             return false;
 

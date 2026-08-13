@@ -63,7 +63,7 @@ public sealed class KeyboardContextParityTests
         var window = new MainWindow(
             new FreePOptions(),
             messageService: TestUserMessageService.DiscardUnsavedChanges,
-            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+            nativePrintCapability: PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", "Test printer handoff deferred."));
         try
         {
             Execute(window, Key.P, ModifierKeys.Control);
@@ -87,8 +87,7 @@ public sealed class KeyboardContextParityTests
         var section = new PresentationSection { Name = "Intro" };
         section.SlideIds.Add(presentation.Slides[0].Id);
         presentation.Sections.Add(section);
-        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
-        var pane = new SlidePane(editor);
+        var pane = SlidePaneTestFactory.Create(presentation);
 
         var slideMenu = pane.BuildSlideContextMenuForTests(0);
         AssertMenuMatches(
@@ -172,6 +171,36 @@ public sealed class KeyboardContextParityTests
             splitMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Split Cell"))
                 .RaiseEvent(new System.Windows.RoutedEventArgs(MenuItem.ClickEvent));
             table.Table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void WpfChartContextMenuUsesSharedWaterfallStateAndCommands()
+    {
+        var window = new MainWindow(
+            new FreePOptions(),
+            messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var chart = window.Editor.InsertChart(ChartType.Waterfall);
+            var hit = new ChartSubtargetHit(
+                chart.Id,
+                ChartSubtargetKind.Point,
+                SeriesIndex: 0,
+                PointIndex: 1);
+
+            var menu = window.BuildChartContextMenuForTests(hit);
+            menu.Items.OfType<MenuItem>().First().Header.Should().Be("Set as Total");
+            menu.Items.OfType<MenuItem>().First()
+                .RaiseEvent(new System.Windows.RoutedEventArgs(MenuItem.ClickEvent));
+            chart.Chart!.WaterfallTotalPointIndices.Should().Contain(1);
+
+            window.BuildChartContextMenuForTests(hit)
+                .Items.OfType<MenuItem>().First().Header.Should().Be("Clear Total");
         }
         finally
         {

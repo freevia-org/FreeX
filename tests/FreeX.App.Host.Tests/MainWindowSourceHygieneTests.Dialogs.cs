@@ -147,15 +147,12 @@ public sealed partial class MainWindowSourceHygieneTests
         pageLayoutSource.Should().Contain("UiText.Format(\"MainWindowMessage_SheetBackgroundReadFailed\", ex.Message)");
         pageLayoutSource.Should().Contain("UiText.Get(\"MainWindowMessage_SheetBackgroundTitle\")");
         pageLayoutSource.Should().Contain("SheetBackgroundPickerPlanner.TryBuildBackgroundImage(bytes, result.FileName!, out var background)");
-        pageLayoutSource.Should().Contain("TryExecuteGroupedSheetCommand(");
-        pageLayoutSource.Should().Contain("\"Sheet Background\"");
-        pageLayoutSource.Should().Contain("PageLayoutRibbonCommandPlanner.BuildSetBackgroundCommand(sheetId, background)");
+        pageLayoutSource.Should().Contain("CreatePageLayoutCommandSession().PlanSetBackground(background)");
         pageLayoutSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
         pageLayoutSource.Should().NotContain("private static bool IsSupportedSheetBackgroundFile(string fileName)");
         pageLayoutSource.Should().NotContain("DrawingInputParser.GetImageContentType(result.FileName!)");
         pageLayoutSource.Should().Contain("private void BackgroundClearMenuItem_Click(");
-        pageLayoutSource.Should().Contain("\"Clear Sheet Background\"");
-        pageLayoutSource.Should().Contain("PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand(sheetId)");
+        pageLayoutSource.Should().Contain("CreatePageLayoutCommandSession().PlanClearBackground()");
     }
 
     [Fact]
@@ -166,7 +163,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("private void OpenExternalHelpLink(string url, string title)");
         // External links route through the single guarded launcher (scheme allowlist enforced there),
         // so the raw shell launch must NOT live in this file anymore.
-        source.Should().Contain("ExternalUrlLauncher.Open(url)");
+        source.Should().Contain("DesktopExternalUriLauncher.Open(url)");
         source.Should().NotContain("UseShellExecute");
         source.Should().Contain("ShowOwnedMessage(");
         source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, UiText.Get(\"MainWindowMessage_HelpOnlineTitle\"))");
@@ -197,7 +194,7 @@ public sealed partial class MainWindowSourceHygieneTests
         method.Should().Contain("useDialogLocationForInitialInsert");
         method.Should().Contain("? fallbackLocationRange");
         method.Should().Contain(": SheetGrid.SelectedRange ?? fallbackLocationRange");
-        method.Should().Contain("var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);");
+        method.Should().Contain("TryExecuteRepeatableCommand(CreateCommand, \"Insert Sparkline\", out _)");
         method.Should().Contain("useDialogLocationForInitialInsert = false;");
         method.Should().NotContain("MessageBox.Show(");
     }
@@ -243,25 +240,25 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
-        source.Should().Contain("SpellCheckDialogAction.ReplaceAll");
-        source.Should().Contain("SpellCheckDialogAction.IgnoreAll");
-        source.Should().Contain("SpellCheckDialogAction.Ignore");
-        source.Should().Contain("SpellCheckDialogAction.Add");
-        source.Should().Contain("while (true)");
-        source.Should().Contain("SpellCheckWorkflowPlanner.ScanWorksheet(");
-        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(issues, issue.Word, replacement)");
-        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, replacement)");
+        source.Should().Contain("SpellCheckSessionAction.ChangeAll");
+        source.Should().Contain("SpellCheckSessionAction.Stop");
+        source.Should().Contain("while (transition.RequiresReview)");
+        source.Should().Contain("new SpellCheckSessionController(new SpellCheckSessionAdapter(");
+        source.Should().Contain("transition = controller.Apply(dialog.Result);");
         source.Should().NotContain("BuildSpellCheckEdits");
-        source.Should().Contain("TryExecuteSpellCheckCommand");
-        source.Should().Contain("TryExecuteCommand(command, \"Spell Check\")");
+        source.Should().Contain("TryExecuteCommand(command, \"Spell Check\", out var outcome)");
+        source.Should().NotContain("TryExecuteSpellCheckCommand");
         source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
 
         var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("SpellCheckWorkflowPlanner.cs");
+        var controllerSource = DialogSourceTestSupport.ReadAppServicesSource("SpellCheckSessionController.cs");
         plannerSource.Should().Contain("ContainsIgnoredWord(ignoredWords, issue.Word)");
-        plannerSource.Should().Contain("ignoredIssues.Contains(CreateIssueKey(issue))");
+        plannerSource.Should().Contain("ignoredIssues?.Contains(CreateIssueKey(issue)) == true");
         plannerSource.Should().Contain("new(FilterIssues(");
         plannerSource.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
         plannerSource.Should().Contain("SpellingIssueSource.ThreadedCommentReply");
+        controllerSource.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(");
+        controllerSource.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementCommand(");
     }
 
     [Fact]
@@ -283,8 +280,9 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var scenarioSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ScenarioCommands.cs");
 
-        scenarioSource.Should().Contain("_commandBus.ExecuteRepeatable(_workbook.Id, () => new ApplyScenarioCommand(name))");
-        scenarioSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
+        scenarioSource.Should().Contain("TryExecuteRepeatableCommand(");
+        scenarioSource.Should().Contain("() => new ApplyScenarioCommand(name)");
+        scenarioSource.Should().NotContain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
         scenarioSource.Should().Contain("CellAddress? first = null;");
         scenarioSource.Should().Contain("foreach (var cell in outcome.AffectedCells)");
         scenarioSource.Should().Contain("if (first is { } firstCell)");
@@ -303,14 +301,14 @@ public sealed partial class MainWindowSourceHygieneTests
         // than a local assigned from dialog.Result inline.
         dataSource.Should().Contain("ApplyAdvancedFilterResult(dialog.Result);");
         dataSource.Should().Contain("private void ApplyAdvancedFilterResult(AdvancedFilterDialogResult result)");
-        dataSource.Should().Contain("_commandBus.ExecuteRepeatable(");
+        dataSource.Should().Contain("TryExecuteRepeatableCommand(");
         dataSource.Should().Contain("() => new AdvancedFilterCommand(");
         dataSource.Should().Contain("result.ListRange");
         dataSource.Should().Contain("result.CriteriaRange");
         dataSource.Should().Contain("result.CopyToCell");
         dataSource.Should().Contain("result.UniqueRecordsOnly");
         dataSource.Should().Contain("result.CopyToRange");
-        dataSource.Should().NotContain("_commandBus.Execute(\r\n            _workbook.Id,\r\n            new AdvancedFilterCommand(");
+        dataSource.Should().NotContain("_commandBus.ExecuteRepeatable(");
     }
 
     [Fact]
@@ -339,19 +337,21 @@ public sealed partial class MainWindowSourceHygieneTests
     public void RowAndColumnDimensionDialogs_AreRepeatableForF4AgainstCurrentSelection()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
+        var sessionSource = DialogSourceTestSupport.ReadAppServicesSource("WorkbookSession.cs");
 
-        source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
-        source.Should().Contain("\"Row Height\",");
-        source.Should().Contain("\"Column Width\",");
-        source.Should().Contain("new RowHeightDialog(RowColumnSizingPlanner.GetRowHeightDialogValue(sheet, range)) { Owner = this };");
-        source.Should().Contain("new ColumnWidthDialog(RowColumnSizingPlanner.GetColumnWidthDialogValue(sheet, range)) { Owner = this };");
-        source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
-        source.Should().Contain("RowColumnSizingPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden)");
-        source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Row Height\"");
-        source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Column Width\"");
+        source.Should().Contain("_session.SetSelectedRowsHeight(dialog.Result.Height)");
+        source.Should().Contain("_session.SetSelectedColumnsWidth(dialog.Result.Width)");
+        source.Should().Contain("_session.SetSelectedRowsHidden(hidden)");
+        source.Should().Contain("_session.SetSelectedColumnsHidden(hidden)");
+        source.Should().Contain("new RowHeightDialog(_session.GetSelectedRowHeight()) { Owner = this };");
+        source.Should().Contain("new ColumnWidthDialog(_session.GetSelectedColumnWidth()) { Owner = this };");
+        sessionSource.Should().Contain("ExecuteRepeatableStructureCommand(() =>");
+        sessionSource.Should().Contain("\"Row Height\",");
+        sessionSource.Should().Contain("\"Column Width\",");
+        sessionSource.Should().Contain("Ribbon.RowColumnSizingPlanner.CreateRowHeightCommand(");
+        sessionSource.Should().Contain("Ribbon.RowColumnSizingPlanner.CreateColumnWidthCommand(");
+        sessionSource.Should().Contain("Ribbon.RowColumnSizingPlanner.CreateRowsHiddenCommand(");
+        sessionSource.Should().Contain("Ribbon.RowColumnSizingPlanner.CreateColumnsHiddenCommand(");
 
         var plannerSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("RowColumnSizingPlanner.cs");
         plannerSource.Should().Contain("sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight");
@@ -382,9 +382,9 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("new ManageConditionalFormatsDialog(");
         source.Should().Contain("applyRules: ApplyManagedConditionalFormatRules)");
         source.Should().Contain("private void ApplyManagedConditionalFormatRules(IReadOnlyList<ConditionalFormat> newRules)");
-        source.Should().Contain("new ReplaceAllConditionalFormatsCommand(sheetId, remapped)");
-        source.Should().Contain("GroupedSheetRangePlanner.CloneConditionalFormatForSheet(r, sheetId)");
-        CountOccurrences(source, "new ReplaceAllConditionalFormatsCommand(sheetId, remapped)").Should().Be(1);
+        source.Should().Contain("ConditionalFormatCommandPlanner.PlanReplaceAll(");
+        source.Should().NotContain("new ReplaceAllConditionalFormatsCommand(");
+        CountOccurrences(source, "ConditionalFormatCommandPlanner.PlanReplaceAll(").Should().Be(1);
     }
 
     [Fact]
@@ -439,10 +439,11 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("var command = ChartWorkflowCommandCatalog.FormatDataSeries;");
         source.Should().Contain("ChartWorkflowCommandCatalog.CanOpenDialog(chart, command)");
         source.Should().Contain("ShowUnsupportedChartWorkflow(command)");
-        source.Should().Contain("ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions())");
+        source.Should().Contain("ChartDataLabelsPlanner.Plan(dialog.Result)");
+        source.Should().Contain("ChartAxisPlanner.Plan(dialog.Result)");
         source.Should().Contain("UiText.Get(\"ChartAxisFormat_XAxisTitle\")");
         source.Should().Contain("UiText.Get(\"ChartAxisFormat_YAxisTitle\")");
-        source.Should().Contain("ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions(chart))");
+        source.Should().Contain("ChartSeriesFormatPlanner.Plan(chart, dialog.Result)");
     }
 
     [Fact]
@@ -451,16 +452,25 @@ public sealed partial class MainWindowSourceHygieneTests
         // The ribbon moved to the single-source FreeXRibbonDefinition (FreeX.Ribbon.Definitions project);
         // the "Crop Picture" split button exposes "Crop..." and "Reset Crop" menu items, which the
         // generated handler map wires to the dialog/reset handlers in MainWindow.Drawing.cs.
-        var ribbon = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
+        var crop = FreeXRibbon.Build().FindTab(FreeXRibbonTabIds.PictureFormat)!
+            .Groups.SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .Single(control => control.Label == "Crop Picture");
         var handlers = DialogSourceTestSupport.ReadHostSources("Ribbon\\FreeXRibbonHandlerMap.g.cs");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
+        var plannerSource = DialogSourceTestSupport.ReadPresentationSources(
+            "DrawingUI",
+            "PictureCropPlanner.cs");
 
-        ribbon.Should().Contain("menu: m => m.Item(\"Crop\", \"Crop...\", \"C\").Item(\"Reset Crop\", \"Reset Crop\", \"R\")");
-        handlers.Should().Contain("[\"Crop\"] = \"PictureCropDialogMenuItem_Click\"");
-        handlers.Should().Contain("[\"Reset Crop\"] = \"PictureResetCropMenuItem_Click\"");
+        crop.Menu.Items.Select(item => (item.CommandId?.Value, item.Header)).Should().Equal(
+            (FreeXRibbonCommandIds.DrawingCrop, "Crop..."),
+            (FreeXRibbonCommandIds.DrawingResetCrop, "Reset Crop"));
+        handlers.Should().Contain("[FreeXRibbonCommandIds.DrawingCrop] = new(static (owner, sender, eventArgs) => owner.PictureCropDialogMenuItem_Click");
+        handlers.Should().Contain("[FreeXRibbonCommandIds.DrawingResetCrop] = new(static (owner, sender, eventArgs) => owner.PictureResetCropMenuItem_Click");
         source.Should().Contain("PictureResetCropMenuItem_Click");
-        source.Should().Contain("new SetPictureCropCommand(");
-        source.Should().Contain("0, 0, 0, 0");
+        source.Should().Contain("PictureCropDialogPlanner.BuildResetCommand(");
+        plannerSource.Should().Contain("public static SetPictureCropCommand BuildResetCommand");
+        plannerSource.Should().Contain("BuildCommand(sheetId, pictureId, 0, 0, 0, 0)");
     }
 
     [Fact]

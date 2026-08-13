@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Dialogs;
@@ -14,6 +15,38 @@ public sealed record CustomizeThemeColorsDialogInput(
 public sealed record CustomizeThemeColorsValidation(
     int SlotIndex,
     string Message);
+
+public sealed record DesignDialogText(
+    string InvalidThemeColorsMessage,
+    string PageColorLabel,
+    string MoreColorsLabel,
+    string EffectsTitle,
+    string EffectSetLabel,
+    string StyleSetsTitle,
+    string StyleSetLabel);
+
+public static class DesignDialogTextCatalog
+{
+    private static readonly ResourceTextDescriptor[] Texts =
+    [
+        new("Design_ThemeColors_Invalid_Message", "Enter valid theme colors."),
+        new("Design_PageColor_Color_Label", "Color:"),
+        new("Design_PageColor_MoreColors_Label", "More Colors:"),
+        new("Design_Effects_Title", "Effects"),
+        new("Design_Effects_Set_Label", "Effect set:"),
+        new("Design_StyleSets_Title", "Style Sets"),
+        new("Design_StyleSets_Set_Label", "Style set:"),
+    ];
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+        Texts.Select(text => text.ResourceKey).ToArray();
+
+    public static DesignDialogText Resolve(Func<string, string?>? getText = null)
+    {
+        var values = Texts.Select(text => text.Resolve(getText)).ToArray();
+        return new DesignDialogText(values[0], values[1], values[2], values[3], values[4], values[5], values[6]);
+    }
+}
 
 public static class CustomizeThemeColorsDialogPlanner
 {
@@ -125,10 +158,41 @@ public sealed record CustomizeThemeFontsValidation(
     CustomizeThemeFontsDialogField Field,
     string Message);
 
+public sealed record CustomizeThemeFontsDialogAcceptance(
+    DocumentFontSet? Result,
+    CustomizeThemeFontsValidation? Validation)
+{
+    public bool IsAccepted => Result is not null && Validation is null;
+
+    public string ErrorMessage =>
+        Validation?.Message ?? CustomizeThemeFontsDialogPlanner.GenericValidationMessage;
+
+    public CustomizeThemeFontsDialogField? FocusField => Validation?.Field;
+}
+
+public sealed class CustomizeThemeFontsDialogSession
+{
+    internal CustomizeThemeFontsDialogSession(DocumentFontSet current)
+    {
+        InitialState = CustomizeThemeFontsDialogPlanner.BuildInitialState(current);
+    }
+
+    public CustomizeThemeFontsInitialState InitialState { get; }
+
+    public CustomizeThemeFontsDialogAcceptance PlanAcceptance(CustomizeThemeFontsDialogInput input) =>
+        CustomizeThemeFontsDialogPlanner.TryBuildResult(input, out var result, out var validation)
+            ? new CustomizeThemeFontsDialogAcceptance(result, Validation: null)
+            : new CustomizeThemeFontsDialogAcceptance(Result: null, validation);
+}
+
 public static class CustomizeThemeFontsDialogPlanner
 {
     public const string Title = "Create New Theme Fonts";
     public const string Hint = "Type a font name or select one from the list.";
+    public const string HeadingFontLabel = "Heading font:";
+    public const string BodyFontLabel = "Body font:";
+    public const string NameLabel = "Name:";
+    public const string GenericValidationMessage = "Enter both font names.";
     public const string DefaultName = "Custom";
     public const double DialogWidth = 380;
     public const double DialogMargin = 14;
@@ -152,6 +216,8 @@ public static class CustomizeThemeFontsDialogPlanner
         "Palatino Linotype", "Segoe UI", "Tahoma", "Times New Roman",
         "Trebuchet MS", "Verdana",
     ];
+
+    public static CustomizeThemeFontsDialogSession CreateSession(DocumentFontSet current) => new(current);
 
     public static CustomizeThemeFontsInitialState BuildInitialState(DocumentFontSet current)
     {

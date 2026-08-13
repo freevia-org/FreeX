@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -5,7 +6,9 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Free.Shared.Drawing;
+using Free.Shared.Opc;
 using FreeP.App.Compositor;
+using FreeP.App.Media;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
@@ -59,43 +62,46 @@ public interface ITempMediaFileWriter
     void Delete(string path);
 }
 
-/// <summary>Default implementation that writes to <see cref="Path.GetTempPath"/>.</summary>
+/// <summary>Default implementation backed by shared temporary-file leases.</summary>
 internal sealed class TempMediaFileWriter : ITempMediaFileWriter
 {
+    private readonly ConcurrentDictionary<string, TemporaryFileLease> _leases =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public string Write(byte[] bytes, string contentType)
     {
         string ext = ContentTypeToExtension(contentType);
-        string path = Path.Combine(Path.GetTempPath(), $"freep_media_{Guid.NewGuid():N}{ext}");
-        File.WriteAllBytes(path, bytes);
-        return path;
+        var lease = TemporaryFileLease.Create("freep_media_", ext);
+        try
+        {
+            lease.WriteAllBytes(bytes);
+            if (!_leases.TryAdd(lease.Path, lease))
+                throw new IOException($"Temporary media path is already owned: '{lease.Path}'.");
+            return lease.Path;
+        }
+        catch
+        {
+            lease.Dispose();
+            throw;
+        }
     }
 
     public void Delete(string path)
     {
-        try { File.Delete(path); } catch { /* best-effort */ }
+        if (_leases.TryRemove(path, out var lease))
+        {
+            lease.Dispose();
+            return;
+        }
+
+        using var externallyOwnedFile = TemporaryFileLease.Own(path);
     }
 
     internal static string ContentTypeToExtension(string contentType) =>
-        contentType.ToLowerInvariant() switch
-        {
-            "video/mp4"             => ".mp4",
-            "video/mpeg"            => ".mpg",
-            "video/avi"             => ".avi",
-            "video/x-msvideo"       => ".avi",
-            "video/quicktime"       => ".mov",
-            "video/x-ms-wmv"        => ".wmv",
-            "video/x-ms-asf"        => ".asf",
-            "video/webm"            => ".webm",
-            "audio/mpeg"            => ".mp3",
-            "audio/mp3"             => ".mp3",
-            "audio/wav"             => ".wav",
-            "audio/x-wav"           => ".wav",
-            "audio/ogg"             => ".ogg",
-            "audio/x-ms-wma"        => ".wma",
-            "audio/aac"             => ".aac",
-            "audio/flac"            => ".flac",
-            _                       => ".bin",
-        };
+        OpcMediaTypes.GetMediaFileExtension(
+            contentType,
+            OpcMediaExtensionProfile.EmbeddedPlayback,
+            includeDot: true);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -125,7 +131,7 @@ public sealed class MediaShapeRect
 /// <summary>
 /// Manages MediaElement overlays for media shapes on a single slide visit.
 /// </summary>
-public sealed class SlideShowMediaController
+public sealed partial class SlideShowMediaController
 {
     // ── injected / constructed ────────────────────────────────────────────────
 
@@ -138,9 +144,9 @@ public sealed class SlideShowMediaController
     private double _canvasW;
     private double _canvasH;
     private Slide? _activeSlide;
-    private int? _activeSlideIndex;
     private bool _showMediaControls = true;
     private bool _showNarration = true;
+    private readonly SlideShowMediaPlaybackSession _playbackSession = new();
 
     // ── per-slide state ───────────────────────────────────────────────────────
 
@@ -148,17 +154,12 @@ public sealed class SlideShowMediaController
     private sealed record MediaSlot(
         uint ShapeId,
         MediaElement? Element,
-        string? TempPath,
-        bool ShowWhenStopped,
-        MediaShapeRect AuthoredRect,
-        bool PlayFullScreen,
-        MediaInfo? Media = null,
-        int BaseVolumePercent = 100,
+        IMediaPlaybackSession? Session,
+        LayoutRect AuthoredBounds,
+        SlideShowMediaPlaybackHandle? Playback = null,
         PresentationMediaTranscriptTrackDescriptor? CaptionTrack = null,
         Border? CaptionHost = null,
-        TextBlock? CaptionText = null,
-        int RemainingSlides = 1,
-        TimeSpan? PendingSeekPosition = null);
+        TextBlock? CaptionText = null);
     private readonly List<MediaSlot> _slots = new();
     private readonly DispatcherTimer _captionTimer;
 
@@ -176,18 +177,12 @@ public sealed class SlideShowMediaController
         };
         _captionTimer.Tick += (_, _) =>
         {
-            EnforceTrimWindows();
+            EnforcePlaybackState();
             UpdateCaptions();
         };
     }
 
-    internal string? CaptionTextForTest(uint shapeId) =>
-        _slots.FirstOrDefault(slot => slot.CaptionTrack?.ShapeId == shapeId)?.CaptionText?.Text;
-
-    internal void RefreshCaptionsForTest(TimeSpan? playbackPosition = null) =>
-        UpdateCaptions(playbackPosition);
-
-    internal uint? LastMediaClickShapeIdForTest { get; private set; }
+    partial void ObserveMediaClick(SlideShowMediaClickPlan click);
 
     // ── public API ────────────────────────────────────────────────────────────
 
@@ -229,49 +224,39 @@ public sealed class SlideShowMediaController
                            bool showNarration = true,
                            int? presentationSlideIndex = null)
     {
-        var continues = _activeSlideIndex is int previous
-            && presentationSlideIndex is int current
-            && current == previous + 1;
-        if (continues)
-            RetainAcrossSlide();
-        else
-            Teardown();
+        ApplyEnterResult(_playbackSession.EnterSlide(presentationSlideIndex));
 
         _slideDipW = slideDipW;
         _slideDipH = slideDipH;
         _canvasW = canvasW;
         _canvasH = canvasH;
         _activeSlide = slide;
-        _activeSlideIndex = presentationSlideIndex;
         _showMediaControls = showMediaControls;
         _showNarration = showNarration;
+        var entryPlan = SlideShowMediaInteractionPlanner.PlanSlideEntry(
+            slide,
+            slideDipW,
+            slideDipH,
+            canvasW,
+            canvasH,
+            captionTracks,
+            preferredCaptionShapeId,
+            preferredCaptionTrackIndex,
+            captionSlideIndex,
+            preferredCaptionSlideIndex,
+            showMediaControls,
+            showNarration);
 
-        foreach (var shape in ShapeTreeLookup.Enumerate(slide))
+        foreach (var entry in entryPlan.Items)
         {
-            if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
-                continue;
-            if (!_showNarration && !shape.Media.IsVideo)
-                continue;
-
-            var rect = ComputeMediaRect(shape, slideDipW, slideDipH, canvasW, canvasH);
-            var slot = CreateSlot(shape.Id, shape.Media, rect, shape.Media.IsVideo);
-            var captionTrack = captionSlideIndex is int currentSlideIndex
-                ? PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
-                    captionTracks,
-                    currentSlideIndex,
-                    shape.Id,
-                    preferredCaptionSlideIndex,
-                    preferredCaptionShapeId == shape.Id ? preferredCaptionTrackIndex : null)
-                : PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
-                    captionTracks,
-                    shape.Id,
-                    preferredCaptionShapeId == shape.Id ? preferredCaptionTrackIndex : null);
-            if (captionTrack is not null)
+            var bounds = entry.Surface.Bounds;
+            var slot = CreateSlot(entry.ShapeId, entry.Media, bounds);
+            if (entry.CaptionTrack is not null)
             {
-                var caption = CreateCaptionView(rect);
+                var caption = CreateCaptionView(bounds);
                 slot = slot with
                 {
-                    CaptionTrack = captionTrack,
+                    CaptionTrack = entry.CaptionTrack,
                     CaptionHost = caption.Host,
                     CaptionText = caption.Text,
                 };
@@ -279,8 +264,11 @@ public sealed class SlideShowMediaController
             _slots.Add(slot);
         }
 
-        _captionTimer.IsEnabled = _slots.Any(slot =>
-            slot.CaptionTrack is not null || HasPlaybackEnvelope(slot.Media));
+        _captionTimer.IsEnabled = SlideShowMediaInteractionPlanner.ShouldRunPeriodicUpdates(
+            _slots.Select(slot => new SlideShowMediaActiveSlotMonitorPlan(
+                slot.CaptionTrack,
+                slot.Playback)),
+            _playbackSession);
         UpdateCaptions();
     }
 
@@ -301,28 +289,39 @@ public sealed class SlideShowMediaController
 
         foreach (var slot in _slots)
         {
-            var shape = ShapeTreeLookup.Find(slide, slot.ShapeId);
+            var shape = SlideShapeTraversal.FindById(slide, slot.ShapeId);
             if (shape?.Media is null || shape.Kind != SlideShapeKind.Media)
                 continue;
 
-            var r = ComputeMediaRect(shape, _slideDipW, _slideDipH, canvasW, canvasH);
-            if (slot.Element is not null)
-                ApplyRect(slot.Element, slot.PlayFullScreen && slot.Element.Tag is true
-                    ? FullScreenRect()
-                    : r);
-
+            var authoredBounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
+                shape,
+                _slideDipW,
+                _slideDipH,
+                canvasW,
+                canvasH);
+            var useFullScreen = slot.Playback is { } playback
+                && _playbackSession.Snapshot(playback).UseFullScreen;
+            PresentationMediaTranscriptCueDescriptor? cue = null;
             if (slot.CaptionHost is not null && slot.CaptionText is not null)
             {
-                var cue = slot.Element is null
+                cue = slot.Element is null
                     ? null
                     : PresentationMediaTranscriptPlanner.FindActiveCue(
                         slot.CaptionTrack,
-                        slot.Element.Position);
-                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText,
-                    slot.PlayFullScreen && slot.Element?.Tag is true ? FullScreenRect() : r,
-                    cue,
-                    slot.CaptionTrack?.Regions);
+                        slot.Playback?.Port.Position ?? slot.Element.Position);
             }
+            var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                new PresentationMediaOverlayPlacementRequest(
+                    authoredBounds,
+                    canvasW,
+                    canvasH,
+                    useFullScreen,
+                    cue,
+                    slot.CaptionTrack?.Regions));
+            if (slot.Element is not null)
+                ApplyRect(slot.Element, placement.MediaBounds);
+            if (slot.CaptionHost is not null && slot.CaptionText is not null)
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, placement);
         }
     }
 
@@ -332,20 +331,20 @@ public sealed class SlideShowMediaController
     /// </summary>
     public void Teardown()
     {
+        _playbackSession.Teardown();
         foreach (var slot in _slots)
             DisposeSlot(slot);
         _slots.Clear();
         _activeSlide = null;
-        _activeSlideIndex = null;
         _captionTimer.Stop();
     }
 
-    private void RetainAcrossSlide()
+    private void ApplyEnterResult(SlideShowMediaEnterResult result)
     {
         for (var i = _slots.Count - 1; i >= 0; i--)
         {
             var slot = _slots[i];
-            if (slot.Media?.IsVideo != false || slot.RemainingSlides <= 1)
+            if (slot.Playback is null || result.Released.Contains(slot.Playback))
             {
                 DisposeSlot(slot);
                 _slots.RemoveAt(i);
@@ -356,7 +355,6 @@ public sealed class SlideShowMediaController
                 _overlay.Children.Remove(slot.CaptionHost);
             _slots[i] = slot with
             {
-                RemainingSlides = slot.RemainingSlides - 1,
                 CaptionTrack = null,
                 CaptionHost = null,
                 CaptionText = null,
@@ -366,11 +364,12 @@ public sealed class SlideShowMediaController
 
     private void DisposeSlot(MediaSlot slot)
     {
+        slot.Session?.Dispose();
+
         if (slot.Element is not null)
         {
             try
             {
-                slot.Element.Stop();
                 _overlay.Children.Remove(slot.Element);
             }
             catch { /* ignore */ }
@@ -378,9 +377,6 @@ public sealed class SlideShowMediaController
 
         if (slot.CaptionHost is not null)
             _overlay.Children.Remove(slot.CaptionHost);
-
-        if (slot.TempPath is not null)
-            _fileWriter.Delete(slot.TempPath);
     }
 
     /// <summary>
@@ -401,22 +397,18 @@ public sealed class SlideShowMediaController
             canvasY,
             _showMediaControls,
             _showNarration);
-        LastMediaClickShapeIdForTest = click.Media?.ShapeId;
+        ObserveMediaClick(click);
         if (!click.IsHandled)
             return false;
 
-        var slot = _slots.FirstOrDefault(candidate =>
-            candidate.ShapeId == click.Media!.ShapeId);
-        if (slot is null)
-            return true;
-
-        TogglePlayPause(slot);
+        if (_playbackSession.TryHandleClick(click.Media!.ShapeId, out var snapshot) && snapshot is not null)
+            ApplyPlaybackSnapshot(snapshot);
         return true;
     }
 
     // ── internal helpers ──────────────────────────────────────────────────────
 
-    private (Border Host, TextBlock Text) CreateCaptionView(MediaShapeRect bounds)
+    private (Border Host, TextBlock Text) CreateCaptionView(LayoutRect bounds)
     {
         var text = new TextBlock
         {
@@ -427,18 +419,23 @@ public sealed class SlideShowMediaController
             VerticalAlignment = VerticalAlignment.Center,
             Padding = new Thickness(10, 4, 10, 4),
         };
-        var height = Math.Clamp(bounds.Height * 0.2, 36, 86);
         var host = new Border
         {
             Background = Brushes.Black,
             Opacity = 0.82,
-            Width = Math.Max(1, bounds.Width),
-            Height = height,
             Child = text,
             Visibility = Visibility.Collapsed,
             IsHitTestVisible = false,
         };
-        ApplyCaptionPlacement(host, text, bounds, cue: null);
+        ApplyCaptionPlacement(
+            host,
+            text,
+            PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                new PresentationMediaOverlayPlacementRequest(
+                    bounds,
+                    _canvasW,
+                    _canvasH,
+                    UseFullScreen: false)));
         Panel.SetZIndex(host, 10);
         _overlay.Children.Add(host);
         return (host, text);
@@ -447,28 +444,18 @@ public sealed class SlideShowMediaController
     private static void ApplyCaptionPlacement(
         Border host,
         TextBlock text,
-        MediaShapeRect bounds,
-        PresentationMediaTranscriptCueDescriptor? cue,
-        IReadOnlyList<PresentationMediaTranscriptRegionDescriptor>? regions = null)
+        PresentationMediaOverlayPlacement placement)
     {
-        var defaultHeight = Math.Clamp(bounds.Height * 0.2, 36, 86);
-        var placement = PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(
-            cue,
-            bounds.Width,
-            bounds.Height,
-            defaultHeight,
-            regions);
-        host.Width = placement.Width;
-        host.Height = placement.Height;
-        var isVertical = placement.RotationDegrees != 0;
-        text.Width = isVertical ? placement.Height : double.NaN;
-        text.Height = isVertical ? placement.Width : double.NaN;
+        host.Width = placement.CaptionBounds.Width;
+        host.Height = placement.CaptionBounds.Height;
+        text.Width = placement.CaptionTextWidth ?? double.NaN;
+        text.Height = placement.CaptionTextHeight ?? double.NaN;
         text.RenderTransformOrigin = new Point(0.5, 0.5);
-        text.RenderTransform = isVertical
-            ? new RotateTransform(placement.RotationDegrees)
+        text.RenderTransform = placement.IsCaptionVertical
+            ? new RotateTransform(placement.CaptionRotationDegrees)
             : Transform.Identity;
-        Canvas.SetLeft(host, bounds.X + placement.X);
-        Canvas.SetTop(host, bounds.Y + placement.Y);
+        Canvas.SetLeft(host, placement.CaptionBounds.X);
+        Canvas.SetTop(host, placement.CaptionBounds.Y);
     }
 
     private void UpdateCaptions(TimeSpan? testPlaybackPosition = null)
@@ -478,7 +465,7 @@ public sealed class SlideShowMediaController
             if (slot.CaptionHost is null || slot.CaptionText is null)
                 continue;
 
-            if (slot.Element is null && testPlaybackPosition is null)
+            if (slot.Playback is null && testPlaybackPosition is null)
             {
                 slot.CaptionText.Text = string.Empty;
                 slot.CaptionHost.Visibility = Visibility.Collapsed;
@@ -487,16 +474,31 @@ public sealed class SlideShowMediaController
 
             var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
                 slot.CaptionTrack,
-                testPlaybackPosition ?? slot.Element!.Position);
+                testPlaybackPosition ?? slot.Playback!.Port.Position);
             ApplyCaptionText(slot.CaptionText, cue);
             if (cue is not null
                 && _activeSlide is { } activeSlide
-                && ShapeTreeLookup.Find(activeSlide, slot.ShapeId) is { Media: not null } shape)
+                && SlideShapeTraversal.FindById(activeSlide, slot.ShapeId) is { Media: not null } shape)
             {
-                var bounds = ComputeMediaRect(shape, _slideDipW, _slideDipH, _canvasW, _canvasH);
-                if (slot.PlayFullScreen && slot.Element?.Tag is true)
-                    bounds = FullScreenRect();
-                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue, slot.CaptionTrack?.Regions);
+                var bounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
+                    shape,
+                    _slideDipW,
+                    _slideDipH,
+                    _canvasW,
+                    _canvasH);
+                var useFullScreen = slot.Playback is { } playback
+                    && _playbackSession.Snapshot(playback).UseFullScreen;
+                ApplyCaptionPlacement(
+                    slot.CaptionHost,
+                    slot.CaptionText,
+                    PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                        new PresentationMediaOverlayPlacementRequest(
+                            bounds,
+                            _canvasW,
+                            _canvasH,
+                            useFullScreen,
+                            cue,
+                            slot.CaptionTrack?.Regions)));
             }
             slot.CaptionHost.Visibility = cue is null
                 ? Visibility.Collapsed
@@ -546,40 +548,28 @@ public sealed class SlideShowMediaController
 
     private static Brush? CaptionBrush(string? colorHex)
     {
-        if (string.IsNullOrWhiteSpace(colorHex))
-        {
+        if (!RgbColorTextCodec.TryParse(
+                colorHex,
+                RgbColorTextProfile.CaptionPayload,
+                out var color))
             return null;
-        }
 
-        try
-        {
-            return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#" + colorHex)!);
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
+        return new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
     }
 
-    private MediaSlot CreateSlot(uint shapeId, MediaInfo media, MediaShapeRect rect, bool isVideo)
+    private MediaSlot CreateSlot(uint shapeId, MediaInfo media, LayoutRect bounds)
     {
-        // Resolve source first (writes temp file if needed).
-        // This is done OUTSIDE the element-creation try/catch so the temp path
-        // is always recorded and cleaned up on Teardown, even if MediaElement
-        // construction fails (e.g. headless / no display in unit tests).
-        // NOTE: tempPath is set even when source is null (e.g. invalid URI from a fake writer),
-        // so we always have it for cleanup.
-        Uri? source = ResolveSource(media, out string? tempPath);
-        var baseVolumePercent = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(media.VolumePercent);
-        if (source is null)
-        {
-            // Still record the tempPath for cleanup (written but URI was unparseable).
-            return new MediaSlot(shapeId, null, tempPath, media.ShowWhenStopped, rect,
-                media.PlayFullScreen, media, baseVolumePercent,
-                RemainingSlides: Math.Max(1, media.StopAfterSlides));
-        }
+        if (!MediaPlaybackSourceFactory.TryCreate(
+                media.Bytes,
+                media.LinkUrl,
+                media.ContentType,
+                media.IsVideo,
+                out var source,
+                loop: false))
+            return new MediaSlot(shapeId, null, null, bounds);
 
         MediaElement? element = null;
+        WpfMediaPlaybackSession? session = null;
         try
         {
             element = new MediaElement
@@ -589,363 +579,152 @@ public sealed class SlideShowMediaController
                 // PowerPoint lets a bookmark seek land while media is paused. WPF
                 // otherwise ignores Position assignments made before playback starts.
                 ScrubbingEnabled = true,
-                Source           = source,
-                Volume           = baseVolumePercent / 100d,
-                // For audio: collapse the visual (no video frame to show).
-                Visibility       = isVideo && media.ShowWhenStopped
-                    ? Visibility.Visible
-                    : Visibility.Collapsed,
+                Visibility       = Visibility.Collapsed,
                 IsHitTestVisible = false,   // we do our own hit-testing
             };
 
-            ApplyRect(element, media.PlayFullScreen &&
-                media.PlaybackStartMode == MediaPlaybackStartMode.Automatically
-                ? FullScreenRect()
-                : rect);
+            ApplyRect(element, bounds);
+            session = new WpfMediaPlaybackSession(
+                element,
+                new WpfMediaPlaybackSourceStore(_fileWriter));
+            var port = new WpfMediaPlaybackPort(session);
+            SlideShowMediaPlaybackHandle? playback = null;
 
             // Handle media failure gracefully — just hide the element.
-            element.MediaFailed += (_, _) =>
+            session.Failed += (_, _) =>
             {
                 element.Visibility = Visibility.Collapsed;
             };
 
             element.MediaOpened += (_, _) =>
             {
-                var pendingIndex = _slots.FindIndex(candidate => candidate.ShapeId == shapeId);
-                var pending = pendingIndex >= 0 ? _slots[pendingIndex].PendingSeekPosition : null;
-                if (pending is TimeSpan pendingPosition)
-                {
-                    if (pendingIndex >= 0)
-                        _slots[pendingIndex] = _slots[pendingIndex] with { PendingSeekPosition = null };
-
-                    ApplySeekPosition(element, media, pendingPosition, baseVolumePercent);
-                }
-                else
-                {
-                    SeekToTrimStart(element, media);
-                    ApplyFade(element, media, baseVolumePercent);
-                }
+                session.HandleMediaOpened();
+                if (playback is not null &&
+                    _playbackSession.Synchronize(playback, out var snapshot) &&
+                    snapshot is not null)
+                    ApplyPlaybackSnapshot(snapshot);
             };
 
-            element.MediaEnded += (_, _) =>
+            element.MediaEnded += (_, _) => session.HandleMediaEnded();
+            element.MediaFailed += (_, args) => session.HandleMediaFailed(args.ErrorException);
+            session.Ended += (_, _) =>
             {
-                switch (SlideShowMediaInteractionPlanner.ResolveEndAction(media))
-                {
-                    case SlideShowMediaEndAction.Rewind:
-                        try
-                        {
-                            SeekToTrimStart(element, media);
-                            ApplyFade(element, media, baseVolumePercent);
-                            element.Pause();
-                            element.Tag = false;
-                            ApplyRect(element, rect);
-                            element.Visibility = isVideo && media.ShowWhenStopped
-                                ? Visibility.Visible
-                                : Visibility.Collapsed;
-                        }
-                        catch (InvalidOperationException)
-                        {
-                            element.Tag = false;
-                        }
-                        return;
-                    case SlideShowMediaEndAction.Stop:
-                        if (!media.ShowWhenStopped && isVideo)
-                            element.Visibility = Visibility.Collapsed;
-                        element.Tag = false;
-                        ApplyRect(element, rect);
-                        return;
-                    case SlideShowMediaEndAction.Loop:
-                        try
-                        {
-                            SeekToTrimStart(element, media);
-                            ApplyFade(element, media, baseVolumePercent);
-                            element.Play();
-                            element.Tag = true;
-                        }
-                        catch (InvalidOperationException)
-                        {
-                            element.Tag = false;
-                        }
-                        return;
-                }
+                if (playback is not null)
+                    ApplyPlaybackSnapshot(_playbackSession.HandleEnded(playback));
             };
+
+            session.Open(source!);
+            if (session.State == MediaPlaybackState.Failed)
+            {
+                session.Dispose();
+                return new MediaSlot(shapeId, null, null, bounds);
+            }
 
             _overlay.Children.Add(element);
-            if (media.PlaybackStartMode == MediaPlaybackStartMode.Automatically)
-            {
-                SeekToTrimStart(element, media);
-                ApplyFade(element, media, baseVolumePercent);
-                element.Play();
-                element.Tag = true;
-                if (isVideo)
-                    element.Visibility = Visibility.Visible;
-            }
+            playback = _playbackSession.Register(shapeId, media, port);
+            var slot = new MediaSlot(shapeId, element, session, bounds, playback);
+            ApplyPlaybackSnapshot(slot, _playbackSession.Snapshot(playback));
+            return slot;
         }
         catch
         {
-            // Headless / no-display: swallow — tempPath is still set so cleanup works.
+            session?.Dispose();
+            if (element is not null)
+                _overlay.Children.Remove(element);
             element = null;
         }
 
-        return new MediaSlot(shapeId, element, tempPath, media.ShowWhenStopped, rect,
-            media.PlayFullScreen, media, baseVolumePercent,
-            RemainingSlides: Math.Max(1, media.StopAfterSlides));
-    }
-
-    private Uri? ResolveSource(MediaInfo media, out string? tempPath)
-    {
-        tempPath = null;
-
-        // 1. Embedded bytes: write to a temp file.
-        if (media.Bytes is { Length: > 0 })
-        {
-            tempPath = _fileWriter.Write(media.Bytes, media.ContentType);
-            // Build a file:// URI; tolerate fake/relative paths from tests by falling back
-            // gracefully — the MediaElement will simply never receive a source.
-            if (!Uri.TryCreate(tempPath, UriKind.Absolute, out var fileUri))
-                return null;
-            return fileUri;
-        }
-
-        // 2. Link-only: only allow http/https (same safety guard as OpenExternalUrl).
-        if (!string.IsNullOrEmpty(media.LinkUrl))
-        {
-            if (Uri.TryCreate(media.LinkUrl, UriKind.Absolute, out var uri) &&
-                uri.Scheme is "http" or "https")
-            {
-                return uri;
-            }
-            // Non-safe scheme (e.g. file:// or blank) — skip.
-            return null;
-        }
-
-        return null; // nothing to play
+        return new MediaSlot(shapeId, element, null, bounds);
     }
 
     /// <summary>Seeks an active media element, matching the Avalonia playback controller.</summary>
     public bool TrySeek(uint shapeId, TimeSpan position)
     {
-        if (position < TimeSpan.Zero)
-            return false;
-
-        var slotIndex = _slots.FindIndex(candidate => candidate.ShapeId == shapeId);
-        if (slotIndex < 0 || _slots[slotIndex].Element is not { } element)
-            return false;
-
-        try
-        {
-            var slot = _slots[slotIndex];
-            ApplySeekPosition(element, slot.Media, position, slot.BaseVolumePercent);
-            if (slot.Media is not null && !element.NaturalDuration.HasTimeSpan)
-                _slots[slotIndex] = slot with { PendingSeekPosition = position };
-            else if (slot.PendingSeekPosition is not null)
-                _slots[slotIndex] = slot with { PendingSeekPosition = null };
-            return true;
-        }
-        catch (InvalidOperationException)
-        {
-            return false;
-        }
+        var didSeek = _playbackSession.TrySeek(shapeId, position, out var snapshot);
+        if (snapshot is not null)
+            ApplyPlaybackSnapshot(snapshot);
+        return didSeek;
     }
 
     /// <summary>Seeks an active media element to a named authored bookmark.</summary>
     public bool TrySeekToBookmark(uint shapeId, string bookmarkName)
     {
-        var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
-        if (slot?.Element is not { } element || slot.Media is not { } media)
-            return false;
-
-        var duration = element.NaturalDuration.HasTimeSpan
-            ? element.NaturalDuration.TimeSpan
-            : TimeSpan.Zero;
-        if (!SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
-                media, bookmarkName, duration, out var position))
-            return false;
-
-        // Reuse the established WPF seek path so unopened MediaElement instances
-        // receive the same dispatcher/trim handling as ordinary scrubbing.
-        return TrySeek(shapeId, position);
-    }
-
-    private static void ApplySeekPosition(
-        MediaElement element,
-        MediaInfo? media,
-        TimeSpan position,
-        int baseVolumePercent)
-    {
-        if (media is null)
-        {
-            element.Position = position;
-        }
-        else
-        {
-            var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
-                media,
-                element.NaturalDuration.HasTimeSpan
-                    ? element.NaturalDuration.TimeSpan
-                    : TimeSpan.Zero);
-            element.Position = window.End != TimeSpan.MaxValue && position > window.End
-                ? window.End
-                : SlideShowMediaInteractionPlanner.ClampToTrimStart(media, position);
-        }
-
-        ApplyFade(element, media, baseVolumePercent);
+        var didSeek = _playbackSession.TrySeekToBookmark(shapeId, bookmarkName, out var snapshot);
+        if (snapshot is not null)
+            ApplyPlaybackSnapshot(snapshot);
+        return didSeek;
     }
 
     /// <summary>Sets the active media volume using the shared 0-100 volume convention.</summary>
     public bool TrySetVolume(uint shapeId, int volume)
     {
-        var slotIndex = _slots.FindIndex(slot => slot.ShapeId == shapeId);
-        if (slotIndex < 0 || _slots[slotIndex].Element is not { } element)
-            return false;
-
-        try
-        {
-            var baseVolumePercent = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(volume);
-            _slots[slotIndex] = _slots[slotIndex] with { BaseVolumePercent = baseVolumePercent };
-            ApplyFade(element, _slots[slotIndex].Media, baseVolumePercent);
-            return true;
-        }
-        catch (InvalidOperationException)
-        {
-            return false;
-        }
+        var didSet = _playbackSession.TrySetVolume(shapeId, volume, out var snapshot);
+        if (snapshot is not null)
+            ApplyPlaybackSnapshot(snapshot);
+        return didSet;
     }
 
-    private static void ApplyRect(MediaElement el, MediaShapeRect r)
+    private static void ApplyRect(MediaElement el, LayoutRect bounds)
     {
-        el.Width  = Math.Max(1, r.Width);
-        el.Height = Math.Max(1, r.Height);
-        Canvas.SetLeft(el, r.X);
-        Canvas.SetTop(el, r.Y);
+        el.Width = Math.Max(1, bounds.Width);
+        el.Height = Math.Max(1, bounds.Height);
+        Canvas.SetLeft(el, bounds.X);
+        Canvas.SetTop(el, bounds.Y);
     }
 
-    private void TogglePlayPause(MediaSlot slot)
+    private void EnforcePlaybackState()
     {
-        var el = slot.Element;
-        if (el is null) return;
-        try
-        {
-            // Check CanPause: if playing → pause; else → play.
-            // We track state by observing the SpeedRatio + Position heuristic.
-            // The simplest safe approach: try Pause first; if it fails, Play.
-            // MediaElement does not expose a clean "IsPlaying" property,
-            // so we use a tag flag.
-            if (el.Tag is true)
-            {
-                el.Pause();
-                el.Tag = false;
-                if (!slot.ShowWhenStopped)
-                    el.Visibility = Visibility.Collapsed;
-            }
-            else
-            {
-                if (slot.PlayFullScreen)
-                    ApplyRect(el, FullScreenRect());
-                SeekToTrimStart(el, slot.Media);
-                ApplyFade(el, slot.Media, slot.BaseVolumePercent);
-                el.Play();
-                el.Tag = true;
-                el.Visibility = Visibility.Visible;
-            }
-        }
-        catch { /* ignore */ }
+        foreach (var snapshot in _playbackSession.EnforcePlaybackState())
+            ApplyPlaybackSnapshot(snapshot);
     }
 
-    private void EnforceTrimWindows()
+    private void ApplyPlaybackSnapshot(SlideShowMediaPlaybackSnapshot snapshot)
     {
-        foreach (var slot in _slots)
-        {
-            if (slot.Element is not { } element || slot.Media is not { } media)
-                continue;
-
-            if (element.Tag is not true)
-                continue;
-
-            ApplyFade(element, media, slot.BaseVolumePercent);
-
-            var duration = element.NaturalDuration.HasTimeSpan
-                ? element.NaturalDuration.TimeSpan
-                : TimeSpan.Zero;
-            if (!SlideShowMediaInteractionPlanner.IsAtOrPastTrimEnd(
-                    media, element.Position, duration))
-                continue;
-
-            switch (SlideShowMediaInteractionPlanner.ResolveEndAction(media))
-            {
-                case SlideShowMediaEndAction.Loop:
-                    SeekToTrimStart(element, media);
-                    ApplyFade(element, media, slot.BaseVolumePercent);
-                    element.Play();
-                    break;
-                case SlideShowMediaEndAction.Rewind:
-                    SeekToTrimStart(element, media);
-                    ApplyFade(element, media, slot.BaseVolumePercent);
-                    element.Pause();
-                    element.Tag = false;
-                    ApplyRect(element, slot.AuthoredRect);
-                    element.Visibility = media.IsVideo && slot.ShowWhenStopped
-                        ? Visibility.Visible
-                        : Visibility.Collapsed;
-                    break;
-                default:
-                    element.Pause();
-                    element.Tag = false;
-                    ApplyRect(element, slot.AuthoredRect);
-                    if (!slot.ShowWhenStopped)
-                        element.Visibility = Visibility.Collapsed;
-                    break;
-            }
-        }
+        var slot = _slots.FirstOrDefault(candidate => candidate.Playback is { } playback &&
+            playback.ShapeId == snapshot.ShapeId);
+        if (slot is not null)
+            ApplyPlaybackSnapshot(slot, snapshot);
     }
 
-    private static bool HasPlaybackEnvelope(MediaInfo? media) =>
-        media is not null &&
-        (HasPositiveTiming(media.TrimStartMilliseconds) ||
-         HasPositiveTiming(media.TrimEndMilliseconds) ||
-         HasPositiveTiming(media.FadeInMilliseconds) ||
-         HasPositiveTiming(media.FadeOutMilliseconds));
-
-    private static bool HasPositiveTiming(double value) => value > 0 && double.IsFinite(value);
-
-    private static void ApplyFade(MediaElement element, MediaInfo? media, int baseVolumePercent)
+    private void ApplyPlaybackSnapshot(MediaSlot slot, SlideShowMediaPlaybackSnapshot snapshot)
     {
-        if (media is null)
+        if (slot.Element is not { } element)
             return;
 
-        var duration = element.NaturalDuration.HasTimeSpan
-            ? element.NaturalDuration.TimeSpan
-            : TimeSpan.Zero;
-        element.Volume = SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
-            media,
-            baseVolumePercent,
-            element.Position,
-            duration) / 100d;
+        element.Tag = snapshot.IsPlaying;
+        var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+            new PresentationMediaOverlayPlacementRequest(
+                slot.AuthoredBounds,
+                _canvasW,
+                _canvasH,
+                snapshot.UseFullScreen,
+                PresentationMediaTranscriptPlanner.FindActiveCue(
+                    slot.CaptionTrack,
+                    slot.Playback?.Port.Position ?? element.Position),
+                slot.CaptionTrack?.Regions));
+        ApplyRect(element, placement.MediaBounds);
+        if (slot.CaptionHost is not null && slot.CaptionText is not null)
+            ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, placement);
+        element.Visibility = snapshot.ShowVisual ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private MediaShapeRect FullScreenRect() =>
-        new(0, 0, Math.Max(1, _canvasW), Math.Max(1, _canvasH));
-
-    private static void SeekToTrimStart(MediaElement element, MediaInfo? media)
+    private sealed class WpfMediaPlaybackPort : IMediaPlaybackPort
     {
-        if (media is null)
-            return;
+        private readonly IMediaPlaybackSession _session;
 
-        try
+        public WpfMediaPlaybackPort(IMediaPlaybackSession session) => _session = session;
+
+        public bool IsPlaying => _session.State == MediaPlaybackState.Playing;
+        public TimeSpan Position => _session.Position;
+        public TimeSpan Duration => _session.Duration;
+        public int VolumePercent
         {
-            var position = element.Position;
-            var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
-                media,
-                element.NaturalDuration.HasTimeSpan
-                    ? element.NaturalDuration.TimeSpan
-                    : TimeSpan.Zero);
-            if (window.End != TimeSpan.MaxValue && position >= window.End)
-                element.Position = window.Start;
-            else if (position < window.Start)
-                element.Position = window.Start;
+            set => _session.Volume = value;
         }
-        catch (InvalidOperationException)
-        {
-        }
+
+        public void Play() => _session.Play();
+        public void Pause() => _session.Pause();
+        public void Stop() => _session.Stop();
+        public bool Seek(TimeSpan position) => _session.Seek(position);
     }
 }

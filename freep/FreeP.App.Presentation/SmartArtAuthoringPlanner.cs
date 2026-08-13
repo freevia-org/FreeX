@@ -161,10 +161,7 @@ public enum SmartArtQuickStylePreset
     SunsetScene,
     BirdsEyeScene,
 
-    // Compatibility aliases for the original FreeP command vocabulary.
-    Simple = SimpleFill,
-    Moderate = ModerateEffect,
-    Intense = IntenseEffect,
+    // Compatibility aliases retained by the remaining original command vocabulary.
     Subtle = SubtleEffect,
     SoftEdge = WhiteOutline,
     Insert = Inset,

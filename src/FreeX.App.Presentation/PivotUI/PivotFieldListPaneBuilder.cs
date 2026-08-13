@@ -9,6 +9,49 @@ namespace FreeX.App.Presentation.PivotUI;
 /// </summary>
 public static class PivotFieldListPaneBuilder
 {
+    public static IReadOnlyList<PivotAvailableFieldItemModel> BuildAvailableFields(
+        IReadOnlyList<string> headers,
+        PivotFieldAreas areas)
+    {
+        ArgumentNullException.ThrowIfNull(headers);
+        ArgumentNullException.ThrowIfNull(areas);
+
+        var used = areas.RowFields
+            .Select(field => field.SourceFieldIndex)
+            .Concat(areas.ColumnFields.Select(field => field.SourceFieldIndex))
+            .Concat(areas.PageFields.Select(field => field.SourceFieldIndex))
+            .Concat(areas.DataFields.Select(field => field.SourceFieldIndex))
+            .ToHashSet();
+        return headers
+            .Select((caption, index) => new PivotAvailableFieldItemModel(
+                index,
+                caption,
+                used.Contains(index)))
+            .ToList();
+    }
+
+    public static IReadOnlyList<PivotAvailableFieldItemModel> FilterAvailableFields(
+        IEnumerable<PivotAvailableFieldItemModel> fields,
+        string? searchText)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        var needle = searchText?.Trim();
+        return string.IsNullOrEmpty(needle)
+            ? fields.ToList()
+            : fields
+                .Where(field => field.Caption.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+    }
+
+    public static string? GetItemCaption(object? item) =>
+        item switch
+        {
+            string value when !string.IsNullOrWhiteSpace(value) => value,
+            PivotAvailableFieldItemModel field when !string.IsNullOrWhiteSpace(field.Caption) => field.Caption,
+            PivotFieldListItemModel field when !string.IsNullOrWhiteSpace(field.Caption) => field.Caption,
+            _ => null,
+        };
+
     /// <summary>
     /// Builds the field-list pane model. A field placed in a layout area (rows/columns/filters or values)
     /// is removed from the available pool; every remaining source field stays available.

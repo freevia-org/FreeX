@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -6,6 +7,31 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class DataTablePlannerTests
 {
+    [Fact]
+    public void CreatePlan_FromDialogResultOwnsCommandProjectionAndSupportsRangeRebasing()
+    {
+        var sheetId = SheetId.New();
+        var originalRange = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 5));
+        var repeatedRange = new GridRange(
+            new CellAddress(sheetId, 10, 2),
+            new CellAddress(sheetId, 16, 5));
+        var dialogResult = new DataTableDialogResult(
+            DataTableMode.TwoVariable,
+            DataTableInputOrientation.Column,
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 1, 3));
+
+        var plan = DataTablePlanner.CreatePlan(originalRange, dialogResult);
+        var command = plan.CreateCommand(repeatedRange);
+
+        plan.Mode.Should().Be(DataTablePlanMode.TwoVariable);
+        plan.TableRange.Should().Be(originalRange);
+        command.Should().BeOfType<TwoVariableDataTableCommand>().Which.Label.Should().Be("Data Table");
+    }
+
     [Fact]
     public void CreatePlan_BuildsOneVariableColumnPlanAndCommand()
     {

@@ -7,7 +7,7 @@ public sealed class AllowEditRangeParitySourceTests
     [Fact]
     public void ParityFixture_MatchesWpfSeedAndDefaultRange()
     {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var source = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         source.Should().Contain("new CellAddress(sheetId, 1, 1)");
         source.Should().Contain("new CellAddress(sheetId, 5, 5)");
@@ -44,15 +44,6 @@ public sealed class AllowEditRangeParitySourceTests
         source.Should().NotContain("VerticalScrollBarVisibility =");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

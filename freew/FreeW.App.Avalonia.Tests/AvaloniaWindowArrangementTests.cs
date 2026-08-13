@@ -1,5 +1,6 @@
 using Avalonia;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -9,26 +10,26 @@ public sealed class AvaloniaWindowArrangementTests
     public void Build_tiles_one_window_to_the_full_working_area_in_dips()
     {
         var bounds = ArrangeAllLayoutPlanner.ArrangeRowFirst(800, 450, 1, maxColumns: 3);
-        var tiles = FreeW.App.Avalonia.FreeWAvaloniaWindowBoundsTranslator.Translate(
+        var tiles = AvaloniaWindowBoundsTranslator.Translate(
             new PixelRect(40, 80, 1600, 900), 2, bounds);
 
         tiles.Should().ContainSingle().Which.Should().Be(
-            new FreeW.App.Avalonia.FreeWAvaloniaWindowTile(new PixelPoint(40, 80), 800, 450));
+            new AvaloniaWindowTile(new PixelPoint(40, 80), 800, 450));
     }
 
     [Fact]
     public void Build_tiles_windows_row_first_with_three_columns()
     {
         var bounds = ArrangeAllLayoutPlanner.ArrangeRowFirst(1200, 800, 5, maxColumns: 3);
-        var tiles = FreeW.App.Avalonia.FreeWAvaloniaWindowBoundsTranslator.Translate(
+        var tiles = AvaloniaWindowBoundsTranslator.Translate(
             new PixelRect(100, 200, 1200, 800), 1, bounds);
 
         tiles.Should().HaveCount(5);
-        tiles[0].Should().Be(new FreeW.App.Avalonia.FreeWAvaloniaWindowTile(new PixelPoint(100, 200), 400, 400));
-        tiles[1].Should().Be(new FreeW.App.Avalonia.FreeWAvaloniaWindowTile(new PixelPoint(500, 200), 400, 400));
-        tiles[2].Should().Be(new FreeW.App.Avalonia.FreeWAvaloniaWindowTile(new PixelPoint(900, 200), 400, 400));
-        tiles[3].Should().Be(new FreeW.App.Avalonia.FreeWAvaloniaWindowTile(new PixelPoint(100, 600), 400, 400));
-        tiles[4].Should().Be(new FreeW.App.Avalonia.FreeWAvaloniaWindowTile(new PixelPoint(500, 600), 400, 400));
+        tiles[0].Should().Be(new AvaloniaWindowTile(new PixelPoint(100, 200), 400, 400));
+        tiles[1].Should().Be(new AvaloniaWindowTile(new PixelPoint(500, 200), 400, 400));
+        tiles[2].Should().Be(new AvaloniaWindowTile(new PixelPoint(900, 200), 400, 400));
+        tiles[3].Should().Be(new AvaloniaWindowTile(new PixelPoint(100, 600), 400, 400));
+        tiles[4].Should().Be(new AvaloniaWindowTile(new PixelPoint(500, 600), 400, 400));
     }
 
     [Fact]
@@ -41,7 +42,7 @@ public sealed class AvaloniaWindowArrangementTests
             workArea.Height / scaling,
             3,
             maxColumns: 3);
-        var tiles = FreeW.App.Avalonia.FreeWAvaloniaWindowBoundsTranslator.Translate(workArea, scaling, bounds);
+        var tiles = AvaloniaWindowBoundsTranslator.Translate(workArea, scaling, bounds);
 
         tiles.Should().HaveCount(3);
         tiles[0].Position.Should().Be(new PixelPoint(-1600, -900));
@@ -55,7 +56,7 @@ public sealed class AvaloniaWindowArrangementTests
     [Fact]
     public void Build_returns_no_tiles_for_empty_or_invalid_inputs()
     {
-        FreeW.App.Avalonia.FreeWAvaloniaWindowBoundsTranslator.Translate(
+        AvaloniaWindowBoundsTranslator.Translate(
                 new PixelRect(0, 0, 100, 100),
                 1,
                 Array.Empty<ShellRect>())
@@ -69,6 +70,11 @@ public sealed class AvaloniaWindowArrangementTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        var translatorSource = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "AvaloniaWindowBoundsTranslator.cs"));
 
         source.Should().Contain("desktop.Windows");
         source.Should().Contain("OfType<MainWindow>()");
@@ -81,5 +87,9 @@ public sealed class AvaloniaWindowArrangementTests
         source.Should().Contain("ArrangeAllLayoutPlanner.ArrangeRowFirst(");
         source.Should().Contain("FreeWAvaloniaWindowBoundsTranslator.Translate(");
         source.Should().NotContain("FreeWAvaloniaWindowArrangement");
+        translatorSource.Should().Contain(
+            "global using FreeWAvaloniaWindowBoundsTranslator = Free.Shared.Shell.Avalonia.AvaloniaWindowBoundsTranslator;");
+        translatorSource.Should().NotContain("Math.Round(");
+        translatorSource.Should().NotContain("for (");
     }
 }

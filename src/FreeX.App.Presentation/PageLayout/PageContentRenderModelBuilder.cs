@@ -126,7 +126,7 @@ public static class PageContentRenderModelBuilder
         var bodyBottom = PageGeometryRules.ResolveBodyEdge(marginBottom, footerMarginPx);
         var bodyHeight = Math.Max(0.0, pageH - bodyTop - bodyBottom);
 
-        var columnWidthsPixels = BuildColumnWidthsPixels(sheet);
+        var columnWidthsPixels = WorksheetPrintPageContentPlanner.BuildColumnWidthsPixels(sheet);
         var measurement = PrintLayoutPlanner.MeasurePrintableGrid(
             printableW,
             bodyHeight,
@@ -150,9 +150,9 @@ public static class PageContentRenderModelBuilder
         // ResolveScaleRatio/ComputeActualGridSizes.
         var unscaledPrintedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
         var unscaledPrintedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
-        var scaleRatio = ResolveScaleRatio(
+        var scaleRatio = WorksheetPrintPageContentPlanner.ResolveScaleRatio(
             pagePlan.EffectiveScalePercent, unscaledPrintedWidth, unscaledPrintedHeight, printableW, bodyHeight);
-        measurement = ScaleMeasurement(measurement, scaleRatio);
+        measurement = WorksheetPrintPageContentPlanner.ScaleMeasurement(measurement, scaleRatio);
 
         var printedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
         var printedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
@@ -249,12 +249,12 @@ public static class PageContentRenderModelBuilder
                 measurement,
                 scaleRatio);
 
-        var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
+        var headerFooter = WorksheetPrintPageContentPlanner.ResolveHeaderFooterVariant(sheet, pageNumber);
         var resolvedNow = now ?? DateTime.Now;
         var (headerRuns, footerRuns) = BuildHeaderFooterRuns(
             sheet,
-            header,
-            footer,
+            headerFooter.Header,
+            headerFooter.Footer,
             pageW,
             pageH,
             marginLeft,
@@ -283,60 +283,8 @@ public static class PageContentRenderModelBuilder
             textBoxes,
             headerRuns,
             footerRuns,
-            pictures);
-    }
-
-    /// <summary>
-    /// Resolves the sheet's Scale%/Fit-to-pages setting to a single geometry shrink/grow ratio for
-    /// this page. <paramref name="effectiveScalePercent"/> is applied unconditionally first (matching
-    /// PrintRenderer.HeaderFooter.cs's <c>scaleRatio</c> and WorkbookPdfContentBuilder.ResolveScaleRatio
-    /// -- Scale% is a direct multiplier on every printed element, never merely a repagination hint that
-    /// only matters once content overflows). A defensive residual-overflow shrink is then applied on
-    /// top, using a SINGLE uniform ratio (the smaller of the width/height overflow ratios) so the
-    /// aspect ratio never distorts, mirroring WorkbookPdfContentBuilder.ComputeActualGridSizes'
-    /// R18-print-pagination-exact-2 fix. Never scales up for overflow, only shrinks further.
-    /// </summary>
-    private static double ResolveScaleRatio(
-        double effectiveScalePercent,
-        double printedWidth,
-        double printedHeight,
-        double printableWidth,
-        double printableHeight)
-    {
-        var scaleRatio = double.IsFinite(effectiveScalePercent) && effectiveScalePercent > 0
-            ? Math.Max(0.001, effectiveScalePercent / 100.0)
-            : 1.0;
-
-        var scaledWidth = printedWidth * scaleRatio;
-        var scaledHeight = printedHeight * scaleRatio;
-        var widthFitScale = scaledWidth > printableWidth && scaledWidth > 0 ? printableWidth / scaledWidth : 1.0;
-        var heightFitScale = scaledHeight > printableHeight && scaledHeight > 0 ? printableHeight / scaledHeight : 1.0;
-        scaleRatio *= PageGeometryRules.ResolveUniformScale(widthFitScale, heightFitScale);
-
-        return double.IsFinite(scaleRatio) && scaleRatio > 0 ? scaleRatio : 1.0;
-    }
-
-    /// <summary>
-    /// Applies <paramref name="scaleRatio"/> to a grid measurement's header/column/row sizes and
-    /// cumulative offsets, so every consumer that only ever reads through <see
-    /// cref="PrintGridMeasurement"/> (cells, gridlines, headings, the chart/text-box/picture body
-    /// rect) automatically renders at the resolved Scale%/Fit-to-pages size without each call site
-    /// needing to separately remember to multiply by the ratio.
-    /// </summary>
-    private static PrintGridMeasurement ScaleMeasurement(PrintGridMeasurement measurement, double scaleRatio)
-    {
-        if (scaleRatio == 1.0)
-            return measurement;
-
-        return measurement with
-        {
-            HeaderWidth = measurement.HeaderWidth * scaleRatio,
-            HeaderHeight = measurement.HeaderHeight * scaleRatio,
-            ColumnWidth = measurement.ColumnWidth * scaleRatio,
-            RowHeight = measurement.RowHeight * scaleRatio,
-            ColumnOffsets = measurement.ColumnOffsets?.Select(o => o * scaleRatio).ToArray(),
-            RowOffsets = measurement.RowOffsets?.Select(o => o * scaleRatio).ToArray(),
-        };
+            pictures,
+            []);
     }
 
     /// <summary>Scales a resolved cell font's size by the page's Scale%/Fit-to-pages ratio.</summary>
@@ -396,20 +344,10 @@ public static class PageContentRenderModelBuilder
         double scaleRatio,
         ITextMeasurer textMeasurer)
     {
-        var rowIndexes = BuildPositionLookup(pageRows);
-        var columnIndexes = BuildPositionLookup(pageColumns);
         var theme = workbook.Theme;
         var cells = new List<PageCellBlock>();
 
-        // Conditional formatting: precompute the rule priority order once for the page. Per-rule
-        // range statistics (needed for AboveAverage/ColorScale/DataBar/IconSet automatic thresholds)
-        // are computed lazily on first use and cached for the rest of the page in cfStatsCache. See
-        // EvaluateConditionalFormat for the per-cell evaluation this mirrors from the interactive
-        // grid's ViewportConditionalFormatEvaluator (FreeX.Core.Calc, not reachable from this portable
-        // render-model builder -- see EvaluateConditionalFormatRule for the exact scope of what is and
-        // is not reproduced here).
-        var cfRulesByPriority = BuildConditionalFormatRulesByPriority(sheet);
-        var cfStatsCache = new Dictionary<ConditionalFormat, ConditionalFormatStatistics>(ReferenceEqualityComparer.Instance);
+        var conditionalFormats = new ConditionalFormatRenderEvaluator(sheet);
 
         for (var rowIndex = 0; rowIndex < pageRows.Count; rowIndex++)
         {
@@ -435,17 +373,20 @@ public static class PageContentRenderModelBuilder
                 var height = measurement.RowHeightAt(rowIndex);
                 if (merge is { } mergedRegion)
                 {
-                    (width, height) = MeasureMergedExtent(
-                        mergedRegion,
-                        rowIndexes,
-                        columnIndexes,
+                    width = WorksheetPrintCellGeometryPlanner.MeasureMergedColumnSpan(
+                        measurement,
+                        pageColumns,
                         colIndex,
+                        mergedRegion.End.Col);
+                    height = WorksheetPrintCellGeometryPlanner.MeasureMergedRowSpan(
+                        measurement,
+                        pageRows,
                         rowIndex,
-                        measurement);
+                        mergedRegion.End.Row);
                 }
 
-                var cfResult = cfRulesByPriority.Count > 0
-                    ? EvaluateConditionalFormat(cfRulesByPriority, sheet, address, cell?.Value ?? BlankValue.Instance, cfStatsCache)
+                var cfResult = conditionalFormats.HasRules
+                    ? conditionalFormats.Evaluate(address, cell?.Value ?? BlankValue.Instance)
                     : default;
 
                 var fill = cfResult.Style?.FillColor is { } cfFillColor
@@ -492,33 +433,6 @@ public static class PageContentRenderModelBuilder
         }
 
         return cells;
-    }
-
-    private static (double Width, double Height) MeasureMergedExtent(
-        GridRange region,
-        IReadOnlyDictionary<uint, int> rowIndexes,
-        IReadOnlyDictionary<uint, int> columnIndexes,
-        int anchorColIndex,
-        int anchorRowIndex,
-        PrintGridMeasurement measurement)
-    {
-        var lastColIndex = anchorColIndex;
-        for (var col = region.Start.Col; col <= region.End.Col; col++)
-        {
-            if (columnIndexes.TryGetValue(col, out var index) && index > lastColIndex)
-                lastColIndex = index;
-        }
-
-        var lastRowIndex = anchorRowIndex;
-        for (var row = region.Start.Row; row <= region.End.Row; row++)
-        {
-            if (rowIndexes.TryGetValue(row, out var index) && index > lastRowIndex)
-                lastRowIndex = index;
-        }
-
-        return (
-            measurement.ColumnOffset(lastColIndex + 1) - measurement.ColumnOffset(anchorColIndex),
-            measurement.RowOffset(lastRowIndex + 1) - measurement.RowOffset(anchorRowIndex));
     }
 
     private static IReadOnlyList<PageGridLine> BuildGridLines(
@@ -814,37 +728,50 @@ public static class PageContentRenderModelBuilder
         DateTime now,
         ITextMeasurer textMeasurer)
     {
-        // Band layout mirrors the source header/footer renderer: the header line sits at headerMargin
-        // (minus a nominal line height) and the footer at the bottom inset by footerMargin; each line is
-        // split into left/center/right thirds, with the inset following the align-with-margins flag.
         const double lineHeight = 16.0;
-        var headerY = Math.Max(4, headerMargin - lineHeight);
-        // R100-presentation-footer-margin-overlap-1: mirrors the WPF/PDF fix -- the grid's own bottom
-        // edge sits at pageH - Math.Max(marginBottom, footerMargin) (PagePaginationPlanner's
-        // bodyBottomInches), so once FooterMargin exceeds BottomMargin the unclamped footer band would
-        // land inside the grid's own span, printing on top of the last row(s) in both shells' shared
-        // print-preview canvas. Clamp so the footer band never starts above the grid's bottom edge.
-        var gridBottomEdge = pageH - PageGeometryRules.ResolveBodyEdge(marginBottom, footerMargin);
-        var footerY = Math.Max(Math.Max(4, pageH - footerMargin - lineHeight), gridBottomEdge);
-        var leftInset = sheet.HeaderFooterAlignWithMargins ? marginLeft : 0.3 * Dpi;
-        var rightInset = sheet.HeaderFooterAlignWithMargins ? marginRight : 0.3 * Dpi;
+        var headerBand = WorksheetPrintHeaderFooterGeometryPlanner.BuildBand(
+            header,
+            WorksheetHeaderFooterPictureSet.Empty,
+            pageW,
+            pageH,
+            marginLeft,
+            marginRight,
+            marginBottom,
+            headerMargin,
+            sheet.HeaderFooterAlignWithMargins,
+            isFooter: false,
+            draftQuality: false,
+            fontScale: 1.0,
+            baseLineHeight: lineHeight,
+            sizeToContent: false);
+        var footerBand = WorksheetPrintHeaderFooterGeometryPlanner.BuildBand(
+            footer,
+            WorksheetHeaderFooterPictureSet.Empty,
+            pageW,
+            pageH,
+            marginLeft,
+            marginRight,
+            marginBottom,
+            footerMargin,
+            sheet.HeaderFooterAlignWithMargins,
+            isFooter: true,
+            draftQuality: false,
+            fontScale: 1.0,
+            baseLineHeight: lineHeight,
+            sizeToContent: false);
 
         var headerRuns = BuildBandRuns(
-            header, pageW, leftInset, rightInset, headerY, lineHeight,
+            header, headerBand,
             workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
         var footerRuns = BuildBandRuns(
-            footer, pageW, leftInset, rightInset, footerY, lineHeight,
+            footer, footerBand,
             workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
         return (headerRuns, footerRuns);
     }
 
     private static IReadOnlyList<PageHeaderFooterRun> BuildBandRuns(
         WorksheetHeaderFooter value,
-        double pageW,
-        double leftInset,
-        double rightInset,
-        double y,
-        double lineHeight,
+        WorksheetPrintHeaderFooterBandGeometry geometry,
         string workbookName,
         string workbookDirectory,
         string sheetName,
@@ -853,24 +780,13 @@ public static class PageContentRenderModelBuilder
         DateTime now,
         ITextMeasurer textMeasurer)
     {
-        // R131-presentation-headerfooter-center-asymmetric-margin-1: the center section must be
-        // centered on the PRINTABLE width between the margins (leftInset + sectionWidth is the middle
-        // third of that printable span), matching Excel and this app's PDF export path
-        // (WorkbookPdfContentBuilder.RenderHeaderFooterBand). Centering on the raw page width instead
-        // ((pageW - sectionWidth) / 2) only coincides with the correct position when leftInset ==
-        // rightInset -- with asymmetric margins it drifted toward the smaller-inset side. This model
-        // feeds BOTH the WPF PrintPreviewPaginationContext and the Avalonia
-        // AvaloniaPrintPreviewPaginationContext (the Page Layout / Print Preview screen view on both
-        // shells), so this single fix corrects both hosts' preview rendering at once.
-        var availableWidth = Math.Max(1, pageW - leftInset - rightInset);
-        var sectionWidth = Math.Max(1, availableWidth / 3);
         var runs = new List<PageHeaderFooterRun>(3);
 
-        AddBandRun(runs, value.Left, new LayoutRect(leftInset, y, sectionWidth, lineHeight),
+        AddBandRun(runs, value.Left, geometry.Left,
             PageTextAlignment.Left, workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
-        AddBandRun(runs, value.Center, new LayoutRect(leftInset + sectionWidth, y, sectionWidth, lineHeight),
+        AddBandRun(runs, value.Center, geometry.Center,
             PageTextAlignment.Center, workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
-        AddBandRun(runs, value.Right, new LayoutRect(pageW - rightInset - sectionWidth, y, sectionWidth, lineHeight),
+        AddBandRun(runs, value.Right, geometry.Right,
             PageTextAlignment.Right, workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
         return runs;
     }
@@ -939,19 +855,6 @@ public static class PageContentRenderModelBuilder
             sheetName,
             now);
 
-    private static (WorksheetHeaderFooter Header, WorksheetHeaderFooter Footer) ResolveHeaderFooterForPage(
-        Sheet sheet,
-        int pageNumber)
-    {
-        if (sheet.DifferentFirstPageHeaderFooter && pageNumber == (sheet.FirstPageNumber ?? 1))
-            return (sheet.FirstPageHeader, sheet.FirstPageFooter);
-
-        if (sheet.DifferentOddEvenHeaderFooter && pageNumber % 2 == 0)
-            return (sheet.EvenPageHeader, sheet.EvenPageFooter);
-
-        return (sheet.PageHeader, sheet.PageFooter);
-    }
-
     private static string FormatCellText(
         Workbook workbook,
         Sheet sheet,
@@ -1010,22 +913,7 @@ public static class PageContentRenderModelBuilder
         if (string.IsNullOrEmpty(numberFormat))
             return false;
 
-        var sectionCount = 1;
-        var inQuote = false;
-        var inBracket = false;
-        foreach (var c in numberFormat)
-        {
-            if (c == '"' && !inBracket)
-                inQuote = !inQuote;
-            else if (c == '[' && !inQuote)
-                inBracket = true;
-            else if (c == ']' && !inQuote)
-                inBracket = false;
-            else if (c == ';' && !inQuote && !inBracket)
-                sectionCount++;
-        }
-
-        return sectionCount >= 3;
+        return NumberFormatSectionTokenizer.Count(numberFormat) >= 3;
     }
 
     /// <summary>
@@ -1046,198 +934,7 @@ public static class PageContentRenderModelBuilder
         return Math.Max(1, (int)Math.Round(width, MidpointRounding.AwayFromZero));
     }
 
-    // ── Conditional formatting ─────────────────────────────────────────────────
-    //
-    // This is a portable, single-page-render-scoped subset of the interactive grid's conditional-
-    // format evaluation (FreeX.Core.Calc's ViewportConditionalFormatEvaluator, used via
-    // IViewportService.GetViewport by both the grid and the WPF print path -- see PrintRenderer.cs).
-    // That engine is internal to FreeX.Core.Calc and keyed off a live ViewportService instance that
-    // no PDF-export caller of PageContentRenderModelBuilder.Build currently threads through, so
-    // reaching it from here would require a cross-cutting signature change across every PDF exporter.
-    // Instead this reuses the portable, framework-free FreeX.App.Presentation.ConditionalFormatting.
-    // ConditionalFormatEvaluator (the same per-rule math the grid's engine wraps) directly, with the
-    // rule-selection/priority/stacking loop reimplemented here to match ViewportConditionalFormatEvaluator.
-    // Evaluate/MergeStyles/StackDifferentialStyle.
-    //
-    // Supported rule types: CellValue (literal numeric thresholds only), AboveAverage (plain
-    // mean comparison, no N-std-dev band), ColorScale, DataBar, and IconSet. Formula-driven
-    // thresholds and cell values, Top10, Duplicate/Unique, text-match, DateOccurring, and
-    // Blanks/NoBlanks/Errors/NoErrors rules are NOT evaluated (treated as never matching) -- they
-    // need the full formula evaluator and/or duplicate/rank aggregate caches from the Core.Calc
-    // engine. A cell whose only conditional formatting comes from one of those rule kinds keeps its
-    // raw (unconditional) style in the PDF, a known, deliberately scoped gap versus the interactive
-    // grid.
-
-    /// <summary>The fill/font delta a matched style-producing CF rule contributes, before stacking.</summary>
-    private readonly record struct CfStyleDelta(CellColor? FillColor, CellColor? FontColor, bool Bold, bool Italic, bool Underline);
-
-    /// <summary>The accumulated conditional-format result for one cell.</summary>
-    private readonly record struct CfCellResult(CfStyleDelta? Style, DataBarLayout? DataBar, IconSetResult? IconSet);
-
-    /// <summary>
-    /// Sorts the sheet's conditional-format rules by Excel priority order (lower <see
-    /// cref="ConditionalFormat.Priority"/> number = higher precedence), ties broken by original list
-    /// order -- matching <c>ViewportConditionalFormatEvaluator.CopyRulesByPriority</c>.
-    /// </summary>
-    private static IReadOnlyList<ConditionalFormat> BuildConditionalFormatRulesByPriority(Sheet sheet)
-    {
-        if (sheet.ConditionalFormats.Count == 0)
-            return [];
-
-        var indexed = new (ConditionalFormat Rule, int Index)[sheet.ConditionalFormats.Count];
-        for (var i = 0; i < sheet.ConditionalFormats.Count; i++)
-            indexed[i] = (sheet.ConditionalFormats[i], i);
-
-        Array.Sort(indexed, static (a, b) =>
-        {
-            var priorityOrder = a.Rule.Priority.CompareTo(b.Rule.Priority);
-            return priorityOrder != 0 ? priorityOrder : a.Index.CompareTo(b.Index);
-        });
-
-        var rules = new ConditionalFormat[indexed.Length];
-        for (var i = 0; i < indexed.Length; i++)
-            rules[i] = indexed[i].Rule;
-
-        return rules;
-    }
-
-    /// <summary>
-    /// Evaluates every applicable rule for <paramref name="address"/> in priority order, stacking
-    /// style-producing matches (first rule to set a given property wins, matching
-    /// <c>StackDifferentialStyle</c>) and taking the first matching DataBar/IconSet rule of each kind
-    /// (Excel shows at most one bar and one icon set per cell). Stops early once a matched rule marks
-    /// <see cref="ConditionalFormat.StopIfTrue"/>, exactly as the grid engine does.
-    /// </summary>
-    private static CfCellResult EvaluateConditionalFormat(
-        IReadOnlyList<ConditionalFormat> rulesByPriority,
-        Sheet sheet,
-        CellAddress address,
-        ScalarValue value,
-        Dictionary<ConditionalFormat, ConditionalFormatStatistics> statsCache)
-    {
-        CfStyleDelta? style = null;
-        DataBarLayout? dataBar = null;
-        IconSetResult? iconSet = null;
-
-        for (var i = 0; i < rulesByPriority.Count; i++)
-        {
-            var rule = rulesByPriority[i];
-            if (!rule.AllRanges.Any(r => r.Contains(address)))
-                continue;
-
-            var conditionMet = EvaluateConditionalFormatRule(
-                rule, sheet, value, statsCache, out var delta, out var ruleDataBar, out var ruleIconSet);
-
-            if (delta is { } matchedDelta)
-                style = style is { } accumulated ? StackConditionalFormatDelta(accumulated, matchedDelta) : matchedDelta;
-            if (dataBar is null && ruleDataBar is { } matchedDataBar)
-                dataBar = matchedDataBar;
-            if (iconSet is null && ruleIconSet is { } matchedIconSet)
-                iconSet = matchedIconSet;
-
-            if (conditionMet && rule.StopIfTrue)
-                break;
-        }
-
-        return new CfCellResult(style, dataBar, iconSet);
-    }
-
-    /// <summary>
-    /// Evaluates a single rule's condition against <paramref name="value"/>, returning whether it
-    /// matched and (via the out parameters) any style delta / data-bar layout / icon-set result it
-    /// produced. See the "Conditional formatting" section header for which rule types are supported.
-    /// </summary>
-    private static bool EvaluateConditionalFormatRule(
-        ConditionalFormat rule,
-        Sheet sheet,
-        ScalarValue value,
-        Dictionary<ConditionalFormat, ConditionalFormatStatistics> statsCache,
-        out CfStyleDelta? styleDelta,
-        out DataBarLayout? dataBar,
-        out IconSetResult? iconSet)
-    {
-        styleDelta = null;
-        dataBar = null;
-        iconSet = null;
-
-        switch (rule.RuleType)
-        {
-            case CfRuleType.ColorScale:
-            {
-                if (!TryGetConditionalFormatNumeric(value, out var numeric))
-                    return false;
-                var scale = ConditionalFormatEvaluator.EvaluateColorScale(rule, numeric, GetConditionalFormatStatistics(rule, sheet, statsCache));
-                if (scale is null)
-                    return false;
-                styleDelta = new CfStyleDelta(scale.Value.Fill.ToCellColor(), null, false, false, false);
-                return true;
-            }
-            case CfRuleType.CellValue:
-            {
-                if (!TryGetConditionalFormatNumeric(value, out var numeric) ||
-                    !ConditionalFormatEvaluator.MatchesCellValueNumeric(rule, numeric))
-                {
-                    return false;
-                }
-                if (rule.FormatIfTrue is { } formatIfTrue)
-                    styleDelta = ExtractConditionalFormatDelta(formatIfTrue);
-                return true;
-            }
-            case CfRuleType.AboveAverage:
-            {
-                if (!TryGetConditionalFormatNumeric(value, out var numeric) ||
-                    !ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, numeric, GetConditionalFormatStatistics(rule, sheet, statsCache)))
-                {
-                    return false;
-                }
-                if (rule.FormatIfTrue is { } formatIfTrue)
-                    styleDelta = ExtractConditionalFormatDelta(formatIfTrue);
-                return true;
-            }
-            case CfRuleType.DataBar:
-            {
-                // A data bar always renders for every finite numeric cell in its range, matching the
-                // grid engine's MatchesIconSetOrDataBarCondition gate -- the condition is independent
-                // of whether a bar could actually be computed (e.g. an unresolvable threshold), so a
-                // Stop-If-True data-bar rule still suppresses lower-priority rules even when its own
-                // bar does not render.
-                if (!TryGetConditionalFormatNumeric(value, out var numeric))
-                    return false;
-                dataBar = ConditionalFormatEvaluator.EvaluateDataBar(rule, numeric, GetConditionalFormatStatistics(rule, sheet, statsCache));
-                return true;
-            }
-            case CfRuleType.IconSet:
-            {
-                if (!TryGetConditionalFormatNumeric(value, out var numeric))
-                    return false;
-                iconSet = ConditionalFormatEvaluator.EvaluateIconSet(rule, numeric, GetConditionalFormatStatistics(rule, sheet, statsCache));
-                return true;
-            }
-            default:
-                // Formula / Top10 / Duplicate-Unique / text-match / DateOccurring / Blanks / NoBlanks /
-                // Errors / NoErrors -- see the "Conditional formatting" section header.
-                return false;
-        }
-    }
-
-    private static CfStyleDelta ExtractConditionalFormatDelta(CellStyle formatIfTrue) =>
-        new(
-            formatIfTrue.FillColor,
-            formatIfTrue.FontColor != CellColor.Black ? formatIfTrue.FontColor : null,
-            formatIfTrue.Bold,
-            formatIfTrue.Italic,
-            formatIfTrue.Underline);
-
-    /// <summary>First-property-wins stacking across multiple matched CF rules, matching <c>StackDifferentialStyle</c>.</summary>
-    private static CfStyleDelta StackConditionalFormatDelta(CfStyleDelta accumulated, CfStyleDelta next) =>
-        new(
-            accumulated.FillColor ?? next.FillColor,
-            accumulated.FontColor ?? next.FontColor,
-            accumulated.Bold || next.Bold,
-            accumulated.Italic || next.Italic,
-            accumulated.Underline || next.Underline);
-
-    private static PageTextFont ApplyConditionalFontDelta(PageTextFont baseFont, CfStyleDelta? delta) =>
+    private static PageTextFont ApplyConditionalFontDelta(PageTextFont baseFont, ConditionalFormatStylePlan? delta) =>
         delta is { } d && (d.FontColor.HasValue || d.Bold || d.Italic)
             ? baseFont with
             {
@@ -1246,75 +943,6 @@ public static class PageContentRenderModelBuilder
                 Color = d.FontColor is { } color ? PresentationRgb.FromCellColor(color) : baseFont.Color
             }
             : baseFont;
-
-    private static ConditionalFormatStatistics GetConditionalFormatStatistics(
-        ConditionalFormat rule,
-        Sheet sheet,
-        Dictionary<ConditionalFormat, ConditionalFormatStatistics> cache)
-    {
-        if (cache.TryGetValue(rule, out var cached))
-            return cached;
-
-        var stats = ConditionalFormatStatistics.FromValues(EnumerateConditionalFormatNumericValues(sheet, rule));
-        cache[rule] = stats;
-        return stats;
-    }
-
-    /// <summary>
-    /// Gathers the finite numeric values across a rule's range(s) for range-statistic thresholds
-    /// (AboveAverage / ColorScale / DataBar automatic Min/Max/Percentile), de-duplicating cells shared
-    /// between overlapping ranges in a multi-range rule. Mirrors
-    /// <c>ViewportConditionalFormatEvaluator.EnumerateAllAggregateValues</c>'s dense-range-vs-sparse-scan
-    /// split so a rule applied to a huge range (e.g. a full column) does not force a million-cell scan.
-    /// </summary>
-    private static IEnumerable<double> EnumerateConditionalFormatNumericValues(Sheet sheet, ConditionalFormat rule)
-    {
-        const long denseScanLimit = 10_000;
-        var ranges = rule.AllRanges.ToList();
-        var seen = ranges.Count > 1 ? new HashSet<CellAddress>() : null;
-
-        foreach (var range in ranges)
-        {
-            if (range.CellCount <= denseScanLimit)
-            {
-                foreach (var address in range.AllCells())
-                {
-                    if (seen is not null && !seen.Add(address))
-                        continue;
-                    if (TryGetConditionalFormatNumeric(sheet.GetValue(address), out var numeric))
-                        yield return numeric;
-                }
-            }
-            else
-            {
-                foreach (var (address, rangeCell) in sheet.EnumerateCells())
-                {
-                    if (!range.Contains(address))
-                        continue;
-                    if (seen is not null && !seen.Add(address))
-                        continue;
-                    if (TryGetConditionalFormatNumeric(rangeCell.Value, out var numeric))
-                        yield return numeric;
-                }
-            }
-        }
-    }
-
-    private static bool TryGetConditionalFormatNumeric(ScalarValue value, out double result)
-    {
-        switch (value)
-        {
-            case NumberValue n:
-                result = n.Value;
-                return double.IsFinite(result);
-            case DateTimeValue d:
-                result = d.Value;
-                return double.IsFinite(result);
-            default:
-                result = 0;
-                return false;
-        }
-    }
 
     private static PresentationRgb? ResolveFill(CellStyle style, WorkbookTheme theme)
     {
@@ -1370,27 +998,4 @@ public static class PageContentRenderModelBuilder
             ? PageBorderEdge.None
             : new PageBorderEdge(border.Style, PresentationRgb.FromCellColor(border.Color));
 
-    private static IReadOnlyDictionary<uint, int> BuildPositionLookup(IReadOnlyList<uint> indexes)
-    {
-        var lookup = new Dictionary<uint, int>(indexes.Count);
-        for (var i = 0; i < indexes.Count; i++)
-            lookup[indexes[i]] = i;
-
-        return lookup;
-    }
-
-    /// <summary>
-    /// Converts the sheet's character-unit column widths to pixels (matching
-    /// <see cref="PagePaginationPlanner.AverageColumnWidthPixels"/>'s per-column conversion), so
-    /// <see cref="PrintLayoutPlanner.MeasurePrintableGrid(double, double, IReadOnlyList{uint}, IReadOnlyList{uint}, IReadOnlyDictionary{uint, double}, IReadOnlyDictionary{uint, double}, bool)"/>
-    /// can measure the page grid from real per-column pixel sizes.
-    /// </summary>
-    private static IReadOnlyDictionary<uint, double> BuildColumnWidthsPixels(Sheet sheet)
-    {
-        var pixels = new Dictionary<uint, double>(sheet.ColumnWidths.Count);
-        foreach (var (col, width) in sheet.ColumnWidths)
-            pixels[col] = ColumnWidthPixelMapper.ColumnWidthToPixels(width);
-
-        return pixels;
-    }
 }

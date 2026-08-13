@@ -93,6 +93,8 @@ public sealed class FormatCellsNumberFormatPlannerTests
     [Theory]
     [InlineData("#,##0.0000", 4)]
     [InlineData("#,##0;[Red](#,##0)", 0)]
+    [InlineData("0.000\"; units\";[Red]-0", 3)]
+    [InlineData("0.0\\;kg;[Red]-0", 1)]
     [InlineData(null, 2)]
     public void DecimalPlacesForFormat_MatchesExcelDecimalControls(string? format, int expected)
     {

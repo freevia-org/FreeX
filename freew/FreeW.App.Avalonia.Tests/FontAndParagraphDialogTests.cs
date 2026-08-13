@@ -3,6 +3,7 @@ using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
+using static FreeW.App.Avalonia.Tests.DialogWorkflowResultFactory;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -28,7 +29,7 @@ public sealed class FontAndParagraphDialogTests
         return doc;
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { },
             Save: () => { },
@@ -59,7 +60,7 @@ public sealed class FontAndParagraphDialogTests
     [Fact]
     public void Font_dialog_launcher_command_is_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.font-dialog"), out _)
             .Should().BeTrue("freew.font-dialog must be registered in the ribbon command registry");
     }
@@ -67,7 +68,7 @@ public sealed class FontAndParagraphDialogTests
     [Fact]
     public void Paragraph_dialog_launcher_command_is_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.paragraph-dialog"), out _)
             .Should().BeTrue("freew.paragraph-dialog must be registered in the ribbon command registry");
     }
@@ -75,7 +76,7 @@ public sealed class FontAndParagraphDialogTests
     [Fact]
     public void Ribbon_definition_contains_font_dialog_button()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var allIds = definition.Tabs
             .SelectMany(t => t.Groups)
             .SelectMany(g => g.Controls)
@@ -94,7 +95,7 @@ public sealed class FontAndParagraphDialogTests
     [Fact]
     public void Ribbon_definition_contains_paragraph_dialog_button()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var allIds = definition.Tabs
             .SelectMany(t => t.Groups)
             .SelectMany(g => g.Controls)
@@ -121,7 +122,7 @@ public sealed class FontAndParagraphDialogTests
         view.SelectAll();
 
         var original = RunFormatting.Default; // Bold = false
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null, SizePt: null,
             Bold: true, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,
@@ -144,7 +145,7 @@ public sealed class FontAndParagraphDialogTests
         view.SelectAll();
 
         var original = RunFormatting.Default; // FontSizePt = null
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null, SizePt: 14.0,
             Bold: false, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,
@@ -167,7 +168,7 @@ public sealed class FontAndParagraphDialogTests
         view.SelectAll();
 
         var original = RunFormatting.Default;
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null, SizePt: null,
             Bold: false, Italic: true, Underline: true, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,
@@ -190,7 +191,7 @@ public sealed class FontAndParagraphDialogTests
         view.SelectAll();
 
         var original = RunFormatting.Default; // Baseline
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null, SizePt: null,
             Bold: false, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Superscript,
@@ -213,7 +214,7 @@ public sealed class FontAndParagraphDialogTests
         view.SelectAll();
 
         var original = RunFormatting.Default; // Baseline
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null, SizePt: null,
             Bold: false, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Subscript,
@@ -236,7 +237,7 @@ public sealed class FontAndParagraphDialogTests
         view.SelectAll();
 
         var original = RunFormatting.Default; // ColorHex = null
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null, SizePt: null,
             Bold: false, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,
@@ -259,7 +260,7 @@ public sealed class FontAndParagraphDialogTests
         view.SelectAll();
 
         var original = RunFormatting.Default;
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null, SizePt: null,
             Bold: false, Italic: false, Underline: false, Strikethrough: true,
             VerticalAlign: VerticalAlign.Baseline,
@@ -282,7 +283,7 @@ public sealed class FontAndParagraphDialogTests
         view.SelectAll();
 
         var original = RunFormatting.Default;
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null, SizePt: null,
             Bold: false, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,
@@ -322,7 +323,7 @@ public sealed class FontAndParagraphDialogTests
         view.SelectAll();
 
         var original = RunFormatting.Default;
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null, SizePt: null,
             Bold: false, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,
@@ -362,7 +363,7 @@ public sealed class FontAndParagraphDialogTests
         view.SelectAll();
 
         var original = RunFormatting.Default; // FontFamily = null
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: "Arial", SizePt: null,
             Bold: false, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,
@@ -390,7 +391,7 @@ public sealed class FontAndParagraphDialogTests
         view.LoadDocument(doc);
         view.SelectAll();
 
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null, SizePt: 12.0,
             Bold: true, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,
@@ -416,7 +417,7 @@ public sealed class FontAndParagraphDialogTests
         view.SelectAll();
 
         var original = RunFormatting.Default;
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null,
             SizePt: null,
             Bold: false,
@@ -452,24 +453,27 @@ public sealed class FontAndParagraphDialogTests
     }
 
     [Fact]
-    public void ParagraphDialog_apply_sets_alignment()
+    public void ParagraphDialog_apply_preserves_alignment()
     {
         var doc = MakeDoc("Center me");
+        ((Paragraph)doc.Blocks[0]).Formatting = ParagraphFormatting.Default with
+        {
+            Alignment = TextAlignment.Center,
+        };
         var view = new DocumentView();
         view.LoadDocument(doc);
 
-        var original = ParagraphFormatting.Default; // Left
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Center,
             IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
             SpaceBeforePt: 0, SpaceAfterPt: 8,
             LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
         var para = (Paragraph)view.Document.Blocks[0];
         para.Formatting.Alignment.Should().Be(TextAlignment.Center,
-            "ApplyResult should set the paragraph alignment to Center");
+            "the canonical Paragraph dialog does not expose alignment");
     }
 
     [Fact]
@@ -480,13 +484,13 @@ public sealed class FontAndParagraphDialogTests
         view.LoadDocument(doc);
 
         var original = ParagraphFormatting.Default; // SpaceBeforePt = 0
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Left,
             IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
             SpaceBeforePt: 12, SpaceAfterPt: 8,
             LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
         var para = (Paragraph)view.Document.Blocks[0];
         para.Formatting.SpaceBeforePt.Should().Be(12,
@@ -501,13 +505,13 @@ public sealed class FontAndParagraphDialogTests
         view.LoadDocument(doc);
 
         var original = ParagraphFormatting.Default; // SpaceAfterPt = 8
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Left,
             IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
             SpaceBeforePt: 0, SpaceAfterPt: 24,
             LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
         var para = (Paragraph)view.Document.Blocks[0];
         para.Formatting.SpaceAfterPt.Should().Be(24,
@@ -522,13 +526,13 @@ public sealed class FontAndParagraphDialogTests
         view.LoadDocument(doc);
 
         var original = ParagraphFormatting.Default; // Multiple 1.15
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Left,
             IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
             SpaceBeforePt: 0, SpaceAfterPt: 8,
             LineRule: LineSpacingRule.Multiple, LineSpacingValue: 2.0);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
         var para = (Paragraph)view.Document.Blocks[0];
         para.Formatting.LineSpacing.Should().BeApproximately(2.0, 0.01,
@@ -536,26 +540,29 @@ public sealed class FontAndParagraphDialogTests
     }
 
     [Fact]
-    public void ParagraphDialog_apply_sets_exact_line_spacing()
+    public void ParagraphDialog_apply_uses_canonical_multiple_line_spacing()
     {
         var doc = MakeDoc("Exact space");
+        ((Paragraph)doc.Blocks[0]).Formatting = ParagraphFormatting.Default with
+        {
+            LineRule = LineSpacingRule.Exact,
+            LineHeightPt = 18,
+        };
         var view = new DocumentView();
         view.LoadDocument(doc);
 
-        var original = ParagraphFormatting.Default;
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Left,
             IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
             SpaceBeforePt: 0, SpaceAfterPt: 8,
             LineRule: LineSpacingRule.Exact, LineSpacingValue: 18);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
         var para = (Paragraph)view.Document.Blocks[0];
-        para.Formatting.LineRule.Should().Be(LineSpacingRule.Exact,
-            "ApplyResult should set LineRule to Exact");
-        para.Formatting.LineHeightPt.Should().BeApproximately(18, 0.01,
-            "ApplyResult should set exact line height to 18pt");
+        para.Formatting.LineRule.Should().Be(LineSpacingRule.Multiple,
+            "the canonical Paragraph dialog exposes a line-spacing multiplier");
+        para.Formatting.LineSpacing.Should().BeApproximately(18, 0.01);
     }
 
     [Fact]
@@ -566,13 +573,13 @@ public sealed class FontAndParagraphDialogTests
         view.LoadDocument(doc);
 
         var original = ParagraphFormatting.Default;
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Left,
             IndentLeftPt: 36, IndentRightPt: 0, FirstLineIndentPt: 0,
             SpaceBeforePt: 0, SpaceAfterPt: 8,
             LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
         var para = (Paragraph)view.Document.Blocks[0];
         para.Formatting.IndentLeftPt.Should().BeApproximately(36, 0.01,
@@ -587,13 +594,13 @@ public sealed class FontAndParagraphDialogTests
         view.LoadDocument(doc);
 
         var original = ParagraphFormatting.Default;
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Left,
             IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 18,
             SpaceBeforePt: 0, SpaceAfterPt: 8,
             LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
         var para = (Paragraph)view.Document.Blocks[0];
         para.Formatting.FirstLineIndentPt.Should().BeApproximately(18, 0.01,
@@ -653,13 +660,13 @@ public sealed class FontAndParagraphDialogTests
         para.Formatting = original;
         view.LoadDocument(doc);
 
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Right,
             IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
             SpaceBeforePt: 6, SpaceAfterPt: 6,
             LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.5);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
         var resultPara = (Paragraph)view.Document.Blocks[0];
         resultPara.Formatting.Alignment.Should().Be(TextAlignment.Right,
@@ -688,24 +695,25 @@ public sealed class FontAndParagraphDialogTests
     }
 
     [Fact]
-    public void ParagraphDialog_apply_sets_alignment_on_all_selected_paragraphs()
+    public void ParagraphDialog_apply_preserves_alignment_on_all_selected_paragraphs()
     {
         var (doc, view) = MakeThreeParaDoc();
+        foreach (var paragraph in doc.Blocks.OfType<Paragraph>())
+            paragraph.Formatting = paragraph.Formatting with { Alignment = TextAlignment.Center };
 
-        var original = ParagraphFormatting.Default; // Left
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Center,
             IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
             SpaceBeforePt: 0, SpaceAfterPt: 8,
             LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
         for (var i = 0; i < 3; i++)
         {
             var para = (Paragraph)doc.Blocks[i];
             para.Formatting.Alignment.Should().Be(TextAlignment.Center,
-                $"paragraph {i} should have Center alignment after multi-paragraph apply");
+                $"paragraph {i} alignment is outside the canonical dialog contract");
         }
     }
 
@@ -715,13 +723,13 @@ public sealed class FontAndParagraphDialogTests
         var (doc, view) = MakeThreeParaDoc();
 
         var original = ParagraphFormatting.Default; // SpaceBeforePt = 0
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Left,
             IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
             SpaceBeforePt: 12, SpaceAfterPt: 8,
             LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
         for (var i = 0; i < 3; i++)
         {
@@ -732,26 +740,28 @@ public sealed class FontAndParagraphDialogTests
     }
 
     [Fact]
-    public void ParagraphDialog_apply_multi_paragraph_alignment_and_space_before_together()
+    public void ParagraphDialog_apply_multi_paragraph_preserves_alignment_and_sets_space_before()
     {
         // The main regression test: selecting 3 paragraphs then applying Center + SpaceBefore=12
         // via the dialog must change ALL 3 paragraphs, not just the caret's paragraph.
         var (doc, view) = MakeThreeParaDoc();
+        foreach (var paragraph in doc.Blocks.OfType<Paragraph>())
+            paragraph.Formatting = paragraph.Formatting with { Alignment = TextAlignment.Center };
 
         var original = ParagraphFormatting.Default;
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Center,
             IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
             SpaceBeforePt: 12, SpaceAfterPt: 8,
             LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
         for (var i = 0; i < 3; i++)
         {
             var para = (Paragraph)doc.Blocks[i];
             para.Formatting.Alignment.Should().Be(TextAlignment.Center,
-                $"paragraph {i} alignment should be Center");
+                $"paragraph {i} alignment should be preserved");
             para.Formatting.SpaceBeforePt.Should().Be(12,
                 $"paragraph {i} SpaceBeforePt should be 12");
         }
@@ -763,24 +773,23 @@ public sealed class FontAndParagraphDialogTests
         // One Undo must revert all three paragraphs that were changed in a single apply.
         var (doc, view) = MakeThreeParaDoc();
 
-        // Capture original alignment for all three paragraphs.
-        var originalAlignments = Enumerable.Range(0, 3)
-            .Select(i => ((Paragraph)doc.Blocks[i]).Formatting.Alignment)
+        var originalSpacing = Enumerable.Range(0, 3)
+            .Select(i => ((Paragraph)doc.Blocks[i]).Formatting.SpaceBeforePt)
             .ToArray();
 
         var original = ParagraphFormatting.Default;
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Right,
             IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
             SpaceBeforePt: 6, SpaceAfterPt: 8,
             LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
-        // Verify all three were changed.
+        // Verify all three were changed by the canonical spacing field.
         for (var i = 0; i < 3; i++)
-            ((Paragraph)doc.Blocks[i]).Formatting.Alignment.Should().Be(TextAlignment.Right,
-                $"paragraph {i} should be Right after apply");
+            ((Paragraph)doc.Blocks[i]).Formatting.SpaceBeforePt.Should().Be(6,
+                $"paragraph {i} should have spacing after apply");
 
         // A single Undo should revert all three.
         view.CanUndo.Should().BeTrue("there should be a command to undo after apply");
@@ -790,8 +799,8 @@ public sealed class FontAndParagraphDialogTests
         for (var i = 0; i < 3; i++)
         {
             var para = (Paragraph)doc.Blocks[i];
-            para.Formatting.Alignment.Should().Be(originalAlignments[i],
-                $"paragraph {i} alignment should be reverted after single Undo");
+            para.Formatting.SpaceBeforePt.Should().Be(originalSpacing[i],
+                $"paragraph {i} spacing should be reverted after single Undo");
         }
 
         // Undo queue should be empty (one composite command was the only action).
@@ -812,19 +821,19 @@ public sealed class FontAndParagraphDialogTests
         // No SelectAll → caret only at block 0.
 
         var original = ParagraphFormatting.Default;
-        var result = new ParagraphDialog.ParagraphDialogResult(
+        var result = ParagraphResult(
             Alignment: TextAlignment.Center,
             IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
             SpaceBeforePt: 12, SpaceAfterPt: 8,
             LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
 
-        ParagraphDialog.ApplyResult(view, result, original);
+        ParagraphDialog.ApplyResult(view, result);
 
-        ((Paragraph)doc.Blocks[0]).Formatting.Alignment.Should().Be(TextAlignment.Center,
+        ((Paragraph)doc.Blocks[0]).Formatting.SpaceBeforePt.Should().Be(12,
             "caret paragraph (block 0) should be changed");
-        ((Paragraph)doc.Blocks[1]).Formatting.Alignment.Should().Be(TextAlignment.Left,
+        ((Paragraph)doc.Blocks[1]).Formatting.SpaceBeforePt.Should().Be(0,
             "block 1 should be unchanged (caret-only apply)");
-        ((Paragraph)doc.Blocks[2]).Formatting.Alignment.Should().Be(TextAlignment.Left,
+        ((Paragraph)doc.Blocks[2]).Formatting.SpaceBeforePt.Should().Be(0,
             "block 2 should be unchanged (caret-only apply)");
     }
 

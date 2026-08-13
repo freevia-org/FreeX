@@ -146,17 +146,6 @@ public sealed class ChartStylePlannerTests
         avaloniaRenderer.Should().Contain("ChartStylePlanner.ResolveBarPaint");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "src", "FreeX.App.Presentation", "Charts", "ChartStylePlanner.cs")))
-                return directory.FullName;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the FreeX repository root.");
-    }
+    private static string FindRepositoryRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

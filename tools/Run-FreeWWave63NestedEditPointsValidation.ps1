@@ -6,6 +6,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $resolvedOutput = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetFullPath($OutputDir) } else { [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir)) }
 $fixtureProject = Join-Path $repoRoot "freew/tools/FreeW.GroupChildPhysicalFixture/FreeW.GroupChildPhysicalFixture.csproj"
 $fixturePath = Join-Path $resolvedOutput "nested-edit-points-wave63.docx"
@@ -14,21 +15,11 @@ $sessionPath = Join-Path $resolvedOutput "freew/current-session.json"
 $containerName = "freex-linux-interactive-freew-$Port"
 $started = $false
 
-function Invoke-Fixture { param([string]$Action, [string]$Path)
-    $lines = @(& dotnet run --project $fixtureProject --configuration Release --no-restore -- $Action $Path 2>&1)
-    if ($LASTEXITCODE -ne 0) { throw "Fixture '$Action' failed: $($lines -join [Environment]::NewLine)" }
-    return $lines
-}
-function Read-Geometry { param([string]$Action, [string]$Path)
-    $values = [ordered]@{}
-    foreach ($line in @(Invoke-Fixture $Action $Path)) { if ($line -match '^([^=]+)=(.*)$') { $values[$Matches[1]] = $Matches[2] } }
-    return $values
-}
-
 try {
     New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
-    Invoke-Fixture generate-nested $fixturePath | Out-File (Join-Path $resolvedOutput "fixture-generation.txt") -Encoding utf8
-    $before = Read-Geometry inspect-nested $fixturePath
+    Invoke-PhysicalValidationFixture -ProjectPath $fixtureProject -Action "generate-nested" -ArtifactPath $fixturePath |
+        Out-File (Join-Path $resolvedOutput "fixture-generation.txt") -Encoding utf8
+    $before = Read-PhysicalValidationFixtureValues -ProjectPath $fixtureProject -Action "inspect-nested" -ArtifactPath $fixturePath
     if ($before['child-point-0'] -ne '3600,1800') { throw "Fixture child point was not deterministic: '$($before['child-point-0'])'." }
     if ([string]::IsNullOrWhiteSpace($before['child-points'])) { throw "Fixture had no nested leaf geometry points." }
 
@@ -42,7 +33,7 @@ try {
 
     $savedPath = Join-Path $resolvedOutput "freew/documents/nested-edit-points-wave63.docx"
     if (-not (Test-Path $savedPath -PathType Leaf)) { throw "The FreeW document was not persisted at '$savedPath'." }
-    $after = Read-Geometry inspect-nested $savedPath
+    $after = Read-PhysicalValidationFixtureValues -ProjectPath $fixtureProject -Action "inspect-nested" -ArtifactPath $savedPath
     if ([string]::IsNullOrWhiteSpace($after['child-points'])) { throw "Saved DOCX has no nested leaf geometry points." }
     if ($after['child-points'] -eq $before['child-points']) { throw "Nested edit-point drag did not change any saved leaf point." }
     if ($after['outer-transform'] -ne $before['outer-transform'] -or $after['inner-transform'] -ne $before['inner-transform']) { throw "Nested group transforms changed during edit-point drag." }

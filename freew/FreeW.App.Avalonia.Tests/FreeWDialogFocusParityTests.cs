@@ -23,20 +23,20 @@ public sealed class FreeWDialogFocusParityTests
                 new CompareDocumentsPromptState("Reviewer", "Revised.docx"));
             var properties = new PropertiesDialog(new DocumentProperties());
             var formula = new TableFormulaDialog(new TableFormulaDialogInitialState("=SUM(ABOVE)", 0));
-            var zoom = new ZoomDialog(1.0, new ZoomDialogFitFactors(1.25, 1.5, 0.6));
+            var zoom = new ZoomDialog(1.0, new ZoomDialogFitFactors(1.1, 1.2, 0.7));
 
             AutomationProperties.GetAutomationId(compare.AuthorBoxForTest)
-                .Should().Be(FreeWDialogFocusPlanner.CompareDocuments.InitialFocusTargetAutomationId);
+                .Should().Be(FreeWDialogFocusPlanner.CompareDocuments.InitialFocusTarget);
             FindTextBox(properties, FreeWDialogFocusPlanner.Properties)
                 .Should().NotBeNull();
             AutomationProperties.GetAutomationId(formula.FormulaBoxForTest)
-                .Should().Be(FreeWDialogFocusPlanner.TableFormula.InitialFocusTargetAutomationId);
+                .Should().Be(FreeWDialogFocusPlanner.TableFormula.InitialFocusTarget);
             FindTextBox(zoom, FreeWDialogFocusPlanner.Zoom)
                 .Should().NotBeNull();
         }, CancellationToken.None);
     }
 
-    private static TextBox? FindTextBox(Control dialog, DialogFocusPlan plan) =>
+    private static TextBox? FindTextBox(Control dialog, Free.Shared.Shell.DialogFocusPlan<string> plan) =>
         dialog.GetLogicalDescendants().OfType<TextBox>().FirstOrDefault(textBox =>
-            AutomationProperties.GetAutomationId(textBox) == plan.InitialFocusTargetAutomationId);
+            AutomationProperties.GetAutomationId(textBox) == plan.InitialFocusTarget);
 }

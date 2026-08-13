@@ -13,23 +13,23 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class ChartDialogTests
 {
     [Fact]
-    public void ChartAreaLegendDialogResult_BuildsLayoutOptions()
+    public void ChartAreaLegendDialog_ReturnsSharedInputThatBuildsLayoutOptions()
     {
-        var result = ChartAreaLegendDialog.CreateResult(
-            chartAreaFillColor: new CellColor(250, 250, 250),
-            plotAreaFillColor: new CellColor(245, 250, 255),
-            plotAreaBorderColor: new CellColor(120, 120, 120),
-            plotAreaBorderThickness: 2.25,
-            showLegend: true,
-            legendPosition: ChartLegendPosition.Bottom,
-            legendOverlay: true,
-            legendTextColor: new CellColor(40, 40, 40),
-            legendFillColor: new CellColor(248, 248, 248),
-            legendBorderColor: new CellColor(180, 180, 180),
-            legendBorderThickness: 1.25,
-            legendFontSize: 11);
+        var result = ChartAreaFormatPlanner.Normalize(new ChartAreaFormatInput(
+            ChartAreaFillColor: new CellColor(250, 250, 250),
+            PlotAreaFillColor: new CellColor(245, 250, 255),
+            PlotAreaBorderColor: new CellColor(120, 120, 120),
+            PlotAreaBorderThickness: 2.25,
+            ShowLegend: true,
+            LegendPosition: ChartLegendPosition.Bottom,
+            LegendOverlay: true,
+            LegendTextColor: new CellColor(40, 40, 40),
+            LegendFillColor: new CellColor(248, 248, 248),
+            LegendBorderColor: new CellColor(180, 180, 180),
+            LegendBorderThickness: 1.25,
+            LegendFontSize: 11));
 
-        result.ToOptions().Should().Be(new ChartLayoutOptions(
+        ChartAreaFormatPlanner.Plan(result).Should().Be(new ChartLayoutOptions(
             ChartAreaFillColor: new CellColor(250, 250, 250),
             PlotAreaFillColor: new CellColor(245, 250, 255),
             PlotAreaBorderColor: new CellColor(120, 120, 120),
@@ -45,14 +45,14 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void ChartAreaLegendDialogResult_DelegatesOptionsDefaultsAndParsingToSharedPlanner()
+    public void ChartAreaLegendDialog_UsesSharedContractDefaultsAndParsing()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartFormatDialogs.cs");
 
-        source.Should().Contain("public ChartAreaFormatInput ToInput()");
-        source.Should().Contain("ChartAreaFormatPlanner.Plan(ToInput())");
+        source.Should().Contain("public ChartAreaFormatInput Result { get; private set; }");
         source.Should().Contain("ChartAreaFormatPlanner.Read(chart)");
-        source.Should().Contain("ChartAreaFormatPlanner.Normalize(new ChartAreaFormatInput(");
+        source.Should().NotContain("public static ChartAreaFormatInput CreateResult(");
+        source.Should().NotContain("public static ChartAreaFormatInput FromChart(");
         source.Should().Contain("ChartAreaFormatPlanner.GetLegendPositionChoices()");
         source.Should().Contain("ChartAreaFormatPlanner.GetFillLineSection()");
         source.Should().Contain("ChartAreaFormatPlanner.GetLegendSection()");
@@ -63,6 +63,7 @@ public sealed partial class ChartDialogTests
         source.Should().NotContain("TryReadOptionalColor(");
         source.Should().NotContain("TryReadClampedDouble(");
         source.Should().NotContain("FiniteOrDefault(");
+        source.Should().NotContain("ChartAreaLegendDialogResult");
     }
 
     [Fact]
@@ -78,9 +79,9 @@ public sealed partial class ChartDialogTests
             LegendFontSize = 100
         };
 
-        ChartAreaLegendDialog.FromChart(chart)
+        ChartAreaFormatPlanner.Read(chart)
             .Should()
-            .Be(new ChartAreaLegendDialogResult(
+            .Be(new ChartAreaFormatInput(
                 new CellColor(1, 2, 3),
                 null,
                 null,
@@ -112,42 +113,43 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartFormatDialogs.cs");
 
-        source.Should().Contain("_ => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _chartAreaFillBox)");
-        source.Should().Contain("ChartAreaFormatParseIssue.PlotAreaFillColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _plotAreaFillBox)");
-        source.Should().Contain("ChartAreaFormatParseIssue.PlotAreaBorderColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _plotAreaBorderBox)");
-        source.Should().Contain("ChartAreaFormatParseIssue.PlotAreaBorderThickness => (UiText.Get(\"ChartAreaLegend_InvalidPlotAreaBorderWidthMessage\"), _plotAreaBorderThicknessBox)");
-        source.Should().Contain("ChartAreaFormatParseIssue.LegendTextColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendTextBox)");
-        source.Should().Contain("ChartAreaFormatParseIssue.LegendFillColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendFillBox)");
-        source.Should().Contain("ChartAreaFormatParseIssue.LegendBorderColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendBorderBox)");
-        source.Should().Contain("ChartAreaFormatParseIssue.LegendBorderThickness => (UiText.Get(\"ChartAreaLegend_InvalidLegendBorderWidthMessage\"), _legendBorderThicknessBox)");
-        source.Should().Contain("ChartAreaFormatParseIssue.LegendFontSize => (UiText.Get(\"ChartAreaLegend_InvalidLegendFontSizeMessage\"), _legendFontSizeBox)");
+        source.Should().Contain("var presentation = ChartValidationPresentationPlanner.Describe(issue);");
+        source.Should().Contain("ChartAreaFormatDialogFieldId.PlotAreaFillColor => _plotAreaFillBox");
+        source.Should().Contain("ChartAreaFormatDialogFieldId.PlotAreaBorderColor => _plotAreaBorderBox");
+        source.Should().Contain("ChartAreaFormatDialogFieldId.PlotAreaBorderThickness => _plotAreaBorderThicknessBox");
+        source.Should().Contain("ChartAreaFormatDialogFieldId.LegendTextColor => _legendTextBox");
+        source.Should().Contain("ChartAreaFormatDialogFieldId.LegendFillColor => _legendFillBox");
+        source.Should().Contain("ChartAreaFormatDialogFieldId.LegendBorderColor => _legendBorderBox");
+        source.Should().Contain("ChartAreaFormatDialogFieldId.LegendBorderThickness => _legendBorderThicknessBox");
+        source.Should().Contain("ChartAreaFormatDialogFieldId.LegendFontSize => _legendFontSizeBox");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartAreaFormatParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
     }
 
     [Fact]
-    public void ChartDataLabelsDialogResult_BuildsLayoutOptions()
+    public void ChartDataLabelsDialog_ReturnsSharedInputThatBuildsLayoutOptions()
     {
-        var result = ChartDataLabelsDialog.CreateResult(
-            showDataLabels: true,
-            position: ChartDataLabelPosition.OutsideEnd,
-            showValue: false,
-            showLegendKey: true,
-            showCategoryName: true,
-            showSeriesName: false,
-            showPercentage: true,
-            separator: ChartDataLabelSeparator.NewLine,
-            numberFormat: ChartDataLabelNumberFormat.Percent,
-            showCallouts: true,
-            fillColor: new CellColor(240, 240, 240),
-            borderColor: new CellColor(10, 20, 30),
-            textColor: new CellColor(40, 50, 60),
-            borderThickness: 1.5,
-            fontSize: 12,
-            angle: -45);
+        var result = ChartDataLabelsPlanner.Normalize(new ChartDataLabelsInput(
+            ShowDataLabels: true,
+            Position: ChartDataLabelPosition.OutsideEnd,
+            ShowValue: false,
+            ShowCategoryName: true,
+            ShowSeriesName: false,
+            ShowPercentage: true,
+            ShowLegendKey: true,
+            Separator: ChartDataLabelSeparator.NewLine,
+            NumberFormat: ChartDataLabelNumberFormat.Percent,
+            ShowCallouts: true,
+            FillColor: new CellColor(240, 240, 240),
+            BorderColor: new CellColor(10, 20, 30),
+            TextColor: new CellColor(40, 50, 60),
+            BorderThickness: 1.5,
+            FontSize: 12,
+            Angle: -45));
 
-        result.ToOptions().Should().Be(new ChartLayoutOptions(
+        ChartDataLabelsPlanner.Plan(result).Should().Be(new ChartLayoutOptions(
             ShowDataLabels: true,
             DataLabelPosition: ChartDataLabelPosition.OutsideEnd,
             ShowDataLabelValue: false,
@@ -167,14 +169,14 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void ChartDataLabelsDialogResult_DelegatesOptionsDefaultsAndValidationToSharedPlanner()
+    public void ChartDataLabelsDialog_UsesSharedContractDefaultsAndValidation()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartDataLabelsDialog.cs");
 
-        source.Should().Contain("public ChartDataLabelsInput ToInput()");
-        source.Should().Contain("ChartDataLabelsPlanner.Plan(ToInput())");
+        source.Should().Contain("public ChartDataLabelsInput Result { get; private set; }");
         source.Should().Contain("ChartDataLabelsPlanner.Read(chart)");
-        source.Should().Contain("ChartDataLabelsPlanner.Normalize(new ChartDataLabelsInput(");
+        source.Should().NotContain("public static ChartDataLabelsInput CreateResult(");
+        source.Should().NotContain("public static ChartDataLabelsInput FromChart(");
         source.Should().Contain("ChartDataLabelsPlanner.GetPositionChoices()");
         source.Should().Contain("ChartDataLabelsPlanner.GetSeparatorChoices()");
         source.Should().Contain("ChartDataLabelsPlanner.GetNumberFormatChoices()");
@@ -186,6 +188,7 @@ public sealed partial class ChartDialogTests
         source.Should().NotContain("TryReadClampedDouble(");
         source.Should().NotContain("ShowPlannerValidationWarning");
         source.Should().NotContain("ShowDataLabels: ShowDataLabels");
+        source.Should().NotContain("ChartDataLabelsDialogResult");
     }
 
     [Fact]
@@ -199,13 +202,13 @@ public sealed partial class ChartDialogTests
             ShowDataLabelCategoryName = true
         };
 
-        var result = ChartDataLabelsDialog.FromChart(chart);
+        var result = ChartDataLabelsPlanner.Read(chart);
 
         result.ShowValue.Should().BeFalse();
         result.ShowLegendKey.Should().BeTrue();
         result.ShowCategoryName.Should().BeTrue();
-        result.ToOptions().ShowDataLabelValue.Should().BeFalse();
-        result.ToOptions().ShowDataLabelLegendKey.Should().BeTrue();
+        ChartDataLabelsPlanner.Plan(result).ShowDataLabelValue.Should().BeFalse();
+        ChartDataLabelsPlanner.Plan(result).ShowDataLabelLegendKey.Should().BeTrue();
     }
 
     [Fact]
@@ -221,7 +224,7 @@ public sealed partial class ChartDialogTests
             DataLabelAngle = -120,
         };
 
-        var result = ChartDataLabelsDialog.FromChart(chart);
+        var result = ChartDataLabelsPlanner.Read(chart);
 
         result.Position.Should().Be(ChartDataLabelPosition.BestFit);
         result.Separator.Should().Be(ChartDataLabelSeparator.Comma);
@@ -247,12 +250,13 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartDataLabelsDialog.cs");
 
-        source.Should().Contain("_ => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _fillBox)");
-        source.Should().Contain("ChartDataLabelsParseIssue.BorderColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _borderBox)");
-        source.Should().Contain("ChartDataLabelsParseIssue.TextColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _textBox)");
-        source.Should().Contain("ChartDataLabelsParseIssue.BorderThickness => (UiText.Get(\"ChartDataLabels_InvalidBorderThicknessMessage\"), _borderThicknessBox)");
-        source.Should().Contain("ChartDataLabelsParseIssue.FontSize => (UiText.Get(\"ChartDataLabels_InvalidFontSizeMessage\"), _fontSizeBox)");
-        source.Should().Contain("ChartDataLabelsParseIssue.Angle => (UiText.Get(\"ChartDataLabels_InvalidAngleMessage\"), _angleBox)");
+        source.Should().Contain("var presentation = ChartValidationPresentationPlanner.Describe(issue);");
+        source.Should().Contain("ChartDataLabelsDialogFieldId.BorderColor => _borderBox");
+        source.Should().Contain("ChartDataLabelsDialogFieldId.TextColor => _textBox");
+        source.Should().Contain("ChartDataLabelsDialogFieldId.BorderThickness => _borderThicknessBox");
+        source.Should().Contain("ChartDataLabelsDialogFieldId.FontSize => _fontSizeBox");
+        source.Should().Contain("ChartDataLabelsDialogFieldId.TextAngle => _angleBox");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartDataLabelsParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");

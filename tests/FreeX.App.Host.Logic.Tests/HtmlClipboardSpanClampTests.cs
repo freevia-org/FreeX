@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
 using FluentAssertions;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
@@ -16,12 +16,7 @@ public sealed class HtmlClipboardSpanClampTests
 {
     private static string[][] ParseRows(string html)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "TryParseHtmlClipboardTableRows", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new MissingMethodException(nameof(MainWindow), "TryParseHtmlClipboardTableRows");
-
-        var result = (System.Collections.Generic.List<System.Collections.Generic.IReadOnlyList<string>>?)
-            method.Invoke(null, [html]);
+        var result = HtmlClipboardTableParser.Parse(html);
         result.Should().NotBeNull();
         return result!.Select(row => row.ToArray()).ToArray();
     }

@@ -8,21 +8,17 @@ namespace FreeP.App.Host.Tests;
 
 public sealed class NotesMasterRoundTripTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.NotesMasterTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.NotesMasterTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public NotesMasterRoundTripTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public void CorpusNotesMaster_IsReadWithNativeStyleAndRetainedAcrossRoundTrip()
     {
-        var path = CorpusPath("21-comments-notes.pptx");
-        if (!File.Exists(path)) return;
+        var path = TestWorkspaceFileLocator.TryFindFileFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus", "21-comments-notes.pptx");
+        if (path is null) return;
 
         var original = PptxPackageReader.Read(path);
         original.NotesMasterXml.Should().NotBeNullOrEmpty();
@@ -93,18 +89,4 @@ public sealed class NotesMasterRoundTripTests : IDisposable
         plan.NotesBounds.Should().Be(new LayoutRect(54, 346.5, 432, 283.5));
     }
 
-    private static string CorpusPath(string filename)
-    {
-        var dir = AppContext.BaseDirectory;
-        for (var i = 0; i < 8; i++)
-        {
-            var candidate = Path.Combine(dir, "tools", "FreeP.RenderCompare", "corpus", filename);
-            if (File.Exists(candidate)) return candidate;
-            dir = Path.GetDirectoryName(dir) ?? dir;
-        }
-
-        return Path.Combine(
-            @"C:\Users\quinn\Documents\GitHub\FreeX\.worktrees\freep-animation-parity-20260720\tools\FreeP.RenderCompare\corpus",
-            filename);
-    }
 }

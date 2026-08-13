@@ -1,9 +1,11 @@
 using System;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -17,49 +19,49 @@ namespace FreeW.App.Host;
 /// list. View-only: it touches no docx I/O and changes no model shapes — only the existing
 /// <see cref="Paragraph.BookmarkName"/> marker.
 /// </summary>
-internal sealed class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private static readonly BookmarkManagerSurfaceSpec Surface = BookmarkManagerDialogPlanner.Surface;
     private readonly DocumentView _editor;
-    private readonly ListBox _list = new() { MinWidth = 300, MinHeight = 180 };
-    private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 8, 0, 0) };
+    private readonly ListBox _list = new() { MinWidth = Surface.ListMinWidth, MinHeight = Surface.ListMinHeight };
+    private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, Surface.StatusTopMargin, 0, 0) };
     private readonly Button _goToButton;
     private readonly Button _deleteButton;
+    private readonly BookmarkManagerDialogSession _session = new();
+    private bool _applyingState;
 
     private BookmarkManagerDialog(Window? owner, DocumentView editor)
     {
         _editor = editor;
         Owner = owner;
-        Title = "Bookmark Manager";
-        System.Windows.Automation.AutomationProperties.SetAutomationId(this, "BookmarkManagerDialog");
-        Width = 380;
+        Title = Surface.Title;
+        AutomationProperties.SetAutomationId(this, Surface.WindowAutomationId);
+        Width = Surface.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var panel = new StackPanel { Margin = new Thickness(14) };
-        panel.Children.Add(new TextBlock { Text = "Bookmarks:", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
-        System.Windows.Automation.AutomationProperties.SetAutomationId(panel.Children[0], "BookmarkManagerHeading");
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_list, "BookmarkManagerList");
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_status, "BookmarkManagerStatus");
+        var panel = new StackPanel { Margin = new Thickness(Surface.OuterMargin) };
+        var heading = new TextBlock { Text = Surface.Heading, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, Surface.HeadingBottomMargin) };
+        AutomationProperties.SetAutomationId(heading, Surface.HeadingAutomationId);
+        AutomationProperties.SetAutomationId(_list, Surface.ListAutomationId);
+        AutomationProperties.SetAutomationId(_status, Surface.StatusAutomationId);
+        panel.Children.Add(heading);
 
-        _list.SelectionChanged += (_, _) => UpdateButtons();
+        _list.SelectionChanged += (_, _) => UpdateSelection();
         _list.MouseDoubleClick += (_, _) => GoTo();
         panel.Children.Add(_list);
 
-        _goToButton = MakeButton("Go To", (_, _) => GoTo());
-        _deleteButton = MakeButton("Delete", (_, _) => Delete());
-        var closeButton = MakeButton("Close", (_, _) => Close());
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_goToButton, "BookmarkManagerGoToButton");
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_deleteButton, "BookmarkManagerDeleteButton");
-        System.Windows.Automation.AutomationProperties.SetAutomationId(closeButton, "BookmarkManagerCloseButton");
-        closeButton.IsCancel = true;
+        _goToButton = MakeButton(Surface.Action(BookmarkManagerActionKind.GoTo), (_, _) => GoTo());
+        _deleteButton = MakeButton(Surface.Action(BookmarkManagerActionKind.Delete), (_, _) => Delete());
+        var closeButton = MakeButton(Surface.Action(BookmarkManagerActionKind.Close), (_, _) => Close());
 
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0)
+            Margin = new Thickness(0, Surface.ActionTopMargin, 0, 0)
         };
         buttons.Children.Add(_goToButton);
         buttons.Children.Add(_deleteButton);
@@ -82,77 +84,81 @@ internal sealed class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     public static void Show(Window? owner, DocumentView editor) =>
         new BookmarkManagerDialog(owner, editor).ShowDialog();
 
-    // A list entry: the bookmark name + its model block index, shown by name in the list box.
-    private readonly record struct Item(string Name, int BlockIndex)
-    {
-        public override string ToString() => Name;
-    }
-
-    private void RefreshList()
+    private void RefreshList(BookmarkManagerDeleteRefreshPlan? deletePlan = null)
     {
         // Commit pending edits so the model reflects the current text before enumerating bookmarks.
-        _editor.CommitToModel();
-
-        var selectedName = (_list.SelectedItem as Item?)?.Name;
-
-        _list.Items.Clear();
-        foreach (var location in Bookmarks.List(_editor.Model))
-            _list.Items.Add(new Item(location.Name, location.BlockIndex));
-
-        if (_list.Items.Count == 0)
-        {
-            _status.Text = "This document has no bookmarks.";
-        }
-        else
-        {
-            // Re-select the previously selected name if it survived, else select the first entry.
-            var restored = -1;
-            if (selectedName is not null)
-            {
-                for (var i = 0; i < _list.Items.Count; i++)
-                {
-                    if (_list.Items[i] is Item item && string.Equals(item.Name, selectedName, StringComparison.Ordinal))
-                    {
-                        restored = i;
-                        break;
-                    }
-                }
-            }
-            _list.SelectedIndex = restored >= 0 ? restored : 0;
-        }
-
-        UpdateButtons();
+        var locations = EnumerateBookmarks();
+        var state = deletePlan is null
+            ? _session.Refresh(locations)
+            : _session.CompleteDelete(deletePlan, locations);
+        ApplyState(state);
     }
 
-    private void UpdateButtons()
+    private IReadOnlyList<BookmarkLocation> EnumerateBookmarks()
     {
-        var hasSelection = _list.SelectedItem is Item;
-        _goToButton.IsEnabled = hasSelection;
-        _deleteButton.IsEnabled = hasSelection;
+        _editor.CommitToModel();
+        return Bookmarks.List(_editor.Model);
+    }
+
+    private void ApplyState(BookmarkManagerDialogState state)
+    {
+        _applyingState = true;
+        try
+        {
+            _list.Items.Clear();
+            foreach (var item in state.Items)
+                _list.Items.Add(item);
+            _list.SelectedIndex = state.SelectedIndex;
+        }
+        finally
+        {
+            _applyingState = false;
+        }
+
+        _status.Text = state.StatusText;
+        ApplyActionState(state);
+    }
+
+    private void UpdateSelection()
+    {
+        if (_applyingState)
+            return;
+
+        ApplyActionState(_session.SelectIndex(_list.SelectedIndex));
+    }
+
+    private void ApplyActionState(BookmarkManagerDialogState state)
+    {
+        _goToButton.IsEnabled = state.IsEnabled(BookmarkManagerActionKind.GoTo);
+        _deleteButton.IsEnabled = state.IsEnabled(BookmarkManagerActionKind.Delete);
     }
 
     private void GoTo()
     {
-        if (_list.SelectedItem is not Item item)
+        var intent = _session.PlanGoTo();
+        if (intent is null)
             return;
-        _editor.BringBlockIntoView(item.BlockIndex);
+        _editor.BringBlockIntoView(intent.BlockIndex);
         Close();
     }
 
     private void Delete()
     {
-        if (_list.SelectedItem is not Item item)
+        var plan = _session.PlanDelete();
+        if (plan is null)
             return;
 
         // Removes the marker from the model and re-renders, then refresh the list.
-        _editor.RemoveBookmark(item.Name);
-        RefreshList();
-        _status.Text = $"Removed bookmark \"{item.Name}\".";
+        _editor.RemoveBookmark(plan.Name);
+        RefreshList(plan);
     }
 
-    private static Button MakeButton(string content, RoutedEventHandler onClick)
+    private static Button MakeButton(BookmarkManagerActionSpec spec, RoutedEventHandler onClick)
     {
-        var button = new Button { Content = content, MinWidth = 84, Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(6, 3, 6, 3) };
+        var button = new Button { Content = spec.Label, IsCancel = spec.IsCancel, MinWidth = Surface.ButtonMinWidth };
+        button.Margin = new Thickness(Surface.ButtonLeadingMargin, 0, 0, 0);
+        button.Padding = new Thickness(Surface.ButtonHorizontalPadding, Surface.ButtonVerticalPadding, Surface.ButtonHorizontalPadding, Surface.ButtonVerticalPadding);
+        AutomationProperties.SetAutomationId(button, spec.AutomationId);
         button.Click += onClick;
         return button;
     }

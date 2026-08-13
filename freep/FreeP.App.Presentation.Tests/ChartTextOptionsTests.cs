@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -44,7 +45,8 @@ public sealed class ChartTextOptionsTests
     [InlineData("14.5", 14.5)]
     public void ParseOptionalFontSize_MapsBlankAndParsesCurrentCulture(string text, double? expected)
     {
-        ChartTextOptionsPlanner.ParseOptionalFontSize(text).Should().Be(expected);
+        ChartTextOptionsDialogSession.ParseOptionalFontSize(text, CultureInfo.CurrentCulture)
+            .Should().Be(expected);
     }
 
     [Fact]

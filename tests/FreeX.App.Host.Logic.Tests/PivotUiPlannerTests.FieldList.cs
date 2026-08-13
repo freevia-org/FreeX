@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -6,57 +7,59 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class PivotUiPlannerTests
 {
     [Fact]
-    public void GetFieldListCaption_ReadsStringOrFieldListItemAndIgnoresBlankCaptions()
+    public void GetItemCaption_ReadsSharedFieldModelsAndIgnoresBlankCaptions()
     {
-        PivotUiHostHelpers.GetFieldListCaption("Region").Should().Be("Region");
-        PivotUiHostHelpers.GetFieldListCaption(new PivotFieldListItem("Amount", true)).Should().Be("Amount");
-        PivotUiHostHelpers.GetFieldListCaption(new PivotFieldListItem("  ", false)).Should().BeNull();
-        PivotUiHostHelpers.GetFieldListCaption(null).Should().BeNull();
+        PivotFieldListPaneBuilder.GetItemCaption("Region").Should().Be("Region");
+        PivotFieldListPaneBuilder.GetItemCaption(new PivotAvailableFieldItemModel(1, "Amount", true)).Should().Be("Amount");
+        PivotFieldListPaneBuilder.GetItemCaption(new PivotAvailableFieldItemModel(2, "  ", false)).Should().BeNull();
+        PivotFieldListPaneBuilder.GetItemCaption(null).Should().BeNull();
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void FilterPivotFieldListItems_ReturnsAllFieldsForBlankSearch(string? searchText)
+    public void FilterAvailableFields_ReturnsAllFieldsForBlankSearch(string? searchText)
     {
         var fields = new[]
         {
-            new PivotFieldListItem("Region", true),
-            new PivotFieldListItem("Amount", false)
+            new PivotAvailableFieldItemModel(0, "Region", true),
+            new PivotAvailableFieldItemModel(1, "Amount", false)
         };
 
-        var filtered = PivotUiHostHelpers.FilterPivotFieldListItems(fields, searchText);
+        var filtered = PivotFieldListPaneBuilder.FilterAvailableFields(fields, searchText);
 
         filtered.Should().Equal(fields);
     }
 
     [Fact]
-    public void FilterPivotFieldListItems_MatchesCaptionsCaseInsensitivelyAndPreservesCheckedState()
+    public void FilterAvailableFields_MatchesCaptionsCaseInsensitivelyAndPreservesCheckedState()
     {
         var fields = new[]
         {
-            new PivotFieldListItem("Region", true),
-            new PivotFieldListItem("Sales Amount", false),
-            new PivotFieldListItem("Cost", true)
+            new PivotAvailableFieldItemModel(0, "Region", true),
+            new PivotAvailableFieldItemModel(1, "Sales Amount", false),
+            new PivotAvailableFieldItemModel(2, "Cost", true)
         };
 
-        var filtered = PivotUiHostHelpers.FilterPivotFieldListItems(fields, "amount");
+        var filtered = PivotFieldListPaneBuilder.FilterAvailableFields(fields, "amount");
 
-        filtered.Should().Equal(new PivotFieldListItem("Sales Amount", false));
+        filtered.Should().Equal(new PivotAvailableFieldItemModel(1, "Sales Amount", false));
     }
 
     [Fact]
-    public void PendingPivotLayoutUpdate_CapturesDeferredLayoutIntent()
+    public void PivotFieldLayoutDraft_CapturesDeferredLayoutIntent()
     {
-        var pending = new PendingPivotLayoutUpdate(
-            IsDeferred: true,
-            AvailableFieldsSearchText: "sales",
-            Fields: [new PivotFieldListItem("Sales Amount", true)]);
+        var areas = new PivotFieldAreas(
+            [new PivotFieldModel(0)],
+            [],
+            [],
+            [new PivotDataFieldModel(1, "Sum of Sales Amount", "sum")]);
+        var pending = new PivotFieldLayoutDraft("PivotTable1", areas);
 
-        pending.IsDeferred.Should().BeTrue();
-        pending.AvailableFieldsSearchText.Should().Be("sales");
-        pending.Fields.Should().Equal(new PivotFieldListItem("Sales Amount", true));
+        pending.PivotTableName.Should().Be("PivotTable1");
+        pending.RowFields.Should().Equal(new PivotFieldModel(0));
+        pending.DataFields.Should().Equal(new PivotDataFieldModel(1, "Sum of Sales Amount", "sum"));
     }
 
     [Theory]

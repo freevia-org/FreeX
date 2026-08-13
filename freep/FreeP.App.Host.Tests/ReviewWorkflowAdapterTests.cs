@@ -933,7 +933,7 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            var opened = window.ShowMediaCaptionPane();
+            var opened = window.MediaPaneHost.Show();
 
             opened.ShapeId.Should().Be(mediaShape.Id);
             window.IsMediaCaptionPaneVisible.Should().BeTrue();
@@ -941,14 +941,14 @@ public sealed class ReviewWorkflowAdapterTests
             window.MediaCaptionPaneTrackCount.Should().Be(0);
             window.IsMediaCaptionCreateEnabled.Should().BeFalse();
 
-            window.SetMediaCaptionPaneInput(
+            window.MediaPaneHost.SetCaptionInput(new(
                 "English captions",
                 "en-US",
                 "ppt/media/demo-captions.vtt",
-                "WEBVTT\r\n\r\n00:00:00.000 --> 00:00:01.000\r\nInitial cue\r\n");
+                "WEBVTT\r\n\r\n00:00:00.000 --> 00:00:01.000\r\nInitial cue\r\n"));
             window.IsMediaCaptionCreateEnabled.Should().BeTrue();
 
-            var create = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Create);
+            var create = window.MediaPaneHost.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Create);
 
             create.Succeeded.Should().BeTrue();
             create.TrackIndex.Should().Be(0);
@@ -962,23 +962,28 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastMediaTranscriptPlan!.Tracks.Should().ContainSingle()
                 .Which.Cues.Single().Text.Should().Be("Initial cue");
 
-            window.SetMediaCaptionPaneInput(
+            window.MediaPaneHost.SetCaptionInput(new(
                 "English captions",
                 "en-US",
                 "ppt/media/demo-captions.vtt",
-                "WEBVTT\r\n\r\n00:00:01.000 --> 00:00:02.000\r\nUpdated cue\r\n",
+                "WEBVTT\r\n\r\n00:00:01.000 --> 00:00:02.000\r\nUpdated cue\r\n"),
                 selectedTrackIndex: 0);
-            var replace = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Replace);
+            var replace = window.MediaPaneHost.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Replace);
 
             replace.Succeeded.Should().BeTrue();
             window.LastMediaTranscriptPlan!.Tracks.Should().ContainSingle()
                 .Which.Cues.Single().Text.Should().Be("Updated cue");
 
-            var delete = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Delete);
+            var delete = window.MediaPaneHost.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Delete);
 
             delete.Succeeded.Should().BeTrue();
             mediaShape.Media.CaptionTracks.Should().BeEmpty();
             window.MediaCaptionPaneTrackCount.Should().Be(0);
+
+            window.MediaPaneHost.Hide();
+            window.IsMediaCaptionPaneVisible.Should().BeFalse();
+            window.MediaPaneHost.Show();
+            window.IsMediaCaptionPaneVisible.Should().BeTrue();
         }
         finally
         {
@@ -1002,12 +1007,12 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.ShowMediaCaptionPane();
+            window.MediaPaneHost.Show();
             window.MediaVolumePercent.Should().Be(80);
 
-            window.SetMediaVolumePaneInput(25);
+            window.MediaPaneHost.SetVolumeInput(25);
             window.MediaVolumePercent.Should().Be(25);
-            window.ApplyMediaVolumePane().Should().BeTrue();
+            window.MediaPaneHost.ApplyVolume().Should().BeTrue();
 
             mediaShape.Media!.VolumePercent.Should().Be(25);
             window.IsDirty.Should().BeTrue();
@@ -1034,19 +1039,19 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.ShowMediaCaptionPane();
+            window.MediaPaneHost.Show();
             window.MediaPlaybackStartMode.Should().Be(MediaPlaybackStartMode.InClickSequence);
             window.MediaLoop.Should().BeFalse();
             window.MediaRewindAfterPlaying.Should().BeFalse();
             window.MediaPlayFullScreen.Should().BeFalse();
 
-            window.SetMediaPlaybackPaneInput(MediaPlaybackStartMode.Automatically, true, true, true, true, 3);
+            window.MediaPaneHost.SetPlaybackInput(MediaPlaybackStartMode.Automatically, true, true, true, true, 3);
             window.MediaPlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
             window.MediaLoop.Should().BeTrue();
             window.MediaRewindAfterPlaying.Should().BeTrue();
             window.MediaPlayFullScreen.Should().BeTrue();
             window.MediaStopAfterSlides.Should().Be(3);
-            window.ApplyMediaPlaybackPane().Should().BeTrue();
+            window.MediaPaneHost.ApplyPlayback().Should().BeTrue();
 
             mediaShape.Media!.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
             mediaShape.Media.Loop.Should().BeTrue();
@@ -1077,9 +1082,9 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.SetMediaTimingPaneInput(125, 250, 500, 750);
-            window.MediaTrimStartMilliseconds.Should().Be(125);
-            window.ApplyMediaTimingPane().Should().BeTrue();
+            window.MediaPaneHost.SetTimingInput(125, 250, 500, 750);
+            window.MediaPaneHost.CaptureTiming().MutationPlan.TrimStartMilliseconds.Should().Be(125);
+            window.MediaPaneHost.ApplyTiming().Should().BeTrue();
 
             mediaShape.Media!.TrimStartMilliseconds.Should().Be(125);
             mediaShape.Media.TrimEndMilliseconds.Should().Be(250);
@@ -1109,14 +1114,14 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.SetMediaBookmarkPaneInput("Intro", 1250.25);
-            window.ApplyMediaBookmarkCreatePane().Should().BeTrue();
-            window.MediaBookmarkCount.Should().Be(1);
-            window.SetMediaBookmarkPaneInput("Demo", 2500);
-            window.ApplyMediaBookmarkReplacePane().Should().BeTrue();
+            window.MediaPaneHost.SetBookmarkInput("Intro", 1250.25);
+            window.MediaPaneHost.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Create).Should().BeTrue();
+            window.MediaPaneHost.BookmarkCount.Should().Be(1);
+            window.MediaPaneHost.SetBookmarkInput("Demo", 2500);
+            window.MediaPaneHost.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Replace).Should().BeTrue();
             mediaShape.Media!.Bookmarks.Single().Name.Should().Be("Demo");
-            window.ApplyMediaBookmarkDeletePane().Should().BeTrue();
-            window.MediaBookmarkCount.Should().Be(0);
+            window.MediaPaneHost.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Delete).Should().BeTrue();
+            window.MediaPaneHost.BookmarkCount.Should().Be(0);
             window.IsDirty.Should().BeTrue();
         }
         finally
@@ -1778,10 +1783,15 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.CurrentSlide.Shapes.Add(group);
             window.Editor.Select(chart.Id);
 
-            var registry = FreePRibbonCommands.Build(
-                new RibbonStateStore(),
+            var registry = FreePRibbonTestRegistry.Compose(
                 window.Editor,
-                onReviewReadingOrder: () => window.ShowReadingOrderPane());
+                new FreePRibbonHostPorts
+                {
+                    ActionEndpoints = new FreePRibbonHostActionEndpoints
+                    {
+                        ShowReadingOrderPane = () => window.ShowReadingOrderPane(),
+                    },
+                });
             registry.TryGet(PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId, out var command)
                 .Should().BeTrue();
 
@@ -2218,7 +2228,7 @@ public sealed class ReviewWorkflowAdapterTests
         var window = new MainWindow(
             new FreePOptions(),
             messageService: TestUserMessageService.DiscardUnsavedChanges,
-            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+            nativePrintCapability: PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", "Test printer handoff deferred."));
         try
         {
             window.Editor.InsertSlide();
@@ -2265,7 +2275,7 @@ public sealed class ReviewWorkflowAdapterTests
         var window = new MainWindow(
             new FreePOptions(),
             messageService: TestUserMessageService.DiscardUnsavedChanges,
-            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+            nativePrintCapability: PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", "Test printer handoff deferred."));
         try
         {
             window.Editor.InsertSlide();
@@ -2298,7 +2308,7 @@ public sealed class ReviewWorkflowAdapterTests
         var window = new MainWindow(
             new FreePOptions(),
             messageService: TestUserMessageService.DiscardUnsavedChanges,
-            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+            nativePrintCapability: PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", "Test printer handoff deferred."));
         try
         {
             window.Editor.InsertSlide();
@@ -2355,7 +2365,7 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
-    public void FreePRibbonCommands_RegistersSharedReviewWorkflowCommandIds()
+    public void TypedHostProfile_RegistersSharedReviewWorkflowCommandIds()
     {
         var presentation = Presentation.CreateEmpty();
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
@@ -2370,19 +2380,24 @@ public sealed class ReviewWorkflowAdapterTests
         var previousInvoked = false;
         var nextInvoked = false;
 
-        var registry = FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        var registry = FreePRibbonTestRegistry.Compose(
             editor,
-            onReviewAccessibility: () => invoked = true,
-            onReviewAltText: () => altTextInvoked = true,
-            onReviewReadingOrder: () => readingOrderInvoked = true,
-            onReviewProofing: () => proofingInvoked = true,
-            onAddComment: () => addInvoked = true,
-            onEditComment: () => editInvoked = true,
-            onReplyComment: () => replyInvoked = true,
-            onDeleteComment: () => deleteInvoked = true,
-            onPreviousComment: () => previousInvoked = true,
-            onNextComment: () => nextInvoked = true);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    ShowAccessibilityPane = () => invoked = true,
+                    ShowAltTextPane = () => altTextInvoked = true,
+                    ShowReadingOrderPane = () => readingOrderInvoked = true,
+                    ShowProofingPane = () => proofingInvoked = true,
+                    AddComment = () => addInvoked = true,
+                    EditComment = () => editInvoked = true,
+                    ReplyComment = () => replyInvoked = true,
+                    DeleteComment = () => deleteInvoked = true,
+                    PreviousComment = () => previousInvoked = true,
+                    NextComment = () => nextInvoked = true,
+                },
+            });
 
         registry.TryGet(PresentationReviewWorkflowPlanner.AccessibilityCommandId, out var command)
             .Should()
@@ -2509,44 +2524,75 @@ public sealed class ReviewWorkflowAdapterTests
             "freep",
             "FreeP.App.Host",
             "MainWindow.cs"));
+        var workareaEndpointSource = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.WorkareaEndpoint.cs"));
+        var ribbonProfileSource = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.RibbonProfile.cs"));
 
         source.Should().Contain("PresentationReviewWorkflowSession");
         source.Should().Contain("_reviewWorkflowSession.RefreshReviewWorkflowPlans();");
         source.Should().Contain("_reviewWorkflowSession.ApplySelectedShapeAlternativeText(");
         source.Should().Contain("_reviewWorkflowSession.ApplyProofingCorrection(");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation)");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
-        source.Should().Contain("_reviewWorkflowSession.RefreshAltTextPlans(");
+        source.Should().Contain("_reviewWorkflowSession.ShowAccessibilityCheckerPane()");
+        source.Should().Contain("_reviewWorkflowSession.SelectAccessibilityCheckerRow(rowIndex)");
+        source.Should().Contain("_reviewWorkflowSession.ApplyAccessibilityCheckerRowAction(rowIndex)");
+        source.Should().NotContain("PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(");
+        source.Should().NotContain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
+        source.Should().NotContain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
+        source.Should().Contain("_altTextPaneHostCoordinator.RefreshSelection();");
         source.Should().Contain("_reviewWorkflowSession.ApplyReadingOrderMove(");
         source.Should().Contain("_reviewWorkflowSession.SelectReadingOrderItem(");
-        source.Should().Contain("_reviewWorkflowSession.RefreshReadingOrderPlan();");
+        workareaEndpointSource.Should().Contain(
+            "RefreshReadingOrder = () => _ = _reviewWorkflowSession.RefreshReadingOrderPlan()");
         source.Should().Contain("_reviewWorkflowSession.RefreshProofingRequestPlan();");
-        source.Should().Contain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(");
-        source.Should().Contain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringMutationPlan(");
-        source.Should().Contain("Editor.ApplyMediaCaptionAuthoring(");
+        source.Should().Contain("OpenMediaCaptionPane: () => MediaPaneHost.Show()");
+        source.Should().Contain("IPresentationMediaPaneHostView.SetCaptionInput(");
+        source.Should().Contain("_mediaPaneHostCoordinator.Refresh();");
+        source.Should().Contain("_mediaPaneHostCoordinator.ApplyCaption(");
+        source.Should().NotContain("_mediaCaptionPaneRefreshing");
+        source.Should().NotContain("_mediaPaneHostCoordinator.BuildRenderPlan(");
+        source.Should().NotContain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(");
+        source.Should().NotContain("Editor.ApplyMediaCaptionAuthoring(");
         source.Should().Contain("RenderCommentPane(PresentationCommentPanePlan plan)");
         source.Should().Contain("cm.AuthorDisplayName");
         source.Should().Contain("cm.InitialsBadgeText");
         source.Should().Contain("cm.ThreadStatusLabel");
-        source.Should().Contain("reply.AuthorDisplayName");
-        source.Should().Contain("onLayoutPicker:     () => OpenLayoutPicker()");
+        source.Should().Contain("reply.DisplayText");
+        ribbonProfileSource.Should().Contain("OpenLayoutPicker = _ => OpenLayoutPicker()");
         source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");
-        source.Should().Contain("BuildLayoutChoiceLabel(choice)");
+        source.Should().Contain("choice.DisplayLabel");
 
         var selectionPaneSource = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Host",
             "SelectionPane.cs"));
-        selectionPaneSource.Should().Contain("_editor.SetShapeName(");
+        selectionPaneSource.Should().Contain("PresentationSelectionPaneSession");
+        selectionPaneSource.Should().Contain("_session.CreateItemSession(item.ShapeId)");
+        selectionPaneSource.Should().Contain("itemSession.CommitRename(rename.Text)");
+        selectionPaneSource.Should().Contain("itemSession.ToggleVisibility()");
+        selectionPaneSource.Should().Contain("itemSession.MoveTowardFront()");
+        selectionPaneSource.Should().Contain("itemSession.MoveTowardBack()");
+        selectionPaneSource.Should().NotContain("var committed");
+        selectionPaneSource.Should().NotContain("_session.RenameShape(");
+        selectionPaneSource.Should().NotContain("_session.ToggleShapeVisibility(");
+        selectionPaneSource.Should().NotContain("_session.MoveShapeInReadingOrder(");
+        selectionPaneSource.Should().NotContain("PresentationSelectionPaneMoveDirection");
         selectionPaneSource.Should().Contain("Key.Enter");
         selectionPaneSource.Should().Contain("rename.LostFocus");
-        selectionPaneSource.Should().Contain("_editor.MoveSelectedShapeInReadingOrder(");
         selectionPaneSource.Should().Contain("item.CanMoveUp");
         selectionPaneSource.Should().Contain("item.CanMoveDown");
+        selectionPaneSource.Should().NotContain(".SetShapeName(");
+        selectionPaneSource.Should().NotContain(".ToggleShapeHidden(");
+        selectionPaneSource.Should().NotContain(".MoveSelectedShapeInReadingOrder(");
         source.Should().Contain("BuildLayoutChoiceTile(choice)");
         source.Should().Contain("BuildLayoutThumbnail(choice)");
         source.Should().NotContain("Modern resolved-thread state is not modeled yet.\";");

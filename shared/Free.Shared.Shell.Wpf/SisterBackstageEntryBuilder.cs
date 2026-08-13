@@ -75,25 +75,6 @@ public static class SisterBackstageEntryBuilder
             HideRecentPane = spec.HideRecentPane,
         });
 
-        return plans.Select(ToWpfEntry).ToArray();
+        return plans.Select(WpfBackstageEntryProjection.FromPlan).ToArray();
     }
-
-    private static BackstageEntry ToWpfEntry(SisterBackstageEntryPlan<UIElement> plan) =>
-        plan.Kind switch
-        {
-            SisterBackstageEntryKind.Pane => BackstageEntry.Pane(
-                plan.Label,
-                plan.Icon,
-                plan.ContentFactory ?? throw new InvalidOperationException($"Pane '{plan.Label}' has no content factory."),
-                plan.DockBottom,
-                iconName: plan.IconCommandName),
-            SisterBackstageEntryKind.Command => BackstageEntry.Command(
-                plan.Label,
-                plan.Icon,
-                plan.Action ?? throw new InvalidOperationException($"Command '{plan.Label}' has no action."),
-                plan.DockBottom,
-                iconName: plan.IconCommandName),
-            SisterBackstageEntryKind.Divider => BackstageEntry.Divider(plan.DockBottom),
-            _ => throw new ArgumentOutOfRangeException(nameof(plan), plan.Kind, null),
-        };
 }

@@ -12,41 +12,49 @@ public sealed class PivotAnalyzeCommandSourceTests
         var advancedSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotAdvancedCommands.cs");
         var chartSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotChartCommands.cs");
 
-        pivotSource.Should().Contain("new RefreshPivotTableCommand(_currentSheetId, pivotTable.Name)");
-        pivotSource.Should().Contain("new DrillDownPivotTableCommand(_currentSheetId, target.PivotTableName, target.PivotCell)");
+        pivotSource.Should().Contain("PivotApplication.PlanRefresh(target)");
+        pivotSource.Should().Contain("PivotApplication.PlanShowDetails(_currentSheetId, SheetGrid.SelectedRange)");
         pivotSource.Should().Contain("PivotFieldListPane.Visibility = PivotFieldListPane.Visibility == Visibility.Visible");
         pivotSource.Should().Contain("new PivotTableDataSourceDialog(");
-        pivotSource.Should().Contain("new ChangePivotTableSourceCommand(_currentSheetId, pivotTable.Name, sourceRange)");
-        pivotSource.Should().Contain("new PivotTableNameDialog(pivotTable.Name)");
-        pivotSource.Should().Contain("new RenamePivotTableCommand(sheet.Id, pivotTable.Name, dialog.Result.Name)");
+        pivotSource.Should().Contain("PivotApplication.PlanChangeDataSource(target, dialog.Result.SourceRangeText)");
+        pivotSource.Should().Contain("new PivotTableNameDialog(target.PivotTable.Name)");
+        pivotSource.Should().Contain("PivotApplication.PlanRename(target, dialog.Result.Name)");
         pivotSource.Should().Contain("ShowPivotTableOptionsDialog();");
-        pivotSource.Should().Contain("new ClearPivotTableViewCommand(sheet.Id, pivotTable.Name)");
-        pivotSource.Should().Contain("PivotUiPlanner.ResolvePivotTableSelectionRange(pivotTable)");
+        pivotSource.Should().Contain("PivotApplication.PlanClear(target)");
+        pivotSource.Should().Contain("PivotApplication.PlanSelect(target)");
         pivotSource.Should().Contain("new MovePivotTableDialog(");
-        pivotSource.Should().Contain("new MovePivotTableCommand(sheet.Id, pivotTable.Name, targetRange.Start)");
+        pivotSource.Should().Contain("PivotApplication.PlanMove(target, dialog.Result.DestinationRangeText)");
         pivotSource.Should().Contain("new InsertSlicerDialog(headers, fieldName)");
-        pivotSource.Should().Contain("new AddSlicerCommand(dialog.Result.SlicerName, pivotTable.Name, dialog.Result.FieldName)");
+        pivotSource.Should().Contain("PivotApplication.PlanInsertSlicer(");
+        pivotSource.Should().NotContain("new AddSlicerCommand(");
         pivotSource.Should().Contain("new InsertTimelineDialog(headers, fieldName)");
-        pivotSource.Should().Contain("new AddTimelineCommand(dialog.Result.TimelineName, pivotTable.Name, dialog.Result.DateFieldName)");
+        pivotSource.Should().Contain("PivotApplication.PlanInsertTimeline(");
+        pivotSource.Should().NotContain("new AddTimelineCommand(");
         pivotSource.Should().Contain("new PivotValueFieldSettingsDialog(current, context.Headers)");
 
         var designSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
         designSource.Should().Contain("private void PivotExpandCollapseButtonsBtn_Click(object sender, RoutedEventArgs e)");
         designSource.Should().Contain("showExpandCollapseButtons: !pivotTable.ShowExpandCollapseButtons");
         designSource.Should().Contain("private void PivotFieldHeadersBtn_Click(object sender, RoutedEventArgs e)");
-        designSource.Should().Contain("showFieldHeaders: !pivotTable.ShowFieldHeaders");
+        designSource.Should().Contain("ShowFieldHeaders = !pivotTable.ShowFieldHeaders");
 
         advancedSource.Should().Contain("new PivotFieldGroupingDialog(headers, currentField)");
-        advancedSource.Should().Contain("PivotFieldGroupingDialog.CreateResult(");
+        advancedSource.Should().Contain("PivotGroupFieldPlanner.CreateSubmission(");
+        advancedSource.Should().Contain("PivotGroupFieldPlanner.BuildLayout(pivotTable, submission.Field)");
+        advancedSource.Should().NotContain("PivotFieldGroupingDialogResult");
         advancedSource.Should().Contain("new PivotCalculatedFieldDialog");
         advancedSource.Should().Contain("new PivotCalculatedItemDialog(headers, sourceIndex)");
-        advancedSource.Should().Contain("new ConfigurePivotTableCalculatedItemsCommand(");
+        advancedSource.Should().Contain("PivotApplication.PlanCalculatedConfiguration(");
+        advancedSource.Should().NotContain("new ConfigurePivotTableCalculatedItemsCommand(");
 
         chartSource.Should().Contain("new PivotChartTypeDialog(ChartType.Column)");
-        chartSource.Should().Contain("new AddPivotChartCommand(_currentSheetId, pivotTable.Name, dialog.Result.ChartType");
-        chartSource.Should().Contain("new ChangePivotChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType)");
+        chartSource.Should().Contain("ChartCommandWorkflowPlanner.BuildAddPivotChartCommand(");
+        chartSource.Should().NotContain("new AddPivotChartCommand(");
+        chartSource.Should().Contain("ChartCommandWorkflowPlanner.BuildChangePivotChartTypeCommand(");
+        chartSource.Should().NotContain("new ChangePivotChartTypeCommand(");
         chartSource.Should().Contain("new PivotChartOptionsDialog(chart)");
-        chartSource.Should().Contain("new ConfigurePivotChartOptionsCommand(");
+        chartSource.Should().Contain("ChartCommandWorkflowPlanner.BuildPivotChartOptionsCommand(");
+        chartSource.Should().NotContain("new ConfigurePivotChartOptionsCommand(");
     }
 
     [Fact]
@@ -61,10 +69,10 @@ public sealed class PivotAnalyzeCommandSourceTests
         var contextualSource = pivotSource[fieldListStart..insertSlicerStart];
 
         getActiveSource.Should().Contain(
-            "FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange)",
+            "PivotApplication.ResolveTarget(_currentSheetId, SheetGrid.SelectedRange)",
             "Excel enables PivotTable Analyze/Design commands only while the selection is inside the PivotTable");
         getActiveSource.Should().NotContain(
-            "FindPivotTableForSelection(sheet, SheetGrid.SelectedRange)",
+            "PivotTargetFallback.FirstOnSheet",
             "falling back to the first PivotTable would let contextual commands operate from ordinary cells");
         contextualSource.Should().Contain(
             "FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange)",

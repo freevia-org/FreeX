@@ -6,7 +6,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.FormulaBar;
-using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -35,27 +34,20 @@ public partial class MainWindow
     private void ClearFormulaRangeEntryState()
     {
         _formulaEditCell = null;
-        _formulaRangeSelectionAnchor = null;
-        _formulaRangeEntryMode = false;
-        _formulaRangeEntrySelectionMode = ExcelSelectionMode.Normal;
-        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
-        ClearFormulaReferenceEntrySpan();
-        ClearFormulaReferenceHighlights();
+        FormulaReferenceEditingController.Reset(
+            _formulaRangeEditingSession,
+            HideFormulaFunctionAutocomplete,
+            ClearFormulaReferenceHighlights);
     }
 
-    private void ClearFormulaReferenceEntrySpan()
-    {
-        _formulaReferenceStart = null;
-        _formulaReferenceLength = null;
-        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
-    }
+    private void ClearFormulaReferenceEntrySpan() =>
+        _formulaRangeEditingSession.ClearReferenceSpan();
 
     private void UpdateFormulaRangeEntryStateAfterTextChanged(System.Windows.Controls.TextBox editor)
     {
-        var textChangePlan = FormulaEditInteractionPlanner.BuildTextChangePlan(editor.Text);
+        var textChangePlan = _formulaRangeEditingSession.ApplyTextChanged(editor.Text);
         if (textChangePlan.StartsPointMode)
         {
-            _formulaRangeEntryMode = true;
             ApplyFormulaEditStatusBarPlan(textChangePlan.StatusBarPlan);
         }
 
@@ -64,48 +56,30 @@ public partial class MainWindow
 
     private void ClearFormulaReferenceEntrySpanIfCaretLeftReference(System.Windows.Controls.TextBox editor)
     {
-        if (_formulaReferenceStart is not { } start || _formulaReferenceLength is not { } length)
-            return;
-
-        var end = start + length;
-        if (start < 0 || length < 0 || start > editor.Text.Length || end > editor.Text.Length)
-        {
-            ClearFormulaReferenceEntrySpan();
-            return;
-        }
-
-        var selectionStart = Math.Clamp(editor.SelectionStart, 0, editor.Text.Length);
-        if (editor.SelectionLength > 0)
-        {
-            var selectionEnd = Math.Clamp(selectionStart + editor.SelectionLength, selectionStart, editor.Text.Length);
-            if (selectionStart < start || selectionEnd > end)
-                ClearFormulaReferenceEntrySpan();
-            return;
-        }
-
-        var caret = Math.Clamp(editor.CaretIndex, 0, editor.Text.Length);
-        if (caret < start || caret > end)
-            ClearFormulaReferenceEntrySpan();
+        _formulaRangeEditingSession.ClearReferenceSpanIfCaretLeft(
+            editor.Text.Length,
+            editor.SelectionStart,
+            editor.SelectionLength,
+            editor.CaretIndex,
+            preserveWhileSelectionActive: false);
     }
 
     private bool TryToggleFormulaRangeEntrySelectionMode(Key key, ModifierKeys modifiers)
     {
         var editor = GetFormulaRangeEntryEditor();
         if (!IsFormulaRangeEntryActive(editor) ||
-            !FormulaRangeEntryPlanner.TryToggleKeyboardSelectionMode(
+            !_formulaRangeEditingSession.TryToggleSelectionMode(
                 FormulaBarWpfInputAdapter.ToFormulaEditorKey(key),
                 FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(modifiers),
-                _formulaRangeEntrySelectionMode,
-                out var next))
+                out var plan))
         {
             return false;
         }
 
-        _formulaRangeEntrySelectionMode = next;
-        if (next == ExcelSelectionMode.Normal)
-            SetFormulaEditStatusBarMode(pointMode: true);
-        else
-            SetStatusBarModeText(UiText.Get(ExcelSelectionModePlanner.StatusBarModeResourceKey(next)));
+        if (plan.EditStatusBarPlan is { } statusBarPlan)
+            ApplyFormulaEditStatusBarPlan(statusBarPlan);
+        else if (plan.StatusBarModeResourceKey is { } resourceKey)
+            SetStatusBarModeText(UiText.Get(resourceKey));
         return true;
     }
 
@@ -114,42 +88,37 @@ public partial class MainWindow
         CellAddress target,
         bool extendSelection)
     {
-        var range = FormulaRangeEntryPlanner.GetKeyboardDisjointRange(current, target, extendSelection);
-        if (_formulaRangeEntrySelectionMode != ExcelSelectionMode.Add)
-            return TryApplyFormulaRangeSelection(target, extendSelection);
-
         var editor = GetFormulaRangeEntryEditor();
         var formulaCell = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
-        if (editor is null || formulaCell is null)
-            return false;
-
-        if (_formulaReferenceStart is not { } previousStart ||
-            _formulaReferenceLength is not { } previousLength)
-        {
-            return TryApplyFormulaRangeSelection(range, range.Start, target);
-        }
-
-        if (!FormulaRangeEntryPlanner.TryAppendKeyboardRangeSelection(
+        FormulaRangeEditorSnapshot? snapshot = editor is not null && formulaCell is { } editCell
+            ? FormulaRangeEditorSnapshot.Capture(
                 editor.Text,
-                previousStart,
-                previousLength,
+                editor.CaretIndex,
+                editor.SelectionLength,
+                editCell,
+                _options.UseR1C1ReferenceStyle,
+                _workbook,
+                _formulaRangeEditingSession.PlanKeyboardSelectionRange(current, target, extendSelection))
+            : null;
+        if (!FormulaReferenceEditingController.TryApplyKeyboardSelection(
+                _formulaRangeEditingSession,
                 current,
                 target,
                 extendSelection,
-                formulaCell.Value,
-                _options.UseR1C1ReferenceStyle,
-                out var edit,
-                _workbook.GetSheet(range.Start.Sheet)?.Name,
-                _formulaSheetSpanEntryState))
+                snapshot,
+                TryApplyFormulaRangeSelection,
+                edit => ApplyFormulaEditorTextEdit(editor!, edit),
+                afterEditorEdit: null,
+                (range, anchor, cursor) => TryApplyFormulaRangeSelection(range, anchor, cursor),
+                out var result))
         {
             return false;
         }
 
-        ApplyFormulaEditorTextEdit(editor, edit.TextEdit);
+        if (result.Route != FormulaKeyboardSelectionRoute.DisjointReference)
+            return true;
 
-        _formulaReferenceStart = edit.ReferenceStart;
-        _formulaReferenceLength = edit.ReferenceLength;
-        _formulaRangeSelectionAnchor = range.Start;
+        var range = result.Range;
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SheetGrid.SelectedRanges = null;
@@ -160,7 +129,7 @@ public partial class MainWindow
         RefreshStatusBar();
         RefreshFormulaReferenceHighlights();
         SetFormulaEditStatusBarMode(pointMode: true);
-        editor.Focus();
+        editor!.Focus();
         return true;
     }
 
@@ -169,7 +138,7 @@ public partial class MainWindow
         if (editor is null || _formulaEditCell is null)
             return false;
 
-        return FormulaEditInteractionPlanner.IsRangeEntryActive(editor.Text, _formulaRangeEntryMode);
+        return _formulaRangeEditingSession.IsRangeEntryActive(editor.Text);
     }
 
     private bool IsFormulaReferenceHighlightActive(System.Windows.Controls.TextBox? editor)
@@ -177,7 +146,7 @@ public partial class MainWindow
         if (editor is null || _formulaEditCell is null)
             return false;
 
-        return FormulaEditInteractionPlanner.IsFormulaText(editor.Text);
+        return _formulaRangeEditingSession.IsFormulaText(editor.Text);
     }
 
     private System.Windows.Controls.TextBox? GetFormulaRangeEntryEditor()
@@ -201,15 +170,11 @@ public partial class MainWindow
 
     private bool TryApplyFormulaRangeSelection(CellAddress target, bool extendSelection)
     {
-        if (!extendSelection || _formulaRangeSelectionAnchor is null)
-            _formulaRangeSelectionAnchor = target;
-
-        var anchor = _formulaRangeSelectionAnchor.Value;
-        var range = new GridRange(
-            new CellAddress(_currentSheetId, Math.Min(anchor.Row, target.Row), Math.Min(anchor.Col, target.Col)),
-            new CellAddress(_currentSheetId, Math.Max(anchor.Row, target.Row), Math.Max(anchor.Col, target.Col)));
-
-        return TryApplyFormulaRangeSelection(range, anchor, target);
+        var selection = _formulaRangeEditingSession.PlanSelection(target, extendSelection);
+        return TryApplyFormulaRangeSelection(
+            selection.Range,
+            selection.Anchor,
+            selection.Cursor);
     }
 
     private bool TryApplyFormulaRangeSelection(
@@ -227,80 +192,48 @@ public partial class MainWindow
         if (formulaCell is null)
             return false;
 
-        var isExternalWorkbookSelection = selectedWorkbookName is not null;
-        var getPivotDataPlan = !isExternalWorkbookSelection &&
-            range.Start == range.End && _options.GenerateGetPivotData
-            ? GetPivotDataFormulaPlanner.Create(
-                _workbook,
-                _workbook.GetSheet(formulaCell.Value.Sheet)!,
-                _workbook.GetSheet(_currentSheetId)!,
-                range.Start)
-            : null;
-
         var referenceInsertionIndex = editor.SelectionLength > 0
             ? editor.SelectionStart
             : editor.CaretIndex;
-        var previousReferenceStart = _formulaReferenceStart;
-        var previousReferenceLength = _formulaReferenceLength;
-        if (previousReferenceStart is null && previousReferenceLength is null)
-        {
-            FormulaRangeEntryPlanner.TryGetReferenceSpanForPointEntry(
-                editor.Text,
-                previousReferenceStart,
-                previousReferenceLength,
-                referenceInsertionIndex,
-                editor.SelectionLength,
-                out var recoveredStart,
-                out var recoveredLength);
-            previousReferenceStart = recoveredLength > 0 ? recoveredStart : null;
-            previousReferenceLength = recoveredLength > 0 ? recoveredLength : null;
-        }
-
-        var applied = getPivotDataPlan is not null
-            ? FormulaRangeEntryPlanner.TryApplySelectionText(
-                editor.Text,
-                referenceInsertionIndex,
-                editor.SelectionLength,
-                previousReferenceStart,
-                previousReferenceLength,
-                getPivotDataPlan.FunctionCall,
-                out var edit)
-            : FormulaRangeEntryPlanner.TryApplyRangeSelection(
-                editor.Text,
-                referenceInsertionIndex,
-                editor.SelectionLength,
-                previousReferenceStart,
-                previousReferenceLength,
+        var snapshot = FormulaRangeEditorSnapshot.Capture(
+            editor.Text,
+            referenceInsertionIndex,
+            editor.SelectionLength,
+            formulaCell.Value,
+            _options.UseR1C1ReferenceStyle,
+            _workbook,
+            range,
+            selectedSheetNameOverride,
+            selectedWorkbookName);
+        if (!_formulaRangeEditingSession.TryApplyPointRangeSelectionEdit(
+                snapshot,
+                _workbook,
+                _currentSheetId,
                 range,
-                formulaCell.Value,
-                _options.UseR1C1ReferenceStyle,
-                out edit,
-                selectedSheetNameOverride ?? _workbook.GetSheet(range.Start.Sheet)?.Name,
-                _formulaSheetSpanEntryState,
-                selectedWorkbookName);
+                selectionAnchor,
+                selectionCursor,
+                _options.GenerateGetPivotData,
+                beforeEditorEdit: plan =>
+                {
+                    HideValidationDropdown();
+                    ClearCommentPreview();
 
-        if (!applied)
+                    if (plan.UpdateLocalSelection)
+                    {
+                        _selectionAnchor = selectionAnchor;
+                        _selectionCursor = selectionCursor;
+                        SheetGrid.SelectedRanges = null;
+                        SheetGrid.SelectedRange = range;
+                        CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
+                    }
+                    RefreshStatusBar();
+                },
+                applyEditorEdit: edit => ApplyFormulaEditorTextEdit(editor, edit),
+                afterEditorEdit: null,
+                out _))
         {
             return false;
         }
-
-        HideValidationDropdown();
-        ClearCommentPreview();
-
-        if (!isExternalWorkbookSelection)
-        {
-            _selectionAnchor = selectionAnchor;
-            _selectionCursor = selectionCursor;
-            SheetGrid.SelectedRanges = null;
-            SheetGrid.SelectedRange = range;
-            CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
-        }
-        RefreshStatusBar();
-
-        ApplyFormulaEditorTextEdit(editor, edit.TextEdit);
-
-        _formulaReferenceStart = edit.ReferenceStart;
-        _formulaReferenceLength = edit.ReferenceLength;
         RefreshFormulaReferenceHighlights();
         SetFormulaEditStatusBarMode(pointMode: true);
         editor.Focus();
@@ -315,84 +248,11 @@ public partial class MainWindow
     }
 
     private IReadOnlyList<FormulaReferenceHighlight> GetFormulaReferenceHighlights(string text) =>
-        FormulaReferenceHighlightPlanner.GetHighlights(
+        FormulaReferenceEditingController.BuildHighlights(
             text,
-            _currentSheetId,
-            sheetName => _workbook.GetSheet(sheetName)?.Id,
-            ResolveStructuredFormulaReference,
-            sheetId =>
-            {
-                for (var index = 0; index < _workbook.Sheets.Count; index++)
-                {
-                    if (_workbook.Sheets[index].Id == sheetId)
-                        return index;
-                }
-
-                return null;
-            });
-
-    internal bool RaiseFormulaReferenceGripDragForTest(int highlightIndex, CellAddress target)
-    {
-        var editor = GetFormulaReferenceHighlightEditor();
-        var highlights = editor is null
-            ? []
-            : GetFormulaReferenceHighlights(editor.Text);
-        if (editor is null || highlightIndex < 0 || highlightIndex >= highlights.Count ||
-            highlights[highlightIndex].Range is not { } originalRange ||
-            originalRange.Start.Sheet != target.Sheet)
-        {
-            return false;
-        }
-
-        var newRange = FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, target);
-        ApplyFormulaReferenceResize(editor, highlights[highlightIndex], newRange);
-        RefreshFormulaReferenceHighlights();
-        return true;
-    }
-
-    private GridRange? ResolveStructuredFormulaReference(string tableName, string selector)
-    {
-        var currentSheet = _workbook.GetSheet(_currentSheetId);
-        var currentAddress = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
-        var trimmedSelector = selector.Trim();
-
-        if (trimmedSelector.StartsWith('@'))
-        {
-            var columnSelector = trimmedSelector.Length > 1 ? trimmedSelector[1..].Trim() : "";
-
-            // The bare '@' shorthand (Table1[@] / [@], no column name at all) means "this entire
-            // row" -- same as Table1[#This Row] -- and must highlight the whole-row range, not a
-            // single-cell column lookup. Route it through Resolve's own "#This Row" handling
-            // (mirrors FormulaEvaluator.References.EvaluateCurrentRowReference's evaluation-side
-            // fix for the same shape) instead of falling into ResolveCurrentRowColumn below, which
-            // has no column name to search for and always returned null (no highlight box) for it.
-            if (string.IsNullOrWhiteSpace(columnSelector))
-            {
-                return StructuredReferenceResolver.Resolve(
-                    _workbook,
-                    currentSheet,
-                    tableName,
-                    "#This Row",
-                    currentAddress);
-            }
-
-            var address = StructuredReferenceResolver.ResolveCurrentRowColumn(
-                _workbook,
-                currentSheet,
-                currentAddress,
-                string.IsNullOrWhiteSpace(tableName) ? null : tableName,
-                columnSelector);
-
-            return address is null ? null : new GridRange(address.Value, address.Value);
-        }
-
-        return StructuredReferenceResolver.Resolve(
             _workbook,
-            currentSheet,
-            tableName,
-            trimmedSelector,
-            currentAddress);
-    }
+            _currentSheetId,
+            _formulaEditCell ?? SheetGrid.SelectedRange?.Start);
 
     private void RefreshFormulaReferenceHighlights()
     {
@@ -580,24 +440,25 @@ public partial class MainWindow
         if (editor is null)
             return;
 
-        _formulaReferenceDragHighlight = highlight;
+        if (!_formulaRangeEditingSession.TryBeginReferenceDrag(highlight))
+            return;
+
         _formulaReferenceDragEditor = editor;
-        _formulaReferenceDragActive = true;
         grip.CaptureMouse();
         e.Handled = true;
     }
 
     private void FormulaReferenceGrip_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (!_formulaReferenceDragActive ||
+        if (!_formulaRangeEditingSession.IsReferenceDragActive ||
             sender is not System.Windows.Shapes.Rectangle grip ||
-            _formulaReferenceDragHighlight?.Range is not { } originalRange ||
             SheetGrid.Viewport is null)
             return;
 
-        if (TryResolveDragTargetCell(e.GetPosition(EditOverlay), originalRange.Start.Sheet, out var targetCell))
+        if (_formulaRangeEditingSession.ReferenceDragHighlight?.Range is { } originalRange &&
+            TryResolveDragTargetCell(e.GetPosition(EditOverlay), originalRange.Start.Sheet, out var targetCell) &&
+            _formulaRangeEditingSession.PlanActiveReferenceDrag(targetCell) is { } previewRange)
         {
-            var previewRange = FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, targetCell);
             var rect = FreeX.App.UI.GridView.CalculateVisibleSelectionRect(
                 SheetGrid.Viewport, previewRange, SheetGrid.ActualRowHeaderWidth, FreeX.App.UI.GridView.ColHeaderHeight);
             if (rect is { } previewRect)
@@ -621,15 +482,14 @@ public partial class MainWindow
 
     private void FormulaReferenceGrip_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (!_formulaReferenceDragActive || sender is not System.Windows.Shapes.Rectangle grip)
+        if (!_formulaRangeEditingSession.IsReferenceDragActive ||
+            sender is not System.Windows.Shapes.Rectangle grip)
             return;
 
         grip.ReleaseMouseCapture();
-        _formulaReferenceDragActive = false;
 
-        var highlight = _formulaReferenceDragHighlight;
+        var highlight = _formulaRangeEditingSession.EndReferenceDrag();
         var editor = _formulaReferenceDragEditor;
-        _formulaReferenceDragHighlight = null;
         _formulaReferenceDragEditor = null;
 
         if (highlight?.Range is not { } originalRange || editor is null)
@@ -637,8 +497,8 @@ public partial class MainWindow
 
         if (TryResolveDragTargetCell(e.GetPosition(EditOverlay), originalRange.Start.Sheet, out var targetCell))
         {
-            var newRange = FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, targetCell);
-            ApplyFormulaReferenceResize(editor, highlight!, newRange);
+            if (_formulaRangeEditingSession.PlanReferenceDrag(highlight, targetCell) is { } newRange)
+                ApplyFormulaReferenceResize(editor, highlight, newRange);
         }
 
         // Whether or not the drag actually changed anything, rebuild the overlays from the (possibly
@@ -653,14 +513,18 @@ public partial class MainWindow
         FormulaReferenceHighlight highlight,
         GridRange newRange)
     {
-        var (newText, caretIndex) = FormulaReferenceDragResizePlanner.ApplyResize(
-            editor.Text, highlight.TextStart, highlight.TextLength, newRange, _options.UseR1C1ReferenceStyle);
+        var edit = _formulaRangeEditingSession.PlanReferenceResizeEdit(
+            editor.Text,
+            highlight,
+            newRange,
+            _options.UseR1C1ReferenceStyle);
 
-        ApplyTextEdit(editor, new ExcelTextEdit(newText, caretIndex, 0));
+        ApplyTextEdit(editor, edit);
+        _formulaRangeEditingSession.ApplyReferenceResizeEdit(highlight, edit);
         if (ReferenceEquals(editor, _inlineEditor))
-            FormulaBar.Text = newText;
+            FormulaBar.Text = edit.Text;
         else if (_inlineEditor?.IsVisible == true)
-            _inlineEditor.Text = newText;
+            _inlineEditor.Text = edit.Text;
     }
 
     /// <summary>

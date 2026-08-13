@@ -19,7 +19,7 @@ public sealed class PictureCoreCommandParityTests
     [Fact]
     public void AvaloniaRibbon_ExposesCorePictureCommandsInWpfEquivalentGroups()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
 
         definition.FindTab("picture-format")!.FindGroup("picture-adjust")!.Controls
             .Select(CommandId)
@@ -45,7 +45,7 @@ public sealed class PictureCoreCommandParityTests
             {
                 OpenImageAltTextDialog = () => editor.SetSelectedFloatingAltText("  Updated description  "),
             };
-            var command = Stateful(FreeWRibbon.BuildRegistry(editor, callbacks), "freew.image-alt-text");
+            var command = Stateful(FreeWAvaloniaRibbonCommands.Build(editor, callbacks), "freew.image-alt-text");
 
             command.GetState().IsEnabled.Should().BeTrue();
             command.Execute(RibbonCommandContext.Empty);
@@ -54,7 +54,7 @@ public sealed class PictureCoreCommandParityTests
             image.AltText.Should().Be("Original description");
 
             var cancelCommand = Stateful(
-                FreeWRibbon.BuildRegistry(editor, NoopCallbacks() with { OpenImageAltTextDialog = () => { } }),
+                FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks() with { OpenImageAltTextDialog = () => { } }),
                 "freew.image-alt-text");
             cancelCommand.Execute(RibbonCommandContext.Empty);
             image.AltText.Should().Be("Original description");
@@ -72,7 +72,7 @@ public sealed class PictureCoreCommandParityTests
             {
                 OpenImageBorderDialog = () => editor.SetSelectedImageBorder("AABBCC", 2.25, "dot"),
             };
-            var command = Stateful(FreeWRibbon.BuildRegistry(editor, callbacks), "freew.image-border");
+            var command = Stateful(FreeWAvaloniaRibbonCommands.Build(editor, callbacks), "freew.image-border");
 
             command.GetState().IsEnabled.Should().BeTrue();
             command.Execute(RibbonCommandContext.Empty);
@@ -94,7 +94,7 @@ public sealed class PictureCoreCommandParityTests
             {
                 OpenImageSizeDialog = () => editor.SetSelectedImageSize(210, 105),
             };
-            var command = Stateful(FreeWRibbon.BuildRegistry(editor, callbacks), "freew.image-size");
+            var command = Stateful(FreeWAvaloniaRibbonCommands.Build(editor, callbacks), "freew.image-size");
 
             command.GetState().IsEnabled.Should().BeTrue();
             command.Execute(RibbonCommandContext.Empty);
@@ -110,7 +110,7 @@ public sealed class PictureCoreCommandParityTests
         await Session.Dispatch(() =>
         {
             var (editor, image) = SelectedImage();
-            var command = Stateful(FreeWRibbon.BuildRegistry(editor, NoopCallbacks()), "freew.image-reset");
+            var command = Stateful(FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks()), "freew.image-reset");
 
             command.GetState().IsEnabled.Should().BeTrue();
             command.Execute(RibbonCommandContext.Empty);
@@ -135,7 +135,7 @@ public sealed class PictureCoreCommandParityTests
         await Session.Dispatch(() =>
         {
             var (editor, image) = SelectedImage();
-            var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+            var registry = FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks());
 
             var brightness = Stateful(registry, "freew.image-brightness-plus40");
             brightness.GetState().IsEnabled.Should().BeTrue();
@@ -164,7 +164,7 @@ public sealed class PictureCoreCommandParityTests
         await Session.Dispatch(() =>
         {
             var (editor, _) = SelectedImage();
-            var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+            var registry = FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks());
             var ids = new[]
             {
                 "freew.image-brightness-plus20", "freew.image-brightness-plus40",
@@ -702,7 +702,7 @@ public sealed class PictureCoreCommandParityTests
         await Session.Dispatch(() =>
         {
             var (editor, image) = SelectedImage();
-            var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+            var registry = FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks());
 
             foreach (var commandId in new[]
                      {
@@ -747,7 +747,7 @@ public sealed class PictureCoreCommandParityTests
                 OpenImageBorderDialog = () => { },
                 OpenImageSizeDialog = () => { },
             };
-            var registry = FreeWRibbon.BuildRegistry(editor, callbacks);
+            var registry = FreeWAvaloniaRibbonCommands.Build(editor, callbacks);
 
             foreach (var id in new[]
                      {
@@ -927,7 +927,7 @@ public sealed class PictureCoreCommandParityTests
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { },
             Save: () => { },

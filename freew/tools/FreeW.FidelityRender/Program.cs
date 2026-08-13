@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Free.Shared.Drawing;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
@@ -1569,195 +1570,15 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
     var artInset = Math.Min(
         (float)PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
         Math.Min(width, height) / 4f);
-    if (PageBorderArtVisualPlanner.TryBuildApplesFrame(
+    if (PageBorderArtVisualPlanner.TryBuildFramePlan(
             border.ArtId,
             border.WidthPt,
             width,
             height,
             artInset,
-            out var appleMotifs))
+            out var artPlan))
     {
-        foreach (var motif in appleMotifs)
-            DrawSoftwareApple(canvas, motif);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var squareMotifs))
-    {
-        foreach (var motif in squareMotifs)
-            DrawSoftwareShadowedSquare(canvas, motif);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var trackMotifs))
-    {
-        foreach (var motif in trackMotifs)
-            DrawSoftwareShorebirdTrack(canvas, motif);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildBatsFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var batMotifs))
-    {
-        foreach (var motif in batMotifs)
-            DrawSoftwareBat(canvas, motif);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var muffinPlan))
-    {
-        DrawSoftwareFilledShapePlan(canvas, muffinPlan);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var cakePlan))
-    {
-        DrawSoftwareFilledShapePlan(canvas, cakePlan);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var birdPlan))
-    {
-        DrawSoftwareFilledShapePlan(canvas, birdPlan);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var eggPlan))
-    {
-        DrawSoftwareFilledShapePlan(canvas, eggPlan);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildCandyCornFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var candyPlan))
-    {
-        DrawSoftwareFilledShapePlan(canvas, candyPlan);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildIceCreamConesFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var conePlan))
-    {
-        DrawSoftwareFilledShapePlan(canvas, conePlan);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildPeopleFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var peoplePlan))
-    {
-        DrawSoftwareFilledShapePlan(canvas, peoplePlan);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var rosePlan))
-    {
-        DrawSoftwareFilledShapePlan(canvas, rosePlan);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildVineFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var vinePlan))
-    {
-        DrawSoftwareFilledShapePlan(canvas, vinePlan);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildPapyrusFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var papyrusPlan))
-    {
-        DrawSoftwareFilledShapePlan(canvas, papyrusPlan);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var ribbonPlan))
-    {
-        DrawSoftwareFilledShapePlan(canvas, ribbonPlan);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var archPlan))
-    {
-        DrawSoftwareDecorativeArch(canvas, archPlan);
-        return;
-    }
-    if (PageBorderArtVisualPlanner.TryBuildHandmade2Frame(
-            border.ArtId,
-            border.WidthPt,
-            width,
-            height,
-            artInset,
-            out var handmadePlan))
-    {
-        DrawSoftwareDecorativeArch(canvas, handmadePlan);
+        DrawSoftwarePageBorderArtFramePlan(canvas, artPlan);
         return;
     }
 
@@ -1779,80 +1600,14 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
         Math.Max(inset, height - inset)), borderPaint);
 }
 
-static void DrawSoftwareShadowedSquare(SKCanvas canvas, PageBorderShadowedSquareMotif motif)
-{
-    var x = (float)motif.Xdip;
-    var y = (float)motif.Ydip;
-    var size = (float)motif.SizeDip;
-    var color = new SKColor(0, 0, PageBorderArtVisualPlanner.ShadowedSquareBlue);
-    using var fill = new SKPaint { Color = color, IsAntialias = true, Style = SKPaintStyle.Fill };
-    canvas.DrawRect(x, y, x + size - 4f, y + size - 4f, fill);
-
-    var faceInset = (float)PageBorderArtVisualPlanner.ShadowedSquareFaceInsetDip;
-    var faceSize = Math.Max(0, size - 6f);
-    var faceX = x + faceInset;
-    var faceY = y + faceInset;
-    using var faceFill = new SKPaint { Color = SKColors.White, IsAntialias = true, Style = SKPaintStyle.Fill };
-    canvas.DrawRect(faceX, faceY, faceX + faceSize, faceY + faceSize, faceFill);
-    var outlineInset = (float)PageBorderArtVisualPlanner.ShadowedSquareOutlineInsetDip;
-    var outlineSize = Math.Max(0, size - 4f);
-    var outlineX = x + outlineInset;
-    var outlineY = y + outlineInset;
-    canvas.DrawRect(outlineX, outlineY, outlineX + outlineSize, outlineY + 1, fill);
-    canvas.DrawRect(outlineX, outlineY + outlineSize - 1, outlineX + outlineSize, outlineY + outlineSize, fill);
-    canvas.DrawRect(outlineX, outlineY, outlineX + 1, outlineY + outlineSize, fill);
-    canvas.DrawRect(outlineX + outlineSize - 1, outlineY, outlineX + outlineSize, outlineY + outlineSize, fill);
-}
-
-static void DrawSoftwareShorebirdTrack(SKCanvas canvas, PageBorderShorebirdTrackMotif motif)
-{
-    using var paint = new SKPaint
-    {
-        Color = SKColors.Black,
-        IsAntialias = true,
-        Style = SKPaintStyle.Stroke,
-        StrokeWidth = (float)PageBorderArtVisualPlanner.ShorebirdTrackStrokeWidthDip,
-        StrokeCap = SKStrokeCap.Butt,
-    };
-    foreach (var segment in PageBorderArtVisualPlanner.BuildShorebirdTrackSegments(motif))
-    {
-        canvas.DrawLine(
-            (float)segment.X1Dip,
-            (float)segment.Y1Dip,
-            (float)segment.X2Dip,
-            (float)segment.Y2Dip,
-            paint);
-    }
-}
-
-static void DrawSoftwareBat(SKCanvas canvas, PageBorderBatMotif motif)
-{
-    var points = PageBorderArtVisualPlanner.BuildBatPolygon(motif);
-    if (points.Count == 0)
-        return;
-
-    using var path = new SKPath();
-    path.MoveTo((float)points[0].XDip, (float)points[0].YDip);
-    foreach (var point in points.Skip(1))
-        path.LineTo((float)point.XDip, (float)point.YDip);
-    path.Close();
-    using var paint = new SKPaint
-    {
-        Color = SKColors.Black,
-        IsAntialias = true,
-        Style = SKPaintStyle.Fill,
-    };
-    canvas.DrawPath(path, paint);
-}
-
-static void DrawSoftwareFilledShapePlan(SKCanvas canvas, PageBorderArtFilledShapePlan plan)
+static void DrawSoftwarePageBorderArtFramePlan(SKCanvas canvas, PageBorderArtFramePlan plan)
 {
     foreach (var fill in plan.Fills)
     {
         using var paint = new SKPaint
         {
             Color = new SKColor(fill.Red, fill.Green, fill.Blue),
-            IsAntialias = false,
+            IsAntialias = fill.Antialias,
             Style = SKPaintStyle.Fill,
         };
         canvas.DrawRect(
@@ -1880,75 +1635,69 @@ static void DrawSoftwareFilledShapePlan(SKCanvas canvas, PageBorderArtFilledShap
         };
         canvas.DrawPath(path, paint);
     }
-}
 
-static void DrawSoftwareDecorativeArch(SKCanvas canvas, PageBorderDecorativeArchPlan plan)
-{
-    foreach (var fill in plan.Fills)
+    foreach (var line in plan.Lines)
     {
         using var paint = new SKPaint
         {
-            Color = new SKColor(fill.Red, fill.Green, fill.Blue),
-            IsAntialias = false,
-            Style = SKPaintStyle.Fill,
+            Color = SkiaColor(line.Color),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = (float)line.WidthDip,
+            StrokeCap = line.RoundCaps ? SKStrokeCap.Round : SKStrokeCap.Butt,
         };
-        canvas.DrawRect(
-            (float)fill.Xdip,
-            (float)fill.Ydip,
-            (float)(fill.Xdip + fill.WidthDip),
-            (float)(fill.Ydip + fill.HeightDip),
+        canvas.DrawLine(
+            (float)line.Segment.X1Dip,
+            (float)line.Segment.Y1Dip,
+            (float)line.Segment.X2Dip,
+            (float)line.Segment.Y2Dip,
             paint);
     }
 
-    foreach (var stroke in plan.Strokes)
+    foreach (var figure in plan.CubicFigures)
     {
         using var path = new SKPath();
-        path.MoveTo((float)stroke.StartXDip, (float)stroke.StartYDip);
-        path.CubicTo(
-            (float)stroke.Control1XDip,
-            (float)stroke.Control1YDip,
-            (float)stroke.Control2XDip,
-            (float)stroke.Control2YDip,
-            (float)stroke.EndXDip,
-            (float)stroke.EndYDip);
-        using var paint = new SKPaint
+        path.MoveTo((float)figure.Start.XDip, (float)figure.Start.YDip);
+        foreach (var segment in figure.Segments)
         {
-            Color = new SKColor(stroke.Red, stroke.Green, stroke.Blue),
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            StrokeWidth = (float)stroke.WidthDip,
-            StrokeCap = SKStrokeCap.Butt,
-        };
-        canvas.DrawPath(path, paint);
+            path.CubicTo(
+                (float)segment.Control1.XDip,
+                (float)segment.Control1.YDip,
+                (float)segment.Control2.XDip,
+                (float)segment.Control2.YDip,
+                (float)segment.End.XDip,
+                (float)segment.End.YDip);
+        }
+        if (figure.IsClosed)
+            path.Close();
+
+        if (figure.Fill is { } fill)
+        {
+            using var paint = new SKPaint
+            {
+                Color = SkiaColor(fill),
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill,
+            };
+            canvas.DrawPath(path, paint);
+        }
+
+        if (figure.Stroke is { } stroke)
+        {
+            using var paint = new SKPaint
+            {
+                Color = SkiaColor(stroke),
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = (float)figure.StrokeWidthDip,
+                StrokeCap = figure.RoundCaps ? SKStrokeCap.Round : SKStrokeCap.Butt,
+            };
+            canvas.DrawPath(path, paint);
+        }
     }
-}
 
-static void DrawSoftwareApple(SKCanvas canvas, PageBorderAppleMotif motif)
-{
-    var x = (float)motif.Xdip;
-    var y = (float)motif.Ydip;
-    var size = (float)motif.SizeDip;
-    using var body = new SKPath();
-    body.MoveTo(x + size * .50f, y + size * .22f);
-    body.CubicTo(x + size * .35f, y + size * .04f, x + size * .04f, y + size * .10f, x + size * .03f, y + size * .51f);
-    body.CubicTo(x + size * .02f, y + size * .82f, x + size * .24f, y + size, x + size * .50f, y + size * .91f);
-    body.CubicTo(x + size * .76f, y + size, x + size * .98f, y + size * .82f, x + size * .97f, y + size * .51f);
-    body.CubicTo(x + size * .96f, y + size * .10f, x + size * .65f, y + size * .04f, x + size * .50f, y + size * .22f);
-    body.Close();
-    using var fill = new SKPaint { Color = new SKColor(PageBorderArtVisualPlanner.AppleFillRed, 0, 0), IsAntialias = true, Style = SKPaintStyle.Fill };
-    canvas.DrawPath(body, fill);
-
-    using var stem = new SKPath();
-    stem.MoveTo(x + size * .50f, y + size * .30f);
-    stem.CubicTo(x + size * .56f, y + size * .24f, x + size * .61f, y + size * .10f, x + size * .62f, y + size * .03f);
-    using var stemPaint = new SKPaint { Color = new SKColor(PageBorderArtVisualPlanner.AppleStemRed, 0, 0), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.35f * size / 32f, StrokeCap = SKStrokeCap.Round };
-    canvas.DrawPath(stem, stemPaint);
-
-    using var highlight = new SKPath();
-    highlight.MoveTo(x + size * .25f, y + size * .34f);
-    highlight.CubicTo(x + size * .15f, y + size * .47f, x + size * .15f, y + size * .70f, x + size * .22f, y + size * .78f);
-    using var highlightPaint = new SKPaint { Color = new SKColor(PageBorderArtVisualPlanner.AppleHighlightRed, PageBorderArtVisualPlanner.AppleHighlightGreen, PageBorderArtVisualPlanner.AppleHighlightBlue), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 2f * size / 32f, StrokeCap = SKStrokeCap.Round };
-    canvas.DrawPath(highlight, highlightPaint);
+    static SKColor SkiaColor(PageBorderArtColor color) =>
+        new(color.Red, color.Green, color.Blue);
 }
 
 static void DrawSoftwareWatermark(SKCanvas canvas, PageSettings page, int width, int height)
@@ -2235,20 +1984,9 @@ static FreeWVisualPixelStats ComputeSkiaPixelStats(SKBitmap bitmap, string backg
 
 static SKColor ParseSkiaColor(string? hex, SKColor fallback)
 {
-    if (string.IsNullOrWhiteSpace(hex))
-        return fallback;
-
-    var value = hex.Trim().TrimStart('#');
-    if (value.Length == 6
-        && uint.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
-    {
-        return new SKColor(
-            (byte)((rgb >> 16) & 0xFF),
-            (byte)((rgb >> 8) & 0xFF),
-            (byte)(rgb & 0xFF));
-    }
-
-    return fallback;
+    return DrawingMlRgbColor.TryParseHexRgb(hex, out var color)
+        ? new SKColor(color.R, color.G, color.B)
+        : fallback;
 }
 
 static RenderTargetBitmap RenderWatermarkPage(WatermarkOptions options, Color pageColor, int pixW, int pixH)
@@ -3425,7 +3163,4 @@ static FreeWVisualPixelStats ComputeWpfPixelStats(RenderTargetBitmap bmp, string
 }
 
 static Color ParseHexColor(string hex, Color fallback)
-{
-    try { return (Color)System.Windows.Media.ColorConverter.ConvertFromString(hex); }
-    catch { return fallback; }
-}
+    => WpfRgbColorAdapter.ParseDrawingMlOrDefault(hex, fallback);

@@ -30,7 +30,7 @@ public sealed partial class SelectDataSourceDialog : Window
     private ChartBlankDisplayMode _blankDisplayMode;
     private bool _showDataInHiddenRowsAndColumns;
 
-    public SelectDataSourceDialogResult Result { get; private set; }
+    public SelectDataSourceResult Result { get; private set; }
     public SelectDataSourceRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
     public SelectDataSourceDialog(
@@ -48,7 +48,7 @@ public sealed partial class SelectDataSourceDialog : Window
         _resolveSheetId = resolveSheetId ?? (_ => null);
         _blankDisplayMode = blankDisplayMode;
         _showDataInHiddenRowsAndColumns = showDataInHiddenRowsAndColumns;
-        Result = CreateResult(sourceRangeText, firstColumnIsCategories, switchRowColumn);
+        Result = SelectDataSourcePlanner.CreateResult(sourceRangeText, firstColumnIsCategories, switchRowColumn);
         Title = UiText.Get(SelectDataSourcePlanner.DialogTitleResourceKey);
         Width = 620;
         Height = 500;
@@ -117,7 +117,7 @@ public sealed partial class SelectDataSourceDialog : Window
             if (!ValidateInputs())
                 return;
 
-            Result = CreateResult(
+            Result = SelectDataSourcePlanner.CreateResult(
                 _rangeBox.Text,
                 _firstColumnCategoriesBox.IsChecked == true,
                 _switchRowColumnBox.IsChecked == true) with
@@ -143,8 +143,9 @@ public sealed partial class SelectDataSourceDialog : Window
             automationName,
             requestSelection: request =>
             {
-                RangeSelectionRequest = CreateRangeSelectionRequest(request.CurrentText);
-                _requestRangeSelection?.Invoke(RangeSelectionRequest);
+                var selectionRequest = SelectDataSourcePlanner.CreateRangeSelectionRequest(request.CurrentText);
+                RangeSelectionRequest = selectionRequest;
+                _requestRangeSelection?.Invoke(selectionRequest);
                 FocusRangeSelectionInput(request.Target);
             });
 

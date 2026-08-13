@@ -8,24 +8,20 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     [Fact]
     public void InsertDeleteContextMenuActionsRouteToExistingWorksheetMutationCommands()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
 
-        source.Should().Contain("case WorksheetContextMenuAction.InsertCells:");
-        source.Should().Contain("InsertCellsMenuItem_Click(this, new RoutedEventArgs());");
-        source.Should().Contain("case WorksheetContextMenuAction.InsertRowAbove:");
-        source.Should().Contain("InsertRows(address.Row);");
-        source.Should().Contain("case WorksheetContextMenuAction.InsertRowBelow:");
-        source.Should().Contain("InsertRows(address.Row + 1);");
-        source.Should().Contain("case WorksheetContextMenuAction.InsertColumnLeft:");
-        source.Should().Contain("InsertColumns(address.Col);");
-        source.Should().Contain("case WorksheetContextMenuAction.InsertColumnRight:");
-        source.Should().Contain("InsertColumns(address.Col + 1);");
-        source.Should().Contain("case WorksheetContextMenuAction.DeleteCells:");
-        source.Should().Contain("DeleteCellsMenuItem_Click(this, new RoutedEventArgs());");
-        source.Should().Contain("case WorksheetContextMenuAction.DeleteRows:");
-        source.Should().Contain("DeleteSelectedRows();");
-        source.Should().Contain("case WorksheetContextMenuAction.DeleteColumns:");
-        source.Should().Contain("DeleteSelectedColumns();");
+        source.Should().Contain("InsertCells = Handled(");
+        source.Should().Contain("InsertCellsMenuItem_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("InsertRow = Handled<uint>");
+        source.Should().Contain("InsertRows(index)");
+        source.Should().Contain("InsertColumn = Handled<uint>");
+        source.Should().Contain("InsertColumns(index)");
+        source.Should().Contain("DeleteCells = Handled(");
+        source.Should().Contain("DeleteCellsMenuItem_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("DeleteRows = Handled(");
+        source.Should().Contain("DeleteSelectedRows()");
+        source.Should().Contain("DeleteColumns = Handled(");
+        source.Should().Contain("DeleteSelectedColumns()");
     }
 
     [Fact]
@@ -111,10 +107,14 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     [Fact]
     public void ContextMenuStateSkipsValidationLookupWhenSheetHasNoValidationRules()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        hostSource.Should().Contain("WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address)");
+
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Services", "Ribbon", "WorksheetContextMenuPlanner.cs"));
 
         var stateMethod = source[
-            source.IndexOf("private WorksheetContextMenuState GetWorksheetContextMenuState", StringComparison.Ordinal)..];
+            source.IndexOf("public static WorksheetContextMenuState ResolveWorksheetState", StringComparison.Ordinal)..];
 
         stateMethod.Should().Contain("sheet.DataValidations.Count > 0 &&");
         stateMethod.IndexOf("sheet.DataValidations.Count > 0 &&", StringComparison.Ordinal)
@@ -138,23 +138,27 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     [Fact]
     public void PivotTableContextMenuStateUsesClickedCell()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        hostSource.Should().Contain("WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address)");
+
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Services", "Ribbon", "WorksheetContextMenuPlanner.cs"));
 
         var stateMethod = source[
-            source.IndexOf("private WorksheetContextMenuState GetWorksheetContextMenuState", StringComparison.Ordinal)..];
+            source.IndexOf("public static WorksheetContextMenuState ResolveWorksheetState", StringComparison.Ordinal)..];
 
         stateMethod.Should().Contain("PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null");
-        stateMethod.Should().Contain("HasPivotTableTarget: hasPivotTableTarget");
+        stateMethod.Should().Contain("HasPivotTableTarget: PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null");
     }
 
     [Fact]
     public void PivotTableOptionsContextMenuActionRoutesToClickedPivotDialog()
     {
-        var contextSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var contextSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
         var designSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
 
-        contextSource.Should().Contain("case WorksheetContextMenuAction.PivotTableOptions:");
-        contextSource.Should().Contain("ShowPivotTableOptionsDialog(address);");
+        contextSource.Should().Contain("PivotTableOptions = Handled<CellAddress>");
+        contextSource.Should().Contain("ShowPivotTableOptionsDialog(address)");
         designSource.Should().Contain("private void ShowPivotTableOptionsDialog(CellAddress address)");
         designSource.Should().Contain("PivotUiPlanner.FindPivotTableContainingCell(sheet, address)");
         designSource.Should().Contain("private void ShowPivotTableOptionsDialog(PivotTableModel pivotTable)");

@@ -11,7 +11,27 @@ public sealed record SlidePrintCommentCalloutPlan(
     double CardWidth,
     double CardHeight,
     string Author,
-    string Body);
+    string Body)
+{
+    public required SlidePrintCommentVisualPlan Visual { get; init; }
+}
+
+public readonly record struct SlidePrintCommentTextPlan(
+    string Text,
+    LayoutRect Bounds,
+    bool IsBold,
+    double FontSize);
+
+public readonly record struct SlidePrintCommentVisualPlan(
+    LayoutPoint AnchorCenter,
+    double MarkerRadius,
+    LayoutRect CardBounds,
+    SrgbColor FillColor,
+    SrgbColor BorderColor,
+    double BorderThickness,
+    SrgbColor MarkerColor,
+    SlidePrintCommentTextPlan Author,
+    SlidePrintCommentTextPlan Body);
 
 public static class SlidePrintMarkupPlanner
 {
@@ -40,6 +60,7 @@ public static class SlidePrintMarkupPlanner
                 ? (string.IsNullOrWhiteSpace(comment.Initials) ? "Comment" : comment.Initials.Trim())
                 : Trim(comment.Author, 24);
 
+            var body = Trim(comment.Text, 82);
             result.Add(new SlidePrintCommentCalloutPlan(
                 anchorX,
                 anchorY,
@@ -48,7 +69,27 @@ public static class SlidePrintMarkupPlanner
                 cardWidth,
                 cardHeight,
                 author,
-                Trim(comment.Text, 82)));
+                body)
+            {
+                Visual = new SlidePrintCommentVisualPlan(
+                    new LayoutPoint(anchorX, anchorY),
+                    MarkerRadius: 3,
+                    new LayoutRect(cardX, cardY, cardWidth, cardHeight),
+                    new SrgbColor(255, 249, 196),
+                    new SrgbColor(192, 160, 0),
+                    BorderThickness: 1,
+                    new SrgbColor(220, 40, 40),
+                    new SlidePrintCommentTextPlan(
+                        author,
+                        new LayoutRect(cardX + 6, cardY + 3, cardWidth - 12, 9),
+                        IsBold: true,
+                        FontSize: 8),
+                    new SlidePrintCommentTextPlan(
+                        body,
+                        new LayoutRect(cardX + 6, cardY + 13, cardWidth - 12, 11),
+                        IsBold: false,
+                        FontSize: 7)),
+            });
         }
 
         return result;

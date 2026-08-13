@@ -1,0 +1,28 @@
+using FluentAssertions;
+
+namespace FreeX.App.Host.Tests;
+
+public sealed class WpfSaveExecutionOwnershipSourceTests
+{
+    [Fact]
+    public void SaveRenderer_DelegatesPortableExecutionAndRetainsNativeGateAndWriter()
+    {
+        var source = WorkspaceFileLocator.ReadAllText(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.Backstage.cs");
+
+        source.Should().Contain("_fileWorkflow.SaveTargetAsync(");
+        source.Should().Contain("new WorkbookSaveWorkflowRequest(");
+        source.Should().NotContain("WorkbookSaveExecutionCoordinator.Begin(");
+        source.Should().NotContain("generationAtSaveStart");
+        source.Should().NotContain("SaveCompletionPlanner.Plan(");
+        source.Should().NotContain("catch (WorkbookExternallyModifiedException)");
+
+        source.Should().Contain("AdjustSaveGate(acquire: true)");
+        source.Should().Contain("BroadcastSaveInProgress(this, inProgress: true)");
+        source.Should().Contain("var saveService = new WorkbookSaveService();");
+        source.Should().Contain("SaveAsync: invocation => saveService.SaveAsync(");
+        source.Should().Contain("ConfirmExternallyModifiedFileOverwrite");
+    }
+}

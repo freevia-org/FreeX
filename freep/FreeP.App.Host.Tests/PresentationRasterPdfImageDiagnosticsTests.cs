@@ -6,7 +6,7 @@ namespace FreeP.App.Host.Tests;
 /// <summary>
 /// R133 remediation: <see cref="PresentationNotesPagePdfImageDiagnosticsTests"/> proved the shared
 /// writer's imageDiagnostics sink is wired, but only for the *vector* Notes-Page PDF path. File &gt;
-/// Export to PDF (<see cref="FileCommands.ExportPdf"/>) -- the primary, most-used raster export
+/// Export to PDF (<see cref="PresentationFileCommandSession.ExportPdfAsync"/>) -- the primary raster export
 /// command, on both shells -- rasterizes each slide first (via
 /// <see cref="WpfPresentationSlideImageRenderer"/> + <c>SlideCanvas</c>), then hands the shared writer
 /// an already-composited PNG. That PNG is one the host itself just encoded, so it is always
@@ -14,8 +14,8 @@ namespace FreeP.App.Host.Tests;
 /// never observe a picture dropped one layer further down, inside the slide composite itself (an
 /// undecodable embedded picture used to be a bare <c>catch { return; }</c> in
 /// <c>FreeP.App.Rendering.Wpf.SlideCanvas.RenderPicture</c> with no way to report it). This test drives
-/// the exact composition <see cref="FileCommands.ExportPdf"/> uses --
-/// <see cref="FileCommands.ExportPdfRasterBytes"/>, not a re-implementation -- to prove the raster
+/// the exact shared composition <see cref="PresentationFileCommandSession.ExportPdfAsync"/> uses --
+/// <see cref="PresentationFilePdfExportExecutor"/>, not a re-implementation -- to prove the raster
 /// path itself surfaces the loss instead of the export silently looking clean.
 /// </summary>
 public class PresentationRasterPdfImageDiagnosticsTests
@@ -42,17 +42,14 @@ public class PresentationRasterPdfImageDiagnosticsTests
     [StaFact]
     public void ExportPdfRasterBytes_SurfacesImageDiagnostics_WhenSlidePictureBytesAreUndecodable()
     {
-        // Calls FileCommands' own internal raster export helper directly -- the exact code
-        // ExportPdf runs (renderer, ambient SlideImageRenderDiagnostics capture, and writer all
-        // together) -- so this proves the production raster wiring reaches the fix, not just the
-        // shared writer underneath it.
         var deck = DeckWithPicture([0x00, 0x01, 0x02, 0x03, 0x04]);
-        var imageDiagnostics = new List<string>();
+        var artifact = PresentationFilePdfExportExecutor.ExportRaster(
+            deck,
+            request: null,
+            new WpfPresentationFileRenderPort());
 
-        var bytes = FileCommands.ExportPdfRasterBytes(deck, imageDiagnostics);
-
-        bytes.Should().NotBeEmpty();
-        imageDiagnostics.Should().NotBeEmpty(
+        artifact.Bytes.Should().NotBeEmpty();
+        artifact.ImageDiagnostics.Should().NotBeEmpty(
             "the undecodable slide picture must be surfaced through the raster export path (File > Export to PDF), not silently dropped");
     }
 
@@ -61,11 +58,12 @@ public class PresentationRasterPdfImageDiagnosticsTests
     {
         // Sibling no-regression: a valid embedded picture must not spuriously report an image warning.
         var deck = DeckWithPicture(MinimalPngBytes());
-        var imageDiagnostics = new List<string>();
+        var artifact = PresentationFilePdfExportExecutor.ExportRaster(
+            deck,
+            request: null,
+            new WpfPresentationFileRenderPort());
 
-        FileCommands.ExportPdfRasterBytes(deck, imageDiagnostics);
-
-        imageDiagnostics.Should().BeEmpty();
+        artifact.ImageDiagnostics.Should().BeEmpty();
     }
 
     private static byte[] MinimalPngBytes() =>

@@ -7,21 +7,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public enum HyperlinkLinkType
-{
-    ExistingFileOrWebPage,
-    CreateNewDocument,
-    PlaceInThisDocument,
-    EmailAddress
-}
-
-public sealed record HyperlinkDialogResult(
-    HyperlinkLinkType LinkType,
-    string Target,
-    string DisplayText,
-    string ScreenTip,
-    string Bookmark);
-
 public sealed class HyperlinkDialog : Window
 {
     private readonly TextBox _targetBox = new();
@@ -33,7 +18,7 @@ public sealed class HyperlinkDialog : Window
     private string _screenTip = "";
     private string _bookmark = "";
 
-    public HyperlinkDialogResult Result { get; private set; }
+    public HyperlinkDialogPlan Result { get; private set; }
 
     public HyperlinkDialog(string target = "https://", string displayText = "")
     {
@@ -103,64 +88,62 @@ public sealed class HyperlinkDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static HyperlinkDialogResult CreateResult(
+    public static HyperlinkDialogPlan CreateResult(
         string target,
         string? displayText,
-        HyperlinkLinkType linkType = HyperlinkLinkType.ExistingFileOrWebPage,
+        HyperlinkTargetKind linkType = HyperlinkTargetKind.ExistingFileOrWebPage,
         string? screenTip = "",
         string? bookmark = "")
-    {
-        return FromPlan(HyperlinkDialogPlanner.Plan(
+    => HyperlinkDialogPlanner.Plan(
             target,
             displayText,
-            ToCoreHyperlinkTargetKind(linkType),
+            linkType,
             screenTip,
-            bookmark));
-    }
+            bookmark);
 
     public static bool TryCreateResult(
         string? target,
         string? displayText,
-        HyperlinkLinkType linkType,
+        HyperlinkTargetKind linkType,
         string? screenTip,
         string? bookmark,
-        out HyperlinkDialogResult result,
+        out HyperlinkDialogPlan result,
         out string? error)
     {
         if (HyperlinkDialogPlanner.TryPlan(
                 target,
                 displayText,
-                ToCoreHyperlinkTargetKind(linkType),
+                linkType,
                 screenTip,
                 bookmark,
                 out var plan,
                 out var validationError))
         {
-            result = FromPlan(plan);
+            result = plan;
             error = null;
             return true;
         }
 
-        result = FromPlan(plan);
+        result = plan;
         error = GetValidationErrorText(validationError);
         return false;
     }
 
-    private HyperlinkLinkType SelectedLinkType => _linkTypes.SelectedIndex switch
+    private HyperlinkTargetKind SelectedLinkType => _linkTypes.SelectedIndex switch
     {
-        1 => HyperlinkLinkType.CreateNewDocument,
-        2 => HyperlinkLinkType.PlaceInThisDocument,
-        3 => HyperlinkLinkType.EmailAddress,
-        _ => HyperlinkLinkType.ExistingFileOrWebPage
+        1 => HyperlinkTargetKind.CreateNewDocument,
+        2 => HyperlinkTargetKind.PlaceInThisDocument,
+        3 => HyperlinkTargetKind.EmailAddress,
+        _ => HyperlinkTargetKind.ExistingFileOrWebPage
     };
 
     private void UpdateTargetFieldForLinkType()
     {
         var (label, automationName, helpText) = SelectedLinkType switch
         {
-            HyperlinkLinkType.CreateNewDocument => (UiText.Get("Hyperlink_NewDocumentLabel"), UiText.Get("Hyperlink_NewDocumentAutomationName"), UiText.Get("Hyperlink_NewDocumentHelpText")),
-            HyperlinkLinkType.PlaceInThisDocument => (UiText.Get("Hyperlink_CellReferenceLabel"), UiText.Get("Hyperlink_CellReferenceAutomationName"), UiText.Get("Hyperlink_CellReferenceHelpText")),
-            HyperlinkLinkType.EmailAddress => (UiText.Get("Hyperlink_EmailAddressLabel"), UiText.Get("Hyperlink_EmailAddressAutomationName"), UiText.Get("Hyperlink_EmailAddressHelpText")),
+            HyperlinkTargetKind.CreateNewDocument => (UiText.Get("Hyperlink_NewDocumentLabel"), UiText.Get("Hyperlink_NewDocumentAutomationName"), UiText.Get("Hyperlink_NewDocumentHelpText")),
+            HyperlinkTargetKind.PlaceInThisDocument => (UiText.Get("Hyperlink_CellReferenceLabel"), UiText.Get("Hyperlink_CellReferenceAutomationName"), UiText.Get("Hyperlink_CellReferenceHelpText")),
+            HyperlinkTargetKind.EmailAddress => (UiText.Get("Hyperlink_EmailAddressLabel"), UiText.Get("Hyperlink_EmailAddressAutomationName"), UiText.Get("Hyperlink_EmailAddressHelpText")),
             _ => (UiText.Get("Hyperlink_Address"), UiText.Get("Hyperlink_AddressAutomationName"), UiText.Get("Hyperlink_AddressHelpText"))
         };
 
@@ -211,36 +194,10 @@ public sealed class HyperlinkDialog : Window
         DialogFocus.ShowWarningAndFocus(this, message, Title, _targetBox);
     }
 
-    private static HyperlinkDialogResult FromPlan(HyperlinkDialogPlan plan) =>
-        new(ToDialogLinkType(plan.LinkType), plan.Target, plan.DisplayText, plan.ScreenTip, plan.Bookmark);
-
-    private static HyperlinkTargetKind ToCoreHyperlinkTargetKind(HyperlinkLinkType linkType) =>
-        linkType switch
-        {
-            HyperlinkLinkType.CreateNewDocument => HyperlinkTargetKind.CreateNewDocument,
-            HyperlinkLinkType.PlaceInThisDocument => HyperlinkTargetKind.PlaceInThisDocument,
-            HyperlinkLinkType.EmailAddress => HyperlinkTargetKind.EmailAddress,
-            _ => HyperlinkTargetKind.ExistingFileOrWebPage
-        };
-
-    private static HyperlinkLinkType ToDialogLinkType(HyperlinkTargetKind linkType) =>
-        linkType switch
-        {
-            HyperlinkTargetKind.CreateNewDocument => HyperlinkLinkType.CreateNewDocument,
-            HyperlinkTargetKind.PlaceInThisDocument => HyperlinkLinkType.PlaceInThisDocument,
-            HyperlinkTargetKind.EmailAddress => HyperlinkLinkType.EmailAddress,
-            _ => HyperlinkLinkType.ExistingFileOrWebPage
-        };
-
     private static string GetValidationErrorText(HyperlinkDialogValidationError error) =>
-        error switch
-        {
-            HyperlinkDialogValidationError.MissingDocumentLocation => UiText.Get("Hyperlink_EnterValidCellReferenceOrDefinedName"),
-            HyperlinkDialogValidationError.MissingEmailAddress => UiText.Get("Hyperlink_EnterEmailAddress"),
-            HyperlinkDialogValidationError.MissingNewDocumentName => UiText.Get("Hyperlink_EnterNewDocumentName"),
-            HyperlinkDialogValidationError.InvalidEmailAddress => UiText.Get("Hyperlink_EnterValidEmailAddress"),
-            _ => UiText.Get("Hyperlink_EnterAddress")
-        };
+        HyperlinkDialogPlanner
+            .DescribeValidationError(error, HyperlinkDialogTextProfile.Wpf)
+            .Message.Resolve(UiText.Get, UiText.Format);
 
     private static Grid DialogGrid(int inputRows)
     {

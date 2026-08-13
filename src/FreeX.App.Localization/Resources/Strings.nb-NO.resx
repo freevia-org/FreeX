@@ -3235,7 +3235,7 @@ Sende krasjrapporter for dette testbygget?</value>
   <data name="MainWindow_Content_AllowUsersToEditRangesCompact" xml:space="preserve">
     <value>Områder</value>
   </data>
-  <data name="MainWindow_Content_AltText" xml:space="preserve">
+  <data name="Common_AltText" xml:space="preserve">
     <value>Alternativ tekst</value>
   </data>
   <data name="MainWindow_Content_Apply" xml:space="preserve">
@@ -3529,7 +3529,7 @@ Sende krasjrapporter for dette testbygget?</value>
   <data name="MainWindow_Content_InkToShape" xml:space="preserve">
     <value>Ink å forme</value>
   </data>
-  <data name="MainWindow_Content_Insert" xml:space="preserve">
+  <data name="Common_Insert" xml:space="preserve">
     <value>Sett inn</value>
   </data>
   <data name="MainWindow_Content_InsertFunction" xml:space="preserve">
@@ -3892,7 +3892,7 @@ Sende krasjrapporter for dette testbygget?</value>
   <data name="MainWindow_Content_TextBox" xml:space="preserve">
     <value>Tekstboks</value>
   </data>
-  <data name="MainWindow_Content_Themes" xml:space="preserve">
+  <data name="Common_Themes" xml:space="preserve">
     <value>Temaer</value>
   </data>
   <data name="MainWindow_Content_Timeline" xml:space="preserve">
@@ -5012,7 +5012,7 @@ Sende krasjrapporter for dette testbygget?</value>
   <data name="MainWindow_Text_Name" xml:space="preserve">
     <value>Navn</value>
   </data>
-  <data name="MainWindow_Text_New" xml:space="preserve">
+  <data name="Common_New" xml:space="preserve">
     <value>Ny</value>
   </data>
   <data name="MainWindow_Text_Notes" xml:space="preserve">
@@ -12867,7 +12867,7 @@ Endre celleverdi: {2}</value>
   <data name="Sort_SortOnCellValues" xml:space="preserve">
     <value>Cellverdier</value>
   </data>
-  <data name="Sort_SortOnFontColor" xml:space="preserve">
+  <data name="Common_FontColor" xml:space="preserve">
     <value>Skriftfarge</value>
   </data>
   <data name="SortOptions_FirstKeyJanToDecShort" xml:space="preserve">
@@ -14873,9 +14873,6 @@ Lagret XPS-fil:
   <data name="StatusBar_ViewShortcuts" xml:space="preserve">
     <value>View Shortcuts</value>
   </data>
-  <data name="StatusBar_Zoom" xml:space="preserve">
-    <value>Zoom</value>
-  </data>
   <data name="StatusBar_ZoomSlider" xml:space="preserve">
     <value>Zoom Slider</value>
   </data>
@@ -14988,18 +14985,6 @@ Lagret XPS-fil:
   </data>
   <data name="Startup_RecoveryTitle" xml:space="preserve">
     <value>Recover Unsaved Work</value>
-  </data>
-  <data name="Startup_RecoveryPrompt" xml:space="preserve">
-    <value>FreeX found autosaved recovery files from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook?</value>
-  </data>
-  <data name="Startup_RecoveryPromptNamed" xml:space="preserve">
-    <value>FreeX found an autosaved recovery file for "{0}" from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook?</value>
-  </data>
-  <data name="Startup_RecoveryPromptMultiple" xml:space="preserve">
-    <value>FreeX found autosaved recovery files from a previous session that ended unexpectedly. There are {0} workbook(s) remaining to review. Would you like to restore this workbook?</value>
-  </data>
-  <data name="Startup_RecoveryPromptNamedMultiple" xml:space="preserve">
-    <value>FreeX found an autosaved recovery file for "{0}" from a previous session that ended unexpectedly. There are {1} workbook(s) remaining to review. Would you like to restore this workbook?</value>
   </data>
   <data name="MainWindowMessage_XlsxSaveWarningsBodyFormat" xml:space="preserve">
     <value>Some features could not be saved to the file and may be missing:

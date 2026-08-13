@@ -8,15 +8,10 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class PresentationFilePersistenceWorkflowTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.PresentationFilePersistenceWorkflowTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.PresentationFilePersistenceWorkflowTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public PresentationFilePersistenceWorkflowTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort cleanup */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Theory]
     [InlineData("deck.pptx", PresentationFilePersistenceFormat.PowerPoint)]
@@ -44,6 +39,7 @@ public sealed class PresentationFilePersistenceWorkflowTests : IDisposable
     [InlineData("deck.fxp", true)]
     [InlineData("deck.pdf", false)]
     [InlineData("deck", false)]
+    [InlineData("bad\0deck.pptx", false)]
     public void IsSupportedPresentationPath_IsRestrictedToOpenablePresentationFiles(string path, bool expected) =>
         PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path).Should().Be(expected);
 
@@ -157,7 +153,7 @@ public sealed class PresentationFilePersistenceWorkflowTests : IDisposable
             "FreeP.App.Presentation",
             "PresentationFilePersistenceWorkflow.cs"));
 
-        source.Should().Contain("ExportAtomicWriter.WriteAllBytes(path, SerializePresentation(path, presentation));");
+        source.Should().Contain("AtomicFileWriter.WriteAllBytes(path, SerializePresentation(path, presentation));");
         source.Should().Contain("FxpFormat.Serialize(presentation)");
         source.Should().Contain("PptxPackageWriter.Write(presentation, stream, ResolvePackageKind(path))");
         source.Should().NotContain("FxpFormat.Write(");

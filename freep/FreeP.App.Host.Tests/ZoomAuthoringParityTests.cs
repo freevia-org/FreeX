@@ -5,7 +5,7 @@ namespace FreeP.App.Host.Tests;
 public sealed class ZoomAuthoringParityTests
 {
     [Fact]
-    public void Wpf_zoom_format_dialog_uses_shared_transition_control_and_validation()
+    public void Wpf_zoom_format_dialog_binds_the_portable_properties_session()
     {
         var source = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
@@ -13,55 +13,54 @@ public sealed class ZoomAuthoringParityTests
             "FreeP.App.Host",
             "ZoomObjectPropertiesDialog.cs"));
 
-        source.Should().Contain("Use Zoom transition");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseTransitionDuration(");
-        source.Should().Contain("_transitionEnabled.IsChecked == true");
-        source.Should().Contain("_transitionDuration.IsEnabled");
-        source.Should().Contain("Use Zoom border");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderColor(");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderWidth(");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderDash(");
-        source.Should().Contain("Use gradient border");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderGradient(");
-        source.Should().Contain("Use pattern border");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderPattern(");
-        source.Should().Contain("Use no-fill border");
-        source.Should().Contain("IsFrameBorderNoFillEnabled");
-        source.Should().Contain("Use theme border color");
-        source.Should().Contain("FrameBorderThemeColor");
-        source.Should().Contain("Use outer border shadow");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderShadow(");
-        source.Should().Contain("Use border glow");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderGlow(");
-        source.Should().Contain("Use border soft edge");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderSoftEdge(");
-        source.Should().Contain("Use border reflection");
-        source.Should().Contain("Reflection blur (pt):");
-        source.Should().Contain("Reflection fade end (%):");
-        source.Should().Contain("FormatFrameBorderReflectionBlur");
-        source.Should().Contain("FormatFrameBorderReflectionEndPosition");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.TryParseFrameGeometry(");
-        source.Should().Contain("Frame shape:");
-        source.Should().Contain("_frameBorderColor.IsEnabled");
-        source.Should().Contain("Apply format to all Summary Zoom tiles");
-        source.Should().Contain("ApplySummaryPropertiesToAllTiles");
-        source.Should().Contain("40 + (_summaryTargets.Count > 0 ? 4 : 0)",
-            "the merged frame, Summary Zoom, option, and action controls need distinct grid rows");
+        source.Should().Contain("ZoomObjectPropertiesDialogSession");
+        source.Should().Contain("_surface = _session.Surface");
+        source.Should().Contain("ZoomObjectPropertiesDialogFormSession<Control>");
+        source.Should().Contain("foreach (var plan in _session.FieldCatalog)");
+        source.Should().Contain("ZoomObjectPropertiesDialogControlKind.Toggle");
+        source.Should().Contain("_formSession.Dispatch(field, value)");
+        source.Should().Contain("_session.TryAccept(out var validation)");
+        source.Should().Contain("_formSession.ApplyState(_session.State)");
+        source.Should().Contain("_formSession.Focus(validation.Field)");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(");
+        source.Should().Contain("AutomationProperties.SetName(");
+        source.Should().Contain("AutomationProperties.SetAutomationId(");
+
+        source.Should().NotContain("new ZoomObjectPropertiesDialogInput(");
+        source.Should().NotContain("ZoomObjectPropertiesDialogSurfacePlanner.BuildSurfacePlan()");
+        source.Should().NotContain("ZoomObjectPropertiesDialogSession.BuildEnablement(");
+        source.Should().NotContain("ZoomObjectPropertiesDialogSession.SelectExclusiveBorderMode(");
+        source.Should().NotContain("ZoomObjectPropertiesPlanner.FrameBorder");
+        source.Should().NotContain("ZoomObjectPropertiesPlanner.TryParse");
+        source.Should().NotContain("Reflection blur (pt):");
+        source.Should().NotContain("LoadSummaryTileFields");
+        source.Should().NotContain("SyncFrameBorderState");
+        source.Should().NotContain("private readonly CheckBox _returnToParent");
+        source.Should().NotContain("Dictionary<ZoomObjectPropertiesDialogField");
+        source.Should().NotContain("foreach (var fieldState in state.Fields)");
+        source.Should().NotContain("_applyingState");
     }
 
     [Fact]
-    public void Wpf_zoom_commands_keep_shared_property_persistence_and_undo_route()
+    public void Wpf_zoom_commands_delegate_persistence_and_preview_ownership_to_shared_session()
     {
         var source = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Host",
             "MainWindow.cs"));
+        var ribbonProfile = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.RibbonProfile.cs"));
 
-        source.Should().Contain("onFormatZoom:       () => OpenZoomObjectPropertiesDialog()");
-        source.Should().Contain("Editor.SetSelectedZoomObjectProperties(dialog.Properties)");
-        source.Should().Contain("dialog.ApplySummaryPropertiesToAllTiles");
+        ribbonProfile.Should().Contain("FormatZoom = OpenZoomObjectPropertiesDialog");
+        source.Should().Contain("PresentationZoomAuthoringSession _zoomAuthoringSession");
+        source.Should().Contain("_zoomAuthoringSession.ApplySelectedProperties(");
+        source.Should().Contain("_zoomAuthoringSession.RestoreSelectedPreview(");
+        source.Should().NotContain("Editor.SetSelectedZoomObjectProperties(");
+        source.Should().NotContain("SummaryZoomPreviewPlanner.AttachPreviewImage(");
     }
 
     [Fact]
@@ -73,13 +72,18 @@ public sealed class ZoomAuthoringParityTests
             "FreeP.App.Host",
             "SummaryZoomDialog.cs"));
 
-        source.Should().Contain("Move Up");
-        source.Should().Contain("Move Down");
-        source.Should().Contain("SelectOrderedTargets");
+        source.Should().Contain("surface.Action(ZoomTargetDialogAction.MoveUp)");
+        source.Should().Contain("surface.Action(ZoomTargetDialogAction.MoveDown)");
+        source.Should().Contain("SummaryZoomDialogSession");
+        source.Should().Contain("TryMoveSelected");
+        source.Should().Contain("TryAccept(selectedIds)");
+        source.Should().NotContain("\"Move Up\"");
+        source.Should().NotContain("\"Move Down\"");
+        source.Should().NotContain("SelectOrderedTargets");
     }
 
     [Fact]
-    public void Wpf_zoom_validation_uses_the_shared_messages_and_modal_warning_surface()
+    public void Wpf_zoom_validation_uses_session_result_and_native_warning_surface()
     {
         var source = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
@@ -87,21 +91,33 @@ public sealed class ZoomAuthoringParityTests
             "FreeP.App.Host",
             "ZoomObjectPropertiesDialog.cs"));
 
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidTransitionDurationMessage");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderColorMessage");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderWidthMessage");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderDashMessage");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderGradientMessage");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderPatternMessage");
-        source.Should().Contain("Use no-fill border");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderShadowMessage");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderGlowMessage");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderSoftEdgeMessage");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameBorderReflectionMessage");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidFrameGeometryMessage");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidCropEdgesMessage");
-        source.Should().Contain("ZoomObjectPropertiesPlanner.InvalidSummaryTileLayoutMessage");
-        source.Should().Contain("MessageBox.Show(this,");
+        source.Should().Contain("validation!.Message");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(");
+        source.Should().Contain("_formSession.Focus(validation.Field)");
+        source.Should().NotContain("InvalidTransitionDurationMessage");
+        source.Should().NotContain("InvalidFrameBorderShadowMessage");
+        source.Should().NotContain("InvalidFrameBorderGlowMessage");
+        source.Should().NotContain("InvalidFrameBorderSoftEdgeMessage");
+        source.Should().NotContain("InvalidFrameBorderReflectionMessage");
+        source.Should().NotContain("TryParseTransitionDuration");
         source.Should().NotContain("inline validation");
+    }
+
+    [Fact]
+    public void Wpf_zoom_target_dialog_family_uses_portable_selection_sessions()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        foreach (var file in new[]
+                 {
+                     "SlideZoomDialog.cs",
+                     "SectionZoomDialog.cs",
+                     "SummaryZoomCoverImageTargetDialog.cs",
+                 })
+        {
+            var source = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", file));
+            source.Should().Contain("ZoomSingleTargetDialogSession");
+            source.Should().NotContain("FindSelectedIndex");
+            source.Should().NotContain("record TargetOption");
+        }
     }
 }

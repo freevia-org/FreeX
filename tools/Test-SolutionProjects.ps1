@@ -11,24 +11,6 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-function Test-IsIgnoredProjectPath {
-    param(
-        [Parameter(Mandatory = $true)][System.IO.FileInfo]$ProjectFile,
-        [Parameter(Mandatory = $true)][string]$RelativePath
-    )
-
-    if ($ProjectFile.Name -like "*_wpftmp.csproj") {
-        return $true
-    }
-
-    $segments = $RelativePath -split "/"
-    return $segments -contains "bin" -or
-        $segments -contains "obj" -or
-        $segments -contains ".git" -or
-        $segments -contains ".worktrees" -or
-        $segments -contains ".claude"
-}
-
 function Test-IsIncludedProjectPath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
 
@@ -94,10 +76,7 @@ $escapedSolutionProjectPaths = @(
 $discoveredProjectPaths = @(
     Get-ToolProjectFiles -Directory (Get-Item -LiteralPath $resolvedProjectRoot) |
         ForEach-Object {
-            $relativePath = ConvertTo-ToolNormalizedRelativePath (Get-ToolRelativePath -RootPath $resolvedProjectRoot -Path $_.FullName)
-            if (-not (Test-IsIgnoredProjectPath -ProjectFile $_ -RelativePath $relativePath)) {
-                $relativePath
-            }
+            ConvertTo-ToolNormalizedRelativePath (Get-ToolRelativePath -RootPath $resolvedProjectRoot -Path $_.FullName)
         } |
         Where-Object { Test-IsIncludedProjectPath $_ } |
         Sort-Object -Unique

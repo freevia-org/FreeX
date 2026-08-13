@@ -4,6 +4,10 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.IO;
+using FreeX.App.Localization;
+using FreeX.App.Presentation.Calculation;
+using FreeX.App.Presentation.Shell;
+using FreeX.App.Presentation.Options;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -16,59 +20,25 @@ public enum OptionsDialogInitialSection
     FormulaErrorChecking
 }
 
-/// <summary>
-/// Snapshot of the live workbook's calculation settings (calc mode + iterative-calculation
-/// enable/max-iterations/max-change), captured just before the Options dialog opens so the
-/// Formulas panel seeds from the workbook actually being edited, not the persisted app-wide
-/// <see cref="FreeXOptions.AutoCalculate"/> default. Excel's Options dialog reflects the active
-/// workbook's calculation state, not a saved app preference.
-/// </summary>
-/// <param name="AutoCalculate">
-/// True when the workbook is NOT in Manual mode. The dialog only has two calc-mode radio
-/// buttons (Automatic/Manual), so <see cref="WorkbookCalculationMode.AutomaticExceptDataTables"/>
-/// must map here to "Automatic" (checked, not Manual) — never collapse it into Manual.
-/// </param>
-/// <param name="CalculationMode">
-/// The workbook's real tri-state calculation mode when known (set by <see cref="FromWorkbook"/>).
-/// Null for settings built from a dialog edit or the persisted app-wide default, which can only
-/// ever express Automatic/Manual. Callers applying an edited settings snapshot back to the
-/// workbook must compare against <see cref="AutoCalculate"/> (not this mode) so that leaving the
-/// calc-mode radios untouched never overwrites an <see cref="WorkbookCalculationMode.AutomaticExceptDataTables"/>
-/// workbook with plain Automatic or Manual as a side effect of an unrelated settings change.
-/// </param>
-public sealed record OptionsDialogCalculationSettings(
-    bool AutoCalculate,
-    bool IterativeCalculation,
-    int? MaxCalculationIterations,
-    double? MaxCalculationChange,
-    WorkbookCalculationMode? CalculationMode = null)
-{
-    public static OptionsDialogCalculationSettings FromWorkbook(Workbook workbook) => new(
-        workbook.CalculationMode != WorkbookCalculationMode.Manual,
-        workbook.IterativeCalculation,
-        workbook.MaxCalculationIterations,
-        workbook.MaxCalculationChange,
-        workbook.CalculationMode);
-}
-
+/// <summary>Native WPF Options surface backed by portable options and calculation planners.</summary>
 public partial class OptionsDialog : Window
 {
-    private readonly FreeXOptions _opts;
-    private readonly OptionsDialogCalculationSettings _calcSettings;
+    private readonly AppOptions _opts;
+    private readonly CalculationOptionsDialogState _calculationState;
     private readonly HashSet<string> _disabledFormulaErrorCodes;
     private readonly Dictionary<string, CheckBox> _errorRuleBoxes = new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<string> _quickAccessCommandIds = [];
-    private readonly List<string> _customDictionaryWords = [];
+    private readonly FreeXOptionsDialogSession _dialogSession;
+    private readonly QuickAccessToolbarOptionsSession _quickAccessSession;
+    private readonly CustomDictionaryEditorSession _customDictionaryEditor;
     private readonly OptionsDialogInitialSection _initialSection;
-    public FreeXOptions Result { get; private set; }
+    public AppOptions Result { get; private set; }
     public IReadOnlySet<string> DisabledFormulaErrorCodesResult { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The workbook calculation settings as edited in the dialog. Null when the user did not
-    /// change anything from <see cref="OptionsDialogCalculationSettings"/> passed in, so the
-    /// caller can apply the workbook-level change only when something actually changed.
+    /// The portable calculation submission produced by the shared planner. Null when the user
+    /// left the workbook calculation settings unchanged.
     /// </summary>
-    public OptionsDialogCalculationSettings? CalculationSettingsResult { get; private set; }
+    public CalculationOptionsSubmission? CalculationSubmission { get; private set; }
 
     private sealed record QuickAccessCommandChoice(string Id, string DisplayName);
 
@@ -79,17 +49,21 @@ public partial class OptionsDialog : Window
         ["8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36"];
 
     public OptionsDialog(
-        FreeXOptions opts,
+        AppOptions opts,
         IEnumerable<string>? disabledFormulaErrorCodes = null,
         OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General,
-        OptionsDialogCalculationSettings? calcSettings = null)
+        CalculationOptionsDialogState? calcSettings = null,
+        FreeXOptionsRuntimeSession? runtimeSession = null)
     {
-        _opts = opts;
+        _dialogSession = (runtimeSession ?? new FreeXOptionsRuntimeSession(opts)).BeginDialog(opts);
+        _opts = _dialogSession.OpenSnapshot;
+        _quickAccessSession = _dialogSession.QuickAccessToolbar;
+        _customDictionaryEditor = _dialogSession.CustomDictionary;
         // Falls back to the persisted app default only for callers that don't have a live workbook
         // handy (parity-capture surfaces, source-pinning unit tests). The real host call site always
         // passes the live workbook's calculation settings so the Formulas panel reflects the workbook
         // actually open, matching Excel.
-        _calcSettings = calcSettings ?? new OptionsDialogCalculationSettings(opts.AutoCalculate, false, null, null);
+        _calculationState = calcSettings ?? CalculationOptionsDialogState.FromAppDefault(opts.AutoCalculate);
         _disabledFormulaErrorCodes = new HashSet<string>(disabledFormulaErrorCodes ?? [], StringComparer.OrdinalIgnoreCase);
         DisabledFormulaErrorCodesResult = new HashSet<string>(_disabledFormulaErrorCodes, StringComparer.OrdinalIgnoreCase);
         _initialSection = initialSection;
@@ -143,12 +117,12 @@ public partial class OptionsDialog : Window
     {
         // General
         OptDefaultFont.ItemsSource = Fonts;
-        var defaultFontName = FreeXOptions.NormalizeDefaultFontName(_opts.DefaultFontName);
+        var defaultFontName = AppOptions.NormalizeDefaultFontName(_opts.DefaultFontName);
         OptDefaultFont.SelectedItem = Fonts.Contains(defaultFontName)
-            ? defaultFontName : FreeXOptions.DefaultFontNameFallback;
+            ? defaultFontName : AppOptions.DefaultFontNameFallback;
 
         OptDefaultFontSize.ItemsSource = Sizes;
-        OptDefaultFontSize.Text = FreeXOptions.NormalizeDefaultFontSize(_opts.DefaultFontSize).ToString();
+        OptDefaultFontSize.Text = AppOptions.NormalizeDefaultFontSize(_opts.DefaultFontSize).ToString();
 
         OptSheetCount.Text = _opts.DefaultSheetCount.ToString();
         OptUserName.Text   = _opts.UserName;
@@ -158,11 +132,11 @@ public partial class OptionsDialog : Window
         // Formulas — seeded from the live workbook's calculation settings, not the persisted
         // app-wide default, so the dialog reflects whatever the ribbon's Calculation Options
         // last set on this workbook (matching Excel).
-        OptCalcAuto.IsChecked   =  _calcSettings.AutoCalculate;
-        OptCalcManual.IsChecked = !_calcSettings.AutoCalculate;
-        OptIterativeEnabled.IsChecked = _calcSettings.IterativeCalculation;
-        OptMaxIterations.Text = (_calcSettings.MaxCalculationIterations ?? DefaultMaxCalculationIterations).ToString();
-        OptMaxChange.Text = (_calcSettings.MaxCalculationChange ?? DefaultMaxCalculationChange).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        OptCalcAuto.IsChecked   =  _calculationState.AutoCalculate;
+        OptCalcManual.IsChecked = !_calculationState.AutoCalculate;
+        OptIterativeEnabled.IsChecked = _calculationState.IterativeCalculation;
+        OptMaxIterations.Text = (_calculationState.MaxCalculationIterations ?? DefaultMaxCalculationIterations).ToString();
+        OptMaxChange.Text = (_calculationState.MaxCalculationChange ?? DefaultMaxCalculationChange).ToString(System.Globalization.CultureInfo.InvariantCulture);
         UpdateIterativeCalculationFieldsState();
         OptR1C1.IsChecked = _opts.UseR1C1ReferenceStyle;
         OptFormulasAutocomplete.IsChecked = true;
@@ -179,13 +153,7 @@ public partial class OptionsDialog : Window
             UiText.Get("Options_AfterEnterDirectionUp"),
             UiText.Get("Options_AfterEnterDirectionLeft")
         };
-        OptAfterEnterDirection.SelectedIndex = _opts.AfterEnterDirection switch
-        {
-            FreeXEnterDirection.Right => 1,
-            FreeXEnterDirection.Up => 2,
-            FreeXEnterDirection.Left => 3,
-            _ => 0
-        };
+        OptAfterEnterDirection.SelectedIndex = OptionsDialogPlanner.AfterEnterDirectionToIndex(_opts.AfterEnterDirection);
         UpdateAfterEnterDirectionState();
         OptAdvancedFillHandle.IsChecked = _opts.EnableFillHandleAndCellDragAndDrop;
         OptAdvancedAutoComplete.IsChecked = _opts.EnableAutoCompleteForCellValues;
@@ -197,12 +165,7 @@ public partial class OptionsDialog : Window
             UiText.Get("Options_ObjectsDisplayPlaceholders"),
             UiText.Get("Options_ObjectsDisplayNothing")
         };
-        OptObjectsDisplay.SelectedIndex = _opts.ObjectsDisplay switch
-        {
-            FreeXObjectDisplay.Placeholders => 1,
-            FreeXObjectDisplay.Nothing => 2,
-            _ => 0
-        };
+        OptObjectsDisplay.SelectedIndex = OptionsDialogPlanner.ObjectDisplayToIndex(_opts.ObjectsDisplay);
 
         // View
         OptShowFormulaBar.IsChecked = _opts.ShowFormulaBar;
@@ -215,7 +178,7 @@ public partial class OptionsDialog : Window
             UiText.Get("Options_DefaultFormatXlsx"),
             UiText.Get("Options_DefaultFormatJson")
         };
-        OptDefaultFormat.SelectedIndex = FreeXOptions.NormalizeDefaultFormat(_opts.DefaultFormat) == FreeXOptions.FreeXWorkbookDefaultFormat ? 1 : 0;
+        OptDefaultFormat.SelectedIndex = OptionsDialogPlanner.DefaultFormatToIndex(_opts.DefaultFormat);
         OptCrashAnalytics.IsChecked = _opts.CrashAnalyticsEnabled;
 
         OptRecentFilesPath.Text = Path.Combine(
@@ -303,22 +266,19 @@ public partial class OptionsDialog : Window
 
     private void PopulateQuickAccessToolbarOptions()
     {
-        QuickAccessBelowRibbonCheckBox.IsChecked = _opts.QuickAccessToolbarBelowRibbon;
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(QuickAccessToolbarCatalog.NormalizeCommandIds(_opts.QuickAccessToolbarCommands));
+        QuickAccessBelowRibbonCheckBox.IsChecked = _quickAccessSession.QuickAccessToolbarBelowRibbon;
         RefreshQuickAccessToolbarCommandLists();
     }
 
     private void RefreshQuickAccessToolbarCommandLists(string? selectedAvailableId = null, string? selectedQatId = null)
     {
         var filterText = QuickAccessSearchBox.Text ?? string.Empty;
-        QuickAccessAvailableCommandsList.ItemsSource = QuickAccessToolbarCustomizationPlanner.FilterAvailable(
-                _quickAccessCommandIds,
+        QuickAccessAvailableCommandsList.ItemsSource = _quickAccessSession.FilterAvailable(
                 filterText,
                 command => [UiText.Get(command.TitleResourceKey), UiText.Get(command.DescriptionResourceKey)])
             .Select(CreateQuickAccessCommandChoice)
             .ToList();
-        QuickAccessSelectedCommandsList.ItemsSource = _quickAccessCommandIds
+        QuickAccessSelectedCommandsList.ItemsSource = _quickAccessSession.CommandIds
             .Select(id => QuickAccessToolbarCatalog.TryGet(id, out var command) ? command : null)
             .Where(command => command is not null)
             .Select(command => CreateQuickAccessCommandChoice(command!))
@@ -343,17 +303,6 @@ public partial class OptionsDialog : Window
         return null;
     }
 
-    private int IndexOfQuickAccessCommandId(string commandId)
-    {
-        for (var index = 0; index < _quickAccessCommandIds.Count; index++)
-        {
-            if (QuickAccessCommandIdsEqual(_quickAccessCommandIds[index], commandId))
-                return index;
-        }
-
-        return -1;
-    }
-
     private static bool QuickAccessCommandIdsEqual(string id, string otherId) =>
         string.Equals(id, otherId, StringComparison.OrdinalIgnoreCase);
 
@@ -370,11 +319,11 @@ public partial class OptionsDialog : Window
         QuickAccessAddButton.IsEnabled = QuickAccessAvailableCommandsList.SelectedItem is QuickAccessCommandChoice;
         QuickAccessRemoveButton.IsEnabled =
             QuickAccessSelectedCommandsList.SelectedItem is QuickAccessCommandChoice &&
-            _quickAccessCommandIds.Count > 1;
+            _quickAccessSession.CommandIds.Count > 1;
         QuickAccessMoveUpButton.IsEnabled = QuickAccessSelectedCommandsList.SelectedIndex > 0;
         QuickAccessMoveDownButton.IsEnabled =
             QuickAccessSelectedCommandsList.SelectedIndex >= 0 &&
-            QuickAccessSelectedCommandsList.SelectedIndex < _quickAccessCommandIds.Count - 1;
+            QuickAccessSelectedCommandsList.SelectedIndex < _quickAccessSession.CommandIds.Count - 1;
     }
 
     private void QuickAccessCommandLists_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
@@ -395,37 +344,27 @@ public partial class OptionsDialog : Window
         if (QuickAccessAvailableCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
             return;
 
-        var updated = QuickAccessToolbarCustomizationPlanner.Apply(
-            _quickAccessCommandIds,
-            choice.Id,
-            QuickAccessToolbarCustomizationAction.Add);
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(updated);
+        _quickAccessSession.Apply(choice.Id, QuickAccessToolbarCustomizationAction.Add);
         RefreshQuickAccessToolbarCommandLists(selectedQatId: choice.Id);
     }
 
     private void QuickAccessRemoveButton_Click(object sender, RoutedEventArgs e)
     {
         if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice ||
-            _quickAccessCommandIds.Count <= 1)
+            _quickAccessSession.CommandIds.Count <= 1)
         {
             return;
         }
 
-        var removedIndex = IndexOfQuickAccessCommandId(choice.Id);
+        var removedIndex = _quickAccessSession.IndexOf(choice.Id);
         if (removedIndex < 0)
             return;
 
-        var updated = QuickAccessToolbarCustomizationPlanner.Apply(
-            _quickAccessCommandIds,
-            choice.Id,
-            QuickAccessToolbarCustomizationAction.Remove);
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(updated);
-        var nextIndex = Math.Clamp(removedIndex, 0, _quickAccessCommandIds.Count - 1);
+        _quickAccessSession.Apply(choice.Id, QuickAccessToolbarCustomizationAction.Remove);
+        var nextIndex = Math.Clamp(removedIndex, 0, _quickAccessSession.CommandIds.Count - 1);
         RefreshQuickAccessToolbarCommandLists(
             selectedAvailableId: choice.Id,
-            selectedQatId: _quickAccessCommandIds.ElementAtOrDefault(nextIndex));
+            selectedQatId: _quickAccessSession.CommandIds.ElementAtOrDefault(nextIndex));
     }
 
     private void QuickAccessAvailableCommandsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -503,13 +442,11 @@ public partial class OptionsDialog : Window
         if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
             return;
 
-        var index = IndexOfQuickAccessCommandId(choice.Id);
+        var index = _quickAccessSession.IndexOf(choice.Id);
         if (index <= 0)
             return;
 
-        var updated = QuickAccessToolbarCustomizationPlanner.Move(_quickAccessCommandIds, choice.Id, -1);
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(updated);
+        _quickAccessSession.Move(choice.Id, -1);
         RefreshQuickAccessToolbarCommandLists(selectedQatId: choice.Id);
     }
 
@@ -518,27 +455,48 @@ public partial class OptionsDialog : Window
         if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
             return;
 
-        var index = IndexOfQuickAccessCommandId(choice.Id);
-        if (index < 0 || index >= _quickAccessCommandIds.Count - 1)
+        var index = _quickAccessSession.IndexOf(choice.Id);
+        if (index < 0 || index >= _quickAccessSession.CommandIds.Count - 1)
             return;
 
-        var updated = QuickAccessToolbarCustomizationPlanner.Move(_quickAccessCommandIds, choice.Id, 1);
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(updated);
+        _quickAccessSession.Move(choice.Id, 1);
         RefreshQuickAccessToolbarCommandLists(selectedQatId: choice.Id);
     }
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!OptionsInputParser.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize))
+        if (!OptionsDialogPlanner.TryBuildInput(
+                OptDefaultFont.SelectedItem as string ?? _opts.DefaultFontName,
+                OptDefaultFontSize.Text,
+                OptSheetCount.Text,
+                OptUserName.Text,
+                OptCalcAuto.IsChecked == true,
+                OptR1C1.IsChecked == true,
+                _opts.ErrorCheckingEnabled,
+                OptProofingIgnoreUppercase.IsChecked == true,
+                _opts.ProofingIgnoreNumbers,
+                OptShowFormulaBar.IsChecked == true,
+                OptShowGridlines.IsChecked == true,
+                OptShowHeadings.IsChecked == true,
+                OptionsDialogPlanner.IndexToDefaultFormat(OptDefaultFormat.SelectedIndex),
+                OptShowScreenTips.IsChecked == true,
+                OptMoveAfterEnter.IsChecked == true,
+                OptionsDialogPlanner.IndexToAfterEnterDirection(OptAfterEnterDirection.SelectedIndex),
+                out var input,
+                out var inputError,
+                objectsDisplay: OptionsDialogPlanner.IndexToObjectDisplay(OptObjectsDisplay.SelectedIndex),
+                collapseRibbonAutomatically: OptCollapseRibbon.IsChecked == true,
+                appLanguage: AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
+                crashAnalyticsEnabled: OptCrashAnalytics.IsChecked == true))
         {
-            ShowInvalidInputWarning(UiText.Get("Options_InvalidDefaultFontSizeMessage"), OptDefaultFontSize);
-            return;
-        }
-
-        if (!OptionsInputParser.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount))
-        {
-            ShowInvalidInputWarning(UiText.Get("Options_InvalidSheetCountMessage"), OptSheetCount);
+            var presentation = OptionsDialogPlanner.DescribeInputError(
+                inputError,
+                OptionsValidationTextProfile.Wpf);
+            ShowInvalidInputWarning(
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                presentation.FocusTarget == OptionsValidationFocusTarget.DefaultFontSize
+                    ? OptDefaultFontSize
+                    : OptSheetCount);
             return;
         }
 
@@ -547,138 +505,50 @@ public partial class OptionsDialog : Window
                 iterativeEnabled,
                 OptMaxIterations.Text,
                 OptMaxChange.Text,
-                _calcSettings.MaxCalculationIterations ?? DefaultMaxCalculationIterations,
-                _calcSettings.MaxCalculationChange ?? DefaultMaxCalculationChange,
+                _calculationState.MaxCalculationIterations ?? DefaultMaxCalculationIterations,
+                _calculationState.MaxCalculationChange ?? DefaultMaxCalculationChange,
                 out var maxIterations,
                 out var maxChange,
                 out var calculationInputError))
         {
-            var invalidIterations = calculationInputError == CalculationOptionsInputError.InvalidMaxIterations;
+            var presentation = OptionsValidationPresentationPlanner.DescribeCalculationInput(calculationInputError);
             ShowInvalidInputWarning(
-                UiText.Get(invalidIterations
-                    ? "Options_InvalidMaxIterationsMessage"
-                    : "Options_InvalidMaxChangeMessage"),
-                invalidIterations ? OptMaxIterations : OptMaxChange);
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                presentation.FocusTarget == OptionsValidationFocusTarget.MaxIterations
+                    ? OptMaxIterations
+                    : OptMaxChange);
             return;
         }
 
-        // Compute what this dialog session actually edited, evaluating every field's control
-        // exactly as before, on top of the dialog's own open-time snapshot (_opts).
-        var editedDefaultFontName = OptDefaultFont.SelectedItem as string ?? _opts.DefaultFontName;
-        var editedUserName = string.IsNullOrWhiteSpace(OptUserName.Text) ? _opts.UserName : OptUserName.Text.Trim();
-        var editedCollapseRibbon = OptCollapseRibbon.IsChecked == true;
-        var editedShowScreenTips = OptShowScreenTips.IsChecked == true;
-        var editedAutoCalculate = OptCalcAuto.IsChecked == true;
-        var editedUseR1C1 = OptR1C1.IsChecked == true;
-        var editedShowFormulaBar = OptShowFormulaBar.IsChecked == true;
-        var editedFormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true;
-        var editedMoveAfterEnter = OptMoveAfterEnter.IsChecked == true;
-        var editedAfterEnterDirection = OptAfterEnterDirection.SelectedIndex switch
+        var saveResult = _dialogSession.Commit(
+            input,
+            enableFillHandleAndCellDragAndDrop: OptAdvancedFillHandle.IsChecked == true,
+            enableAutoCompleteForCellValues: OptAdvancedAutoComplete.IsChecked == true,
+            quickAccessToolbarBelowRibbon: QuickAccessBelowRibbonCheckBox.IsChecked == true,
+            formulaBarExpanded: OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true);
+        if (!saveResult.IsPersisted)
         {
-            1 => FreeXEnterDirection.Right,
-            2 => FreeXEnterDirection.Up,
-            3 => FreeXEnterDirection.Left,
-            _ => FreeXEnterDirection.Down
-        };
-        var editedFillHandle = OptAdvancedFillHandle.IsChecked == true;
-        var editedAutoComplete = OptAdvancedAutoComplete.IsChecked == true;
-        var editedShowGridlines = OptShowGridlines.IsChecked == true;
-        var editedShowHeadings = OptShowHeadings.IsChecked == true;
-        var editedObjectsDisplay = OptObjectsDisplay.SelectedIndex switch
-        {
-            1 => FreeXObjectDisplay.Placeholders,
-            2 => FreeXObjectDisplay.Nothing,
-            _ => FreeXObjectDisplay.All
-        };
-        var editedDefaultFormat = OptDefaultFormat.SelectedIndex == 1 ? FreeXOptions.FreeXWorkbookDefaultFormat : FreeXOptions.XlsxDefaultFormat;
-        var editedQuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true;
-        var editedQuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList();
-        var editedAppLanguage = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string);
-        var editedCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords);
-        var editedCrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true;
-
-        // Reload the current on-disk options immediately before saving, instead of building the
-        // saved record purely from this dialog's open-time snapshot (_opts). A second MainWindow
-        // opened via View > New Window shares this window's live workbook but loads its own
-        // independent FreeXOptions snapshot (see MainWindow.MultiWindow.cs ViewNewWindowBtn_Click
-        // and MainWindow.xaml.cs's `_options = options ?? FreeXOptions.Load()`); without this
-        // reload, OK in one window's dialog would blow away whatever an unrelated option another
-        // window already saved (last-writer-wins). Every dialog control always reflects a value —
-        // there is no way to tell "the user picked this" from "this is just what _opts held when
-        // the dialog opened" other than comparing against _opts, so each field below is applied to
-        // the freshly-reloaded `opts` ONLY when it actually differs from _opts (this dialog's own
-        // opening snapshot). A field the user never touched in this session — including one this
-        // dialog exposes no control for at all, e.g. status-bar visibility toggles — is left alone
-        // and keeps whatever is freshest on disk right now, instead of reverting to this window's
-        // stale value or a hardcoded default.
-        var opts = FreeXOptions.Load();
-        if (editedDefaultFontName != _opts.DefaultFontName) opts.DefaultFontName = editedDefaultFontName;
-        if (defaultFontSize != _opts.DefaultFontSize) opts.DefaultFontSize = defaultFontSize;
-        if (defaultSheetCount != _opts.DefaultSheetCount) opts.DefaultSheetCount = defaultSheetCount;
-        if (editedUserName != _opts.UserName) opts.UserName = editedUserName;
-        if (editedCollapseRibbon != _opts.CollapseRibbonAutomatically) opts.CollapseRibbonAutomatically = editedCollapseRibbon;
-        if (editedShowScreenTips != _opts.ShowScreenTips) opts.ShowScreenTips = editedShowScreenTips;
-        if (editedAutoCalculate != _opts.AutoCalculate) opts.AutoCalculate = editedAutoCalculate;
-        if (editedUseR1C1 != _opts.UseR1C1ReferenceStyle) opts.UseR1C1ReferenceStyle = editedUseR1C1;
-        if (editedShowFormulaBar != _opts.ShowFormulaBar) opts.ShowFormulaBar = editedShowFormulaBar;
-        if (editedFormulaBarExpanded != _opts.FormulaBarExpanded) opts.FormulaBarExpanded = editedFormulaBarExpanded;
-        if (editedMoveAfterEnter != _opts.MoveSelectionAfterEnter) opts.MoveSelectionAfterEnter = editedMoveAfterEnter;
-        if (editedAfterEnterDirection != _opts.AfterEnterDirection) opts.AfterEnterDirection = editedAfterEnterDirection;
-        if (editedFillHandle != _opts.EnableFillHandleAndCellDragAndDrop) opts.EnableFillHandleAndCellDragAndDrop = editedFillHandle;
-        if (editedAutoComplete != _opts.EnableAutoCompleteForCellValues) opts.EnableAutoCompleteForCellValues = editedAutoComplete;
-        if (editedShowGridlines != _opts.ShowGridlines) opts.ShowGridlines = editedShowGridlines;
-        if (editedShowHeadings != _opts.ShowHeadings) opts.ShowHeadings = editedShowHeadings;
-        if (editedObjectsDisplay != _opts.ObjectsDisplay) opts.ObjectsDisplay = editedObjectsDisplay;
-        if (editedDefaultFormat != FreeXOptions.NormalizeDefaultFormat(_opts.DefaultFormat)) opts.DefaultFormat = editedDefaultFormat;
-        if (editedQuickAccessToolbarBelowRibbon != _opts.QuickAccessToolbarBelowRibbon) opts.QuickAccessToolbarBelowRibbon = editedQuickAccessToolbarBelowRibbon;
-        if (!editedQuickAccessToolbarCommands.SequenceEqual(_opts.QuickAccessToolbarCommands)) opts.QuickAccessToolbarCommands = editedQuickAccessToolbarCommands;
-        if (!string.Equals(editedAppLanguage, AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage), StringComparison.Ordinal)) opts.AppLanguage = editedAppLanguage;
-        if (!editedCustomDictionaryWords.SequenceEqual(FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords))) opts.SpellCheckCustomDictionaryWords = editedCustomDictionaryWords;
-        if (editedCrashAnalyticsEnabled != _opts.CrashAnalyticsEnabled) opts.CrashAnalyticsEnabled = editedCrashAnalyticsEnabled;
-        // Monotonic flag (never reverts once true), so unconditionally OR-ing the freshly-reloaded
-        // value with the current checkbox state is safe even when the checkbox wasn't touched.
-        opts.CrashAnalyticsPrompted = opts.CrashAnalyticsPrompted || editedCrashAnalyticsEnabled;
-        // ProofingIgnoreUppercase/Numbers and PdfExportLanguage have no controls in this dialog at
-        // all, so they are left untouched here — `opts` already carries whatever is newest on disk
-        // for them; normalize PdfExportLanguage defensively since Load() does not itself apply
-        // ExportPlanner's PDF-language normalization.
-        opts.PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(opts.PdfExportLanguage);
-        if (!opts.Save())
-        {
-            DialogMessageHelper.ShowError(this, opts.LastPersistenceError, Title);
+            DialogMessageHelper.ShowError(this, saveResult.PersistenceError, Title);
             return;
         }
 
-        Result = opts;
+        Result = saveResult.Options;
         DisabledFormulaErrorCodesResult = CollectDisabledFormulaErrorCodes();
 
-        var editedCalcSettings = new OptionsDialogCalculationSettings(
+        CalculationSubmission = CalculationOptionsSubmissionPlanner.Plan(
+            _calculationState,
             OptCalcAuto.IsChecked == true,
             iterativeEnabled,
             maxIterations,
             maxChange);
-        // Only surface a workbook-level calculation change when the user actually changed
-        // something in this panel — an unrelated Options edit (e.g. UserName) must never force
-        // -apply stale/unseen calc settings back onto the live workbook. The max-iterations/
-        // max-change text boxes always round-trip a concrete number (they're seeded from
-        // DefaultMaxCalculationIterations/DefaultMaxCalculationChange when the workbook had no
-        // explicit value yet), so comparing the raw records would spuriously treat every dialog
-        // open+OK as an edit whenever the workbook's iterative-calc bounds are still null; compare
-        // the *effective* (null-coalesced) values instead.
-        var unchanged =
-            editedCalcSettings.AutoCalculate == _calcSettings.AutoCalculate &&
-            editedCalcSettings.IterativeCalculation == _calcSettings.IterativeCalculation &&
-            editedCalcSettings.MaxCalculationIterations == (_calcSettings.MaxCalculationIterations ?? DefaultMaxCalculationIterations) &&
-            editedCalcSettings.MaxCalculationChange == (_calcSettings.MaxCalculationChange ?? DefaultMaxCalculationChange);
-        CalculationSettingsResult = unchanged ? null : editedCalcSettings;
 
         DialogResult = true;
     }
 
     private void CancelBtn_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
-    private const int DefaultMaxCalculationIterations = 100;
-    private const double DefaultMaxCalculationChange = 0.001;
+    private const int DefaultMaxCalculationIterations = CalculationCommandPolicy.DefaultMaxCalculationIterations;
+    private const double DefaultMaxCalculationChange = CalculationCommandPolicy.DefaultMaxCalculationChange;
 
     private bool ShowInvalidInputWarning(string message, Control target)
     {
@@ -687,56 +557,39 @@ public partial class OptionsDialog : Window
     }
 
     private void AutoCorrectOptionsButton_Click(object sender, RoutedEventArgs e) =>
-        ShowDeferredOptionsMessage(DeferredCommandMessages.AutoCorrectOptions());
+        ShowDeferredOptionsMessage(WpfResourceKeyTextResolver.Resolve(DeferredCommandMessagePlanner.AutoCorrectOptions()));
 
     private void PopulateProofingCustomDictionaryWords()
     {
-        _customDictionaryWords.Clear();
-        _customDictionaryWords.AddRange(
-            FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords));
+        _customDictionaryEditor.Reset(_opts.SpellCheckCustomDictionaryWords);
         RefreshProofingCustomDictionaryWordsList();
     }
 
-    private void RefreshProofingCustomDictionaryWordsList(string? selectedWord = null)
+    private void RefreshProofingCustomDictionaryWordsList()
     {
-        var previousSelection = selectedWord ?? ProofingCustomDictionaryWordsList.SelectedItem as string;
-        ProofingCustomDictionaryWordsList.ItemsSource = _customDictionaryWords.ToList();
-        if (!string.IsNullOrWhiteSpace(previousSelection))
-        {
-            ProofingCustomDictionaryWordsList.SelectedItem = FindCustomDictionaryWord(previousSelection);
-        }
+        var model = _customDictionaryEditor.Model;
+        ProofingCustomDictionaryWordsList.ItemsSource = model.Words;
+        ProofingCustomDictionaryWordsList.SelectedItem = model.SelectedWord;
 
         UpdateProofingCustomDictionaryButtons();
     }
-
-    private string? FindCustomDictionaryWord(string word)
-    {
-        foreach (var candidate in _customDictionaryWords)
-        {
-            if (CustomDictionaryWordsEqual(candidate, word))
-                return candidate;
-        }
-
-        return null;
-    }
-
-    private static bool CustomDictionaryWordsEqual(string word, string otherWord) =>
-        string.Equals(word, otherWord, StringComparison.OrdinalIgnoreCase);
 
     private void UpdateProofingCustomDictionaryButtons()
     {
         if (ProofingCustomDictionaryAddWordButton is null)
             return;
 
-        ProofingCustomDictionaryAddWordButton.IsEnabled =
-            FreeXOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text) is not null;
-        ProofingCustomDictionaryRemoveWordButton.IsEnabled =
-            ProofingCustomDictionaryWordsList.SelectedItem is string;
-        ProofingCustomDictionaryClearWordsButton.IsEnabled = _customDictionaryWords.Count > 0;
+        var model = _customDictionaryEditor.Model;
+        ProofingCustomDictionaryAddWordButton.IsEnabled = model.CanAdd;
+        ProofingCustomDictionaryRemoveWordButton.IsEnabled = model.CanRemove;
+        ProofingCustomDictionaryClearWordsButton.IsEnabled = model.CanClear;
     }
 
-    private void ProofingCustomDictionaryWordBox_TextChanged(object sender, TextChangedEventArgs e) =>
+    private void ProofingCustomDictionaryWordBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _customDictionaryEditor.SetPendingWord(ProofingCustomDictionaryWordBox.Text);
         UpdateProofingCustomDictionaryButtons();
+    }
 
     private void ProofingCustomDictionaryWordBox_KeyDown(object sender, KeyEventArgs e)
     {
@@ -749,24 +602,18 @@ public partial class OptionsDialog : Window
         e.Handled = true;
     }
 
-    private void ProofingCustomDictionaryWordsList_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+    private void ProofingCustomDictionaryWordsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _customDictionaryEditor.SelectWord(ProofingCustomDictionaryWordsList.SelectedItem as string);
         UpdateProofingCustomDictionaryButtons();
+    }
 
     private void ProofingCustomDictionaryAddWordButton_Click(object sender, RoutedEventArgs e)
     {
-        var word = FreeXOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text);
-        if (word is null)
-        {
-            ProofingCustomDictionaryWordBox.Clear();
-            UpdateProofingCustomDictionaryButtons();
-            return;
-        }
-
-        var normalized = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords.Append(word));
-        _customDictionaryWords.Clear();
-        _customDictionaryWords.AddRange(normalized);
+        _customDictionaryEditor.SetPendingWord(ProofingCustomDictionaryWordBox.Text);
+        _customDictionaryEditor.AddPendingWord();
         ProofingCustomDictionaryWordBox.Clear();
-        RefreshProofingCustomDictionaryWordsList(word);
+        RefreshProofingCustomDictionaryWordsList();
     }
 
     private void ProofingCustomDictionaryRemoveWordButton_Click(object sender, RoutedEventArgs e)
@@ -774,29 +621,26 @@ public partial class OptionsDialog : Window
         if (ProofingCustomDictionaryWordsList.SelectedItem is not string selectedWord)
             return;
 
-        var nextWord = SpellCheckWorkflowPlanner.RemoveCustomDictionaryWordAndSelectNext(
-            _customDictionaryWords,
-            selectedWord);
-        RefreshProofingCustomDictionaryWordsList(nextWord);
+        _customDictionaryEditor.SelectWord(selectedWord);
+        _customDictionaryEditor.RemoveSelectedWord();
+        RefreshProofingCustomDictionaryWordsList();
     }
 
     private void ProofingCustomDictionaryClearWordsButton_Click(object sender, RoutedEventArgs e)
     {
-        _customDictionaryWords.Clear();
+        _customDictionaryEditor.Clear();
         RefreshProofingCustomDictionaryWordsList();
         ProofingCustomDictionaryWordBox.Focus();
         Keyboard.Focus(ProofingCustomDictionaryWordBox);
     }
 
     private void RibbonImportExportButton_Click(object sender, RoutedEventArgs e) =>
-        ShowDeferredOptionsMessage(DeferredCommandMessages.RibbonCustomizationImportExport());
+        ShowDeferredOptionsMessage(WpfResourceKeyTextResolver.Resolve(DeferredCommandMessagePlanner.RibbonCustomizationImportExport()));
 
     private void QuickAccessResetButton_Click(object sender, RoutedEventArgs e)
     {
-        var reset = QuickAccessToolbarCustomizationPlanner.Reset();
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(reset);
-        RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessCommandIds[0]);
+        _quickAccessSession.Reset();
+        RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessSession.CommandIds[0]);
     }
 
     private void QuickAccessImportExportButton_Click(object sender, RoutedEventArgs e)
@@ -808,11 +652,11 @@ public partial class OptionsDialog : Window
         };
 
         var importItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ImportMenuHeader };
-        AutomationProperties.SetAutomationId(importItem, "QuickAccessToolbarImportCustomizationMenuItem");
+        AutomationProperties.SetAutomationId(importItem, FreeXAutomationIdCatalog.QuickAccessToolbarImportCustomizationMenuItem);
         importItem.Click += QuickAccessImportCustomizationMenuItem_Click;
 
         var exportItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ExportMenuHeader };
-        AutomationProperties.SetAutomationId(exportItem, "QuickAccessToolbarExportCustomizationMenuItem");
+        AutomationProperties.SetAutomationId(exportItem, FreeXAutomationIdCatalog.QuickAccessToolbarExportCustomizationMenuItem);
         exportItem.Click += QuickAccessExportCustomizationMenuItem_Click;
 
         menu.Items.Add(importItem);
@@ -832,17 +676,15 @@ public partial class OptionsDialog : Window
         if (!pickerResult.Chosen)
             return;
 
-        var result = QuickAccessToolbarCustomizationFile.TryLoad(pickerResult.FileName!);
+        var result = _quickAccessSession.TryImport(pickerResult.FileName!);
         if (!result.Success || result.Customization is null)
         {
             DialogMessageHelper.ShowWarning(this, result.ErrorMessage, UiText.Get("Options_QuickAccessToolbar"));
             return;
         }
 
-        QuickAccessBelowRibbonCheckBox.IsChecked = result.Customization.QuickAccessToolbarBelowRibbon;
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(result.Customization.CommandIds);
-        RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessCommandIds[0]);
+        QuickAccessBelowRibbonCheckBox.IsChecked = _quickAccessSession.QuickAccessToolbarBelowRibbon;
+        RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessSession.CommandIds[0]);
         DialogMessageHelper.ShowInfo(
             this,
             $"Imported Quick Access Toolbar customization from '{pickerResult.FileName!}'.",
@@ -861,11 +703,8 @@ public partial class OptionsDialog : Window
         if (!pickerResult.Chosen)
             return;
 
-        if (!QuickAccessToolbarCustomizationFile.TrySave(
-                pickerResult.FileName!,
-                _quickAccessCommandIds,
-                QuickAccessBelowRibbonCheckBox.IsChecked == true,
-                out var errorMessage))
+        _quickAccessSession.SetPlacement(QuickAccessBelowRibbonCheckBox.IsChecked == true);
+        if (!_quickAccessSession.TryExport(pickerResult.FileName!, out var errorMessage))
         {
             DialogMessageHelper.ShowError(this, errorMessage, UiText.Get("Options_QuickAccessToolbar"));
             return;
@@ -878,10 +717,10 @@ public partial class OptionsDialog : Window
     }
 
     private void AddInsGoButton_Click(object sender, RoutedEventArgs e) =>
-        ShowDeferredOptionsMessage(DeferredCommandMessages.OfficeAddIns());
+        ShowDeferredOptionsMessage(WpfResourceKeyTextResolver.Resolve(DeferredCommandMessagePlanner.OfficeAddIns()));
 
     private void TrustCenterSettingsButton_Click(object sender, RoutedEventArgs e) =>
-        ShowDeferredOptionsMessage(DeferredCommandMessages.TrustCenterSettings());
+        ShowDeferredOptionsMessage(WpfResourceKeyTextResolver.Resolve(DeferredCommandMessagePlanner.TrustCenterSettings()));
 
     private void ShowDeferredOptionsMessage(DeferredCommandMessage message) =>
         DialogMessageHelper.ShowInfo(this, message.Body, message.Title);

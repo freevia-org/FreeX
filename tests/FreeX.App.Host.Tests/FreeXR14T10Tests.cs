@@ -43,7 +43,7 @@ public sealed class FreeXR14T10Tests
                 window.Activate();
                 PumpDispatcher();
 
-                var sheet = workbook.GetSheetAt(0);
+                var sheet = window.Session.Workbook.GetSheetAt(0);
                 var a1 = new CellAddress(sheet.Id, 1, 1);
                 var b1 = new CellAddress(sheet.Id, 1, 2);
                 var c1 = new CellAddress(sheet.Id, 1, 3);

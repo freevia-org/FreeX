@@ -37,26 +37,33 @@ public sealed class NameBoxDropdownParityCaptureSourceTests
     [Fact]
     public void AvaloniaParityCapture_KeepsPhysicalFixtureSeparate()
     {
-        var capture = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+        var capture = WorkspaceFileLocator.ReadAllText("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
+        var physicalEvidence = WorkspaceFileLocator.ReadAllText(
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.NameBoxPhysicalEvidence.cs");
         var avaloniaSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var rendererAccess = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Avalonia", "MainWindow.RendererAccess.cs");
 
         capture.Should().Contain("SeedNameBoxDropdownParityFixture");
         capture.Should().Contain("68000000-0000-0000-0000-000000000001");
         capture.Should().Contain("68000000-0000-0000-0000-000000000004");
-        avaloniaSource.Should().Contain("SeedNameBoxDropdownPhysicalFixture");
-        avaloniaSource.Should().Contain("67000000-0000-0000-0000-000000000001");
-        avaloniaSource.Should().Contain("67000000-0000-0000-0000-000000000004");
-        avaloniaSource.Should().Contain("Width = NameBoxDropdownParityCaptureWidth");
-        avaloniaSource.Should().Contain("Height = NameBoxDropdownParityCaptureHeight");
+        physicalEvidence.Should().Contain("SeedNameBoxDropdownPhysicalFixture");
+        physicalEvidence.Should().Contain("67000000-0000-0000-0000-000000000001");
+        physicalEvidence.Should().Contain("67000000-0000-0000-0000-000000000004");
+        avaloniaSource.Should().NotContain("SeedNameBoxDropdownPhysicalFixture");
+        avaloniaSource.Should().Contain("Width = NameBoxDropdownWidth");
+        avaloniaSource.Should().Contain("Height = NameBoxDropdownHeight");
+        rendererAccess.Should().Contain("NameBoxDropdownWidth = 208");
+        rendererAccess.Should().Contain("NameBoxDropdownHeight = 136");
     }
 
     [Fact]
     public void AvaloniaParityCapture_RejectsSyntheticPopupEvidenceAndRequiresNativeX11()
     {
         var capture = WorkspaceFileLocator.ReadAllText(
-            "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
         var parityManifest = WorkspaceFileLocator.ReadAllText(
-            "src", "FreeX.App.Avalonia", "ParityCapture.cs");
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "ParityCapture.cs");
         var probe = WorkspaceFileLocator.ReadAllText(
             "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh");
 

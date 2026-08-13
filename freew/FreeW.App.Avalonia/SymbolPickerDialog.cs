@@ -16,7 +16,7 @@ using FreeW.App.Presentation.Dialogs;
 namespace FreeW.App.Avalonia;
 
 /// <summary>Compact modal glyph picker matching FreeW's WPF Symbol dialog.</summary>
-internal sealed class SymbolPickerDialog : FreeWDialogWindow
+internal sealed partial class SymbolPickerDialog : FreeWDialogWindow
 {
     private static readonly IBrush GlyphBackground = new ImmutableSolidColorBrush(Color.FromRgb(221, 221, 221));
     private static readonly IBrush GlyphBorder = new ImmutableSolidColorBrush(Color.FromRgb(200, 200, 200));
@@ -50,12 +50,13 @@ internal sealed class SymbolPickerDialog : FreeWDialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
-        AutomationProperties.SetAutomationId(this, "SymbolPickerDialog");
+        AutomationProperties.SetAutomationId(this, FreeWSymbolPickerDialogPlanner.DialogAutomationId);
 
         var panel = new StackPanel { Margin = new Thickness(FreeWSymbolPickerDialogPlanner.OuterMargin) };
         var grid = new UniformGrid { Columns = FreeWSymbolPickerDialogPlanner.Columns };
         foreach (var glyph in FreeWSymbolPickerDialogPlanner.Glyphs)
         {
+            var semantic = FreeWSymbolPickerDialogPlanner.BuildSemantic(glyph);
             var button = new Button
             {
                 Content = glyph,
@@ -68,10 +69,9 @@ internal sealed class SymbolPickerDialog : FreeWDialogWindow
                 HorizontalContentAlignment = HorizontalAlignment.Center,
                 VerticalContentAlignment = VerticalAlignment.Center,
             };
-            var codePoint = FreeWSymbolPickerDialogPlanner.BuildCodePointLabel(glyph);
-            ToolTip.SetTip(button, codePoint);
-            AutomationProperties.SetName(button, glyph);
-            AutomationProperties.SetAutomationId(button, $"SymbolPicker{codePoint[2..]}Button");
+            ToolTip.SetTip(button, semantic.CodePointLabel);
+            AutomationProperties.SetName(button, semantic.AutomationName);
+            AutomationProperties.SetAutomationId(button, semantic.AutomationId);
             button.Click += (_, _) => SelectGlyph(glyph, close: true);
             _glyphButtons.Add(button);
             grid.Children.Add(button);
@@ -91,7 +91,7 @@ internal sealed class SymbolPickerDialog : FreeWDialogWindow
                 0),
             Padding = new Thickness(8, 2),
         };
-        AutomationProperties.SetAutomationId(cancel, "SymbolPickerCancelButton");
+        AutomationProperties.SetAutomationId(cancel, FreeWSymbolPickerDialogPlanner.CancelAutomationId);
         cancel.Click += (_, _) => Close();
         panel.Children.Add(cancel);
 
@@ -100,14 +100,6 @@ internal sealed class SymbolPickerDialog : FreeWDialogWindow
         {
             ApplyGlyphButtonChrome(grid);
         };
-    }
-
-    internal IReadOnlyList<Button> GlyphButtonsForTest => _glyphButtons;
-
-    internal string? SelectGlyphForTest(string glyph)
-    {
-        SelectGlyph(glyph, close: false);
-        return Result;
     }
 
     private void SelectGlyph(string glyph, bool close)

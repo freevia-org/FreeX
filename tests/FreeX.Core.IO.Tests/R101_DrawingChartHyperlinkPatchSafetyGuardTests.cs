@@ -315,17 +315,6 @@ public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
         AllowedCopyForwardRhs.IsMatch("null").Should().BeFalse();
     }
 
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return directory.FullName;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root (FreeX.slnx) above " + AppContext.BaseDirectory);
-    }
+    private static string FindRepositoryRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

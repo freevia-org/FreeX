@@ -24,9 +24,9 @@ public sealed class R102_DrawingChartHyperlinkPatchSafetyGuardMultilineScanTests
     [Fact]
     public void Scan_CatchesNonCopyForwardHyperlinkAssignment_SplitAcrossMultipleLines()
     {
-        var fixtureDirectory = CreateFixtureDirectory();
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("FreeX.R102HyperlinkGuardFixture-"))
         {
+            var fixtureDirectory = temporaryDirectory.Path;
             File.WriteAllText(
                 Path.Combine(fixtureDirectory, "SetShapeHyperlinkCommand.cs"),
                 """
@@ -50,18 +50,14 @@ public sealed class R102_DrawingChartHyperlinkPatchSafetyGuardMultilineScanTests
                 "though the terminating token is on a later line than `Hyperlink =`");
             violations[0].Should().Contain("SetShapeHyperlinkCommand.cs");
         }
-        finally
-        {
-            Directory.Delete(fixtureDirectory, recursive: true);
-        }
     }
 
     [Fact]
     public void Scan_CatchesNonCopyForwardHyperlinkAssignment_AsLastInitializerMemberWithNoTrailingComma()
     {
-        var fixtureDirectory = CreateFixtureDirectory();
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("FreeX.R102HyperlinkGuardFixture-"))
         {
+            var fixtureDirectory = temporaryDirectory.Path;
             File.WriteAllText(
                 Path.Combine(fixtureDirectory, "SetChartHyperlinkCommand.cs"),
                 """
@@ -88,10 +84,6 @@ public sealed class R102_DrawingChartHyperlinkPatchSafetyGuardMultilineScanTests
                 "`,`/`;`/`}` terminator appears on the same line as `Hyperlink =`");
             violations[0].Should().Contain("SetChartHyperlinkCommand.cs");
         }
-        finally
-        {
-            Directory.Delete(fixtureDirectory, recursive: true);
-        }
     }
 
     /// <summary>
@@ -102,9 +94,9 @@ public sealed class R102_DrawingChartHyperlinkPatchSafetyGuardMultilineScanTests
     [Fact]
     public void Scan_StillAllowsKnownCopyForwardShapes_SingleLineAndLastMember()
     {
-        var fixtureDirectory = CreateFixtureDirectory();
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("FreeX.R102HyperlinkGuardFixture-"))
         {
+            var fixtureDirectory = temporaryDirectory.Path;
             File.WriteAllText(
                 Path.Combine(fixtureDirectory, "CloneShapeSite.cs"),
                 """
@@ -129,16 +121,5 @@ public sealed class R102_DrawingChartHyperlinkPatchSafetyGuardMultilineScanTests
                 "with a trailing comma or as the last member of a `with`-initializer -- introduces no " +
                 "new data and must remain a non-violation");
         }
-        finally
-        {
-            Directory.Delete(fixtureDirectory, recursive: true);
-        }
-    }
-
-    private static string CreateFixtureDirectory()
-    {
-        var directory = Path.Combine(Path.GetTempPath(), "FreeX.R102HyperlinkGuardFixture_" + Path.GetRandomFileName());
-        Directory.CreateDirectory(directory);
-        return directory;
     }
 }

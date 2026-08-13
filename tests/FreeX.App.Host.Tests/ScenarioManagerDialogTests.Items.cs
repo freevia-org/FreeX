@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.ScenarioManager;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -12,7 +13,7 @@ public sealed partial class ScenarioManagerDialogTests
         workbook.Scenarios.Add(new WorkbookScenario("Best Case", []));
         workbook.Scenarios.Add(new WorkbookScenario("Worst Case", []));
 
-        var items = ScenarioManagerDialog.BuildScenarioItems(workbook);
+        var items = ScenarioManagerDialogPlanner.BuildItems(workbook);
 
         items.Select(item => item.Name).Should().Equal("Best Case", "Worst Case");
     }
@@ -34,10 +35,10 @@ public sealed partial class ScenarioManagerDialogTests
             Hidden: true,
             Locked: true));
 
-        var item = ScenarioManagerDialog.BuildScenarioItems(workbook).Single();
+        var item = ScenarioManagerDialogPlanner.BuildItems(workbook).Single();
 
         item.Name.Should().Be("Best Case");
-        item.ChangingCellsText.Should().Be("B2:C4");
+        item.ChangingCellsText.Should().Be("B2:B2,C4:C4");
         item.Comment.Should().Be("Revenue lift");
         item.Hidden.Should().BeTrue();
         item.Locked.Should().BeTrue();

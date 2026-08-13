@@ -10,12 +10,12 @@ namespace FreeX.App.Host;
 public sealed class PasswordProtectionDialog : Window
 {
     private readonly PasswordBox _passwordBox = new();
-    private readonly List<CheckBox> _sheetPermissionBoxes = [];
+    private readonly List<(SheetProtectionPermission Permission, CheckBox Box)> _sheetPermissionBoxes = [];
     private readonly bool _requiresConfirmation;
 
     public string? Password { get; private set; }
-    public IReadOnlyList<string> SelectedSheetPermissions { get; private set; } =
-        SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions();
+    public IReadOnlyList<SheetProtectionPermission> SelectedSheetPermissions { get; private set; } =
+        SheetProtectionOptions.DefaultEnabledPermissions;
 
     public PasswordProtectionDialog(string title, string prompt)
     {
@@ -85,16 +85,15 @@ public sealed class PasswordProtectionDialog : Window
         };
         root.Children.Add(group);
 
-        var defaultSelectedPermissions = SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions().ToHashSet(StringComparer.Ordinal);
-        foreach (var permission in SheetProtectionPermissionLabels.GetDefaultSheetPermissions())
+        foreach (var option in SheetProtectionOptions.All)
         {
             var box = new CheckBox
             {
-                Content = permission,
-                IsChecked = defaultSelectedPermissions.Contains(permission),
+                Content = UiText.Get(option.LabelKey),
+                IsChecked = option.DefaultEnabled,
                 Margin = new Thickness(0, 0, 0, 4)
             };
-            _sheetPermissionBoxes.Add(box);
+            _sheetPermissionBoxes.Add((option.Permission, box));
             checklist.Children.Add(box);
         }
     }
@@ -110,9 +109,8 @@ public sealed class PasswordProtectionDialog : Window
 
         Password = _passwordBox.Password;
         SelectedSheetPermissions = _sheetPermissionBoxes
-            .Where(box => box.IsChecked == true)
-            .Select(box => box.Content?.ToString() ?? "")
-            .Where(permission => !string.IsNullOrWhiteSpace(permission))
+            .Where(item => item.Box.IsChecked == true)
+            .Select(item => item.Permission)
             .ToList();
         DialogResult = true;
     }

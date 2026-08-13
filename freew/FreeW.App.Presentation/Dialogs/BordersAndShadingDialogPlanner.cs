@@ -30,9 +30,130 @@ public sealed record BordersAndShadingDialogInput(
     string? ShadingColorHex,
     int ShadingPatternIndex);
 
+public sealed record BordersAndShadingDialogInitialState(
+    int ParagraphSettingIndex,
+    int ParagraphLineStyleIndex,
+    int ParagraphColorIndex,
+    string ParagraphWidthText,
+    bool Top,
+    bool Left,
+    bool Bottom,
+    bool Right,
+    int PageSettingIndex,
+    int PageLineStyleIndex,
+    int PageColorIndex,
+    string PageWidthText,
+    int PageArtIndex,
+    int ShadingColorIndex,
+    int ShadingPatternIndex);
+
+public sealed record PageBordersDialogInitialState(
+    int SettingIndex,
+    int LineStyleIndex,
+    int ColorIndex,
+    string WidthText,
+    int ArtIndex);
+
+public sealed record PageBordersDialogInput(
+    int SettingIndex,
+    int LineStyleIndex,
+    int ColorIndex,
+    string? WidthText,
+    int ArtIndex);
+
+public sealed record PageBordersDialogAcceptance(
+    bool IsAccepted,
+    PageBorder? PageBorder = null,
+    string? ValidationMessage = null);
+
+public sealed record BordersAndShadingDialogAcceptance(
+    BordersAndShadingDialogResult? Result,
+    string? ValidationMessage)
+{
+    public bool IsAccepted => Result is not null;
+}
+
+public sealed class BordersAndShadingDialogSession
+{
+    private readonly CultureInfo _culture;
+
+    public BordersAndShadingDialogSession(
+        ParagraphFormatting paragraph,
+        PageBorder? pageBorder,
+        CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(culture);
+        _culture = culture;
+        InitialState = BordersAndShadingDialogPlanner.BuildInitialState(paragraph, pageBorder, culture);
+    }
+
+    public BordersAndShadingDialogInitialState InitialState { get; }
+
+    public BorderSettingPlan PlanParagraphSetting(int settingIndex) =>
+        BordersAndShadingDialogPlanner.PlanParagraphSetting(settingIndex);
+
+    public string PaletteHex(int index) => BordersAndShadingDialogPlanner.PaletteHex(index);
+
+    public string? ShadingHex(int index) =>
+        index <= 0 ? null : BordersAndShadingDialogPlanner.PaletteHex(index - 1);
+
+    public BordersAndShadingDialogAcceptance PlanAcceptance(BordersAndShadingDialogInput input)
+    {
+        if (!BordersAndShadingDialogPlanner.TryBuildResult(input, _culture, out var result, out var error))
+            return new BordersAndShadingDialogAcceptance(null, error);
+
+        return new BordersAndShadingDialogAcceptance(result, ValidationMessage: null);
+    }
+}
+
 public static class BordersAndShadingDialogPlanner
 {
+    public const string Title = "Borders and Shading";
+    public const string BordersTabLabel = "Borders";
+    public const string PageBorderTabLabel = "Page Border";
+    public const string ShadingTabLabel = "Shading";
+    public const string SettingLabel = "Setting:";
+    public const string StyleLabel = "Style:";
+    public const string ColorLabel = "Colour:";
+    public const string WidthLabel = "Width (pt):";
+    public const string EdgesLabel = "Edges:";
+    public const string ArtBorderLabel = "Art border:";
+    public const string FillLabel = "Fill:";
+    public const string PatternLabel = "Pattern:";
+    public const string TopLabel = "Top";
+    public const string LeftLabel = "Left";
+    public const string BottomLabel = "Bottom";
+    public const string RightLabel = "Right";
+    public const string NoColorLabel = "No Colour";
+    public const string AcceptButtonLabel = "OK";
+    public const string RemovePageBorderButtonLabel = "None";
+    public const string CancelButtonLabel = "Cancel";
     public const string WidthValidationMessage = "Enter a border width between 0 and 12 points.";
+    public const string AutomationId = "BordersAndShadingDialog";
+    public const string ParagraphSettingAutomationId = "BordersAndShadingParagraphSetting";
+    public const string ParagraphStyleAutomationId = "BordersAndShadingParagraphStyle";
+    public const string ParagraphColorAutomationId = "BordersAndShadingParagraphColor";
+    public const string ParagraphWidthAutomationId = "BordersAndShadingParagraphWidth";
+    public const string TopEdgeAutomationId = "BordersAndShadingTopEdge";
+    public const string LeftEdgeAutomationId = "BordersAndShadingLeftEdge";
+    public const string BottomEdgeAutomationId = "BordersAndShadingBottomEdge";
+    public const string RightEdgeAutomationId = "BordersAndShadingRightEdge";
+    public const string PageSettingAutomationId = "BordersAndShadingPageSetting";
+    public const string PageStyleAutomationId = "BordersAndShadingPageStyle";
+    public const string PageColorAutomationId = "BordersAndShadingPageColor";
+    public const string PageWidthAutomationId = "BordersAndShadingPageWidth";
+    public const string PageArtAutomationId = "BordersAndShadingPageArt";
+    public const string ShadingColorAutomationId = "BordersAndShadingShadingColor";
+    public const string ShadingPatternAutomationId = "BordersAndShadingShadingPattern";
+    public const string ValidationAutomationId = "BordersAndShadingValidationMessage";
+    public const string TabsAutomationId = "BordersAndShadingTabs";
+    public const string BordersTabAutomationId = "BordersAndShadingBordersTab";
+    public const string PageBorderTabAutomationId = "BordersAndShadingPageBorderTab";
+    public const string ShadingTabAutomationId = "BordersAndShadingShadingTab";
+    public const string AcceptButtonAutomationId = "BordersAndShadingOkButton";
+    public const string CancelButtonAutomationId = "BordersAndShadingCancelButton";
+    public const string NoShadingColorAutomationId = "BordersAndShadingNoShadingColor";
 
     public static readonly IReadOnlyList<string> SettingNames = ["None", "Box", "Shadow", "3-D", "Custom"];
     public static readonly IReadOnlyList<string> LineStyleNames = ["Single", "Dotted", "Dashed", "Double", "Thick", "Wave"];
@@ -81,6 +202,84 @@ public static class BordersAndShadingDialogPlanner
         for (var i = 0; i < ArtBorders.Count; i++)
         {
             if (ArtBorders[i].ArtId == artId)
+                return i;
+        }
+
+        return 0;
+    }
+
+    public static BordersAndShadingDialogInitialState BuildInitialState(
+        ParagraphFormatting paragraph,
+        PageBorder? pageBorder,
+        CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(culture);
+
+        var border = paragraph.Border;
+        return new BordersAndShadingDialogInitialState(
+            ParagraphSettingIndex: SettingIndexFor(border),
+            ParagraphLineStyleIndex: IndexOfLineStyle(border?.LineStyle ?? BorderLineStyle.Single),
+            ParagraphColorIndex: PaletteIndex(border?.ColorHex ?? "#000000"),
+            ParagraphWidthText: FormatPoints(border?.WidthPt ?? 0.5, culture),
+            Top: border?.Top ?? true,
+            Left: border?.Left ?? true,
+            Bottom: border?.Bottom ?? true,
+            Right: border?.Right ?? true,
+            PageSettingIndex: pageBorder is null ? 0 : 1,
+            PageLineStyleIndex: IndexOfLineStyle(pageBorder?.LineStyle ?? BorderLineStyle.Single),
+            PageColorIndex: PaletteIndex(pageBorder?.ColorHex ?? "#000000"),
+            PageWidthText: FormatPoints(pageBorder?.WidthPt ?? 1.0, culture),
+            PageArtIndex: ArtIndexFor(pageBorder?.ArtId ?? 0),
+            ShadingColorIndex: string.IsNullOrWhiteSpace(paragraph.ShadingColorHex)
+                ? 0
+                : PaletteIndex(paragraph.ShadingColorHex) + 1,
+            ShadingPatternIndex: IndexOfPattern(paragraph.ShadingPattern));
+    }
+
+    public static PageBordersDialogInitialState BuildPageBordersInitialState(
+        PageBorder? pageBorder,
+        CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+        return new PageBordersDialogInitialState(
+            SettingIndex: pageBorder is null ? 0 : 1,
+            LineStyleIndex: IndexOfLineStyle(pageBorder?.LineStyle ?? BorderLineStyle.Single),
+            ColorIndex: PaletteIndex(pageBorder?.ColorHex ?? "#000000"),
+            WidthText: FormatPoints(pageBorder?.WidthPt ?? 1.0, culture),
+            ArtIndex: ArtIndexFor(pageBorder?.ArtId ?? 0));
+    }
+
+    public static PageBordersDialogAcceptance SubmitPageBorders(
+        PageBordersDialogInput input,
+        CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(culture);
+
+        if (!TryReadWidth(input.WidthText, culture, out var width))
+            return new PageBordersDialogAcceptance(false, ValidationMessage: WidthValidationMessage);
+
+        if (input.SettingIndex == 0)
+            return new PageBordersDialogAcceptance(true);
+
+        var artIndex = Math.Clamp(input.ArtIndex, 0, ArtBorders.Count - 1);
+        var pageBorder = new PageBorder(PaletteHex(input.ColorIndex), width)
+        {
+            LineStyle = ValueAtOrDefault(LineStyleValues, input.LineStyleIndex),
+            ArtId = ArtBorders[artIndex].ArtId,
+        };
+        return new PageBordersDialogAcceptance(true, pageBorder);
+    }
+
+    public static string PaletteHex(int index) =>
+        Palette[Math.Clamp(index, 0, Palette.Count - 1)];
+
+    public static int PaletteIndex(string? hex)
+    {
+        for (var i = 0; i < Palette.Count; i++)
+        {
+            if (string.Equals(Palette[i], hex, StringComparison.OrdinalIgnoreCase))
                 return i;
         }
 

@@ -1,4 +1,5 @@
 using FreeX.App.Presentation.DefinedNames;
+using FreeX.Core.Model;
 using FluentAssertions;
 
 namespace FreeX.App.Presentation.Tests.DefinedNames;
@@ -7,11 +8,13 @@ public sealed class DefinedNameListProjectorTests
 {
     private static DefinedNameRow Row(
         string name,
-        string scope = DefinedNameScope.WorkbookLabel,
+        DefinedNameScope? scope = null,
         string refersTo = "=Sheet1!$A$1",
         string value = "",
         string comment = "") =>
-        DefinedNameListProjector.CreateRow(name, scope, refersTo, value, comment);
+        DefinedNameListProjector.CreateRow(name, scope ?? DefinedNameScope.Workbook, refersTo, value, comment);
+
+    private static DefinedNameScope SheetScope(string label) => DefinedNameScope.ForSheet(SheetId.New(), label);
 
     [Fact]
     public void CreateRow_DerivesRangeKindForPlainReference()
@@ -41,9 +44,9 @@ public sealed class DefinedNameListProjectorTests
     {
         var rows = new[]
         {
-            Row("A", scope: DefinedNameScope.WorkbookLabel),
-            Row("B", scope: "Sheet1"),
-            Row("C", scope: DefinedNameScope.WorkbookLabel)
+            Row("A"),
+            Row("B", scope: SheetScope("Sheet1")),
+            Row("C")
         };
 
         DefinedNameListProjector.Filter(rows, DefinedNameFilter.Workbook)
@@ -55,9 +58,9 @@ public sealed class DefinedNameListProjectorTests
     {
         var rows = new[]
         {
-            Row("A", scope: DefinedNameScope.WorkbookLabel),
-            Row("B", scope: "Sheet1"),
-            Row("C", scope: "Sheet2")
+            Row("A"),
+            Row("B", scope: SheetScope("Sheet1")),
+            Row("C", scope: SheetScope("Sheet2"))
         };
 
         DefinedNameListProjector.Filter(rows, DefinedNameFilter.Worksheet)
@@ -112,9 +115,9 @@ public sealed class DefinedNameListProjectorTests
     {
         var rows = new[]
         {
-            Row("X", scope: "Sheet2"),
-            Row("Y", scope: DefinedNameScope.WorkbookLabel),
-            Row("Z", scope: "Sheet1")
+            Row("X", scope: SheetScope("Sheet2")),
+            Row("Y"),
+            Row("Z", scope: SheetScope("Sheet1"))
         };
 
         DefinedNameListProjector.Sort(rows, DefinedNameSortColumn.Scope)
@@ -126,9 +129,9 @@ public sealed class DefinedNameListProjectorTests
     {
         var rows = new[]
         {
-            Row("zebra", scope: "Sheet1"),
-            Row("apple", scope: DefinedNameScope.WorkbookLabel),
-            Row("mango", scope: DefinedNameScope.WorkbookLabel)
+            Row("zebra", scope: SheetScope("Sheet1")),
+            Row("apple"),
+            Row("mango")
         };
 
         DefinedNameListProjector.Project(rows, DefinedNameFilter.Workbook, DefinedNameSortColumn.Name)

@@ -1,6 +1,5 @@
 using System.IO;
 using System.IO.Compression;
-using System.Reflection;
 using FluentAssertions;
 using Free.Shared.AppServices;
 
@@ -12,7 +11,7 @@ namespace FreeX.App.Host.Tests;
 /// which gives each sibling window its own autosave snapshot per J25) as several independent
 /// recovery candidates. Accepting more than one such candidate previously loaded the same document
 /// into two disconnected MainWindow/WorkbookRef instances, silently forking what was one shared,
-/// dirtied workbook. App.DeduplicateCandidatesByDocument collapses same-document candidates down
+/// dirtied workbook. AutosaveRecoveryCandidateProcessor collapses same-document candidates down
 /// to the single newest snapshot before OfferStartupRecovery ever offers them.
 ///
 /// Since R82-services-autosave-recovery-5-1, "same document" additionally requires a matching
@@ -23,20 +22,6 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class CrashRecoverySharedWorkbookDedupTests
 {
-    /// <summary>Self-contained temp directory helper (avoids relying on another test project's internal type).</summary>
-    private sealed class RecoveryTempDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
-
-        public RecoveryTempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
-
     // Real snapshots are OPC/ZIP packages; EnumerateCandidates validates that, so test snapshots
     // must be readable archives (matching AutosaveSnapshotStoreTests' WriteSnapshotZip pattern).
     private static void WriteSnapshotZip(string path)
@@ -69,20 +54,13 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
     }
 
     private static IReadOnlyList<AutosaveRecoveryCandidate> InvokeDeduplicate(
-        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
-    {
-        var method = typeof(App).GetMethod(
-            "DeduplicateCandidatesByDocument",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-
-        return (IReadOnlyList<AutosaveRecoveryCandidate>)method!.Invoke(null, [candidates])!;
-    }
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates) =>
+        AutosaveRecoveryCandidateProcessor.DeduplicateByDocument(candidates);
 
     [Fact]
     public void Deduplicate_CollapsesTwoSnapshotsOfSharedWorkbookIntoOne()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.CrashRecoveryDedup-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -107,7 +85,7 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
     [Fact]
     public void Deduplicate_KeepsDistinctDocumentsSeparate()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.CrashRecoveryDedup-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -125,7 +103,7 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
     [Fact]
     public void Deduplicate_GroupsUnsavedWorkbooksByDisplayNameWhenNoFilePath()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.CrashRecoveryDedup-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -145,7 +123,7 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
     [Fact]
     public void Deduplicate_IsCaseInsensitiveForFilePaths()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.CrashRecoveryDedup-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -161,7 +139,7 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
     [Fact]
     public void Deduplicate_SingleCandidateIsUnaffected()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.CrashRecoveryDedup-");
         var store = new AutosaveSnapshotStore(temp.Path);
 
         var only = WriteCandidate(store, "recovery-5-w0", @"C:\Users\alice\Book1.fxl", "Book1", DateTimeOffset.UtcNow);

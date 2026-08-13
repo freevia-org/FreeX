@@ -7,6 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Backstage;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -21,7 +22,7 @@ internal sealed class PrintPreviewDialog : Window
     private readonly TextBlock _pageCount = new();
     private readonly Func<Task>? _createPdf;
     private readonly Func<Task>? _directPrint;
-    private readonly BackstageDirectPrintCapability _directPrintCapability;
+    private readonly FreeWPrintPreviewSession _session;
 
     public PrintPreviewDialog(
         TextDocument document,
@@ -34,10 +35,15 @@ internal sealed class PrintPreviewDialog : Window
 
         _createPdf = createPdf;
         _directPrint = directPrint;
-        _directPrintCapability = directPrintCapability ?? BackstageDirectPrintCapability.Deferred();
+        _session = new FreeWPrintPreviewSession(
+            displayName,
+            document.Page,
+            directPrintCapability ?? BackstageDirectPrintCapability.Deferred(),
+            canCreatePdf: createPdf is not null,
+            canDirectPrint: directPrint is not null);
+        var state = _session.State;
 
-        var titleName = string.IsNullOrWhiteSpace(displayName) ? "Untitled" : displayName;
-        Title = $"Print Preview - {titleName}";
+        Title = state.Title;
         Width = 980;
         Height = 720;
         MinWidth = 760;
@@ -50,7 +56,7 @@ internal sealed class PrintPreviewDialog : Window
         _preview.Focusable = false;
         AutomationProperties.SetAutomationId(_preview, "PrintPreviewDocumentView");
 
-        Content = BuildShell(document, titleName);
+        Content = BuildShell(state);
         Opened += (_, _) => UpdatePageCount();
         KeyDown += OnKeyDown;
     }
@@ -64,7 +70,7 @@ internal sealed class PrintPreviewDialog : Window
         e.Handled = true;
     }
 
-    private Control BuildShell(TextDocument document, string displayName)
+    private Control BuildShell(FreeWPrintPreviewState state)
     {
         var root = new DockPanel
         {
@@ -80,7 +86,7 @@ internal sealed class PrintPreviewDialog : Window
             ColumnDefinitions = new ColumnDefinitions("260,*"),
         };
 
-        var summary = BuildSummaryPane(document, displayName, _directPrintCapability);
+        var summary = BuildSummaryPane(state);
         Grid.SetColumn(summary, 0);
         grid.Children.Add(summary);
 
@@ -100,6 +106,7 @@ internal sealed class PrintPreviewDialog : Window
 
     private Control BuildToolbar()
     {
+        var action = _session.State.PrimaryAction;
         var toolbar = new DockPanel
         {
             Background = Brushes.White,
@@ -107,27 +114,23 @@ internal sealed class PrintPreviewDialog : Window
             Margin = new Thickness(0),
         };
 
-        var canDirectPrint = _directPrintCapability.IsAvailable && _directPrint is not null;
-        var usePdfFallback = !canDirectPrint && _createPdf is not null;
         var printButton = new Button
         {
-            Content = canDirectPrint ? "Print" : BackstageViewTextResources.CreatePdfLabel,
-            IsEnabled = canDirectPrint || usePdfFallback,
+            Content = action.Label,
+            IsEnabled = action.IsEnabled,
             Margin = new Thickness(12, 8, 6, 8),
             Padding = new Thickness(14, 6),
         };
         AutomationProperties.SetAutomationId(printButton, "PrintPreviewPrintButton");
         ToolTip.SetTip(
             printButton,
-            _directPrintCapability.IsAvailable
-                ? _directPrintCapability.ActionDescription
-                : _directPrintCapability.DeferredNote ?? _directPrintCapability.ActionDescription);
-        if (canDirectPrint)
+            action.Description);
+        if (action.Action == FreeWPrintPreviewPrimaryAction.DirectPrint)
         {
             var directPrint = _directPrint!;
             printButton.Click += async (_, _) => await directPrint();
         }
-        else if (usePdfFallback)
+        else if (action.Action == FreeWPrintPreviewPrimaryAction.CreatePdf)
         {
             var createPdf = _createPdf!;
             printButton.Click += async (_, _) => await createPdf();
@@ -137,7 +140,7 @@ internal sealed class PrintPreviewDialog : Window
 
         var closeButton = new Button
         {
-            Content = "Close",
+            Content = UiText.Get("Dialog_Close_Label"),
             Margin = new Thickness(6, 8, 12, 8),
             Padding = new Thickness(14, 6),
         };
@@ -154,12 +157,8 @@ internal sealed class PrintPreviewDialog : Window
         return toolbar;
     }
 
-    private static Control BuildSummaryPane(
-        TextDocument document,
-        string displayName,
-        BackstageDirectPrintCapability directPrintCapability)
+    private static Control BuildSummaryPane(FreeWPrintPreviewState state)
     {
-        var plan = BackstagePrintPanePlanner.Build(displayName, document.Page, directPrintCapability);
         var panel = new StackPanel
         {
             Spacing = 10,
@@ -167,19 +166,19 @@ internal sealed class PrintPreviewDialog : Window
 
         panel.Children.Add(new TextBlock
         {
-            Text = "Print settings",
+            Text = UiText.Get("PrintPreview_Settings_Heading"),
             FontSize = 18,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x19, 0x1F, 0x28)),
         });
         panel.Children.Add(new TextBlock
         {
-            Text = $"Preview uses the current paginated layout. {directPrintCapability.ActionDescription}",
+            Text = state.Description,
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(0x5E, 0x67, 0x74)),
         });
 
-        foreach (var field in plan.Fields)
+        foreach (var field in state.Fields)
         {
             panel.Children.Add(new TextBlock
             {
@@ -206,7 +205,6 @@ internal sealed class PrintPreviewDialog : Window
 
     private void UpdatePageCount()
     {
-        var pages = Math.Max(1, _preview.PageCount);
-        _pageCount.Text = pages == 1 ? "1 page" : $"{pages} pages";
+        _pageCount.Text = _session.SetPageCount(_preview.PageCount).PageCountText;
     }
 }

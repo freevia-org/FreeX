@@ -82,7 +82,8 @@ public sealed class AsyncFileLifecycleCoordinatorTests
             {
                 savedAs = true;
                 return Task.FromResult(true);
-            });
+            },
+            resolvedTargetPolicy: _ => throw new InvalidOperationException("Policy should not be used."));
 
         saved.Should().BeTrue();
         resolved.Should().BeFalse();
@@ -104,7 +105,8 @@ public sealed class AsyncFileLifecycleCoordinatorTests
                 savedTarget = resolvedTarget;
                 return Task.FromResult(true);
             },
-            saveAsAsync: () => throw new InvalidOperationException("Save As should not be used."));
+            saveAsAsync: () => throw new InvalidOperationException("Save As should not be used."),
+            resolvedTargetPolicy: _ => ResolvedSaveTargetDecision.Write);
 
         saved.Should().BeTrue();
         savedTarget.Should().BeSameAs(target);
@@ -124,7 +126,8 @@ public sealed class AsyncFileLifecycleCoordinatorTests
             {
                 savedAs = true;
                 return Task.FromResult(false);
-            });
+            },
+            resolvedTargetPolicy: _ => throw new InvalidOperationException("Policy should not be used."));
 
         saved.Should().BeFalse();
         savedAs.Should().BeTrue();
@@ -149,6 +152,64 @@ public sealed class AsyncFileLifecycleCoordinatorTests
 
         saved.Should().BeTrue();
         savedTarget.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SaveResolved_ResolvedTargetPolicySkipsWrite()
+    {
+        var target = new TestTarget(@"C:\Work\Book.fx");
+        TestTarget? policyTarget = null;
+
+        var saved = await AsyncFileLifecycleCoordinator.SaveResolvedAsync<TestTarget>(
+            isDirty: false,
+            currentFilePath: target.Path,
+            resolveCurrentTarget: () => target,
+            saveTargetAsync: _ => throw new InvalidOperationException("Save target should not be used."),
+            saveAsAsync: () => throw new InvalidOperationException("Save As should not be used."),
+            resolvedTargetPolicy: resolvedTarget =>
+            {
+                policyTarget = resolvedTarget;
+                return ResolvedSaveTargetDecision.Skip;
+            });
+
+        saved.Should().BeTrue();
+        policyTarget.Should().BeSameAs(target);
+    }
+
+    [Fact]
+    public async Task SaveResolved_ResolvedTargetPolicyErrorPropagatesWithoutWriting()
+    {
+        var target = new TestTarget(@"C:\Work\Book.fx");
+        var expected = new InvalidOperationException("Policy failed.");
+
+        Func<Task> act = async () => await AsyncFileLifecycleCoordinator.SaveResolvedAsync<TestTarget>(
+            isDirty: true,
+            currentFilePath: target.Path,
+            resolveCurrentTarget: () => target,
+            saveTargetAsync: _ => throw new InvalidOperationException("Save target should not be used."),
+            saveAsAsync: () => throw new InvalidOperationException("Save As should not be used."),
+            resolvedTargetPolicy: _ => throw expected);
+
+        (await act.Should().ThrowAsync<InvalidOperationException>())
+            .Which.Should().BeSameAs(expected);
+    }
+
+    [Fact]
+    public async Task SaveResolved_CanceledTargetWriteRemainsCanceled()
+    {
+        var target = new TestTarget(@"C:\Work\Book.fx");
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var saveTask = AsyncFileLifecycleCoordinator.SaveResolvedAsync<TestTarget>(
+            isDirty: true,
+            currentFilePath: target.Path,
+            resolveCurrentTarget: () => target,
+            saveTargetAsync: _ => Task.FromCanceled<bool>(cancellation.Token),
+            saveAsAsync: () => throw new InvalidOperationException("Save As should not be used."));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => saveTask);
+        saveTask.IsCanceled.Should().BeTrue();
     }
 
     private sealed record TestTarget(string Path);

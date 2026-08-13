@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
 using FreeP.Core.Model;
@@ -9,9 +8,7 @@ using Windows.Storage;
 namespace FreeP.App.Recording.Windows;
 
 /// <summary>
-/// Encodes the shared PNG frame package with the Windows media stack.
-///
-/// This supports delayed multi-track narration and captured camera PIP through MediaComposition.
+/// Selects the Windows MediaComposition backend for the shared recording export lifecycle.
 /// </summary>
 public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
 {
@@ -19,8 +16,7 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
     public static bool CanUseCaptionFallback => FindExecutable("ffmpeg") is not null;
 
     private readonly LinuxVideoEncoderCapability _capability;
-    private readonly ILinuxVideoExportAdapter? _captionFallback;
-    private readonly Func<ILinuxVideoExportAdapter?> _captionFallbackFactory;
+    private readonly PresentationVideoExportOrchestrator _orchestrator;
 
     public WindowsNativeVideoExportAdapter(
         LinuxVideoEncoderCapability capability,
@@ -28,215 +24,32 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
         Func<ILinuxVideoExportAdapter?>? captionFallbackFactory = null)
     {
         _capability = capability ?? throw new ArgumentNullException(nameof(capability));
-        _captionFallback = captionFallback;
-        _captionFallbackFactory = captionFallbackFactory ?? TryCreateCaptionFallback;
+        _orchestrator = new PresentationVideoExportOrchestrator(
+            capability,
+            new WindowsMediaCompositionVideoExportBackend(
+                capability,
+                captionFallback,
+                captionFallbackFactory ?? TryCreateCaptionFallback),
+            new PresentationVideoExportOrchestrationOptions(
+                TemporaryDirectoryPrefix: "freep-windows-video-",
+                InitialStage: "initializing MediaComposition",
+                InvalidOutputReason: "Windows MediaComposition completed but did not produce a valid non-empty MP4 file.",
+                CanExport: static value =>
+                    value.CanEncodeMp4 &&
+                    string.Equals(value.ExecutablePath, ExecutablePath, StringComparison.Ordinal),
+                FormatFailureReason: static (stage, ex) =>
+                    $"Windows MediaComposition failed while {stage} with {ex.GetType().Name} (0x{ex.HResult:X8}): {ex.Message}",
+                FramePreparationStage: static frame => $"creating slide clip {frame.FileName}"));
     }
 
     public LinuxVideoEncoderCapability Capability => _capability;
 
-    public async Task<LinuxVideoExportResult> ExportAsync(
+    public Task<LinuxVideoExportResult> ExportAsync(
         PresentationVideoFramePackage package,
         string outputPath,
         CancellationToken cancellationToken = default,
-        IReadOnlyList<PresentationRecordingMediaArtifact>? mediaArtifacts = null)
-    {
-        ArgumentNullException.ThrowIfNull(package);
-        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
-        if (cancellationToken.IsCancellationRequested)
-            return LinuxVideoExportResult.CanceledResult(outputPath);
-        if (!_capability.CanEncodeMp4 ||
-            !string.Equals(_capability.ExecutablePath, ExecutablePath, StringComparison.Ordinal))
-        {
-            return LinuxVideoExportResult.Failed(_capability.Reason, outputPath);
-        }
-
-        var validation = PresentationVideoFramePackageExecutor.ValidatePackage(package);
-        if (!validation.IsValid)
-        {
-            return LinuxVideoExportResult.Failed(
-                validation.FailureReason ?? "Video frame package validation failed.",
-                outputPath);
-        }
-
-        var temporaryDirectory = Path.Combine(
-            Path.GetTempPath(),
-            $"freep-windows-video-{Guid.NewGuid():N}");
-        var fullOutputPath = Path.GetFullPath(outputPath);
-        var stage = "initializing MediaComposition";
-        try
-        {
-            Directory.CreateDirectory(temporaryDirectory);
-            var composition = new MediaComposition();
-            var mediaPlan = PresentationVideoMediaMuxPlanner.Prepare(
-                package,
-                mediaArtifacts,
-                temporaryDirectory);
-            if (mediaPlan.CaptionTracks.Count > 0)
-            {
-                var captionFallback = _captionFallback ?? _captionFallbackFactory();
-                if (captionFallback is null)
-                {
-                    return LinuxVideoExportResult.Failed(
-                        "Windows MediaComposition cannot mux timed caption tracks. Install ffmpeg to export this captioned video.",
-                        outputPath);
-                }
-
-                return await captionFallback.ExportAsync(
-                        package,
-                        outputPath,
-                        cancellationToken,
-                        mediaArtifacts)
-                    .ConfigureAwait(false);
-            }
-
-            using var archive = new ZipArchive(
-                new MemoryStream(package.Bytes),
-                ZipArchiveMode.Read,
-                leaveOpen: false);
-
-            foreach (var frame in package.Frames)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                stage = $"creating slide clip {frame.FileName}";
-                var framePath = ExtractFrame(archive, frame.FileName, frame.SegmentIndex, temporaryDirectory);
-                var frameFile = await StorageFile.GetFileFromPathAsync(framePath)
-                    .AsTask(cancellationToken)
-                    .ConfigureAwait(false);
-                var clip = await MediaClip.CreateFromImageFileAsync(frameFile, frame.Duration)
-                    .AsTask(cancellationToken)
-                    .ConfigureAwait(false);
-                composition.Clips.Add(clip);
-            }
-
-            foreach (var narration in mediaPlan.NarrationTracks)
-            {
-                stage = $"creating narration track {narration.Path}";
-                var narrationFile = await StorageFile.GetFileFromPathAsync(narration.Path)
-                    .AsTask(cancellationToken)
-                    .ConfigureAwait(false);
-                var audioTrack = await BackgroundAudioTrack.CreateFromFileAsync(narrationFile)
-                    .AsTask(cancellationToken)
-                    .ConfigureAwait(false);
-                audioTrack.Delay = narration.StartTime;
-                if (narration.Duration > TimeSpan.Zero && audioTrack.OriginalDuration > narration.Duration)
-                    audioTrack.TrimTimeFromEnd = audioTrack.OriginalDuration - narration.Duration;
-                composition.BackgroundAudioTracks.Add(audioTrack);
-            }
-
-            if (mediaPlan.CameraTracks.Count > 0)
-            {
-                var overlayLayer = new MediaOverlayLayer();
-                var frame = package.Frames[0];
-                foreach (var camera in mediaPlan.CameraTracks)
-                {
-                    stage = $"creating camera overlay {camera.Path}";
-                    var cameraFile = await StorageFile.GetFileFromPathAsync(camera.Path)
-                        .AsTask(cancellationToken)
-                        .ConfigureAwait(false);
-                    var cameraClip = await MediaClip.CreateFromFileAsync(cameraFile)
-                        .AsTask(cancellationToken)
-                        .ConfigureAwait(false);
-                    var cameraProperties = cameraClip.GetVideoEncodingProperties();
-                    if (cameraProperties.Width == 0 || cameraProperties.Height == 0)
-                        throw new InvalidDataException("Windows MediaComposition could not determine the camera video dimensions.");
-
-                    var overlayWidth = Math.Max(2, frame.WidthPx * 0.25);
-                    var overlayHeight = overlayWidth * cameraProperties.Height / cameraProperties.Width;
-                    var overlay = new MediaOverlay(
-                        cameraClip,
-                        new global::Windows.Foundation.Rect(
-                            Math.Max(0, frame.WidthPx - overlayWidth - 32),
-                            Math.Max(0, frame.HeightPx - overlayHeight - 32),
-                            overlayWidth,
-                            overlayHeight),
-                        opacity: 1.0)
-                    {
-                        AudioEnabled = false,
-                        Delay = camera.StartTime,
-                    };
-                    if (camera.Duration > TimeSpan.Zero && cameraClip.OriginalDuration > camera.Duration)
-                        cameraClip.TrimTimeFromEnd = cameraClip.OriginalDuration - camera.Duration;
-
-                    overlayLayer.Overlays.Add(overlay);
-                }
-
-                composition.OverlayLayers.Add(overlayLayer);
-            }
-
-            var outputDirectory = Path.GetDirectoryName(fullOutputPath)!;
-            Directory.CreateDirectory(outputDirectory);
-            var outputFolder = await StorageFolder.GetFolderFromPathAsync(outputDirectory)
-                .AsTask(cancellationToken)
-                .ConfigureAwait(false);
-            var outputFile = await outputFolder.CreateFileAsync(
-                    Path.GetFileName(fullOutputPath),
-                    CreationCollisionOption.ReplaceExisting)
-                    .AsTask(cancellationToken)
-                    .ConfigureAwait(false);
-            stage = "rendering MediaComposition to MP4";
-            var encodingQuality = package.Frames[0].HeightPx >= 1080
-                ? VideoEncodingQuality.HD1080p
-                : VideoEncodingQuality.HD720p;
-            await composition.RenderToFileAsync(
-                    outputFile,
-                    MediaTrimmingPreference.Precise,
-                    MediaEncodingProfile.CreateMp4(encodingQuality))
-                .AsTask(cancellationToken)
-                .ConfigureAwait(false);
-
-            var bytes = await File.ReadAllBytesAsync(fullOutputPath, cancellationToken)
-                .ConfigureAwait(false);
-            if (!HasNonEmptyMp4Payload(bytes))
-            {
-                TryDelete(fullOutputPath);
-                return LinuxVideoExportResult.Failed(
-                    "Windows MediaComposition completed but did not produce a valid non-empty MP4 file.",
-                    outputPath);
-            }
-
-            return LinuxVideoExportResult.Success(
-                outputPath,
-                _capability.EncoderName ?? ExecutablePath,
-                bytes.LongLength);
-        }
-        catch (OperationCanceledException)
-        {
-            TryDelete(fullOutputPath);
-            return LinuxVideoExportResult.CanceledResult(outputPath);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            TryDelete(fullOutputPath);
-            return LinuxVideoExportResult.Failed(
-                $"Windows MediaComposition failed while {stage} with {ex.GetType().Name} (0x{ex.HResult:X8}): {ex.Message}",
-                outputPath);
-        }
-        finally
-        {
-            TryDeleteDirectory(temporaryDirectory);
-        }
-    }
-
-    private static string ExtractFrame(
-        ZipArchive archive,
-        string entryName,
-        int segmentIndex,
-        string directory)
-    {
-        var entry = archive.GetEntry(entryName) ??
-            throw new InvalidDataException($"Video package is missing frame '{entryName}'.");
-        var framePath = Path.Combine(directory, $"frame-{segmentIndex:D6}.png");
-        using var input = entry.Open();
-        using var output = File.Create(framePath);
-        input.CopyTo(output);
-        return framePath;
-    }
-
-    private static bool HasNonEmptyMp4Payload(byte[] bytes) =>
-        bytes.Length >= 16 &&
-        bytes.AsSpan(4, 4).SequenceEqual("ftyp"u8) &&
-        bytes.AsSpan().IndexOf("moov"u8) >= 0 &&
-        bytes.AsSpan().IndexOf("mdat"u8) >= 0;
+        IReadOnlyList<PresentationRecordingMediaArtifact>? mediaArtifacts = null) =>
+        _orchestrator.ExportAsync(package, outputPath, cancellationToken, mediaArtifacts);
 
     private static ILinuxVideoExportAdapter? TryCreateCaptionFallback()
     {
@@ -269,27 +82,129 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
         return null;
     }
 
-    private static void TryDelete(string path)
+    private sealed class WindowsMediaCompositionVideoExportBackend(
+        LinuxVideoEncoderCapability capability,
+        ILinuxVideoExportAdapter? captionFallback,
+        Func<ILinuxVideoExportAdapter?> captionFallbackFactory) : IPresentationVideoExportBackend
     {
-        try
+        public async Task<PresentationVideoExportBackendResult> EncodeAsync(
+            PresentationVideoExportWorkspace workspace,
+            PresentationVideoExportStage stage,
+            CancellationToken cancellationToken)
         {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
-    }
+            var composition = new MediaComposition();
+            if (workspace.MediaPlan.CaptionTracks.Count > 0)
+            {
+                var fallback = captionFallback ?? captionFallbackFactory();
+                if (fallback is null)
+                {
+                    return PresentationVideoExportBackendResult.Failed(
+                        "Windows MediaComposition cannot mux timed caption tracks. Install ffmpeg to export this captioned video.");
+                }
 
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
+                return PresentationVideoExportBackendResult.Completed(
+                    await fallback.ExportAsync(
+                            workspace.Package,
+                            workspace.OutputPath,
+                            cancellationToken,
+                            workspace.MediaArtifacts)
+                        .ConfigureAwait(false));
+            }
+
+            foreach (var workspaceFrame in workspace.Frames)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                stage.Set($"creating slide clip {workspaceFrame.Frame.FileName}");
+                var frameFile = await StorageFile.GetFileFromPathAsync(workspaceFrame.Path)
+                    .AsTask(cancellationToken)
+                    .ConfigureAwait(false);
+                var clip = await MediaClip.CreateFromImageFileAsync(
+                        frameFile,
+                        workspaceFrame.Frame.Duration)
+                    .AsTask(cancellationToken)
+                    .ConfigureAwait(false);
+                composition.Clips.Add(clip);
+            }
+
+            foreach (var narration in workspace.MediaPlan.NarrationTracks)
+            {
+                stage.Set($"creating narration track {narration.Path}");
+                var narrationFile = await StorageFile.GetFileFromPathAsync(narration.Path)
+                    .AsTask(cancellationToken)
+                    .ConfigureAwait(false);
+                var audioTrack = await BackgroundAudioTrack.CreateFromFileAsync(narrationFile)
+                    .AsTask(cancellationToken)
+                    .ConfigureAwait(false);
+                audioTrack.Delay = narration.StartTime;
+                if (narration.Duration > TimeSpan.Zero && audioTrack.OriginalDuration > narration.Duration)
+                    audioTrack.TrimTimeFromEnd = audioTrack.OriginalDuration - narration.Duration;
+                composition.BackgroundAudioTracks.Add(audioTrack);
+            }
+
+            if (workspace.MediaPlan.CameraTracks.Count > 0)
+            {
+                var overlayLayer = new MediaOverlayLayer();
+                var frame = workspace.Package.Frames[0];
+                foreach (var camera in workspace.MediaPlan.CameraTracks)
+                {
+                    stage.Set($"creating camera overlay {camera.Path}");
+                    var cameraFile = await StorageFile.GetFileFromPathAsync(camera.Path)
+                        .AsTask(cancellationToken)
+                        .ConfigureAwait(false);
+                    var cameraClip = await MediaClip.CreateFromFileAsync(cameraFile)
+                        .AsTask(cancellationToken)
+                        .ConfigureAwait(false);
+                    var cameraProperties = cameraClip.GetVideoEncodingProperties();
+                    if (cameraProperties.Width == 0 || cameraProperties.Height == 0)
+                    {
+                        throw new InvalidDataException(
+                            "Windows MediaComposition could not determine the camera video dimensions.");
+                    }
+
+                    var overlayWidth = Math.Max(2, frame.WidthPx * 0.25);
+                    var overlayHeight = overlayWidth * cameraProperties.Height / cameraProperties.Width;
+                    var overlay = new MediaOverlay(
+                        cameraClip,
+                        new global::Windows.Foundation.Rect(
+                            Math.Max(0, frame.WidthPx - overlayWidth - 32),
+                            Math.Max(0, frame.HeightPx - overlayHeight - 32),
+                            overlayWidth,
+                            overlayHeight),
+                        opacity: 1.0)
+                    {
+                        AudioEnabled = false,
+                        Delay = camera.StartTime,
+                    };
+                    if (camera.Duration > TimeSpan.Zero && cameraClip.OriginalDuration > camera.Duration)
+                        cameraClip.TrimTimeFromEnd = cameraClip.OriginalDuration - camera.Duration;
+                    overlayLayer.Overlays.Add(overlay);
+                }
+
+                composition.OverlayLayers.Add(overlayLayer);
+            }
+
+            var outputFolder = await StorageFolder.GetFolderFromPathAsync(
+                    Path.GetDirectoryName(workspace.FullOutputPath)!)
+                .AsTask(cancellationToken)
+                .ConfigureAwait(false);
+            var outputFile = await outputFolder.CreateFileAsync(
+                    Path.GetFileName(workspace.FullOutputPath),
+                    CreationCollisionOption.ReplaceExisting)
+                .AsTask(cancellationToken)
+                .ConfigureAwait(false);
+            stage.Set("rendering MediaComposition to MP4");
+            var encodingQuality = workspace.Package.Frames[0].HeightPx >= 1080
+                ? VideoEncodingQuality.HD1080p
+                : VideoEncodingQuality.HD720p;
+            await composition.RenderToFileAsync(
+                    outputFile,
+                    MediaTrimmingPreference.Precise,
+                    MediaEncodingProfile.CreateMp4(encodingQuality))
+                .AsTask(cancellationToken)
+                .ConfigureAwait(false);
+
+            return PresentationVideoExportBackendResult.Encoded(
+                capability.EncoderName ?? ExecutablePath);
         }
     }
 }

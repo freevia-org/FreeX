@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Free.Shared.Shell.Avalonia;
@@ -9,794 +10,213 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class ZoomObjectPropertiesDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(global::Avalonia.Media.FontFamily.Default);
-    private readonly CheckBox _returnToParent;
-    private readonly CheckBox _showBackground;
-    private readonly CheckBox _transitionEnabled;
-    private readonly CheckBox _frameBorderEnabled;
-    private readonly CheckBox _frameBorderGradientEnabled;
-    private readonly CheckBox _frameBorderPatternEnabled;
-    private readonly CheckBox _frameBorderNoFillEnabled;
-    private readonly CheckBox _frameBorderThemeEnabled;
-    private readonly CheckBox _frameBorderShadowEnabled;
-    private readonly CheckBox _frameBorderGlowEnabled;
-    private readonly CheckBox _frameBorderSoftEdgeEnabled;
-    private readonly CheckBox _frameBorderReflectionEnabled;
-    private readonly ComboBox _imageType;
-    private readonly TextBox _transitionDuration;
-    private readonly TextBox _frameBorderColor;
-    private readonly ComboBox _frameBorderThemeColor;
-    private readonly TextBox _frameBorderShadowColor;
-    private readonly TextBox _frameBorderShadowAlpha;
-    private readonly TextBox _frameBorderShadowBlur;
-    private readonly TextBox _frameBorderShadowDistance;
-    private readonly TextBox _frameBorderShadowDirection;
-    private readonly TextBox _frameBorderGlowColor;
-    private readonly TextBox _frameBorderGlowAlpha;
-    private readonly TextBox _frameBorderGlowRadius;
-    private readonly TextBox _frameBorderSoftEdgeRadius;
-    private readonly TextBox _frameBorderReflectionAlpha;
-    private readonly TextBox _frameBorderReflectionBlur;
-    private readonly TextBox _frameBorderReflectionDistance;
-    private readonly TextBox _frameBorderReflectionDirection;
-    private readonly TextBox _frameBorderReflectionScale;
-    private readonly TextBox _frameBorderReflectionEndPosition;
-    private readonly TextBox _frameBorderWidth;
-    private readonly ComboBox _frameBorderDash;
-    private readonly TextBox _frameBorderGradientStart;
-    private readonly TextBox _frameBorderGradientEnd;
-    private readonly TextBox _frameBorderGradientAngle;
-    private readonly ComboBox _frameBorderPatternPreset;
-    private readonly TextBox _frameBorderPatternForeground;
-    private readonly TextBox _frameBorderPatternBackground;
-    private readonly ComboBox _frameGeometry;
-    private readonly TextBox _cropEdges;
-    private readonly IReadOnlyList<SummaryZoomTarget> _summaryTargets;
-    private readonly IReadOnlyList<ZoomObjectProperties> _summaryTileProperties;
-    private readonly ComboBox? _summaryTile;
-    private readonly TextBox? _summaryOffset;
-    private readonly TextBox? _summaryScale;
-    private readonly CheckBox? _applySummaryPropertiesToAllTiles;
+    private readonly ZoomObjectPropertiesDialogSession _session;
+    private readonly ZoomObjectPropertiesDialogSurfacePlan _surface;
+    private readonly ZoomObjectPropertiesDialogFormSession<Control> _formSession;
 
-    internal ZoomObjectProperties Properties { get; private set; }
-    internal ZoomObjectPropertiesPlanner.SummaryZoomTileLayoutEdit? SummaryTileLayout { get; private set; }
-    internal ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit? SummaryTileProperties { get; private set; }
-    internal bool ApplySummaryPropertiesToAllTiles => _applySummaryPropertiesToAllTiles?.IsChecked == true;
+    internal ZoomObjectProperties Properties => _session.CommitPlan.Properties;
+    internal ZoomObjectPropertiesPlanner.SummaryZoomTileLayoutEdit? SummaryTileLayout =>
+        _session.CommitPlan.SummaryTileLayout;
+    internal ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit? SummaryTileProperties =>
+        _session.CommitPlan.SummaryTileProperties;
+    internal bool ApplySummaryPropertiesToAllTiles =>
+        _session.CommitPlan.ApplySummaryPropertiesToAllTiles;
 
     internal ZoomObjectPropertiesDialog(
         ZoomObjectProperties current,
         IReadOnlyList<SummaryZoomTarget>? summaryTargets = null,
         IReadOnlyList<ZoomObjectProperties>? summaryTileProperties = null)
     {
-        _summaryTargets = summaryTargets ?? Array.Empty<SummaryZoomTarget>();
-        _summaryTileProperties = summaryTileProperties is { Count: var count }
-            && count == _summaryTargets.Count
-            ? summaryTileProperties
-            : Enumerable.Repeat(current, _summaryTargets.Count).ToArray();
-        Title = ZoomObjectPropertiesPlanner.DialogTitle;
-        Width = 440;
+        _session = new ZoomObjectPropertiesDialogSession(current, summaryTargets, summaryTileProperties);
+        _surface = _session.Surface;
+        _formSession = new(_session.Dispatch, ApplyFieldState, FocusControl);
+        var layout = _surface.Layout;
+        Title = _surface.Chrome.Title;
+        Width = _surface.Chrome.Width;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        AvaloniaCompactDialogChrome.ApplyWindow(this, DialogChromeStyle);
+        ZoomDialogChrome.Apply(this);
+        AutomationProperties.SetName(this, _surface.Chrome.AccessibleName);
+        AutomationProperties.SetAutomationId(this, _surface.Chrome.AutomationId);
 
-        _imageType = new ComboBox
+        foreach (var plan in _session.FieldCatalog)
         {
-            ItemsSource = new[] { "preview", "cover" },
-            SelectedItem = ZoomObjectPropertiesPlanner.IsSupportedImageType(current.ImageType)
-                ? current.ImageType!.ToLowerInvariant()
-                : "preview",
-            MinWidth = 180,
-        };
-        _transitionDuration = new TextBox
-        {
-            Text = current.TransitionDuration ?? string.Empty,
-            MinWidth = 180,
-        };
-        _transitionEnabled = new CheckBox
-        {
-            Content = "Use Zoom transition",
-            IsChecked = ZoomObjectPropertiesPlanner.IsTransitionEnabled(current),
-        };
-        _transitionEnabled.IsCheckedChanged += (_, _) => SyncTransitionState();
-        _frameBorderColor = new TextBox
-        {
-            Text = current.FrameBorderColor ?? string.Empty,
-            MinWidth = 180,
-            PlaceholderText = "six-digit RGB value",
-        };
-        _frameBorderThemeColor = new ComboBox
-        {
-            ItemsSource = ZoomObjectPropertiesPlanner.FrameBorderThemeColorOptions,
-            SelectedItem = current.FrameBorderThemeColor,
-            MinWidth = 180,
-        };
-        _frameBorderWidth = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderWidth(current),
-            MinWidth = 180,
-            PlaceholderText = "positive width in points",
-        };
-        _frameBorderDash = new ComboBox
-        {
-            ItemsSource = ZoomObjectPropertiesPlanner.FrameBorderDashOptions,
-            SelectedItem = current.FrameBorderDash ?? OutlineDash.Solid,
-            MinWidth = 180,
-        };
-        _frameBorderEnabled = new CheckBox
-        {
-            Content = "Use Zoom border",
-            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(current),
-        };
-        _frameBorderEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
-        _frameBorderGradientEnabled = new CheckBox
-        {
-            Content = "Use gradient border",
-            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderGradientEnabled(current),
-        };
-        _frameBorderGradientEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
-        _frameBorderGradientStart = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientStart(current),
-            MinWidth = 180,
-            PlaceholderText = "start RGB value",
-        };
-        _frameBorderGradientEnd = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientEnd(current),
-            MinWidth = 180,
-            PlaceholderText = "end RGB value",
-        };
-        _frameBorderGradientAngle = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientAngle(current),
-            MinWidth = 180,
-            PlaceholderText = "angle 0-360 degrees",
-        };
-        _frameBorderPatternEnabled = new CheckBox
-        {
-            Content = "Use pattern border",
-            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderPatternEnabled(current),
-        };
-        _frameBorderPatternEnabled.IsCheckedChanged += (_, _) =>
-        {
-            if (_frameBorderPatternEnabled.IsChecked == true)
-                _frameBorderGradientEnabled.IsChecked = false;
-            SyncFrameBorderState();
-        };
-        _frameBorderGradientEnabled.IsCheckedChanged += (_, _) =>
-        {
-            if (_frameBorderGradientEnabled.IsChecked == true)
-                _frameBorderPatternEnabled.IsChecked = false;
-            SyncFrameBorderState();
-        };
-        _frameBorderPatternPreset = new ComboBox
-        {
-            ItemsSource = ZoomObjectPropertiesPlanner.FrameBorderPatternOptions,
-            SelectedItem = ZoomObjectPropertiesPlanner.FormatFrameBorderPatternPreset(current),
-            MinWidth = 180,
-        };
-        _frameBorderPatternForeground = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderPatternForeground(current),
-            MinWidth = 180,
-            PlaceholderText = "foreground RGB value",
-        };
-        _frameBorderPatternBackground = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderPatternBackground(current),
-            MinWidth = 180,
-            PlaceholderText = "background RGB value",
-        };
-        _frameBorderNoFillEnabled = new CheckBox
-        {
-            Content = "Use no-fill border",
-            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderNoFillEnabled(current),
-        };
-        _frameBorderNoFillEnabled.IsCheckedChanged += (_, _) =>
-        {
-            if (_frameBorderNoFillEnabled.IsChecked == true)
-            {
-                _frameBorderGradientEnabled.IsChecked = false;
-                _frameBorderPatternEnabled.IsChecked = false;
-            }
-            SyncFrameBorderState();
-        };
-        _frameBorderGradientEnabled.IsCheckedChanged += (_, _) =>
-        {
-            if (_frameBorderGradientEnabled.IsChecked == true)
-            {
-                _frameBorderNoFillEnabled.IsChecked = false;
-            }
-        };
-        _frameBorderPatternEnabled.IsCheckedChanged += (_, _) =>
-        {
-            if (_frameBorderPatternEnabled.IsChecked == true)
-            {
-                _frameBorderNoFillEnabled.IsChecked = false;
-            }
-        };
-        _frameBorderThemeEnabled = new CheckBox
-        {
-            Content = "Use theme border color",
-            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderThemeColorEnabled(current),
-        };
-        _frameBorderThemeEnabled.IsCheckedChanged += (_, _) =>
-        {
-            if (_frameBorderThemeEnabled.IsChecked == true)
-            {
-                _frameBorderGradientEnabled.IsChecked = false;
-                _frameBorderPatternEnabled.IsChecked = false;
-                _frameBorderNoFillEnabled.IsChecked = false;
-            }
-            SyncFrameBorderState();
-        };
-        _frameBorderGradientEnabled.IsCheckedChanged += (_, _) =>
-        {
-            if (_frameBorderGradientEnabled.IsChecked == true)
-                _frameBorderThemeEnabled.IsChecked = false;
-        };
-        _frameBorderPatternEnabled.IsCheckedChanged += (_, _) =>
-        {
-            if (_frameBorderPatternEnabled.IsChecked == true)
-                _frameBorderThemeEnabled.IsChecked = false;
-        };
-        _frameBorderNoFillEnabled.IsCheckedChanged += (_, _) =>
-        {
-            if (_frameBorderNoFillEnabled.IsChecked == true)
-                _frameBorderThemeEnabled.IsChecked = false;
-        };
-        _frameBorderShadowEnabled = new CheckBox
-        {
-            Content = "Use outer border shadow",
-            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderShadowEnabled(current),
-        };
-        _frameBorderShadowColor = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowColor(current),
-            MinWidth = 180,
-            PlaceholderText = "six-digit RGB value",
-        };
-        _frameBorderShadowAlpha = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowAlpha(current), MinWidth = 180,
-        };
-        _frameBorderShadowBlur = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowBlur(current), MinWidth = 180,
-        };
-        _frameBorderShadowDistance = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowDistance(current), MinWidth = 180,
-        };
-        _frameBorderShadowDirection = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowDirection(current), MinWidth = 180,
-        };
-        _frameBorderShadowEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
-        _frameBorderGlowEnabled = new CheckBox
-        {
-            Content = "Use border glow",
-            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderGlowEnabled(current),
-        };
-        _frameBorderGlowColor = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowColor(current),
-            MinWidth = 180,
-            PlaceholderText = "six-digit RGB value",
-        };
-        _frameBorderGlowAlpha = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowAlpha(current), MinWidth = 180,
-        };
-        _frameBorderGlowRadius = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowRadius(current), MinWidth = 180,
-        };
-        _frameBorderGlowEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
-        _frameBorderSoftEdgeEnabled = new CheckBox
-        {
-            Content = "Use border soft edge",
-            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderSoftEdgeEnabled(current),
-        };
-        _frameBorderSoftEdgeRadius = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(current), MinWidth = 180,
-        };
-        _frameBorderSoftEdgeEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
-        _frameBorderReflectionEnabled = new CheckBox
-        {
-            Content = "Use border reflection",
-            IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(current),
-        };
-        _frameBorderReflectionAlpha = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(current), MinWidth = 180 };
-        _frameBorderReflectionBlur = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionBlur(current), MinWidth = 180 };
-        _frameBorderReflectionDistance = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(current), MinWidth = 180 };
-        _frameBorderReflectionDirection = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(current), MinWidth = 180 };
-        _frameBorderReflectionScale = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(current), MinWidth = 180 };
-        _frameBorderReflectionEndPosition = new TextBox { Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionEndPosition(current), MinWidth = 180 };
-        _frameBorderReflectionEnabled.IsCheckedChanged += (_, _) => SyncFrameBorderState();
-        _frameGeometry = new ComboBox
-        {
-            ItemsSource = ZoomObjectPropertiesPlanner.FrameGeometryOptions,
-            SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
-                geometry => string.Equals(geometry, current.FrameGeometry, StringComparison.OrdinalIgnoreCase))
-                ?? "rect",
-            MinWidth = 180,
-        };
-        _cropEdges = new TextBox
-        {
-            Text = ZoomObjectPropertiesPlanner.FormatCropEdges(current),
-            MinWidth = 180,
-            PlaceholderText = "left, top, right, bottom",
-        };
-        if (_summaryTargets.Count > 0)
-        {
-            _summaryTile = new ComboBox
-            {
-                ItemsSource = _summaryTargets
-                    .Select(target => string.IsNullOrWhiteSpace(target.Title)
-                        ? target.SectionId
-                        : target.Title)
-                    .ToArray(),
-                SelectedIndex = 0,
-                MinWidth = 180,
-            };
-            _summaryOffset = new TextBox { MinWidth = 180 };
-            _summaryScale = new TextBox { MinWidth = 180 };
-            _applySummaryPropertiesToAllTiles = new CheckBox
-            {
-                Content = "Apply format to all Summary Zoom tiles",
-                Margin = new Thickness(0, 4, 0, 0),
-            };
-            _summaryTile.SelectionChanged += (_, _) => LoadSummaryTileFields();
+            var control = CreateControl(plan, layout.InputMinWidth);
+            _formSession.Register(
+                plan.Field,
+                control,
+                selectAllOnFocus: plan.Kind == ZoomObjectPropertiesDialogControlKind.Text);
         }
-        _returnToParent = new CheckBox
-        {
-            Content = "Return to parent after following the Zoom",
-            IsChecked = current.ReturnToParent ?? true,
-        };
-        _showBackground = new CheckBox
-        {
-            Content = "Show destination slide background",
-            IsChecked = current.ShowBackground ?? true,
-        };
 
-        Properties = current;
-        var ok = MakeButton("OK", true, Apply);
-        var children = new List<Control>
+        var children = new List<Control>();
+        foreach (var plan in _session.FieldCatalog)
         {
-            Row("Image source:", _imageType),
-            _transitionEnabled,
-            Row("Transition duration:", _transitionDuration),
-            _frameBorderEnabled,
-            Row("Border color:", _frameBorderColor),
-            _frameBorderThemeEnabled,
-            Row("Theme color:", _frameBorderThemeColor),
-            _frameBorderShadowEnabled,
-            Row("Shadow color:", _frameBorderShadowColor),
-            Row("Shadow alpha (%):", _frameBorderShadowAlpha),
-            Row("Shadow blur (pt):", _frameBorderShadowBlur),
-            Row("Shadow distance (pt):", _frameBorderShadowDistance),
-            Row("Shadow direction (deg):", _frameBorderShadowDirection),
-            _frameBorderGlowEnabled,
-            Row("Glow color:", _frameBorderGlowColor),
-            Row("Glow alpha (%):", _frameBorderGlowAlpha),
-            Row("Glow radius (pt):", _frameBorderGlowRadius),
-            _frameBorderSoftEdgeEnabled,
-            Row("Soft-edge radius (pt):", _frameBorderSoftEdgeRadius),
-            _frameBorderReflectionEnabled,
-            Row("Reflection alpha (%):", _frameBorderReflectionAlpha),
-            Row("Reflection blur (pt):", _frameBorderReflectionBlur),
-            Row("Reflection distance (pt):", _frameBorderReflectionDistance),
-            Row("Reflection direction (deg):", _frameBorderReflectionDirection),
-            Row("Reflection scale (%):", _frameBorderReflectionScale),
-            Row("Reflection fade end (%):", _frameBorderReflectionEndPosition),
-            Row("Border width (pt):", _frameBorderWidth),
-            Row("Border dash:", _frameBorderDash),
-            _frameBorderGradientEnabled,
-            Row("Gradient start:", _frameBorderGradientStart),
-            Row("Gradient end:", _frameBorderGradientEnd),
-            Row("Gradient angle (deg):", _frameBorderGradientAngle),
-            _frameBorderPatternEnabled,
-            Row("Pattern preset:", _frameBorderPatternPreset),
-            Row("Pattern foreground:", _frameBorderPatternForeground),
-            Row("Pattern background:", _frameBorderPatternBackground),
-            _frameBorderNoFillEnabled,
-            Row("Frame shape:", _frameGeometry),
-            Row("Preview crop (%):", _cropEdges),
-        };
-        if (_summaryTile is not null && _summaryOffset is not null && _summaryScale is not null)
-        {
-            children.Add(Row("Summary tile:", _summaryTile));
-            children.Add(Row("Tile position (%):", _summaryOffset));
-            children.Add(Row("Tile scale (%):", _summaryScale));
-            children.Add(_applySummaryPropertiesToAllTiles!);
+            var control = _formSession.Control(plan.Field);
+            children.Add(plan.Kind == ZoomObjectPropertiesDialogControlKind.Toggle
+                ? control
+                : Row(plan.Label, control, layout.LabelWidth));
         }
-        children.Add(_returnToParent);
-        children.Add(_showBackground);
+
+        var okAction = _surface.Chrome.Action(ZoomObjectPropertiesDialogChromeAction.Accept);
+        var cancelAction = _surface.Chrome.Action(ZoomObjectPropertiesDialogChromeAction.Cancel);
+        var ok = ZoomDialogChrome.MakeButton(okAction.Label, okAction.IsDefault, Apply);
+        ApplyAction(ok, okAction);
+        var cancel = ZoomDialogChrome.MakeButton(
+            cancelAction.Label,
+            cancelAction.IsDefault,
+            () => Close(false));
+        cancel.IsCancel = cancelAction.IsCancel;
+        ApplyAction(cancel, cancelAction);
         children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
             Spacing = 8,
-            Children = { ok, MakeButton("Cancel", false, () => Close(false)) },
+            Children =
+            {
+                ok,
+                cancel,
+            },
         });
         var content = new StackPanel
         {
-            Margin = new Thickness(14),
+            Margin = new Thickness(layout.ContentMargin),
             Spacing = 8,
         };
         foreach (var child in children)
             content.Children.Add(child);
         Content = content;
-        SyncTransitionState();
-        SyncFrameBorderState();
-        LoadSummaryTileFields();
+        _formSession.ApplyState(_session.State);
     }
 
-    private static StackPanel Row(string label, Control control) => new()
+    private Control CreateControl(
+        ZoomObjectPropertiesDialogControlPlan plan,
+        double inputMinWidth)
+    {
+        switch (plan.Kind)
+        {
+            case ZoomObjectPropertiesDialogControlKind.Toggle:
+            {
+                var checkBox = new CheckBox
+                {
+                    Content = plan.Label,
+                    Margin = plan.Field ==
+                        ZoomObjectPropertiesDialogField.ApplySummaryPropertiesToAllTiles
+                            ? new Thickness(0, 4, 0, 0)
+                            : default,
+                };
+                PresentationDialogControlAdapter.ApplySemantic(
+                    checkBox,
+                    plan.AccessibleName,
+                    plan.AutomationId,
+                    plan.HelpText);
+                checkBox.IsCheckedChanged += (_, _) =>
+                    Dispatch(plan.Field, checkBox.IsChecked == true);
+                return checkBox;
+            }
+            case ZoomObjectPropertiesDialogControlKind.Text:
+            {
+                var textBox = new TextBox
+                {
+                    MinWidth = inputMinWidth,
+                    PlaceholderText = plan.PlaceholderText,
+                };
+                PresentationDialogControlAdapter.ApplySemantic(
+                    textBox,
+                    plan.AccessibleName,
+                    plan.AutomationId,
+                    plan.HelpText);
+                textBox.TextChanged += (_, _) => Dispatch(plan.Field, textBox.Text);
+                return textBox;
+            }
+            case ZoomObjectPropertiesDialogControlKind.Choice:
+            {
+                var comboBox = new ComboBox
+                {
+                    ItemsSource = plan.Options,
+                    MinWidth = inputMinWidth,
+                };
+                PresentationDialogControlAdapter.ApplySemantic(
+                    comboBox,
+                    plan.AccessibleName,
+                    plan.AutomationId,
+                    plan.HelpText);
+                comboBox.SelectionChanged += (_, _) => Dispatch(plan.Field, comboBox.SelectedItem);
+                return comboBox;
+            }
+            default:
+                throw new ArgumentOutOfRangeException(nameof(plan));
+        }
+    }
+
+    private static StackPanel Row(string label, Control control, double labelWidth) => new()
     {
         Orientation = Orientation.Horizontal,
         Spacing = 8,
         Children =
         {
-            new TextBlock { Text = label, Width = 160, VerticalAlignment = VerticalAlignment.Center },
+            new TextBlock
+            {
+                Text = label,
+                Width = labelWidth,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
             control,
         },
     };
 
+    private void Dispatch(ZoomObjectPropertiesDialogField field, object? value)
+        => _formSession.Dispatch(field, value);
+
     private async void Apply()
     {
-        if (!ZoomObjectPropertiesPlanner.TryParseTransitionDuration(
-                _transitionDuration.Text,
-                _transitionEnabled.IsChecked == true,
-                out var transitionDuration))
+        if (!_session.TryAccept(out var validation))
         {
             await AvaloniaUserMessageDialog.ShowWarningAsync(
                 this,
-                ZoomObjectPropertiesPlanner.InvalidTransitionDurationMessage,
-                ZoomObjectPropertiesPlanner.DialogTitle);
+                validation!.Message,
+                _surface.Chrome.Title);
+            _formSession.Focus(validation.Field);
             return;
-        }
-        var noFillEnabled = _frameBorderEnabled.IsChecked == true
-            && _frameBorderNoFillEnabled.IsChecked == true;
-        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderColor(
-                _frameBorderColor.Text,
-                _frameBorderEnabled.IsChecked == true
-                && _frameBorderGradientEnabled.IsChecked != true
-                && _frameBorderPatternEnabled.IsChecked != true
-                && _frameBorderThemeEnabled.IsChecked != true
-                && !noFillEnabled,
-                out var frameBorderColor))
-        {
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                ZoomObjectPropertiesPlanner.InvalidFrameBorderColorMessage,
-                ZoomObjectPropertiesPlanner.DialogTitle);
-            return;
-        }
-        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderWidth(
-                _frameBorderWidth.Text,
-                _frameBorderEnabled.IsChecked == true,
-                out var frameBorderWidth))
-        {
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                ZoomObjectPropertiesPlanner.InvalidFrameBorderWidthMessage,
-                ZoomObjectPropertiesPlanner.DialogTitle);
-            return;
-        }
-        var frameBorderDashText = _frameBorderEnabled.IsChecked == true
-            ? _frameBorderDash.SelectedItem?.ToString()
-            : null;
-        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderDash(
-                frameBorderDashText,
-                out var frameBorderDash))
-        {
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                ZoomObjectPropertiesPlanner.InvalidFrameBorderDashMessage,
-                ZoomObjectPropertiesPlanner.DialogTitle);
-            return;
-        }
-        var gradientEnabled = _frameBorderEnabled.IsChecked == true
-            && _frameBorderGradientEnabled.IsChecked == true
-            && !noFillEnabled;
-        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderGradient(
-                _frameBorderGradientStart.Text,
-                _frameBorderGradientEnd.Text,
-                _frameBorderGradientAngle.Text,
-                gradientEnabled,
-                out var frameBorderGradient))
-        {
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                ZoomObjectPropertiesPlanner.InvalidFrameBorderGradientMessage,
-                ZoomObjectPropertiesPlanner.DialogTitle);
-            return;
-        }
-        if (gradientEnabled)
-            frameBorderColor = null;
-        var patternEnabled = _frameBorderEnabled.IsChecked == true
-            && _frameBorderPatternEnabled.IsChecked == true
-            && !noFillEnabled;
-        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderPattern(
-                _frameBorderPatternPreset.SelectedItem?.ToString(),
-                _frameBorderPatternForeground.Text,
-                _frameBorderPatternBackground.Text,
-                patternEnabled,
-                out var frameBorderPattern))
-        {
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                ZoomObjectPropertiesPlanner.InvalidFrameBorderPatternMessage,
-                ZoomObjectPropertiesPlanner.DialogTitle);
-            return;
-        }
-        if (patternEnabled)
-        {
-            frameBorderColor = null;
-            frameBorderGradient = null;
-        }
-        if (noFillEnabled)
-        {
-            frameBorderColor = null;
-            frameBorderGradient = null;
-            frameBorderPattern = null;
-        }
-        var themeColor = _frameBorderEnabled.IsChecked == true
-            && _frameBorderThemeEnabled.IsChecked == true
-            && !noFillEnabled
-            ? _frameBorderThemeColor.SelectedItem is ThemeColorSlot slot ? slot : (ThemeColorSlot?)null
-            : null;
-        if (themeColor is not null)
-        {
-            frameBorderColor = null;
-            frameBorderGradient = null;
-            frameBorderPattern = null;
-        }
-        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderShadow(
-                _frameBorderShadowColor.Text,
-                _frameBorderShadowAlpha.Text,
-                _frameBorderShadowBlur.Text,
-                _frameBorderShadowDistance.Text,
-                _frameBorderShadowDirection.Text,
-                _frameBorderShadowEnabled.IsChecked == true,
-                out var frameBorderShadow))
-        {
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                ZoomObjectPropertiesPlanner.InvalidFrameBorderShadowMessage,
-                ZoomObjectPropertiesPlanner.DialogTitle);
-            return;
-        }
-        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderGlow(
-                _frameBorderGlowColor.Text,
-                _frameBorderGlowAlpha.Text,
-                _frameBorderGlowRadius.Text,
-                _frameBorderGlowEnabled.IsChecked == true,
-                out var frameBorderGlow))
-        {
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                ZoomObjectPropertiesPlanner.InvalidFrameBorderGlowMessage,
-                ZoomObjectPropertiesPlanner.DialogTitle);
-            return;
-        }
-        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderSoftEdge(
-                _frameBorderSoftEdgeRadius.Text,
-                _frameBorderSoftEdgeEnabled.IsChecked == true,
-                out var frameBorderSoftEdge))
-        {
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                ZoomObjectPropertiesPlanner.InvalidFrameBorderSoftEdgeMessage,
-                ZoomObjectPropertiesPlanner.DialogTitle);
-            return;
-        }
-        if (!ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(
-                _frameBorderReflectionAlpha.Text,
-                _frameBorderReflectionDistance.Text,
-                _frameBorderReflectionDirection.Text,
-                _frameBorderReflectionScale.Text,
-                _frameBorderReflectionBlur.Text,
-                _frameBorderReflectionEndPosition.Text,
-                _frameBorderReflectionEnabled.IsChecked == true,
-                out var frameBorderReflection))
-        {
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                ZoomObjectPropertiesPlanner.InvalidFrameBorderReflectionMessage,
-                ZoomObjectPropertiesPlanner.DialogTitle);
-            return;
-        }
-        if (!ZoomObjectPropertiesPlanner.TryParseFrameGeometry(
-                _frameGeometry.SelectedItem?.ToString(), out var frameGeometry))
-        {
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                ZoomObjectPropertiesPlanner.InvalidFrameGeometryMessage,
-                ZoomObjectPropertiesPlanner.DialogTitle);
-            return;
-        }
-        if (!ZoomObjectPropertiesPlanner.TryParseCropEdges(
-                _cropEdges.Text, out var cropLeft, out var cropTop, out var cropRight, out var cropBottom))
-        {
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                ZoomObjectPropertiesPlanner.InvalidCropEdgesMessage,
-                ZoomObjectPropertiesPlanner.DialogTitle);
-            return;
-        }
-        if (_summaryTile is not null && _summaryOffset is not null && _summaryScale is not null)
-        {
-            if (!ZoomObjectPropertiesPlanner.TryParseFactorPair(
-                    _summaryOffset.Text, allowNegative: true, out var offsetX, out var offsetY)
-                || !ZoomObjectPropertiesPlanner.TryParseFactorPair(
-                    _summaryScale.Text, allowNegative: false, out var scaleX, out var scaleY))
-            {
-                await AvaloniaUserMessageDialog.ShowWarningAsync(
-                    this,
-                    ZoomObjectPropertiesPlanner.InvalidSummaryTileLayoutMessage,
-                    ZoomObjectPropertiesPlanner.DialogTitle);
-                return;
-            }
-
-            var target = _summaryTargets[_summaryTile.SelectedIndex];
-            SummaryTileLayout = new ZoomObjectPropertiesPlanner.SummaryZoomTileLayoutEdit(
-                target.SectionId, offsetX, offsetY, scaleX, scaleY);
         }
 
-        Properties = new ZoomObjectProperties(
-            _returnToParent.IsChecked == true,
-            _imageType.SelectedItem as string ?? "preview",
-            transitionDuration,
-            _showBackground.IsChecked == true,
-            cropLeft,
-            cropTop,
-            cropRight,
-            cropBottom,
-            frameBorderColor,
-            frameBorderWidth,
-            frameBorderDash,
-            frameGeometry,
-            frameBorderGradient,
-            frameBorderPattern,
-            noFillEnabled ? true : null,
-            themeColor,
-            frameBorderShadow,
-            _frameBorderShadowEnabled.IsChecked == true ? true : false,
-            frameBorderGlow,
-            _frameBorderGlowEnabled.IsChecked == true ? true : false,
-            frameBorderSoftEdge,
-            _frameBorderSoftEdgeEnabled.IsChecked == true ? true : false,
-            frameBorderReflection,
-            _frameBorderReflectionEnabled.IsChecked == true ? true : false);
-        if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
-            && _summaryTile.SelectedIndex < _summaryTargets.Count)
-        {
-            if (!ApplySummaryPropertiesToAllTiles)
-            {
-                SummaryTileProperties = new ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit(
-                    _summaryTargets[_summaryTile.SelectedIndex].SectionId,
-                    Properties);
-            }
-        }
         Close(true);
     }
 
-    private void LoadSummaryTileFields()
+    private static void ApplyFieldState(
+        Control control,
+        ZoomObjectPropertiesDialogFieldState fieldState)
     {
-        if (_summaryTile is null || _summaryOffset is null || _summaryScale is null
-            || _summaryTile.SelectedIndex < 0
-            || _summaryTile.SelectedIndex >= _summaryTargets.Count)
-            return;
-
-        var target = _summaryTargets[_summaryTile.SelectedIndex];
-        var properties = _summaryTileProperties[_summaryTile.SelectedIndex];
-        _imageType.SelectedItem = ZoomObjectPropertiesPlanner.IsSupportedImageType(properties.ImageType)
-            ? properties.ImageType!.ToLowerInvariant()
-            : "preview";
-        _transitionDuration.Text = properties.TransitionDuration ?? string.Empty;
-        _transitionEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsTransitionEnabled(properties);
-        SyncTransitionState();
-        _frameBorderColor.Text = properties.FrameBorderColor ?? string.Empty;
-        _frameBorderWidth.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderWidth(properties);
-        _frameBorderDash.SelectedItem = properties.FrameBorderDash ?? OutlineDash.Solid;
-        _frameBorderEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderEnabled(properties);
-        _frameBorderGradientEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderGradientEnabled(properties);
-        _frameBorderGradientStart.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientStart(properties);
-        _frameBorderGradientEnd.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientEnd(properties);
-        _frameBorderGradientAngle.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGradientAngle(properties);
-        _frameBorderPatternEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderPatternEnabled(properties);
-        _frameBorderPatternPreset.SelectedItem = ZoomObjectPropertiesPlanner.FormatFrameBorderPatternPreset(properties);
-        _frameBorderPatternForeground.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderPatternForeground(properties);
-        _frameBorderPatternBackground.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderPatternBackground(properties);
-        _frameBorderNoFillEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderNoFillEnabled(properties);
-        _frameBorderThemeEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderThemeColorEnabled(properties);
-        _frameBorderThemeColor.SelectedItem = properties.FrameBorderThemeColor;
-        _frameBorderShadowEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderShadowEnabled(properties);
-        _frameBorderShadowColor.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowColor(properties);
-        _frameBorderShadowAlpha.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowAlpha(properties);
-        _frameBorderShadowBlur.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowBlur(properties);
-        _frameBorderShadowDistance.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowDistance(properties);
-        _frameBorderShadowDirection.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderShadowDirection(properties);
-        _frameBorderGlowEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderGlowEnabled(properties);
-        _frameBorderGlowColor.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowColor(properties);
-        _frameBorderGlowAlpha.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowAlpha(properties);
-        _frameBorderGlowRadius.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderGlowRadius(properties);
-        _frameBorderSoftEdgeEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderSoftEdgeEnabled(properties);
-        _frameBorderSoftEdgeRadius.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderSoftEdgeRadius(properties);
-        _frameBorderReflectionEnabled.IsChecked = ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(properties);
-        _frameBorderReflectionAlpha.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(properties);
-        _frameBorderReflectionBlur.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionBlur(properties);
-        _frameBorderReflectionDistance.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(properties);
-        _frameBorderReflectionDirection.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(properties);
-        _frameBorderReflectionScale.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(properties);
-        _frameBorderReflectionEndPosition.Text = ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionEndPosition(properties);
-        SyncFrameBorderState();
-        _frameGeometry.SelectedItem = ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
-            geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
-            ?? "rect";
-        _cropEdges.Text = ZoomObjectPropertiesPlanner.FormatCropEdges(properties);
-        _returnToParent.IsChecked = properties.ReturnToParent ?? true;
-        _showBackground.IsChecked = properties.ShowBackground ?? true;
-        _summaryOffset.Text = ZoomObjectPropertiesPlanner.FormatFactorPair(
-            target.OffsetFactorX, target.OffsetFactorY);
-        _summaryScale.Text = ZoomObjectPropertiesPlanner.FormatFactorPair(
-            target.ScaleFactorX, target.ScaleFactorY);
+        control.IsEnabled = fieldState.IsEnabled;
+        switch (control)
+        {
+            case CheckBox checkBox when fieldState.Value is bool isChecked:
+                if (checkBox.IsChecked != isChecked)
+                    checkBox.IsChecked = isChecked;
+                break;
+            case TextBox textBox:
+                if (!string.Equals(textBox.Text, fieldState.TextValue, StringComparison.Ordinal))
+                    textBox.Text = fieldState.TextValue;
+                break;
+            case ComboBox comboBox:
+                if (!Equals(comboBox.SelectedItem, fieldState.Value))
+                    comboBox.SelectedItem = fieldState.Value;
+                break;
+        }
     }
 
-    private void SyncTransitionState() =>
-        _transitionDuration.IsEnabled = _transitionEnabled.IsChecked == true;
-
-    private void SyncFrameBorderState()
+    private static void FocusControl(Control control, bool selectAll)
     {
-        var enabled = _frameBorderEnabled.IsChecked == true;
-        var noFill = enabled && _frameBorderNoFillEnabled.IsChecked == true;
-        var gradient = enabled && _frameBorderGradientEnabled.IsChecked == true && !noFill;
-        var pattern = enabled && _frameBorderPatternEnabled.IsChecked == true && !noFill;
-        var theme = enabled && _frameBorderThemeEnabled.IsChecked == true && !noFill;
-        _frameBorderColor.IsEnabled = enabled && !gradient && !pattern && !noFill && !theme;
-        _frameBorderWidth.IsEnabled = enabled;
-        _frameBorderDash.IsEnabled = enabled;
-        _frameBorderGradientEnabled.IsEnabled = enabled;
-        _frameBorderGradientStart.IsEnabled = gradient;
-        _frameBorderGradientEnd.IsEnabled = gradient;
-        _frameBorderGradientAngle.IsEnabled = gradient;
-        _frameBorderPatternEnabled.IsEnabled = enabled;
-        _frameBorderPatternPreset.IsEnabled = pattern;
-        _frameBorderPatternForeground.IsEnabled = pattern;
-        _frameBorderPatternBackground.IsEnabled = pattern;
-        _frameBorderNoFillEnabled.IsEnabled = enabled;
-        _frameBorderThemeEnabled.IsEnabled = enabled;
-        _frameBorderThemeColor.IsEnabled = theme;
-        _frameBorderShadowEnabled.IsEnabled = enabled;
-        _frameBorderShadowColor.IsEnabled = enabled && _frameBorderShadowEnabled.IsChecked == true;
-        _frameBorderShadowAlpha.IsEnabled = _frameBorderShadowColor.IsEnabled;
-        _frameBorderShadowBlur.IsEnabled = _frameBorderShadowColor.IsEnabled;
-        _frameBorderShadowDistance.IsEnabled = _frameBorderShadowColor.IsEnabled;
-        _frameBorderShadowDirection.IsEnabled = _frameBorderShadowColor.IsEnabled;
-        _frameBorderGlowEnabled.IsEnabled = enabled;
-        _frameBorderGlowColor.IsEnabled = enabled && _frameBorderGlowEnabled.IsChecked == true;
-        _frameBorderGlowAlpha.IsEnabled = _frameBorderGlowColor.IsEnabled;
-        _frameBorderGlowRadius.IsEnabled = _frameBorderGlowColor.IsEnabled;
-        _frameBorderSoftEdgeEnabled.IsEnabled = enabled;
-        _frameBorderSoftEdgeRadius.IsEnabled = enabled && _frameBorderSoftEdgeEnabled.IsChecked == true;
-        _frameBorderReflectionEnabled.IsEnabled = enabled;
-        _frameBorderReflectionAlpha.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
-        _frameBorderReflectionBlur.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
-        _frameBorderReflectionDistance.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
-        _frameBorderReflectionDirection.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
-        _frameBorderReflectionScale.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
-        _frameBorderReflectionEndPosition.IsEnabled = enabled && _frameBorderReflectionEnabled.IsChecked == true;
+        control.Focus();
+        if (selectAll && control is TextBox textBox)
+            textBox.SelectAll();
     }
 
-    private static Button MakeButton(string label, bool isDefault, Action action)
+    private static void ApplyAction(
+        Control control,
+        PresentationDialogActionPlan<ZoomObjectPropertiesDialogChromeAction> action)
     {
-        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
-        button.Click += (_, _) => action();
-        return button;
+        AutomationProperties.SetName(control, action.AccessibleName);
+        AutomationProperties.SetAutomationId(control, action.AutomationId);
     }
 }

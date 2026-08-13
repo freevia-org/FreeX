@@ -198,9 +198,10 @@ public sealed partial class DataToolDialogTests
     {
         var source = ReadTextToColumnsDialogSources();
 
-        source.Should().Contain("FocusInvalidDestinationInput();");
-        source.Should().Contain("RefocusInvalidInputAfterWarning(ex.Message);");
-        source.Should().Contain("private void RefocusInvalidInputAfterWarning(string message)");
+        source.Should().Contain("ShowValidation(TextToColumnsDialogValidationIssue.InvalidDestination);");
+        source.Should().Contain("var presentation = TextToColumnsDialogPlanner.DescribeValidationIssue(issue);");
+        source.Should().Contain("case TextToColumnsDialogFocusTarget.FixedWidthBreaks:");
+        source.Should().Contain("default:");
         source.Should().Contain("FocusInvalidDestinationInput();");
         source.Should().Contain("private void FocusInvalidDestinationInput()");
         source.Should().Contain("_wizardStep = 3;");
@@ -214,9 +215,9 @@ public sealed partial class DataToolDialogTests
         var source = ReadTextToColumnsDialogSources();
 
         source.Should().Contain("TryParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text, FixedWidthMaxLength(), out _)");
+        source.Should().Contain("ShowValidation(TextToColumnsDialogValidationIssue.MissingFixedWidthBreaks);");
         source.Should().Contain("FocusInvalidFixedWidthBreaksInput();");
-        source.Should().Contain("RefocusInvalidInputAfterWarning(ex.Message);");
-        source.Should().Contain("private void RefocusInvalidInputAfterWarning(string message)");
+        source.Should().Contain("case TextToColumnsDialogFocusTarget.FixedWidthBreaks:");
         source.Should().Contain("private void FocusInvalidFixedWidthBreaksInput()");
         source.Should().Contain("_wizardStep = 2;");
         source.Should().Contain("_fixedWidthButton.IsChecked = true;");
@@ -228,9 +229,9 @@ public sealed partial class DataToolDialogTests
     {
         var source = ReadTextToColumnsDialogSources();
 
+        source.Should().Contain("ShowValidation(TextToColumnsDialogValidationIssue.MissingCustomDelimiter);");
+        source.Should().Contain("case TextToColumnsDialogFocusTarget.CustomDelimiter:");
         source.Should().Contain("FocusInvalidCustomDelimiterInput();");
-        source.Should().Contain("RefocusInvalidInputAfterWarning(ex.Message);");
-        source.Should().Contain("private void RefocusInvalidInputAfterWarning(string message)");
         source.Should().Contain("private void FocusInvalidCustomDelimiterInput()");
         source.Should().Contain("_wizardStep = 2;");
         source.Should().Contain("_delimitedButton.IsChecked = true;");
@@ -244,9 +245,9 @@ public sealed partial class DataToolDialogTests
         var source = ReadTextToColumnsDialogSources();
 
         source.Should().Contain("SelectedDelimiterKinds().Count == 0");
+        source.Should().Contain("ShowValidation(TextToColumnsDialogValidationIssue.MissingDelimiter);");
+        source.Should().Contain("case TextToColumnsDialogFocusTarget.DelimiterSelection:");
         source.Should().Contain("FocusInvalidDelimiterSelectionInput();");
-        source.Should().Contain("throw new ArgumentException(UiText.Get(\"TextToColumns_SelectAtLeastOneDelimiter\"));");
-        source.Should().Contain("string.Equals(message, UiText.Get(\"TextToColumns_SelectAtLeastOneDelimiter\"), StringComparison.Ordinal)");
         source.Should().Contain("private void FocusInvalidDelimiterSelectionInput()");
         source.Should().Contain("_wizardStep = 2;");
         source.Should().Contain("_delimitedButton.IsChecked = true;");

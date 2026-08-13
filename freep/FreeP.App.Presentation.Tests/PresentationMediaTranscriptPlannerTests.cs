@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
@@ -271,6 +272,65 @@ public sealed class PresentationMediaTranscriptPlannerTests
         var placement = PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(
             cues[0], 800, 400, 80);
         placement.Should().Be(new PresentationMediaCaptionPlacement(200, 120, 400, 80));
+    }
+
+    [Fact]
+    public void PlanOverlayPlacement_CentralizesDefaultCaptionHeightAndAbsoluteCoordinates()
+    {
+        var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+            new PresentationMediaOverlayPlacementRequest(
+                new LayoutRect(100, 50, 500, 200),
+                OverlayWidth: 1280,
+                OverlayHeight: 720,
+                UseFullScreen: false));
+
+        placement.MediaBounds.Should().Be(new LayoutRect(100, 50, 500, 200));
+        placement.CaptionBounds.Should().Be(new LayoutRect(100, 210, 500, 40));
+        placement.CaptionTextWidth.Should().BeNull();
+        placement.CaptionTextHeight.Should().BeNull();
+        placement.IsCaptionVertical.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanOverlayPlacement_NormalizesFullscreenAndVerticalCaptionGeometry()
+    {
+        var cue = new PresentationMediaTranscriptCueDescriptor(
+            TimeSpan.Zero,
+            TimeSpan.FromSeconds(1),
+            "Vertical caption")
+        {
+            SizePercent = 50,
+            WritingMode = PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
+        };
+
+        var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+            new PresentationMediaOverlayPlacementRequest(
+                new LayoutRect(100, 50, 500, 200),
+                OverlayWidth: 1280,
+                OverlayHeight: 720,
+                UseFullScreen: true,
+                Cue: cue));
+
+        placement.MediaBounds.Should().Be(new LayoutRect(0, 0, 1280, 720));
+        placement.CaptionBounds.Should().Be(new LayoutRect(1194, 180, 86, 360));
+        placement.CaptionTextWidth.Should().Be(360);
+        placement.CaptionTextHeight.Should().Be(86);
+        placement.CaptionRotationDegrees.Should().Be(90);
+        placement.IsCaptionVertical.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlanOverlayPlacement_NormalizesInvalidOverlayExtents()
+    {
+        var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+            new PresentationMediaOverlayPlacementRequest(
+                new LayoutRect(double.NaN, double.PositiveInfinity, 0, -20),
+                OverlayWidth: double.NaN,
+                OverlayHeight: 0,
+                UseFullScreen: false));
+
+        placement.MediaBounds.Should().Be(new LayoutRect(0, 0, 1, 1));
+        placement.CaptionBounds.Should().Be(new LayoutRect(0, 0, 1, 36));
     }
 
     [Fact]
@@ -1154,6 +1214,11 @@ public sealed class PresentationMediaTranscriptPlannerTests
         externalPlan.ShapeId.Should().Be(401);
         externalPlan.Tracks.Should().HaveCount(2);
         externalPlan.SelectedTrackIndex.Should().Be(0);
+        externalPlan.SelectedTrackListIndex.Should().Be(0);
+        externalPlan.Tracks.Select(track => track.DisplayText).Should().Equal(
+            "1. External captions (unavailable)",
+            "2. Internal captions (available)");
+        externalPlan.Tracks.Select(track => track.IsSelected).Should().Equal(true, false);
         externalPlan.Message.Should().Be(PresentationMediaTranscriptPlanner.CaptionAuthoringExternalTrackMessage);
         externalPlan.Actions.Single(action =>
                 action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneReplaceCommandId)
@@ -1173,6 +1238,8 @@ public sealed class PresentationMediaTranscriptPlannerTests
             proposedTranscriptText: null);
 
         internalPlan.Label.Value.Should().Be("Internal captions");
+        internalPlan.SelectedTrackListIndex.Should().Be(1);
+        internalPlan.Tracks.Select(track => track.IsSelected).Should().Equal(false, true);
         internalPlan.Language.Value.Should().Be("en-US");
         internalPlan.Source.Value.Should().Be("ppt/media/internal.vtt");
         internalPlan.TranscriptText.Value.Should().Contain("Existing cue");
@@ -1194,9 +1261,54 @@ public sealed class PresentationMediaTranscriptPlannerTests
             proposedTranscriptText: null);
 
         missingSelection.HasSelectedMedia.Should().BeFalse();
+        missingSelection.SelectedTrackListIndex.Should().Be(-1);
         missingSelection.Actions.Should().Contain(action =>
             action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId &&
             action.DisabledReason == PresentationMediaTranscriptPlanner.MissingSelectedMediaMessage);
+    }
+
+    [Fact]
+    public void CaptionAuthoringPanePlan_ResolvesInvalidSelectionToFirstAvailableTrack()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 17,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Label = "Remote",
+                        Source = "https://example.com/captions.vtt",
+                        IsExternal = true
+                    },
+                    new MediaCaptionTrackInfo
+                    {
+                        Label = "Embedded",
+                        Source = "ppt/media/captions.vtt",
+                        Bytes = Encoding.UTF8.GetBytes("WEBVTT\r\n\r\n")
+                    }
+                }
+            }
+        });
+
+        var plan = PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(
+            slide,
+            0,
+            [17],
+            selectedTrackIndex: 42,
+            proposedLabel: null,
+            proposedLanguage: null,
+            proposedSource: null,
+            proposedTranscriptText: null);
+
+        plan.SelectedTrackIndex.Should().Be(1);
+        plan.SelectedTrackListIndex.Should().Be(1);
+        plan.SelectedTrack.Should().BeSameAs(plan.Tracks[1]);
+        plan.Tracks[1].IsSelected.Should().BeTrue();
     }
 
     [Fact]

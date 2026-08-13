@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 
@@ -23,6 +24,9 @@ public sealed class DialogActionButtonPlanTests
             DocumentInspectorDialogPlanner.ActionButtons,
             ("Remove Selected", true, false),
             ("Close", false, true));
+
+        DocumentInspectorDialogPlanner.ActionButtons
+            .Should().AllSatisfy(button => button.Should().BeAssignableTo<DialogActionPlan>());
     }
 
     private static void AssertPlan(

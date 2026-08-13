@@ -319,7 +319,8 @@ public sealed partial class ChartRendererTests
             []));
 
         var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
-        series.OutsideLabelFormat.Should().Be("{1}" + Environment.NewLine + "{2:0%}");
+        series.OutsideLabelFormat.Should().Be(
+            "{1}" + Environment.NewLine + "{0}" + Environment.NewLine + "{2:0%}");
     }
 
     [Fact]

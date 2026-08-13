@@ -7,39 +7,47 @@ namespace FreeP.App.Host;
 
 internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly SummaryZoomDialogSession _session;
     private readonly ListBox _targetList;
-    private readonly ObservableCollection<TargetOption> _items;
+    private readonly ObservableCollection<ZoomTargetOption> _items;
 
-    internal IReadOnlyList<string> SelectedTargetSectionIds { get; private set; } = Array.Empty<string>();
+    internal IReadOnlyList<string> SelectedTargetSectionIds => _session.SelectedTargetIds;
 
     internal SummaryZoomDialog(
         IReadOnlyList<(string Id, string DisplayName)> options,
         string? title = null,
         IReadOnlyCollection<string>? selectedTargetIds = null)
     {
-        ArgumentNullException.ThrowIfNull(options);
-        Title = title ?? SummaryZoomInsertionPlanner.DialogTitle;
+        _session = new SummaryZoomDialogSession(options, selectedTargetIds, title);
+        var surface = _session.Surface;
+        Title = surface.Title;
         Width = 460;
         Height = 360;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ZoomDialogChrome.Apply(this, surface);
 
-        _items = new ObservableCollection<TargetOption>(
-            options.Select(option => new TargetOption(option.Id, option.DisplayName)));
+        _items = new ObservableCollection<ZoomTargetOption>(_session.Options);
         _targetList = new ListBox
         {
             ItemsSource = _items,
             SelectionMode = SelectionMode.Extended,
             MinHeight = 180,
         };
+        ZoomDialogChrome.ApplyField(_targetList, surface.Field(ZoomTargetDialogField.Target));
         foreach (var item in _items)
-            if (selectedTargetIds?.Contains(item.Id, StringComparer.OrdinalIgnoreCase) == true)
+            if (_session.InitialSelectedTargetIds.Contains(item.Id, StringComparer.OrdinalIgnoreCase))
                 _targetList.SelectedItems.Add(item);
 
-        var moveUp = new Button { Content = "Move Up", MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
-        moveUp.Click += (_, _) => MoveSelected(_items, -1);
-        var moveDown = new Button { Content = "Move Down", MinWidth = 80 };
-        moveDown.Click += (_, _) => MoveSelected(_items, 1);
+        var moveUp = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.MoveUp),
+            () => MoveSelected(_items, -1));
+        moveUp.MinWidth = 80;
+        moveUp.Margin = new Thickness(0, 0, 8, 0);
+        var moveDown = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.MoveDown),
+            () => MoveSelected(_items, 1));
+        moveDown.MinWidth = 80;
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -47,7 +55,7 @@ internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var label = new Label { Content = "Target sections (select at least two):" };
+        var label = new Label { Content = surface.Field(ZoomTargetDialogField.Target).Label };
         Grid.SetRow(label, 0);
         grid.Children.Add(label);
         Grid.SetRow(_targetList, 1);
@@ -69,10 +77,15 @@ internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 14, 0, 0),
         };
-        var ok = new Button { Content = "OK", IsDefault = true, IsEnabled = options.Count >= 2, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
-        ok.Click += (_, _) => Apply();
+        var ok = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Accept),
+            Apply,
+            _session.CanAccept);
+        ok.Margin = new Thickness(0, 0, 8, 0);
         buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = "Cancel", IsCancel = true, MinWidth = 75 });
+        buttons.Children.Add(ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Cancel),
+            () => DialogResult = false));
         Grid.SetRow(buttons, 3);
         grid.Children.Add(buttons);
         Content = grid;
@@ -80,30 +93,24 @@ internal sealed class SummaryZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Apply()
     {
-        var selectedIds = _targetList.SelectedItems.OfType<TargetOption>().Select(option => option.Id).ToArray();
-        var selected = SummaryZoomTargetPlanner.SelectOrderedTargets(
-            _items.Select(item => item.Id), selectedIds);
-        if (selected.Count >= 2)
-        {
-            SelectedTargetSectionIds = selected;
+        var selectedIds = _targetList.SelectedItems
+            .OfType<ZoomTargetOption>()
+            .Select(option => option.Id)
+            .ToArray();
+        if (_session.TryAccept(selectedIds))
             DialogResult = true;
-        }
     }
 
-    private void MoveSelected(ObservableCollection<TargetOption> items, int delta)
+    private void MoveSelected(ObservableCollection<ZoomTargetOption> items, int delta)
     {
-        var selected = _targetList.SelectedItems.OfType<TargetOption>().ToArray();
-        if (selected.Length != 1)
+        var selectedIds = _targetList.SelectedItems
+            .OfType<ZoomTargetOption>()
+            .Select(option => option.Id)
+            .ToArray();
+        if (!_session.TryMoveSelected(selectedIds, delta, out var plan))
             return;
 
-        var index = items.IndexOf(selected[0]);
-        var targetIndex = index + delta;
-        if (index < 0 || targetIndex < 0 || targetIndex >= items.Count)
-            return;
-
-        items.Move(index, targetIndex);
-        _targetList.SelectedItem = selected[0];
+        items.Move(plan!.FromIndex, plan.ToIndex);
+        _targetList.SelectedItem = items[plan.ToIndex];
     }
-
-    private sealed record TargetOption(string Id, string DisplayName);
 }

@@ -44,7 +44,10 @@ public sealed class AutosaveCoordinatorWindowIsolationTests : IDisposable
             editor,
             onChanged: () => { },
             loadRecentFilesStore: () => RecentFilesStore.Load(Path.Combine(_tempDir, Guid.NewGuid().ToString("N") + ".json")));
-        var coordinator = new AutosaveCoordinator(editor, file, store);
+        var coordinator = new AutosaveCoordinator(
+            editor,
+            file,
+            ports => new FreeWAutosaveSession(ports, store));
         return (coordinator, file);
     }
 
@@ -167,7 +170,7 @@ public sealed class AutosaveCoordinatorWindowIsolationTests : IDisposable
         var coordinatorUnderTest = new AutosaveCoordinator(
             owningEditor,
             owningFile,
-            store,
+            sessionFactory: ports => new FreeWAutosaveSession(ports, store),
             recoverInNewWindow: candidate =>
             {
                 recoveredInNewWindow.Add(candidate);
@@ -250,7 +253,10 @@ public sealed class AutosaveCoordinatorWindowIsolationTests : IDisposable
             owningEditor,
             onChanged: () => { },
             loadRecentFilesStore: () => RecentFilesStore.Load(Path.Combine(_tempDir, Guid.NewGuid().ToString("N") + ".json")));
-        var coordinatorB = new AutosaveCoordinator(owningEditor, owningFile, store);
+        var coordinatorB = new AutosaveCoordinator(
+            owningEditor,
+            owningFile,
+            ports => new FreeWAutosaveSession(ports, store));
 
         HeadlessMessageBox.Handler = (_, _) => UserMessageResult.Ok; // always accept (RecoverUnsavedDocuments uses OkCancel)
         try

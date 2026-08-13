@@ -112,14 +112,36 @@ public static class PresentationClipboardContentFactory
         if (selected.Length == 0)
             return null;
 
+        var content = CreateSelection(
+            editor.Presentation,
+            slide,
+            selected,
+            renderPng,
+            ownerToken);
+        return content.IsEmpty ? null : content;
+    }
+
+    public static PresentationClipboardContent CreateSelection(
+        Presentation presentation,
+        Slide slide,
+        IReadOnlyList<SlideShape> shapes,
+        Func<Presentation, Slide, IReadOnlyList<SlideShape>, byte[]> renderPng,
+        string ownerToken)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(slide);
+        ArgumentNullException.ThrowIfNull(shapes);
+        ArgumentNullException.ThrowIfNull(renderPng);
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerToken);
+
         byte[]? selectionBytes = null;
         byte[]? pngBytes = null;
         try
         {
             selectionBytes = PresentationClipboardSelectionCodec.Serialize(
-                editor.Presentation,
+                presentation,
                 slide,
-                selected);
+                shapes);
         }
         catch
         {
@@ -128,16 +150,18 @@ public static class PresentationClipboardContentFactory
 
         try
         {
-            pngBytes = renderPng(editor.Presentation, slide, selected);
+            pngBytes = renderPng(presentation, slide, shapes);
         }
         catch
         {
             // Native selection/text fallbacks remain useful when rendering fails.
         }
 
-        var text = ExtractText(selected);
-        var content = new PresentationClipboardContent(selectionBytes, pngBytes, text, ownerToken);
-        return content.IsEmpty ? null : content;
+        return new PresentationClipboardContent(
+            selectionBytes,
+            pngBytes,
+            ExtractText(shapes),
+            ownerToken);
     }
 
     private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)

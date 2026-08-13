@@ -1,3 +1,5 @@
+using Free.Shared.IO;
+
 namespace Free.Shared.AppServices;
 
 /// <summary>
@@ -70,20 +72,12 @@ public sealed class FileCommandSession
         string? currentFilePath,
         string untitledDisplayName = DefaultUntitledDisplayName)
     {
-        if (string.IsNullOrWhiteSpace(currentFilePath))
-            return untitledDisplayName;
-
-        var displayName = Path.GetFileNameWithoutExtension(currentFilePath);
-        return string.IsNullOrWhiteSpace(displayName) ? untitledDisplayName : displayName;
+        return FilePathPolicy.FileNameWithoutExtensionOr(currentFilePath, untitledDisplayName);
     }
 
     public static string? FileNameFromPath(string? currentFilePath)
     {
-        if (string.IsNullOrWhiteSpace(currentFilePath))
-            return null;
-
-        var fileName = Path.GetFileName(currentFilePath);
-        return string.IsNullOrWhiteSpace(fileName) ? null : fileName;
+        return FilePathPolicy.TryGetFileName(currentFilePath, out var fileName) ? fileName : null;
     }
 
     public static string FileNameWithoutExtensionFromPath(
@@ -96,10 +90,7 @@ public sealed class FileCommandSession
                 ? DefaultUntitledDisplayName
                 : fallbackDisplayName;
 
-        var baseName = Path.GetFileNameWithoutExtension(effectiveName);
-        return string.IsNullOrWhiteSpace(baseName)
-            ? DefaultUntitledDisplayName
-            : baseName;
+        return FilePathPolicy.FileNameWithoutExtensionOr(effectiveName, DefaultUntitledDisplayName);
     }
 
     public void ClearCurrentPath() => _state.ClearCurrentFilePath();

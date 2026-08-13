@@ -1,12 +1,15 @@
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Media.Imaging;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using Free.Shared.Drawing;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
+using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -19,6 +22,20 @@ public sealed class PresentationClipboardInteropTests
 
     private static readonly byte[] Png = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+
+    private static PresentationPlatformClipboardSession CreateService(
+        IPlatformClipboard clipboard,
+        IPresentationClipboardShapeRenderer renderer) =>
+        new(
+            clipboard,
+            renderer.RenderSelection,
+            static content => PresentationClipboardPlatformMapper.ToPlatformContent(
+                content,
+                PresentationClipboardPlatformMapper.ResolveNativeScope(),
+                PresentationClipboardPlatformMapper.ResolveNativeXamlPackageFormat(),
+                PresentationClipboardPlatformMapper.ResolveNativeRtfFormat()),
+            PresentationClipboardPlatformIdentityStrategy.ContentIdentity(
+                AvaloniaClipboardShapeRenderer.NormalizePng));
 
     [Fact]
     public void Avalonia12Win32Backend_LegacyApplicationPrefixIsProvenButNotRequired()
@@ -34,16 +51,16 @@ public sealed class PresentationClipboardInteropTests
 
         productVersion.Should().StartWith("12.0.4");
         prefix.Should().Be("avn-app-fmt:");
-        AvaloniaPresentationSystemClipboard.SelectionFormat
+        ClipboardProjection.SelectionFormat
             .ToSystemName((string)prefix!)
             .Should().Be("avn-app-fmt:" + PresentationClipboardFormats.Selection);
-        AvaloniaPresentationSystemClipboard.OwnerTokenFormat
+        ClipboardProjection.OwnerTokenFormat
             .ToSystemName((string)prefix!)
             .Should().Be("avn-app-fmt:" + PresentationClipboardFormats.OwnerToken);
-        AvaloniaPresentationSystemClipboard.SelectionPlatformFormat
+        ClipboardProjection.SelectionPlatformFormat
             .ToSystemName("ignored-prefix:")
             .Should().Be(PresentationClipboardFormats.Selection);
-        AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat
+        ClipboardProjection.OwnerTokenPlatformFormat
             .ToSystemName("ignored-prefix:")
             .Should().Be(PresentationClipboardFormats.OwnerToken);
     }
@@ -73,13 +90,13 @@ public sealed class PresentationClipboardInteropTests
             var payload = InCanvasRichClipboardPlanner.Capture(
                 body,
                 new InCanvasEditorTextSelection(0, 4));
-            using var transfer = AvaloniaPresentationSystemClipboard.BuildDataTransfer(
+            using var transfer = ClipboardProjection.BuildDataTransfer(
                 new PresentationClipboardContent(
                     RichTextBytes: InCanvasRichClipboardPlanner.Serialize(payload)),
                 out var bitmap);
 
             bitmap.Should().BeNull();
-            var content = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+            var content = await ClipboardProjection.ReadDataTransferAsync(transfer);
             var decoded = InCanvasRichClipboardPlanner.Deserialize(content.RichTextBytes);
 
             decoded.Should().NotBeNull();
@@ -97,20 +114,20 @@ public sealed class PresentationClipboardInteropTests
         var content = new PresentationClipboardContent(
             SelectionBytes: [0x50, 0x4B, 0x03, 0x04, 0x44, 0x55],
             OwnerToken: "avalonia-owner");
-        using var transfer = AvaloniaPresentationSystemClipboard.BuildDataTransfer(
+        using var transfer = ClipboardProjection.BuildDataTransfer(
             content,
             out var bitmap);
         bitmap.Should().BeNull();
 
         ReadAvaloniaWin32HGlobal(
                 transfer,
-                AvaloniaPresentationSystemClipboard.SelectionPlatformFormat)
+                ClipboardProjection.SelectionPlatformFormat)
             .Should().Equal(content.SelectionBytes!);
 
         var ownerBytes = Encoding.Unicode.GetBytes("avalonia-owner\0");
         ReadAvaloniaWin32HGlobal(
                 transfer,
-                AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat)
+                ClipboardProjection.OwnerTokenPlatformFormat)
             .Should().Equal(ownerBytes);
     }
 
@@ -119,7 +136,7 @@ public sealed class PresentationClipboardInteropTests
     {
         var clipboard = new FakeSystemClipboard();
         var editor = CreateEditorWithSelectedShape(out var source);
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         var written = await service.CopyAsync(editor);
 
@@ -184,33 +201,33 @@ public sealed class PresentationClipboardInteropTests
                 Text: "portable text",
                 OwnerToken: "owner-token",
                 RichTextBytes: [10, 11, 12]);
-            var transfer = AvaloniaPresentationSystemClipboard.BuildDataTransfer(
+            var transfer = ClipboardProjection.BuildDataTransfer(
                 content,
                 out var bitmap);
             try
             {
                 var expectedSelectionFormat = OperatingSystem.IsWindows()
-                    ? AvaloniaPresentationSystemClipboard.SelectionPlatformFormat
-                    : AvaloniaPresentationSystemClipboard.SelectionFormat;
+                    ? ClipboardProjection.SelectionPlatformFormat
+                    : ClipboardProjection.SelectionFormat;
                 var expectedOwnerTokenFormat = OperatingSystem.IsWindows()
-                    ? AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat
-                    : AvaloniaPresentationSystemClipboard.OwnerTokenFormat;
+                    ? ClipboardProjection.OwnerTokenPlatformFormat
+                    : ClipboardProjection.OwnerTokenFormat;
                 transfer.Formats.Should().Contain(expectedSelectionFormat);
                 transfer.Formats.Should().Contain(expectedOwnerTokenFormat);
                 transfer.Formats.Should().Contain(
                     OperatingSystem.IsWindows()
-                        ? AvaloniaPresentationSystemClipboard.RichTextPlatformFormat
-                        : AvaloniaPresentationSystemClipboard.RichTextFormat);
-                AvaloniaPresentationSystemClipboard.SelectionFormat
+                        ? ClipboardProjection.RichTextPlatformFormat
+                        : ClipboardProjection.RichTextFormat);
+                ClipboardProjection.SelectionFormat
                     .ToSystemName("avn-app-fmt:")
                     .Should().Be("avn-app-fmt:" + PresentationClipboardFormats.Selection);
-                AvaloniaPresentationSystemClipboard.OwnerTokenFormat
+                ClipboardProjection.OwnerTokenFormat
                     .ToSystemName("avn-app-fmt:")
                     .Should().Be("avn-app-fmt:" + PresentationClipboardFormats.OwnerToken);
                 transfer.Formats.Should().Contain(DataFormat.Bitmap);
                 transfer.Formats.Should().Contain(DataFormat.Text);
 
-                var roundTrip = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+                var roundTrip = await ClipboardProjection.ReadDataTransferAsync(transfer);
                 roundTrip.SelectionBytes.Should().Equal(4, 5, 6);
                 roundTrip.PngBytes.Should().NotBeNullOrEmpty();
                 roundTrip.Text.Should().Be("portable text");
@@ -231,14 +248,14 @@ public sealed class PresentationClipboardInteropTests
         await Session.Dispatch(async () =>
         {
             var item = new DataTransferItem();
-            item.Set(AvaloniaPresentationSystemClipboard.SelectionPlatformFormat, [9, 8, 7]);
-            item.Set(AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat, "wpf-owner");
-            item.Set(AvaloniaPresentationSystemClipboard.RichTextPlatformFormat, [1, 2, 3]);
+            item.Set(ClipboardProjection.SelectionPlatformFormat, [9, 8, 7]);
+            item.Set(ClipboardProjection.OwnerTokenPlatformFormat, "wpf-owner");
+            item.Set(ClipboardProjection.RichTextPlatformFormat, [1, 2, 3]);
             item.SetText("WPF fallback");
             using var transfer = new DataTransfer();
             transfer.Add(item);
 
-            var content = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+            var content = await ClipboardProjection.ReadDataTransferAsync(transfer);
 
             content.SelectionBytes.Should().Equal(9, 8, 7);
             content.OwnerToken.Should().Be("wpf-owner");
@@ -256,13 +273,13 @@ public sealed class PresentationClipboardInteropTests
             var item = new DataTransferItem();
             item.Set(
                 OperatingSystem.IsWindows()
-                    ? AvaloniaPresentationSystemClipboard.ExternalRtfWindowsFormat
-                    : AvaloniaPresentationSystemClipboard.ExternalRtfLinuxFormat,
+                    ? ClipboardProjection.ExternalRtfWindowsFormat
+                    : ClipboardProjection.ExternalRtfLinuxFormat,
                 rtf);
             using var transfer = new DataTransfer();
             transfer.Add(item);
 
-            var content = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+            var content = await ClipboardProjection.ReadDataTransferAsync(transfer);
 
             content.RtfBytes.Should().Equal(rtf);
             content.HasRichText.Should().BeTrue();
@@ -275,7 +292,7 @@ public sealed class PresentationClipboardInteropTests
         await Session.Dispatch(async () =>
         {
             var xamlPackage = Encoding.UTF8.GetBytes("wpf-xamlpackage");
-            var transfer = AvaloniaPresentationSystemClipboard.BuildDataTransfer(
+            var transfer = ClipboardProjection.BuildDataTransfer(
                 new PresentationClipboardContent(XamlPackageBytes: xamlPackage),
                 out var bitmap);
             try
@@ -283,10 +300,10 @@ public sealed class PresentationClipboardInteropTests
                 bitmap.Should().BeNull();
                 transfer.Formats.Should().Contain(
                     OperatingSystem.IsWindows()
-                        ? AvaloniaPresentationSystemClipboard.ExternalXamlPackageWindowsFormat
-                        : AvaloniaPresentationSystemClipboard.ExternalXamlPackageLinuxFormat);
+                        ? ClipboardProjection.ExternalXamlPackageWindowsFormat
+                        : ClipboardProjection.ExternalXamlPackageLinuxFormat);
 
-                var content = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+                var content = await ClipboardProjection.ReadDataTransferAsync(transfer);
 
                 content.XamlPackageBytes.Should().Equal(xamlPackage);
                 content.HasXamlPackage.Should().BeTrue();
@@ -303,7 +320,7 @@ public sealed class PresentationClipboardInteropTests
     {
         using var transfer = new ThrowingPlatformAliasTransfer();
 
-        var content = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+        var content = await ClipboardProjection.ReadDataTransferAsync(transfer);
 
         content.SelectionBytes.Should().Equal(6, 5, 4);
         content.OwnerToken.Should().Be("legacy-owner");
@@ -319,7 +336,7 @@ public sealed class PresentationClipboardInteropTests
                 PngBytes: [1, 2, 3],
                 Text: "surviving text",
                 OwnerToken: "surviving-owner");
-            var transfer = AvaloniaPresentationSystemClipboard.BuildDataTransfer(
+            var transfer = ClipboardProjection.BuildDataTransfer(
                 content,
                 out var bitmap);
             try
@@ -329,10 +346,10 @@ public sealed class PresentationClipboardInteropTests
                 transfer.Formats.Should().Contain(DataFormat.Text);
                 transfer.Formats.Should().Contain(
                     OperatingSystem.IsWindows()
-                        ? AvaloniaPresentationSystemClipboard.SelectionPlatformFormat
-                        : AvaloniaPresentationSystemClipboard.SelectionFormat);
+                        ? ClipboardProjection.SelectionPlatformFormat
+                        : ClipboardProjection.SelectionFormat);
 
-                var roundTrip = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+                var roundTrip = await ClipboardProjection.ReadDataTransferAsync(transfer);
                 roundTrip.SelectionBytes.Should().Equal(7, 8);
                 roundTrip.Text.Should().Be("surviving text");
                 roundTrip.OwnerToken.Should().Be("surviving-owner");
@@ -349,7 +366,7 @@ public sealed class PresentationClipboardInteropTests
     {
         var clipboard = new FakeSystemClipboard();
         var editor = CreateEditorWithSelectedShape(out var source);
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
         var sourceExistedDuringWrite = false;
         clipboard.BeforeWrite = () =>
         {
@@ -382,7 +399,7 @@ public sealed class PresentationClipboardInteropTests
             Content = new PresentationClipboardContent(native, Png, "fallback text", "external"),
         };
         var destination = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         var result = await service.PasteAsync(destination);
 
@@ -401,7 +418,7 @@ public sealed class PresentationClipboardInteropTests
             Content = new PresentationClipboardContent([1, 2, 3], Png, "fallback text", "external"),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         var result = await service.PasteAsync(editor);
 
@@ -418,7 +435,7 @@ public sealed class PresentationClipboardInteropTests
             Content = new PresentationClipboardContent(Text: "external text"),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         var result = await service.PasteAsync(editor);
 
@@ -444,7 +461,7 @@ public sealed class PresentationClipboardInteropTests
                     "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Paragraph>ignored</Paragraph></FlowDocument>")),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         var result = await service.PasteAsync(editor);
 
@@ -464,7 +481,7 @@ public sealed class PresentationClipboardInteropTests
                     @"{\rtf1\ansi{\fonttbl{\f0 Calibri;}}\pard\f0\fs24 Before \b bold\b0\par After}")),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         var result = await service.PasteAsync(editor);
 
@@ -485,7 +502,7 @@ public sealed class PresentationClipboardInteropTests
                     @"{\rtf1\ansi Caption {\pict\pngblip " + Convert.ToHexString(Png) + @"} After}")),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         var result = await service.PasteAsync(editor);
 
@@ -509,7 +526,7 @@ public sealed class PresentationClipboardInteropTests
                     + Convert.ToHexString(Png) + "}}")),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.RichText);
         var picture = editor.CurrentSlide!.Shapes.Single();
@@ -529,7 +546,7 @@ public sealed class PresentationClipboardInteropTests
                     + @"} middle {\pict\jpegblip " + Convert.ToHexString(jpeg) + @"} After}")),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.RichText);
         editor.CurrentSlide!.Shapes.Should().HaveCount(3);
@@ -551,7 +568,7 @@ public sealed class PresentationClipboardInteropTests
                     @"{\rtf1\ansi Before {\object{\*\objclass Word.Document.12}{\*\objdata 010203}{\objresult Embedded result}} After}")),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.RichText);
         editor.CurrentSlide!.Shapes.Should().HaveCount(2);
@@ -585,7 +602,7 @@ public sealed class PresentationClipboardInteropTests
                     """)),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         var result = await service.PasteAsync(editor);
 
@@ -645,7 +662,7 @@ public sealed class PresentationClipboardInteropTests
                     """)),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
         var body = editor.CurrentSlide!.Shapes.Single().TextBody!;
@@ -677,7 +694,7 @@ public sealed class PresentationClipboardInteropTests
                     """)),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
 
@@ -696,7 +713,7 @@ public sealed class PresentationClipboardInteropTests
                     "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" FlowDirection=\"RightToLeft\"><Paragraph><Run Text=\"אבג\"/><Run FlowDirection=\"LeftToRight\" Text=\"LTR\"/></Paragraph></FlowDocument>")),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
 
@@ -715,7 +732,7 @@ public sealed class PresentationClipboardInteropTests
                     "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" TextAlignment=\"Center\"><Paragraph>centered</Paragraph><Paragraph TextAlignment=\"Right\">right</Paragraph></FlowDocument>")),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
 
@@ -736,7 +753,7 @@ public sealed class PresentationClipboardInteropTests
 Header\cell Value\cell\row}")),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.RichText);
         var cell = editor.CurrentSlide!.Shapes.Single().Table!.Rows.Single().Cells[0];
@@ -764,7 +781,7 @@ Header\cell Value\cell\row}")),
                     ("Images/pasted.png", imageBytes))),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         var result = await service.PasteAsync(editor);
 
@@ -797,7 +814,7 @@ Header\cell Value\cell\row}")),
                     ("Images/second.jpg", second))),
         };
         var editor = CreateEmptyEditor();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
         editor.CurrentSlide!.Shapes.Should().HaveCount(2);
@@ -812,7 +829,7 @@ Header\cell Value\cell\row}")),
     {
         var clipboard = new FakeSystemClipboard();
         var editor = CreateEditorWithSelectedShape(out var source);
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
         await service.CopyAsync(editor);
 
         var result = await service.PasteAsync(editor);
@@ -828,7 +845,7 @@ Header\cell Value\cell\row}")),
     {
         var clipboard = new FakeSystemClipboard();
         var editor = CreateEditorWithSelectedShape(out _);
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         await service.CopyAsync(editor);
         var ownerToken = clipboard.LastWritten!.OwnerToken;
@@ -848,7 +865,7 @@ Header\cell Value\cell\row}")),
     {
         var clipboard = new FakeSystemClipboard();
         var editor = CreateEditorWithSelectedShape(out _);
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         await service.CopyAsync(editor);
         clipboard.Content = new PresentationClipboardContent(
@@ -865,7 +882,7 @@ Header\cell Value\cell\row}")),
     {
         var clipboard = new FakeSystemClipboard { ThrowOnWrite = true };
         var editor = CreateEditorWithSelectedShape(out _);
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         (await service.CopyAsync(editor)).Should().BeFalse();
 
@@ -877,7 +894,7 @@ Header\cell Value\cell\row}")),
     {
         var clipboard = new FakeSystemClipboard { ThrowOnWrite = true };
         var editor = CreateEditorWithSelectedShape(out _);
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
         (await service.CopyAsync(editor)).Should().BeFalse();
         service.LastWriteFailureMessage.Should().NotBeNull();
 
@@ -894,7 +911,7 @@ Header\cell Value\cell\row}")),
         // leak its error message onto an unrelated later copy that has nothing selected.
         var clipboard = new FakeSystemClipboard { ThrowOnWrite = true };
         var editor = CreateEditorWithSelectedShape(out _);
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
         (await service.CopyAsync(editor)).Should().BeFalse();
         service.LastWriteFailureMessage.Should().NotBeNull();
 
@@ -997,7 +1014,7 @@ Header\cell Value\cell\row}")),
         var editor = CreateEditorWithSelectedShape(out _);
         editor.CopySelectedShapes();
         editor.ClearSelection();
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.Internal);
         editor.CurrentSlide!.Shapes.Should().HaveCount(2);
@@ -1012,7 +1029,7 @@ Header\cell Value\cell\row}")),
     {
         var clipboard = new FakeSystemClipboard { ThrowOnWrite = true, ThrowOnRead = true };
         var editor = CreateEditorWithSelectedShape(out _);
-        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var service = CreateService(clipboard, new StubRenderer());
 
         (await service.CutAsync(editor)).Should().BeFalse();
         editor.CurrentSlide!.Shapes.Should().BeEmpty();
@@ -1188,7 +1205,67 @@ Header\cell Value\cell\row}")),
         return output.ToArray();
     }
 
-    private sealed class FakeSystemClipboard : IPresentationSystemClipboard
+    private static class ClipboardProjection
+    {
+        internal static readonly DataFormat<byte[]> SelectionFormat =
+            Bytes(PresentationClipboardFormats.Selection, PlatformClipboardFormatScope.Application);
+        internal static readonly DataFormat<string> OwnerTokenFormat =
+            Text(PresentationClipboardFormats.OwnerToken, PlatformClipboardFormatScope.Application);
+        internal static readonly DataFormat<byte[]> SelectionPlatformFormat =
+            Bytes(PresentationClipboardFormats.Selection, PlatformClipboardFormatScope.Platform);
+        internal static readonly DataFormat<string> OwnerTokenPlatformFormat =
+            Text(PresentationClipboardFormats.OwnerToken, PlatformClipboardFormatScope.Platform);
+        internal static readonly DataFormat<byte[]> RichTextFormat =
+            Bytes(PresentationClipboardFormats.RichText, PlatformClipboardFormatScope.Application);
+        internal static readonly DataFormat<byte[]> RichTextPlatformFormat =
+            Bytes(PresentationClipboardFormats.RichText, PlatformClipboardFormatScope.Platform);
+        internal static readonly DataFormat<byte[]> ExternalXamlPackageWindowsFormat =
+            Bytes(PresentationClipboardFormats.WindowsXamlPackage, PlatformClipboardFormatScope.Platform);
+        internal static readonly DataFormat<byte[]> ExternalXamlPackageLinuxFormat =
+            Bytes(PresentationClipboardFormats.LinuxXamlPackage, PlatformClipboardFormatScope.Platform);
+        internal static readonly DataFormat<byte[]> ExternalRtfWindowsFormat =
+            Bytes(PresentationClipboardFormats.WindowsRtf, PlatformClipboardFormatScope.Platform);
+        internal static readonly DataFormat<byte[]> ExternalRtfLinuxFormat =
+            Bytes(PresentationClipboardFormats.LinuxRtf, PlatformClipboardFormatScope.Platform);
+
+        internal static DataTransfer BuildDataTransfer(
+            PresentationClipboardContent content,
+            out Bitmap? bitmap) =>
+            AvaloniaPlatformClipboard.BuildDataTransfer(ToPlatformContent(content), out bitmap);
+
+        internal static async Task<PresentationClipboardContent> ReadDataTransferAsync(
+            IAsyncDataTransfer transfer)
+        {
+            var read = await AvaloniaPlatformClipboard.ReadDataTransferAsync(
+                transfer,
+                PresentationClipboardPlatformMapper.ReadRequest);
+            return read.Status == PlatformClipboardReadStatus.Success
+                ? PresentationClipboardPlatformMapper.FromPlatformContent(read.Value)
+                : new PresentationClipboardContent();
+        }
+
+        private static PlatformClipboardContent ToPlatformContent(
+            PresentationClipboardContent content) =>
+            PresentationClipboardPlatformMapper.ToPlatformContent(
+                content,
+                PresentationClipboardPlatformMapper.ResolveNativeScope(),
+                PresentationClipboardPlatformMapper.ResolveNativeXamlPackageFormat(),
+                PresentationClipboardPlatformMapper.ResolveNativeRtfFormat());
+
+        private static DataFormat<byte[]> Bytes(
+            string name,
+            PlatformClipboardFormatScope scope) =>
+            AvaloniaPlatformClipboard.CreateBytesFormat(
+                new PlatformClipboardFormat(name, PlatformClipboardDataKind.Bytes, scope));
+
+        private static DataFormat<string> Text(
+            string name,
+            PlatformClipboardFormatScope scope) =>
+            AvaloniaPlatformClipboard.CreateStringFormat(
+                new PlatformClipboardFormat(name, PlatformClipboardDataKind.Text, scope));
+    }
+
+    private sealed class FakeSystemClipboard : IPlatformClipboard
     {
         public PresentationClipboardContent Content { get; set; } = new();
         public PresentationClipboardContent? LastWritten { get; private set; }
@@ -1199,25 +1276,43 @@ Header\cell Value\cell\row}")),
         public TaskCompletionSource<bool>? WriteStarted { get; set; }
         public TaskCompletionSource<bool>? WriteGate { get; set; }
 
-        public async Task WriteAsync(PresentationClipboardContent content)
+        public async ValueTask<PlatformClipboardWriteResult> WriteAsync(
+            PlatformClipboardContent platformContent,
+            CancellationToken cancellationToken = default)
         {
             if (ThrowOnWrite)
-                throw new InvalidOperationException("clipboard locked");
+                return PlatformClipboardWriteResult.Failed("clipboard locked");
             BeforeWrite?.Invoke();
             WriteStarted?.TrySetResult(true);
             if (WriteGate is not null)
                 await WriteGate.Task;
+            var content = PresentationClipboardPlatformMapper.FromPlatformContent(platformContent);
             LastWritten = content;
             Content = content;
             WriteCount++;
+            return PlatformClipboardWriteResult.Success();
         }
 
-        public Task<PresentationClipboardContent> ReadAsync()
+        public ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
+            PlatformClipboardReadRequest request,
+            CancellationToken cancellationToken = default)
         {
             if (ThrowOnRead)
-                throw new InvalidOperationException("clipboard unavailable");
-            return Task.FromResult(Content);
+                return ValueTask.FromResult(
+                    PlatformClipboardReadResult<PlatformClipboardContent>.Failed(
+                        "clipboard unavailable"));
+            return ValueTask.FromResult(
+                PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                    PresentationClipboardPlatformMapper.ToPlatformContent(
+                        Content,
+                        PresentationClipboardPlatformMapper.ResolveNativeScope(),
+                        PresentationClipboardPlatformMapper.ResolveNativeXamlPackageFormat(),
+                        PresentationClipboardPlatformMapper.ResolveNativeRtfFormat())));
         }
+
+        public ValueTask<PlatformClipboardWriteResult> ClearAsync(
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PlatformClipboardWriteResult.Success());
     }
 
     private sealed class StubRenderer : IPresentationClipboardShapeRenderer
@@ -1232,25 +1327,25 @@ Header\cell Value\cell\row}")),
     {
         public IReadOnlyList<DataFormat> Formats { get; } =
         [
-            AvaloniaPresentationSystemClipboard.SelectionPlatformFormat,
-            AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat,
-            AvaloniaPresentationSystemClipboard.SelectionFormat,
-            AvaloniaPresentationSystemClipboard.OwnerTokenFormat,
+            ClipboardProjection.SelectionPlatformFormat,
+            ClipboardProjection.OwnerTokenPlatformFormat,
+            ClipboardProjection.SelectionFormat,
+            ClipboardProjection.OwnerTokenFormat,
         ];
 
         public IReadOnlyList<IAsyncDataTransferItem> Items => [this];
 
         public Task<object?> TryGetRawAsync(DataFormat format)
         {
-            if (format == AvaloniaPresentationSystemClipboard.SelectionPlatformFormat
-                || format == AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat)
+            if (format == ClipboardProjection.SelectionPlatformFormat
+                || format == ClipboardProjection.OwnerTokenPlatformFormat)
             {
                 throw new InvalidOperationException("public alias unavailable");
             }
 
-            if (format == AvaloniaPresentationSystemClipboard.SelectionFormat)
+            if (format == ClipboardProjection.SelectionFormat)
                 return Task.FromResult<object?>(new byte[] { 6, 5, 4 });
-            if (format == AvaloniaPresentationSystemClipboard.OwnerTokenFormat)
+            if (format == ClipboardProjection.OwnerTokenFormat)
                 return Task.FromResult<object?>("legacy-owner");
             return Task.FromResult<object?>(null);
         }

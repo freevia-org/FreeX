@@ -76,6 +76,46 @@ public sealed record PortablePdfExportPlan(
 
 public static class PortablePdfExportPlanner
 {
+    public static bool TryApplyOptions(
+        PortablePdfExportPlan exportPlan,
+        ExportOptions options,
+        out PortablePdfExportPlan effectivePlan,
+        out string? error,
+        ExportPlannerTextResolver? textResolver = null)
+    {
+        ArgumentNullException.ThrowIfNull(exportPlan);
+        ArgumentNullException.ThrowIfNull(options);
+
+        effectivePlan = exportPlan;
+        if (!ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Pdf, out error, textResolver))
+            return false;
+
+        if (!ExportPlanner.TryValidatePageRange(options.PageRange, exportPlan.TotalPageCount, out error, textResolver))
+            return false;
+
+        effectivePlan = ApplyPageRange(exportPlan, options.PageRange);
+        return true;
+    }
+
+    public static PortablePdfExportPlan ApplyPageRange(
+        PortablePdfExportPlan exportPlan,
+        ExportPageRange? pageRange)
+    {
+        ArgumentNullException.ThrowIfNull(exportPlan);
+        if (pageRange is null)
+            return exportPlan;
+
+        var pageRequests = exportPlan.PageRequests
+            .Where(page => page.ExportPageNumber >= pageRange.FromPage && page.ExportPageNumber <= pageRange.ToPage)
+            .Select((page, index) => page with { ExportPageNumber = index + 1 })
+            .ToArray();
+        return exportPlan with
+        {
+            PageRequests = pageRequests,
+            StatusText = $"Ready to export portable PDF: {pageRequests.Length} {(pageRequests.Length == 1 ? "page" : "pages")} from selected page range."
+        };
+    }
+
     /// <summary>
     /// Builds the portable PDF export plan. When <paramref name="workbook"/> is supplied, each
     /// sheet's <see cref="Sheet.PrintComments"/> setting is honored the same way the WPF

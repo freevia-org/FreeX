@@ -1768,7 +1768,7 @@ public sealed partial class XlsxFileAdapter
             var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
             var calcPr = workbookXml.Root?.Element(workbookNs + "calcPr");
             if (calcPr is not null &&
-                XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr))
+                XlsxWorkbookLeafElementNormalizer.Normalize(calcPr))
             {
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
             }
@@ -2279,7 +2279,7 @@ public sealed partial class XlsxFileAdapter
             var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
             var workbookPr = workbookXml.Root?.Element(workbookNs + "workbookPr");
             if (workbookPr is not null &&
-                XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr))
+                XlsxWorkbookLeafElementNormalizer.Normalize(workbookPr))
             {
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
             }
@@ -2295,7 +2295,7 @@ public sealed partial class XlsxFileAdapter
             var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
             var fileSharing = workbookXml.Root?.Element(workbookNs + "fileSharing");
             if (fileSharing is not null &&
-                XlsxWorkbookFileSharingNormalizer.NormalizeElement(fileSharing))
+                XlsxWorkbookLeafElementNormalizer.Normalize(fileSharing))
             {
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
             }
@@ -2311,7 +2311,7 @@ public sealed partial class XlsxFileAdapter
             var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
             var fileVersion = workbookXml.Root?.Element(workbookNs + "fileVersion");
             if (fileVersion is not null &&
-                XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion))
+                XlsxWorkbookLeafElementNormalizer.Normalize(fileVersion))
             {
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
             }
@@ -2327,7 +2327,7 @@ public sealed partial class XlsxFileAdapter
             var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
             var changed = false;
             foreach (var fileRecoveryPr in workbookXml.Root?.Elements(workbookNs + "fileRecoveryPr") ?? [])
-                changed |= XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(fileRecoveryPr);
+                changed |= XlsxWorkbookLeafElementNormalizer.Normalize(fileRecoveryPr);
 
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
@@ -2385,7 +2385,7 @@ public sealed partial class XlsxFileAdapter
             var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
             var workbookProtection = workbookXml.Root?.Element(workbookNs + "workbookProtection");
             if (workbookProtection is not null &&
-                XlsxWorkbookProtectionNormalizer.NormalizeElement(workbookProtection))
+                XlsxWorkbookLeafElementNormalizer.Normalize(workbookProtection))
             {
                 XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
             }

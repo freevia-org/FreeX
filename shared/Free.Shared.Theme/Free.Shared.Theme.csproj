@@ -6,4 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+  </ItemGroup>
+
 </Project>

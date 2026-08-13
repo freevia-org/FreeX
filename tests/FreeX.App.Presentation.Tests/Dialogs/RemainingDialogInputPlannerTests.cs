@@ -76,4 +76,30 @@ public sealed class RemainingDialogInputPlannerTests
 
         result.Should().Be(new ColumnWidthDialogResult(expected));
     }
+
+    [Theory]
+    [InlineData(WorksheetDimensionKind.RowHeight, "409.5", 409.5)]
+    [InlineData(WorksheetDimensionKind.ColumnWidth, "255", 255)]
+    public void WorksheetDimension_TryCreateResult_ProvidesRendererNeutralValue(
+        WorksheetDimensionKind kind,
+        string input,
+        double expected)
+    {
+        WorksheetDimensionDialogPlanner.TryCreateResult(kind, input, out var result).Should().BeTrue();
+
+        result.Should().Be(new WorksheetDimensionDialogResult(expected));
+    }
+
+    [Fact]
+    public void AvaloniaDimensionDialog_DelegatesValidationToPortablePlanner()
+    {
+        var avaloniaRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Avalonia");
+        var source = File.ReadAllText(Path.Combine(avaloniaRoot, "MainWindow.RowColumnVisibility.cs"));
+
+        source.Should().Contain("WorksheetDimensionDialogPlanner.TryCreateResult(");
+        source.Should().Contain("WorksheetDimensionKind.RowHeight");
+        source.Should().Contain("WorksheetDimensionKind.ColumnWidth");
+        source.Should().NotContain("double.TryParse(");
+        source.Should().NotContain("Math.Clamp(");
+    }
 }

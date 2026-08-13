@@ -4,8 +4,10 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.Calculation;
 using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Presentation.FormulaAuditing;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -87,12 +89,13 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 
+        var definedNames = new DefinedNamesSession(_workbook, _currentSheetId);
         NameDefinitionDialog? dialog = null;
         dialog = new NameDefinitionDialog(
-            new NameDefinitionDialogResult("", "Workbook", "", FormatWorkbookRange(range)),
-            GetNameDefinitionScopeOptions(),
+            new NameDefinitionDialogResult("", DefinedNameScope.WorkbookLabel, "", FormatWorkbookRange(range)),
+            DefinedNameUiPolicy.BuildScopeOptions(definedNames.ScopeChoices),
             request => ApplyNameDefinitionSelection(dialog, request),
-            isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _),
+            isValidRange: rangeText => definedNames.TryParseRange(rangeText, out _),
             validateName: _workbook.ValidateNamedRangeName)
         {
             Owner = this
@@ -101,25 +104,25 @@ public partial class MainWindow
         if (ShowOwnedDialog(dialog) != true)
             return;
 
-        // The ribbon "Define Name" dialog only ever creates a BRAND NEW name (unlike the Name
-        // Manager's New/Edit dialog, which reuses NameDefinitionDialog for both and has its own
-        // isSameEntry-aware duplicate check in NamedRangeDialog.xaml.cs), so any name that already
-        // exists anywhere in the target scope is unconditionally a conflict here. Without this,
-        // redefining an existing NamedFormula/constant (e.g. "Revenue" = 0.08) as a range via this
-        // dialog would silently add a NamedRanges entry alongside the stale NamedFormulas one, and
-        // NamedRanges wins at evaluation time -- every formula using the name would silently change
-        // value. Excel's own New Name dialog rejects this outright.
-        if (NameConflictsWithExistingDefinition(dialog.Result.Name, dialog.Result.Scope.Trim()))
+        var draft = DefinedNameUiPolicy.CreateDraft(
+            dialog.Result.Name,
+            definedNames.GetScope(dialog.Result.ScopeSheetId),
+            dialog.Result.RefersTo,
+            dialog.Result.Comment);
+        var plan = definedNames.PlanSave(draft);
+        if (!plan.Validation.Name.IsValid)
         {
             ShowOwnedMessage(
-                UiText.Get("NameDefinition_NameConflictsMessage"),
+                plan.Validation.Name.Error == DefinedNameError.Duplicate
+                    ? UiText.Get("NameDefinition_NameConflictsMessage")
+                    : DefinedNameValidationMessages.Describe(plan.Validation.Name.Error).Resolve(UiText.Get),
                 UiText.Get("NameDefinition_NewNameTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;
         }
 
-        if (!NamedRangeInputParser.TryParseRange(_workbook, dialog.Result.RefersTo, out var namedRange))
+        if (!plan.Validation.RefersTo.IsValid || plan.Command is null)
         {
             ShowOwnedMessage(
                 UiText.Get("NameDefinition_InvalidRangeFormatMessage"),
@@ -130,10 +133,7 @@ public partial class MainWindow
         }
 
         if (!TryExecuteCommand(
-                new DefineNamedRangeCommand(
-                    dialog.Result.Name,
-                    namedRange,
-                    new NamedRangeMetadata(dialog.Result.Scope.Trim(), dialog.Result.Comment.Trim())),
+                plan.Command,
                 UiText.Get("MainWindow_Content_DefineName")))
             return;
 
@@ -153,25 +153,27 @@ public partial class MainWindow
             dlg.UseLeftColumn,
             dlg.UseBottomRow,
             dlg.UseRightColumn);
-        var outcome = _commandBus.Execute(_workbook.Id, command);
-        if (!outcome.Success)
-            ShowCommandError(outcome, "Create from Selection");
+        TryExecuteCommand(command, "Create from Selection");
     }
 
     private void UseInFormulaBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Button btn) return;
-        if (_workbook.NamedRanges.Count == 0)
+        var plan = DefinedNameUiPolicy.PlanUseInFormula(
+            _workbook,
+            FormatWorkbookRange,
+            DefinedNameUiProfile.Wpf);
+        if (!plan.HasItems)
         {
             _messageService.ShowInfo(UiText.Get("MainWindowMessage_UseInFormulaNoNames"), UiText.Get("MainWindowMessage_UseInFormulaTitle"));
             return;
         }
 
         var menu = new ContextMenu();
-        foreach (var name in _workbook.NamedRanges.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
+        foreach (var descriptor in plan.Items)
         {
-            var item = new MenuItem { Header = name };
-            item.Click += (_, _) => InsertDefinedNameIntoFormula(name);
+            var item = new MenuItem { Header = descriptor.Name };
+            item.Click += (_, _) => InsertDefinedNameIntoFormula(descriptor.Name);
             menu.Items.Add(item);
         }
 
@@ -224,12 +226,8 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
-    private static string DescribePasteNamesListError(PasteNamesListError error) => error switch
-    {
-        PasteNamesListError.NotEnoughColumns => UiText.Get("PasteNames_NotEnoughColumnsMessage"),
-        PasteNamesListError.NotEnoughRows => UiText.Get("PasteNames_NotEnoughRowsMessage"),
-        _ => UiText.Get("PasteNames_NoNamesMessage"),
-    };
+    private static string DescribePasteNamesListError(PasteNamesListError error) =>
+        UiText.Get(DefinedNameUiPolicy.GetPasteNamesListErrorResourceKey(error, DefinedNameUiProfile.Wpf));
 
     private void InsertDefinedNameIntoFormula(string name)
     {
@@ -249,7 +247,7 @@ public partial class MainWindow
     {
         if (_formulaEditCell is not null ||
             _inlineEditor?.IsVisible == true ||
-            FormulaEditInteractionPlanner.IsFormulaText(formulaText) ||
+            _formulaRangeEditingSession.IsFormulaText(formulaText) ||
             SheetGrid.SelectedRange?.Start is not { } address)
         {
             return false;
@@ -396,7 +394,7 @@ public partial class MainWindow
     {
         RecalculateWorkbook();
 
-        var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _recalcEngine.CyclicCells);
+        var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _session.CyclicCells);
         if (issues.Count == 0)
         {
             _messageService.ShowInfo(UiText.Get("MainWindowMessage_ErrorCheckingNoIssues"), UiText.Get("MainWindowMessage_ErrorCheckingTitle"));
@@ -554,38 +552,15 @@ public partial class MainWindow
 
     private void CalcNowBtn_Click(object sender, RoutedEventArgs e)
     {
-        // Ribbon "Calculate Now" and plain F9 share Excel's cheapest recalc scope: only dirty
-        // (volatile + affected) cells via the existing dependency graph. See
-        // RecalculateDirtyCells for why this must not rebuild the graph or evaluate every
-        // formula cell -- that full-workbook scope is reserved for Ctrl+Alt+F9 (CalcFullBtn_Click).
-        RecalculateDirtyCells();
-        UpdateViewport();
+        ExecuteCalculationAction(CalculationCommandAction.CalculateNow);
     }
     private void CalcFullBtn_Click(object sender, RoutedEventArgs e)
     {
-        RecalculateWorkbook();
-        UpdateViewport();
+        ExecuteCalculationAction(CalculationCommandAction.CalculateFull);
     }
     private void CalcSheetBtn_Click(object sender, RoutedEventArgs e)
     {
-        // R119-app-host-except-data-tables-recalc: Shift+F9 ("Calculate Sheet") is one of the
-        // three explicit triggers that always force this sheet's Data Tables fresh, regardless
-        // of calc mode -- see RefreshDataTablesOnSheetBeforeForcedRecalc's doc comment (mirrors
-        // FreeX.App.Services.WorkbookCellEditService.RecalculateSheet).
-        RefreshDataTablesOnSheetBeforeForcedRecalc(_currentSheetId);
-        _recalcEngine.RecalculateSheetFormulas(_workbook, _currentSheetId);
-        InvalidateNavigationCaches();
-        // R128B-app-host-status-bar-calculate-indicator: Shift+F9 ("Calculate Sheet") is this
-        // shell's counterpart of FreeX.App.Services.WorkbookCellEditService.RecalculateSheet, which
-        // clears Workbook.HasPendingManualRecalculation the same way F9/Ctrl+Alt+F9 do (the pending
-        // flag is workbook-scoped, matching Excel's own workbook-level "Calculate" indicator, so
-        // Shift+F9 clears it the same as a full recalc rather than tracking staleness per sheet --
-        // see WorkbookCellEditService.RecalculateSheet's matching comment). This method calls
-        // _recalcEngine.RecalculateSheetFormulas directly rather than routing through the shared
-        // service (see MainWindow.WorkbookUiState.cs's other Recalculate* methods for why), so the
-        // clear has to be threaded here independently.
-        _workbook.HasPendingManualRecalculation = false;
-        UpdateViewport();
+        ExecuteCalculationAction(CalculationCommandAction.CalculateActiveSheet);
     }
     private void CalcOptionsBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -603,33 +578,65 @@ public partial class MainWindow
             item.IsChecked = item.Name switch
             {
                 _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_Manual"), StringComparison.Ordinal) =>
-                    _workbook.CalculationMode == WorkbookCalculationMode.Manual,
+                    CalculationCommandPolicy.IsSelected(_workbook.CalculationMode, WorkbookCalculationMode.Manual),
                 _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_AutomaticExceptDataTables"), StringComparison.Ordinal) =>
-                    _workbook.CalculationMode == WorkbookCalculationMode.AutomaticExceptDataTables,
-                _ => _workbook.CalculationMode == WorkbookCalculationMode.Automatic
+                    CalculationCommandPolicy.IsSelected(_workbook.CalculationMode, WorkbookCalculationMode.AutomaticExceptDataTables),
+                _ => CalculationCommandPolicy.IsSelected(_workbook.CalculationMode, WorkbookCalculationMode.Automatic)
             };
         }
     }
 
-    private void CalcAutoMenuItem_Click(object sender, RoutedEventArgs e)
+    private void CalcAutoMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyCalculationModeChange(WorkbookCalculationMode.Automatic);
+
+    private void CalcAutoExceptDataTablesMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyCalculationModeChange(WorkbookCalculationMode.AutomaticExceptDataTables);
+
+    private void CalcManualMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyCalculationModeChange(WorkbookCalculationMode.Manual);
+
+    private void ApplyCalculationModeChange(WorkbookCalculationMode requestedMode)
     {
-        if (!TryExecuteCommand(new SetCalculationModeCommand(WorkbookCalculationMode.Automatic), "Calculation Options"))
-            return;
-        RecalculateWorkbook();
-        UpdateViewport();
+        ApplyCalculationWorkflowOutcome(CalculationWorkflow.ChangeMode(requestedMode));
     }
 
-    private void CalcAutoExceptDataTablesMenuItem_Click(object sender, RoutedEventArgs e)
+    private CalculationWorkflowSession CalculationWorkflow =>
+        new(
+            _workbook,
+            (command, label) =>
+            {
+                var success = TryExecuteCommand(command, label, out var outcome);
+                return new CalculationCommandExecutionResult(
+                    success,
+                    outcome.ErrorMessage,
+                    outcome.IsNoOp);
+            },
+            new CalculationRecalculationOperations(
+                RecalculateDirtyCells,
+                RecalculateWorkbook,
+                () =>
+                {
+                    _session.RecalculateActiveSheet();
+                    InvalidateNavigationCaches();
+                }));
+
+    private void ExecuteCalculationAction(CalculationCommandAction action)
     {
-        if (!TryExecuteCommand(new SetCalculationModeCommand(WorkbookCalculationMode.AutomaticExceptDataTables), "Calculation Options"))
-            return;
-        RecalculateWorkbook();
-        UpdateViewport();
+        ApplyCalculationWorkflowOutcome(CalculationWorkflow.Execute(action));
     }
 
-    private void CalcManualMenuItem_Click(object sender, RoutedEventArgs e)
+    private void ApplyCalculationWorkflowOutcome(CalculationWorkflowOutcome outcome)
     {
-        TryExecuteCommand(new SetCalculationModeCommand(WorkbookCalculationMode.Manual), "Calculation Options");
+        if (outcome.Success)
+            ApplyCalculationRefresh(outcome.RefreshPolicy);
+    }
+
+    private void ApplyCalculationRefresh(CalculationStateRefreshPolicy policy)
+    {
+        if (policy.HasFlag(CalculationStateRefreshPolicy.CommandSurface))
+            RefreshToolbar();
+        if (policy.HasFlag(CalculationStateRefreshPolicy.FormulaResults))
+            UpdateViewport();
     }
 
     private void FormulaLogicalBtn_Click(object sender, RoutedEventArgs e)
@@ -716,7 +723,7 @@ public partial class MainWindow
     private void BeginFormulaBarFormulaEdit(string text, int? caretIndex = null)
     {
         CaptureFormulaEditCell();
-        _formulaRangeEntryMode = FormulaEditInteractionPlanner.IsFormulaText(text);
+        _formulaRangeEditingSession.SetPointModeForFormulaText(text);
         ClearFormulaReferenceEntrySpan();
         FormulaBar.Text = text;
         if (caretIndex is { } requestedCaretIndex)
@@ -760,44 +767,6 @@ public partial class MainWindow
     private void Formula_ROUND_Click(object sender, RoutedEventArgs e)   => InsertFormulaFunction("ROUND");
     private void Formula_ABS_Click(object sender, RoutedEventArgs e)     => InsertFormulaFunction("ABS");
     private void Formula_SQRT_Click(object sender, RoutedEventArgs e)    => InsertFormulaFunction("SQRT");
-
-    // R114-app-name-manager-workbook-sentinel-3-2: mirrors NamedRangeDialog.GetScopeOptions --
-    // deliberately not de-duplicated by display label, so a sheet literally named "Workbook" still
-    // gets its own distinct (label, SheetId) entry alongside the workbook-global sentinel.
-    private IReadOnlyList<NamedRangeScopeOption> GetNameDefinitionScopeOptions()
-    {
-        var options = new List<NamedRangeScopeOption> { new("Workbook", null) };
-        options.AddRange(_workbook.Sheets.Select(sheet => new NamedRangeScopeOption(sheet.Name, sheet.Id)));
-        return options;
-    }
-
-    // R74-commands-name-manager-4-1: whether "name" is already defined -- as a range, a
-    // formula/constant, or a structured table -- in the given target scope. Structured-table names
-    // share the same namespace as defined names workbook-wide in Excel, so a table-name collision is
-    // checked regardless of scope; NamedRanges/NamedFormulas are workbook-scoped storage, and
-    // ScopedNamedRanges/ScopedNamedFormulas are sheet-scoped storage keyed by (name, sheetId).
-    private bool NameConflictsWithExistingDefinition(string name, string scope)
-    {
-        if (_workbook.Sheets.Any(sheet => sheet.StructuredTables.Any(t =>
-                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase))))
-        {
-            return true;
-        }
-
-        if (string.Equals(scope, "Workbook", StringComparison.OrdinalIgnoreCase))
-        {
-            return _workbook.NamedRanges.ContainsKey(name) || _workbook.NamedFormulas.ContainsKey(name);
-        }
-
-        var scopeSheetId = _workbook.Sheets.FirstOrDefault(sheet =>
-            string.Equals(sheet.Name, scope, StringComparison.OrdinalIgnoreCase))?.Id;
-        if (scopeSheetId is not { } sheetId)
-            return false;
-
-        return _workbook.ScopedNamedRanges.ContainsKey((name, sheetId)) ||
-               _workbook.ScopedNamedFormulas.ContainsKey((name, sheetId));
-    }
 
     private void ApplyNamedRangeSelection(
         NamedRangeDialog? dialog,

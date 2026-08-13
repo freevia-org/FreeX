@@ -986,10 +986,11 @@ public sealed partial class GridViewPerformanceMeasurementTests
         public int Count { get; private set; }
 
         public void AcceptLayout(
-            Point start,
-            Point end,
+            LayoutPoint start,
+            LayoutPoint end,
             FormulaTraceArrowLayoutKind kind,
-            CellAddress? navigationTarget) =>
+            CellAddress? navigationTarget,
+            FormulaTraceArrowKind arrowKind) =>
             Count++;
     }
 

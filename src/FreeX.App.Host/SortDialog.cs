@@ -58,17 +58,20 @@ public sealed partial class SortDialog : Window
         Sheet? iconSheet = null,
         GridRange? iconRange = null)
     {
-        _levels = new ObservableCollection<SortDialogLevel>(NormalizeLevels(levels));
-        _columnChoices = NormalizeColumnChoices(columnChoices);
-        _genericColumnChoices = NormalizeColumnChoices(genericColumnChoices ?? columnChoices);
-        _rowChoices = NormalizeColumnChoices(rowChoices);
-        _cellColorChoices = NormalizeColorChoices(cellColorChoices ?? colorChoices);
-        _fontColorChoices = NormalizeColorChoices(fontColorChoices ?? colorChoices);
+        _levels = new ObservableCollection<SortDialogLevel>(
+            SortDialogPlanner.NormalizeLevels(levels, PlannerText));
+        _columnChoices = SortDialogPlanner.NormalizeColumnChoices(columnChoices, PlannerText);
+        _genericColumnChoices = SortDialogPlanner.NormalizeColumnChoices(
+            genericColumnChoices ?? columnChoices,
+            PlannerText);
+        _rowChoices = SortDialogPlanner.NormalizeColumnChoices(rowChoices, PlannerText);
+        _cellColorChoices = SortDialogPlanner.NormalizeColorChoices(cellColorChoices ?? colorChoices);
+        _fontColorChoices = SortDialogPlanner.NormalizeColorChoices(fontColorChoices ?? colorChoices);
         _iconWorkbook = iconWorkbook;
         _iconSheet = iconSheet;
         _iconRange = iconRange;
         _options = new SortDialogOptions();
-        ResultSortKeys = BuildSortKeys(_levels);
+        ResultSortKeys = SortDialogPlanner.BuildSortKeys(_levels, PlannerText);
         ResultHasHeaders = hasHeaders;
         ResultOptions = _options;
 
@@ -171,7 +174,7 @@ public sealed partial class SortDialog : Window
         _addLevelButton = new Button { Content = UiText.Get("Sort_AddLevel"), MinWidth = 98, Margin = new Thickness(0, 0, 8, 6) };
         _addLevelButton.Click += (_, _) =>
         {
-            ReplaceLevels(AddLevel(_levels));
+            ReplaceLevels(SortDialogPlanner.AddLevel(_levels, text: PlannerText));
             _levelsGrid.SelectedIndex = _levels.Count - 1;
             UpdateToolbarButtonStates();
         };
@@ -179,7 +182,7 @@ public sealed partial class SortDialog : Window
         _deleteLevelButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
-            ReplaceLevels(RemoveLevel(_levels, selectedIndex));
+            ReplaceLevels(SortDialogPlanner.RemoveLevel(_levels, selectedIndex, PlannerText));
             _levelsGrid.SelectedIndex = Math.Min(selectedIndex, _levels.Count - 1);
             UpdateToolbarButtonStates();
         };
@@ -187,7 +190,7 @@ public sealed partial class SortDialog : Window
         _copyLevelButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
-            ReplaceLevels(CopyLevel(_levels, selectedIndex));
+            ReplaceLevels(SortDialogPlanner.CopyLevel(_levels, selectedIndex, PlannerText));
             _levelsGrid.SelectedIndex = Math.Min(selectedIndex + 1, _levels.Count - 1);
             UpdateToolbarButtonStates();
         };
@@ -195,7 +198,7 @@ public sealed partial class SortDialog : Window
         _moveUpButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? 0 : _levelsGrid.SelectedIndex;
-            ReplaceLevels(MoveLevel(_levels, selectedIndex, -1));
+            ReplaceLevels(SortDialogPlanner.MoveLevel(_levels, selectedIndex, -1, PlannerText));
             _levelsGrid.SelectedIndex = Math.Max(0, selectedIndex - 1);
             UpdateToolbarButtonStates();
         };
@@ -203,7 +206,7 @@ public sealed partial class SortDialog : Window
         _moveDownButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
-            ReplaceLevels(MoveLevel(_levels, selectedIndex, 1));
+            ReplaceLevels(SortDialogPlanner.MoveLevel(_levels, selectedIndex, 1, PlannerText));
             _levelsGrid.SelectedIndex = Math.Min(_levels.Count - 1, selectedIndex + 1);
             UpdateToolbarButtonStates();
         };
@@ -243,7 +246,7 @@ public sealed partial class SortDialog : Window
         var ok = new Button { Content = UiText.Ok, IsDefault = true, MinWidth = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
         {
-            ResultSortKeys = BuildSortKeys(_levels);
+            ResultSortKeys = SortDialogPlanner.BuildSortKeys(_levels, PlannerText);
             ResultHasHeaders = _headerCheck.IsChecked == true;
             ResultOptions = _options;
             DialogResult = true;

@@ -8,6 +8,41 @@ namespace FreeX.App.Services;
 
 public sealed class WorkbookSessionFactory
 {
+    /// <summary>
+    /// Creates a session over host-provided command, calculation, viewport, and document-state
+    /// services. This lets an existing renderer migrate to <see cref="WorkbookSession"/> ownership
+    /// without creating a second command history or recalculation graph.
+    /// </summary>
+    public WorkbookSession CreateHostOwned(
+        StartupWorkbookLoadResult source,
+        ICommandBus commandBus,
+        RecalcEngine recalcEngine,
+        IViewportService viewportService,
+        IEnumerable<IFileAdapter> adapters,
+        WorkbookDocumentState documentState,
+        double viewportHeight,
+        double viewportWidth,
+        bool includeObjects = false)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(commandBus);
+        ArgumentNullException.ThrowIfNull(recalcEngine);
+        ArgumentNullException.ThrowIfNull(viewportService);
+        ArgumentNullException.ThrowIfNull(adapters);
+        ArgumentNullException.ThrowIfNull(documentState);
+
+        return new WorkbookSession(
+            source,
+            adapters.ToList(),
+            new WorkbookCellEditService(commandBus, recalcEngine),
+            new WorkbookSheetSelectionService(),
+            viewportService,
+            viewportHeight,
+            viewportWidth,
+            includeObjects,
+            documentState: documentState);
+    }
+
     public WorkbookSession Create(
         StartupWorkbookLoadResult source,
         double viewportHeight,
@@ -21,22 +56,20 @@ public sealed class WorkbookSessionFactory
         var adapterCatalog = (adapters ?? WorkbookFileAdapterCatalog.CreateDefaultAdapters()).ToList();
         var workbook = source.Workbook;
         var recalcEngine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
-        var commandBus = new CommandBus(
-            _ => new WorkbookCommandContext(workbook),
-            (workbookId, ctx) => XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(ctx.Workbook, out _));
-        var cellEditService = new WorkbookCellEditService(commandBus, recalcEngine);
+        var documentContext = WorkbookDocumentContext.Create(workbook);
         recalcEngine.RebuildFormulaDependencies(workbook);
         ApplyOnOpenVolatileRecalc(recalcEngine, workbook, adapterCatalog);
 
-        return new WorkbookSession(
+        return documentContext.CreateHostOwnedSession(
+            this,
             source,
-            adapterCatalog,
-            cellEditService,
-            new WorkbookSheetSelectionService(),
+            recalcEngine,
             viewportService ?? new ViewportService(),
-            viewportHeight,
-            viewportWidth,
-            includeObjects);
+            adapterCatalog,
+            documentState: null,
+            viewportHeight: viewportHeight,
+            viewportWidth: viewportWidth,
+            includeObjects: includeObjects);
     }
 
     public WorkbookSession CreateNew(
@@ -52,34 +85,6 @@ public sealed class WorkbookSessionFactory
             workbook,
             workbook.Name,
             "Created new workbook.",
-            IsFallback: false);
-
-        return Create(
-            source,
-            viewportHeight,
-            viewportWidth,
-            includeObjects,
-            adapters,
-            viewportService);
-    }
-
-    /// <summary>
-    /// Creates a session over the fixed parity demo workbook (<see cref="ParityDemoWorkbookFactory"/>) so the
-    /// Avalonia <c>--parity-capture</c> grid surface renders the SAME content the WPF host adopts, instead of
-    /// the rich macOS-preview demo. Used only by the headless capture path.
-    /// </summary>
-    public WorkbookSession CreateParityDemo(
-        double viewportHeight,
-        double viewportWidth,
-        bool includeObjects = false,
-        IEnumerable<IFileAdapter>? adapters = null,
-        IViewportService? viewportService = null)
-    {
-        var workbook = ParityDemoWorkbookFactory.Create();
-        var source = new StartupWorkbookLoadResult(
-            workbook,
-            workbook.Name,
-            "Showing parity demo workbook.",
             IsFallback: false);
 
         return Create(

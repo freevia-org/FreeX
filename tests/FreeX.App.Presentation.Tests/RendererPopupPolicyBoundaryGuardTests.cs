@@ -122,10 +122,6 @@ public sealed class RendererPopupPolicyBoundaryGuardTests
                 .Order(StringComparer.OrdinalIgnoreCase)
                 .Select(File.ReadAllText));
 
-    private static string ResolveRepositoryRoot()
-    {
-        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        return Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
-    }
+    private static string ResolveRepositoryRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

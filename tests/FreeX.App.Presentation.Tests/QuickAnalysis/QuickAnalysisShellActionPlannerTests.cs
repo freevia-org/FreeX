@@ -13,8 +13,12 @@ public sealed class QuickAnalysisShellActionPlannerTests
         var action = Plan("format.lessthan", QuickAnalysisShellCapabilities.DialogBacked);
 
         action.Kind.Should().Be(QuickAnalysisShellActionKind.OpenConditionalFormatDialog);
-        action.ConditionalFormat.Should().Be(QuickAnalysisConditionalFormatCommand.LessThan);
-        action.ConditionalFormatDialogTitle.Should().Be("Less Than");
+        action.Route.ConditionalFormat.Should().Be(QuickAnalysisConditionalFormatCommand.LessThan);
+        action.ConditionalFormatDialog.Should().NotBeNull();
+        action.ConditionalFormatDialog!.Command.Should().Be(QuickAnalysisConditionalFormatCommand.LessThan);
+        action.ConditionalFormatDialog.Title.Should().Be("Less Than");
+        action.ConditionalFormatDialog.Seed.Should().Be(
+            new QuickAnalysisConditionalFormatDialogSeed(CfRuleType.CellValue, CfOperator.LessThan));
     }
 
     [Fact]
@@ -23,9 +27,9 @@ public sealed class QuickAnalysisShellActionPlannerTests
         var action = Plan("format.lessthan", QuickAnalysisShellCapabilities.DirectApplyLimited);
 
         action.Kind.Should().Be(QuickAnalysisShellActionKind.ApplyConditionalFormat);
-        action.ConditionalFormat.Should().Be(QuickAnalysisConditionalFormatCommand.LessThan);
+        action.Route.ConditionalFormat.Should().Be(QuickAnalysisConditionalFormatCommand.LessThan);
         action.ConditionalFormatPreset.Should().Be(ConditionalFormatPreset.HighlightLessThan);
-        action.ConditionalFormatDialogTitle.Should().BeNull();
+        action.ConditionalFormatDialog.Should().BeNull();
     }
 
     [Theory]

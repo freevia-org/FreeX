@@ -211,9 +211,12 @@ public sealed class QuickAnalysisPlannerTests
         dataBars.Label.Should().Be("Data Bars");
         dataBars.ToolTip.Should().Be("Preview data bars across the selected values.");
         dataBars.AutomationId.Should().Be("QuickAnalysis_format.databars");
-        dataBars.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
+        dataBars.HoverPreview.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
+        dataBars.PreviewIcon.Glyph.Should().Be(QuickAnalysisPreviewIconGlyph.HorizontalBars);
         dataBars.Action.Kind.Should().Be(QuickAnalysisShellActionKind.OpenConditionalFormatDialog);
-        dataBars.Action.ConditionalFormatDialogTitle.Should().Be("Data Bar");
+        dataBars.Action.ConditionalFormatDialog.Should().NotBeNull();
+        dataBars.Action.ConditionalFormatDialog!.Title.Should().Be("Data Bar");
+        dataBars.Action.ConditionalFormatDialog.Seed.RuleType.Should().Be(CfRuleType.DataBar);
         dataBars.HoverPreview.Range.Should().Be(selection);
         dataBars.HoverPreview.StatusText.Should().Be(dataBars.ToolTip);
 
@@ -346,6 +349,19 @@ public sealed class QuickAnalysisPlannerTests
             new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
         QuickAnalysisPlanner.BuildHoverPreview(selection, sparkline)!.Range.Should().Be(
             new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
+    }
+
+    [Fact]
+    public void BuildHoverPreview_StaysInsideSheetAtLastColumn()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(
+            new CellAddress(sheetId, 2, CellAddress.MaxCol),
+            new CellAddress(sheetId, 6, CellAddress.MaxCol));
+        var sum = QuickAnalysisPlanner.BuildOptions(selection)
+            .Single(option => option.Command == QuickAnalysisCommand.Sum);
+
+        QuickAnalysisPlanner.BuildHoverPreview(selection, sum).Range.Should().Be(selection);
     }
 
     [Theory]

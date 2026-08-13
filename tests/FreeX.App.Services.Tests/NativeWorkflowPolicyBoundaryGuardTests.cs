@@ -10,6 +10,10 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         Path.Combine("src", "FreeX.App.Services", "WorkbookFileDialogSurfacePlanner.cs"),
         Path.Combine("src", "FreeX.App.Services", "WorkbookFilePickerPlanner.cs"),
         Path.Combine("src", "FreeX.App.Services", "WorkbookFileLifecycleCoordinator.cs"),
+        Path.Combine("src", "FreeX.App.Services", "WorkbookFileWorkflow.cs"),
+        Path.Combine("src", "FreeX.App.Services", "WorkbookImportWorkflow.cs"),
+        Path.Combine("src", "FreeX.App.Services", "WorkbookExportWorkflow.cs"),
+        Path.Combine("src", "FreeX.App.Services", "WorkbookPrintWorkflow.cs"),
         Path.Combine("src", "FreeX.App.Services", "ExportFilePickerPlanner.cs"),
         Path.Combine("src", "FreeX.App.Services", "ExportOptionsDialogSurfacePlanner.cs"),
         Path.Combine("src", "FreeX.App.Services", "ExportPlanner.cs"),
@@ -35,7 +39,9 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         var exportPickerPlanner = Read(repoRoot, "src", "FreeX.App.Services", "ExportFilePickerPlanner.cs");
         var exportOptionsPlanner = Read(repoRoot, "src", "FreeX.App.Services", "ExportOptionsDialogSurfacePlanner.cs");
         var exportPrintPlanner = Read(repoRoot, "src", "FreeX.App.Services", "WorkbookExportPrintPlanner.cs");
+        var exportWorkflow = Read(repoRoot, "src", "FreeX.App.Services", "WorkbookExportWorkflow.cs");
         var printJobPlanner = Read(repoRoot, "src", "FreeX.App.Services", "PrintJobPlanner.cs");
+        var fileWorkflow = Read(repoRoot, "src", "FreeX.App.Services", "WorkbookFileWorkflow.cs");
 
         workbookCommandPlanner.Should().Contain("PlanOpenPicker(");
         workbookCommandPlanner.Should().Contain("PlanSaveAsPicker(");
@@ -48,7 +54,10 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         exportOptionsPlanner.Should().Contain("CreateFormatAvailability(");
         exportOptionsPlanner.Should().Contain("CreateResult(");
         exportPrintPlanner.Should().Contain("CreatePlanFromPageSetup(");
+        exportWorkflow.Should().NotContain("CreateScopePlan(");
         printJobPlanner.Should().Contain("CreatePlanFromPageSetup(");
+        fileWorkflow.Should().Contain("public async Task<WorkbookOpenWorkflowResult> OpenAsync(");
+        fileWorkflow.Should().Contain("public async Task<WorkbookSaveWorkflowResult> SaveTargetAsync(");
     }
 
     [Fact]
@@ -57,20 +66,27 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         var repoRoot = ResolveRepositoryRoot();
         var wpfBackstageSource = Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.Backstage.cs");
         var wpfExportSource = Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.PrintExport.cs");
+        var wpfImportSource = Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.DataCommands.cs");
         var wpfExportOptionsSource = Read(repoRoot, "src", "FreeX.App.Host", "ExportOptionsDialog.cs");
-        var wpfParitySource = Read(repoRoot, "src", "FreeX.App.Host", "ParityCapture.cs");
+        var wpfParitySource = Read(repoRoot, "tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs");
         var avaloniaMainSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs");
         var avaloniaExportOptionsSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ExportOptions.cs");
         var avaloniaPrintSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.Print.cs");
-        var avaloniaParitySource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+        var avaloniaImportSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.GetData.cs");
+        var avaloniaParitySource = Read(repoRoot, "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
 
         wpfBackstageSource.Should().Contain("WorkbookFilePickerPlanner.BuildOpenDialogPlan(_fileAdapters)");
         wpfBackstageSource.Should().Contain("WorkbookFilePickerPlanner.BuildSaveDialogPlan(");
-        wpfBackstageSource.Should().Contain("WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(");
-        wpfBackstageSource.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(");
+        wpfBackstageSource.Should().Contain("_fileWorkflow.TryResolveSaveTarget(");
+        wpfBackstageSource.Should().Contain("_fileWorkflow.OpenAsync(");
+        wpfBackstageSource.Should().Contain("_fileWorkflow.SaveTargetAsync(");
         wpfExportSource.Should().Contain("ExportFilePickerPlanner.BuildPdfXpsDialogPlan(");
         wpfExportSource.Should().Contain("ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(");
-        wpfExportSource.Should().Contain("ExportPlanner.PlanExport(");
+        wpfExportSource.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
+        wpfExportSource.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
+        wpfExportSource.Should().Contain("WorkbookExportWorkflow.ExecuteBooleanAsync(");
+        wpfExportSource.Should().Contain("WorkbookPrintWorkflow.CreatePlan(");
+        wpfImportSource.Should().Contain("WorkbookImportWorkflow.ImportPathAsync(");
         wpfExportOptionsSource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(");
         wpfExportOptionsSource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateResult(");
         wpfParitySource.Should().Contain("WorkbookFileDialogSurfacePlanner.CreateOpenPlan(");
@@ -78,22 +94,39 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
 
         avaloniaMainSource.Should().Contain("WorkbookFileCommandPlanner.PlanOpenPicker(");
         avaloniaMainSource.Should().Contain("WorkbookFileCommandPlanner.PlanSaveAsPicker(");
+        avaloniaMainSource.Should().Contain("_fileWorkflow.OpenAsync(");
+        avaloniaMainSource.Should().Contain("_fileWorkflow.SaveTargetAsync(");
+        avaloniaMainSource.Should().Contain("WorkbookExportWorkflow.ExecuteBooleanAsync(");
         avaloniaMainSource.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
         avaloniaMainSource.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
         avaloniaMainSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfPickerPlan(");
-        avaloniaMainSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(");
+        avaloniaMainSource.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
+        avaloniaMainSource.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
         avaloniaMainSource.Should().Contain("WorkbookExportPrintPlanner.CreatePlanFromPageSetup(");
+        avaloniaMainSource.Should().Contain("PortablePdfExportPlanner.TryApplyOptions(");
         avaloniaExportOptionsSource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(");
         avaloniaExportOptionsSource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateResult(");
         avaloniaExportOptionsSource.Should().Contain("ExportPlanner.TryCreatePageRange(");
         avaloniaExportOptionsSource.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(");
-        avaloniaExportOptionsSource.Should().Contain("ExportPlanner.TryValidatePublishOptions(");
-        avaloniaExportOptionsSource.Should().Contain("ExportPlanner.TryValidatePageRange(");
-        avaloniaPrintSource.Should().Contain("PrintJobPlanner.CreatePlanFromPageSetup(");
+        avaloniaExportOptionsSource.Should().NotContain("TryPreparePortablePdfExportPlan(");
+        avaloniaExportOptionsSource.Should().NotContain("ApplyPageRangeToPortablePdfExportPlan(");
+        avaloniaPrintSource.Should().Contain("WorkbookPrintWorkflow.CreatePlan(");
+        avaloniaPrintSource.Should().Contain("WorkbookPrintWorkflow.ExecutePortableAsync(");
+        avaloniaPrintSource.Should().Contain("_printService.SubmitAsync(pdfPath, selection, cancellationToken)");
+        avaloniaPrintSource.Should().NotContain("IPlatformPrinter");
+        avaloniaImportSource.Should().Contain("WorkbookImportWorkflow.ApplyImportedWorkbookEdit(");
         avaloniaPrintSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(");
         avaloniaParitySource.Should().Contain("WorkbookFileDialogSurfacePlanner.CreateOpenPlan(");
         avaloniaParitySource.Should().Contain("WorkbookFileDialogSurfacePlanner.CreateSaveAsPlan(");
         avaloniaParitySource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(");
+
+        wpfBackstageSource.Should().NotContain("WorkbookSaveExecutionCoordinator.Begin(");
+        wpfBackstageSource.Should().Contain(
+            "request => RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, request)");
+        avaloniaMainSource.Should().NotContain("WorkbookSaveExecutionCoordinator.Begin(");
+        avaloniaMainSource.Should().NotContain("_openService.LoadAsync(");
+        wpfImportSource.Should().NotContain("adapter.Load(stream)");
+        avaloniaPrintSource.Should().NotContain("PrintJobPlanner.CreatePlanFromPageSetup(");
     }
 
     [Fact]
@@ -104,7 +137,7 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         var wpfExportSource = Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.PrintExport.cs");
         var avaloniaMainSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs");
         var avaloniaPrintSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.Print.cs");
-        var avaloniaParitySource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+        var avaloniaParitySource = Read(repoRoot, "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
 
         wpfBackstageSource.Should().NotContain("\"Open Workbook\"");
         wpfBackstageSource.Should().NotContain("\"Save Workbook\"");
@@ -127,10 +160,6 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
     private static string Read(string repoRoot, params string[] segments) =>
         File.ReadAllText(Path.Combine([repoRoot, .. segments]));
 
-    private static string ResolveRepositoryRoot()
-    {
-        var servicesProject = RepositoryFileLocator.Find("src", "FreeX.App.Services", "FreeX.App.Services.csproj");
-        return Directory.GetParent(servicesProject)?.Parent?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
-    }
+    private static string ResolveRepositoryRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

@@ -17,6 +17,8 @@ public sealed class AccessibilityCheckerDialogPlannerTests
         plan.CleanMessage.Should().Be("No accessibility issues found.");
         plan.StatusText.Should().Contain("No accessibility issues found");
         plan.Sections.Should().BeEmpty();
+        plan.TreeNodes.Should().BeEmpty();
+        plan.InitialItem.Should().BeNull();
         plan.ResultAutomation.Should().Be(new AccessibilityCheckerAutomationSpec(
             "Accessibility checker result",
             "AccessibilityCheckerResultText",
@@ -75,6 +77,23 @@ public sealed class AccessibilityCheckerDialogPlannerTests
         var item = group.Items.Should().ContainSingle().Subject;
         item.ObjectLabel.Should().Be("Sheet1!B2");
         item.Description.Should().Be("Sheet1!B2: Cell text has low contrast against its fill color.");
+
+        var sectionNode = plan.TreeNodes.Should().ContainSingle().Subject;
+        sectionNode.Should().Match<AccessibilityCheckerTreeNodePlan>(node =>
+            node.Kind == AccessibilityCheckerTreeNodeKind.Section &&
+            node.Header == "Localized warnings (2)" &&
+            node.IsExpanded &&
+            !node.IsInitialSelection &&
+            node.Group == null &&
+            node.Item == null);
+        sectionNode.Children.Select(node => node.Header).Should().Contain("Localized contrast (1)");
+        var initialNode = sectionNode.Children
+            .SelectMany(node => node.Children)
+            .Single(node => node.IsInitialSelection);
+        initialNode.Kind.Should().Be(AccessibilityCheckerTreeNodeKind.Item);
+        initialNode.Item.Should().BeSameAs(plan.InitialItem);
+        plan.InitialItem.Should().BeSameAs(
+            plan.Sections.SelectMany(value => value.Groups).SelectMany(value => value.Items).First());
 
         AccessibilityCheckerDialogPlanner.CreateSelection(item, null, plan)
             .Should()

@@ -509,21 +509,7 @@ public sealed class PptxRepairCorpusValidityTests
             .ToArray();
     }
 
-    private static string FindCorpusDirectory()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus");
-            if (Directory.Exists(candidate) &&
-                File.Exists(Path.Combine(candidate, "10-motionpath.pptx")))
-            {
-                return candidate;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate tools/FreeP.RenderCompare/corpus.");
-    }
+    private static string FindCorpusDirectory() =>
+        TestWorkspaceFileLocator.FindContainingDirectoryFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus", "10-motionpath.pptx");
 }

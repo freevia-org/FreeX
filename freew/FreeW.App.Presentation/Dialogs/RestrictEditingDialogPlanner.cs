@@ -32,6 +32,92 @@ public sealed record RestrictEditingDialogPresentationPlan(
     string InitialFocusTarget,
     IReadOnlyList<string> ActionButtonOrder);
 
+public enum RestrictEditingDialogOutcomeKind
+{
+    Accepted,
+    Cancelled,
+    ValidationFailed,
+}
+
+public sealed record RestrictEditingDialogOutcome(
+    RestrictEditingDialogOutcomeKind Kind,
+    ProtectionSettings? Settings = null,
+    string? ValidationMessage = null)
+{
+    public bool IsAccepted => Kind == RestrictEditingDialogOutcomeKind.Accepted;
+}
+
+public delegate ValueTask<string?> RestrictEditingPasswordPrompt(string title, string prompt);
+
+public sealed class RestrictEditingDialogSession
+{
+    private readonly ProtectionSettings _currentProtection;
+
+    public RestrictEditingDialogSession(ProtectionSettings? current)
+    {
+        _currentProtection = current ?? ProtectionSettings.Unprotected;
+        InitialPlan = RestrictEditingDialogPlanner.BuildPlan(_currentProtection);
+    }
+
+    public RestrictEditingDialogPlan InitialPlan { get; }
+
+    public RestrictEditingDialogOutcome Start(
+        int selectedModeIndex,
+        string? password,
+        string? confirmation)
+    {
+        if (!RestrictEditingDialogPlanner.TryCreateStartSettings(
+                ModeAt(selectedModeIndex),
+                password,
+                confirmation,
+                out var settings,
+                out var validationMessage))
+        {
+            return new RestrictEditingDialogOutcome(
+                RestrictEditingDialogOutcomeKind.ValidationFailed,
+                ValidationMessage: validationMessage);
+        }
+
+        return new RestrictEditingDialogOutcome(RestrictEditingDialogOutcomeKind.Accepted, settings);
+    }
+
+    public async ValueTask<RestrictEditingDialogOutcome> StopAsync(
+        RestrictEditingPasswordPrompt? prompt = null)
+    {
+        string? password = null;
+        if (_currentProtection.HasPassword)
+        {
+            ArgumentNullException.ThrowIfNull(prompt);
+            password = await prompt(
+                RestrictEditingDialogPlanner.StopButtonText,
+                RestrictEditingDialogPlanner.StopPasswordPrompt);
+            if (password is null)
+                return new RestrictEditingDialogOutcome(RestrictEditingDialogOutcomeKind.Cancelled);
+        }
+
+        if (!RestrictEditingDialogPlanner.TryCreateStopSettings(
+                _currentProtection,
+                password,
+                out var settings,
+                out var validationMessage))
+        {
+            return new RestrictEditingDialogOutcome(
+                RestrictEditingDialogOutcomeKind.ValidationFailed,
+                ValidationMessage: validationMessage);
+        }
+
+        return new RestrictEditingDialogOutcome(RestrictEditingDialogOutcomeKind.Accepted, settings);
+    }
+
+    public RestrictEditingDialogOutcome Cancel() =>
+        new(RestrictEditingDialogOutcomeKind.Cancelled);
+
+    public static ProtectionMode ModeAt(int selectedModeIndex) =>
+        selectedModeIndex >= 0 && selectedModeIndex < RestrictEditingDialogPlanner.ModeOptions.Count
+            ? RestrictEditingDialogPlanner.ModeOptions[selectedModeIndex].Mode
+            : ProtectionMode.ReadOnly;
+}
+
 public static class RestrictEditingDialogPlanner
 {
     public const string Title = "Restrict Editing";

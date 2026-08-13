@@ -38,6 +38,9 @@ internal static class TestWorkspaceFileLocator
         FindExistingDirectory(new DirectoryInfo(AppContext.BaseDirectory), relativeParts)
         ?? throw new DirectoryNotFoundException($"Could not find repository directory '{Path.Combine(relativeParts)}'.");
 
+    public static string? TryFindDirectoryFromBaseDirectory(params string[] relativeParts) =>
+        FindExistingDirectory(new DirectoryInfo(AppContext.BaseDirectory), relativeParts);
+
     /// <summary>
     /// Walks up from <see cref="AppContext.BaseDirectory"/> looking for the directory
     /// containing a required sentinel file. This keeps repository-root discovery neutral
@@ -48,6 +51,16 @@ internal static class TestWorkspaceFileLocator
         ?? throw new DirectoryNotFoundException(
             $"Could not locate directory containing '{sentinelFileName}' from {AppContext.BaseDirectory}.");
 
+    public static string ResolveFromDirectoryContainingFile(
+        string sentinelFileName,
+        params string[] relativeParts) =>
+        Path.Combine([FindDirectoryContainingFileFromBaseDirectory(sentinelFileName), .. relativeParts]);
+
+    public static string FindContainingDirectoryFromBaseDirectory(params string[] relativeFileParts) =>
+        Path.GetDirectoryName(FindFileFromBaseDirectory(relativeFileParts))
+        ?? throw new DirectoryNotFoundException(
+            $"Could not locate directory containing '{Path.Combine(relativeFileParts)}'.");
+
     /// <summary>
     /// Walks up from <see cref="AppContext.BaseDirectory"/> looking for a file whose path,
     /// combined with <paramref name="relativeParts"/>, exists. The neutral engine behind per-app
@@ -56,6 +69,12 @@ internal static class TestWorkspaceFileLocator
     public static string FindFileFromBaseDirectory(params string[] relativeParts) =>
         FindExistingFile(new DirectoryInfo(AppContext.BaseDirectory), relativeParts)
         ?? throw new FileNotFoundException($"Could not find repository file '{Path.Combine(relativeParts)}'.");
+
+    public static string? TryFindFileFromBaseDirectory(params string[] relativeParts) =>
+        FindExistingFile(new DirectoryInfo(AppContext.BaseDirectory), relativeParts);
+
+    public static string ReadAllTextFromBaseDirectory(params string[] relativeParts) =>
+        File.ReadAllText(FindFileFromBaseDirectory(relativeParts));
 
     public static string ReadAllText(params string[] relativeParts) =>
         File.ReadAllText(Find(relativeParts));
@@ -108,17 +127,13 @@ internal static class TestWorkspaceFileLocator
 
     public static string FindFromWorkspaceRoot(params string[] relativeParts)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return Path.Combine([directory.FullName, .. relativeParts]);
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(
-            $"Could not locate {Path.Combine(relativeParts)} from {AppContext.BaseDirectory}.");
+        var root = FindDirectoryContainingFile(
+            new DirectoryInfo(AppContext.BaseDirectory),
+            "FreeX.slnx");
+        return root is not null
+            ? Path.Combine([root, .. relativeParts])
+            : throw new FileNotFoundException(
+                $"Could not locate {Path.Combine(relativeParts)} from {AppContext.BaseDirectory}.");
     }
 
     public static string ReadAllTextFromWorkspaceRoot(params string[] relativeParts) =>

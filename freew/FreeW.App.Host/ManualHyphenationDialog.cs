@@ -6,45 +6,50 @@ using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
-internal sealed class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly ManualHyphenationDialogSession _session;
     private readonly ComboBox _choices;
     private ManualHyphenationDialogResult? _result;
 
     private ManualHyphenationDialog(Window? owner, ManualHyphenationCandidate candidate)
     {
+        var surface = ManualHyphenationPlanner.HostSurface;
+        _session = new ManualHyphenationDialogSession(candidate);
         Owner = owner;
-        Title = "Manual Hyphenation";
+        Title = surface.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         _choices = new ComboBox
         {
-            ItemsSource = candidate.Options,
+            ItemsSource = _session.Options,
             DisplayMemberPath = nameof(ManualHyphenationOption.DisplayText),
             SelectedIndex = 0,
             MinWidth = 230
         };
+        WpfDialogSurfaceSemantics.Apply(
+            _choices,
+            surface.Field(ManualHyphenationDialogField.Choices));
 
-        var yes = new Button { Content = "_Yes", MinWidth = 72, IsDefault = true };
+        var yes = new Button { Content = surface.Field(ManualHyphenationDialogField.Yes).Label, MinWidth = 72, IsDefault = true };
         yes.Click += (_, _) => Accept();
-        var no = new Button { Content = "_No", MinWidth = 72, Margin = new Thickness(8, 0, 0, 0) };
-        no.Click += (_, _) => CloseWith(ManualHyphenationDialogAction.Skip);
-
-        // Cancel routes through the shared shell-strings pipeline (same source ShellStrings.Current
-        // that DialogButtonRowFactory uses) so this dialog gets a localized "Annuler"/etc label and
-        // the Alt+ accelerator every other WPF dialog's Cancel button gets, instead of a hardcoded
-        // English literal. See DialogButtonRowFactoryLocalizationTests for the shared contract.
+        var no = new Button { Content = surface.Field(ManualHyphenationDialogField.No).Label, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0) };
+        no.Click += (_, _) => CloseWith(_session.PlanSkip());
         var cancelContent = ShellStrings.Current.Cancel;
         var cancel = new Button { Content = cancelContent, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0), IsCancel = true };
+        cancel.Click += (_, _) => CloseWith(_session.PlanCancel());
+        WpfDialogSurfaceSemantics.Apply(yes, surface.Field(ManualHyphenationDialogField.Yes));
+        WpfDialogSurfaceSemantics.Apply(no, surface.Field(ManualHyphenationDialogField.No));
+        WpfDialogSurfaceSemantics.Apply(cancel, surface.Field(ManualHyphenationDialogField.Cancel));
         AutomationProperties.SetName(cancel, ShellStrings.Current.CreateAutomationName(cancelContent));
         var cancelAccelerator = ShellStringText.CreateAcceleratorKey(cancelContent);
         if (!string.IsNullOrEmpty(cancelAccelerator))
             AutomationProperties.SetAcceleratorKey(cancel, cancelAccelerator);
-        cancel.Click += (_, _) => CloseWith(ManualHyphenationDialogAction.Cancel);
 
         var buttons = new StackPanel
         {
@@ -57,9 +62,9 @@ internal sealed class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWin
         buttons.Children.Add(cancel);
 
         var content = new StackPanel { Margin = new Thickness(16) };
-        content.Children.Add(new TextBlock { Text = $"Word {candidate.Number}", Margin = new Thickness(0, 0, 0, 4) });
-        content.Children.Add(new TextBlock { Text = candidate.Word, FontWeight = FontWeights.SemiBold, FontSize = 16 });
-        content.Children.Add(new TextBlock { Text = "Hyphenate at:", Margin = new Thickness(0, 12, 0, 4) });
+        content.Children.Add(new TextBlock { Text = _session.CandidateLabel, Margin = new Thickness(0, 0, 0, 4) });
+        content.Children.Add(new TextBlock { Text = _session.Candidate.Word, FontWeight = FontWeights.SemiBold, FontSize = 16 });
+        content.Children.Add(new TextBlock { Text = surface.Field(ManualHyphenationDialogField.Choices).Label, Margin = new Thickness(0, 12, 0, 4) });
         content.Children.Add(_choices);
         content.Children.Add(buttons);
         Content = content;
@@ -67,14 +72,15 @@ internal sealed class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private void Accept()
     {
-        if (_choices.SelectedItem is ManualHyphenationOption option)
-            _result = new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Accept, option.BreakPoint);
+        _result = _session.PlanAcceptance(_choices.SelectedIndex);
+        if (_result is null)
+            return;
         Close();
     }
 
-    private void CloseWith(ManualHyphenationDialogAction action)
+    private void CloseWith(ManualHyphenationDialogResult result)
     {
-        _result = new ManualHyphenationDialogResult(action);
+        _result = result;
         Close();
     }
 

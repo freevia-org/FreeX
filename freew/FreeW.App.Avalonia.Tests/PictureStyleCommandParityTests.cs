@@ -16,7 +16,7 @@ public sealed class PictureStyleCommandParityTests
     [Fact]
     public void AvaloniaRibbon_UsesWpfPictureGroupOrderAndSharedStyleCatalog()
     {
-        var pictureTab = FreeWRibbon.BuildDefinition().FindTab("picture-format")!;
+        var pictureTab = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("picture-format")!;
         pictureTab.Groups.Select(group => group.Id)
             .Should().Equal("picture-arrange", "picture-styles", "picture-adjust", "picture-size");
 
@@ -35,7 +35,7 @@ public sealed class PictureStyleCommandParityTests
         await Session.Dispatch(() =>
         {
             var (editor, image) = SelectedImage();
-            var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+            var registry = FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks());
 
             foreach (var preset in PictureStyleCatalog.Catalog)
             {
@@ -59,7 +59,7 @@ public sealed class PictureStyleCommandParityTests
         {
             var editor = new DocumentView();
             editor.LoadDocument(TextDocument.CreateEmpty());
-            var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+            var registry = FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks());
 
             foreach (var preset in PictureStyleCatalog.Catalog)
                 Stateful(registry, $"freew.image-style-{preset.Id}")
@@ -114,7 +114,7 @@ public sealed class PictureStyleCommandParityTests
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { },
             Save: () => { },

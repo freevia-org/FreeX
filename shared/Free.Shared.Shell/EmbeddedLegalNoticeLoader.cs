@@ -6,15 +6,18 @@ namespace Free.Shared.Shell;
 /// <summary>Loads an ordered app-owned set of embedded legal-notice documents.</summary>
 public static class EmbeddedLegalNoticeLoader
 {
-    public static IReadOnlyList<(string Title, string Text)> GetDocuments(
+    public static IReadOnlyList<LegalNoticeDocument> GetDocuments(
         Assembly assembly,
-        IReadOnlyList<(string Title, string ResourceName)> resources)
+        IReadOnlyList<LegalNoticeResource> resources)
     {
         ArgumentNullException.ThrowIfNull(assembly);
         ArgumentNullException.ThrowIfNull(resources);
 
         return resources
-            .Select(resource => (resource.Title, ReadResourceText(assembly, resource.ResourceName)))
+            .Select(resource => new LegalNoticeDocument(
+                resource.Title,
+                resource.ResourceName,
+                ReadResourceText(assembly, resource.ResourceName)))
             .ToList();
     }
 

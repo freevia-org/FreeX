@@ -1,5 +1,5 @@
 using System.Reflection;
-using System.Text;
+using Free.Shared.Shell;
 
 namespace FreeX.App.Services;
 
@@ -21,23 +21,6 @@ public static class LegalNoticeProvider
 
     internal static IReadOnlyList<LegalNoticeDocument> GetDocuments(Assembly assembly)
     {
-        ArgumentNullException.ThrowIfNull(assembly);
-
-        return Resources
-            .Select(resource => new LegalNoticeDocument(
-                resource.Title,
-                resource.ResourceName,
-                ReadResourceText(assembly, resource.ResourceName)))
-            .ToList();
-    }
-
-    private static string ReadResourceText(Assembly assembly, string resourceName)
-    {
-        using var stream = assembly.GetManifestResourceStream(resourceName)
-            ?? throw new InvalidOperationException($"Embedded legal notice resource '{resourceName}' was not found.");
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        return reader.ReadToEnd();
+        return EmbeddedLegalNoticeLoader.GetDocuments(assembly, Resources);
     }
 }
-
-internal sealed record LegalNoticeResource(string Title, string ResourceName);

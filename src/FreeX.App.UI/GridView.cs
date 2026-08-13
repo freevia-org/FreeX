@@ -4,7 +4,9 @@ using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Media;
+using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.GridInteraction;
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
@@ -78,62 +80,6 @@ public partial class GridView : FrameworkElement
 
         peer.EvictStaleCellPeers();
         peer.NotifyActiveCellValueIfChanged();
-    }
-
-    /// <summary>
-    /// Flags describing a cell's attached metadata for building its screen-reader announcement
-    /// (UIA Name) -- the accessible parity to the sighted indicators GridView already renders
-    /// (comment corner-triangle, formula-bar "=" prefix, merged span, hyperlink hand-cursor).
-    /// R80 added <see cref="HasComment"/>/<see cref="CommentTitle"/> only
-    /// (R80-app-accessibility-a11y-5-3); R81 adds <see cref="IsFormula"/>, <see cref="IsMerged"/>,
-    /// and <see cref="HasHyperlink"/>, all backed by data GridView already has wired
-    /// (<c>DisplayCell.Formula</c>, <see cref="MergedRegions"/>, <see cref="HyperlinkCells"/>).
-    /// <see cref="HasDataValidation"/> and <see cref="IsLocked"/> are included so the builder and
-    /// its cue text are ready and unit-testable, but neither is wired to a live GridView signal:
-    /// GridView has no property carrying "cells with a data-validation rule" (only
-    /// <see cref="ValidationCircleCells"/>, which is the narrower "current value fails its rule"
-    /// set -- conflating the two would misannounce every cell with a passing validation as having
-    /// none) or "the active sheet is protected" (a prerequisite for "locked" to mean anything;
-    /// <c>CellStyle.Locked</c> defaults to true for virtually every cell, so surfacing it
-    /// unconditionally would announce "is locked" on almost every cell in almost every workbook).
-    /// Wiring those two needs a new signal sourced outside FreeX.App.UI.
-    /// </summary>
-    internal readonly record struct CellAnnouncementMetadata(
-        bool HasComment = false,
-        string? CommentTitle = null,
-        bool IsFormula = false,
-        bool IsMerged = false,
-        bool HasDataValidation = false,
-        bool HasHyperlink = false,
-        bool IsLocked = false);
-
-    /// <summary>
-    /// Pure, unit-testable builder for a cell's UIA Name: the cell address (plus its value, if
-    /// any) followed by a comma-separated "has X"/"is X" cue for each set metadata flag. Kept
-    /// free of any GridView/AutomationPeer dependency so it can be exercised directly in tests
-    /// without constructing a GridView, Viewport, or AutomationPeer.
-    /// </summary>
-    internal static string BuildCellAnnouncementName(string address, string? value, CellAnnouncementMetadata metadata)
-    {
-        var name = string.IsNullOrWhiteSpace(value) ? address : $"{address}: {value}";
-
-        List<string>? cues = null;
-        void AddCue(string cue) => (cues ??= []).Add(cue);
-
-        if (metadata.HasComment && !string.IsNullOrEmpty(metadata.CommentTitle))
-            AddCue($"has {metadata.CommentTitle.ToLowerInvariant()}");
-        if (metadata.IsFormula)
-            AddCue("is a formula");
-        if (metadata.IsMerged)
-            AddCue("is merged");
-        if (metadata.HasDataValidation)
-            AddCue("has data validation");
-        if (metadata.HasHyperlink)
-            AddCue("has a hyperlink");
-        if (metadata.IsLocked)
-            AddCue("is locked");
-
-        return cues is null ? name : $"{name}, {string.Join(", ", cues)}";
     }
 
     private sealed class GridViewAutomationPeer(GridView owner) :
@@ -296,73 +242,27 @@ public partial class GridView : FrameworkElement
         {
             var rowHeaderWidth = showHeaders ? GridView.CalculateRowHeaderWidth(viewport) : 0.0;
             var colHeaderHeight = showHeaders ? GridView.CalculateColumnHeaderHeight(viewport) : 0.0;
-
-            var splitPanes = viewport.SplitPanes;
-            if (splitPanes is null)
-            {
-                if (!TryGetMetric(viewport.RowMetrics, row, out var mainRowMetric) ||
-                    !TryGetMetric(viewport.ColMetrics, column, out var mainColMetric))
-                {
-                    bounds = Rect.Empty;
-                    return false;
-                }
-
-                bounds = new Rect(
-                    rowHeaderWidth + mainColMetric.LeftOffset,
-                    colHeaderHeight + mainRowMetric.TopOffset,
-                    mainColMetric.Width,
-                    mainRowMetric.Height);
-                return true;
-            }
-
-            var dividerLayout = GridView.CalculateSplitDividerLayout(viewport);
-            var horizontalY = dividerLayout.HorizontalY ?? colHeaderHeight;
-            var verticalX = dividerLayout.VerticalX ?? rowHeaderWidth;
-
-            var isTopPane = TryGetMetric(splitPanes.TopRows, row, out var topRowMetric);
-            var isLeftPane = TryGetMetric(splitPanes.LeftColumns, column, out var leftColMetric);
-
-            RowMetric rowMetric;
-            double rowOrigin;
-            if (isTopPane)
-            {
-                rowMetric = topRowMetric;
-                rowOrigin = colHeaderHeight;
-            }
-            else if (TryGetMetric(splitPanes.BottomLeftRows ?? viewport.RowMetrics, row, out var bottomRowMetric))
-            {
-                rowMetric = bottomRowMetric;
-                rowOrigin = horizontalY;
-            }
-            else
-            {
-                bounds = Rect.Empty;
-                return false;
-            }
-
-            ColMetric colMetric;
-            double colOrigin;
-            if (isLeftPane)
-            {
-                colMetric = leftColMetric;
-                colOrigin = rowHeaderWidth;
-            }
-            else if (TryGetMetric(splitPanes.TopRightColumns ?? viewport.ColMetrics, column, out var topRightColMetric))
-            {
-                colMetric = topRightColMetric;
-                colOrigin = verticalX;
-            }
-            else
+            if (!ViewportGeometryPlanner.TryGetCellBounds(
+                    viewport,
+                    row,
+                    column,
+                    new ViewportGeometrySettings(
+                        rowHeaderWidth,
+                        colHeaderHeight,
+                        MetricPlacement: ViewportMetricPlacement.MetricOffsets,
+                        SplitColumnHeaderHeight: GridView.ColHeaderHeight,
+                        SplitRowHeaderWidth: GridView.CalculateRowHeaderWidth(viewport)),
+                    out var layoutBounds))
             {
                 bounds = Rect.Empty;
                 return false;
             }
 
             bounds = new Rect(
-                colOrigin + colMetric.LeftOffset,
-                rowOrigin + rowMetric.TopOffset,
-                colMetric.Width,
-                rowMetric.Height);
+                layoutBounds.X,
+                layoutBounds.Y,
+                layoutBounds.Width,
+                layoutBounds.Height);
             return true;
         }
 
@@ -575,42 +475,6 @@ public partial class GridView : FrameworkElement
             }
         }
 
-        private static bool TryGetMetric(IReadOnlyList<RowMetric>? metrics, uint row, out RowMetric metric)
-        {
-            if (metrics is not null)
-            {
-                foreach (var candidate in metrics)
-                {
-                    if (candidate.Row == row)
-                    {
-                        metric = candidate;
-                        return true;
-                    }
-                }
-            }
-
-            metric = null!;
-            return false;
-        }
-
-        private static bool TryGetMetric(IReadOnlyList<ColMetric>? metrics, uint column, out ColMetric metric)
-        {
-            if (metrics is not null)
-            {
-                foreach (var candidate in metrics)
-                {
-                    if (candidate.Col == column)
-                    {
-                        metric = candidate;
-                        return true;
-                    }
-                }
-            }
-
-            metric = null!;
-            return false;
-        }
-
         private static int IndexOf(IReadOnlyList<uint> values, uint value)
         {
             for (var i = 0; i < values.Count; i++)
@@ -704,7 +568,7 @@ public partial class GridView : FrameworkElement
                 IsMerged: parent.IsCellMerged(row, column),
                 HasHyperlink: parent.IsCellHyperlinked(row, column));
 
-            return GridView.BuildCellAnnouncementName(address, Value, metadata);
+            return CellAnnouncementPlanner.BuildName(address, Value, metadata);
         }
 
         protected override Rect GetBoundingRectangleCore() =>
@@ -835,10 +699,9 @@ public partial class GridView : FrameworkElement
     private const double OutlineGutterPadding = 6;
     private const double OutlineButtonSize = 13;
     private const double DefaultCellFontSizePoints = 11.0;
-    // Super/subscript rendering constants (match Excel's ~58% font shrink and baseline shift).
-    internal const double SuperSubFontSizeFactor  = 0.583;   // ~7/12 — Excel renders super/sub at ~58% of cell font size
-    internal const double SuperScriptBaselineRatio = 0.33;   // shift up by 33% of the NORMAL (pre-scaled) fontSize
-    internal const double SubScriptBaselineRatio   = 0.14;   // shift down by 14% of the NORMAL (pre-scaled) fontSize
+    internal const double SuperSubFontSizeFactor = CellTextMaterializationPlanner.ScriptFontSizeFactor;
+    internal const double SuperScriptBaselineRatio = CellTextMaterializationPlanner.SuperscriptBaselineRatio;
+    internal const double SubScriptBaselineRatio = CellTextMaterializationPlanner.SubscriptBaselineRatio;
     private const double PageMarginGuideHitZone = 5;
     private const int MarchingAntsPhaseCount = 16;
 
@@ -983,17 +846,12 @@ public partial class GridView : FrameworkElement
         double requestedFontSize,
         double availableWidth,
         Func<double, double> measureTextWidth,
-        double minimumFontSize = 6.0)
-    {
-        if (requestedFontSize <= minimumFontSize || availableWidth <= 0)
-            return Math.Min(requestedFontSize, minimumFontSize);
-
-        var fontSize = requestedFontSize;
-        while (fontSize > minimumFontSize && measureTextWidth(fontSize) > availableWidth)
-            fontSize = Math.Max(minimumFontSize, fontSize - 1);
-
-        return fontSize;
-    }
+        double minimumFontSize = 6.0) =>
+        CellTextShrinkPlanner.ResolveFontSize(
+            requestedFontSize,
+            availableWidth,
+            measureTextWidth,
+            minimumFontSize);
 
     public static bool CanOverflowCellText(CellStyle? style, ScalarValue? rawValue, string? displayText, GridRange? merge)
         => CellTextOverflowPlanner.CanOverflowCellText(style, rawValue, displayText, merge);

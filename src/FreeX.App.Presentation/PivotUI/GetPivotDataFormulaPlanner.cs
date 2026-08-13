@@ -8,6 +8,29 @@ public sealed record GetPivotDataFormulaPlan(string FunctionCall, string Formula
 
 public static class GetPivotDataFormulaPlanner
 {
+    public static string? CreatePointModeFunctionCall(
+        Workbook workbook,
+        CellAddress formulaCell,
+        SheetId selectedSheetId,
+        GridRange selectedRange,
+        bool generateGetPivotData,
+        string? selectedWorkbookName)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        if (!generateGetPivotData ||
+            selectedWorkbookName is not null ||
+            selectedRange.Start != selectedRange.End)
+        {
+            return null;
+        }
+
+        var formulaSheet = workbook.GetSheet(formulaCell.Sheet);
+        var pivotSheet = workbook.GetSheet(selectedSheetId);
+        return formulaSheet is null || pivotSheet is null
+            ? null
+            : Create(workbook, formulaSheet, pivotSheet, selectedRange.Start)?.FunctionCall;
+    }
+
     public static GetPivotDataFormulaPlan? Create(
         Workbook workbook,
         Sheet formulaSheet,

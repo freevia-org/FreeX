@@ -6,14 +6,22 @@ namespace FreeW.App.Presentation.Tests;
 
 public sealed class DocumentPersistenceWorkflowTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeW.DocumentPersistenceWorkflowTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.DocumentPersistenceWorkflowTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public DocumentPersistenceWorkflowTests() => Directory.CreateDirectory(_tempDir);
+    public void Dispose() => _temporaryDirectory.Dispose();
 
-    public void Dispose()
+    [Theory]
+    [InlineData("draft.DOCX", true)]
+    [InlineData("draft", false)]
+    [InlineData("bad\0draft.docx", false)]
+    public void CanOpenPath_ClassifiesExtensionWithoutThrowing(string path, bool expected)
     {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best effort */ }
+        var adapter = new FakeDocumentAdapter(
+            [new FileFormatDescriptor(".docx", "Word Document")]);
+        var workflow = new DocumentPersistenceWorkflow([adapter]);
+
+        workflow.CanOpenPath(path).Should().Be(expected);
     }
 
     [Fact]
@@ -141,6 +149,11 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
         result.Format!.CanSave.Should().BeFalse();
         workflow.CanOpenPath(path).Should().BeFalse("PDF import is not a normal editable Open path");
         workflow.BuildPdfImportDialogPlan().Filter.Should().Contain("PDF Document (*.pdf)|*.pdf");
+
+        var pickerPlan = workflow.BuildPdfImportPickerPlan();
+        pickerPlan.FileTypes.Select(type => type.DisplayName).Should().Equal("PDF Document");
+        pickerPlan.FileTypes.Should().OnlyContain(type => type.Patterns.SequenceEqual(new[] { "*.pdf" }));
+        pickerPlan.FileTypes.Should().OnlyContain(type => type.MimeTypes!.SequenceEqual(new[] { "application/pdf" }));
     }
 
     [Fact]

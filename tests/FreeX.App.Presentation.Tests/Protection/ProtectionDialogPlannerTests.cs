@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Presentation.Protection;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Tests.Protection;
 
@@ -25,7 +26,7 @@ public sealed class ProtectionDialogPlannerTests
         var result = ProtectionDialogPlanner.CreateSheetResult(
             isProtected: true,
             password: "ignored",
-            selectedSheetPermissions: ["Select locked cells"]);
+            selectedSheetPermissions: [SheetProtectionPermission.SelectLockedCells]);
 
         result.Mode.Should().Be(ProtectionDialogMode.Unprotect);
         result.Password.Should().Be("ignored");
@@ -38,11 +39,17 @@ public sealed class ProtectionDialogPlannerTests
         var result = ProtectionDialogPlanner.CreateSheetResult(
             isProtected: false,
             password: "secret",
-            selectedSheetPermissions: ["Select unlocked cells", "Sort"]);
+            selectedSheetPermissions:
+            [
+                SheetProtectionPermission.SelectUnlockedCells,
+                SheetProtectionPermission.Sort,
+            ]);
 
         result.Mode.Should().Be(ProtectionDialogMode.Protect);
         result.Password.Should().Be("secret");
-        result.SelectedSheetPermissions.Should().Equal("Select unlocked cells", "Sort");
+        result.SelectedSheetPermissions.Should().Equal(
+            SheetProtectionPermission.SelectUnlockedCells,
+            SheetProtectionPermission.Sort);
     }
 
     [Fact]
@@ -52,11 +59,17 @@ public sealed class ProtectionDialogPlannerTests
             isProtected: false,
             password: "secret",
             confirmation: "Secret",
-            defaultSelectedSheetPermissions: ["Select locked cells", "Select unlocked cells"]);
+            defaultSelectedSheetPermissions:
+            [
+                SheetProtectionPermission.SelectLockedCells,
+                SheetProtectionPermission.SelectUnlockedCells,
+            ]);
 
         result.Mode.Should().Be(ProtectionDialogMode.Protect);
         result.Password.Should().BeNull();
-        result.SelectedSheetPermissions.Should().Equal("Select locked cells", "Select unlocked cells");
+        result.SelectedSheetPermissions.Should().Equal(
+            SheetProtectionPermission.SelectLockedCells,
+            SheetProtectionPermission.SelectUnlockedCells);
     }
 
     [Fact]

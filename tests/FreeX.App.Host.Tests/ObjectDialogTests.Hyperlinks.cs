@@ -12,8 +12,8 @@ public sealed partial class ObjectDialogTests
     {
         var result = HyperlinkDialog.CreateResult("https://example.test", " ");
 
-        result.Should().Be(new HyperlinkDialogResult(
-            HyperlinkLinkType.ExistingFileOrWebPage,
+        result.Should().Be(new HyperlinkDialogPlan(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
             "https://example.test",
             "https://example.test",
             "",
@@ -26,12 +26,12 @@ public sealed partial class ObjectDialogTests
         var result = HyperlinkDialog.CreateResult(
             " Sheet1!A1 ",
             " Jump ",
-            HyperlinkLinkType.PlaceInThisDocument,
+            HyperlinkTargetKind.PlaceInThisDocument,
             "  Open budget cell  ",
             "  BudgetAnchor  ");
 
-        result.Should().Be(new HyperlinkDialogResult(
-            HyperlinkLinkType.PlaceInThisDocument,
+        result.Should().Be(new HyperlinkDialogPlan(
+            HyperlinkTargetKind.PlaceInThisDocument,
             "Sheet1!A1",
             "Jump",
             "Open budget cell",
@@ -39,11 +39,11 @@ public sealed partial class ObjectDialogTests
     }
 
     [Theory]
-    [InlineData(HyperlinkLinkType.ExistingFileOrWebPage, "Enter an address.")]
-    [InlineData(HyperlinkLinkType.CreateNewDocument, "Enter a new document name.")]
-    [InlineData(HyperlinkLinkType.PlaceInThisDocument, "Enter a valid cell reference or defined name.")]
-    [InlineData(HyperlinkLinkType.EmailAddress, "Enter an email address.")]
-    public void HyperlinkDialog_TryCreateResult_RejectsBlankTarget(HyperlinkLinkType linkType, string expectedError)
+    [InlineData(HyperlinkTargetKind.ExistingFileOrWebPage, "Enter an address.")]
+    [InlineData(HyperlinkTargetKind.CreateNewDocument, "Enter a new document name.")]
+    [InlineData(HyperlinkTargetKind.PlaceInThisDocument, "Enter a valid cell reference or defined name.")]
+    [InlineData(HyperlinkTargetKind.EmailAddress, "Enter an email address.")]
+    public void HyperlinkDialog_TryCreateResult_RejectsBlankTarget(HyperlinkTargetKind linkType, string expectedError)
     {
         HyperlinkDialog.TryCreateResult(" ", "Label", linkType, "", "", out _, out var error)
             .Should()
@@ -59,7 +59,7 @@ public sealed partial class ObjectDialogTests
     [InlineData("review@example test")]
     public void HyperlinkDialog_TryCreateResult_RejectsInvalidEmailTarget(string target)
     {
-        HyperlinkDialog.TryCreateResult(target, "Label", HyperlinkLinkType.EmailAddress, "", "", out _, out var error)
+        HyperlinkDialog.TryCreateResult(target, "Label", HyperlinkTargetKind.EmailAddress, "", "", out _, out var error)
             .Should()
             .BeFalse();
 
@@ -71,7 +71,7 @@ public sealed partial class ObjectDialogTests
     [InlineData("mailto:review@example.test", "mailto:review@example.test")]
     public void HyperlinkDialog_TryCreateResult_AcceptsEmailTarget(string target, string expectedTarget)
     {
-        HyperlinkDialog.TryCreateResult(target, "Label", HyperlinkLinkType.EmailAddress, "", "", out var result, out var error)
+        HyperlinkDialog.TryCreateResult(target, "Label", HyperlinkTargetKind.EmailAddress, "", "", out var result, out var error)
             .Should()
             .BeTrue(error);
 
@@ -86,10 +86,10 @@ public sealed partial class ObjectDialogTests
         string expectedTarget,
         string expectedDisplayText)
     {
-        var result = HyperlinkDialog.CreateResult(target, " ", HyperlinkLinkType.EmailAddress);
+        var result = HyperlinkDialog.CreateResult(target, " ", HyperlinkTargetKind.EmailAddress);
 
-        result.Should().Be(new HyperlinkDialogResult(
-            HyperlinkLinkType.EmailAddress,
+        result.Should().Be(new HyperlinkDialogPlan(
+            HyperlinkTargetKind.EmailAddress,
             expectedTarget,
             expectedDisplayText,
             "",
@@ -102,7 +102,7 @@ public sealed partial class ObjectDialogTests
         HyperlinkDialog.TryCreateResult(
                 " https://example.test ",
                 " Example ",
-                HyperlinkLinkType.ExistingFileOrWebPage,
+                HyperlinkTargetKind.ExistingFileOrWebPage,
                 " Tip ",
                 " Bookmark ",
                 out var result,
@@ -110,8 +110,8 @@ public sealed partial class ObjectDialogTests
             .Should()
             .BeTrue(error);
 
-        result.Should().Be(new HyperlinkDialogResult(
-            HyperlinkLinkType.ExistingFileOrWebPage,
+        result.Should().Be(new HyperlinkDialogPlan(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
             "https://example.test",
             "Example",
             "Tip",
@@ -274,7 +274,7 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("UiText.Get(\"Hyperlink_ScreenTipTextAutomationName\")");
         source.Should().Contain("UiText.Get(\"Hyperlink_BookmarkOrCellReferenceAutomationName\")");
         source.Should().Contain("string.Concat(title.Where(char.IsLetterOrDigit)) + \"TextBox\"");
-        source.Should().Contain("$\"Enter {CreateAutomationName(label).ToLowerInvariant()}.\"");
+        source.Should().Contain("UiText.Format(\"TextEntry_EnterValueHelpTextFormat\", CreateAutomationName(label))");
     }
 
     [Fact]
@@ -282,7 +282,7 @@ public sealed partial class ObjectDialogTests
     {
         var source = ReadClassSource("HyperlinkDialog.cs", "public sealed class HyperlinkDialog", "");
 
-        source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
+        source.Should().Contain("DialogButtonRowFactory.Create(Accept, HyperlinkDialogPlanner.ActionButtonWidth)");
         source.Should().Contain("if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"Hyperlink_EnterHyperlinkDetails\"));");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, _targetBox);");

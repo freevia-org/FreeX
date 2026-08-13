@@ -19,7 +19,39 @@ public sealed class ConditionalFormatDialogCatalogTests
             .Should()
             .Contain(option => option.LabelKey == "ConditionalFormatDialog_FormatPreset_CustomFormat"
                 && option.IsCustom);
+
+        ConditionalFormatDialogCatalog.RuleEditorTypeOptions
+            .Should()
+            .ContainInOrder(
+                new ConditionalFormatRuleTypeOption("ConditionalFormatDialog_RuleType_CellValue", CfRuleType.CellValue),
+                new ConditionalFormatRuleTypeOption("ConditionalFormatDialog_RuleType_Formula", CfRuleType.Formula),
+                new ConditionalFormatRuleTypeOption("ConditionalFormatDialog_RuleType_TopBottom", CfRuleType.Top10));
+        ConditionalFormatDialogCatalog.RuleEditorOperatorOptions
+            .Should()
+            .Contain(new ConditionalFormatOperatorOption(
+                "ConditionalFormatDialog_CellValueOperator_NotBetween",
+                CfOperator.NotBetween));
     }
+
+    [Theory]
+    [InlineData(ConditionalFormatDialogCatalog.GreaterThanRule, ConditionalFormatDialogFamily.HighlightCells)]
+    [InlineData(ConditionalFormatDialogCatalog.AboveAverageRule, ConditionalFormatDialogFamily.TopBottom)]
+    [InlineData(ConditionalFormatDialogCatalog.DataBarRule, ConditionalFormatDialogFamily.DataBar)]
+    [InlineData(ConditionalFormatDialogCatalog.FormulaRule, ConditionalFormatDialogFamily.NewRule)]
+    public void DialogFamilyForRuleType_OwnsWpfFactoryClassification(
+        string ruleType,
+        ConditionalFormatDialogFamily expected) =>
+        ConditionalFormatDialogCatalog.DialogFamilyForRuleType(ruleType).Should().Be(expected);
+
+    [Theory]
+    [InlineData(CfRuleType.DataBar, 0)]
+    [InlineData(CfRuleType.CellValue, 1)]
+    [InlineData(CfRuleType.Top10, 2)]
+    [InlineData(CfRuleType.AboveAverage, 3)]
+    [InlineData(CfRuleType.UniqueValues, 4)]
+    [InlineData(CfRuleType.Formula, 5)]
+    public void RuleEditorShellIndexForModelRuleType_OwnsShellSelection(CfRuleType ruleType, int expected) =>
+        ConditionalFormatDialogCatalog.RuleEditorShellIndexForModelRuleType(ruleType).Should().Be(expected);
 
     [Theory]
     [InlineData("ConditionalFormatDialog_RuleShell_FormatAllCells", ConditionalFormatDialogCatalog.GreaterThanRule, ConditionalFormatDialogCatalog.DataBarRule)]

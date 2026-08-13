@@ -25,17 +25,6 @@ public sealed partial class MainWindow
     private bool _isCapsLockToggleOnForShell;
     private bool _isNumLockToggleOnForShell;
 
-    /// <summary>
-    /// Test-only override for <see cref="TryGetOsKeyToggleState"/>, so tests can simulate a real OS
-    /// toggle state (e.g. "CapsLock is on but no key-down ever reached this shell") without depending on
-    /// the actual keyboard LED state of the machine running the test. Static rather than an instance
-    /// field because <see cref="ResyncKeyLockToggleStateFromOs"/> runs from the constructor itself,
-    /// before a test can reach an instance to install an override -- tests MUST reset this to null when
-    /// done since it is shared static state (the AvaloniaHeadless test collection disables
-    /// parallelization, so this is safe within it).
-    /// </summary>
-    internal static Func<Key, bool?>? KeyLockOsToggleStateOverrideForTest;
-
     /// <summary>Flips the tracked toggle state for a CapsLock/NumLock key-down; no-op for any other key.</summary>
     private void UpdateKeyLockToggleState(Key key)
     {
@@ -61,9 +50,6 @@ public sealed partial class MainWindow
             _isNumLockToggleOnForShell = numLockOn;
     }
 
-    /// <summary>Test-only seam for <see cref="ResyncKeyLockToggleStateFromOs"/>.</summary>
-    internal void ResyncKeyLockToggleStateFromOsForTest() => ResyncKeyLockToggleStateFromOs();
-
     /// <summary>
     /// Best-effort direct OS toggle-state query for <paramref name="key"/> (CapsLock/NumLock only).
     /// Returns null when no such query is available (or it fails), so callers keep whatever value they
@@ -73,8 +59,10 @@ public sealed partial class MainWindow
     /// </summary>
     private bool? TryGetOsKeyToggleState(Key key)
     {
-        if (KeyLockOsToggleStateOverrideForTest is { } testOverride)
-            return testOverride(key);
+        Func<Key, bool?>? overrideHandler = null;
+        ResolveKeyLockToggleStateOverride(ref overrideHandler);
+        if (overrideHandler is not null)
+            return overrideHandler(key);
 
         if (!OperatingSystem.IsWindows())
             return null;
@@ -94,11 +82,13 @@ public sealed partial class MainWindow
         }
         catch
         {
-            // Mirrors the wheel-scroll-lines lookup's own try/catch fallback (GetWheelScrollLinesPerNotch
+            // Mirrors the wheel-scroll-lines lookup's own try/catch fallback (GetSystemWheelScrollLines
             // in MainWindow.cs): never let an OS toggle-state query failure break the indicator refresh.
             return null;
         }
     }
+
+    static partial void ResolveKeyLockToggleStateOverride(ref Func<Key, bool?>? handler);
 
     private static class KeyLockNativeMethods
     {
@@ -121,10 +111,4 @@ public sealed partial class MainWindow
         _statusCapsLockText.IsVisible = plan.CapsLockVisible;
         _statusNumLockText.IsVisible = plan.NumLockVisible;
     }
-
-    /// <summary>Test-only seam exposing the CAPS LOCK indicator's live visibility.</summary>
-    internal bool IsCapsLockIndicatorVisibleForTest => _statusCapsLockText.IsVisible;
-
-    /// <summary>Test-only seam exposing the NUM LOCK indicator's live visibility.</summary>
-    internal bool IsNumLockIndicatorVisibleForTest => _statusNumLockText.IsVisible;
 }

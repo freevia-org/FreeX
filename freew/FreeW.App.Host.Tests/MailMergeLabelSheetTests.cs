@@ -30,7 +30,7 @@ public sealed class MailMergeLabelSheetTests
         editor.MoveCaretToBlockForTest(0, 0);
 
         var data = new MergeData(["Name"], [["Ada"], ["Grace"]]);
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = data,
             Mapping = MailMerge.AutoMatchFields(data.Header),
@@ -72,7 +72,7 @@ public sealed class MailMergeLabelSheetTests
         var data = new MergeData(
             ["Name", "Skip"],
             [["Ada", "Yes"], ["Grace", "No"]]);
-        var session = new FreeWRibbonCommands.MailMergeSession { Data = data };
+        var session = new MailMergeSession { Data = data };
 
         FreeWRibbonCommands.ApplyLabelSheet(
             editor,

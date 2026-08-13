@@ -1,3 +1,5 @@
+using FreeX.App.Presentation.GridInteraction;
+using Free.Shared.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.ConditionalFormatting;
@@ -154,13 +156,7 @@ public static class ManageConditionalFormatsPlanner
         if (selection is not { } selectionRange)
             return null;
 
-        foreach (var table in sheet.StructuredTables)
-        {
-            if (RangesOverlap(table.Range, selectionRange))
-                return table.Range;
-        }
-
-        return null;
+        return StructuredTableSelectionPlanner.FindOverlappingTableRange(sheet, selectionRange);
     }
 
     public static ConditionalFormatAppliesToRangeSelectionRequest CreateAppliesToRangeSelectionRequest(
@@ -254,6 +250,26 @@ public static class ManageConditionalFormatsPlanner
         };
     }
 
+    public static string ResolveDescription(
+        ManageConditionalFormatRuleDescription description,
+        ResourceKeyTextResolver text)
+    {
+        ArgumentNullException.ThrowIfNull(description);
+        ArgumentNullException.ThrowIfNull(text);
+
+        if (description.ResourceKey is null)
+            return description.LiteralText ?? string.Empty;
+
+        if (description.Arguments.Count == 0)
+            return text.Get(description.ResourceKey);
+
+        var arguments = description.Arguments
+            .Select(argument => ResolveDescriptionArgument(argument, text))
+            .Cast<object?>()
+            .ToArray();
+        return text.Format(description.ResourceKey, arguments);
+    }
+
     public static ManageConditionalFormatPreviewPlan CreatePreviewPlan(ConditionalFormat cf)
     {
         ArgumentNullException.ThrowIfNull(cf);
@@ -327,6 +343,18 @@ public static class ManageConditionalFormatsPlanner
         return Reprioritize(result);
     }
 
+    public static IReadOnlyList<ConditionalFormat> AddRule(
+        IReadOnlyList<ConditionalFormat> rules,
+        ConditionalFormat newRule)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(newRule);
+
+        var result = Reprioritize(rules).ToList();
+        result.Add(CloneWithPriority(newRule, result.Count + 1));
+        return result;
+    }
+
     public static IReadOnlyList<ConditionalFormat> ReplaceRule(
         IReadOnlyList<ConditionalFormat> rules,
         ConditionalFormat editedRule)
@@ -350,17 +378,31 @@ public static class ManageConditionalFormatsPlanner
     public static IReadOnlyList<ConditionalFormat> MoveRule(
         IReadOnlyList<ConditionalFormat> rules,
         Guid ruleId,
+        ConditionalFormatRuleMoveDirection direction) =>
+        MoveRule(rules, scope: null, ruleId, direction);
+
+    public static IReadOnlyList<ConditionalFormat> MoveRule(
+        IReadOnlyList<ConditionalFormat> rules,
+        GridRange? scope,
+        Guid ruleId,
         ConditionalFormatRuleMoveDirection direction)
     {
         var result = Reprioritize(rules).ToList();
+        var visible = scope is not { } range
+            ? result
+            : result.Where(rule => RuleOverlapsSelection(rule, range)).ToList();
+        var visibleIndex = FindRuleIndex(visible, ruleId);
+        if (visibleIndex < 0)
+            return result;
+
+        var visibleTarget = direction == ConditionalFormatRuleMoveDirection.Up
+            ? visibleIndex - 1
+            : visibleIndex + 1;
+        if (visibleTarget < 0 || visibleTarget >= visible.Count)
+            return result;
+
         var index = FindRuleIndex(result, ruleId);
-        if (index < 0)
-            return result;
-
-        var target = direction == ConditionalFormatRuleMoveDirection.Up ? index - 1 : index + 1;
-        if (target < 0 || target >= result.Count)
-            return result;
-
+        var target = FindRuleIndex(result, visible[visibleTarget].Id);
         (result[index], result[target]) = (result[target], result[index]);
         return Reprioritize(result);
     }
@@ -439,6 +481,19 @@ public static class ManageConditionalFormatsPlanner
                 ManageConditionalFormatDescriptionArgument.Literal(style),
                 ManageConditionalFormatDescriptionArgument.ResourceList(flags));
     }
+
+    private static string ResolveDescriptionArgument(
+        ManageConditionalFormatDescriptionArgument argument,
+        ResourceKeyTextResolver text) =>
+        argument switch
+        {
+            LiteralDescriptionArgument literal => literal.Text,
+            ResourceDescriptionArgument resource => text.Get(resource.ResourceKey),
+            ResourceListDescriptionArgument resourceList => string.Join(
+                text.Get(resourceList.SeparatorKey),
+                resourceList.ResourceKeys.Select(text.Get)),
+            _ => string.Empty
+        };
 
     private static string DatePeriodLabelKey(string? value) => value switch
     {

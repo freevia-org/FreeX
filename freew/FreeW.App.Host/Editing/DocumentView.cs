@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -7,15 +8,18 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using Free.Shared.AppServices;
+using Free.Shared.Drawing;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Editing;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using FreeW.Core.IO;
 using FreeW.App.Host;
-using System.Diagnostics;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun = System.Windows.Documents.Run;
 using WpfHyperlink = System.Windows.Documents.Hyperlink;
@@ -38,41 +42,12 @@ using ModelTextAlignment = FreeW.Core.Model.TextAlignment;
 namespace FreeW.App.Host.Editing;
 
 /// <summary>
-/// Word's mutually-exclusive document view modes (View ▸ Views), as far as the live editing surface is
-/// concerned. Read Mode and Outline are separate host-level overlays (they swap the surface out entirely),
-/// so they are not part of this enum — these three all reuse the one editable surface and differ only in
-/// the page chrome they show.
-/// <list type="bullet">
-/// <item><see cref="PrintLayout"/> — the Word default: a white page sheet on the grey workspace, margins,
-/// drop shadow and page-break markers.</item>
-/// <item><see cref="WebLayout"/> — a continuous, full-width view with no page chrome (text wraps to the
-/// window like a web page).</item>
-/// <item><see cref="Draft"/> — a simplified continuous view with no page chrome, for fast editing.</item>
-/// </list>
-/// </summary>
-public enum DocumentViewMode
-{
-    PrintLayout,
-    WebLayout,
-    Draft,
-    /// <summary>
-    /// Renders the document as discrete editable page boxes (<see cref="PageBox"/>)
-    /// stacked in a <see cref="PaginatedEditorPanel"/>.  Opt-in via View ▸ Views ▸ Page Edit.
-    /// Entering commits the continuous editor first; exiting commits all page boxes back to the
-    /// model and reloads the continuous editor so PrintLayout/Web/Draft work normally again.
-    /// The default continuous editor (PrintLayout/Web/Draft) and its
-    /// <see cref="DocumentView.CommitToModel"/> path are untouched.
-    /// </summary>
-    PagedEdit,
-}
-
-/// <summary>
 /// The FreeW editing surface: a RichTextBox that renders a <see cref="TextDocument"/> into a
 /// WPF FlowDocument (resolving run/paragraph formatting through styles + document defaults) and
 /// commits edits back into the model. Caret, selection, typing, delete and Enter come from the
 /// RichTextBox; <see cref="CommitToModel"/> maps the edited view back to the model.
 /// </summary>
-public sealed class DocumentView : RichTextBox
+public sealed partial class DocumentView : RichTextBox
 {
     // Setting RichTextBox.Document with SpellCheck enabled routes through WPF's
     // System.Windows.Documents.MsSpellCheckLib.WinRTSpellerInterop, which lazily activates and registers
@@ -115,7 +90,9 @@ public sealed class DocumentView : RichTextBox
     // surrounding line box. The transform is calibrated to Word's cached footnote/endnote references.
     private const double NoteReferenceSuperscriptOffsetDip = 5.0;
 
-    private TextDocument _model = TextDocument.CreateEmpty();
+    private readonly DocumentEditingSession _editingSession;
+    private readonly IPlatformClipboard _platformClipboard;
+    private TextDocument _model => _editingSession.Document;
     private bool _spellCheckEnabled = true;
     private DocumentViewDepthLayoutPlan _viewDepthLayout =
         DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
@@ -179,7 +156,27 @@ public sealed class DocumentView : RichTextBox
     [ThreadStatic]
     internal static int _renderHfSectionPageCount;
 
-    private readonly DocumentCommandBus _commands;
+    private DocumentCommandBus _commands => _editingSession.Commands;
+    private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
+    private DocumentParagraphFormattingCoordinator ParagraphEdits => _editingSession.Paragraphs;
+    private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
+    private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
+    private DocumentReferenceEditingCoordinator ReferenceEdits => _editingSession.References;
+
+    private static DocumentObjectTarget ObjectTarget(
+        int blockIndex,
+        int runIndex,
+        IReadOnlyList<int>? childPath = null) =>
+        new(blockIndex, runIndex, childPath);
+
+    private bool RenderObjectEdit(DocumentObjectEditResult result)
+    {
+        if (!result.Applied)
+            return false;
+
+        Render();
+        return true;
+    }
     private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
     private double _zoomLevel = ZoomLevels.Default;
 
@@ -291,20 +288,6 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Holds the run + paragraph formatting captured when Format Painter is armed (null when the
-    /// painter is idle). On the next selection the user makes, this is stamped onto that selection
-    /// and the painter disarms (single-shot) or stays armed (locked mode). See <see cref="ArmFormatPainter"/>.
-    /// </summary>
-    private FormatPainterClipboard? _formatPainter;
-
-    /// <summary>
-    /// When true the painter stays armed after each application (double-click / lock mode), re-applying
-    /// on every new selection until the user clicks the button again or presses Escape. False for the
-    /// default single-shot gesture.
-    /// </summary>
-    private bool _formatPainterLocked;
-
-    /// <summary>
     /// Model block indices of headings the user has collapsed in the outline. Collapse is purely a
     /// view concern: while a heading is collapsed, <see cref="Render"/> skips building the body blocks
     /// beneath it (down to the next same-or-higher heading), and <see cref="CommitToModel"/> re-inserts
@@ -321,11 +304,13 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private readonly List<(int VisibleOffset, ModelBlock Block)> _hiddenBlocks = new();
 
-    public DocumentView()
+    public DocumentView(IPlatformClipboard? platformClipboard = null)
     {
+        _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(Dispatcher);
+        _editingSession = new DocumentEditingSession(() => CurrentRevisionAuthor());
         AcceptsTab = true;
         IsDocumentEnabled = true;
-        SpellCheck.IsEnabled = true;
+        SpellCheck.IsEnabled = !IsNativeSpellCheckSuppressed();
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
         BorderThickness = new Thickness(1);
         BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
@@ -336,8 +321,7 @@ public sealed class DocumentView : RichTextBox
         // while the model and on-disk document are untouched (this is pure view chrome).
         LayoutTransform = _zoomTransform;
 
-        _commands = new DocumentCommandBus(new ViewContext(this));
-        _commands.Changed += Render;
+        _editingSession.Changed += Render;
 
         // Clear the floating-image selection when the user clicks within the text body so the inline
         // selection takes priority and the floating selection does not persist unexpectedly.
@@ -346,7 +330,7 @@ public sealed class DocumentView : RichTextBox
 
     public TextDocument Model => _model;
 
-    internal DocumentViewDepthLayoutPlan ViewDepthLayout => _viewDepthLayout;
+    internal IPlatformClipboard PlatformClipboard => _platformClipboard;
 
     internal void ApplyViewDepthLayout(DocumentViewDepthLayoutPlan layout)
     {
@@ -406,18 +390,6 @@ public sealed class DocumentView : RichTextBox
         SyncColumnRuleAdorner();
         SyncPageBorderAdorner();
         SyncLineNumberAdorner();
-    }
-
-    /// <summary>
-    /// Toggle the View ribbon's "Print Layout" button: flip between Print Layout and the plain continuous
-    /// (Draft) view, returning whether Print Layout is now on. Backward-compatible shim over
-    /// <see cref="SetViewMode"/> so existing callers keep working; the dedicated Web Layout / Draft commands
-    /// call <see cref="SetViewMode"/> directly.
-    /// </summary>
-    public bool TogglePrintLayout()
-    {
-        SetViewMode(PrintLayoutEnabled ? DocumentViewMode.Draft : DocumentViewMode.PrintLayout);
-        return PrintLayoutEnabled;
     }
 
     /// <summary>
@@ -492,10 +464,19 @@ public sealed class DocumentView : RichTextBox
             .Where(diagnostic => diagnostic.Kind == ProofingDiagnosticKind.Grammar)
             .ToList();
 
-    internal bool NativeSpellCheckEnabledForTest => SpellCheck.IsEnabled;
-
     private void ApplySpellCheckVisibility() =>
-        SpellCheck.IsEnabled = _spellCheckEnabled && !_model.HideSpellingErrors;
+        SpellCheck.IsEnabled = !IsNativeSpellCheckSuppressed()
+            && _spellCheckEnabled
+            && !_model.HideSpellingErrors;
+
+    private static bool IsNativeSpellCheckSuppressed()
+    {
+        var suppressed = false;
+        ApplyNativeSpellCheckOverride(ref suppressed);
+        return suppressed;
+    }
+
+    static partial void ApplyNativeSpellCheckOverride(ref bool suppressed);
 
     /// <summary>
     /// Register a custom dictionary (<c>.lex</c>) file with this control's spell checker so the words it
@@ -722,7 +703,8 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     protected override void OnPreviewTextInput(TextCompositionEventArgs e)
     {
-        if (!string.IsNullOrEmpty(e.Text)
+        if (AutoCorrectEnabled
+            && !string.IsNullOrEmpty(e.Text)
             && e.Text.Length == 1
             && Selection.IsEmpty
             && TryAutoCorrect(e.Text[0]))
@@ -730,9 +712,8 @@ public sealed class DocumentView : RichTextBox
             e.Handled = true;
             return;
         }
-        if (TrackChangesEnabled
-            && !string.IsNullOrEmpty(e.Text)
-            && TryRecordTrackedTextInput(e.Text))
+        if (!string.IsNullOrEmpty(e.Text)
+            && TryApplyBodyTextInput(e.Text))
         {
             e.Handled = true;
             return;
@@ -742,26 +723,36 @@ public sealed class DocumentView : RichTextBox
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
-        var isCtrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
-        if (isCtrl && e.Key == Key.Z && !AllowsCurrentUndoHistory())
+        var input = DocumentEditorInteractionSession.PlanBodyKey(
+            ToEditorInputKey(e.Key),
+            ToEditorInputModifiers(Keyboard.Modifiers));
+        if (input.Intent == DocumentEditorInputIntent.Undo && !AllowsCurrentUndoHistory())
         {
             e.Handled = true;
             return;
         }
 
-        if (isCtrl && e.Key == Key.Y && !AllowsCurrentRedoHistory())
+        if (input.Intent == DocumentEditorInputIntent.Redo && !AllowsCurrentRedoHistory())
         {
             e.Handled = true;
             return;
         }
 
-        if (TrackChangesEnabled
-            && Keyboard.Modifiers == ModifierKeys.None
-            && (e.Key == Key.Back || e.Key == Key.Delete))
+        if (Keyboard.Modifiers == ModifierKeys.None
+            && input.Intent == DocumentEditorInputIntent.InsertParagraphBreak
+            && TryApplyBodyParagraphBreak())
         {
-            var handled = e.Key == Key.Back
-                ? TryRecordTrackedBackspace()
-                : TryRecordTrackedDeleteForward();
+            e.Handled = true;
+            return;
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.None
+            && input.Intent is DocumentEditorInputIntent.DeleteBackward
+                or DocumentEditorInputIntent.DeleteForward)
+        {
+            var handled = input.Intent == DocumentEditorInputIntent.DeleteBackward
+                ? TryApplyBodyBackspace()
+                : TryApplyBodyDeleteForward();
             if (handled)
             {
                 e.Handled = true;
@@ -772,36 +763,36 @@ public sealed class DocumentView : RichTextBox
         base.OnPreviewKeyDown(e);
     }
 
-    /// <summary>
-    /// Test seam: simulate typing a single character at the caret through the same AutoCorrect/AutoFormat
-    /// path <see cref="OnPreviewTextInput"/> uses. When a rule fires the correction is applied and the raw
-    /// character is suppressed (returns true); otherwise the character is inserted literally (returns false).
-    /// Lets the as-you-type rules be driven deterministically from STA tests without synthesising WPF input
-    /// events. Honours <see cref="AutoCorrectEnabled"/> and <see cref="AutoFormatOptions"/> just like real typing.
-    /// </summary>
-    internal bool SimulateTypeCharacter(char c)
+    private static DocumentEditorInputKey ToEditorInputKey(Key key) => key switch
     {
-        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
-            return false;
+        Key.Back => DocumentEditorInputKey.Backspace,
+        Key.Delete => DocumentEditorInputKey.Delete,
+        Key.Enter => DocumentEditorInputKey.Enter,
+        Key.Tab => DocumentEditorInputKey.Tab,
+        Key.Left => DocumentEditorInputKey.Left,
+        Key.Right => DocumentEditorInputKey.Right,
+        Key.Up => DocumentEditorInputKey.Up,
+        Key.Down => DocumentEditorInputKey.Down,
+        Key.Home => DocumentEditorInputKey.Home,
+        Key.End => DocumentEditorInputKey.End,
+        Key.B => DocumentEditorInputKey.B,
+        Key.I => DocumentEditorInputKey.I,
+        Key.U => DocumentEditorInputKey.U,
+        Key.Y => DocumentEditorInputKey.Y,
+        Key.Z => DocumentEditorInputKey.Z,
+        _ => DocumentEditorInputKey.None,
+    };
 
-        if (Selection.IsEmpty && TryAutoCorrect(c))
-            return true;
-        if (TrackChangesEnabled)
-        {
-            InsertText(c.ToString());
-            return false;
-        }
-        // No rule fired: insert the literal character at the caret (mirroring the RichTextBox's own insert).
-        CaretPosition.InsertTextInRun(c.ToString());
-        CaretPosition = CaretPosition.GetPositionAtOffset(1, LogicalDirection.Forward) ?? CaretPosition;
-        return false;
-    }
-
-    /// <summary>Test seam: type a whole string one character at a time through <see cref="SimulateTypeCharacter"/>.</summary>
-    internal void SimulateTypeText(string text)
+    private static DocumentEditorInputModifiers ToEditorInputModifiers(ModifierKeys modifiers)
     {
-        foreach (var c in text)
-            SimulateTypeCharacter(c);
+        var result = DocumentEditorInputModifiers.None;
+        if ((modifiers & ModifierKeys.Control) != 0)
+            result |= DocumentEditorInputModifiers.Control;
+        if ((modifiers & ModifierKeys.Shift) != 0)
+            result |= DocumentEditorInputModifiers.Shift;
+        if ((modifiers & ModifierKeys.Alt) != 0)
+            result |= DocumentEditorInputModifiers.Alt;
+        return result;
     }
 
     // Read the text before the caret (within the current paragraph), evaluate the AutoCorrect rules for
@@ -818,17 +809,17 @@ public sealed class DocumentView : RichTextBox
         var start = caret.Paragraph.ContentStart;
         var textBefore = new TextRange(start, caret).Text;
 
-        var plan = AutoCorrectTypingPlanner.Build(
+        // Two engines share the delete-back/insert idiom below: the AutoCorrect-tab word-completion rules
+        // (replace-text table, two-initial-caps, day names) fire when a separator ends a word; the AutoFormat
+        // As-You-Type rules (smart quotes, dashes, lists, ordinals…) fire on their own trigger characters.
+        // Try AutoCorrect first (its corrections are the user's authoritative table); fall back to AutoFormat.
+        var result = AutoCorrectEvaluationPolicy.Evaluate(
             textBefore,
             justTyped,
-            AutoCorrectEnabled,
             AutoCorrectOptions,
-            AutoFormatOptions,
-            suppressCapitalizationAtListStart: caret.Paragraph.Parent is WpfListItem
-                && string.IsNullOrEmpty(textBefore));
-        if (!plan.Applies)
+            AutoFormatOptions);
+        if (!result.Applies)
             return false;
-        var result = plan.Result;
 
         // Walk back DeleteBefore characters (caret-relative) to find the start of the range to replace.
         var deleteStart = caret;
@@ -990,7 +981,7 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Render a model document into the editable surface.</summary>
     public void LoadModel(TextDocument document)
     {
-        _model = document;
+        _editingSession.LoadDocument(document);
         _outlineCollapse.Clear();
         _trackChangesEnabled = document.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
         ApplySpellCheckVisibility();
@@ -999,48 +990,20 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Mutate page settings as one undoable command and re-render through the command bus. Pending
-    /// in-progress edits are committed first so the layout refresh does not drop them. Targets the
-    /// section containing the caret (see <see cref="CurrentSectionIndex"/>) rather than always the
-    /// document's final section, so a multi-section document's Layout/Page Setup ribbon commands edit
-    /// the section the user is actually in.
+    /// in-progress edits are committed first so the layout refresh does not drop them.
     /// </summary>
     public void ApplyPageSettings(Action<PageSettings> apply)
     {
         ArgumentNullException.ThrowIfNull(apply);
 
         CommitToModel();
-        var sectionIndex = CurrentSectionIndex();
-        var settings = PageSettingsSectionResolver.Resolve(_model, sectionIndex).Clone();
-        apply(settings);
-        _commands.Execute(new SetPageSettingsCommand(settings, sectionIndex));
-    }
-
-    /// <summary>
-    /// The index into <see cref="TextDocument.Sections"/> of the section containing the caret's block
-    /// (<see cref="CaretBlockIndex"/>), reusing <see cref="HeaderFooterPagePlanner.MapBlocksToSections"/>
-    /// — the same block-to-section walk headers/footers use — so page-setup commands (Orientation,
-    /// Margins, Columns, Page Setup dialog, Watermark, Page Border, ...) target the section the caret is
-    /// actually in on a multi-section document instead of always the final section.
-    /// </summary>
-    private int CurrentSectionIndex()
-    {
-        var sections = _model.Sections;
-        if (sections.Count <= 1)
-            return 0;
-
-        var blockSections = HeaderFooterPagePlanner.MapBlocksToSections(_model.Blocks, sections.Count);
-        var blockIndex = CaretBlockIndex();
-        return blockIndex >= 0 && blockIndex < blockSections.Length
-            ? blockSections[blockIndex]
-            : sections.Count - 1;
+        DesignEdits.UpdatePage(apply, CurrentPageSettingsSectionIndex());
     }
 
     /// <summary>Apply confirmed manual soft-hyphen insertions as one undoable body edit.</summary>
     public void ApplyManualHyphenation(IReadOnlyList<ManualHyphenationEdit> edits)
     {
-        ArgumentNullException.ThrowIfNull(edits);
-        if (edits.Count > 0)
-            _commands.Execute(new ApplyManualHyphenationCommand(edits));
+        _editingSession.ApplyManualHyphenation(edits);
     }
 
     public void ApplyPageNumberFormat(PageNumberFormatDialogResult result) =>
@@ -1051,29 +1014,32 @@ public sealed class DocumentView : RichTextBox
     /// (<paramref name="colorHex"/>/<paramref name="widthPt"/>); otherwise it is cleared. Re-renders so
     /// the change shows immediately and round-trips through the model on save. Design-ribbon command.
     /// </summary>
-    public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0) =>
-        ApplyPageSettings(page => page.PageBorder =
-            page.PageBorder is null ? new PageBorder(colorHex, widthPt) : null);
+    public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0)
+    {
+        CommitToModel();
+        DesignEdits.TogglePageBorder(colorHex, widthPt, CurrentPageSettingsSectionIndex());
+    }
 
     /// <summary>
     /// Set (or clear) the page watermark text. A null/empty value removes the watermark. Re-renders so
     /// the faint diagonal text shows immediately and round-trips on save. Design-ribbon command.
     /// </summary>
-    public void SetWatermark(string? text) =>
-        ApplyPageSettings(page => page.Watermark = string.IsNullOrWhiteSpace(text) ? null : text.Trim());
+    public void SetWatermark(string? text)
+    {
+        CommitToModel();
+        DesignEdits.SetWatermarkText(text, CurrentPageSettingsSectionIndex());
+    }
 
     /// <summary>
     /// Set (or clear) the page watermark with full options (text, font, colour, layout, opacity). A
     /// null value removes the watermark. Re-renders immediately and round-trips on save. Design-ribbon
     /// command (Custom Watermark dialog).
     /// </summary>
-    public void SetWatermarkOptions(WatermarkOptions? options) =>
-        ApplyPageSettings(page =>
-        {
-            page.WatermarkOptions = options;
-            // Clear the legacy plain-text field so EffectiveWatermark is driven entirely by the new options.
-            page.Watermark = null;
-        });
+    public void SetWatermarkOptions(WatermarkOptions? options)
+    {
+        CommitToModel();
+        DesignEdits.SetWatermark(options, CurrentPageSettingsSectionIndex());
+    }
 
     /// <summary>
     /// Set (or clear) the page background colour (Word's Design &gt; Page Color). A null/empty value
@@ -1081,8 +1047,14 @@ public sealed class DocumentView : RichTextBox
     /// so the page sheet recolours immediately, and round-trips through the model's w:background on save.
     /// Design-ribbon command.
     /// </summary>
-    public void SetPageColor(string? colorHex) =>
-        ApplyPageSettings(page => page.BackgroundColorHex = PageColorDialogPlanner.NormalizeForModel(colorHex));
+    public void SetPageColor(string? colorHex)
+    {
+        CommitToModel();
+        DesignEdits.SetPageColor(colorHex, CurrentPageSettingsSectionIndex());
+    }
+
+    private int CurrentPageSettingsSectionIndex() =>
+        PageSettingsSectionResolver.ResolveSectionIndex(_model, CaretBlockIndex());
 
     /// <summary>
     /// Apply a document theme (colour/font scheme) to the model's style catalog and re-render so the
@@ -1093,7 +1065,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyTheme(DocumentTheme theme)
     {
         CommitToModel();
-        _commands.Execute(new DesignCatalogCommand("Apply Theme", doc => DocumentTheme.Apply(doc, theme)));
+        DesignEdits.ApplyTheme(theme);
     }
 
     /// <summary>
@@ -1103,7 +1075,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyThemeColors(DocumentTheme theme)
     {
         CommitToModel();
-        _commands.Execute(new DesignCatalogCommand("Theme Colors", doc => DocumentTheme.ApplyColors(doc, theme)));
+        DesignEdits.ApplyThemeColors(theme);
     }
 
     /// <summary>
@@ -1113,7 +1085,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyStyleSet(DocumentStyleSet styleSet)
     {
         CommitToModel();
-        _commands.Execute(new DesignCatalogCommand("Style Set", doc => DocumentStyleSet.Apply(doc, styleSet)));
+        DesignEdits.ApplyStyleSet(styleSet);
     }
 
     /// <summary>
@@ -1122,7 +1094,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyFontSet(DocumentFontSet fontSet)
     {
         CommitToModel();
-        _commands.Execute(new DesignCatalogCommand("Theme Fonts", doc => DocumentFontSet.Apply(doc, fontSet)));
+        DesignEdits.ApplyFontSet(fontSet);
     }
 
     /// <summary>
@@ -1132,9 +1104,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyParagraphSpacingSet(DocumentParagraphSpacingSet spacingSet)
     {
         CommitToModel();
-        _commands.Execute(new DesignCatalogCommand(
-            "Paragraph Spacing",
-            doc => DocumentParagraphSpacingSet.Apply(doc, spacingSet)));
+        DesignEdits.ApplyParagraphSpacingSet(spacingSet);
     }
 
     /// <summary>
@@ -1144,7 +1114,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyEffectSet(DocumentEffectSet effectSet)
     {
         CommitToModel();
-        _commands.Execute(new DesignCatalogCommand("Theme Effects", doc => DocumentEffectSet.Apply(doc, effectSet)));
+        DesignEdits.ApplyEffectSet(effectSet);
     }
 
     /// <summary>
@@ -1522,10 +1492,9 @@ public sealed class DocumentView : RichTextBox
     {
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-        _commands.Execute(new InsertBlockCommand(index, ModelTable.Create(rows, columns)));
+        var index = _editingSession.InsertBlockAfter(
+            CaretBlockIndex(),
+            ModelTable.Create(rows, columns));
 
         // Word places the caret in the new table's first cell, so the Table Design contextual tab appears
         // immediately and the user can type straight into the table. BringBlockIntoView moves the caret to
@@ -1551,7 +1520,8 @@ public sealed class DocumentView : RichTextBox
         IReadOnlyList<ModelParagraph> paragraphs)
     {
         CommitToModel();
-        _commands.Execute(new SetTableCellContentCommand(blockIndex, rowIndex, colIndex, paragraphs));
+        if (TableEdits.AddressFromCellIndex(blockIndex, rowIndex, colIndex) is { } address)
+            TableEdits.SetCellContent(address, paragraphs);
     }
 
     /// <summary>
@@ -1569,23 +1539,7 @@ public sealed class DocumentView : RichTextBox
 
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-
-        // Bring over any styles the source has that the target is missing, so style-referencing
-        // paragraphs (e.g. Heading1) render correctly. Never clobber a style the target already defines.
-        foreach (var (id, style) in source.Styles)
-            _model.Styles.TryAdd(id, style);
-
-        var clones = DocumentMerge.CloneBlocksForInsertion(_model, source);
-        if (clones.Count == 0)
-            return;
-
-        // Insert after the block the caret sits in (else at the end), keeping document order.
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-
-        foreach (var block in clones)
-            _commands.Execute(new InsertBlockCommand(index++, block));
+        _editingSession.InsertDocumentAfter(CaretBlockIndex(), source);
     }
 
     /// <summary>
@@ -1595,26 +1549,18 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void PasteKeepSourceFormatting()
     {
-        string? rtf;
-        try
-        {
-            rtf = System.Windows.Clipboard.ContainsData(DataFormats.Rtf)
-                ? System.Windows.Clipboard.GetData(DataFormats.Rtf) as string
-                : null;
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            return;
-        }
+        var transfer = FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(_platformClipboard)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
 
-        if (RichClipboardDocumentPlanner.TryReadRtf(rtf, out var source)
-            && source is not null
+        if (transfer.Payload?.RichDocument is { } source
             && PasteKeepSourceFormatting(source))
         {
             return;
         }
 
-        PasteFromClipboard();
+        PasteFromClipboard(DocumentPasteTextKind.MergeFormatting);
     }
 
     /// <summary>
@@ -1636,83 +1582,65 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph { PlainText.Length: 0 })
             return false;
 
-        foreach (var (id, style) in source.Styles)
-            _model.Styles.TryAdd(id, style);
-
-        var clones = DocumentMerge.CloneBlocksForInsertion(_model, source);
-        if (clones.Count == 0)
-            return false;
-
-        _commands.Execute(new ReplaceBlocksCommand(index, 1, clones));
-        return true;
+        return _editingSession.ReplaceEmptyParagraphWithDocument(index, source);
     }
 
     /// <summary>
     /// Insert a Table of Contents generated from the document's heading outline. The TOC paragraphs
     /// (built by <see cref="TableOfContents.Build"/>) are inserted at the caret's block (else at the
-    /// document start), applied atomically through the shared mutation coordinator so one undo removes it. The
+    /// document start), routed one-by-one through the undo/redo bus so the insert is reversible. The
     /// paragraphs carry dedicated TOC styles (registered via <see cref="TableOfContents.EnsureStyles"/>)
     /// which both give them distinct formatting and mark the region for <see cref="RefreshTableOfContents"/>.
     /// </summary>
     public void InsertTableOfContents()
     {
-        // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        // Insert before the caret's block so the TOC reads as a front-matter region; fall back to the
-        // document start when the caret can't be mapped.
-        var index = TableOfContentsMutationCoordinator.NormalizeInsertionIndex(_model, CaretBlockIndex());
-
-        ApplyTableOfContentsAt(index, "Insert Table of Contents", replaceExisting: false);
+        var index = CaretBlockIndex();
+        if (index < 0 || index > _model.Blocks.Count)
+            index = 0;
+        ReferenceEdits.InsertTableOfContents(
+            index,
+            BuildGeneratedPageTextResolver,
+            refreshLayout: Render);
     }
 
     /// <summary>
     /// Rebuild the Table of Contents: remove the previously inserted TOC region (paragraphs carrying a
     /// TOC style, see <see cref="TableOfContents.IsTocParagraph"/>) and re-insert a freshly generated
     /// TOC at the same position. With no existing TOC this behaves like <see cref="InsertTableOfContents"/>,
-    /// inserting at the document start. Replacement and pagination stabilization are one shared undoable edit.
+    /// inserting at the document start. Every removal/insert is reversible through the undo/redo bus.
     /// </summary>
     public void RefreshTableOfContents()
     {
         CommitToModel();
-        RefreshTableOfContentsFromModel();
+        ReferenceEdits.RefreshTableOfContents(
+            BuildGeneratedPageTextResolver,
+            refreshLayout: Render);
     }
-
-    private void RefreshTableOfContentsFromModel()
-    {
-        var insertAt = TableOfContentsMutationCoordinator.FindRefreshInsertionIndex(_model);
-
-        ApplyTableOfContentsAt(insertAt, "Update Table of Contents", replaceExisting: true);
-    }
-
-    private void ApplyTableOfContentsAt(int at, string label, bool replaceExisting)
-        => TableOfContentsMutationCoordinator.Apply(
-            _model,
-            _commands,
-            at,
-            label,
-            replaceExisting,
-            () => TableOfContents.Build(_model, BuildGeneratedPageTextResolver()),
-            Render);
 
     /// <summary>
     /// Prepend a simple cover page (a Title paragraph, an optional author Subtitle, and a spacer) at the
-    /// start of the document as one shared undoable block replacement.
+    /// start of the document, routing each block insert through the undo/redo bus so it is reversible.
     /// The title/author come from <see cref="TextDocument.Properties"/> (see
     /// <see cref="DocumentOps.BuildCoverPage"/>). Re-renders the surface.
     /// </summary>
     public void InsertCoverPage()
-        => InsertCoverPage(CoverPagePreset.Default);
+    {
+        CommitToModel();
+        var blocks = DocumentOps.BuildCoverPage(_model);
+        _editingSession.InsertBlocksAfter(-1, blocks, "Insert Cover Page");
+    }
 
     /// <summary>
     /// Prepend a cover page using the given <paramref name="preset"/> at the start of the document,
-    /// applying the generated blocks as one shared undoable replacement. The title/author come
+    /// routing each block insert through the undo/redo bus so it is reversible. The title/author come
     /// from <see cref="TextDocument.Properties"/>. Re-renders the surface.
     /// </summary>
     public void InsertCoverPage(CoverPagePreset preset)
     {
         CommitToModel();
-        ExecuteBlockInsertionPlan(
-            DocumentBlockInsertionMutationPlanner.PlanCoverPage(_model, preset));
+        var blocks = DocumentOps.BuildCoverPage(_model, preset);
+        _editingSession.InsertBlocksAfter(-1, blocks, "Insert Cover Page");
     }
 
     /// <summary>
@@ -1722,8 +1650,10 @@ public sealed class DocumentView : RichTextBox
     public void InsertBlankPage()
     {
         CommitToModel();
-        ExecuteBlockInsertionPlan(
-            DocumentBlockInsertionMutationPlanner.PlanBlankPage(_model, CaretBlockIndex()));
+        _editingSession.InsertBlocksAfter(
+            CaretBlockIndex(),
+            DocumentOps.BuildBlankPage(),
+            "Insert Blank Page");
     }
 
     /// <summary>
@@ -1733,8 +1663,7 @@ public sealed class DocumentView : RichTextBox
     public void InsertHorizontalRule()
     {
         CommitToModel();
-        ExecuteBlockInsertionPlan(
-            DocumentBlockInsertionMutationPlanner.PlanHorizontalRule(_model, CaretBlockIndex()));
+        _editingSession.InsertBlockAfter(CaretBlockIndex(), DocumentOps.CreateHorizontalRule());
     }
 
     /// <summary>
@@ -1744,13 +1673,12 @@ public sealed class DocumentView : RichTextBox
     public void InsertPageBreak()
     {
         CommitToModel();
-        ExecuteBlockInsertionPlan(
-            DocumentBlockInsertionMutationPlanner.PlanPageBreak(_model, CaretBlockIndex()));
+        _editingSession.InsertBlockAfter(CaretBlockIndex(), DocumentOps.CreatePageBreak());
     }
 
     /// <summary>Insert a blank row above the caret's row in the table containing the caret.</summary>
-    public void InsertTableRowAbove() => MutateCaretTable((index, rowIndex, _) =>
-        new InsertTableRowCommand(index, rowIndex));
+    public void InsertTableRowAbove() => MutateCaretTable(address =>
+        TableEdits.InsertRow(address, after: false));
 
     /// <summary>
     /// Insert a page-number field run in a new paragraph after the caret's block, routing through the
@@ -1759,15 +1687,12 @@ public sealed class DocumentView : RichTextBox
     public void InsertPageNumberAtCaret()
     {
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
         var para = new FreeW.Core.Model.Paragraph();
         para.Runs.Add(new FreeW.Core.Model.Run(ResolvePageNumberFieldText(_model))
         {
             FieldKind = RunFieldKind.PageNumber
         });
-        _commands.Execute(new InsertBlockCommand(index, para));
+        _editingSession.InsertBlockAfter(CaretBlockIndex(), para);
     }
 
     /// <summary>
@@ -1778,8 +1703,9 @@ public sealed class DocumentView : RichTextBox
     public void InsertSectionBreak(SectionBreakKind breakKind)
     {
         CommitToModel();
-        ExecuteBlockInsertionPlan(
-            DocumentBlockInsertionMutationPlanner.PlanSectionBreak(_model, CaretBlockIndex(), breakKind));
+        _editingSession.InsertBlockAfter(
+            CaretBlockIndex(),
+            DocumentOps.CreateSectionBreak(breakKind, _model.Page));
     }
 
     /// <summary>
@@ -1788,35 +1714,26 @@ public sealed class DocumentView : RichTextBox
     public void InsertColumnBreak()
     {
         CommitToModel();
-        ExecuteBlockInsertionPlan(
-            DocumentBlockInsertionMutationPlanner.PlanColumnBreak(_model, CaretBlockIndex()));
+        _editingSession.InsertBlockAfter(CaretBlockIndex(), DocumentOps.CreateColumnBreak());
     }
 
-    private void ExecuteBlockInsertionPlan(DocumentBlockReplacementPlan plan) =>
-        _commands.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
-
     /// <summary>Insert a blank row below the caret's row in the table containing the caret.</summary>
-    public void InsertTableRow() => MutateCaretTable((index, rowIndex, _) =>
-        new InsertTableRowCommand(index, rowIndex + 1));
+    public void InsertTableRow() => MutateCaretTable(address =>
+        TableEdits.InsertRow(address, after: true));
 
     /// <summary>Delete the caret's row from the table containing the caret (no-op on the last row).</summary>
-    public void DeleteTableRow() => MutateCaretTable((index, rowIndex, _) =>
-        new DeleteTableRowCommand(index, rowIndex));
+    public void DeleteTableRow() => MutateCaretTable(TableEdits.DeleteRow);
 
     /// <summary>Insert a blank column to the left of the caret's column in the table containing the caret.</summary>
-    // H8 family fix: InsertTableColumnCommand takes a GRID-COLUMN index (it widens/inserts per row
-    // based on GridSpan); CaretTableLocation's columnIndex is a per-row cell-list index. Convert via
-    // GridColumnAt so a preceding horizontal merge in the caret's row doesn't insert at the wrong column.
-    public void InsertTableColumnLeft() => MutateCaretTable((index, rowIndex, columnIndex) =>
-        new InsertTableColumnCommand(index, GridColumnAt(index, rowIndex, columnIndex)));
+    public void InsertTableColumnLeft() => MutateCaretTable(address =>
+        TableEdits.InsertColumn(address, after: false));
 
     /// <summary>Insert a blank column to the right of the caret's column in the table containing the caret.</summary>
-    public void InsertTableColumn() => MutateCaretTable((index, rowIndex, columnIndex) =>
-        new InsertTableColumnCommand(index, GridColumnAt(index, rowIndex, columnIndex) + 1));
+    public void InsertTableColumn() => MutateCaretTable(address =>
+        TableEdits.InsertColumn(address, after: true));
 
     /// <summary>Delete the caret's column from the table containing the caret (no-op on the last column).</summary>
-    public void DeleteTableColumn() => MutateCaretTable((index, rowIndex, columnIndex) =>
-        new DeleteTableColumnCommand(index, GridColumnAt(index, rowIndex, columnIndex)));
+    public void DeleteTableColumn() => MutateCaretTable(TableEdits.DeleteColumn);
 
     /// <summary>Delete the entire table containing the caret from the document (routes through the undo/redo bus).</summary>
     public void DeleteTable()
@@ -1825,7 +1742,7 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, _, _) = CaretTableLocation();
         if (blockIndex < 0)
             return;
-        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, [new ModelParagraph(string.Empty)]));
+        TableEdits.DeleteTable(blockIndex, DocumentTableDeleteMode.ReplaceWithEmptyParagraph);
     }
 
     /// <summary>
@@ -1838,12 +1755,8 @@ public sealed class DocumentView : RichTextBox
     {
         Focus();
         CommitToModel();
-        var (blockIndex, rowIndex, _) = CaretTableLocation();
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable table)
-            return;
-        if (TableLayoutOperations.TryBuildSplitReplacement(table, rowIndex, out var replacement))
-            _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, replacement));
+        if (CaretTableAddress() is { } address)
+            TableEdits.SplitTable(address);
     }
 
     /// <summary>
@@ -1911,21 +1824,8 @@ public sealed class DocumentView : RichTextBox
     {
         Focus();
         CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
-            return;
-        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
-            return;
-        var cells = table.Rows[rowIndex].Cells;
-        if (columnIndex < 0 || columnIndex >= cells.Count)
-            return;
-        _commands.Execute(new SetCellAlignmentCommand(
-            blockIndex,
-            rowIndex,
-            columnIndex,
-            verticalAlignment,
-            horizontalAlignment));
-        Render();
+        if (CaretTableAddress() is { } address)
+            TableEdits.SetCellAlignment([address], verticalAlignment, horizontalAlignment);
     }
 
     /// <summary>
@@ -1936,12 +1836,8 @@ public sealed class DocumentView : RichTextBox
     {
         Focus();
         CommitToModel();
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable)
-            return;
-        _commands.Execute(new DistributeTableRowsCommand(blockIndex));
-        Render();
+        if (CaretTableAddress() is { } address)
+            TableEdits.DistributeRows(address);
     }
 
     /// <summary>
@@ -1952,12 +1848,8 @@ public sealed class DocumentView : RichTextBox
     {
         Focus();
         CommitToModel();
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable)
-            return;
-        _commands.Execute(new DistributeTableColumnsCommand(blockIndex));
-        Render();
+        if (CaretTableAddress() is { } address)
+            TableEdits.DistributeColumns(address);
     }
 
     /// <summary>
@@ -1967,12 +1859,8 @@ public sealed class DocumentView : RichTextBox
     {
         Focus();
         CommitToModel();
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable)
-            return;
-        _commands.Execute(new SetTableAutoFitCommand(blockIndex, mode));
-        Render();
+        if (CaretTableAddress() is { } address)
+            TableEdits.SetAutoFit(address, mode);
     }
 
     /// <summary>
@@ -1986,36 +1874,14 @@ public sealed class DocumentView : RichTextBox
     public void MergeSelectedCells()
     {
         CommitToModel();
-        var start = TableLocationOf(Selection.Start.Parent as TextElement);
-        var end = TableLocationOf(Selection.End.Parent as TextElement);
+        var start = TableAddressOf(Selection.Start.Parent as TextElement);
+        var end = TableAddressOf(Selection.End.Parent as TextElement);
 
         // Fall back to the caret cell when an endpoint is outside any table (e.g. collapsed selection).
-        if (start.BlockIndex < 0)
-            start = CaretTableLocation();
-        if (end.BlockIndex < 0)
-            end = start;
-        if (start.BlockIndex < 0 || start.BlockIndex != end.BlockIndex)
-            return;
-
-        var blockIndex = start.BlockIndex;
-        if (start.RowIndex == end.RowIndex && start.ColumnIndex != end.ColumnIndex)
-        {
-            _commands.Execute(new MergeCellsHorizontalCommand(blockIndex, start.RowIndex, start.ColumnIndex, end.ColumnIndex));
-        }
-        else if (start.ColumnIndex == end.ColumnIndex && start.RowIndex != end.RowIndex)
-        {
-            // H8 fix: MergeCellsVerticalCommand expects a table-wide GRID-COLUMN index (it maps that
-            // column back to each row's own cell-list index internally, accounting for GridSpan). Passing
-            // start.ColumnIndex directly — a per-row cell-list index — merges the wrong cells whenever
-            // the table also has a horizontal (gridSpan) merge before this column in start.RowIndex's row.
-            var gridColumn = GridColumnAt(blockIndex, start.RowIndex, start.ColumnIndex);
-            _commands.Execute(new MergeCellsVerticalCommand(blockIndex, gridColumn, start.RowIndex, end.RowIndex));
-        }
-        else if (start.RowIndex != end.RowIndex && start.ColumnIndex != end.ColumnIndex)
-        {
-            // Mixed rectangular selection: merge horizontally across the start row as a best-effort.
-            _commands.Execute(new MergeCellsHorizontalCommand(blockIndex, start.RowIndex, start.ColumnIndex, end.ColumnIndex));
-        }
+        start ??= CaretTableAddress();
+        end ??= start;
+        if (start is { } anchor && end is { } active)
+            TableEdits.MergeCells(anchor, active);
     }
 
     /// <summary>
@@ -2024,28 +1890,19 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void EraseTableBorderAtCaret()
     {
-        var start = TableLocationOf(Selection.Start.Parent as TextElement);
-        var end = TableLocationOf(Selection.End.Parent as TextElement);
-        var caret = CaretTableLocation();
+        var start = TableAddressOf(Selection.Start.Parent as TextElement);
+        var end = TableAddressOf(Selection.End.Parent as TextElement);
+        var caret = CaretTableAddress();
         CommitToModel();
-        if (start.BlockIndex >= 0 && end.BlockIndex == start.BlockIndex
-            && (start.RowIndex != end.RowIndex || start.ColumnIndex != end.ColumnIndex))
+        if (start is { } anchor && end is { } active && anchor.BlockIndex == active.BlockIndex
+            && (anchor.RowIndex != active.RowIndex || anchor.GridColumn != active.GridColumn))
         {
-            MergeSelectedCells();
+            TableEdits.MergeCells(anchor, active);
             return;
         }
 
-        var (blockIndex, rowIndex, columnIndex) = caret;
-        if (blockIndex < 0
-            || _model.Blocks[blockIndex] is not ModelTable table
-            || TableEraserCommandPlanner.PlanByCellIndex(table, rowIndex, columnIndex) is not { } plan)
-            return;
-
-        _commands.Execute(new MergeCellsHorizontalCommand(
-            blockIndex,
-            plan.RowIndex,
-            plan.FirstCellIndex,
-            plan.LastCellIndex));
+        if (caret is { } address)
+            TableEdits.EraseBorderAt(address);
     }
 
     /// <summary>
@@ -2053,8 +1910,8 @@ public sealed class DocumentView : RichTextBox
     /// <c>GridSpan</c> to 1 (re-adding empty cells), and a vertical merge clears the head and its
     /// continuations. Routes through the undo/redo bus. No-op outside a table or on an unmerged cell.
     /// </summary>
-    public void SplitCell(int rows = 1, int columns = 1) => MutateCaretTable((index, rowIndex, columnIndex) =>
-        new SplitCellCommand(index, rowIndex, columnIndex, rows, columns));
+    public void SplitCell(int rows = 1, int columns = 1) => MutateCaretTable(address =>
+        TableEdits.SplitCell(address, rows, columns));
 
     /// <summary>
     /// Set (or clear, when <paramref name="colorHex"/> is null/empty) the background shading of the
@@ -2063,10 +1920,8 @@ public sealed class DocumentView : RichTextBox
     public void SetCaretCellShading(string? colorHex)
     {
         CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0)
-            return;
-        _commands.Execute(new SetCellShadingCommand(blockIndex, rowIndex, columnIndex, colorHex));
+        if (CaretTableAddress() is { } address)
+            TableEdits.SetCellShading([address], colorHex);
     }
 
     /// <summary>
@@ -2076,10 +1931,8 @@ public sealed class DocumentView : RichTextBox
     public void SetCaretCellBorders(CellBorders? borders)
     {
         CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0)
-            return;
-        _commands.Execute(new SetCellBorderPayloadCommand(blockIndex, rowIndex, columnIndex, borders));
+        if (CaretTableAddress() is { } address)
+            TableEdits.SetCellBorders(address, borders);
     }
 
     /// <summary>
@@ -2089,10 +1942,8 @@ public sealed class DocumentView : RichTextBox
     public void SetCaretCellTextDirection(CellTextDirection direction)
     {
         CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0)
-            return;
-        _commands.Execute(new SetCellTextDirectionCommand(blockIndex, rowIndex, columnIndex, direction));
+        if (CaretTableAddress() is { } address)
+            TableEdits.SetCellTextDirection(address, direction);
     }
 
     /// <summary>
@@ -2147,10 +1998,8 @@ public sealed class DocumentView : RichTextBox
     private void UpdateCaretTableFormatting(Func<TableFormatting, TableFormatting> update)
     {
         CommitToModel();
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
-            return;
-        _commands.Execute(new SetTableFormattingCommand(blockIndex, update(table.Formatting)));
+        if (CaretTableAddress() is { } address)
+            TableEdits.UpdateFormatting(address, update);
     }
 
     /// <summary>
@@ -2160,16 +2009,12 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SetSelectedImageSize(double widthPt, double heightPt = 0)
     {
-        if (widthPt <= 0)
-            return;
         CommitToModel();
-        var (blockIndex, runIndex, image) = SelectedImageLocation();
-        if (image is null)
-            return;
-        var finalHeight = heightPt > 0
-            ? heightPt
-            : (image.WidthPt > 0 ? image.HeightPt / image.WidthPt : 1) * widthPt;
-        _commands.Execute(new SetImageSizeCommand(blockIndex, runIndex, widthPt, finalHeight));
+        var location = SelectedImageLocation();
+        RenderObjectEdit(ObjectEdits.SetImageSize(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            widthPt,
+            heightPt));
     }
 
     /// <summary>
@@ -2395,15 +2240,14 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetShapeKindCommand(
-                nested.BlockIndex, nested.RunIndex, kind, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeKind(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                kind));
             return;
         }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeKindCommand(blockIndex, runIndex, kind));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeKind(ObjectTarget(blockIndex, runIndex), kind));
     }
 
     /// <summary>
@@ -2416,17 +2260,7 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        if (shape.HasCustomGeometry) return; // already freeform
-
-        // Build the matching freeform polygon from the current preset kind.
-        CustomGeometry poly = shape.Kind switch
-        {
-            ShapeKind.Ellipse          => CustomGeometry.EllipsePoly(),
-            ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
-            _                          => CustomGeometry.RectanglePoly(),
-        };
-        _commands.Execute(new SetShapeCustomGeometryCommand(blockIndex, runIndex, poly));
-        Render();
+        RenderObjectEdit(ObjectEdits.ConvertShapeToFreeform(ObjectTarget(blockIndex, runIndex)));
     }
 
     /// <summary>
@@ -2448,16 +2282,9 @@ public sealed class DocumentView : RichTextBox
         {
             if (!nestedShape.HasCustomGeometry)
             {
-                CustomGeometry poly = nestedShape.Kind switch
-                {
-                    ShapeKind.Ellipse => CustomGeometry.EllipsePoly(),
-                    ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
-                    _ => CustomGeometry.RectanglePoly(),
-                };
-                _commands.Execute(new SetShapeCustomGeometryCommand(
+                ObjectEdits.ConvertShapeToFreeform(ObjectTarget(
                     groupLocation.BlockIndex,
                     groupLocation.RunIndex,
-                    poly,
                     selectedChild.ChildPath));
             }
 
@@ -2475,29 +2302,10 @@ public sealed class DocumentView : RichTextBox
         if (shape is null) return;
 
         if (!shape.HasCustomGeometry)
-        {
-            CustomGeometry poly = shape.Kind switch
-            {
-                ShapeKind.Ellipse => CustomGeometry.EllipsePoly(),
-                ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
-                _ => CustomGeometry.RectanglePoly(),
-            };
-            _commands.Execute(new SetShapeCustomGeometryCommand(blockIndex, runIndex, poly));
-        }
+            ObjectEdits.ConvertShapeToFreeform(ObjectTarget(blockIndex, runIndex));
 
         _shapeEditPointsTarget = new ShapeEditPointsTarget(blockIndex, runIndex, shape);
         SyncShapeEditPointsAdorner();
-    }
-
-    internal int ActiveShapeEditPointHandleCount => _shapeEditPointsAdorner?.HandleCount ?? 0;
-
-    internal bool MoveActiveShapeEditPoint(int segmentIndex, long x, long y)
-    {
-        if (_shapeEditPointsTarget is not { } target || !IsCurrentShapeEditPointsTarget(target))
-            return false;
-
-        MoveShapeEditPoint(target, segmentIndex, x, y);
-        return true;
     }
 
     private void MoveShapeEditPoint(ShapeEditPointsTarget target, int segmentIndex, long x, long y)
@@ -2505,13 +2313,11 @@ public sealed class DocumentView : RichTextBox
         if (!IsCurrentShapeEditPointsTarget(target))
             return;
 
-        _commands.Execute(new MoveShapeEditPointCommand(
-            target.BlockIndex,
-            target.RunIndex,
+        ObjectEdits.MoveShapeEditPoint(
+            ObjectTarget(target.BlockIndex, target.RunIndex, target.ChildPath),
             segmentIndex,
             x,
-            y,
-            target.ChildPath));
+            y);
     }
 
     /// <summary>
@@ -2522,15 +2328,14 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetShapeFillCommand(
-                nested.BlockIndex, nested.RunIndex, colorHex, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeFill(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                colorHex));
             return;
         }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeFillCommand(blockIndex, runIndex, colorHex));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeFill(ObjectTarget(blockIndex, runIndex), colorHex));
     }
 
     /// <summary>
@@ -2541,15 +2346,20 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetShapeOutlineCommand(
-                nested.BlockIndex, nested.RunIndex, colorHex, widthPt, dash, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeOutline(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                colorHex,
+                widthPt,
+                dash));
             return;
         }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeOutlineCommand(blockIndex, runIndex, colorHex, widthPt, dash));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeOutline(
+            ObjectTarget(blockIndex, runIndex),
+            colorHex,
+            widthPt,
+            dash));
     }
 
     /// <summary>
@@ -2557,19 +2367,21 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SetSelectedShapeSize(double widthPt, double heightPt)
     {
-        if (widthPt <= 0 || heightPt <= 0) return;
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetDrawingGroupChildSizeCommand(
-                nested.BlockIndex, nested.RunIndex, nested.ChildPath, widthPt, heightPt));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeSize(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                widthPt,
+                heightPt));
             return;
         }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeSizeCommand(blockIndex, runIndex, widthPt, heightPt));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeSize(
+            ObjectTarget(blockIndex, runIndex),
+            widthPt,
+            heightPt));
     }
 
     /// <summary>
@@ -2578,18 +2390,16 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedShapeAltText(string? altText)
     {
         CommitToModel();
-        var normalized = string.IsNullOrWhiteSpace(altText) ? null : altText!.Trim();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetShapeAltTextCommand(
-                nested.BlockIndex, nested.RunIndex, normalized, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeAltText(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                altText));
             return;
         }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeAltTextCommand(blockIndex, runIndex, normalized));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeAltText(ObjectTarget(blockIndex, runIndex), altText));
     }
 
     /// <summary>
@@ -2608,19 +2418,20 @@ public sealed class DocumentView : RichTextBox
             && FindFloatingObjectLocation(selectedChild.RootGroup) is var groupLocation
             && groupLocation.BlockIndex >= 0)
         {
-            _commands.Execute(new SetShapeTextDirectionCommand(
-                groupLocation.BlockIndex,
-                groupLocation.RunIndex,
-                direction,
-                selectedChild.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeTextDirection(
+                ObjectTarget(
+                    groupLocation.BlockIndex,
+                    groupLocation.RunIndex,
+                    selectedChild.ChildPath),
+                direction));
             return;
         }
 
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeTextDirectionCommand(blockIndex, runIndex, direction));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeTextDirection(
+            ObjectTarget(blockIndex, runIndex),
+            direction));
     }
 
     /// <summary>
@@ -2641,22 +2452,21 @@ public sealed class DocumentView : RichTextBox
             && FindFloatingObjectLocation(selectedChild.RootGroup) is var groupLocation
             && groupLocation.BlockIndex >= 0)
         {
-            _commands.Execute(new SetShapeTextParagraphAlignmentCommand(
-                groupLocation.BlockIndex,
-                groupLocation.RunIndex,
-                alignment,
-                selectedChild.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeAlignment(
+                ObjectTarget(
+                    groupLocation.BlockIndex,
+                    groupLocation.RunIndex,
+                    selectedChild.ChildPath),
+                alignment));
             return;
         }
 
-        var (blockIndex, _, shape) = SelectedShapeLocation();
-        if (shape is null || blockIndex < 0 || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+        if (shape is null)
             return;
-        _commands.Execute(new SetParagraphFormattingCommand(
-            blockIndex,
-            paragraph.Formatting with { Alignment = alignment }));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeAlignment(
+            ObjectTarget(blockIndex, runIndex),
+            alignment));
     }
 
     // ── WordArt mutation methods (used by drawing-format contextual tab commands) ───────────────
@@ -2669,8 +2479,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, wordArt) = SelectedWordArtLocation();
         if (wordArt is null) return;
-        _commands.Execute(new SetWordArtStyleCommand(blockIndex, runIndex, style));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetWordArtStyle(
+            ObjectTarget(blockIndex, runIndex),
+            style));
     }
 
     /// <summary>
@@ -2681,15 +2492,14 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new ApplyShapeStyleCommand(
-                nested.BlockIndex, nested.RunIndex, preset, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.ApplyShapeStyle(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                preset));
             return;
         }
         var (blockIndex, runIndex, _) = SelectedShapeLocation();
         if (blockIndex < 0) return;
-        _commands.Execute(new ApplyShapeStyleCommand(blockIndex, runIndex, preset));
-        Render();
+        RenderObjectEdit(ObjectEdits.ApplyShapeStyle(ObjectTarget(blockIndex, runIndex), preset));
     }
 
     /// <summary>
@@ -2700,15 +2510,14 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetShapeExtendedFillCommand(
-                nested.BlockIndex, nested.RunIndex, fill, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeExtendedFill(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                fill));
             return;
         }
         var (blockIndex, runIndex, _) = SelectedShapeLocation();
         if (blockIndex < 0) return;
-        _commands.Execute(new SetShapeExtendedFillCommand(blockIndex, runIndex, fill));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeExtendedFill(ObjectTarget(blockIndex, runIndex), fill));
     }
 
     /// <summary>
@@ -2719,15 +2528,14 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetShapeEffectsCommand(
-                nested.BlockIndex, nested.RunIndex, effects, nested.ChildPath));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapeEffects(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                effects));
             return;
         }
         var (blockIndex, runIndex, _) = SelectedShapeLocation();
         if (blockIndex < 0) return;
-        _commands.Execute(new SetShapeEffectsCommand(blockIndex, runIndex, effects));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetShapeEffects(ObjectTarget(blockIndex, runIndex), effects));
     }
 
     /// <summary>
@@ -2740,8 +2548,7 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeWrappingCommand(blockIndex, runIndex, wrapping));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetWrap(ObjectTarget(blockIndex, runIndex), wrapping));
     }
 
     /// <summary>
@@ -2753,8 +2560,11 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeRotationCommand(blockIndex, runIndex, angleDeg, flipH, flipV));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetRotation(
+            ObjectTarget(blockIndex, runIndex),
+            angleDeg,
+            flipH,
+            flipV));
     }
 
     /// <summary>Return the selected direct shape position or nested shape's group-local offset.</summary>
@@ -2762,32 +2572,25 @@ public sealed class DocumentView : RichTextBox
         HorizontalAnchor HorizontalAnchor, VerticalAnchor VerticalAnchor, bool IsGroupLocal)?
         GetSelectedShapePosition()
     {
-        if (_selectedFloatingGroupChild is { ChildPath.Count: > 0 } selectedChild
-            && DrawingGroupChildPathResolver.TryGetChild(
-                selectedChild.RootGroup,
-                selectedChild.ChildPath,
-                out var owningGroup,
-                out var nestedChild)
-            && nestedChild is Shape)
+        DocumentObjectTarget? target = null;
+        if (SelectedNestedShapeLocation() is { } nested)
         {
-            var childIndex = selectedChild.ChildPath[^1];
-            var offset = childIndex < owningGroup.ChildOffsets.Count
-                ? owningGroup.ChildOffsets[childIndex]
-                : (X: 0d, Y: 0d);
-            return (offset.X, offset.Y,
-                HorizontalAnchor.Column, VerticalAnchor.Paragraph, true);
+            target = ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath);
         }
-
-        var shape = SelectedShapeLocation().Shape;
-        if (shape is null)
+        else
+        {
+            var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+            if (shape is not null)
+                target = ObjectTarget(blockIndex, runIndex);
+        }
+        if (target is null || ObjectEdits.GetShapePosition(target.Value) is not { } plan)
             return null;
-        var placement = shape.Placement;
         return (
-            placement?.HorizontalOffsetPt ?? 0,
-            placement?.VerticalOffsetPt ?? 0,
-            placement?.HorizontalAnchor ?? HorizontalAnchor.Column,
-            placement?.VerticalAnchor ?? VerticalAnchor.Paragraph,
-            false);
+            plan.HorizontalOffsetPt,
+            plan.VerticalOffsetPt,
+            plan.HorizontalAnchor,
+            plan.VerticalAnchor,
+            plan.IsGroupLocal);
     }
 
     /// <summary>
@@ -2801,19 +2604,20 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (SelectedNestedShapeLocation() is { } nested)
         {
-            _commands.Execute(new SetDrawingGroupChildPositionCommand(
-                nested.BlockIndex, nested.RunIndex, nested.ChildPath,
-                horizontalOffsetPt, verticalOffsetPt));
-            Render();
+            RenderObjectEdit(ObjectEdits.SetShapePosition(
+                ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath),
+                horizontalOffsetPt,
+                verticalOffsetPt,
+                horizontalAnchor,
+                verticalAnchor));
             return;
         }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapePositionCommand(
-            blockIndex, runIndex,
+        RenderObjectEdit(ObjectEdits.SetShapePosition(
+            ObjectTarget(blockIndex, runIndex),
             horizontalOffsetPt, verticalOffsetPt,
             horizontalAnchor, verticalAnchor));
-        Render();
     }
 
     /// <summary>
@@ -2824,8 +2628,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, wordArt) = SelectedWordArtLocation();
         if (wordArt is null) return;
-        _commands.Execute(new SetWordArtWarpCommand(blockIndex, runIndex, warp));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetWordArtWarp(
+            ObjectTarget(blockIndex, runIndex),
+            warp));
     }
 
     /// <summary>
@@ -2836,9 +2641,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, wordArt) = SelectedWordArtLocation();
         if (wordArt is null) return;
-        _commands.Execute(new SetWordArtAltTextCommand(blockIndex, runIndex,
-            string.IsNullOrWhiteSpace(altText) ? null : altText!.Trim()));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetAltText(
+            ObjectTarget(blockIndex, runIndex),
+            altText));
     }
 
     // ── Chart mutation methods (used by chart contextual tab commands) ────────────────────────────
@@ -2853,8 +2658,9 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetChartKindCommand(location.BlockIndex, location.RunIndex, kind));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetChartKind(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            kind));
     }
 
     /// <summary>
@@ -2864,14 +2670,10 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         var location = SelectedChartLocation();
-        var chart = location.Chart;
-        if (chart is null)
+        if (location.Chart is null)
             return;
-        var state = ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart);
-        if (!state.CanToggleLegend)
-            return;
-        _commands.Execute(new SetChartLegendCommand(location.BlockIndex, location.RunIndex, !state.IsLegendVisible));
-        Render();
+        RenderObjectEdit(ObjectEdits.ToggleChartLegend(
+            ObjectTarget(location.BlockIndex, location.RunIndex)));
     }
 
     /// <summary>
@@ -2884,8 +2686,9 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetChartTitleCommand(location.BlockIndex, location.RunIndex, title));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetChartTitle(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            title));
     }
 
     /// <summary>
@@ -2898,12 +2701,10 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetChartAxisTitlesCommand(
-            location.BlockIndex,
-            location.RunIndex,
+        RenderObjectEdit(ObjectEdits.SetChartAxisTitles(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
             categoryAxisTitle,
             valueAxisTitle));
-        Render();
     }
 
     /// <summary>
@@ -2912,18 +2713,14 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SetSelectedChartSize(double widthPt, double heightPt)
     {
-        if (widthPt <= 0 || heightPt <= 0)
-            return;
         CommitToModel();
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetFloatingSizeCommand(
-            location.BlockIndex,
-            location.RunIndex,
+        RenderObjectEdit(ObjectEdits.SetSize(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
             widthPt,
             heightPt));
-        Render();
     }
 
     /// <summary>
@@ -2937,11 +2734,9 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new ReplaceChartDataCommand(
-            location.BlockIndex,
-            location.RunIndex,
+        RenderObjectEdit(ObjectEdits.ReplaceChartData(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
             replacement));
-        Render();
     }
 
     /// <summary>
@@ -2969,7 +2764,9 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetChartStyleCommand(location.BlockIndex, location.RunIndex, style.Id));
+        RenderObjectEdit(ObjectEdits.SetChartStyle(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            style.Id));
     }
 
     /// <summary>
@@ -2982,7 +2779,9 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetChartColorSchemeCommand(location.BlockIndex, location.RunIndex, scheme.Id));
+        RenderObjectEdit(ObjectEdits.SetChartColorScheme(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            scheme.Id));
     }
 
     /// <summary>
@@ -2995,7 +2794,9 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedChartLocation();
         if (location.Chart is null)
             return;
-        _commands.Execute(new SetChartQuickLayoutCommand(location.BlockIndex, location.RunIndex, layout));
+        RenderObjectEdit(ObjectEdits.SetChartQuickLayout(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            layout));
     }
 
     // ── SmartArt selection (mirrors SelectedChart / SelectedChartLocation) ────────────────────────
@@ -3133,7 +2934,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var location = SelectedSmartArtLocation();
         if (location.SmartArt is null) return;
-        _commands.Execute(new ReplaceSmartArtContentCommand(location.BlockIndex, location.RunIndex, replacement));
+        RenderObjectEdit(ObjectEdits.ReplaceSmartArt(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            replacement));
     }
 
     /// <summary>
@@ -3146,12 +2949,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var location = SelectedSmartArtLocation();
         if (location.SmartArt is null) return;
-        _commands.Execute(new SetSmartArtLayoutCommand(
-            location.BlockIndex,
-            location.RunIndex,
+        RenderObjectEdit(ObjectEdits.SetSmartArtLayout(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
             preset.Kind,
             preset.Id));
-        Render();
     }
 
     /// <summary>
@@ -3164,11 +2965,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var location = SelectedSmartArtLocation();
         if (location.SmartArt is null) return;
-        _commands.Execute(new SetSmartArtColorCommand(
-            location.BlockIndex,
-            location.RunIndex,
+        RenderObjectEdit(ObjectEdits.SetSmartArtColor(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
             scheme.Id));
-        Render();
     }
 
     /// <summary>
@@ -3181,17 +2980,20 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var location = SelectedSmartArtLocation();
         if (location.SmartArt is null) return;
-        _commands.Execute(new SetSmartArtStyleCommand(location.BlockIndex, location.RunIndex, style.Id));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetSmartArtStyle(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            style.Id));
     }
 
     private void ExecuteSmartArtStructureCommand(SmartArtStructureOperation operation)
     {
         CommitToModel();
         var location = SelectedSmartArtLocation();
-        if (!MutateSmartArtStructureCommand.CanApply(location.SmartArt, operation))
+        if (location.SmartArt is null)
             return;
-        _commands.Execute(new MutateSmartArtStructureCommand(location.BlockIndex, location.RunIndex, operation));
+        RenderObjectEdit(ObjectEdits.MutateSmartArt(
+            ObjectTarget(location.BlockIndex, location.RunIndex),
+            operation));
     }
 
     /// <summary>
@@ -3207,8 +3009,7 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null)
             return;
-        _commands.Execute(new SetImageAltTextCommand(blockIndex, runIndex, altText));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageAltText(ObjectTarget(blockIndex, runIndex), altText));
     }
 
     /// <summary>
@@ -3219,13 +3020,12 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedImageAlignment(ModelTextAlignment alignment)
     {
         CommitToModel();
-        var (blockIndex, _, image) = SelectedImageLocation();
-        if (image is null || blockIndex < 0 || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null)
             return;
-        _commands.Execute(new SetParagraphFormattingCommand(
-            blockIndex,
-            paragraph.Formatting with { Alignment = alignment }));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageAlignment(
+            ObjectTarget(blockIndex, runIndex),
+            alignment));
     }
 
     /// <summary>
@@ -3238,8 +3038,7 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null)
             return;
-        _commands.Execute(new SetFloatingWrapCommand(blockIndex, runIndex, wrapping));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetWrap(ObjectTarget(blockIndex, runIndex), wrapping));
     }
 
     /// <summary>
@@ -3251,8 +3050,11 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageRotationCommand(blockIndex, runIndex, angleDeg, flipH, flipV));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageRotation(
+            ObjectTarget(blockIndex, runIndex),
+            angleDeg,
+            flipH,
+            flipV));
     }
 
     /// <summary>
@@ -3264,8 +3066,12 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageCropCommand(blockIndex, runIndex, left, right, top, bottom));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageCrop(
+            ObjectTarget(blockIndex, runIndex),
+            left,
+            right,
+            top,
+            bottom));
     }
 
     /// <summary>
@@ -3278,8 +3084,12 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageAdjustCommand(blockIndex, runIndex, brightnessPct, contrastPct, saturationPct, transparencyPct));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageAdjust(
+            ObjectTarget(blockIndex, runIndex),
+            brightnessPct,
+            contrastPct,
+            saturationPct,
+            transparencyPct));
     }
 
     /// <summary>
@@ -3291,8 +3101,11 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageBorderCommand(blockIndex, runIndex, colorHex, widthPt, dash));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageBorder(
+            ObjectTarget(blockIndex, runIndex),
+            colorHex,
+            widthPt,
+            dash));
     }
 
     /// <summary>
@@ -3306,11 +3119,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageEffectCommand(
-            blockIndex, runIndex,
+        RenderObjectEdit(ObjectEdits.SetImageEffect(
+            ObjectTarget(blockIndex, runIndex),
             shadowPreset, glowSizePt, glowColorHex,
             reflectionPreset, softEdgePt, bevelPreset));
-        Render();
     }
 
     /// <summary>
@@ -3322,8 +3134,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageRecolorCommand(blockIndex, runIndex, mode, colorTemperature));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageRecolor(
+            ObjectTarget(blockIndex, runIndex),
+            mode,
+            colorTemperature));
     }
 
     /// <summary>
@@ -3336,8 +3150,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageArtisticEffectCommand(blockIndex, runIndex, effect));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageArtisticEffect(
+            ObjectTarget(blockIndex, runIndex),
+            effect));
     }
 
     /// <summary>
@@ -3351,11 +3166,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageStyleCommand(
-            blockIndex, runIndex,
+        RenderObjectEdit(ObjectEdits.SetImageStyle(
+            ObjectTarget(blockIndex, runIndex),
             stylePreset, borderColorHex, borderWidthPt, borderDash,
             shadowPreset, reflectionPreset, softEdgePt));
-        Render();
     }
 
     /// <summary>Apply a shared Picture Styles catalog preset to the selected picture.</summary>
@@ -3365,8 +3179,7 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImageStyleCommand(blockIndex, runIndex, preset));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetImageStyle(ObjectTarget(blockIndex, runIndex), preset));
     }
 
     /// <summary>
@@ -3379,18 +3192,7 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-
-        var naturalSize = ImageResetCommandPlanner.BuildNaturalSize(
-            image.OriginalPixelWidth,
-            image.OriginalPixelHeight,
-            image.WidthPt,
-            image.HeightPt);
-        _commands.Execute(new ResetImageSizeCommand(
-            blockIndex,
-            runIndex,
-            naturalSize.WidthPt,
-            naturalSize.HeightPt));
-        Render();
+        RenderObjectEdit(ObjectEdits.ResetImage(ObjectTarget(blockIndex, runIndex)));
     }
 
     /// <summary>
@@ -3404,11 +3206,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
-        _commands.Execute(new SetImagePositionCommand(
-            blockIndex, runIndex,
+        RenderObjectEdit(ObjectEdits.SetPosition(
+            ObjectTarget(blockIndex, runIndex),
             horizontalOffsetPt, verticalOffsetPt,
             horizontalAnchor, verticalAnchor));
-        Render();
     }
 
     /// <summary>
@@ -3417,40 +3218,14 @@ public sealed class DocumentView : RichTextBox
     /// otherwise the border is cleared. Re-renders so it round-trips through the model on the next commit.
     /// </summary>
     public void ToggleParagraphBorder(string colorHex = "#000000", double widthPt = 0.5) =>
-        MutateSelectedParagraphs(paragraphs =>
-        {
-            var enable = paragraphs.Any(p => p.BorderThickness.Top <= 0);
-            foreach (var p in paragraphs)
-            {
-                if (enable)
-                {
-                    p.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
-                    p.BorderThickness = new Thickness(widthPt * PxPerPoint);
-                    p.Padding = new Thickness(2);
-                }
-                else
-                {
-                    p.BorderBrush = null;
-                    p.BorderThickness = new Thickness(0);
-                    p.Padding = new Thickness(0);
-                }
-            }
-        });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.ToggleBorder(indices, colorHex, widthPt));
 
     /// <summary>
     /// Toggle paragraph shading over the selection. A null/empty <paramref name="colorHex"/> clears
     /// shading; otherwise each touched paragraph is filled with that colour. Re-renders the surface.
     /// </summary>
     public void ToggleParagraphShading(string? colorHex) =>
-        MutateSelectedParagraphs(paragraphs =>
-        {
-            var clear = string.IsNullOrEmpty(colorHex)
-                || paragraphs.All(p => p.Background is SolidColorBrush b && ToHex(b.Color) == colorHex);
-            foreach (var p in paragraphs)
-                p.Background = clear
-                    ? null
-                    : new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex!));
-        });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.ToggleShading(indices, colorHex));
 
     /// <summary>
     /// Set (or clear, when <paramref name="border"/> is null) the box border on every selected paragraph,
@@ -3459,7 +3234,7 @@ public sealed class DocumentView : RichTextBox
     /// edit/commit cycle (the model-only fields ride on the paragraph Tag — see BuildParagraph).
     /// </summary>
     public void SetParagraphBorder(ParagraphBorder? border) =>
-        FormatSelectedModelParagraphs(f => f with { Border = border });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.SetBorder(indices, border));
 
     /// <summary>
     /// Set (or clear, when <paramref name="colorHex"/> is null/empty) paragraph shading over the selection
@@ -3468,41 +3243,28 @@ public sealed class DocumentView : RichTextBox
     /// applies an explicit colour+pattern rather than toggling.
     /// </summary>
     public void SetParagraphShading(string? colorHex, ShadingPattern pattern) =>
-        FormatSelectedModelParagraphs(f => f with
-        {
-            ShadingColorHex = string.IsNullOrEmpty(colorHex) ? null : colorHex,
-            ShadingPattern = string.IsNullOrEmpty(colorHex) ? ShadingPattern.Clear : pattern,
-        });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.SetShading(indices, colorHex, pattern));
 
     /// <summary>
     /// Toggle "keep with next" (pPr/w:keepNext) over the selected paragraphs. If any spanned paragraph
     /// lacks the flag, all get it; otherwise it is cleared. Reversible via the undo/redo bus.
     /// </summary>
-    public void ToggleKeepWithNext()
-    {
-        var enable = SelectedModelParagraphs().Any(p => !p.Formatting.KeepWithNext);
-        FormatSelectedModelParagraphs(f => f with { KeepWithNext = enable });
-    }
+    public void ToggleKeepWithNext() =>
+        ApplySelectedParagraphFormatting(ParagraphEdits.ToggleKeepWithNext);
 
     /// <summary>
     /// Toggle "keep lines together" (pPr/w:keepLines) over the selected paragraphs. If any spanned
     /// paragraph lacks the flag, all get it; otherwise it is cleared. Reversible via the undo/redo bus.
     /// </summary>
-    public void ToggleKeepLinesTogether()
-    {
-        var enable = SelectedModelParagraphs().Any(p => !p.Formatting.KeepLinesTogether);
-        FormatSelectedModelParagraphs(f => f with { KeepLinesTogether = enable });
-    }
+    public void ToggleKeepLinesTogether() =>
+        ApplySelectedParagraphFormatting(ParagraphEdits.ToggleKeepLinesTogether);
 
     /// <summary>
     /// Toggle widow/orphan control (pPr/w:widowControl) over the selected paragraphs. If any spanned
     /// paragraph lacks the flag, all get it; otherwise it is cleared. Reversible via the undo/redo bus.
     /// </summary>
-    public void ToggleWidowControl()
-    {
-        var enable = SelectedModelParagraphs().Any(p => !p.Formatting.WidowControl);
-        FormatSelectedModelParagraphs(f => f with { WidowControl = enable, WidowControlIsSet = true });
-    }
+    public void ToggleWidowControl() =>
+        ApplySelectedParagraphFormatting(ParagraphEdits.ToggleWidowControl);
 
     /// <summary>
     /// Apply (or toggle off) multilevel/legal outline numbering over the selection. If any spanned
@@ -3522,10 +3284,7 @@ public sealed class DocumentView : RichTextBox
     }
 
     public void ApplyMultiLevelNumberFormats(IReadOnlyList<ListNumberFormat> numberFormats)
-    {
-        _model.MultiLevelList.SetNumberFormats(numberFormats);
-        Render();
-    }
+        => _editingSession.SetMultiLevelNumberFormats(numberFormats);
 
     /// <summary>
     /// Applies a complete Define New Multilevel List result as one undoable formatting edit. Selected
@@ -3540,7 +3299,9 @@ public sealed class DocumentView : RichTextBox
         Focus();
         CommitToModel();
         var indices = SelectedModelParagraphIndices();
-        MultilevelListMutationCoordinator.ApplyDefinition(_model, _commands, indices, definition);
+        if (indices.Count == 0)
+            return;
+        _editingSession.ApplyMultilevelListDefinition(indices, definition);
     }
 
     /// <summary>
@@ -3572,7 +3333,7 @@ public sealed class DocumentView : RichTextBox
     /// on every paragraph spanned by the selection. Routes through the undo/redo bus so it is reversible.
     /// </summary>
     public void SetLineSpacing(double multiplier) =>
-        FormatSelectedModelParagraphs(f => f with { LineSpacing = multiplier });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.SetLineSpacing(indices, multiplier));
 
     /// <summary>
     /// Toggle "Add/Remove Space Before Paragraph" over the selection: if any spanned paragraph has no
@@ -3678,7 +3439,7 @@ public sealed class DocumentView : RichTextBox
     /// Tabs dialog (Home > Paragraph > Tabs…).
     /// </summary>
     public void SetParagraphTabStops(IReadOnlyList<TabStop> tabStops) =>
-        FormatSelectedModelParagraphs(f => f with { TabStops = tabStops });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.SetTabStops(indices, tabStops));
 
     /// <summary>
     /// An approximate "Page X of Y" for the status bar: the page the caret currently sits on, and the
@@ -3724,41 +3485,32 @@ public sealed class DocumentView : RichTextBox
     /// otherwise it remains paragraph-level. Explicit character styles use the same exact-range formatting
     /// path, while a collapsed caret retains pending character formatting for subsequently typed text.
     /// </summary>
-    public string? ApplyNamedStyle(string styleId) =>
-        ApplyNamedStyle(styleId, hasTextSelection: !Selection.IsEmpty);
-
-    private string? ApplyNamedStyle(string styleId, bool hasTextSelection)
+    public string? ApplyNamedStyle(string styleId)
     {
         if (string.IsNullOrWhiteSpace(styleId))
             return null;
 
-        BuiltInStyles.EnsureSeeded(_model, styleId);
-        var plan = NamedStyleApplicationPlanner.Resolve(
-            _model,
+        var selectedRange = SelectedVisibleTextRange();
+        var paragraphTargets = SelectedModelParagraphIndices();
+        var hasTextSelection = !Selection.IsEmpty;
+        var activeFormatting = CaptureSelectionRunFormatting();
+        Focus();
+        CommitToModel();
+        var result = _editingSession.ApplyNamedStyle(
             styleId,
-            hasTextSelection);
-        if (plan is null)
+            CreateNamedStyleApplicationTarget(
+                selectedRange,
+                paragraphTargets,
+                hasTextSelection));
+        if (result is null)
             return null;
 
-        if (plan.Kind == NamedStyleApplicationKind.Paragraph)
+        if (result.RequiresRendererProjection)
         {
-            SetParagraphStyle(plan.EffectiveStyle.Id);
-            return styleId;
+            ApplyRunFormattingToSelection(
+                result.ProjectCharacterFormatting(activeFormatting));
         }
-
-        var styleRun = plan.EffectiveStyle.Run;
-        if (TrySetSelectedRunFormatting(
-                formatting => NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, styleRun) == formatting,
-                formatting => NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, styleRun)))
-        {
-            return styleId;
-        }
-
-        Focus();
-        ApplyRunFormattingToSelection(NamedStyleApplicationPlanner.OverlayCharacterStyle(
-            CaptureSelectionRunFormatting(),
-            styleRun));
-        return styleId;
+        return result.RequestedStyleId;
     }
 
     /// <summary>
@@ -3799,17 +3551,21 @@ public sealed class DocumentView : RichTextBox
 
         if (styleId is { Length: > 0 } && previewSelection is { } selection)
         {
-            BuiltInStyles.EnsureSeeded(_model, styleId);
-            var plan = NamedStyleApplicationPlanner.Resolve(_model, styleId, selection.HasTextSelection);
-            if (plan is { Kind: NamedStyleApplicationKind.Character } && selection.HasTextSelection)
+            var result = _editingSession.ApplyNamedStyle(
+                styleId,
+                CreateNamedStyleApplicationTarget(selection, targets ?? []));
+            if (result is not null)
             {
-                ApplyCharacterStyleToCapturedRange(plan.EffectiveStyle.Run, selection);
-                return;
-            }
-
-            if (RestoreStylePreviewSelection(selection))
-            {
-                ApplyNamedStyle(styleId, selection.HasTextSelection);
+                if (result.RequiresRendererProjection
+                    && RestoreStylePreviewSelection(selection))
+                {
+                    ApplyRunFormattingToSelection(result.ProjectCharacterFormatting(
+                        CaptureSelectionRunFormatting()));
+                }
+                else if (result.Kind == NamedStyleApplicationKind.Character)
+                {
+                    RestoreStylePreviewSelection(selection);
+                }
                 return;
             }
         }
@@ -3830,55 +3586,7 @@ public sealed class DocumentView : RichTextBox
 
     // Apply a paragraph style id to the given model paragraph indices, one reversible command each.
     private void ApplyParagraphStyleToIndices(string? styleId, IReadOnlyList<int> indices)
-    {
-        foreach (var index in indices)
-        {
-            if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph)
-                _commands.Execute(new SetParagraphStyleCommand(index, styleId));
-        }
-    }
-
-    private void ApplyCharacterStyleToCapturedRange(
-        RunFormatting styleRun,
-        (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection) selection)
-    {
-        var ranges = new List<(int BlockIndex, int StartOffset, int EndOffset)>();
-        for (var blockIndex = selection.StartBlock; blockIndex <= selection.EndBlock; blockIndex++)
-        {
-            if (blockIndex < 0
-                || blockIndex >= _model.Blocks.Count
-                || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
-            {
-                continue;
-            }
-
-            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
-            var start = blockIndex == selection.StartBlock ? selection.StartOffset : 0;
-            var end = blockIndex == selection.EndBlock ? selection.EndOffset : textLength;
-            start = Math.Clamp(start, 0, textLength);
-            end = Math.Clamp(end, 0, textLength);
-            if (end > start)
-                ranges.Add((blockIndex, start, end));
-        }
-
-        if (ranges.Count == 0)
-            return;
-
-        if (ranges.Count > 1)
-            _commands.BeginUndoGroup();
-        foreach (var range in ranges)
-        {
-            _commands.Execute(new FormatRunRangeCommand(
-                range.BlockIndex,
-                range.StartOffset,
-                range.EndOffset,
-                formatting => NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, styleRun)));
-        }
-        if (ranges.Count > 1)
-            _commands.CommitUndoGroup("Apply Character Style");
-
-        RestoreStylePreviewSelection(selection);
-    }
+        => _editingSession.SetParagraphStyles(indices, styleId);
 
     /// <summary>
     /// The <see cref="ModelParagraph.StyleId"/> of the paragraph at the caret (the first paragraph in the
@@ -3924,9 +3632,7 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         var targets = SelectedModelParagraphIndices();
-        return StyleCatalogMutationCoordinator.CreateAndApply(
-            _model,
-            _commands,
+        return _editingSession.CreateParagraphStyleAndApply(
             targets,
             name,
             basedOnId,
@@ -3944,9 +3650,7 @@ public sealed class DocumentView : RichTextBox
         string? nextStyleId)
     {
         CommitToModel();
-        return StyleCatalogMutationCoordinator.Modify(
-            _model,
-            _commands,
+        return _editingSession.ModifyParagraphStyle(
             styleId,
             run,
             paragraph,
@@ -3958,7 +3662,7 @@ public sealed class DocumentView : RichTextBox
     public bool DeleteParagraphStyle(string styleId)
     {
         CommitToModel();
-        return StyleCatalogMutationCoordinator.Delete(_model, _commands, styleId);
+        return _editingSession.DeleteParagraphStyle(styleId);
     }
 
     /// <summary>
@@ -3969,7 +3673,7 @@ public sealed class DocumentView : RichTextBox
     /// or the style does not change (e.g. a non-heading paragraph, which has nothing to promote).
     /// </summary>
     public void PromoteHeading(int modelBlockIndex) =>
-        ApplyOutlineMutation(() => OutlineMutationCoordinator.Promote(_commands, _model, modelBlockIndex));
+        ShiftHeadingStyle(modelBlockIndex, OutlineTools.Promote);
 
     /// <summary>
     /// Demote the heading at <paramref name="modelBlockIndex"/> one rank toward the bottom of the outline
@@ -3978,7 +3682,7 @@ public sealed class DocumentView : RichTextBox
     /// is not a paragraph or the style does not change (already at the deepest level).
     /// </summary>
     public void DemoteHeading(int modelBlockIndex) =>
-        ApplyOutlineMutation(() => OutlineMutationCoordinator.Demote(_commands, _model, modelBlockIndex));
+        ShiftHeadingStyle(modelBlockIndex, OutlineTools.Demote);
 
     /// <summary>
     /// Set the paragraph at <paramref name="modelBlockIndex"/> directly to <c>Heading1</c> (Word's
@@ -3987,7 +3691,7 @@ public sealed class DocumentView : RichTextBox
     /// No-op when the index is not a paragraph or it is already Heading 1.
     /// </summary>
     public void PromoteHeadingToHeading1(int modelBlockIndex) =>
-        ApplyOutlineMutation(() => OutlineMutationCoordinator.PromoteToHeading1(_commands, _model, modelBlockIndex));
+        ShiftHeadingStyle(modelBlockIndex, _ => "Heading1");
 
     /// <summary>
     /// Move the heading at <paramref name="modelBlockIndex"/> — together with its whole subtree (every
@@ -3996,26 +3700,26 @@ public sealed class DocumentView : RichTextBox
     /// The reorder is computed by the pure <see cref="OutlineTools.MoveSubtree"/> and applied through the
     /// reversible <see cref="ReorderBlocksCommand"/> on the undo/redo bus, so it is a single undoable step.
     /// Returns the new block index of the moved heading (so the nav pane can re-select it), or the original
-    /// index when nothing moved (already at an outline edge, or not a heading). Before a successful move,
-    /// collapsed-heading view state is dropped so its block indices cannot become stale during re-render.
+    /// index when nothing moved (already at an outline edge, or not a heading). Any collapsed-heading view
+    /// state is dropped first so the indices cannot become stale across the reorder.
     /// </summary>
     public int MoveHeading(int modelBlockIndex, bool moveUp)
     {
         CommitToModel();
 
-        var result = OutlineMutationCoordinator.MoveHeading(
-            _commands,
-            _model,
-            modelBlockIndex,
-            moveUp,
-            _outlineCollapse.Clear);
-        return result.CurrentBlockIndex;
+        // Collapse markers are tracked by model block index; a reorder invalidates them, so expand all
+        // first (purely a view concern — the model is unaffected) before relocating the subtree.
+        if (_outlineCollapse.Count > 0)
+            _outlineCollapse.Clear();
+
+        return _editingSession.MoveHeadingSubtree(modelBlockIndex, moveUp);
     }
 
-    private void ApplyOutlineMutation(Func<bool> mutation)
+    // Apply a pure style-id shift (promote/demote) to a single model paragraph via the undo/redo bus.
+    private void ShiftHeadingStyle(int modelBlockIndex, Func<string?, string?> shift)
     {
         CommitToModel();
-        mutation();
+        _editingSession.ShiftParagraphStyle(modelBlockIndex, shift);
     }
 
     /// <summary>
@@ -4026,8 +3730,10 @@ public sealed class DocumentView : RichTextBox
     /// requested level.
     /// </summary>
     public void SetHeadingLevel(int modelBlockIndex, int level)
-        => ApplyOutlineMutation(() =>
-            OutlineMutationCoordinator.SetHeadingLevel(_commands, _model, modelBlockIndex, level));
+    {
+        var styleId = OutlineViewController.HeadingStyleIdForLevel(level);
+        ShiftHeadingStyle(modelBlockIndex, _ => styleId);
+    }
 
     /// <summary>
     /// Collapse the heading at <paramref name="modelBlockIndex"/>: its body blocks (everything down to
@@ -4075,9 +3781,7 @@ public sealed class DocumentView : RichTextBox
         var index = SelectedModelParagraphIndices().FirstOrDefault(-1);
         if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph)
             return;
-        _commands.Execute(new ReplaceParagraphRunsCommand(
-            index,
-            p => DropCap.ApplyDropCap(p, position, sizePt, lineSpan, distanceFromTextPt)));
+        _editingSession.ApplyDropCap(index, position, sizePt, lineSpan, distanceFromTextPt);
     }
 
     /// <summary>
@@ -4092,7 +3796,7 @@ public sealed class DocumentView : RichTextBox
         var index = SelectedModelParagraphIndices().FirstOrDefault(-1);
         if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph)
             return;
-        _commands.Execute(new ReplaceParagraphRunsCommand(index, DropCap.ClearFormatting));
+        _editingSession.ClearDropCap(index);
     }
 
     /// <summary>
@@ -4114,11 +3818,9 @@ public sealed class DocumentView : RichTextBox
 
         Focus();
         CommitToModel();
-        foreach (var index in SelectedModelParagraphIndices())
-        {
-            if (_model.Blocks[index] is ModelParagraph)
-                _commands.Execute(new FormatParagraphRunsCommand(index, _ => RunFormatting.Default));
-        }
+        _editingSession.FormatParagraphRuns(
+            SelectedModelParagraphIndices(),
+            _ => RunFormatting.Default);
     }
 
     /// <summary>
@@ -4175,10 +3877,22 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
 
         var indices = SelectedModelParagraphIndices();
-        var plan = DocumentSortMutationPlanner.PlanParagraphSort(
-            _model, indices, kind, ascending, caseSensitive, hasHeaderRow);
-        if (plan is not null)
-            _commands.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
+        if (indices.Count == 0)
+            return;
+
+        // The contiguous block span the selection covers (first..last selected index, inclusive).
+        var first = indices[0];
+        var last = indices[indices.Count - 1];
+        if (first < 0 || last >= _model.Blocks.Count)
+            return;
+
+        _editingSession.SortParagraphSpan(
+            first,
+            last,
+            kind,
+            ascending,
+            caseSensitive,
+            hasHeaderRow);
     }
 
     /// <summary>
@@ -4194,11 +3908,8 @@ public sealed class DocumentView : RichTextBox
         Focus();
         CommitToModel();
 
-        var (blockIndex, _, columnIndex) = CaretTableLocation();
-        var plan = DocumentSortMutationPlanner.PlanTableRowSort(
-            _model, blockIndex, columnIndex, kind, ascending, caseSensitive, hasHeaderRow);
-        if (plan is not null)
-            _commands.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
+        if (CaretTableAddress() is { } address)
+            TableEdits.SortRows(address, kind, ascending, caseSensitive, hasHeaderRow);
     }
 
     /// <summary>
@@ -4213,9 +3924,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
 
         var indices = SelectedModelParagraphIndices();
-        var plan = DocumentTableConversionMutationPlanner.PlanTextToTable(_model, indices, delimiter);
-        if (plan is not null)
-            _commands.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
+        if (indices.Count == 0)
+            return;
+
+        _editingSession.ConvertParagraphsToTable(indices, delimiter, showBorders: false);
     }
 
     /// <summary>
@@ -4229,14 +3941,12 @@ public sealed class DocumentView : RichTextBox
         Focus();
         CommitToModel();
 
-        var (blockIndex, _, _) = CaretTableLocation();
-        var plan = DocumentTableConversionMutationPlanner.PlanTableToText(_model, blockIndex, delimiter);
-        if (plan is not null)
-            _commands.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
+        if (CaretTableAddress() is { } address)
+            TableEdits.ConvertToText(address, delimiter);
     }
 
     /// <summary>True while Format Painter is armed (captured formatting waiting to be stamped).</summary>
-    public bool FormatPainterActive => _formatPainter is not null;
+    public bool FormatPainterActive => _editingSession.Interaction.IsFormatPainterArmed;
 
     /// <summary>
     /// Arm the Format Painter: capture the run formatting under the caret/selection and the caret
@@ -4248,24 +3958,15 @@ public sealed class DocumentView : RichTextBox
     public bool ArmFormatPainter(bool locked = false)
     {
         Focus();
-        if (_formatPainter is not null)
-        {
-            _formatPainter = null;
-            _formatPainterLocked = false;
-            return false;
-        }
-
-        _formatPainter = FormatPainterClipboard.Capture(CaptureSelectionRunFormatting(), CaptureCaretParagraphFormatting());
-        _formatPainterLocked = locked;
-        return true;
+        return _editingSession.Interaction.ToggleFormatPainter(
+            CaptureSelectionRunFormatting(),
+            CaptureCaretParagraphFormatting(),
+            locked);
     }
 
     /// <summary>Disarm the Format Painter regardless of lock mode (e.g. on Escape key).</summary>
-    public void EscapeFormatPainter()
-    {
-        _formatPainter = null;
-        _formatPainterLocked = false;
-    }
+    public void EscapeFormatPainter() =>
+        _editingSession.Interaction.CancelFormatPainter();
 
     /// <summary>
     /// If the Format Painter is armed and the current selection is non-empty, stamp the captured run
@@ -4278,69 +3979,15 @@ public sealed class DocumentView : RichTextBox
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
             return false;
 
-        if (_formatPainter is not { } clipboard || Selection.IsEmpty)
+        if (!FormatPainterActive
+            || Selection.IsEmpty
+            || !TryGetCurrentBodyTextRange(out var range))
+        {
             return false;
-
-        var selectedRange = SelectedVisibleTextRange();
-        if (selectedRange is null)
-            return false;
+        }
 
         CommitToModel();
-        var ranges = new List<(int BlockIndex, int StartOffset, int EndOffset)>();
-        for (var i = 0; i < selectedRange.Value.VisibleBlockIndices.Count; i++)
-        {
-            var modelIndex = ModelIndexFromVisible(selectedRange.Value.VisibleBlockIndices[i]);
-            if (modelIndex < 0 || modelIndex >= _model.Blocks.Count
-                || _model.Blocks[modelIndex] is not ModelParagraph paragraph)
-            {
-                continue;
-            }
-
-            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
-            var start = i == 0 ? selectedRange.Value.StartOffset : 0;
-            var end = i == selectedRange.Value.VisibleBlockIndices.Count - 1
-                ? selectedRange.Value.EndOffset
-                : textLength;
-            start = Math.Clamp(start, 0, textLength);
-            end = Math.Clamp(end, 0, textLength);
-            if (end > start)
-                ranges.Add((modelIndex, start, end));
-        }
-
-        if (ranges.Count == 0)
-            return false;
-
-        _commands.BeginUndoGroup();
-        try
-        {
-            foreach (var range in ranges)
-            {
-                _commands.Execute(new FormatRunRangeCommand(
-                    range.BlockIndex,
-                    range.StartOffset,
-                    range.EndOffset,
-                    clipboard.ApplyTo));
-            }
-
-            foreach (var blockIndex in ranges.Select(range => range.BlockIndex).Distinct())
-            {
-                var paragraph = (ModelParagraph)_model.Blocks[blockIndex];
-                _commands.Execute(new SetParagraphFormattingCommand(
-                    blockIndex,
-                    clipboard.ApplyTo(paragraph.Formatting)));
-            }
-
-            _commands.CommitUndoGroup("Format Painter");
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
-
-        if (!_formatPainterLocked)
-            _formatPainter = null;
-        return true;
+        return _editingSession.Interaction.TryApplyFormatPainter(range);
     }
 
     // Read the run formatting of the current selection/caret straight from WPF selection property
@@ -4449,8 +4096,19 @@ public sealed class DocumentView : RichTextBox
     protected override void OnPreviewMouseLeftButtonUp(MouseButtonEventArgs e)
     {
         base.OnPreviewMouseLeftButtonUp(e);
-        if (_formatPainter is not null)
+        if (FormatPainterActive)
             TryApplyFormatPainter();
+    }
+
+    private void ApplySelectedParagraphFormatting(Func<IReadOnlyList<int>, bool> apply)
+    {
+        ArgumentNullException.ThrowIfNull(apply);
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
+            return;
+
+        Focus();
+        CommitToModel();
+        _ = apply(SelectedModelParagraphIndices());
     }
 
     // Commit pending edits, then apply a paragraph-formatting transform to every model paragraph spanned
@@ -4463,11 +4121,7 @@ public sealed class DocumentView : RichTextBox
         Focus();
         CommitToModel();
         var indices = SelectedModelParagraphIndices();
-        foreach (var index in indices)
-        {
-            if (_model.Blocks[index] is ModelParagraph paragraph)
-                _commands.Execute(new SetParagraphFormattingCommand(index, transform(paragraph.Formatting)));
-        }
+        _editingSession.FormatParagraphs(indices, transform);
     }
 
     // The model paragraphs spanned by the current selection/caret (post-commit snapshot, for state checks).
@@ -4481,9 +4135,7 @@ public sealed class DocumentView : RichTextBox
     }
 
     // Apply a run-formatting transform to every run in every model paragraph spanned by the current
-    // selection. Commits to the model first, issues one SetRunFormattingCommand per run (fully undoable),
-    // then re-renders. Used for model-only run properties (CharacterBorder, CharacterShadingHex,
-    // LanguageTag) that have no WPF property slot and therefore cannot be applied via ApplyPropertyValue.
+    // selection. Used for model-only properties that have no WPF pending property slot.
     private void FormatSelectedModelRuns(Func<RunFormatting, RunFormatting> transform)
     {
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
@@ -4491,16 +4143,7 @@ public sealed class DocumentView : RichTextBox
 
         Focus();
         CommitToModel();
-        var indices = SelectedModelParagraphIndices();
-        foreach (var blockIndex in indices)
-        {
-            if (_model.Blocks[blockIndex] is not ModelParagraph paragraph)
-                continue;
-            for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
-                _commands.Execute(new SetRunFormattingCommand(blockIndex, runIndex, transform(paragraph.Runs[runIndex].Formatting)));
-        }
-        // Re-render so the visual chrome (border decoration, shading background, language) updates.
-        LoadModel(_model);
+        _editingSession.FormatParagraphRuns(SelectedModelParagraphIndices(), transform);
     }
 
     internal bool TryToggleSelectedRunFormatting(
@@ -4536,125 +4179,22 @@ public sealed class DocumentView : RichTextBox
         }
 
         CommitToModel();
-        var ranges = new List<(int BlockIndex, int StartOffset, int EndOffset)>();
-        for (var i = 0; i < selectedRange.Value.VisibleBlockIndices.Count; i++)
-        {
-            var modelIndex = ModelIndexFromVisible(selectedRange.Value.VisibleBlockIndices[i]);
-            if (modelIndex < 0 || modelIndex >= _model.Blocks.Count
-                || _model.Blocks[modelIndex] is not ModelParagraph paragraph)
-            {
-                continue;
-            }
-
-            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
-            var start = i == 0 ? selectedRange.Value.StartOffset : 0;
-            var end = i == selectedRange.Value.VisibleBlockIndices.Count - 1
-                ? selectedRange.Value.EndOffset
-                : textLength;
-            start = Math.Clamp(start, 0, textLength);
-            end = Math.Clamp(end, 0, textLength);
-            if (end > start)
-                ranges.Add((modelIndex, start, end));
-        }
+        var ranges = CreateBodyTextRanges(selectedRange);
 
         if (ranges.Count == 0)
             return false;
 
-        var allSet = ranges.All(range => RunRangeAllMatches(
-            (ModelParagraph)_model.Blocks[range.BlockIndex],
-            range.StartOffset,
-            range.EndOffset,
-            isSet));
-        if (!toggle && allSet)
-            return true;
-        var target = toggle ? !allSet : true;
-
-        if (ranges.Count > 1)
-            _commands.BeginUndoGroup();
-        foreach (var range in ranges)
-        {
-            _commands.Execute(new FormatRunRangeCommand(
-                range.BlockIndex,
-                range.StartOffset,
-                range.EndOffset,
-                formatting => set(formatting, target)));
-        }
-        if (ranges.Count > 1)
-            _commands.CommitUndoGroup("Character Formatting");
-
-        return true;
-    }
-
-    private static bool RunRangeAllMatches(
-        ModelParagraph paragraph,
-        int startOffset,
-        int endOffset,
-        Func<RunFormatting, bool> predicate)
-    {
-        var position = 0;
-        var sawText = false;
-        foreach (var run in paragraph.Runs)
-        {
-            var runStart = position;
-            var runEnd = position + run.Text.Length;
-            position = runEnd;
-            if (runEnd <= startOffset || runStart >= endOffset || run.Text.Length == 0)
-                continue;
-            sawText = true;
-            if (!predicate(run.Formatting))
-                return false;
-        }
-        return sawText;
-    }
-
-    private sealed class FormatRunRangeCommand(
-        int blockIndex,
-        int startOffset,
-        int endOffset,
-        Func<RunFormatting, RunFormatting> transform) : IDocumentCommand
-    {
-        private List<ModelRun>? _previous;
-        private List<ModelRun>? _replacement;
-
-        public string Label => "Character Formatting";
-        public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.BodyFormatting;
-
-        public void Apply(IDocumentCommandContext context)
-        {
-            var paragraph = (ModelParagraph)context.Document.Blocks[blockIndex];
-            if (_replacement is not null)
-            {
-                paragraph.Runs.Clear();
-                paragraph.Runs.AddRange(_replacement);
-                return;
-            }
-
-            _previous = [.. paragraph.Runs];
-            RevisionEditPlanner.ApplyFormattingRange(
-                paragraph,
-                startOffset,
-                endOffset,
-                transform,
-                context.Document,
-                context.RevisionAuthor,
-                CurrentRevisionDateXml());
-            _replacement = [.. paragraph.Runs];
-        }
-
-        public void Revert(IDocumentCommandContext context)
-        {
-            if (_previous is null)
-                return;
-            var paragraph = (ModelParagraph)context.Document.Blocks[blockIndex];
-            paragraph.Runs.Clear();
-            paragraph.Runs.AddRange(_previous);
-        }
+        return toggle
+            ? _editingSession.TryToggleRunFormatting(ranges, isSet, set)
+            : _editingSession.TrySetRunFormatting(
+                ranges,
+                isSet,
+                formatting => set(formatting, true));
     }
 
     /// <summary>
-    /// Set (or clear when <paramref name="border"/> is null) the character border on the exact selected text.
-    /// A collapsed caret retains the historical selected-paragraph behavior. Routes through the undo/redo bus
-    /// and re-renders.
+    /// Set (or clear when <paramref name="border"/> is null) the character border on every run in each
+    /// selected paragraph. Routes through the shared editing session and re-renders.
     /// </summary>
     public void SetCharacterBorder(ParagraphBorder? border)
     {
@@ -4669,9 +4209,8 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Set (or clear when <paramref name="colorHex"/> is null/empty) the character shading on the exact selected
-    /// text. A collapsed caret retains the historical selected-paragraph behavior. Routes through the undo/redo
-    /// bus and re-renders.
+    /// Set (or clear when <paramref name="colorHex"/> is null/empty) the character shading on every run in each
+    /// selected paragraph. Routes through the shared editing session and re-renders.
     /// </summary>
     public void SetCharacterShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear)
     {
@@ -4829,25 +4368,21 @@ public sealed class DocumentView : RichTextBox
         double spaceBeforePt, double spaceAfterPt, double lineSpacing,
         bool keepWithNext, bool keepLinesTogether, bool widowControl,
         bool pageBreakBefore, bool suppressAutoHyphens, bool suppressLineNumbers, bool contextualSpacing) =>
-        FormatSelectedModelParagraphs(f => f with
-        {
-            IndentLeftPt       = leftPt,
-            IndentRightPt      = rightPt,
-            FirstLineIndentPt  = firstLinePt,
-            SpaceBeforePt      = spaceBeforePt,
-            SpaceAfterPt       = spaceAfterPt,
-            LineSpacing        = lineSpacing,
-            KeepWithNext       = keepWithNext,
-            KeepLinesTogether  = keepLinesTogether,
-            WidowControl       = widowControl,
-            WidowControlIsSet  = true,
-            PageBreakBefore    = pageBreakBefore,
-            SuppressAutoHyphens= suppressAutoHyphens,
-            SuppressAutoHyphensIsSet = true,
-            SuppressLineNumbers = suppressLineNumbers,
-            SuppressLineNumbersIsSet = true,
-            ContextualSpacing  = contextualSpacing,
-        });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.ApplyDialogFormatting(
+            indices,
+            leftPt,
+            rightPt,
+            firstLinePt,
+            spaceBeforePt,
+            spaceAfterPt,
+            lineSpacing,
+            keepWithNext,
+            keepLinesTogether,
+            widowControl,
+            pageBreakBefore,
+            suppressAutoHyphens,
+            suppressLineNumbers,
+            contextualSpacing));
 
     // Map the WPF paragraphs spanned by the selection to their model block indices. The model is built
     // by flattening lists into their item paragraphs in document order (see CommitToModel), so a WPF
@@ -4910,6 +4445,72 @@ public sealed class DocumentView : RichTextBox
             : (indices, endOffset, startOffset);
     }
 
+    private NamedStyleApplicationTarget CreateNamedStyleApplicationTarget(
+        (IReadOnlyList<int> VisibleBlockIndices, int StartOffset, int EndOffset)? selection,
+        IReadOnlyList<int> paragraphIndices,
+        bool hasTextSelection) =>
+        new(
+            CreateBodyTextRanges(selection),
+            paragraphIndices,
+            hasTextSelection,
+            AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting));
+
+    private IReadOnlyList<DocumentTextRange> CreateBodyTextRanges(
+        (IReadOnlyList<int> VisibleBlockIndices, int StartOffset, int EndOffset)? selection)
+    {
+        var ranges = new List<DocumentTextRange>();
+        if (selection is { } selected)
+        {
+            for (var index = 0; index < selected.VisibleBlockIndices.Count; index++)
+            {
+                var modelIndex = ModelIndexFromVisible(selected.VisibleBlockIndices[index]);
+                var startOffset = index == 0 ? selected.StartOffset : 0;
+                var endOffset = index == selected.VisibleBlockIndices.Count - 1
+                    ? selected.EndOffset
+                    : int.MaxValue;
+                if (DocumentTextRangeProjection.TryProject(
+                        _model,
+                        modelIndex,
+                        startOffset,
+                        endOffset,
+                        out var range))
+                {
+                    ranges.Add(range);
+                }
+            }
+        }
+        return ranges;
+    }
+
+    private NamedStyleApplicationTarget CreateNamedStyleApplicationTarget(
+        (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection) selection,
+        IReadOnlyList<int> paragraphIndices)
+    {
+        var ranges = new List<DocumentTextRange>();
+        for (var blockIndex = selection.StartBlock;
+             blockIndex <= selection.EndBlock && blockIndex < _model.Blocks.Count;
+             blockIndex++)
+        {
+            var startOffset = blockIndex == selection.StartBlock ? selection.StartOffset : 0;
+            var endOffset = blockIndex == selection.EndBlock ? selection.EndOffset : int.MaxValue;
+            if (DocumentTextRangeProjection.TryProject(
+                    _model,
+                    blockIndex,
+                    startOffset,
+                    endOffset,
+                    out var range))
+            {
+                ranges.Add(range);
+            }
+        }
+
+        return new NamedStyleApplicationTarget(
+            ranges,
+            paragraphIndices,
+            selection.HasTextSelection,
+            AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting));
+    }
+
     private (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection)?
         CaptureStylePreviewSelection()
     {
@@ -4962,39 +4563,25 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
-    // Apply a mutation to the WPF paragraphs spanned by the selection (or the caret's paragraph),
-    // then commit + re-render so the change lands in the model and round-trips on save.
-    private void MutateSelectedParagraphs(Action<IReadOnlyList<WpfParagraph>> mutate)
+    // Commit pending edits and project the native caret into the shared table coordinator.
+    private void MutateCaretTable(
+        Func<DocumentTableCellAddress, DocumentTableEditResult> mutate)
     {
-        Focus();
-        var start = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
-        var end = Selection.End.Paragraph ?? start;
-        if (start is null)
-            return;
-
-        var paragraphs = new List<WpfParagraph>();
-        for (WpfParagraph? p = start; p is not null; p = p.NextBlock as WpfParagraph)
-        {
-            paragraphs.Add(p);
-            if (ReferenceEquals(p, end))
-                break;
-        }
-        if (paragraphs.Count == 0)
-            return;
-
-        mutate(paragraphs);
         CommitToModel();
-        Render();
+        if (CaretTableAddress() is { } address)
+            mutate(address);
     }
 
-    // Commit pending edits, locate the caret's table + cell, build a command for it, run it through the bus.
-    private void MutateCaretTable(Func<int, int, int, IDocumentCommand> build)
+    private DocumentTableCellAddress? CaretTableAddress() =>
+        TableAddressOf(CaretPosition?.Parent as TextElement);
+
+    private DocumentTableCellAddress? TableAddressOf(TextElement? element)
     {
-        CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0)
-            return;
-        _commands.Execute(build(blockIndex, rowIndex, columnIndex));
+        var location = TableLocationOf(element);
+        return TableEdits.AddressFromCellIndex(
+            location.BlockIndex,
+            location.RowIndex,
+            location.ColumnIndex);
     }
 
     // Locate the model block/row/column of the table containing the caret; blockIndex is -1 if not in a table.
@@ -5087,41 +4674,6 @@ public sealed class DocumentView : RichTextBox
         var rowIndex = ModelRowIndexOfRenderedRow(group, wpfRow);
         var columnIndex = new List<WpfTableCell>(wpfRow.Cells).IndexOf(cell);
         return (blockIndex, rowIndex, columnIndex);
-    }
-
-    // H8: TableLocationOf/CaretTableLocation return a per-row CELL-LIST index (the cell's position
-    // within its own row's Cells list), not a table-wide GRID-COLUMN index. Most cell-scoped commands
-    // (shading, borders, alignment, text direction, split, table properties, table eraser) address a
-    // single row and use the cell-list index directly, so no conversion is needed for them. Commands
-    // that must line up a column position across MULTIPLE rows (MergeCellsVerticalCommand,
-    // InsertTableColumnCommand, DeleteTableColumnCommand) need the true grid column, which diverges
-    // from the cell-list index once a preceding cell in that row has GridSpan > 1 (a horizontal merge)
-    // — convert via this helper before calling into those APIs. Mirrors the internal
-    // FreeW.Core.Model.TableColumnHelpers.CellIndexToGridColumn (not accessible cross-assembly) and the
-    // Avalonia twin's local GridColumnToCellIndex replica.
-    private static int CellIndexToGridColumn(ModelTableRow row, int cellIndex)
-    {
-        if (cellIndex < 0 || cellIndex >= row.Cells.Count)
-            return -1;
-        var gridPos = 0;
-        for (var i = 0; i < cellIndex; i++)
-            gridPos += Math.Max(1, row.Cells[i].GridSpan);
-        return gridPos;
-    }
-
-    // Resolves the true GRID-COLUMN for a caret/selection cell located via TableLocationOf, given the
-    // per-row cell-list index it returns. Falls back to the raw cell-list index if the table/row lookup
-    // fails, matching the pre-fix behavior rather than silently no-op'ing on an unexpected shape.
-    private int GridColumnAt(int blockIndex, int rowIndex, int cellIndex)
-    {
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable table
-            || rowIndex < 0 || rowIndex >= table.Rows.Count)
-        {
-            return cellIndex;
-        }
-        var gridColumn = CellIndexToGridColumn(table.Rows[rowIndex], cellIndex);
-        return gridColumn >= 0 ? gridColumn : cellIndex;
     }
 
     private static int ModelRowIndexOfRenderedRow(TableRowGroup group, WpfTableRow renderedRow)
@@ -5236,7 +4788,7 @@ public sealed class DocumentView : RichTextBox
     public int ReadAloudStartSegmentIndex()
     {
         CommitToModel();
-        return ReadAloudController.ResolveStartSegmentIndex(_model, CaretBlockIndex());
+        return ReadAloudController.MapCaretBlockToSegmentIndex(_model, CaretBlockIndex());
     }
 
     private void Render()
@@ -5277,9 +4829,9 @@ public sealed class DocumentView : RichTextBox
         // non-list paragraph interrupting a numbered list does NOT restart it — Word continues numbering
         // across intervening body text/preserved-numbering chrome unless a later Number/MultiLevel
         // paragraph carries an explicit w:lvlOverride/startOverride restart (ListStartOverride). Mirrors
-        // the Avalonia twin's levelCounters/multiLevelMarkers fix (see DocumentView.cs Render/paged path).
-        var multiLevelMarkers = new MultiLevelListMarkerState(_model.MultiLevelList.NumberFormats);
-        var numberListCounter = 0;
+        // the Avalonia renderer's use of the same portable sequence planner.
+        var listMarkerSequence = new DocumentListMarkerSequencePlanner(
+            _model.MultiLevelList.NumberFormats);
         var i = 0;
         while (i < blocks.Count)
         {
@@ -5308,7 +4860,7 @@ public sealed class DocumentView : RichTextBox
                 // needs to become the first item of a NEW WpfList so its explicit ListStartOverride can be
                 // applied via List.StartIndex (a single WpfList only supports one auto-numbering start).
                 // MultiLevel doesn't need this split: its markers are computed text (below), so a restart
-                // override mid-run is handled by MultiLevelListMarkerState.Advance without a new List.
+                // override mid-run is handled by the shared sequence planner without a new List.
                 var listParagraphs = new List<(ModelParagraph Paragraph, int BlockIndex)>();
                 while (i < blocks.Count
                     && !hidden.Contains(i)
@@ -5327,23 +4879,17 @@ public sealed class DocumentView : RichTextBox
                 // instead (WPF cannot accumulate "1.1.1"); other kinds use the built-in WPF marker. The
                 // marker state persists across the whole render pass (declared above the outer loop) and
                 // each item's ListStartOverride is threaded through so an explicit restart is honored.
+                var markerPlans = listParagraphs
+                    .Select(item => listMarkerSequence.Advance(item.Paragraph))
+                    .ToList();
                 var markers = kind == ListKind.MultiLevel
-                    ? listParagraphs
-                        .Select(p => multiLevelMarkers.Advance(
-                            p.Paragraph.Formatting.ListLevel,
-                            p.Paragraph.Formatting.ListStartOverride))
-                        .ToList()
+                    ? markerPlans.Select(plan => plan.MarkerText ?? string.Empty).ToList()
                     : null;
                 // R132 remediation: honor an explicit restart override for Number-kind lists (mirrors the
                 // MultiLevel branch above); otherwise continue from the running count left by the last
                 // Number list, so an interrupting non-list paragraph does not restart numbering at 1.
                 if (kind == ListKind.Number)
-                {
-                    var overrideStart = listParagraphs[0].Paragraph.Formatting.ListStartOverride;
-                    list.StartIndex = overrideStart.HasValue
-                        ? Math.Max(1, overrideStart.Value)
-                        : numberListCounter + 1;
-                }
+                    list.StartIndex = markerPlans[0].NumberValue ?? 1;
                 if (kind == ListKind.MultiLevel
                     && listParagraphs.Count == 1
                     && string.Equals(listParagraphs[0].Paragraph.StyleId, "Heading1", StringComparison.OrdinalIgnoreCase))
@@ -5414,8 +4960,6 @@ public sealed class DocumentView : RichTextBox
                     previousListParagraph = listParagraphs[p].Paragraph;
                     previousListWpfParagraph = itemParagraphs[^1];
                 }
-                if (kind == ListKind.Number)
-                    numberListCounter = list.StartIndex + listParagraphs.Count - 1;
                 flow.Blocks.Add(list);
                 previousBodyParagraph = null;
                 previousBodyWpfParagraph = null;
@@ -5600,23 +5144,23 @@ public sealed class DocumentView : RichTextBox
     public bool IsMarkedAsFinal => _model.MarkedAsFinal;
 
     public RestrictEditingEnforcementPolicy RestrictEditingPolicy =>
-        RestrictEditingEnforcementPolicy.From(_model.Protection, _model.MarkedAsFinal);
+        _editingSession.Review.RestrictEditingPolicy;
 
     public RestrictEditingEnforcementDecision GetRestrictEditingDecision(RestrictEditingOperationKind operation) =>
-        RestrictEditingPolicy.DecisionFor(operation);
+        _editingSession.Review.DecisionFor(operation);
 
     public RestrictEditingEnforcementDecision GetRestrictEditingHistoryDecision(
         RestrictEditingOperationKind historyOperation,
         DocumentCommandMutationKind? mutationKind) =>
-        RestrictEditingPolicy.DecisionForHistory(historyOperation, mutationKind);
+        _editingSession.Review.DecisionForHistory(historyOperation, mutationKind);
 
     private bool AllowsRestrictEditingOperation(RestrictEditingOperationKind operation) =>
-        RestrictEditingPolicy.Allows(operation);
+        _editingSession.Review.Allows(operation);
 
     private bool AllowsRestrictEditingHistoryOperation(
         RestrictEditingOperationKind operation,
         DocumentCommandMutationKind? mutationKind) =>
-        RestrictEditingPolicy.AllowsHistory(operation, mutationKind);
+        _editingSession.Review.AllowsHistory(operation, mutationKind);
 
     private bool AllowsCurrentUndoHistory() =>
         AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryUndo, mutationKind: null)
@@ -5980,12 +5524,6 @@ public sealed class DocumentView : RichTextBox
         Loaded -= OnLoadedSyncPageBorder;
         SyncPageBorderAdorner();
     }
-
-    // Test seam (FreeW.App.Host.Tests has InternalsVisibleTo). Returns the cached pagination result
-    // from the live page-break adorner, or null when the adorner is not active (non-Print-Layout mode)
-    // or has not yet computed a result. Tests can force a computation by calling PaginationEngine.Compute
-    // directly; this seam is for verifying that the adorner's cache matches the engine's output.
-    internal DocumentPagination? GetPageBreakAdornerPagination() => _pageBreakAdorner?._pagination;
 
     private void SyncShapeEditPointsAdorner()
     {
@@ -6546,10 +6084,9 @@ public sealed class DocumentView : RichTextBox
         if (image.HasBorder)
         {
             var borderWidthPx = Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint;
-            var colorHex = image.BorderColorHex!.TrimStart('#');
-            System.Windows.Media.Color borderColor;
-            try { borderColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#" + colorHex); }
-            catch { borderColor = System.Windows.Media.Colors.Black; }
+            var borderColor = WpfRgbColorAdapter.ParseDrawingMlOrDefault(
+                image.BorderColorHex,
+                System.Windows.Media.Colors.Black);
             root = new System.Windows.Controls.Border
             {
                 BorderBrush = new System.Windows.Media.SolidColorBrush(borderColor),
@@ -6696,67 +6233,7 @@ public sealed class DocumentView : RichTextBox
         FrameworkElement element;
         if (plan.CustomGeometry is { } cg && cg.Segments.Count > 0)
         {
-            var geo = new System.Windows.Media.StreamGeometry();
-            using (var ctx = geo.Open())
-            {
-                var inFigure = false;
-                var closeFigure = false;
-                System.Windows.Point startPt = default;
-                var pathSegments = new List<CustomSegment>();
-
-                void FlushFigure()
-                {
-                    if (!inFigure) return;
-                    ctx.BeginFigure(startPt, isFilled: true, isClosed: closeFigure);
-                    foreach (var segment in pathSegments)
-                    {
-                        if (segment.Kind == CustomSegmentKind.LineTo && segment.Point is not null)
-                        {
-                            ctx.LineTo(new System.Windows.Point(
-                                segment.Point.X / (double)cg.Width * widthPx,
-                                segment.Point.Y / (double)cg.Height * heightPx),
-                                isStroked: true,
-                                isSmoothJoin: false);
-                        }
-                        else if (segment.Kind == CustomSegmentKind.CubicBezierTo
-                            && segment.Point is not null && segment.ControlPoint1 is not null && segment.ControlPoint2 is not null)
-                        {
-                            ctx.BezierTo(
-                                new System.Windows.Point(segment.ControlPoint1.X / (double)cg.Width * widthPx, segment.ControlPoint1.Y / (double)cg.Height * heightPx),
-                                new System.Windows.Point(segment.ControlPoint2.X / (double)cg.Width * widthPx, segment.ControlPoint2.Y / (double)cg.Height * heightPx),
-                                new System.Windows.Point(segment.Point.X / (double)cg.Width * widthPx, segment.Point.Y / (double)cg.Height * heightPx),
-                                isStroked: true,
-                                isSmoothJoin: false);
-                        }
-                    }
-                    pathSegments.Clear();
-                    inFigure = false;
-                    closeFigure = false;
-                }
-
-                foreach (var segment in cg.Segments)
-                {
-                    if (segment.Kind == CustomSegmentKind.MoveTo && segment.Point is not null)
-                    {
-                        FlushFigure();
-                        startPt = new System.Windows.Point(
-                            segment.Point.X / (double)cg.Width * widthPx,
-                            segment.Point.Y / (double)cg.Height * heightPx);
-                        inFigure = true;
-                    }
-                    else if ((segment.Kind == CustomSegmentKind.LineTo || segment.Kind == CustomSegmentKind.CubicBezierTo) && inFigure)
-                    {
-                        pathSegments.Add(segment);
-                    }
-                    else if (segment.Kind == CustomSegmentKind.Close && inFigure)
-                    {
-                        closeFigure = true;
-                    }
-                }
-
-                FlushFigure();
-            }
-            geo.Freeze();
+            var geo = CustomShapePathWpfAdapter.Build(cg, 0, 0, widthPx, heightPx);
             element = new System.Windows.Shapes.Path
             {
                 Width = widthPx,
@@ -7142,21 +6619,11 @@ public sealed class DocumentView : RichTextBox
 
     private static System.Windows.Media.Brush BuildDrawingWordArtTextBrush(DrawingObjectWordArtPlan wordArt)
     {
-        if (wordArt.Style == WordArtStyle.GlowGold)
-            return new SolidColorBrush(Color.FromRgb(0xD8, 0xBA, 0x66));
-
-        var fill = wordArt.Fill;
-        var backgroundHex = fill.ColorHex
-            ?? fill.GradientStops.FirstOrDefault()?.ColorHex
-            ?? fill.PatternBackgroundColorHex
-            ?? fill.PatternForegroundColorHex;
-        if (!TryParseColor(backgroundHex, out var background))
+        var foregroundHex = WordArtForegroundPolicy.ResolveColorHex(wordArt.Style, wordArt.Fill);
+        if (!TryParseColor(foregroundHex, out var foreground))
             return System.Windows.Media.Brushes.White;
 
-        var luminance = (0.2126 * background.R + 0.7152 * background.G + 0.0722 * background.B) / 255.0;
-        return new SolidColorBrush(luminance < 0.42
-            ? System.Windows.Media.Colors.White
-            : System.Windows.Media.Colors.Black);
+        return new SolidColorBrush(foreground);
     }
 
     private static void ArrangeWarpedWordArtGlyphs(
@@ -7536,12 +7003,6 @@ public sealed class DocumentView : RichTextBox
         return root;
     }
 
-    private static double EstimateWordArtWidth(WordArt wordArt) =>
-        Math.Max(1, wordArt.Text.Length) * wordArt.FontSizePt * 0.62;
-
-    private static double EstimateWordArtHeight(WordArt wordArt) =>
-        wordArt.FontSizePt * 1.6;
-
     /// <summary>
     /// Builds a group visual from the shared drawing-object visual plan. The plan keeps child rects in
     /// page space for Avalonia and child offsets in group-local space for this nested WPF canvas.
@@ -7810,97 +7271,6 @@ public sealed class DocumentView : RichTextBox
         RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, this));
     }
 
-    /// <summary>Move the selected WPF group child in group-local points through the shared command.</summary>
-    internal bool MoveSelectedFloatingGroupChild(double dxPt, double dyPt)
-    {
-        if (_selectedFloatingGroupChild is not { } selected)
-            return false;
-
-        CommitToModel();
-        var (blockIndex, runIndex) = FindFloatingObjectLocation(selected.RootGroup);
-        if (blockIndex < 0)
-            return false;
-
-        if (!DrawingGroupChildPathResolver.TryGetChild(
-                selected.RootGroup,
-                selected.ChildPath,
-                out var owningGroup,
-                out _))
-            return false;
-
-        SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(owningGroup, selected.ChildIndex);
-        var offset = owningGroup.ChildOffsets[selected.ChildIndex];
-        _commands.Execute(new SetDrawingGroupChildPositionCommand(
-            blockIndex,
-            runIndex,
-            selected.ChildPath,
-            offset.X + dxPt,
-            offset.Y + dyPt));
-        SyncFloatingObjectsCanvas();
-        return true;
-    }
-
-    /// <summary>Resize the selected WPF group child, optionally moving its local top-left anchor.</summary>
-    internal bool ResizeSelectedFloatingGroupChild(
-        double widthPt,
-        double heightPt,
-        double dxPt = 0,
-        double dyPt = 0)
-    {
-        if (_selectedFloatingGroupChild is not { } selected || widthPt <= 0 || heightPt <= 0)
-            return false;
-
-        CommitToModel();
-        var (blockIndex, runIndex) = FindFloatingObjectLocation(selected.RootGroup);
-        if (blockIndex < 0)
-            return false;
-
-        if (!DrawingGroupChildPathResolver.TryGetChild(
-                selected.RootGroup,
-                selected.ChildPath,
-                out var owningGroup,
-                out _))
-            return false;
-
-        var commands = new List<IDocumentCommand>
-        {
-            new SetDrawingGroupChildSizeCommand(
-                blockIndex,
-                runIndex,
-                selected.ChildPath,
-                widthPt,
-                heightPt)
-        };
-        if (Math.Abs(dxPt) > 0.01 || Math.Abs(dyPt) > 0.01)
-        {
-            SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(owningGroup, selected.ChildIndex);
-            var offset = owningGroup.ChildOffsets[selected.ChildIndex];
-            commands.Add(new SetDrawingGroupChildPositionCommand(
-                blockIndex,
-                runIndex,
-                selected.ChildPath,
-                offset.X + dxPt,
-                offset.Y + dyPt));
-        }
-
-        _commands.Execute(new CompositeDocumentCommand("Resize Group Child", commands));
-        SyncFloatingObjectsCanvas();
-        return true;
-    }
-
-    /// <summary>Returns the current multi-select set as a read-only snapshot.</summary>
-    internal IReadOnlyList<object> SelectedFloatingObjects => _selectedFloatingObjects.AsReadOnly();
-
-    /// <summary>Returns the selected child within a group, when child editing is active.</summary>
-    internal (FreeW.Core.Model.DrawingGroup Group, int ChildIndex)? SelectedFloatingGroupChild =>
-        _selectedFloatingGroupChild is { } selected
-            ? (selected.RootGroup, selected.ChildIndex)
-            : null;
-
-    /// <summary>Returns the complete root-relative path for the selected group child.</summary>
-    internal IReadOnlyList<int>? SelectedFloatingGroupChildPath =>
-        _selectedFloatingGroupChild?.ChildPath;
-
     /// <summary>Returns true when two or more floating objects are currently multi-selected.</summary>
     internal bool HasMultipleFloatingObjectsSelected => _selectedFloatingObjects.Count >= 2;
 
@@ -7915,192 +7285,42 @@ public sealed class DocumentView : RichTextBox
     public bool RotateSelectedFloating(double angleDeg)
     {
         CommitToModel();
-
-        if (SelectedFloatingGroupChildTransform() is { } child)
-        {
-            _commands.Execute(new SetDrawingGroupChildRotationCommand(
-                child.BlockIndex,
-                child.RunIndex,
-                child.ChildPath,
-                AddRotation(child.Angle, angleDeg),
-                child.FlipH,
-                child.FlipV));
-            Render();
-            return true;
-        }
-
-        if (SelectedImageLocation() is { Image: { } image } imageLocation)
-        {
-            _commands.Execute(new SetImageRotationCommand(
-                imageLocation.BlockIndex,
-                imageLocation.RunIndex,
-                AddRotation(image.RotationAngle, angleDeg),
-                image.FlipH,
-                image.FlipV));
-            Render();
-            return true;
-        }
-
-        if (SelectedShapeLocation() is { Shape: { } shape } shapeLocation)
-        {
-            _commands.Execute(new SetShapeRotationCommand(
-                shapeLocation.BlockIndex,
-                shapeLocation.RunIndex,
-                AddRotation(shape.RotationAngle, angleDeg),
-                shape.FlipH,
-                shape.FlipV));
-            Render();
-            return true;
-        }
-
-        if (SelectedFloatingObjectTransform() is not { } selected)
-            return false;
-
-        return TrySetSelectedFloatingRotation(
-            AddRotation(selected.Angle, angleDeg),
-            flipH: null,
-            flipV: null);
+        return SelectedFloatingObjectTarget() is { } target
+            && RenderObjectEdit(ObjectEdits.RotateBy(target, angleDeg));
     }
 
     /// <summary>Flip the selected floating object through the same shared transform route as rotation.</summary>
     public bool FlipSelectedFloating(bool horizontal)
     {
         CommitToModel();
-
-        if (SelectedFloatingGroupChildTransform() is { } child)
-        {
-            _commands.Execute(new SetDrawingGroupChildRotationCommand(
-                child.BlockIndex,
-                child.RunIndex,
-                child.ChildPath,
-                child.Angle,
-                horizontal ? !child.FlipH : child.FlipH,
-                horizontal ? child.FlipV : !child.FlipV));
-            Render();
-            return true;
-        }
-
-        if (SelectedImageLocation() is { Image: { } image } imageLocation)
-        {
-            _commands.Execute(new SetImageRotationCommand(
-                imageLocation.BlockIndex,
-                imageLocation.RunIndex,
-                image.RotationAngle,
-                horizontal ? !image.FlipH : image.FlipH,
-                horizontal ? image.FlipV : !image.FlipV));
-            Render();
-            return true;
-        }
-
-        if (SelectedShapeLocation() is { Shape: { } shape } shapeLocation)
-        {
-            _commands.Execute(new SetShapeRotationCommand(
-                shapeLocation.BlockIndex,
-                shapeLocation.RunIndex,
-                shape.RotationAngle,
-                horizontal ? !shape.FlipH : shape.FlipH,
-                horizontal ? shape.FlipV : !shape.FlipV));
-            Render();
-            return true;
-        }
-
-        if (SelectedFloatingObjectTransform() is { } selected)
-        {
-            return TrySetSelectedFloatingRotation(
-                selected.Angle,
-                horizontal ? !selected.FlipH : selected.FlipH,
-                horizontal ? selected.FlipV : !selected.FlipV);
-        }
-
-        return false;
+        return SelectedFloatingObjectTarget() is { } target
+            && RenderObjectEdit(ObjectEdits.Flip(target, horizontal));
     }
 
-    private bool TrySetSelectedFloatingRotation(double angleDeg, bool? flipH, bool? flipV)
+    private DocumentObjectTarget? SelectedFloatingObjectTarget()
     {
-        if (SelectedFloatingObjectTransform() is not { } selected)
-            return false;
+        if (_selectedFloatingGroupChild is { } child)
+        {
+            var groupLocation = FindFloatingObjectLocation(child.RootGroup);
+            if (groupLocation.BlockIndex >= 0)
+                return ObjectTarget(
+                    groupLocation.BlockIndex,
+                    groupLocation.RunIndex,
+                    child.ChildPath);
+        }
 
-        _commands.Execute(new SetFloatingRotationCommand(
-            selected.BlockIndex,
-            selected.RunIndex,
-            angleDeg,
-            flipH ?? selected.FlipH,
-            flipV ?? selected.FlipV));
-        Render();
-        return true;
-    }
+        var imageLocation = SelectedImageLocation();
+        if (imageLocation.Image is not null)
+            return ObjectTarget(imageLocation.BlockIndex, imageLocation.RunIndex);
 
-    private (int BlockIndex, int RunIndex, IReadOnlyList<int> ChildPath,
-        double Angle, bool FlipH, bool FlipV)? SelectedFloatingGroupChildTransform()
-    {
-        if (_selectedFloatingGroupChild is not { } selected)
-            return null;
-
-        var location = FindFloatingObjectLocation(selected.RootGroup);
-        if (location.BlockIndex < 0
-            || !DrawingGroupChildPathResolver.TryGetChild(
-                selected.RootGroup,
-                selected.ChildPath,
-                out _,
-                out var child))
-            return null;
-
-        var transform = GetDrawingGroupChildTransform(child);
-        return (
-            location.BlockIndex,
-            location.RunIndex,
-            selected.ChildPath,
-            transform.Angle,
-            transform.FlipH,
-            transform.FlipV);
-    }
-
-    private (int BlockIndex, int RunIndex, double Angle, bool FlipH, bool FlipV)? SelectedFloatingObjectTransform()
-    {
         if (_selectedFloatingObject is null)
             return null;
 
         var location = FindFloatingObjectLocation(_selectedFloatingObject);
-        if (location.BlockIndex < 0
-            || location.BlockIndex >= _model.Blocks.Count
-            || _model.Blocks[location.BlockIndex] is not ModelParagraph paragraph
-            || location.RunIndex < 0
-            || location.RunIndex >= paragraph.Runs.Count)
-            return null;
-
-        var run = paragraph.Runs[location.RunIndex];
-        var transform = run.Image is { } image && ReferenceEquals(image, _selectedFloatingObject)
-            ? (image.RotationAngle, image.FlipH, image.FlipV)
-            : run.Shape is { } shape && ReferenceEquals(shape, _selectedFloatingObject)
-                ? (shape.RotationAngle, shape.FlipH, shape.FlipV)
-                : run.Chart is { } chart && ReferenceEquals(chart, _selectedFloatingObject)
-                    ? (chart.RotationAngle, chart.FlipH, chart.FlipV)
-                    : run.SmartArt is { } smartArt && ReferenceEquals(smartArt, _selectedFloatingObject)
-                        ? (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV)
-                        : run.WordArt is { } wordArt && ReferenceEquals(wordArt, _selectedFloatingObject)
-                            ? (wordArt.RotationAngle, wordArt.FlipH, wordArt.FlipV)
-                            : run.DrawingGroup is { } group && ReferenceEquals(group, _selectedFloatingObject)
-                                ? (group.RotationAngle, group.FlipH, group.FlipV)
-                                : (double.NaN, false, false);
-
-        return double.IsNaN(transform.Item1)
-            ? null
-            : (location.BlockIndex, location.RunIndex, transform.Item1, transform.Item2, transform.Item3);
+        return location.BlockIndex >= 0
+            ? ObjectTarget(location.BlockIndex, location.RunIndex)
+            : null;
     }
-
-    private static (double Angle, bool FlipH, bool FlipV) GetDrawingGroupChildTransform(object child) => child switch
-    {
-        InlineImage image => (image.RotationAngle, image.FlipH, image.FlipV),
-        Shape shape => (shape.RotationAngle, shape.FlipH, shape.FlipV),
-        Chart chart => (chart.RotationAngle, chart.FlipH, chart.FlipV),
-        SmartArt smartArt => (smartArt.RotationAngle, smartArt.FlipH, smartArt.FlipV),
-        WordArt wordArt => (wordArt.RotationAngle, wordArt.FlipH, wordArt.FlipV),
-        FreeW.Core.Model.DrawingGroup group => (group.RotationAngle, group.FlipH, group.FlipV),
-        _ => (0, false, false)
-    };
-
-    private static double AddRotation(double currentAngle, double delta) =>
-        (currentAngle + delta + 360) % 360;
 
     /// <summary>
     /// Adds z-order commands to the method set. Called by the host via the ribbon command bus.
@@ -8118,8 +7338,11 @@ public sealed class DocumentView : RichTextBox
             var (groupBlockIndex, groupRunIndex) = FindFloatingObjectLocation(selectedChild.RootGroup);
             if (groupBlockIndex < 0)
                 return false;
-            _commands.Execute(new ChangeDrawingGroupChildZOrderCommand(
-                groupBlockIndex, groupRunIndex, selectedChild.ChildPath, operation));
+            var result = ObjectEdits.ChangeZOrder(
+                ObjectTarget(groupBlockIndex, groupRunIndex, selectedChild.ChildPath),
+                operation);
+            if (!result.Applied)
+                return false;
             RestoreSelectedFloatingGroupChildPath(child);
             SyncFloatingObjectsCanvas();
             return true;
@@ -8128,7 +7351,8 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is { IsFloating: true })
         {
-            _commands.Execute(new ChangeZOrderCommand(blockIndex, runIndex, operation));
+            if (!ObjectEdits.ChangeZOrder(ObjectTarget(blockIndex, runIndex), operation).Applied)
+                return false;
             SyncFloatingObjectsCanvas();
             return true;
         }
@@ -8137,7 +7361,8 @@ public sealed class DocumentView : RichTextBox
             var (bi, ri) = FindFloatingObjectLocation(_selectedFloatingObject);
             if (bi >= 0)
             {
-                _commands.Execute(new ChangeZOrderCommand(bi, ri, operation));
+                if (!ObjectEdits.ChangeZOrder(ObjectTarget(bi, ri), operation).Applied)
+                    return false;
                 SyncFloatingObjectsCanvas();
                 return true;
             }
@@ -8159,24 +7384,25 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
 
         // Collect (blockIndex, runIndex) for each selected floating object.
-        var members = new List<(int Bi, int Ri)>();
+        var members = new List<DocumentObjectTarget>();
         foreach (var obj in _selectedFloatingObjects)
         {
             if (obj is InlineImage img)
             {
                 var (bi, ri, _) = SelectedImageLocationForObject(img);
-                if (bi >= 0) members.Add((bi, ri));
+                if (bi >= 0) members.Add(ObjectTarget(bi, ri));
             }
             else
             {
                 var (bi, ri) = FindFloatingObjectLocation(obj);
-                if (bi >= 0) members.Add((bi, ri));
+                if (bi >= 0) members.Add(ObjectTarget(bi, ri));
             }
         }
 
         if (members.Count < 2) return;
 
-        _commands.Execute(new GroupFloatingObjectsCommand(members));
+        if (!ObjectEdits.Group(members).Applied)
+            return;
         _selectedFloatingObjects.Clear();
         _selectedFloatingGroupChild = null;
         _selectedFloatingImage = null;
@@ -8196,7 +7422,8 @@ public sealed class DocumentView : RichTextBox
         var (bi, ri) = FindFloatingObjectLocation(group);
         if (bi < 0) return;
 
-        _commands.Execute(new UngroupFloatingObjectsCommand(bi, ri));
+        if (!ObjectEdits.Ungroup(ObjectTarget(bi, ri)).Applied)
+            return;
         _selectedFloatingObjects.Clear();
         _selectedFloatingGroupChild = null;
         _selectedFloatingImage = null;
@@ -8208,31 +7435,32 @@ public sealed class DocumentView : RichTextBox
     /// Aligns/distributes floating objects through the shared model command. WPF keeps its historic
     /// document-wide behavior unless the user has an explicit multi-selection.
     /// </summary>
+    public bool CanArrangeFloatingObjects(FloatingObjectArrangeKind kind) =>
+        ObjectEdits.CanArrange(kind, FloatingArrangeLocations());
+
     public bool ArrangeFloatingObjects(FloatingObjectArrangeKind kind)
     {
         CommitToModel();
 
         var members = FloatingArrangeLocations();
-        if (ArrangeFloatingObjectsCommand.CountApplicableObjects(_model, members) < RequiredArrangeObjectCount(kind))
+        if (!ObjectEdits.Arrange(kind, members).Applied)
             return false;
-
-        _commands.Execute(new ArrangeFloatingObjectsCommand(kind, members));
         SyncFloatingObjectsCanvas();
         return true;
     }
 
-    private IReadOnlyList<(int BlockIndex, int RunIndex)> FloatingArrangeLocations()
+    private IReadOnlyList<DocumentObjectTarget> FloatingArrangeLocations()
     {
         var selected = SelectedFloatingArrangeLocations();
         if (selected.Count >= 2)
             return selected;
 
-        return ArrangeFloatingObjectsCommand.CollectFloatingObjectLocations(_model);
+        return ObjectEdits.CollectFloatingObjects();
     }
 
-    private List<(int BlockIndex, int RunIndex)> SelectedFloatingArrangeLocations()
+    private List<DocumentObjectTarget> SelectedFloatingArrangeLocations()
     {
-        var members = new List<(int BlockIndex, int RunIndex)>();
+        var members = new List<DocumentObjectTarget>();
         foreach (var obj in _selectedFloatingObjects)
         {
             (int BlockIndex, int RunIndex) location = obj is InlineImage image
@@ -8241,17 +7469,16 @@ public sealed class DocumentView : RichTextBox
                     : (-1, -1)
                 : FindFloatingObjectLocation(obj);
 
-            if (location.BlockIndex >= 0 && !members.Contains(location))
-                members.Add(location);
+            if (location.BlockIndex >= 0)
+            {
+                var target = ObjectTarget(location.BlockIndex, location.RunIndex);
+                if (!members.Contains(target))
+                    members.Add(target);
+            }
         }
 
         return members;
     }
-
-    private static int RequiredArrangeObjectCount(FloatingObjectArrangeKind kind) =>
-        kind is FloatingObjectArrangeKind.DistributeHorizontal or FloatingObjectArrangeKind.DistributeVertical
-            ? 2
-            : 1;
 
     private (int BlockIndex, int RunIndex, InlineImage? Image) SelectedImageLocationForObject(InlineImage target)
     {
@@ -8417,25 +7644,8 @@ public sealed class DocumentView : RichTextBox
         };
     }
 
-    /// <summary>Legacy overload — adapts a bare text string to a default <see cref="WatermarkOptions"/>.</summary>
-    internal static Brush BuildWatermarkBrush(string text) =>
-        BuildWatermarkBrush(WatermarkOptions.FromLegacyText(text), Colors.White);
-
-    /// <summary>Legacy overload — adapts a bare text string to a default <see cref="WatermarkOptions"/>.</summary>
-    internal static Brush BuildWatermarkBrush(string text, Color pageColor) =>
-        BuildWatermarkBrush(WatermarkOptions.FromLegacyText(text), pageColor);
-
     private static Color ParseColor(string hex, Color fallback)
-    {
-        try
-        {
-            return (Color)ColorConverter.ConvertFromString(hex);
-        }
-        catch (FormatException)
-        {
-            return fallback;
-        }
-    }
+        => WpfRgbColorAdapter.ParseColorTokenOrDefault(hex, fallback);
 
     // Numbered lists render with WPF's built-in decimal marker. MultiLevel lists suppress the built-in
     // marker (None) because WPF cannot produce an accumulating outline marker (true "1.1.1" form); their
@@ -8447,24 +7657,6 @@ public sealed class DocumentView : RichTextBox
         ListKind.MultiLevel => TextMarkerStyle.None,
         _ => TextMarkerStyle.Disc
     };
-
-    /// <summary>
-    /// Computes the accumulated outline marker text ("1.", "1.1.", "1.1.1.", …) for a run of multilevel
-    /// list paragraphs, mirroring exactly what FreeW writes to <c>numbering.xml</c>: each level n shows the
-    /// dotted run of all ancestor counters, <c>%1.%2.…%(n+1).</c> (see <c>DocxWriter.BuildNumbering</c>).
-    /// One marker is returned per input level, in order.
-    /// <para>
-    /// Counter rules match Word's <c>w:multiLevelType="multilevel"</c>: entering a level increments that
-    /// level's counter and resets every deeper level to its start; an ancestor level that has not yet been
-    /// numbered in this run is shown at its start value (1) so a list that begins at, or jumps to, a deeper
-    /// level still renders a sensible dotted prefix rather than zeros.
-    /// </para>
-    /// Pure (no WPF), so it is unit-testable. Levels are clamped to the modelled multilevel depth.
-    /// </summary>
-    internal static IReadOnlyList<string> MultiLevelMarkerSequence(
-        IEnumerable<int> levels,
-        IReadOnlyList<ListNumberFormat>? numberFormats = null) =>
-        MultiLevelListMarkerFormatter.MarkerSequence(levels, numberFormats);
 
     /// <summary>
     /// Prepends the computed accumulated outline marker (e.g. <c>1.1.1.</c>) to a multilevel-list
@@ -8587,12 +7779,6 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
-    private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
-    {
-        public TextDocument Document => view._model;
-        public string? RevisionAuthor => view.CurrentRevisionAuthor();
-    }
-
     /// <summary>
     /// Side-band paragraph data carried on a WPF <see cref="WpfParagraph.Tag"/> so it survives an
     /// edit/commit cycle even though the FlowDocument paragraph has no native slot for it. Holds the
@@ -8631,37 +7817,6 @@ public sealed class DocumentView : RichTextBox
         ModelFormatRevision? FormatRevision);
 
     private sealed record TabFollowingSegmentMetrics(double WidthDip, double? DecimalAlignmentOffsetDip);
-
-    internal static IReadOnlyList<(double StopPositionDip, double SegmentStartDip, double AdvanceDip, TabStopAlignment Alignment, TabLeader Leader, bool IsExplicit)> GetRenderedTabStopPlans(WpfParagraph paragraph)
-    {
-        var plans = new List<(double, double, double, TabStopAlignment, TabLeader, bool)>();
-        CollectRenderedTabStopPlans(paragraph.Inlines, plans);
-        return plans;
-    }
-
-    private static void CollectRenderedTabStopPlans(
-        InlineCollection inlines,
-        ICollection<(double StopPositionDip, double SegmentStartDip, double AdvanceDip, TabStopAlignment Alignment, TabLeader Leader, bool IsExplicit)> plans)
-    {
-        foreach (var inline in inlines)
-        {
-            switch (inline)
-            {
-                case InlineUIContainer { Child: FrameworkElement { Tag: RenderedTabStopSpan marker } }:
-                    plans.Add((
-                        marker.Plan.StopPositionDip,
-                        marker.Plan.SegmentStartDip,
-                        marker.Plan.AdvanceDip,
-                        marker.Plan.Alignment,
-                        marker.Plan.Leader,
-                        marker.Plan.IsExplicit));
-                    break;
-                case Span span:
-                    CollectRenderedTabStopPlans(span.Inlines, plans);
-                    break;
-            }
-        }
-    }
 
     /// <summary>
     /// Reads the blocks of an arbitrary <paramref name="flowDoc"/> — which must have been produced
@@ -8876,9 +8031,6 @@ public sealed class DocumentView : RichTextBox
             SpanningFieldStart = tag?.SpanningFieldStart,
             SpanningFieldOwner = tag?.SpanningFieldOwner,
             EndsSpanningField = tag?.EndsSpanningField ?? false,
-            // Recover the paragraph-mark tracked-change state stamped on the Tag (see BuildParagraph) —
-            // it has no FlowDocument slot, so without this a tracked-deleted paragraph mark would vanish
-            // on the very next commit.
             MarkRevision = tag?.MarkRevision ?? RevisionKind.None,
             MarkRevisionAuthor = tag?.MarkRevisionAuthor,
             MarkRevisionDateXml = tag?.MarkRevisionDateXml
@@ -9418,7 +8570,7 @@ public sealed class DocumentView : RichTextBox
                         cell.VerticalMerge = VerticalMergeState.Restart;
                         // Compute this cell's grid column from cells already placed in the row, then queue
                         // a Continue placeholder in each covered row below so the model keeps its shape.
-                        var gridColumn = row.Cells.Sum(c => Math.Max(1, c.GridSpan));
+                        var gridColumn = TableGridProjection.RowWidth(row);
                         for (var r = rowIndex + 1; r < rowIndex + wpfCell.RowSpan && r < pendingContinues.Count; r++)
                             pendingContinues[r].Add((gridColumn, span));
                     }
@@ -9464,16 +8616,7 @@ public sealed class DocumentView : RichTextBox
     // Returns the cell index at which a Continue placeholder for the given grid column should be
     // inserted, walking the already-placed cells and summing their grid spans.
     private static int InsertIndexForGridColumn(ModelTableRow row, int gridColumn)
-    {
-        var column = 0;
-        for (var i = 0; i < row.Cells.Count; i++)
-        {
-            if (column >= gridColumn)
-                return i;
-            column += Math.Max(1, row.Cells[i].GridSpan);
-        }
-        return row.Cells.Count;
-    }
+        => TableGridProjection.InsertionIndex(row, gridColumn);
 
     private static bool ColorsEqual(Color a, Color b) =>
         a.R == b.R && a.G == b.G && a.B == b.B;
@@ -9545,15 +8688,14 @@ public sealed class DocumentView : RichTextBox
         bool authoredPageBreakBefore)
     {
         var sourceInlines = paragraph.Inlines.ToList();
-        var segments = new List<List<Inline>> { new() };
-        foreach (var inline in sourceInlines)
-        {
-            segments[^1].Add(inline);
-            if (inline is WpfRun { Tag: PageBreakMarker or ColumnBreakMarker })
-                segments.Add([]);
-        }
+        var plan = InlineFlowBreakSegmentationPlanner.Build(
+            sourceInlines.Select(inline => new InlineFlowRunInput(
+                SourceLength: inline is WpfRun run ? run.Text.Length : 0,
+                IsPageBreak: inline is WpfRun { Tag: PageBreakMarker },
+                IsColumnBreak: inline is WpfRun { Tag: ColumnBreakMarker })).ToList(),
+            authoredPageBreakBefore);
 
-        if (segments.Count == 1)
+        if (!plan.HasInlineBreaks)
             return [paragraph];
 
         var originalMargin = paragraph.Margin;
@@ -9562,18 +8704,15 @@ public sealed class DocumentView : RichTextBox
         var originalKeepTogether = paragraph.KeepTogether;
         var originalBorder = paragraph.BorderThickness;
         paragraph.Inlines.Clear();
-        var fragments = new List<WpfParagraph>(segments.Count);
-        for (var index = 0; index < segments.Count; index++)
+        var fragments = new List<WpfParagraph>(plan.Segments.Count);
+        for (var index = 0; index < plan.Segments.Count; index++)
         {
             var fragment = index == 0 ? paragraph : CloneParagraphShell(paragraph);
-            var precedingBreak = index > 0 ? segments[index - 1].LastOrDefault() : null;
-            fragment.BreakPageBefore = index == 0
-                ? authoredPageBreakBefore
-                : precedingBreak is WpfRun { Tag: PageBreakMarker };
-            fragment.BreakColumnBefore = index > 0
-                && precedingBreak is WpfRun { Tag: ColumnBreakMarker };
-            foreach (var inline in segments[index])
-                fragment.Inlines.Add(inline);
+            var segment = plan.Segments[index];
+            fragment.BreakPageBefore = segment.BreakBefore == InlineFlowBreakKind.Page;
+            fragment.BreakColumnBefore = segment.BreakBefore == InlineFlowBreakKind.Column;
+            for (var runIndex = segment.StartRunIndex; runIndex < segment.EndRunIndex; runIndex++)
+                fragment.Inlines.Add(sourceInlines[runIndex]);
             fragments.Add(fragment);
         }
 
@@ -9778,10 +8917,6 @@ public sealed class DocumentView : RichTextBox
         int PageNumber = 1,
         bool IsPaginationSegment = false);
 
-    // RowRevision/Author/DateXml ride along here for the same reason HeightPt and AllowBreakAcrossPages
-    // do: a WPF FlowDocument row has no slot for them, and ReadTable builds a FRESH ModelTableRow on every
-    // commit — so without this side-band a tracked row deletion (DeleteTableRowCommand under Track
-    // Changes) would be silently erased by the very next CommitToModel.
     private sealed record WpfTableRowTag(
         int SourceRowIndex,
         bool IsRepeatedHeader,
@@ -9867,7 +9002,7 @@ public sealed class DocumentView : RichTextBox
                 usePageColumns: true).WidthDip
             : metrics.ContentWidthDip;
         var measuredWidth = ResolveContentAutoFitColumnWidths(table, document)?.Sum();
-        var tableWidth = ResolveTableWidthDip(table, measuredWidth);
+        var tableWidth = TableColumnLayoutPlanner.ResolveTableWidthDip(table, measuredWidth);
         if (tableWidth <= 0)
             tableWidth = contentWidth;
         var tableHeight = tableLayoutPlan.Pagination.Rows.Sum(row => row.EstimatedHeightDip);
@@ -10025,7 +9160,7 @@ public sealed class DocumentView : RichTextBox
         var borderColor = TryResolveHeaderOnlyTableBorderColor(table, out var explicitBorderColor)
             ? explicitBorderColor
             : catalogStyle?.BorderColorHex is { Length: > 0 } borderHex
-                ? (Color)ColorConverter.ConvertFromString("#" + borderHex)
+                ? WpfRgbColorAdapter.ParseDrawingMlOrDefault(borderHex, Colors.Black)
                 : Color.FromRgb(0x9A, 0x9A, 0x9A);
         var borderBrush = new SolidColorBrush(borderColor);
 
@@ -10067,13 +9202,12 @@ public sealed class DocumentView : RichTextBox
                 // that measured overhead so an exact Word row does not grow by the full amount.
                 rowHeightPx = Math.Max(0, authoredRowHeight - 2);
             }
-            // Track the running grid-column position so vertical-merge runs can be matched up by
-            // column even when earlier cells span multiple grid columns.
-            var gridColumn = 0;
-            var cellIndex = 0;
-            foreach (var modelCell in modelRow.Cells)
+            foreach (var projected in TableGridProjection.ProjectRow(modelRow))
             {
-                var span = Math.Max(1, modelCell.GridSpan);
+                var modelCell = projected.Cell;
+                var cellIndex = projected.CellIndex;
+                var gridColumn = projected.StartColumn;
+                var span = projected.Span;
                 var ordinaryCellMargins = !isPaginationSegment
                     ? modelCell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default
                     : null;
@@ -10131,7 +9265,7 @@ public sealed class DocumentView : RichTextBox
                 {
                     var hasContinuation = modelCell.VerticalMerge == VerticalMergeState.Restart &&
                         rowIndex + 1 < table.Rows.Count &&
-                        CellAtGridColumn(table.Rows[rowIndex + 1], gridColumn)?.VerticalMerge == VerticalMergeState.Continue;
+                        TableGridProjection.At(table.Rows[rowIndex + 1], gridColumn)?.Cell.VerticalMerge == VerticalMergeState.Continue;
                     wpfCell.BorderThickness = modelCell.VerticalMerge == VerticalMergeState.Restart && hasContinuation
                         ? new Thickness(0.5, 0.5, 0.5, 0)
                         : modelCell.VerticalMerge == VerticalMergeState.Continue
@@ -10262,8 +9396,6 @@ public sealed class DocumentView : RichTextBox
                         wpfCell.Blocks.Add(paraBlock);
                 }
                 wpfRow.Cells.Add(wpfCell);
-                gridColumn += span;
-                cellIndex++;
             }
             group.Rows.Add(wpfRow);
         }
@@ -10340,7 +9472,7 @@ public sealed class DocumentView : RichTextBox
         DocumentTableLayoutPlan? tableLayoutPlan = null)
     {
         var indent = Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint;
-        var widthDip = ResolveTableWidthDip(table, measuredWidthDip);
+        var widthDip = TableColumnLayoutPlanner.ResolveTableWidthDip(table, measuredWidthDip);
         if (widthDip <= 0)
             return new Thickness(indent, 0, 0, 0);
 
@@ -10375,63 +9507,23 @@ public sealed class DocumentView : RichTextBox
         return new Thickness(left, 0, contentWidth - widthDip - left, 0);
     }
 
-    private static double ResolveTableWidthDip(ModelTable table, double? measuredWidthDip = null) =>
-        measuredWidthDip is > 0
-            ? measuredWidthDip.Value
-            : table.PreferredWidthPt is > 0
-                ? table.PreferredWidthPt.Value * PxPerPoint
-                : table.ColumnWidthsPt.Count > 0
-                    ? table.ColumnWidthsPt.Where(width => width > 0).Sum() * PxPerPoint
-                    : 0;
-
     private static IReadOnlyList<double>? ResolveContentAutoFitColumnWidths(
         ModelTable table,
         TextDocument document)
     {
-        if (table.AutoFit != AutoFitMode.Contents
-            || table.ColumnCount == 0
-            || table.Rows.SelectMany(row => row.Cells).Any(cell =>
-                cell.TextDirection != CellTextDirection.Horizontal))
+        var measurements = new List<TableCellContentMeasurement>();
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
-            return null;
-        }
-
-        const double contentAllowanceDip = 14;
-        var widths = Enumerable.Repeat(contentAllowanceDip, table.ColumnCount).ToArray();
-        var spanningRequirements = new List<(int StartColumn, int Span, double RequiredWidth)>();
-        foreach (var row in table.Rows)
-        {
-            var gridColumn = 0;
-            foreach (var cell in row.Cells)
+            var row = table.Rows[rowIndex];
+            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
             {
-                var span = Math.Min(Math.Max(1, cell.GridSpan), widths.Length - gridColumn);
-                if (span <= 0)
-                    break;
+                var cell = row.Cells[cellIndex];
                 var contentWidth = cell.Paragraphs.Count == 0
                     ? 0
                     : cell.Paragraphs.Max(paragraph => paragraph.Runs.Sum(run =>
                         MeasureRunText(run.Text, run, paragraph, document)));
-                var requiredWidth = contentWidth + contentAllowanceDip * span;
-                if (span == 1)
-                    widths[gridColumn] = Math.Max(widths[gridColumn], requiredWidth);
-                else
-                    spanningRequirements.Add((gridColumn, span, requiredWidth));
-                gridColumn += span;
+                measurements.Add(new TableCellContentMeasurement(rowIndex, cellIndex, contentWidth));
             }
-        }
-
-        foreach (var requirement in spanningRequirements)
-        {
-            var currentWidth = widths
-                .Skip(requirement.StartColumn)
-                .Take(requirement.Span)
-                .Sum();
-            if (currentWidth >= requirement.RequiredWidth)
-                continue;
-
-            var widestColumn = Enumerable.Range(requirement.StartColumn, requirement.Span)
-                .MaxBy(column => widths[column]);
-            widths[widestColumn] += requirement.RequiredWidth - currentWidth;
         }
 
         var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
@@ -10441,26 +9533,7 @@ public sealed class DocumentView : RichTextBox
                 metrics.ContentWidthDip,
                 usePageColumns: true).WidthDip
             : metrics.ContentWidthDip;
-        var targetWidth = table.PreferredWidthPt is > 0
-            ? Math.Min(availableWidth, table.PreferredWidthPt.Value * PxPerPoint)
-            : table.ColumnWidthsPt.Count == table.ColumnCount
-                ? Math.Min(availableWidth, table.ColumnWidthsPt.Where(width => width > 0).Sum() * PxPerPoint)
-                : 0;
-        var totalWidth = widths.Sum();
-        if (targetWidth > 0 && totalWidth > 0)
-        {
-            var scale = targetWidth / totalWidth;
-            for (var i = 0; i < widths.Length; i++)
-                widths[i] *= scale;
-        }
-        else if (totalWidth > availableWidth && totalWidth > 0)
-        {
-            var scale = availableWidth / totalWidth;
-            for (var i = 0; i < widths.Length; i++)
-                widths[i] *= scale;
-        }
-
-        return widths;
+        return TableColumnLayoutPlanner.BuildContentAutoFitWidths(table, availableWidth, measurements);
     }
 
     private static System.Windows.Controls.Grid BuildCellContentHost(
@@ -10606,40 +9679,15 @@ public sealed class DocumentView : RichTextBox
     {
         for (var rowIndex = continuationRow; rowIndex >= 0; rowIndex--)
         {
-            var column = 0;
-            for (var cellIndex = 0; cellIndex < table.Rows[rowIndex].Cells.Count; cellIndex++)
-            {
-                var cell = table.Rows[rowIndex].Cells[cellIndex];
-                var span = Math.Max(1, cell.GridSpan);
-                if (gridColumn < column || gridColumn >= column + span)
-                {
-                    column += span;
-                    continue;
-                }
-
-                if (cell.VerticalMerge == VerticalMergeState.Restart)
-                    return (rowIndex, cellIndex);
-                if (cell.VerticalMerge != VerticalMergeState.Continue)
-                    return null;
-                break;
-            }
+            var projected = TableGridProjection.At(table.Rows[rowIndex], gridColumn);
+            if (projected is null)
+                continue;
+            if (projected.Value.Cell.VerticalMerge == VerticalMergeState.Restart)
+                return (rowIndex, projected.Value.CellIndex);
+            if (projected.Value.Cell.VerticalMerge != VerticalMergeState.Continue)
+                return null;
         }
 
-        return null;
-    }
-
-    // Resolves the model cell occupying a given grid-column position in a row, honouring GridSpan so
-    // a wide cell is matched for any column it covers. Returns null if the position is past the row.
-    private static ModelTableCell? CellAtGridColumn(ModelTableRow row, int gridColumn)
-    {
-        var column = 0;
-        foreach (var cell in row.Cells)
-        {
-            var span = Math.Max(1, cell.GridSpan);
-            if (gridColumn >= column && gridColumn < column + span)
-                return cell;
-            column += span;
-        }
         return null;
     }
 
@@ -10849,10 +9897,6 @@ public sealed class DocumentView : RichTextBox
             paragraph.SpanningFieldStart,
             paragraph.SpanningFieldOwner,
             paragraph.EndsSpanningField,
-            // The paragraph-mark tracked-change state (Word's w:pPr/w:rPr/w:ins or w:del) has no
-            // FlowDocument slot either — a tracked Backspace/Delete at a paragraph boundary sets
-            // ModelParagraph.MarkRevision without touching this paragraph's runs, so without carrying it
-            // here it would be silently dropped on the very next CommitToModel (see ReadParagraph).
             paragraph.MarkRevision,
             paragraph.MarkRevisionAuthor,
             paragraph.MarkRevisionDateXml);
@@ -10966,7 +10010,7 @@ public sealed class DocumentView : RichTextBox
                 if (tabIndex > start)
                 {
                     var segment = text.Substring(start, tabIndex - start);
-                    var segmentRun = CloneTextRun(run, segment);
+                    var segmentRun = RevisionEditPlanner.CloneRunWithText(run, segment);
                     wpf.Inlines.Add(BuildRun(
                         segmentRun, paragraph, document, sourceBlockIndex, runIndex,
                         suppressedFloatingWrapRuns?.Contains(run) == true));
@@ -10991,7 +10035,7 @@ public sealed class DocumentView : RichTextBox
             if (start < text.Length)
             {
                 var remainder = text[start..];
-                var remainderRun = CloneTextRun(run, remainder);
+                var remainderRun = RevisionEditPlanner.CloneRunWithText(run, remainder);
                 wpf.Inlines.Add(BuildRun(
                     remainderRun, paragraph, document, sourceBlockIndex, runIndex,
                     suppressedFloatingWrapRuns?.Contains(run) == true));
@@ -11043,19 +10087,6 @@ public sealed class DocumentView : RichTextBox
         && !run.IsCommentReference
         && !run.IsPageBreak
         && !run.IsColumnBreak;
-
-    private static ModelRun CloneTextRun(ModelRun source, string text) => new(text, source.Formatting)
-    {
-        HyperlinkUrl = source.HyperlinkUrl,
-        HyperlinkAnchor = source.HyperlinkAnchor,
-        HyperlinkTooltip = source.HyperlinkTooltip,
-        CommentId = source.CommentId,
-        Control = source.Control,
-        Revision = source.Revision,
-        RevisionAuthor = source.RevisionAuthor,
-        RevisionDateXml = source.RevisionDateXml,
-        FormatRevision = source.FormatRevision
-    };
 
     private static TabFollowingSegmentMetrics MeasureFollowingTabSegment(
         IReadOnlyList<ModelRun> runs,
@@ -12065,7 +11096,7 @@ public sealed class DocumentView : RichTextBox
     {
         AddMarker(wpf, m => m with { Control = new ContentControlMarker(control, location) });
         wpf.Background = new SolidColorBrush(ContentControlShade);
-        wpf.ToolTip = ContentControlTooltip(control);
+        wpf.ToolTip = ContentControlInteractionPlanner.Tooltip(control);
 
         switch (control.Kind)
         {
@@ -12097,26 +11128,6 @@ public sealed class DocumentView : RichTextBox
                 wpf.MouseLeftButtonUp += OnDatePickerClicked;
                 break;
         }
-    }
-
-    /// <summary>The hover tooltip shown for a content-control run, by kind (surfacing the alias when set).</summary>
-    private static string ContentControlTooltip(ModelContentControl control)
-    {
-        var label = control.Alias is { Length: > 0 } a ? a : null;
-        return control.Kind switch
-        {
-            ContentControlKind.CheckBox => label is null
-                ? "Checkbox content control (click to toggle)" : $"Checkbox: {label}",
-            ContentControlKind.RichText => label is null
-                ? "Rich-text content control" : $"Rich-text control: {label}",
-            ContentControlKind.DatePicker => label is null
-                ? "Date picker content control (click to pick a date)" : $"Date picker: {label}",
-            ContentControlKind.DropDownList => label is null
-                ? "Drop-down list content control (click to choose)" : $"Drop-down list: {label}",
-            ContentControlKind.ComboBox => label is null
-                ? "Combo box content control (click to choose or type)" : $"Combo box: {label}",
-            _ => label is null ? "Plain-text content control" : $"Content control: {label}"
-        };
     }
 
     /// <summary>
@@ -12163,44 +11174,7 @@ public sealed class DocumentView : RichTextBox
         if (control.Kind is not (ContentControlKind.DropDownList or ContentControlKind.ComboBox)
             || control.Items.Count == 0)
             return;
-
-        e.Handled = true;
-        var owner = FindOwnerView(wpf);
-        if (owner is null || !owner.AllowsContentControlInteraction(control))
-            return;
-
-        var menu = new ContextMenu();
-        var plan = FreeWContextMenuPlanner.BuildContentControl(new ModelRun(wpf.Text) { Control = control });
-        foreach (var planned in plan.Items)
-        {
-            if (planned.CommandId is not { } commandId
-                || !FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.ContentChoicePrefix, out var selectedIndex)
-                || selectedIndex >= control.Items.Count)
-                continue;
-            var display = control.Items[selectedIndex].DisplayText;
-            var entry = new MenuItem
-            {
-                Header = planned.Header,
-                IsCheckable = planned.IsChecked.HasValue,
-                IsChecked = planned.IsChecked ?? false,
-                IsEnabled = planned.IsEnabled,
-            };
-            entry.Click += (_, _) =>
-            {
-                if (owner.RestrictEditingPolicy.IsFormFieldEditingOnly
-                    && marker.Location is { } location
-                    && owner.SelectContentControlItem(location.BlockIndex, location.RunIndex, selectedIndex))
-                {
-                    return;
-                }
-
-                wpf.Text = display;
-                owner.CommitToModel();
-            };
-            menu.Items.Add(entry);
-        }
-        menu.PlacementTarget = wpf.Parent as UIElement;
-        menu.IsOpen = true;
+        OpenContentControlMenu(wpf, marker, e);
     }
 
     /// <summary>
@@ -12214,21 +11188,27 @@ public sealed class DocumentView : RichTextBox
             || marker.Control.Kind != ContentControlKind.DatePicker)
             return;
 
+        OpenContentControlMenu(wpf, marker, e);
+    }
+
+    private static void OpenContentControlMenu(
+        WpfRun wpf,
+        ContentControlMarker marker,
+        System.Windows.Input.MouseButtonEventArgs e)
+    {
         e.Handled = true;
         var owner = FindOwnerView(wpf);
         if (owner is null || !owner.AllowsContentControlInteraction(marker.Control))
             return;
 
         var menu = new ContextMenu();
-        var choices = ContentControlInteractionPlanner.RelativeDateChoices(marker.Control);
-        var plan = FreeWContextMenuPlanner.BuildContentControl(new ModelRun(wpf.Text) { Control = marker.Control });
+        var today = DateTime.Today;
+        var source = new ModelRun(wpf.Text) { Control = marker.Control };
+        var plan = FreeWContextMenuPlanner.BuildContentControl(source, today);
         foreach (var planned in plan.Items)
         {
-            if (planned.CommandId is not { } commandId
-                || !FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.ContentDatePrefix, out var selectedIndex)
-                || selectedIndex >= choices.Count)
+            if (planned.CommandId is not { } commandId)
                 continue;
-            var choice = choices[selectedIndex];
             var entry = new MenuItem
             {
                 Header = planned.Header,
@@ -12240,12 +11220,19 @@ public sealed class DocumentView : RichTextBox
             {
                 if (owner.RestrictEditingPolicy.IsFormFieldEditingOnly
                     && marker.Location is { } location
-                    && owner.SelectContentControlRelativeDate(location.BlockIndex, location.RunIndex, selectedIndex))
+                    && owner.ApplyContentControlMenuCommand(
+                        location.BlockIndex,
+                        location.RunIndex,
+                        commandId,
+                        today))
                 {
                     return;
                 }
 
-                wpf.Text = choice.DisplayText;
+                var updated = FreeWContextMenuPlanner.ApplyContentControlCommand(source, commandId, today);
+                if (updated is null)
+                    return;
+                wpf.Text = updated.Text;
                 owner.CommitToModel();
             };
             menu.Items.Add(entry);
@@ -12326,9 +11313,7 @@ public sealed class DocumentView : RichTextBox
         e.Handled = true;
         if (e.Uri is not { } uri)
             return;
-        ExternalUriLauncher.Open(
-            uri.AbsoluteUri,
-            target => Process.Start(new ProcessStartInfo(target.AbsoluteUri) { UseShellExecute = true }));
+        DesktopExternalUriLauncher.Open(uri.AbsoluteUri);
     }
 
     /// <summary>
@@ -12599,40 +11584,24 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Resolves a field's display text in the app layer. DATE/TIME use the current date/time; AUTHOR uses
-    /// <see cref="DocumentProperties.Author"/>; FILENAME uses <paramref name="fileName"/>; PAGE/NUMPAGES
-    /// resolve live when a paged-edit sub-editor context is active (non-zero
-    /// <see cref="_renderHfPageNumber"/>/<see cref="_renderHfPageCount"/>), otherwise fall back to
-    /// <paramref name="cached"/> (the last-computed text). This is the only place date/time is read —
-    /// the model and docx IO stay deterministic.
+    /// Supplies the WPF renderer's current file and paged-edit context to the shared field planner.
     /// </summary>
     private static string ResolveFieldText(RunFieldKind kind, string cached, TextDocument document, string? fileName)
     {
-        var culture = System.Globalization.CultureInfo.CurrentCulture;
-        // In PagedEdit mode, PAGE and NUMPAGES are resolved to the actual page-box page number / page
-        // count injected by PaginatedEditorPanel just before LoadModel on the h/f sub-editor.  The
-        // thread-static fields are zero outside that narrow window, so ordinary renders are unaffected.
         var pageNumberText = _renderHfPageNumber > 0
             ? _renderHfPageNumberText
                 ?? _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            : ResolvePageNumberFieldText(document);
+            : null;
         int? pageCount = _renderHfPageCount > 0 ? _renderHfPageCount : null;
-        return ComplexFieldDisplayPlanner.ResolveLiveValue(
+        return DocumentFieldDisplayPlanner.Resolve(
             kind,
             cached,
             document,
-            fileName,
-            DateTime.Now,
-            culture,
-            pageNumberText,
-            pageCount);
+            new DocumentFieldDisplayContext(DateTime.Now, fileName, pageNumberText, pageCount));
     }
 
-    private static string ResolvePageNumberFieldText(TextDocument document)
-    {
-        var firstValue = Math.Max(1, document.Page.PageNumberStartAt ?? 1);
-        return PageNumberFormatDialogPlanner.FormatPageNumber(firstValue, document.Page.PageNumberFormat);
-    }
+    private static string ResolvePageNumberFieldText(TextDocument document) =>
+        DocumentFieldDisplayPlanner.ResolveFirstPageNumberText(document);
 
     /// <summary>
     /// Carried on a field WPF run's Tag so CommitToModel can round-trip the field kind and its cached
@@ -12742,21 +11711,23 @@ public sealed class DocumentView : RichTextBox
 
     private static string ResolveComplexFieldText(ModelRun run, TextDocument document, string? fileName)
     {
-        var pageNumberText = _renderHfPageNumber > 0
-            ? _renderHfPageNumberText
-                ?? _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            : ResolvePageNumberFieldText(document);
-        int? pageCount = _renderHfPageCount > 0 ? _renderHfPageCount : null;
-        return ComplexFieldDisplayPlanner.ResolveComplexFieldValue(
-            run,
+        var field = run.ComplexField!;
+        var fallback = ResolveFieldText(
+            ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword),
+            run.Text,
             document,
-            fileName,
-            DateTime.Now,
-            System.Globalization.CultureInfo.CurrentCulture,
-            pageNumberText,
-            pageCount,
+            fileName);
+        fallback = ComplexFieldDisplayPlanner.ResolvePageSectionField(
+            field,
+            fallback,
             _renderHfSectionOrdinal,
             _renderHfSectionPageCount);
+        return ComplexFieldDisplayPlanner.ApplyTemporalPicture(
+            field,
+            DateTime.Now,
+            (run.Formatting ?? document.DefaultRun).LanguageTag,
+            System.Globalization.CultureInfo.CurrentCulture,
+            fallback);
     }
 
     /// <summary>
@@ -12784,7 +11755,7 @@ public sealed class DocumentView : RichTextBox
         // A hyperlink cross-reference renders in the link colour so it reads as clickable, matching Word.
         else if (run.CrossReference!.Hyperlink)
             wpf.Foreground = new SolidColorBrush(Color.FromRgb(0x05, 0x63, 0xC1));
-        wpf.ToolTip = "Cross-reference: " + run.CrossReference!.Kind;
+        wpf.ToolTip = UiText.Format("Editor_CrossReference_ToolTip_Format", run.CrossReference!.Kind);
         return wpf;
     }
 
@@ -12804,7 +11775,7 @@ public sealed class DocumentView : RichTextBox
             wpf.FontSize = size * PxPerPoint;
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
-        wpf.ToolTip = "Formula: " + run.TableFormula!.Expression;
+        wpf.ToolTip = UiText.Format("Editor_Formula_ToolTip_Format", run.TableFormula!.Expression);
         return wpf;
     }
 
@@ -12836,20 +11807,18 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable)
             return;
 
-        var command = new InsertTableCellFormulaCommand(
-            blockIndex,
-            rowIndex,
-            columnIndex,
-            paragraphIndex,
-            textOffset,
-            formula);
-        _commands.Execute(command);
+        var address = TableEdits.AddressFromCellIndex(blockIndex, rowIndex, columnIndex);
+        if (address is null)
+            return;
+        var result = TableEdits.InsertFormula(address.Value, paragraphIndex, textOffset, formula);
+        if (!result.Applied)
+            return;
         PlaceCaretAtTableCellTextOffset(
             blockIndex,
             rowIndex,
             columnIndex,
             paragraphIndex,
-            textOffset + command.InsertedTextLength);
+            result.TextOffset);
     }
 
     /// <summary>
@@ -12892,7 +11861,8 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0)
             return;
 
-        _commands.Execute(new ApplyTablePropertiesCommand(blockIndex, rowIndex, columnIndex, values));
+        if (TableEdits.AddressFromCellIndex(blockIndex, rowIndex, columnIndex) is { } address)
+            TableEdits.ApplyProperties(address, values);
     }
 
     /// <summary>Apply the five editable core properties as one undoable operation.</summary>
@@ -12900,7 +11870,7 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(values);
         CommitToModel();
-        _commands.Execute(new ApplyDocumentPropertiesCommand(values));
+        DesignEdits.ApplyDocumentProperties(values);
     }
 
     // Snapshot of the caret table's previous style id for table-style live-preview.
@@ -12918,7 +11888,7 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable)
             return;
 
-        _commands.Execute(new ApplyTableStyleCommand(blockIndex, style));
+        TableEdits.ApplyStyle(new DocumentTableCellAddress(blockIndex, 0, 0), style);
     }
 
     /// <summary>
@@ -12994,25 +11964,29 @@ public sealed class DocumentView : RichTextBox
     {
         if (string.IsNullOrWhiteSpace(instruction))
             return;
-        // Word stores instructions with a single leading/trailing space; normalise so " PAGE " is produced
-        // from a bare "PAGE".
-        var normalized = " " + instruction.Trim() + " ";
-        InsertComplexField(new ComplexField(normalized), cachedResult);
+
+        Focus();
+        var fieldDocument = FieldEvaluationDocument ?? _model;
+        var fieldFileName = FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName;
+        var run = ReferenceEdits.BuildComplexFieldInsertionRun(
+            instruction,
+            cachedResult,
+            fieldRun => ResolveComplexFieldText(fieldRun, fieldDocument, fieldFileName),
+            fieldDocument);
+        InsertInlineAtCaret(BuildComplexFieldRun(run, _model, fieldDocument, fieldFileName));
     }
 
     internal void InsertComplexField(ComplexField field, string? cachedResult)
     {
         Focus();
         ArgumentNullException.ThrowIfNull(field);
-        var run = new ModelRun(cachedResult ?? string.Empty) { ComplexField = field };
         var fieldDocument = FieldEvaluationDocument ?? _model;
         var fieldFileName = FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName;
-        if (cachedResult is null)
-            run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
-                ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
-                : ComplexFieldEngine.CanRecompute(field)
-                    ? ComplexFieldEngine.Recompute(fieldDocument, 0, run)
-                    : ResolveComplexFieldText(run, fieldDocument, fieldFileName);
+        var run = ReferenceEdits.BuildComplexFieldInsertionRun(
+            field,
+            cachedResult,
+            fieldRun => ResolveComplexFieldText(fieldRun, fieldDocument, fieldFileName),
+            fieldDocument);
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model, fieldDocument, fieldFileName));
     }
 
@@ -13034,9 +12008,8 @@ public sealed class DocumentView : RichTextBox
         }
 
         CommitToModel();
-        if (DocumentFieldUpdateCoordinator.ToggleCode(_model, fields) == 0)
-            return;
-        Render();
+        if (ReferenceEdits.ToggleComplexFieldCodes(fields).Applied)
+            Render();
     }
 
     /// <summary>
@@ -13057,9 +12030,8 @@ public sealed class DocumentView : RichTextBox
         }
 
         CommitToModel();
-        if (DocumentFieldUpdateCoordinator.SetLock(_model, fields, isLocked) == 0)
-            return;
-        Render();
+        if (ReferenceEdits.SetComplexFieldsLocked(fields, isLocked).Applied)
+            Render();
     }
 
     /// <summary>
@@ -13126,27 +12098,14 @@ public sealed class DocumentView : RichTextBox
     private void UpdateComplexFields(IReadOnlyCollection<ComplexField> fields)
     {
         CommitToModel();
-        var fieldDocument = FieldEvaluationDocument ?? _model;
-        var fieldFileName = FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName;
-        var pageResolver = fields.Any(field => field.ContainsKeyword("PAGEREF"))
-            ? BuildCrossReferencePageResolver()
-            : null;
-        var pageTextResolver = pageResolver is null
-            ? null
-            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, pageResolver);
-        DocumentFieldUpdateCoordinator.UpdateComplexFields(
-            _model,
-            fieldDocument,
-            fields,
-            fieldFileName,
-            DateTime.Now,
-            System.Globalization.CultureInfo.CurrentCulture,
-            ResolvePageNumberFieldText(fieldDocument),
-            pageCount: null,
-            crossReferencePageResolver: pageResolver,
-            crossReferencePageTextResolver: pageTextResolver);
-
-        Render();
+        if (ReferenceEdits.UpdateComplexFields(
+                fields,
+                blockPageResolutionFactory: BuildReferenceBlockPageResolution,
+                fileName: FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName,
+                evaluationDocument: FieldEvaluationDocument).Applied)
+        {
+            Render();
+        }
     }
 
     /// <summary>
@@ -13167,12 +12126,11 @@ public sealed class DocumentView : RichTextBox
         }
 
         var targets = markers
-            .Select(marker => new DocumentComplexFieldUnlinkTarget(marker.Field, marker.Cached))
-            .ToList();
+            .Select(marker => new DocumentComplexFieldTarget(marker.Field, marker.Cached))
+            .ToArray();
         CommitToModel();
-        if (DocumentFieldUpdateCoordinator.Unlink(_model, targets) == 0)
-            return;
-        Render();
+        if (ReferenceEdits.UnlinkComplexFields(targets).Applied)
+            Render();
     }
 
     private ModelRun? FindComplexFieldRun(ComplexField field) =>
@@ -13220,9 +12178,8 @@ public sealed class DocumentView : RichTextBox
     public void ToggleFieldCodes()
     {
         CommitToModel();
-        if (DocumentFieldUpdateCoordinator.ToggleAllCodes(_model) == 0)
-            return;
-        Render();
+        if (ReferenceEdits.ToggleFieldCodes().Applied)
+            Render();
     }
 
     /// <summary>
@@ -13236,117 +12193,78 @@ public sealed class DocumentView : RichTextBox
     public void UpdateFields()
     {
         CommitToModel();
-        var fieldDocument = FieldEvaluationDocument ?? _model;
-        var fieldFileName = FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName;
-        var crossReferencePageResolver = DocumentFieldUpdateCoordinator.RequiresPageResolver(_model)
-                ? BuildCrossReferencePageResolver()
-                : null;
-        var crossReferencePageTextResolver = crossReferencePageResolver is null
-            ? null
-            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
-                _model,
-                crossReferencePageResolver);
-        DocumentFieldUpdateCoordinator.Update(
-            _model,
-            fieldDocument,
-            fieldFileName,
-            DateTime.Now,
-            System.Globalization.CultureInfo.CurrentCulture,
-            ResolvePageNumberFieldText(fieldDocument),
-            pageCount: null,
-            crossReferencePageResolver: crossReferencePageResolver,
-            crossReferencePageTextResolver: crossReferencePageTextResolver);
-
-        // "Update entire table": regenerate inserted generated-reference regions from current document
-        // state. Keep TOC and bibliography independent so a document containing both updates both in one
-        // F9 pass instead of short-circuiting after the first region.
-        var refreshedGeneratedRegion = false;
-        if (_model.Blocks.Any(TableOfContents.IsTocParagraph))
-        {
-            RefreshTableOfContentsFromModel();
-            refreshedGeneratedRegion = true;
-        }
-
-        if (_model.Blocks.Any(Citations.IsBibliographyParagraph))
-        {
-            RefreshBibliographyFromModel();
-            refreshedGeneratedRegion = true;
-        }
-
-        if (_model.Blocks.Any(TableOfFigures.IsTableOfFiguresParagraph))
-        {
-            RefreshTableOfFigures(TableOfFigures.ExistingLabelText(_model) ?? Captions.FigureLabelText);
-            refreshedGeneratedRegion = true;
-        }
-
-        if (TableOfAuthoritiesRegionPlanner.ContainsRegion(_model))
-        {
-            ApplyTableOfAuthoritiesPlan(
-                TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
-                    _model,
-                    pageResolver: BuildTableOfAuthoritiesPageResolver()),
-                "Update Table of Authorities");
-            refreshedGeneratedRegion = true;
-        }
-
-        if (refreshedGeneratedRegion)
-        {
-            Render();
-            return;
-        }
-
+        ReferenceEdits.UpdateFields(
+            blockPageResolutionFactory: BuildReferenceBlockPageResolution,
+            fileName: FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName,
+            evaluationDocument: FieldEvaluationDocument,
+            figurePageTextResolverFactory: BuildTableOfFiguresPageTextResolver,
+            authorityPageAddressResolverFactory: BuildTableOfAuthoritiesPageResolver);
         Render();
     }
 
-    private Func<int, int?>? BuildCrossReferencePageResolver()
+    private Func<int, int?>? BuildCrossReferencePageResolver() =>
+        BuildReferenceBlockPageResolution().PageNumberAtBlock;
+
+    private DocumentReferenceBlockPageResolution BuildReferenceBlockPageResolution()
     {
         try
         {
             var pagination = PaginationEngine.Compute(this);
             var pageCount = Math.Max(1, pagination.PageCount);
             if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
-                return blockIndex => IsModelBlock(blockIndex)
-                    ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex) ?? 1
-                    : null;
+            {
+                return new DocumentReferenceBlockPageResolution(
+                    blockIndex => IsModelBlock(blockIndex)
+                        ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex) ?? 1
+                        : null,
+                    pageCount);
+            }
 
             var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
             if (firstRect.IsEmpty)
-                return blockIndex => IsModelBlock(blockIndex)
-                    ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
-                    : null;
+            {
+                return new DocumentReferenceBlockPageResolution(
+                    blockIndex => IsModelBlock(blockIndex)
+                        ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                        : null,
+                    pageCount);
+            }
 
             var topY = firstRect.Top;
-            return blockIndex =>
-            {
-                if (!IsModelBlock(blockIndex))
-                    return null;
-
-                var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
-                if (TextPointerAtModelBlockStart(blockIndex) is not { } pointer)
-                    return explicitPage;
-
-                var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
-                if (rect.IsEmpty)
-                    return explicitPage;
-
-                var y = rect.Top - topY;
-                var pageIndex = 0;
-                foreach (var breakY in pagination.PageBreakYsDip)
+            return new DocumentReferenceBlockPageResolution(
+                blockIndex =>
                 {
-                    if (y + 0.5 < breakY)
-                        break;
-                    pageIndex++;
-                }
+                    if (!IsModelBlock(blockIndex))
+                        return null;
 
-                var placedPage = Math.Min(Math.Max(1, pageIndex + 1), pageCount);
-                return explicitPage is { } authoredPage
-                    ? Math.Max(placedPage, authoredPage)
-                    : placedPage;
-            };
+                    var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
+                    if (TextPointerAtModelBlockStart(blockIndex) is not { } pointer)
+                        return explicitPage;
+
+                    var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
+                    if (rect.IsEmpty)
+                        return explicitPage;
+
+                    var y = rect.Top - topY;
+                    var pageIndex = 0;
+                    foreach (var breakY in pagination.PageBreakYsDip)
+                    {
+                        if (y + 0.5 < breakY)
+                            break;
+                        pageIndex++;
+                    }
+
+                    var placedPage = Math.Min(Math.Max(1, pageIndex + 1), pageCount);
+                    return explicitPage is { } authoredPage
+                        ? Math.Max(placedPage, authoredPage)
+                        : placedPage;
+                },
+                pageCount);
         }
         catch (InvalidOperationException)
         {
-            return blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
+            return new DocumentReferenceBlockPageResolution(
+                blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex));
         }
     }
 
@@ -13436,16 +12354,9 @@ public sealed class DocumentView : RichTextBox
         if (image.HasBorder)
         {
             var borderWidthPx = Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint;
-            var colorHex = image.BorderColorHex!.TrimStart('#');
-            System.Windows.Media.Color borderColor;
-            try
-            {
-                borderColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#" + colorHex);
-            }
-            catch
-            {
-                borderColor = System.Windows.Media.Colors.Black;
-            }
+            var borderColor = WpfRgbColorAdapter.ParseDrawingMlOrDefault(
+                image.BorderColorHex,
+                System.Windows.Media.Colors.Black);
             var borderBrush = new System.Windows.Media.SolidColorBrush(borderColor);
 
             System.Windows.Media.Brush strokeBrush = borderBrush;
@@ -13513,14 +12424,9 @@ public sealed class DocumentView : RichTextBox
         else if (image.GlowSizePt > 0)
         {
             // Glow: use DropShadowEffect with 0 distance and colored output.
-            System.Windows.Media.Color glowColor;
-            try
-            {
-                var hex = !string.IsNullOrEmpty(image.GlowColorHex)
-                    ? image.GlowColorHex.TrimStart('#') : "4472C4";
-                glowColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#" + hex);
-            }
-            catch { glowColor = System.Windows.Media.Color.FromRgb(0x44, 0x72, 0xC4); }
+            var glowColor = WpfRgbColorAdapter.ParseDrawingMlOrDefault(
+                image.GlowColorHex,
+                System.Windows.Media.Color.FromRgb(0x44, 0x72, 0xC4));
 
             root.Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
@@ -13660,9 +12566,6 @@ public sealed class DocumentView : RichTextBox
         frame.Freeze();
         return frame;
     }
-
-    /// <summary>Backwards-compatible alias kept for callers that decode a known-PNG (e.g. embedded-object icons).</summary>
-    private static BitmapSource DecodePng(byte[] bytes) => DecodeRaster(bytes);
 
     /// <summary>
     /// Guarded raster decode for byte payloads that are nominally images but may be undecodable (e.g.
@@ -13850,68 +12753,7 @@ public sealed class DocumentView : RichTextBox
         FrameworkElement element;
         if (shape.HasCustomGeometry && shape.CustomGeometry is { } cg)
         {
-            // W25: Render custom (freeform) geometry using a WPF Path with StreamGeometry.
-            var geo = new System.Windows.Media.StreamGeometry();
-            using (var ctx = geo.Open())
-            {
-                // Collect all segments, tracking whether we need to close the current figure.
-                bool inFigure = false;
-                bool closeFigure = false;
-                System.Windows.Point startPt = default;
-                var pathSegments = new System.Collections.Generic.List<CustomSegment>();
-
-                void FlushFigure()
-                {
-                    if (!inFigure) return;
-                    ctx.BeginFigure(startPt, isFilled: true, isClosed: closeFigure);
-                    foreach (var segment in pathSegments)
-                    {
-                        if (segment.Kind == CustomSegmentKind.LineTo && segment.Point is not null)
-                        {
-                            ctx.LineTo(new System.Windows.Point(
-                                segment.Point.X / (double)cg.Width * widthPx,
-                                segment.Point.Y / (double)cg.Height * heightPx),
-                                isStroked: true,
-                                isSmoothJoin: false);
-                        }
-                        else if (segment.Kind == CustomSegmentKind.CubicBezierTo
-                            && segment.Point is not null && segment.ControlPoint1 is not null && segment.ControlPoint2 is not null)
-                        {
-                            ctx.BezierTo(
-                                new System.Windows.Point(segment.ControlPoint1.X / (double)cg.Width * widthPx, segment.ControlPoint1.Y / (double)cg.Height * heightPx),
-                                new System.Windows.Point(segment.ControlPoint2.X / (double)cg.Width * widthPx, segment.ControlPoint2.Y / (double)cg.Height * heightPx),
-                                new System.Windows.Point(segment.Point.X / (double)cg.Width * widthPx, segment.Point.Y / (double)cg.Height * heightPx),
-                                isStroked: true,
-                                isSmoothJoin: false);
-                        }
-                    }
-                    pathSegments.Clear();
-                    inFigure = false;
-                    closeFigure = false;
-                }
-
-                foreach (var seg in cg.Segments)
-                {
-                    if (seg.Kind == CustomSegmentKind.MoveTo && seg.Point is not null)
-                    {
-                        FlushFigure();
-                        startPt = new System.Windows.Point(
-                            seg.Point.X / (double)cg.Width  * widthPx,
-                            seg.Point.Y / (double)cg.Height * heightPx);
-                        inFigure = true;
-                    }
-                    else if ((seg.Kind == CustomSegmentKind.LineTo || seg.Kind == CustomSegmentKind.CubicBezierTo) && inFigure)
-                    {
-                        pathSegments.Add(seg);
-                    }
-                    else if (seg.Kind == CustomSegmentKind.Close && inFigure)
-                    {
-                        closeFigure = true;
-                    }
-                }
-                FlushFigure();
-            }
-            geo.Freeze();
+            var geo = CustomShapePathWpfAdapter.Build(cg, 0, 0, widthPx, heightPx);
             element = new System.Windows.Shapes.Path
             {
                 Width = widthPx,
@@ -14047,121 +12889,47 @@ public sealed class DocumentView : RichTextBox
     {
         TryParseColor(fill.PatternFgColorHex ?? "#4472C4", out var fg);
         TryParseColor(fill.PatternBgColorHex ?? "#FFFFFF", out var bg);
-
-        var preset = fill.PatternPreset ?? string.Empty;
         var fgBrush = new SolidColorBrush(fg);
-        var pen = new System.Windows.Media.Pen(fgBrush, 1);
+        var bgBrush = new SolidColorBrush(bg);
+        var recipe = DrawingMlPatternFillPlanner.Plan(fill.PatternPreset);
+        var tile = new System.Windows.Media.DrawingGroup();
 
-        // Build a tile drawing based on the preset family.
-        // Tile is 8×8 device-independent pixels; complex patterns use 12×12.
-        System.Windows.Media.Drawing tile;
-
-        if (preset is "horz" or "ltHorz" or "medGray" or "dkHorz" or "pct5" or "pct10" or "pct20")
+        foreach (var primitive in recipe.Primitives)
         {
-            // Horizontal lines
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(8, 4))));
-            tile = g;
-        }
-        else if (preset is "vert" or "ltVert" or "dkVert" or "pct25" or "pct30")
-        {
-            // Vertical lines
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(4, 0), new System.Windows.Point(4, 8))));
-            tile = g;
-        }
-        else if (preset is "diagStripe" or "ltDnDiag" or "dkDnDiag" or "dnDiag" or "pct50")
-        {
-            // Diagonal top-left to bottom-right
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(8, 8))));
-            tile = g;
-        }
-        else if (preset is "ltUpDiag" or "dkUpDiag" or "upDiag" or "pct60" or "pct70")
-        {
-            // Diagonal bottom-left to top-right
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 8), new System.Windows.Point(8, 0))));
-            tile = g;
-        }
-        else if (preset is "cross" or "ltGrid" or "dkGrid" or "pct75" or "pct80")
-        {
-            // Cross (horizontal + vertical grid)
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(8, 4))));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(4, 0), new System.Windows.Point(4, 8))));
-            tile = g;
-        }
-        else if (preset is "dotGrid" or "dotDmnd" or "smGrid" or "pct90")
-        {
-            // Dotted / dot grid — single dot per cell
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(fgBrush, null,
-                new System.Windows.Media.EllipseGeometry(new System.Windows.Point(4, 4), 1, 1)));
-            tile = g;
-        }
-        else if (preset is "horzBrick" or "divot" or "weave")
-        {
-            // Brick — alternating horizontal dashes
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 12, 8));
-            var thinPen = new System.Windows.Media.Pen(fgBrush, 0.5);
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(12, 0))));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(6, 4), new System.Windows.Point(12, 4))));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(3, 4))));
-            // Vertical grout lines at offsets
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(6, 0), new System.Windows.Point(6, 4))));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(0, 8))));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(12, 4), new System.Windows.Point(12, 8))));
-            tile = g;
-            // 12-wide tile — return early with custom viewport
-            return new System.Windows.Media.DrawingBrush(tile)
+            var brush = primitive.ColorRole == DrawingMlPatternFillColorRole.Foreground ? fgBrush : bgBrush;
+            tile.Children.Add(primitive switch
             {
-                TileMode      = System.Windows.Media.TileMode.Tile,
-                Viewport      = new System.Windows.Rect(0, 0, 12, 8),
-                ViewportUnits = System.Windows.Media.BrushMappingMode.Absolute,
-            };
-        }
-        else
-        {
-            // Default / diagCross — covers "diagCross", "ltDiagCross", "dkDiagCross", and unknowns.
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(8, 8))));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(8, 0), new System.Windows.Point(0, 8))));
-            tile = g;
+                DrawingMlPatternFillRectangle rectangle => new System.Windows.Media.GeometryDrawing(
+                    brush,
+                    null,
+                    new System.Windows.Media.RectangleGeometry(new System.Windows.Rect(
+                        rectangle.X,
+                        rectangle.Y,
+                        rectangle.Width,
+                        rectangle.Height))),
+                DrawingMlPatternFillLine line => new System.Windows.Media.GeometryDrawing(
+                    null,
+                    new System.Windows.Media.Pen(brush, line.StrokeWidth),
+                    new System.Windows.Media.LineGeometry(
+                        new System.Windows.Point(line.Start.X, line.Start.Y),
+                        new System.Windows.Point(line.End.X, line.End.Y))),
+                DrawingMlPatternFillEllipse ellipse => new System.Windows.Media.GeometryDrawing(
+                    brush,
+                    null,
+                    new System.Windows.Media.EllipseGeometry(
+                        new System.Windows.Point(ellipse.CenterX, ellipse.CenterY),
+                        ellipse.RadiusX,
+                        ellipse.RadiusY)),
+                _ => throw new InvalidOperationException($"Unsupported pattern primitive {primitive.GetType().Name}.")
+            });
         }
 
         return new System.Windows.Media.DrawingBrush(tile)
         {
             TileMode      = System.Windows.Media.TileMode.Tile,
-            Viewport      = new System.Windows.Rect(0, 0, 8, 8),
+            Viewport      = new System.Windows.Rect(0, 0, recipe.TileWidth, recipe.TileHeight),
             ViewportUnits = System.Windows.Media.BrushMappingMode.Absolute,
         };
-
-        static System.Windows.Media.GeometryDrawing BgRect(Color c, double w, double h) =>
-            new(new SolidColorBrush(c), null,
-                new System.Windows.Media.RectangleGeometry(new System.Windows.Rect(0, 0, w, h)));
     }
 
     /// <summary>
@@ -14710,10 +13478,7 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Parse a #RRGGBB hex colour string to a WPF Color, falling back to the Office blue.</summary>
     private static Color ParseHexColor(string hex)
-    {
-        try { return (Color)ColorConverter.ConvertFromString(hex); }
-        catch { return Color.FromRgb(0x5B, 0x9B, 0xD5); }
-    }
+        => WpfRgbColorAdapter.ParseDrawingMlOrDefault(hex, Color.FromRgb(0x5B, 0x9B, 0xD5));
 
     private static InlineUIContainer BuildChartRun(Chart chart, DocumentEffectSet effectSet)
     {
@@ -15021,29 +13786,23 @@ public sealed class DocumentView : RichTextBox
 
     private static void AddSceneSlice(Canvas canvas, ChartSceneSlice slice)
     {
-        var start = slice.StartAngleRadians;
-        var end = start + slice.SweepAngleRadians;
-        var outerStart = new Point(slice.CenterX + slice.OuterRadius * Math.Cos(start),
-            slice.CenterY + slice.OuterRadius * Math.Sin(start));
-        var outerEnd = new Point(slice.CenterX + slice.OuterRadius * Math.Cos(end),
-            slice.CenterY + slice.OuterRadius * Math.Sin(end));
+        var outerStart = new Point(slice.OuterStart.X, slice.OuterStart.Y);
+        var outerEnd = new Point(slice.OuterEnd.X, slice.OuterEnd.Y);
         var figure = new PathFigure { StartPoint = outerStart, IsClosed = true };
         figure.Segments.Add(new ArcSegment(outerEnd,
             new Size(slice.OuterRadius, slice.OuterRadius), 0,
-            slice.SweepAngleRadians > Math.PI, SweepDirection.Clockwise, true));
-        if (slice.InnerRadius > 0)
+            slice.IsLargeArc, SweepDirection.Clockwise, true));
+        if (slice.HasInnerRadius)
         {
-            var innerEnd = new Point(slice.CenterX + slice.InnerRadius * Math.Cos(end),
-                slice.CenterY + slice.InnerRadius * Math.Sin(end));
-            var innerStart = new Point(slice.CenterX + slice.InnerRadius * Math.Cos(start),
-                slice.CenterY + slice.InnerRadius * Math.Sin(start));
+            var innerEnd = new Point(slice.InnerEnd.X, slice.InnerEnd.Y);
+            var innerStart = new Point(slice.InnerStart.X, slice.InnerStart.Y);
             figure.Segments.Add(new LineSegment(innerEnd, true));
             figure.Segments.Add(new ArcSegment(innerStart,
                 new Size(slice.InnerRadius, slice.InnerRadius), 0,
-                slice.SweepAngleRadians > Math.PI, SweepDirection.Counterclockwise, true));
+                slice.IsLargeArc, SweepDirection.Counterclockwise, true));
         }
         else
-            figure.Segments.Add(new LineSegment(new Point(slice.CenterX, slice.CenterY), true));
+            figure.Segments.Add(new LineSegment(new Point(slice.Center.X, slice.Center.Y), true));
 
         var geometry = new PathGeometry();
         geometry.Figures.Add(figure);
@@ -15177,10 +13936,7 @@ public sealed class DocumentView : RichTextBox
             content = new TextBlock
             {
                 Text = plan.Label,
-                Foreground = new SolidColorBrush(
-                    TryParseColor(plan.ForegroundColorHex, out var foreground)
-                        ? foreground
-                        : Color.FromRgb(0x40, 0x40, 0x40)),
+                Foreground = new SolidColorBrush(ParseColor(plan.ForegroundColorHex, Colors.Black)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
@@ -15192,14 +13948,8 @@ public sealed class DocumentView : RichTextBox
         {
             Width = widthPx,
             Height = heightPx,
-            Background = new SolidColorBrush(
-                TryParseColor(plan.BackgroundColorHex, out var background)
-                    ? background
-                    : Color.FromRgb(0xF3, 0xF6, 0xFB)),
-            BorderBrush = new SolidColorBrush(
-                TryParseColor(plan.BorderColorHex, out var border)
-                    ? border
-                    : Color.FromRgb(0xC0, 0xC8, 0xD8)),
+            Background = new SolidColorBrush(ParseColor(plan.BackgroundColorHex, Colors.White)),
+            BorderBrush = new SolidColorBrush(ParseColor(plan.BorderColorHex, Colors.Gray)),
             BorderThickness = new Thickness(1),
             Child = content,
             Tag = embedded // carries the model object so CommitToModel can round-trip it
@@ -15213,10 +13963,16 @@ public sealed class DocumentView : RichTextBox
     public void InsertEquation(Equation equation) => InsertInlineContainer(BuildEquationRun(equation));
 
     /// <summary>Inserts an inline chart at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
-    public void InsertChart(Chart chart) => InsertInlineContainer(BuildChartRun(chart, DocumentEffectSet.FromTheme(_model.Theme)));
+    public void InsertChart(Chart? chart = null)
+    {
+        var insertion = DocumentObjectEditingCoordinator.PlanChartInsertion(chart);
+        InsertInlineContainer(BuildChartRun(insertion, DocumentEffectSet.FromTheme(_model.Theme)));
+    }
 
     /// <summary>Inserts inline WordArt at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
-    public void InsertWordArt(WordArt wordArt) => InsertInlineContainer(BuildWordArtRun(wordArt, DocumentEffectSet.FromTheme(_model.Theme)));
+    public void InsertWordArt(WordArt? wordArt = null) => InsertInlineContainer(BuildWordArtRun(
+        DocumentObjectEditingCoordinator.PlanWordArtInsertion(wordArt),
+        DocumentEffectSet.FromTheme(_model.Theme)));
 
     /// <summary>Inserts an inline SmartArt diagram at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
     public void InsertSmartArt(SmartArt smartArt) => InsertInlineContainer(BuildSmartArtRun(smartArt, DocumentEffectSet.FromTheme(_model.Theme), _model.Theme));
@@ -15250,10 +14006,6 @@ public sealed class DocumentView : RichTextBox
     public (int Current, int Total) SectionInfo()
     {
         CommitToModel();
-        var total = Math.Max(1, _model.Sections.Count);
-        if (total == 1)
-            return (1, 1);
-
         // Find the caret's containing top-level WPF paragraph ordinal, then count model section breaks
         // at or before the model block at that ordinal (model + WPF top-level blocks stay aligned for the
         // simple paragraph/table flow these documents use).
@@ -15272,21 +14024,14 @@ public sealed class DocumentView : RichTextBox
                 ordinal++;
             }
         }
-        if (caretOrdinal < 0)
-            return (total, total); // caret position unknown: report the last (body) section
-
-        var current = 1;
-        for (var i = 0; i < _model.Blocks.Count && i <= caretOrdinal; i++)
-            if (_model.Blocks[i] is FreeW.Core.Model.Paragraph { SectionBreak: not null } && i < caretOrdinal)
-                current++;
-        return (Math.Clamp(current, 1, total), total);
+        var position = _editingSession.Interaction.SectionPosition(caretOrdinal);
+        return (position.Current, position.Total);
     }
 
     /// <summary>
-    /// Insert plain text at the caret through the RichTextBox's own edit path, so it joins the run the
-    /// caret sits in (inheriting its formatting), replaces any active selection, and is captured by the
-    /// existing undo stack. A no-op for null/empty text. Used by Insert &gt; Symbol and Date &amp; Time,
-    /// which just drop ordinary text runs at the caret — no model or docx changes.
+    /// Insert plain text at the caret through the portable body-edit session, translating the WPF caret
+    /// and selection to model positions while preserving native focus, formatting, and fallback behavior.
+    /// A no-op for null/empty text. Used by Insert &gt; Symbol and Date &amp; Time.
     /// </summary>
     public void InsertText(string text)
     {
@@ -15297,7 +14042,7 @@ public sealed class DocumentView : RichTextBox
             return;
 
         Focus();
-        if (TrackChangesEnabled && TryRecordTrackedTextInput(text))
+        if (TryApplyBodyTextInput(text))
             return;
 
         var selection = Selection;
@@ -15315,367 +14060,111 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
-    private bool TryRecordTrackedTextInput(string text)
+    private bool TryApplyBodyTextInput(string text)
     {
-        if (!TrackChangesEnabled
-            || string.IsNullOrEmpty(text)
-            || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+        if (string.IsNullOrEmpty(text)
+            || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
+            || !TryGetCurrentBodyTextRange(out var range))
         {
             return false;
         }
 
-        // Typing over a selection that spans paragraphs: record the replacement as one tracked edit rather
-        // than letting the native RichTextBox merge the paragraphs and drop the text untracked.
-        if (TryGetCrossParagraphSelection(out var firstIndex, out var firstOffset, out var lastIndex, out var lastOffset))
-            return TryRecordTrackedCrossParagraphReplacement(firstIndex, firstOffset, lastIndex, lastOffset, text);
-
-        if (!TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
-            return false;
-
-        var insertOffset = Math.Min(startOffset, endOffset);
-        var author = CurrentRevisionAuthor();
-        var dateXml = CurrentRevisionDateXml();
-
+        var formatting = !TrackChangesEnabled && range.IsCollapsed
+            ? CaptureSelectionRunFormatting()
+            : null;
         CommitToModel();
-        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph)
-            return false;
-
-        _commands.Execute(new ReplaceParagraphRunsCommand(paragraphIndex, paragraph =>
+        if (!_editingSession.Body.TryApplyTextInput(
+                range,
+                new DocumentBodyTextInput(text, TrackChangesEnabled, formatting),
+                out var result))
         {
-            if (hasSelection)
-                RevisionEditPlanner.DeleteRangeAsRevision(paragraph, startOffset, endOffset, author, dateXml);
+            return false;
+        }
 
-            var formatting = RevisionEditPlanner.FormattingAtOffset(paragraph, insertOffset);
-            var link = RevisionEditPlanner.LinkAtOffset(paragraph, insertOffset);
-            RevisionEditPlanner.InsertText(
-                paragraph,
-                insertOffset,
-                text,
-                formatting,
-                new RevisionEditPlanner.InsertOptions(
-                    RevisionKind.Inserted,
-                    author,
-                    dateXml,
-                    link.HyperlinkUrl,
-                    link.HyperlinkAnchor,
-                    link.HyperlinkTooltip));
-        }));
-        PlaceCaretAtModelTextOffset(paragraphIndex, insertOffset + text.Length);
+        PlaceCaretAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset);
         return true;
     }
 
-    private bool TryRecordTrackedBackspace()
+    private bool TryApplyBodyBackspace() => TryApplyBodyDeletion(backward: true);
+
+    private bool TryApplyBodyDeleteForward() => TryApplyBodyDeletion(backward: false);
+
+    private bool TryApplyBodyDeletion(bool backward)
     {
-        if (!TrackChangesEnabled || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
-            return false;
-        if (TryGetCrossParagraphSelection(out var firstIndex, out var firstOffset, out var lastIndex, out var lastOffset))
-            return TryRecordTrackedCrossParagraphReplacement(firstIndex, firstOffset, lastIndex, lastOffset, insertText: null);
-        if (!TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
-            return false;
-        if (hasSelection)
-            return TryRecordTrackedDeletion(paragraphIndex, startOffset, endOffset, placeAfterKeptForwardDelete: false);
-        if (startOffset <= 0)
-            return TryRecordTrackedParagraphMergeBackward(paragraphIndex);
-        return TryRecordTrackedDeletion(paragraphIndex, startOffset - 1, startOffset, placeAfterKeptForwardDelete: false);
-    }
-
-    private bool TryRecordTrackedDeleteForward()
-    {
-        if (!TrackChangesEnabled || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
-            return false;
-        if (TryGetCrossParagraphSelection(out var firstIndex, out var firstOffset, out var lastIndex, out var lastOffset))
-            return TryRecordTrackedCrossParagraphReplacement(firstIndex, firstOffset, lastIndex, lastOffset, insertText: null);
-        if (!TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
-            return false;
-        if (hasSelection)
-            return TryRecordTrackedDeletion(paragraphIndex, startOffset, endOffset, placeAfterKeptForwardDelete: false);
-        CommitToModel();
-        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph paragraph)
-            return false;
-        if (startOffset >= paragraph.PlainText.Length)
-            return TryRecordTrackedParagraphMergeForward(paragraphIndex);
-        return TryRecordTrackedDeletion(paragraphIndex, startOffset, startOffset + 1, placeAfterKeptForwardDelete: true);
-    }
-
-    /// <summary>
-    /// Backspace at the very start of a (non-first) body paragraph, under Track Changes: rather than
-    /// physically merging into the preceding paragraph now (which would bypass Track Changes entirely —
-    /// the family bug this fixes), mark the PRECEDING paragraph's own end-of-paragraph mark as a tracked
-    /// deletion (<see cref="RevisionKind.Deleted"/>). Word's convention: a paragraph's formatting is
-    /// carried by its own trailing mark, so the paragraph whose mark is deleted is always the earlier of
-    /// the pair — the eventual merge (performed by <see cref="TrackChanges.AcceptAll"/> on Accept) keeps
-    /// the later paragraph's formatting, matching real Word. Both paragraphs stay in place — and the
-    /// document keeps looking exactly as it did before the keystroke — until the mark is resolved.
-    /// No-op (returns false, so the caller falls through to native handling) at the very start of the
-    /// document, or when the preceding block is not itself a body paragraph (e.g. a table) — deleting text
-    /// into a table cell this way isn't something Word's pilcrow-delete model covers.
-    /// </summary>
-    private bool TryRecordTrackedParagraphMergeBackward(int paragraphIndex)
-    {
-        CommitToModel();
-        if (paragraphIndex <= 0 || paragraphIndex - 1 >= _model.Blocks.Count)
-            return false;
-        if (_model.Blocks[paragraphIndex - 1] is not ModelParagraph)
-            return false;
-
-        _commands.Execute(new SetParagraphMarkRevisionCommand(
-            paragraphIndex - 1, RevisionKind.Deleted, CurrentRevisionAuthor(), CurrentRevisionDateXml()));
-        // Execute() re-renders the FlowDocument from the model (via the command bus's Changed event),
-        // which replaces every WPF paragraph object — restore the caret to where it visually already was
-        // (nothing textual moved: the two paragraphs are still separate blocks until Accept).
-        PlaceCaretAtModelTextOffset(paragraphIndex, 0);
-        return true;
-    }
-
-    /// <summary>
-    /// Forward-Delete at the very end of a (non-last) body paragraph, under Track Changes: the sibling of
-    /// <see cref="TryRecordTrackedParagraphMergeBackward"/> — deleting the boundary between paragraph N and
-    /// N+1 always marks paragraph N's own mark deleted, whichever key/direction reached the boundary (this
-    /// keeps a subsequent Backspace at the start of N+1 and a Delete at the end of N produce the identical
-    /// tracked state). No-op at the very end of the document, or when the following block is not itself a
-    /// body paragraph.
-    /// </summary>
-    private bool TryRecordTrackedParagraphMergeForward(int paragraphIndex)
-    {
-        CommitToModel();
-        if (paragraphIndex < 0 || paragraphIndex + 1 >= _model.Blocks.Count
-            || _model.Blocks[paragraphIndex] is not ModelParagraph currentParagraph)
-            return false;
-        if (_model.Blocks[paragraphIndex + 1] is not ModelParagraph)
-            return false;
-
-        var endOffsetForCaret = currentParagraph.PlainText.Length;
-        _commands.Execute(new SetParagraphMarkRevisionCommand(
-            paragraphIndex, RevisionKind.Deleted, CurrentRevisionAuthor(), CurrentRevisionDateXml()));
-        // See TryRecordTrackedParagraphMergeBackward: Execute() re-renders the FlowDocument, so the caret
-        // must be explicitly restored to where it visually already was (the end of this paragraph).
-        PlaceCaretAtModelTextOffset(paragraphIndex, endOffsetForCaret);
-        return true;
-    }
-
-    private bool TryRecordTrackedDeletion(int paragraphIndex, int startOffset, int endOffset, bool placeAfterKeptForwardDelete)
-    {
-        var author = CurrentRevisionAuthor();
-        var dateXml = CurrentRevisionDateXml();
-        RevisionEditPlanner.DeleteResult result = default;
-
-        CommitToModel();
-        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph)
-            return false;
-
-        _commands.Execute(new ReplaceParagraphRunsCommand(paragraphIndex, paragraph =>
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
+            || !TryGetCurrentBodyTextRange(out var range))
         {
-            result = RevisionEditPlanner.DeleteRangeAsRevision(paragraph, startOffset, endOffset, author, dateXml);
-        }));
+            return false;
+        }
 
-        var caretOffset = placeAfterKeptForwardDelete && result.KeptDeletedText
-            ? Math.Max(startOffset, endOffset)
-            : result.CaretOffset;
-        PlaceCaretAtModelTextOffset(paragraphIndex, caretOffset);
+        CommitToModel();
+        if (!_editingSession.Body.TryApplyDeletion(
+                range,
+                backward
+                    ? DocumentBodyDeleteDirection.Backward
+                    : DocumentBodyDeleteDirection.Forward,
+                TrackChangesEnabled,
+                mergeForwardBoundary: true,
+                out var result))
+        {
+            return false;
+        }
+
+        PlaceCaretAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset);
         return true;
     }
 
-    /// <summary>
-    /// Resolve a selection that spans TWO OR MORE body paragraphs to model paragraph indices/offsets.
-    /// <see cref="TryGetCurrentBodyTextTarget"/> deliberately handles only a selection contained in a single
-    /// paragraph; without this companion, every tracked edit over a multi-paragraph selection fell through
-    /// to native RichTextBox handling, which merged the paragraphs and discarded the selected text with no
-    /// revision recorded at all. Returns false — so the caller keeps its existing behaviour — for an empty
-    /// or single-paragraph selection, and whenever either endpoint is not a top-level body paragraph
-    /// (<see cref="NumberLeafBlocks"/> numbers a table as one opaque block, so a selection reaching into a
-    /// table cell simply does not resolve here).
-    /// </summary>
-    private bool TryGetCrossParagraphSelection(
-        out int firstParagraphIndex,
-        out int firstOffset,
-        out int lastParagraphIndex,
-        out int lastOffset)
+    private bool TryApplyBodyParagraphBreak()
     {
-        firstParagraphIndex = -1;
-        lastParagraphIndex = -1;
-        firstOffset = 0;
-        lastOffset = 0;
-
-        if (Selection.IsEmpty)
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
+            || !TryGetCurrentBodyTextRange(out var range))
+        {
             return false;
-        var startParagraph = Selection.Start.Paragraph;
-        var endParagraph = Selection.End.Paragraph;
-        if (startParagraph is null || endParagraph is null || ReferenceEquals(startParagraph, endParagraph))
+        }
+
+        CommitToModel();
+        if (!_editingSession.Body.TryApplyParagraphBreak(range, out var result))
+            return false;
+        PlaceCaretAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset);
+        return true;
+    }
+
+    private bool TryGetCurrentBodyTextRange(out DocumentTextRange range)
+    {
+        range = default;
+        var hasSelection = !Selection.IsEmpty;
+        var startParagraph = hasSelection ? Selection.Start.Paragraph : CaretPosition?.Paragraph;
+        var endParagraph = hasSelection ? Selection.End.Paragraph : startParagraph;
+        if (startParagraph is null || endParagraph is null)
             return false;
 
         var indexOf = new Dictionary<WpfParagraph, int>();
-        var modelIndex = 0;
+        var visibleIndex = 0;
         foreach (var block in Document.Blocks)
-            NumberLeafBlocks(block, indexOf, ref modelIndex);
+            NumberLeafBlocks(block, indexOf, ref visibleIndex);
         if (!indexOf.TryGetValue(startParagraph, out var startVisible)
             || !indexOf.TryGetValue(endParagraph, out var endVisible))
         {
             return false;
         }
 
-        firstParagraphIndex = ModelIndexFromVisible(startVisible);
-        lastParagraphIndex = ModelIndexFromVisible(endVisible);
-        if (firstParagraphIndex < 0 || lastParagraphIndex <= firstParagraphIndex)
-            return false;
-
-        firstOffset = OffsetInParagraph(startParagraph, Selection.Start);
-        lastOffset = OffsetInParagraph(endParagraph, Selection.End);
-        return true;
-    }
-
-    /// <summary>
-    /// Record a Backspace/Delete (<paramref name="insertText"/> null) or a type-over replacement
-    /// (<paramref name="insertText"/> non-null) of a selection spanning several body paragraphs as tracked
-    /// revisions, in one undo step. Nothing is physically removed or merged: the selected text in the first,
-    /// intervening, and last paragraphs is struck as a tracked deletion, and every paragraph MARK inside the
-    /// selection — the first paragraph's and each intervening one's, but not the last paragraph's, which
-    /// lies past the selection's end — is flagged <see cref="RevisionKind.Deleted"/> exactly as the
-    /// single-boundary case does (<see cref="TryRecordTrackedParagraphMergeBackward"/>). The paragraphs only
-    /// actually collapse into one when the revisions are accepted. Replacement text is inserted as a tracked
-    /// insertion at the selection's start, matching the single-paragraph type-over path.
-    /// Returns false — leaving the caller to fall through to native handling — when any block in the span is
-    /// not an ordinary body paragraph (a table in the middle of the selection is outside what this
-    /// pilcrow-level model covers).
-    /// </summary>
-    private bool TryRecordTrackedCrossParagraphReplacement(
-        int firstParagraphIndex,
-        int firstOffset,
-        int lastParagraphIndex,
-        int lastOffset,
-        string? insertText)
-    {
-        CommitToModel();
-        if (firstParagraphIndex < 0
-            || lastParagraphIndex >= _model.Blocks.Count
-            || lastParagraphIndex <= firstParagraphIndex)
-        {
-            return false;
-        }
-        for (var i = firstParagraphIndex; i <= lastParagraphIndex; i++)
-        {
-            if (_model.Blocks[i] is not ModelParagraph)
-                return false;
-        }
-
-        var author = CurrentRevisionAuthor();
-        var dateXml = CurrentRevisionDateXml();
-        var startLength = ((ModelParagraph)_model.Blocks[firstParagraphIndex]).PlainText.Length;
-        var insertOffset = Math.Clamp(firstOffset, 0, startLength);
-        var endLength = ((ModelParagraph)_model.Blocks[lastParagraphIndex]).PlainText.Length;
-        var deleteEndOffset = Math.Clamp(lastOffset, 0, endLength);
-
-        var ownsUndoGroup = !_commands.IsUndoGroupOpen;
-        if (ownsUndoGroup)
-            _commands.BeginUndoGroup();
-        try
-        {
-            // First paragraph: strike from the selection start to its end, then (type-over only) insert the
-            // replacement there — the same delete-then-insert order the single-paragraph path uses.
-            _commands.Execute(new ReplaceParagraphRunsCommand(firstParagraphIndex, paragraph =>
-            {
-                RevisionEditPlanner.DeleteRangeAsRevision(
-                    paragraph, insertOffset, paragraph.PlainText.Length, author, dateXml);
-                if (insertText is not { Length: > 0 })
-                    return;
-                var formatting = RevisionEditPlanner.FormattingAtOffset(paragraph, insertOffset);
-                var link = RevisionEditPlanner.LinkAtOffset(paragraph, insertOffset);
-                RevisionEditPlanner.InsertText(
-                    paragraph,
-                    insertOffset,
-                    insertText,
-                    formatting,
-                    new RevisionEditPlanner.InsertOptions(
-                        RevisionKind.Inserted,
-                        author,
-                        dateXml,
-                        link.HyperlinkUrl,
-                        link.HyperlinkAnchor,
-                        link.HyperlinkTooltip));
-            }));
-
-            // Fully-covered paragraphs in between: all of their text is struck.
-            for (var i = firstParagraphIndex + 1; i < lastParagraphIndex; i++)
-            {
-                _commands.Execute(new ReplaceParagraphRunsCommand(i, paragraph =>
-                    RevisionEditPlanner.DeleteRangeAsRevision(
-                        paragraph, 0, paragraph.PlainText.Length, author, dateXml)));
-            }
-
-            // Last paragraph: strike only up to the selection's end; its own mark is NOT in the selection.
-            _commands.Execute(new ReplaceParagraphRunsCommand(lastParagraphIndex, paragraph =>
-                RevisionEditPlanner.DeleteRangeAsRevision(paragraph, 0, deleteEndOffset, author, dateXml)));
-
-            // Every paragraph mark the selection actually covers.
-            for (var i = firstParagraphIndex; i < lastParagraphIndex; i++)
-                _commands.Execute(new SetParagraphMarkRevisionCommand(i, RevisionKind.Deleted, author, dateXml));
-        }
-        catch
-        {
-            if (ownsUndoGroup)
-                _commands.RollbackUndoGroup();
-            throw;
-        }
-
-        if (ownsUndoGroup)
-            _commands.CommitUndoGroup(insertText is { Length: > 0 } ? "Replace Selection" : "Delete Selection");
-
-        PlaceCaretAtModelTextOffset(firstParagraphIndex, insertOffset + (insertText?.Length ?? 0));
-        return true;
-    }
-
-    private bool TryGetCurrentBodyTextTarget(
-        out int paragraphIndex,
-        out int startOffset,
-        out int endOffset,
-        out bool hasSelection)
-    {
-        paragraphIndex = -1;
-        startOffset = 0;
-        endOffset = 0;
-        hasSelection = false;
-
-        WpfParagraph? paragraph;
-        if (!Selection.IsEmpty)
-        {
-            paragraph = Selection.Start.Paragraph;
-            if (paragraph is null || !ReferenceEquals(paragraph, Selection.End.Paragraph))
-                return false;
-            startOffset = OffsetInParagraph(paragraph, Selection.Start);
-            endOffset = OffsetInParagraph(paragraph, Selection.End);
-            hasSelection = startOffset != endOffset;
-        }
-        else
-        {
-            paragraph = CaretPosition?.Paragraph;
-            if (paragraph is null || CaretPosition is null)
-                return false;
-            startOffset = OffsetInParagraph(paragraph, CaretPosition);
-            endOffset = startOffset;
-        }
-
-        var indexOf = new Dictionary<WpfParagraph, int>();
-        var modelIndex = 0;
-        foreach (var block in Document.Blocks)
-            NumberLeafBlocks(block, indexOf, ref modelIndex);
-        if (!indexOf.TryGetValue(paragraph, out var visibleIndex))
-            return false;
-
-        paragraphIndex = ModelIndexFromVisible(visibleIndex);
+        var startOffset = OffsetInParagraph(
+            startParagraph,
+            hasSelection ? Selection.Start : CaretPosition!);
+        var endOffset = OffsetInParagraph(
+            endParagraph,
+            hasSelection ? Selection.End : CaretPosition!);
+        range = new DocumentTextRange(
+            new DocumentTextPosition(ModelIndexFromVisible(startVisible), startOffset),
+            new DocumentTextPosition(ModelIndexFromVisible(endVisible), endOffset));
         return true;
     }
 
     private string CurrentRevisionAuthor()
-    {
-        var author = string.IsNullOrWhiteSpace(RevisionAuthor)
-            ? _model.Properties.Author
-            : RevisionAuthor;
-        if (string.IsNullOrWhiteSpace(author))
-            author = Environment.UserName;
-        return string.IsNullOrWhiteSpace(author) ? "FreeW User" : author.Trim();
-    }
-
-    private static string CurrentRevisionDateXml() =>
-        DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+        => ReviewAuthorIdentityPlanner.ResolveAuthor(
+            RevisionAuthor,
+            _model.Properties.Author,
+            Environment.UserName);
 
     private void PlaceCaretAtModelTextOffset(int modelBlockIndex, int offset)
     {
@@ -15731,41 +14220,16 @@ public sealed class DocumentView : RichTextBox
         return false;
     }
 
-    internal void MoveCaretToBlockForTest(int modelBlockIndex, int offset) =>
-        PlaceCaretAtModelTextOffset(modelBlockIndex, offset);
-
-    internal void SetSelectionRangeForTest(int anchorBlock, int anchorOffset, int caretBlock, int caretOffset)
-    {
-        var anchor = TextPointerAtModelTextOffset(anchorBlock, anchorOffset);
-        var caret = TextPointerAtModelTextOffset(caretBlock, caretOffset);
-        if (anchor is not null && caret is not null)
-            Selection.Select(anchor, caret);
-    }
-
-    internal bool ApplyFormatPainterToSelectionForTest() => TryApplyFormatPainter();
-
-    internal void BackspaceForTest()
-    {
-        if (!TryRecordTrackedBackspace())
-            EditingCommands.Backspace.Execute(null, this);
-    }
-
-    internal void DeleteForwardForTest()
-    {
-        if (!TryRecordTrackedDeleteForward())
-            EditingCommands.Delete.Execute(null, this);
-    }
-
     /// <summary>
     /// Paste the clipboard's text as unformatted text at the caret ("Paste Text Only"). The clipboard
     /// text is normalized (line endings canonicalized, control chars stripped — see
     /// <see cref="PasteText.Normalize"/>) and inserted through <see cref="InsertText"/>, which joins the
     /// run the caret sits in (so the pasted text inherits the destination formatting), replaces any active
     /// selection, and is captured by the undo stack. All source/rich formatting is discarded. A no-op when
-    /// the clipboard holds no usable text. Reads <see cref="System.Windows.Clipboard"/> directly — no model
-    /// or docx changes.
+    /// the clipboard holds no usable text. Reads through the shared platform clipboard boundary — no
+    /// model or docx changes.
     /// </summary>
-    public void PastePlainText() => PasteFromClipboard();
+    public void PastePlainText() => PasteFromClipboard(DocumentPasteTextKind.TextOnly);
 
     /// <summary>
     /// Paste the clipboard's text and merge it into the destination's formatting ("Merge Formatting"). In
@@ -15775,32 +14239,26 @@ public sealed class DocumentView : RichTextBox
     /// and inserted via <see cref="InsertText"/> so it is undoable. A no-op when the clipboard holds no
     /// usable text.
     /// </summary>
-    public void PasteMergeFormatting() => PasteFromClipboard();
+    public void PasteMergeFormatting() => PasteFromClipboard(DocumentPasteTextKind.MergeFormatting);
 
     // Shared body for the paste-special commands: read the clipboard's text (guarding the absent/empty
     // case and the rare clipboard-access failure), normalize it, and insert it at the caret. Both
     // "Paste Text Only" and "Merge Formatting" resolve to match-destination insertion in FreeW, so they
     // share one implementation.
-    private void PasteFromClipboard()
+    private void PasteFromClipboard(DocumentPasteTextKind kind)
     {
-        string raw;
-        try
-        {
-            if (!System.Windows.Clipboard.ContainsText())
-                return;
-            raw = System.Windows.Clipboard.GetText();
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            // The clipboard can be transiently locked by another process; treat that as nothing to paste.
-            return;
-        }
-
-        var text = PasteText.Normalize(raw);
-        if (text.Length == 0)
+        var transfer = FreeWClipboardApplicationWorkflow.ReadTextAsync(_platformClipboard)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+        if (!transfer.IsSuccess || transfer.Payload is not { } payload)
             return;
 
-        InsertText(text);
+        var plan = _editingSession.Interaction.PlanPasteText(payload.Text, kind);
+        if (!plan.HasText)
+            return;
+
+        InsertText(plan.Text);
     }
 
     /// <summary>
@@ -15879,10 +14337,10 @@ public sealed class DocumentView : RichTextBox
             return false;
         }
 
-        var id = footnote ? _model.NextFootnoteId() : _model.NextEndnoteId();
-        _commands.Execute(new InsertNoteCommand(id, footnote, text ?? string.Empty, paragraphIndex, textOffset));
-        var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
-        PlaceCaretAtModelTextOffset(paragraphIndex, textOffset + markerLength);
+        var result = ReferenceEdits.InsertNote(paragraphIndex, textOffset, text, footnote);
+        if (!result.Applied)
+            return false;
+        PlaceCaretAtModelTextOffset(paragraphIndex, result.TextOffset);
         return true;
     }
 
@@ -15899,23 +14357,22 @@ public sealed class DocumentView : RichTextBox
         }
 
         CommitToModel();
-        var id = footnote ? _model.NextFootnoteId() : _model.NextEndnoteId();
-        _commands.Execute(new InsertTableCellNoteCommand(
-            id,
-            footnote,
-            text ?? string.Empty,
-            tableBlockIndex,
-            rowIndex,
-            cellIndex,
+        if (TableEdits.AddressFromCellIndex(tableBlockIndex, rowIndex, cellIndex) is not { } address)
+            return false;
+        var result = TableEdits.InsertNote(
+            address,
             paragraphIndex,
-            textOffset));
-        var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+            textOffset,
+            text,
+            footnote);
+        if (!result.Applied)
+            return false;
         PlaceCaretAtTableCellTextOffset(
             tableBlockIndex,
             rowIndex,
             cellIndex,
             paragraphIndex,
-            textOffset + markerLength);
+            result.TextOffset);
         return true;
     }
 
@@ -16035,7 +14492,7 @@ public sealed class DocumentView : RichTextBox
     public void DeleteFootnote(int id)
     {
         CommitToModel();
-        _commands.Execute(new DeleteNoteCommand(id, footnote: true));
+        ReferenceEdits.DeleteNote(id, footnote: true);
     }
 
     /// <summary>
@@ -16045,7 +14502,7 @@ public sealed class DocumentView : RichTextBox
     public void DeleteEndnote(int id)
     {
         CommitToModel();
-        _commands.Execute(new DeleteNoteCommand(id, footnote: false));
+        ReferenceEdits.DeleteNote(id, footnote: false);
     }
 
     /// <summary>Replaces a note's rich content as one undoable edit.</summary>
@@ -16053,7 +14510,13 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(paragraphs);
         CommitToModel();
-        _commands.Execute(new ReplaceNoteContentCommand(id, footnote, paragraphs));
+        ReferenceEdits.ReplaceNoteContent(id, footnote, paragraphs);
+    }
+
+    public void ApplyFootnoteEndnoteOptions(FootnoteEndnoteOptionsDialogResult result)
+    {
+        CommitToModel();
+        ReferenceEdits.ApplyNoteNumberingOptions(result);
     }
 
     /// <summary>Moves the caret to the next footnote reference marker in visible document order.</summary>
@@ -16076,14 +14539,13 @@ public sealed class DocumentView : RichTextBox
             return false;
 
         var caret = CaretPosition ?? Document.ContentStart;
-        WpfRun target;
-        if (previous)
+        if (!DocumentNoteNavigationPlanner.TryFindAdjacent(
+                markers,
+                marker => marker.ContentStart.CompareTo(caret),
+                previous,
+                out var target))
         {
-            target = markers.LastOrDefault(marker => marker.ContentStart.CompareTo(caret) < 0) ?? markers[^1];
-        }
-        else
-        {
-            target = markers.FirstOrDefault(marker => marker.ContentStart.CompareTo(caret) > 0) ?? markers[0];
+            return false;
         }
 
         CaretPosition = target.ContentStart.GetInsertionPosition(LogicalDirection.Forward) ?? target.ContentStart;
@@ -16157,6 +14619,14 @@ public sealed class DocumentView : RichTextBox
         ApplyContentControlInteraction(blockIndex, runIndex, run =>
             ContentControlInteractionPlanner.SelectRelativeDate(run, choiceIndex));
 
+    private bool ApplyContentControlMenuCommand(
+        int blockIndex,
+        int runIndex,
+        RibbonCommandId commandId,
+        DateTime today) =>
+        ApplyContentControlInteraction(blockIndex, runIndex, run =>
+            FreeWContextMenuPlanner.ApplyContentControlCommand(run, commandId, today));
+
     private bool ApplyContentControlInteraction(int blockIndex, int runIndex, Func<ModelRun, ModelRun?> planner)
     {
         if (!TryGetBodyContentControlRun(blockIndex, runIndex, out var current)
@@ -16169,8 +14639,7 @@ public sealed class DocumentView : RichTextBox
         if (updated is null)
             return false;
 
-        _commands.Execute(new ReplaceContentControlRunCommand(blockIndex, runIndex, updated));
-        return true;
+        return ReferenceEdits.ReplaceContentControlRun(blockIndex, runIndex, updated);
     }
 
     private bool TryGetBodyContentControlRun(int blockIndex, int runIndex, out ModelRun run)
@@ -16210,7 +14679,7 @@ public sealed class DocumentView : RichTextBox
         Focus();
 
         var selected = Selection?.Text;
-        var text = string.IsNullOrEmpty(selected) ? "Click to enter text" : selected;
+        var text = ContentControlInteractionPlanner.PromptText(selected);
         if (Selection is { IsEmpty: false })
             Selection.Text = string.Empty;
 
@@ -16246,7 +14715,7 @@ public sealed class DocumentView : RichTextBox
         Focus();
 
         var selected = Selection?.Text;
-        var text = string.IsNullOrEmpty(selected) ? "Click to enter text" : selected;
+        var text = ContentControlInteractionPlanner.PromptText(selected);
         if (Selection is { IsEmpty: false })
             Selection.Text = string.Empty;
 
@@ -16265,8 +14734,8 @@ public sealed class DocumentView : RichTextBox
             return;
 
         Focus();
-        var fmt = string.IsNullOrEmpty(dateFormat) ? ModelContentControl.DefaultDateFormat : dateFormat!;
-        var today = System.DateTime.Today.ToString(fmt, System.Globalization.CultureInfo.CurrentCulture);
+        var fmt = ContentControlInteractionPlanner.DateFormatOrDefault(dateFormat);
+        var today = ContentControlInteractionPlanner.FormatDate(fmt, System.DateTime.Today);
         var run = BuildControlRun(ModelRun.DatePickerControl(today, tag, alias, fmt));
         InsertInlineAtCaret(run);
     }
@@ -16283,7 +14752,10 @@ public sealed class DocumentView : RichTextBox
             return;
 
         Focus();
-        var run = BuildControlRun(ModelRun.DropDownListControl(items ?? DefaultListItems, tag: tag, alias: alias));
+        var run = BuildControlRun(ModelRun.DropDownListControl(
+            ContentControlInteractionPlanner.ListItemsOrDefault(items),
+            tag: tag,
+            alias: alias));
         InsertInlineAtCaret(run);
     }
 
@@ -16299,18 +14771,12 @@ public sealed class DocumentView : RichTextBox
             return;
 
         Focus();
-        var run = BuildControlRun(ModelRun.ComboBoxControl(items ?? DefaultListItems, tag: tag, alias: alias));
+        var run = BuildControlRun(ModelRun.ComboBoxControl(
+            ContentControlInteractionPlanner.ListItemsOrDefault(items),
+            tag: tag,
+            alias: alias));
         InsertInlineAtCaret(run);
     }
-
-    /// <summary>A small default choice sample used when a list/combo control is inserted without items.</summary>
-    private static readonly IReadOnlyList<ContentControlListItem> DefaultListItems =
-    [
-        new ContentControlListItem("Choose an item"),
-        new ContentControlListItem("Item 1"),
-        new ContentControlListItem("Item 2"),
-        new ContentControlListItem("Item 3")
-    ];
 
     /// <summary>Builds the WPF inline for a content-control model run (shaded region + marker tag).</summary>
     private Inline BuildControlRun(ModelRun run) => BuildRun(run, new ModelParagraph(), _model);
@@ -16457,22 +14923,16 @@ public sealed class DocumentView : RichTextBox
         // re-splices hidden blocks back in, so a raw visible index would mis-target with a heading
         // collapsed before the selection. Identity when nothing is collapsed.
         paragraphIndex = ModelIndexFromVisible(paragraphIndex);
-        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
+        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph)
             return;
 
-        if (!AddCommentCommand.HasCommentableRange(modelParagraph, startOffset, endOffset))
-            return; // nothing textual to anchor the comment to
-
-        var id = _model.NextCommentId();
-        var comment = new Comment(id)
-        {
-            Author = author,
-            Initials = initials,
-            // W3CDTF (UTC, second precision) - matches what the docx writer expects for w:date.
-            DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture)
-        };
-        comment.Content.Add(new ModelParagraph(text));
-        _commands.Execute(new AddCommentCommand(paragraphIndex, startOffset, endOffset, id, comment));
+        _editingSession.Review.TryAddComment(
+            paragraphIndex,
+            startOffset,
+            endOffset,
+            text,
+            author,
+            initials);
     }
 
     /// <summary>
@@ -16485,7 +14945,7 @@ public sealed class DocumentView : RichTextBox
     {
         // Fast path: the run under the caret/selection start carries a CommentMarker tag.
         if ((Selection.Start.Parent as WpfRun ?? CaretPosition?.Parent as WpfRun) is { Tag: RunMarkers { Comment: { } marker } })
-            return TopLevelCommentId(marker.CommentId);
+            return _editingSession.Review.ResolveTopLevelCommentId(marker.CommentId);
 
         // Fallback: commit and look for a commented run in the caret's model paragraph.
         var caretParagraph = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
@@ -16504,59 +14964,8 @@ public sealed class DocumentView : RichTextBox
             return null;
         foreach (var run in modelParagraph.Runs)
             if (run.CommentId is { } cid)
-                return TopLevelCommentId(cid);
+                return _editingSession.Review.ResolveTopLevelCommentId(cid);
         return null;
-    }
-
-    /// <summary>
-    /// Maps a comment id (which may be a reply's id) to its owning top-level comment id — the one keyed in
-    /// <see cref="TextDocument.Comments"/> and referenced by body ranges. Returns the id unchanged when it
-    /// is already a top-level comment (or unknown).
-    /// </summary>
-    private int TopLevelCommentId(int commentId)
-    {
-        return DeleteCommentCommand.ResolveTopLevel(_model, commentId);
-    }
-
-    private sealed record CommentNavigationTarget(int CommentId, int BlockIndex);
-
-    private IEnumerable<CommentNavigationTarget> CommentNavigationTargets()
-    {
-        CommitToModel();
-
-        var seen = new HashSet<int>();
-        for (var blockIndex = 0; blockIndex < _model.Blocks.Count; blockIndex++)
-        {
-            foreach (var paragraph in ParagraphsInBlock(_model.Blocks[blockIndex]))
-            {
-                foreach (var run in paragraph.Runs)
-                {
-                    if (run.CommentId is not { } commentId)
-                        continue;
-
-                    var topLevelId = TopLevelCommentId(commentId);
-                    if (_model.Comments.ContainsKey(topLevelId) && seen.Add(topLevelId))
-                        yield return new CommentNavigationTarget(topLevelId, blockIndex);
-                }
-            }
-        }
-    }
-
-    private static IEnumerable<ModelParagraph> ParagraphsInBlock(ModelBlock block)
-    {
-        if (block is ModelParagraph topLevelParagraph)
-        {
-            yield return topLevelParagraph;
-            yield break;
-        }
-
-        if (block is not ModelTable table)
-            yield break;
-
-        foreach (var row in table.Rows)
-            foreach (var cell in row.Cells)
-                foreach (var cellParagraph in cell.Paragraphs)
-                    yield return cellParagraph;
     }
 
     /// <summary>
@@ -16572,17 +14981,18 @@ public sealed class DocumentView : RichTextBox
         if (string.IsNullOrWhiteSpace(text))
             return false;
         Focus();
-        if (CommentIdAtCaret() is not { } id || !_model.Comments.TryGetValue(id, out var comment))
+        if (CommentIdAtCaret() is not { } id)
             return false;
 
-        var replyId = _model.NextCommentId();
-        var reply = new Comment(replyId, text.Trim(), author, initials)
+        if (!_editingSession.Review.TryReplyToComment(
+                id,
+                text,
+                author,
+                initials,
+                CommentTextNormalization.Trim))
         {
-            DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture)
-        };
-        _commands.Execute(new AddCommentReplyCommand(id, reply));
-        if (!comment.Replies.Any(candidate => candidate.Id == replyId))
             return false;
+        }
 
         MoveCaretToComment(id);
         return true;
@@ -16599,10 +15009,13 @@ public sealed class DocumentView : RichTextBox
             return null;
 
         Focus();
-        if (CommentIdAtCaret() is not { } id || !_model.Comments.TryGetValue(id, out var comment))
+        if (CommentIdAtCaret() is not { } id)
             return null;
-        var newState = !comment.Resolved;
-        _commands.Execute(new SetCommentResolvedCommand(id, newState));
+
+        var newState = _editingSession.Review.TryToggleCommentResolved(id);
+        if (newState is null)
+            return null;
+
         MoveCaretToComment(id);
         return newState;
     }
@@ -16617,11 +15030,10 @@ public sealed class DocumentView : RichTextBox
             return false;
 
         Focus();
-        if (CommentIdAtCaret() is not { } id || !_model.Comments.ContainsKey(id))
+        if (CommentIdAtCaret() is not { } id)
             return false;
 
-        _commands.Execute(new DeleteCommentCommand(id));
-        return !_model.Comments.ContainsKey(id);
+        return _editingSession.Review.TryDeleteComment(id);
     }
 
     /// <summary>Moves the caret to the next comment thread in document order, wrapping at the end.</summary>
@@ -16634,20 +15046,13 @@ public sealed class DocumentView : RichTextBox
     {
         Focus();
         var currentId = CommentIdAtCaret();
-        var targets = CommentNavigationTargets().ToArray();
-        if (targets.Length == 0)
+        CommitToModel();
+        var target = _editingSession.Review.SelectAdjacentComment(currentId, direction);
+        if (target is null)
             return false;
 
-        var currentIndex = currentId is { } id
-            ? Array.FindIndex(targets, target => target.CommentId == id)
-            : -1;
-        var targetIndex = currentIndex < 0
-            ? (direction > 0 ? 0 : targets.Length - 1)
-            : (currentIndex + direction + targets.Length) % targets.Length;
-
-        var target = targets[targetIndex];
         BringBlockIntoView(target.BlockIndex);
-        MoveCaretToComment(target.CommentId);
+        MoveCaretToComment(target.Id);
         return true;
     }
 
@@ -16704,7 +15109,7 @@ public sealed class DocumentView : RichTextBox
         foreach (var inline in inlines)
         {
             if (inline is WpfRun { Tag: RunMarkers { Comment: { } marker } } run
-                && TopLevelCommentId(marker.CommentId) == commentId)
+                && _editingSession.Review.ResolveTopLevelCommentId(marker.CommentId) == commentId)
             {
                 CaretPosition = run.ContentStart.GetInsertionPosition(LogicalDirection.Forward) ?? run.ContentStart;
                 Focus();
@@ -16733,11 +15138,8 @@ public sealed class DocumentView : RichTextBox
     public void ApplyCitationStyle(CitationStyle style)
     {
         CommitToModel();
-        if (_model.BibliographyStyle == style)
-            return;
-
-        _commands.Execute(new ApplyCitationStyleCommand(style));
-        Render();
+        if (ReferenceEdits.ApplyCitationStyle(style))
+            Render();
     }
 
     /// <summary>The document's bibliographic sources (Insert &gt; Citation reads/writes this list).</summary>
@@ -16785,7 +15187,7 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(sources);
         CommitToModel();
-        _commands.Execute(new ReplaceSourcesCommand(sources));
+        ReferenceEdits.ReplaceSources(sources);
     }
 
     /// <summary>
@@ -16811,17 +15213,8 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertBibliography()
     {
-        // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-
-        // Insert at the caret's block (a bibliography reads as back-matter); fall back to the document end.
-        var index = CaretBlockIndex();
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-
-        ApplyBibliographyPlan(
-            BibliographyRegionPlanner.BuildInsertPlan(_model, index, ActiveCitationStyle),
-            "Insert Bibliography");
+        RealizeGeneratedReferenceEdit(ReferenceEdits.InsertBibliography(GeneratedReferenceCaret()));
     }
 
     /// <summary>
@@ -16831,17 +15224,8 @@ public sealed class DocumentView : RichTextBox
     public void RefreshBibliography()
     {
         CommitToModel();
-        RefreshBibliographyFromModel();
-        Render();
+        RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshBibliography(GeneratedReferenceCaret()));
     }
-
-    private void RefreshBibliographyFromModel() =>
-        ApplyBibliographyPlan(
-            BibliographyRegionPlanner.BuildRefreshPlan(_model, ActiveCitationStyle),
-            "Update Bibliography");
-
-    private void ApplyBibliographyPlan(BibliographyRegionPlan plan, string label)
-        => GeneratedReferenceMutationCoordinator.ApplyPlan(_model, _commands, plan, label);
 
     /// <summary>
     /// Marks <paramref name="term"/> for the document index by inserting Word's hidden <c>XE</c> field at
@@ -16858,15 +15242,14 @@ public sealed class DocumentView : RichTextBox
         ArgumentNullException.ThrowIfNull(mark);
         CommitToModel();
         if (!TryGetCurrentBodyCaretTarget(out var paragraphIndex, out var textOffset)
-            || !IndexMarkMutationCoordinator.TryMark(
-                _model,
-                _commands,
-                paragraphIndex,
-                textOffset,
-                mark))
+            || _model.Blocks[paragraphIndex] is not ModelParagraph)
+        {
             return;
+        }
 
-        PlaceCaretAtModelTextOffset(paragraphIndex, textOffset);
+        var result = ReferenceEdits.InsertIndexEntry(paragraphIndex, textOffset, mark);
+        if (result.Applied)
+            PlaceCaretAtModelTextOffset(result.HostBlockIndex, result.TextOffset);
     }
 
     /// <summary>Marks every matching body paragraph as one undoable Mark All operation.</summary>
@@ -16874,13 +15257,13 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(mark);
         CommitToModel();
-        return IndexMarkMutationCoordinator.MarkAll(_model, _commands, sourceText, mark);
+        return ReferenceEdits.MarkAllIndexEntries(sourceText, mark);
     }
 
     /// <summary>
     /// Insert an index generated from the document's marked <see cref="TextDocument.IndexEntries"/> at the
-    /// caret's block (else at the document end), applied atomically through the shared generated-reference
-    /// coordinator — mirroring <see cref="InsertBibliography"/>. The paragraphs carry dedicated index
+    /// caret's block (else at the document end), routed one-by-one through the undo/redo bus so the insert
+    /// is reversible — mirroring <see cref="InsertBibliography"/>. The paragraphs carry dedicated index
     /// styles (registered via <see cref="DocumentIndex.EnsureStyles"/>) which both give them distinct
     /// formatting and mark the region.
     /// </summary>
@@ -16888,16 +15271,11 @@ public sealed class DocumentView : RichTextBox
 
     public void InsertIndex(string? identifier)
     {
-        // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        DocumentIndex.EnsureStyles(_model, identifier);
-
-        var entries = DocumentIndex.Build(
-            _model,
-            identifier: identifier,
-            pageReferenceOf: BuildGeneratedIndexPageReferenceResolver());
-        GeneratedReferenceMutationCoordinator.Insert(
-            _model, _commands, CaretBlockIndex(), "Insert Index", entries);
+        RealizeGeneratedReferenceEdit(ReferenceEdits.InsertIndex(
+            GeneratedReferenceCaret(),
+            identifier,
+            BuildGeneratedIndexPageReferenceResolver()));
     }
 
     /// <summary>
@@ -16910,17 +15288,10 @@ public sealed class DocumentView : RichTextBox
     public void RefreshIndex(string? identifier)
     {
         CommitToModel();
-        DocumentIndex.EnsureStyles(_model, identifier);
-
-        GeneratedReferenceMutationCoordinator.Refresh(
-            _model,
-            _commands,
-            block => DocumentIndex.IsIndexParagraph(block, identifier),
-            () => DocumentIndex.Build(
-                _model,
-                identifier: identifier,
-                pageReferenceOf: BuildGeneratedIndexPageReferenceResolver()),
-            "Update Index");
+        RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshIndex(
+            GeneratedReferenceCaret(),
+            identifier,
+            BuildGeneratedIndexPageReferenceResolver()));
     }
 
     /// <summary>
@@ -16939,6 +15310,16 @@ public sealed class DocumentView : RichTextBox
             return;
 
         CommitToModel();
+
+        if (TryGetCurrentBodyCaretTarget(out var paragraphIndex, out var textOffset))
+        {
+            var result = ReferenceEdits.InsertAuthorityCitation(paragraphIndex, textOffset, citation);
+            if (result.Applied)
+            {
+                PlaceCaretAtModelTextOffset(result.HostBlockIndex, result.TextOffset);
+                return;
+            }
+        }
 
         var marker = BuildRun(ModelRun.CitationMark(citation), new ModelParagraph(), _model);
         var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
@@ -16972,21 +15353,12 @@ public sealed class DocumentView : RichTextBox
     public void InsertTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-
-        // Insert at the caret's block (the table reads as front-/back-matter); fall back to the document end.
-        var index = CaretBlockIndex();
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-
-        ApplyTableOfAuthoritiesPlan(
-            TableOfAuthoritiesRegionPlanner.BuildInsertPlanWithTableAddresses(
-                _model,
-                index,
-                options,
-                BuildTableOfAuthoritiesPageResolver()),
-            "Insert Table of Authorities");
+        RealizeGeneratedReferenceEdit(ReferenceEdits.InsertTableOfAuthorities(
+            GeneratedReferenceCaret(),
+            options,
+            BuildTableOfAuthoritiesPageResolver,
+            refreshLayout: Render));
     }
 
     /// <summary>
@@ -17010,12 +15382,11 @@ public sealed class DocumentView : RichTextBox
     private void RefreshTableOfAuthoritiesCore(ToaOptions? options)
     {
         CommitToModel();
-        ApplyTableOfAuthoritiesPlan(
-            TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
-                _model,
-                options,
-                BuildTableOfAuthoritiesPageResolver()),
-            "Update Table of Authorities");
+        RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshTableOfAuthorities(
+            GeneratedReferenceCaret(),
+            options,
+            BuildTableOfAuthoritiesPageResolver,
+            refreshLayout: Render));
     }
 
     private ToaCitationPageAddressResolver? BuildTableOfAuthoritiesPageResolver()
@@ -17027,27 +15398,62 @@ public sealed class DocumentView : RichTextBox
             var hasReliableBlockAssignments = pagination.PageCount == 1
                 || blockPageAssignments.Any(pageIndex => pageIndex > 0);
             var physicalPageOfBlock = BuildCrossReferencePageResolver();
-            int? ObservedPhysicalPageOfBlock(int blockIndex) =>
+            int? KnownPhysicalPageOfBlock(int blockIndex) =>
                 physicalPageOfBlock?.Invoke(blockIndex)
                 ?? (hasReliableBlockAssignments
                     && blockIndex >= 0
                     && blockIndex < blockPageAssignments.Length
                     ? (int?)(blockPageAssignments[blockIndex] + 1)
-                    : null);
+                    : null)
+                ?? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                ?? (blockIndex == 0 ? 1 : null);
+            var paginationContext = GeneratedReferencePaginationContext.Create(
+                _model,
+                pagination.PageCount,
+                KnownPhysicalPageOfBlock);
             var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
             var topY = firstRect.IsEmpty ? (double?)null : firstRect.Top;
-            int? ObservedPhysicalPageOfBlockOffset(int blockIndex, int textOffset)
+            return (_, blockIndex, tableParagraph, runIndex, _) =>
             {
-                if (pagination.PageCount == 1 || pagination.PageBreakYsDip.Count == 0)
-                    return 1;
+                if (tableParagraph is not null)
+                {
+                    if (blockIndex < 0
+                        || blockIndex >= _model.Blocks.Count
+                        || _model.Blocks[blockIndex] is not ModelTable)
+                    {
+                        return null;
+                    }
 
-                var pointer = TextPointerAtModelTextOffset(blockIndex, textOffset);
-                if (pointer is null || topY is null)
+                    return paginationContext.ResolveTableOfAuthoritiesPageReference(
+                        blockIndex,
+                        tableParagraph,
+                        clampToEffectivePageCount: true);
+                }
+
+                if (!IsModelCitationRun(blockIndex, runIndex))
                     return null;
+
+                if (paginationContext.EffectivePageCount == 1 || pagination.PageBreakYsDip.Count == 0)
+                    return paginationContext.CreateTableOfAuthoritiesPageReference(1);
+
+                var offset = _editingSession.Interaction.BodyRunStartOffset(blockIndex, runIndex);
+                var pointer = TextPointerAtModelTextOffset(blockIndex, offset);
+                if (pointer is null || topY is null)
+                {
+                    var blockPage = KnownPhysicalPageOfBlock(blockIndex);
+                    return blockPage is { } fallbackPage
+                        ? paginationContext.CreateTableOfAuthoritiesPageReference(fallbackPage)
+                        : null;
+                }
 
                 var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
                 if (rect.IsEmpty)
-                    return null;
+                {
+                    var blockPage = KnownPhysicalPageOfBlock(blockIndex);
+                    return blockPage is { } fallbackPage
+                        ? paginationContext.CreateTableOfAuthoritiesPageReference(fallbackPage)
+                        : null;
+                }
 
                 var y = rect.Top - topY.Value;
                 var pageIndex = 0;
@@ -17058,42 +15464,36 @@ public sealed class DocumentView : RichTextBox
                     pageIndex++;
                 }
 
-                return Math.Clamp(pageIndex + 1, 1, Math.Max(1, pagination.PageCount));
-            }
-
-            return TableOfAuthoritiesPageResolverPlanner.Build(
-                _model,
-                ObservedPhysicalPageOfBlock,
-                ObservedPhysicalPageOfBlockOffset,
-                minimumPageCount: pagination.PageCount,
-                allowSinglePageFallback: !TableOfAuthoritiesPageResolverPlanner.HasExplicitPageBoundary(_model));
+                var pageNumber = Math.Min(Math.Max(1, pageIndex + 1), paginationContext.EffectivePageCount);
+                return paginationContext.CreateTableOfAuthoritiesPageReference(pageNumber);
+            };
         }
         catch (InvalidOperationException)
         {
-            return TableOfAuthoritiesPageResolverPlanner.Build(
+            int? KnownPhysicalPageOfBlock(int blockIndex) =>
+                CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                ?? (blockIndex == 0 ? 1 : null);
+            var paginationContext = GeneratedReferencePaginationContext.Create(
                 _model,
-                observedPhysicalPageOfBlock: null,
-                observedPhysicalPageOfBlockOffset: null,
-                allowSinglePageFallback: !TableOfAuthoritiesPageResolverPlanner.HasExplicitPageBoundary(_model));
+                minimumPageCount: 1,
+                physicalPageOfBlock: KnownPhysicalPageOfBlock);
+            return (_, blockIndex, tableParagraph, _, _) =>
+                paginationContext.ResolveTableOfAuthoritiesPageReference(blockIndex, tableParagraph);
         }
     }
 
-    private void ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlan plan, string label) =>
-        GeneratedReferenceMutationCoordinator.ApplyStabilizingPlan(
-            _model,
-            _commands,
-            plan,
-            label,
-            () => TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
-                _model,
-                pageResolver: BuildTableOfAuthoritiesPageResolver()),
-            paragraphs => TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(_model, paragraphs),
-            Render);
+    private bool IsModelCitationRun(int modelBlockIndex, int runIndex) =>
+        modelBlockIndex >= 0
+        && modelBlockIndex < _model.Blocks.Count
+        && _model.Blocks[modelBlockIndex] is ModelParagraph paragraph
+        && runIndex >= 0
+        && runIndex < paragraph.Runs.Count
+        && paragraph.Runs[runIndex].Citation is not null;
 
     /// <summary>
     /// Insert a Table of Figures (or Table of Tables) generated from the document's <see cref="CaptionLabel"/>
-    /// captions at the caret's block (else at the document end), applied atomically through the shared
-    /// generated-reference coordinator — mirroring <see cref="InsertTableOfContents"/>. The paragraphs carry
+    /// captions at the caret's block (else at the document end), routed one-by-one through the undo/redo bus
+    /// so the insert is reversible — mirroring <see cref="InsertTableOfContents"/>. The paragraphs carry
     /// dedicated styles (registered via <see cref="TableOfFigures.EnsureStyles"/>) which both give them
     /// distinct formatting and mark the region for <see cref="RefreshTableOfFigures"/>.
     /// </summary>
@@ -17104,21 +15504,19 @@ public sealed class DocumentView : RichTextBox
 
     public void InsertTableOfFigures(string labelText)
     {
-        // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        labelText = Captions.NormalizeLabelText(labelText);
-        TableOfFigures.EnsureStyles(_model);
-
-        var entries = BuildTableOfFigures(labelText);
-        GeneratedReferenceMutationCoordinator.Insert(
-            _model, _commands, CaretBlockIndex(), "Insert Table of Figures", entries);
+        RealizeGeneratedReferenceEdit(ReferenceEdits.InsertTableOfFigures(
+            GeneratedReferenceCaret(),
+            labelText,
+            BuildTableOfFiguresPageTextResolver()));
     }
 
     /// <summary>
     /// Rebuild the Table of Figures: remove the previously inserted region (paragraphs carrying a
     /// table-of-figures style, see <see cref="TableOfFigures.IsTableOfFiguresParagraph"/>) and re-insert a
     /// freshly generated one at the same position. With no existing region this behaves like
-    /// <see cref="InsertTableOfFigures"/>, inserting at the document end. The replacement is one undoable edit.
+    /// <see cref="InsertTableOfFigures"/>, inserting at the document end. Every removal/insert is reversible
+    /// through the undo/redo bus.
     /// </summary>
     public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
     {
@@ -17128,22 +15526,36 @@ public sealed class DocumentView : RichTextBox
     public void RefreshTableOfFigures(string labelText)
     {
         CommitToModel();
-        labelText = Captions.NormalizeLabelText(labelText);
-        TableOfFigures.EnsureStyles(_model);
-
-        GeneratedReferenceMutationCoordinator.Refresh(
-            _model,
-            _commands,
-            TableOfFigures.IsTableOfFiguresParagraph,
-            () => BuildTableOfFigures(labelText),
-            "Update Table of Figures");
+        RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshTableOfFigures(
+            GeneratedReferenceCaret(),
+            labelText,
+            BuildTableOfFiguresPageTextResolver()));
     }
 
-    private IReadOnlyList<ModelParagraph> BuildTableOfFigures(string labelText) =>
-        TableOfFigures.BuildWithTableAddresses(
-            _model,
-            labelText,
-            BuildTableOfFiguresPageTextResolver());
+    private DocumentTextPosition GeneratedReferenceCaret()
+    {
+        var blockIndex = CaretBlockIndex();
+        return TryGetCurrentBodyCaretTarget(out var bodyBlockIndex, out var textOffset)
+            && bodyBlockIndex == blockIndex
+                ? new DocumentTextPosition(blockIndex, textOffset)
+                : new DocumentTextPosition(blockIndex, 0);
+    }
+
+    private void RealizeGeneratedReferenceEdit(DocumentGeneratedReferenceEditResult result)
+    {
+        if (!result.Applied || result.Caret.BlockIndex < 0)
+            return;
+
+        if (TextPointerAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset) is { } pointer)
+        {
+            CaretPosition = pointer;
+            pointer.Paragraph?.BringIntoView();
+            Focus();
+            return;
+        }
+
+        BringBlockIntoView(result.Caret.BlockIndex);
+    }
 
     private Func<int, string?>? BuildGeneratedPageTextResolver()
     {
@@ -17156,7 +15568,14 @@ public sealed class DocumentView : RichTextBox
     private Func<int, TableParagraphAddress?, string?>? BuildTableOfFiguresPageTextResolver()
     {
         var physicalPageOfBlock = BuildCrossReferencePageResolver();
-        return TableOfFiguresPageTextResolverPlanner.Build(_model, physicalPageOfBlock);
+        if (physicalPageOfBlock is null)
+            return null;
+
+        var paginationContext = GeneratedReferencePaginationContext.Create(
+            _model,
+            minimumPageCount: 1,
+            physicalPageOfBlock: physicalPageOfBlock);
+        return paginationContext.ResolvePageText;
     }
 
     private Func<int, IndexPageReferenceAddress?>? BuildGeneratedIndexPageReferenceResolver()
@@ -17187,19 +15606,10 @@ public sealed class DocumentView : RichTextBox
 
     public void InsertCaption(string labelText, string text)
     {
-        // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        labelText = Captions.NormalizeLabelText(labelText);
-        Captions.EnsureStyles(_model);
-
-        var number = Captions.NextCaptionNumber(_model, labelText);
-        var caption = Captions.BuildCaption(labelText, number, text);
-
-        // Insert after the caret's block so the caption sits under the selected image/table.
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-        _commands.Execute(new InsertParagraphCommand(index, caption));
+        var result = ReferenceEdits.InsertCaption(CaretBlockIndex(), labelText, text);
+        if (result.Applied)
+            BringBlockIntoView(result.InsertedBlockIndex);
     }
 
     /// <summary>
@@ -17218,41 +15628,13 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
 
         var sourceBlock = CaretBlockIndex();
-        var plan = CrossReferences.PlanInsertion(_model, type, target, insertAs, hyperlink, sourceBlock);
-
-        // Append the field run to the caret's paragraph (or the last paragraph / a fresh one). Keep creation,
-        // the hidden target bookmark, and field insertion in one undo step.
-        var caretBlock = sourceBlock >= 0 && sourceBlock < _model.Blocks.Count ? sourceBlock : -1;
-        if (caretBlock < 0 || _model.Blocks[caretBlock] is not ModelParagraph)
-        {
-            caretBlock = _model.Blocks.FindLastIndex(block => block is ModelParagraph);
-        }
-
-        _commands.BeginUndoGroup();
-        try
-        {
-            if (caretBlock < 0)
-            {
-                caretBlock = _model.Blocks.Count;
-                _commands.Execute(new InsertParagraphCommand(caretBlock, new ModelParagraph()));
-            }
-            _commands.Execute(new InsertCrossReferenceCommand(
-                caretBlock,
-                plan.FieldRun,
-                plan.Target.BlockIndex,
-                plan.BookmarkNameToAdd,
-                plan.TargetRunIndex,
-                plan.TargetNoteId,
-                plan.TargetIsFootnote,
-                plan.TargetTextStartOffset,
-                plan.TargetTextEndOffset));
-            _commands.CommitUndoGroup("Insert Cross-reference");
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
+        ReferenceEdits.InsertCrossReference(
+            sourceBlock,
+            sourceBlock,
+            type,
+            target,
+            insertAs,
+            hyperlink);
         Render();
     }
 
@@ -17452,56 +15834,46 @@ public sealed class DocumentView : RichTextBox
         if (kind == RevisionKind.None)
             return;
 
-        Focus();
-
-        var startParagraph = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
-        if (startParagraph is null)
+        var hadSelection = !Selection.IsEmpty;
+        if (!TryGetCurrentBodyTextRange(out var selectionRange))
             return;
-        var sameParagraph = ReferenceEquals(Selection.Start.Paragraph, Selection.End.Paragraph);
-        var startOffset = OffsetInParagraph(startParagraph, Selection.Start);
-        var endOffset = sameParagraph ? OffsetInParagraph(startParagraph, Selection.End) : int.MaxValue;
-        if (Selection.IsEmpty || !sameParagraph)
+
+        var normalized = selectionRange.Normalize();
+        if (!hadSelection)
         {
-            startOffset = 0;
-            endOffset = int.MaxValue;
+            selectionRange = new DocumentTextRange(
+                new DocumentTextPosition(normalized.Start.BlockIndex, 0),
+                new DocumentTextPosition(normalized.Start.BlockIndex, int.MaxValue));
         }
 
-        var indexOf = new Dictionary<WpfParagraph, int>();
-        var modelIndex = 0;
-        foreach (var block in Document.Blocks)
-            NumberLeafBlocks(block, indexOf, ref modelIndex);
-        if (!indexOf.TryGetValue(startParagraph, out var paragraphIndex))
-            return;
-
+        Focus();
         CommitToModel();
-        // Map the visible paragraph ordinal to its real model index (collapsed-heading drift), as in
-        // InsertComment. Identity when nothing is collapsed.
-        paragraphIndex = ModelIndexFromVisible(paragraphIndex);
-        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
-            return;
-
-        RevisionEditPlanner.MarkRevisionRange(modelParagraph, startOffset, endOffset, kind, author, dateXml);
-        Render();
+        _editingSession.Review.TryMarkRevisionRange(
+            selectionRange,
+            kind,
+            author,
+            dateXml,
+            recordUndo: false);
     }
 
     /// <summary>
     /// Accept every tracked change in the document: insertions become ordinary text, deletions are
-    /// removed. Commits pending edits first, then records the resolution as one shared undo step.
+    /// removed. Commits pending edits first, then re-renders so the resolved text shows immediately.
     /// </summary>
     public void AcceptAllRevisions()
     {
         CommitToModel();
-        RevisionResolutionCoordinator.AcceptAll(_commands, _model);
+        _editingSession.Review.TryResolveAllRevisions(RevisionResolutionAction.Accept);
     }
 
     /// <summary>
     /// Reject every tracked change in the document: insertions are removed, deletions become ordinary
-    /// text. Commits pending edits first, then records the resolution as one shared undo step.
+    /// text. Commits pending edits first, then re-renders so the resolved text shows immediately.
     /// </summary>
     public void RejectAllRevisions()
     {
         CommitToModel();
-        RevisionResolutionCoordinator.RejectAll(_commands, _model);
+        _editingSession.Review.TryResolveAllRevisions(RevisionResolutionAction.Reject);
     }
 
     /// <summary>
@@ -17512,27 +15884,31 @@ public sealed class DocumentView : RichTextBox
     public IReadOnlyList<RevisionEntry> ListRevisions()
     {
         CommitToModel();
-        return RevisionList.Enumerate(_model);
+        return _editingSession.Review.ListRevisions();
     }
 
     /// <summary>
     /// Accept exactly one tracked change (the one described by <paramref name="entry"/>), leaving every
-    /// other revision pending. Uses the shared undoable command path. Returns true when the
+    /// other revision pending. Re-renders so the resolved text shows immediately. Returns true when the
     /// entry resolved (false when it was already stale). The caller must re-list revisions afterwards.
     /// </summary>
     public bool AcceptRevision(RevisionEntry entry)
     {
-        return RevisionResolutionCoordinator.Accept(_commands, _model, entry);
+        var target = _editingSession.Review.ResolveRevisionTarget(entry);
+        return target is not null
+               && _editingSession.Review.TryResolveRevision(target, RevisionResolutionAction.Accept);
     }
 
     /// <summary>
     /// Reject exactly one tracked change (the one described by <paramref name="entry"/>), leaving every
-    /// other revision pending. Uses the shared undoable command path. Returns true when the
+    /// other revision pending. Re-renders so the resolved text shows immediately. Returns true when the
     /// entry resolved (false when it was already stale). The caller must re-list revisions afterwards.
     /// </summary>
     public bool RejectRevision(RevisionEntry entry)
     {
-        return RevisionResolutionCoordinator.Reject(_commands, _model, entry);
+        var target = _editingSession.Review.ResolveRevisionTarget(entry);
+        return target is not null
+               && _editingSession.Review.TryResolveRevision(target, RevisionResolutionAction.Reject);
     }
 
     /// <summary>
@@ -17543,26 +15919,8 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void NavigateToRevision(RevisionEntry entry)
     {
-        var topLevelIndex = TopLevelBlockIndexOf(entry.Paragraph);
-        if (topLevelIndex >= 0)
-            BringBlockIntoView(topLevelIndex);
-    }
-
-    // The index, among the committed model's top-level blocks, of the block that owns paragraph
-    // <paramref name="target"/> — itself if it is a top-level paragraph, or the containing table. Returns
-    // -1 if it is not found. Matches the leaf-numbering BringBlockIntoView uses (a table is one leaf).
-    private int TopLevelBlockIndexOf(ModelParagraph target)
-    {
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            var block = _model.Blocks[i];
-            if (ReferenceEquals(block, target))
-                return i;
-            if (block is ModelTable table &&
-                table.Rows.Any(r => r.Cells.Any(c => c.Paragraphs.Any(p => ReferenceEquals(p, target)))))
-                return i;
-        }
-        return -1;
+        if (_editingSession.Review.ResolveRevisionTarget(entry) is { } target)
+            BringBlockIntoView(target.TopLevelBlockIndex);
     }
 
     /// <summary>
@@ -17571,12 +15929,10 @@ public sealed class DocumentView : RichTextBox
     /// is stripped via the pure <see cref="DocumentInspector"/> ops (which mutate the model in place),
     /// and the view re-renders so the cleaned document shows immediately.
     /// </summary>
-    public void ApplyInspectorRemovals(bool comments, bool revisions, bool properties, bool bookmarks)
+    public void ApplyInspectorRemovals(InspectorRemovalChoice choice)
     {
         CommitToModel();
-        DocumentInspector.RemoveSelected(
-            _model,
-            new InspectionRemovalSelection(comments, revisions, properties, bookmarks));
+        _editingSession.Review.PlanInspectorRemovals(choice).Apply(_model);
         Render();
     }
 
@@ -17589,83 +15945,22 @@ public sealed class DocumentView : RichTextBox
     public void RemoveBookmark(string name)
     {
         CommitToModel();
-        if (string.IsNullOrWhiteSpace(name))
-            return;
-        _commands.Execute(new RemoveBookmarkCommand(name.Trim()));
-        Render();
-    }
-
-    /// <summary>
-    /// Marks the model runs of <paramref name="paragraph"/> covering the character range
-    /// [<paramref name="startOffset"/>, <paramref name="endOffset"/>) as a tracked change of
-    /// <paramref name="kind"/>, splitting runs at the boundaries. Offsets are measured over the
-    /// paragraph's plain text. Mirrors <see cref="AddCommentCommand.MarkCommentRange"/>.
-    /// </summary>
-    private static void MarkRevisionRange(ModelParagraph paragraph, int startOffset, int endOffset, RevisionKind kind, string author, string? dateXml)
-    {
-        var pos = 0;
-        for (var i = 0; i < paragraph.Runs.Count; i++)
-        {
-            var run = paragraph.Runs[i];
-            var len = run.Text.Length;
-            var runStart = pos;
-            var runEnd = pos + len;
-            pos = runEnd;
-            if (len == 0)
-                continue;
-
-            var coverStart = Math.Max(runStart, startOffset);
-            var coverEnd = Math.Min(runEnd, endOffset);
-            if (coverStart >= coverEnd)
-                continue;
-
-            if (coverStart > runStart)
-            {
-                var head = new ModelRun(run.Text[..(coverStart - runStart)], run.Formatting)
-                {
-                    HyperlinkUrl = run.HyperlinkUrl,
-                    HyperlinkAnchor = run.HyperlinkAnchor,
-                    HyperlinkTooltip = run.HyperlinkTooltip,
-                    CommentId = run.CommentId,
-                    Revision = run.Revision,
-                    RevisionAuthor = run.RevisionAuthor,
-                    RevisionDateXml = run.RevisionDateXml
-                };
-                run.Text = run.Text[(coverStart - runStart)..];
-                paragraph.Runs.Insert(i, head);
-                i++;
-            }
-            if (coverEnd < runEnd)
-            {
-                var tail = new ModelRun(run.Text[(coverEnd - coverStart)..], run.Formatting)
-                {
-                    HyperlinkUrl = run.HyperlinkUrl,
-                    HyperlinkAnchor = run.HyperlinkAnchor,
-                    HyperlinkTooltip = run.HyperlinkTooltip,
-                    CommentId = run.CommentId,
-                    Revision = run.Revision,
-                    RevisionAuthor = run.RevisionAuthor,
-                    RevisionDateXml = run.RevisionDateXml
-                };
-                run.Text = run.Text[..(coverEnd - coverStart)];
-                paragraph.Runs.Insert(i + 1, tail);
-            }
-
-            run.Revision = kind;
-            run.RevisionAuthor = author;
-            run.RevisionDateXml = dateXml;
-        }
+        _editingSession.RemoveBookmark(name);
     }
 
     /// <summary>The plain-text character offset of <paramref name="position"/> from the paragraph's start.</summary>
     private static int OffsetInParagraph(WpfParagraph paragraph, TextPointer position)
     {
-        var range = new TextRange(paragraph.ContentStart, position);
+        var modelTextStart = TextPointerAtParagraphOffset(paragraph, 0);
+        if (position.CompareTo(modelTextStart) <= 0)
+            return 0;
+
+        var range = new TextRange(modelTextStart, position);
         return range.Text.Length;
     }
 
-    private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan) =>
-        ProofingLanguageMutationCoordinator.Apply(_model, _commands, plan);
+    private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan)
+        => _editingSession.TryApplyProofingLanguage(plan);
 
     /// <summary>
     /// Applies an external hyperlink to the current selection. If the selection is non-empty its text
@@ -17946,7 +16241,7 @@ public sealed class DocumentView : RichTextBox
         var index = CaretBlockIndex();
         if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph)
             return;
-        _commands.Execute(new SetParagraphBookmarkNameCommand(index, name));
+        ReferenceEdits.SetBookmark(index, name);
         Render();
     }
 
@@ -18476,22 +16771,9 @@ public sealed class DocumentView : RichTextBox
     };
 
     private static bool TryParseColor(string? hex, out Color color)
-    {
-        color = default;
-        if (string.IsNullOrWhiteSpace(hex))
-            return false;
-        try
-        {
-            color = (Color)ColorConverter.ConvertFromString(hex);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+        => WpfRgbColorAdapter.TryParseColorToken(hex, out color);
 
-    private static string ToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+    private static string ToHex(Color c) => WpfRgbColorAdapter.ToHexRgb(c);
 
     /// <summary>
     /// A non-editable overlay that draws formatting marks — a pilcrow (<see cref="FormattingMarks.Pilcrow"/>)
@@ -18750,7 +17032,7 @@ public sealed class DocumentView : RichTextBox
                     BorderThickness = new Thickness(1),
                     Cursor = Cursors.Cross,
                     Focusable = false,
-                    ToolTip = "Drag edit point"
+                    ToolTip = UiText.Get("Editor_DragEditPoint_ToolTip")
                 };
 
                 CustomPoint? dragStart = null;
@@ -18997,7 +17279,7 @@ public sealed class DocumentView : RichTextBox
         // Cached result from PaginationEngine. Null means "needs recompute" (content has changed since
         // the last successful computation). Invalidated on TextChanged so we don't re-paginate every
         // OnRender (ComputePageCount is a full layout pass — expensive on large docs).
-        // Internal so DocumentView.GetPageBreakAdornerPagination() can expose it as a test seam
+        // Cached so pagination overlays can reuse the latest computed layout.
         // (outer class cannot access a nested class's private fields in C#).
         internal DocumentPagination? _pagination;
 
@@ -19100,19 +17382,6 @@ public sealed class DocumentView : RichTextBox
                 // WPF layout not yet settled — skip; will retry on next LayoutUpdated.
                 return null;
             }
-        }
-
-        /// <summary>
-        /// Returns the page-break Y positions (in the adorner's coordinate space, i.e. relative to
-        /// <paramref name="topY"/>) for the current pagination. Used by tests to verify accuracy without
-        /// triggering a full render. Returns null when the layout is unavailable.
-        /// </summary>
-        internal IReadOnlyList<double>? GetBreakYsForTest(double topY)
-        {
-            _pagination ??= TryComputePagination();
-            if (_pagination is null)
-                return null;
-            return _pagination.PageBreakYsDip.Select(y => topY + y).ToArray();
         }
 
         // The top Y (in the editor's content coordinates) of the first laid-out content line, or null when

@@ -28,12 +28,20 @@
     <Using Include="FreeW.Core.Model.Run" Alias="Run" />
     <Using Include="FreeW.Core.Model.Paragraph" Alias="Paragraph" />
     <Using Include="FreeW.Core.Model.Table" Alias="Table" />
+    <Using Include="FreeW.App.Presentation.DocumentView" />
+    <Using Include="FreeW.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestSupport\HostAccessOwnershipAssertions.cs"
+             Link="TestSupport\HostAccessOwnershipAssertions.cs" />
     <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />
-    <ProjectReference Include="..\FreeW.App.Host\FreeW.App.Host.csproj" />
+    <ProjectReference Include="..\FreeW.App.Host\FreeW.App.Host.csproj"
+                      AdditionalProperties="FreeWHostTestSupport=true" />
+    <ProjectReference Include="..\tests\FreeW.VisualEvidence.TestSupport\FreeW.VisualEvidence.TestSupport.csproj" />
     <ProjectReference Include="..\tools\FreeW.DialogVisualHarness\FreeW.DialogVisualHarness.csproj" Aliases="Harness" />
+    <Compile Include="..\tests\SharedTestInfrastructure\FreeWDialogEvidenceCatalogContractTests.cs"
+             Link="FreeWDialogEvidenceCatalogContractTests.cs" />
   </ItemGroup>
 
 </Project>

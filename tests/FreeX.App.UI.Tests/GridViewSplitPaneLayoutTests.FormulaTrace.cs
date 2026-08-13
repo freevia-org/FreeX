@@ -26,8 +26,8 @@ public sealed partial class GridViewSplitPaneLayoutTests
 
         arrows.Should().ContainSingle().Which.Should().Be(
             new FormulaTraceArrowLayout(
-                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
-                new Point(GridView.RowHeaderWidth + 64 + 32, GridView.ColHeaderHeight + 20 + 10)));
+                new LayoutPoint(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new LayoutPoint(GridView.RowHeaderWidth + 64 + 32, GridView.ColHeaderHeight + 20 + 10)));
     }
 
     [Fact]
@@ -48,8 +48,8 @@ public sealed partial class GridViewSplitPaneLayoutTests
 
         arrows.Should().ContainSingle().Which.Should().Be(
             new FormulaTraceArrowLayout(
-                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
-                new Point(GridView.RowHeaderWidth + 64 + 32, GridView.ColHeaderHeight + 20 + 10)));
+                new LayoutPoint(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new LayoutPoint(GridView.RowHeaderWidth + 64 + 32, GridView.ColHeaderHeight + 20 + 10)));
     }
 
     [Fact]
@@ -75,16 +75,16 @@ public sealed partial class GridViewSplitPaneLayoutTests
 
         arrows.Should().Equal(
             new FormulaTraceArrowLayout(
-                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
-                new Point(GridView.RowHeaderWidth + 64 + 40, GridView.ColHeaderHeight + 20 + 12)),
+                new LayoutPoint(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new LayoutPoint(GridView.RowHeaderWidth + 64 + 40, GridView.ColHeaderHeight + 20 + 12)),
             new FormulaTraceArrowLayout(
-                new Point(GridView.RowHeaderWidth + 144 + 50, GridView.ColHeaderHeight + 44 + 15),
-                new Point(GridView.RowHeaderWidth + 144 + 50, GridView.ColHeaderHeight + 44 + 15),
+                new LayoutPoint(GridView.RowHeaderWidth + 144 + 50, GridView.ColHeaderHeight + 44 + 15),
+                new LayoutPoint(GridView.RowHeaderWidth + 144 + 50, GridView.ColHeaderHeight + 44 + 15),
                 FormulaTraceArrowLayoutKind.OffscreenMarker,
                 new CellAddress(sheetId, 8, 4)),
             new FormulaTraceArrowLayout(
-                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
-                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new LayoutPoint(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new LayoutPoint(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
                 FormulaTraceArrowLayoutKind.CrossSheetMarker,
                 new CellAddress(otherSheetId, 1, 1)));
     }
@@ -137,13 +137,13 @@ public sealed partial class GridViewSplitPaneLayoutTests
 
         arrows.Should().Equal(
             new FormulaTraceArrowLayout(
-                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
-                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new LayoutPoint(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new LayoutPoint(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
                 FormulaTraceArrowLayoutKind.CrossSheetMarker,
                 new CellAddress(otherSheetId, 1, 1)),
             new FormulaTraceArrowLayout(
-                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
-                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new LayoutPoint(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new LayoutPoint(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
                 FormulaTraceArrowLayoutKind.OffscreenMarker,
                 new CellAddress(sheetId, 2, 1)));
     }
@@ -214,28 +214,16 @@ public sealed partial class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
-    public void FormulaTraceLayoutPlanner_StopsSingleMetricLookupsOnceSortedMetricsPassAddress()
+    public void FormulaTraceLayoutPlanner_IsOnlyAWpfProjectionAdapter()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("FormulaTraceLayoutPlanner.cs");
-        var metricLookup = source[
-            source.IndexOf("private readonly struct FormulaTraceMetricLookup", StringComparison.Ordinal)..
-            source.IndexOf("private static bool TryGetMarkerHit", StringComparison.Ordinal)];
 
-        metricLookup.Should().Contain("_firstRow = _hasRows ? _rows[0].Row : 0;");
-        metricLookup.Should().Contain("_lastRow = _hasRows ? _rows[^1].Row : 0;");
-        metricLookup.Should().Contain("_firstCol = _hasColumns ? _columns[0].Col : 0;");
-        metricLookup.Should().Contain("_lastCol = _hasColumns ? _columns[^1].Col : 0;");
-        metricLookup.Should().Contain("row < _firstRow || row > _lastRow");
-        metricLookup.Should().Contain("col < _firstCol || col > _lastCol");
-        metricLookup.Should().Contain("FormulaTraceLayoutPlanner.FindRowMetric(_rowArray, row, _firstRow)");
-        metricLookup.Should().Contain("FormulaTraceLayoutPlanner.FindColMetric(_colArray, col, _firstCol)");
-        source.Should().Contain("var index = row - firstRow;");
-        source.Should().Contain("var index = col - firstCol;");
-        source.Should().Contain("while (low <= high)");
-        source.Should().NotContain("Dictionary<uint, RowMetric>");
-        source.Should().NotContain("Dictionary<uint, ColMetric>");
-        source.Should().NotContain("BuildRowMetricLookup");
-        source.Should().NotContain("BuildColMetricLookup");
-        source.Should().NotContain("TryGetValue");
+        source.Should().Contain("FormulaTraceOverlayPlanner.CalculateLayouts");
+        source.Should().Contain("FormulaTraceOverlayPlanner.VisitLayouts");
+        source.Should().Contain("FormulaTraceOverlayPlanner.HitTestMarker");
+        source.Should().Contain("FormulaTraceViewportProjection.FromMetricOffsets");
+        source.Should().NotContain("for (");
+        source.Should().NotContain("while (");
+        source.Should().NotContain("TryGetCellRect");
     }
 }

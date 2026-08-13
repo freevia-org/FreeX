@@ -16,7 +16,8 @@
   <Import Project="..\ToolProjects.props" />
 
   <ItemGroup>
-    <ProjectReference Include="..\..\freew\FreeW.App.Host\FreeW.App.Host.csproj" />
+    <ProjectReference Include="..\..\freew\FreeW.App.Host\FreeW.App.Host.csproj"
+                      AdditionalProperties="FreeWRenderCompareSupport=true" />
     <ProjectReference Include="..\..\freew\FreeW.Core.IO\FreeW.Core.IO.csproj" />
     <ProjectReference Include="..\..\freew\FreeW.Core.Model\FreeW.Core.Model.csproj" />
   </ItemGroup>

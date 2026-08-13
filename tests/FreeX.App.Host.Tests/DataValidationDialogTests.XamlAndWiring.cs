@@ -1,4 +1,6 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Dialogs;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
@@ -37,25 +39,21 @@ public sealed partial class DataValidationDialogTests
     [Fact]
     public void DataValidationDialog_OrdersAllowTypesLikeExcel()
     {
-        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("DataValidationDialog.xaml");
+        var choices = DataValidationDialogPlanner.CreateTypeChoices(UiText.Get);
         var expectedOrder = new[]
         {
-            "Content=\"Any Value\"",
-            "Content=\"Whole Number\"",
-            "Content=\"Decimal\"",
-            "Content=\"List\"",
-            "Content=\"Date\"",
-            "Content=\"Time\"",
-            "Content=\"Text Length\"",
-            "Content=\"Custom\""
+            DvType.Any,
+            DvType.WholeNumber,
+            DvType.Decimal,
+            DvType.List,
+            DvType.Date,
+            DvType.Time,
+            DvType.TextLength,
+            DvType.Custom
         };
 
-        var positions = expectedOrder
-            .Select(marker => xaml.IndexOf(marker, StringComparison.Ordinal))
-            .ToArray();
-
-        positions.Should().OnlyContain(position => position >= 0);
-        positions.Should().BeInAscendingOrder();
+        choices.Select(choice => choice.Type).Should().Equal(expectedOrder);
+        choices.Select(choice => choice.Label).Should().OnlyContain(label => !string.IsNullOrWhiteSpace(label));
     }
 
     [Fact]
@@ -246,12 +244,17 @@ public sealed partial class DataValidationDialogTests
     public void DataValidationDialog_UpdatesDynamicCaptionContent()
     {
         var codeBehind = DialogSourceTestSupport.ReadHostSources("DataValidationDialog.xaml.cs");
+        var planner = DialogSourceTestSupport.ReadPresentationSources("Dialogs", "DataValidationDialogPlanner.cs");
 
         codeBehind.Should().Contain("DataValidationDialogPlanner.CreateVisibilityPlan(");
-        codeBehind.Should().Contain("Formula1Label.Content = UiText.Get(Formula1LabelKey(plan.Formula1Label));");
-        codeBehind.Should().Contain("DvFormula1Label.Source => \"DataValidation_Source\"");
-        codeBehind.Should().Contain("DvFormula1Label.Formula => \"DataValidation_Formula\"");
-        codeBehind.Should().Contain("DvFormula1Label.Value => \"DataValidation_Value\"");
+        codeBehind.Should().Contain("DataValidationDialogPlanner.GetFormula1FieldDescriptor(plan.Formula1Label)");
+        codeBehind.Should().Contain("Formula1Label.Content = UiText.Get(formula1Descriptor.LabelResourceKey);");
+        planner.Should().Contain("DvFormula1Label.Source => new(");
+        planner.Should().Contain("\"DataValidation_Source\"");
+        planner.Should().Contain("DvFormula1Label.Formula => new(");
+        planner.Should().Contain("\"DataValidation_Formula\"");
+        planner.Should().Contain("DvFormula1Label.Value => new(");
+        planner.Should().Contain("\"DataValidation_Value\"");
         codeBehind.Should().NotContain("Formula1Label.Text =");
     }
 
@@ -274,12 +277,11 @@ public sealed partial class DataValidationDialogTests
     public void DataValidationViolationMessages_UseOwnedMainWindowMessageHelper()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
-        var method = source[
-            source.IndexOf("private bool TryCreateCellFromEntryText(", StringComparison.Ordinal)..
-            source.IndexOf("private bool CommitPreparedEdits(", StringComparison.Ordinal)];
 
-        method.Should().Contain("ShowOwnedMessage(violationMsg");
-        method.Should().NotContain("MessageBox.Show(");
+        source.Should().Contain("_session.DataValidationPromptResolver = ResolveDataValidationPrompt;");
+        source.Should().Contain("private UserMessageResult ResolveDataValidationPrompt(");
+        source.Should().Contain("_messageService.ShowMessage(");
+        source.Should().NotContain("MessageBox.Show(");
     }
 
     [Fact]
@@ -289,7 +291,7 @@ public sealed partial class DataValidationDialogTests
 
         source.Should().Contain("new DataValidationDialog(existingRule, request => ApplyDataValidationRangeSelection(dlg, request))");
         source.Should().Contain("dlg.ApplyToSameSettings");
-        source.Should().Contain("HasSameDataValidationSettings");
+        source.Should().Contain("candidate.HasSameSettings(existingRule)");
         source.Should().Contain("CompositeWorkbookCommand(\"Data Validation\", commands)");
     }
 

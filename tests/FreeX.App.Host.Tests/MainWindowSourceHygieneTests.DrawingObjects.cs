@@ -5,28 +5,40 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowSourceHygieneTests
 {
     [Fact]
-    public void TextBoxInlineEditing_RoutesKeyCommitAndLostFocusPolicyThroughSharedPlanner()
+    public void TextBoxInlineEditing_RoutesLifecycleAndPolicyThroughSharedSession()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.TextBoxInlineEditing.cs");
 
-        source.Should().Contain("TextBoxInlineEditPlanner.PlanKeyDown(");
-        source.Should().Contain("TextBoxInlineEditPlanner.CreateCommitPlan(");
-        source.Should().Contain("TextBoxInlineEditPlanner.ShouldCommitLostFocus(");
-        source.Should().Contain("TextBoxInlineEditPlanner.CommitCommandTitle");
+        source.Should().Contain("TextBoxInlineEditSession _textBoxInlineEditSession = new();");
+        source.Should().Contain("_textBoxInlineEditSession.Begin(textBox)");
+        source.Should().Contain("_textBoxInlineEditSession.CreateCommitPlan(");
+        source.Should().Contain("_textBoxInlineEditSession.CreateCancelPlan()");
+        source.Should().Contain("_textBoxInlineEditSession.ShouldCommitLostFocus(");
+        source.Should().Contain("TextBoxInlineEditSession.CommitCommandTitle");
+        source.Should().NotContain("TextBoxInlineEditPlanner.CreateCommitPlan(");
+        source.Should().NotContain("TextBoxInlineEditPlanner.PlanKeyDown(");
+        source.Should().NotContain("TextBoxInlineEditPlanner.ShouldCommitLostFocus(");
+        source.Should().NotContain("new SetTextBoxTextCommand(");
         source.Should().NotContain("e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None");
         source.Should().NotContain("e.Key is Key.Enter or Key.Return && Keyboard.Modifiers == ModifierKeys.None");
-        source.Should().NotContain("string.Equals(_textBoxInlineOriginalText, newText, StringComparison.Ordinal)");
+        source.Should().NotContain("_textBoxInlineEditingId");
+        source.Should().NotContain("_textBoxInlineOriginalText");
     }
 
     [Fact]
-    public void SelectionPaneDialog_RoutesKeyboardPolicyThroughSharedPlanner()
+    public void SelectionPaneDialog_RoutesStateAndKeyboardPolicyThroughSharedSession()
     {
         var source = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.State.cs");
 
-        source.Should().Contain("SelectionPanePlanner.PlanKeyboardAction(");
-        source.Should().Contain("SelectionPaneKeyboardAction.MoveUp");
-        source.Should().Contain("SelectionPaneKeyboardAction.FocusRename");
-        source.Should().Contain("SelectionPaneKeyboardAction.ToggleVisibility");
+        source.Should().Contain("_session.HandleKeyboard(");
+        source.Should().Contain("_session.MoveSelected(");
+        source.Should().Contain("_session.RenameSelected(");
+        source.Should().Contain("_session.ToggleSelectedVisibility(");
+        source.Should().Contain("_session.SetAllVisibility(");
+        source.Should().Contain("_session.Drop(");
+        source.Should().NotContain("SelectionPanePlanner.PlanKeyboardAction(");
+        source.Should().NotContain("SelectionPanePlanner.PlanMove(");
+        source.Should().NotContain("SelectionPanePlanner.PlanDragReorder(");
         source.Should().NotContain("if (e.Key == Key.F2)");
         source.Should().NotContain("if (e.Key == Key.Space)");
         source.Should().NotContain("if (e.Key == Key.Up)");

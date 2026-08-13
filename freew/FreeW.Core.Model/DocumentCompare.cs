@@ -299,18 +299,9 @@ public static class DocumentCompare
                 StringComparison.Ordinal))
             return ClonePlain(revised);
 
-        var result = new Paragraph
-        {
-            BlockContentControl = revised.BlockContentControl,
-            BlockCustomXml = revised.BlockCustomXml,
-            Formatting = revised.Formatting,
-            StyleId = revised.StyleId,
-            SpanningFieldStart = revised.SpanningFieldStart,
-            SpanningFieldOwner = revised.SpanningFieldOwner,
-            EndsSpanningField = revised.EndsSpanningField,
-            DropCap = revised.DropCap,
-        };
-        result.BookmarkNames.AddRange(revised.BookmarkNames);
+        var result = ClonePlain(revised);
+        result.Runs.Clear();
+        result.BookmarkBoundaries.Clear();
 
         var useExactTokens = settings.CaseChanges && settings.Whitespace;
         var originalTokens = useExactTokens
@@ -402,29 +393,15 @@ public static class DocumentCompare
         string? dateXml,
         int? moveRevisionId = null)
     {
-        var clone = new Paragraph
-        {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            StyleId = source.StyleId,
-            SpanningFieldStart = source.SpanningFieldStart,
-            SpanningFieldOwner = source.SpanningFieldOwner,
-            EndsSpanningField = source.EndsSpanningField,
-            DropCap = source.DropCap,
-        };
-        clone.BookmarkNames.AddRange(source.BookmarkNames);
-        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
+        var clone = ClonePlain(source);
         // An empty paragraph (no runs) still needs to register as inserted/deleted; the paragraph stays
         // empty in the result but is otherwise carried so block ordering is preserved.
-        foreach (var run in source.Runs)
+        foreach (var copy in clone.Runs)
         {
-            var copy = CloneRun(run);
             copy.Revision = kind;
             copy.RevisionAuthor = author;
             copy.RevisionDateXml = dateXml;
             copy.MoveRevisionId = moveRevisionId;
-            clone.Runs.Add(copy);
         }
         return clone;
     }
@@ -763,24 +740,7 @@ public static class DocumentCompare
 
     // Clone a paragraph with its runs verbatim and no revision marks (used for unchanged paragraphs).
     private static Paragraph ClonePlain(Paragraph source)
-    {
-        var clone = new Paragraph
-        {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            StyleId = source.StyleId,
-            SpanningFieldStart = source.SpanningFieldStart,
-            SpanningFieldOwner = source.SpanningFieldOwner,
-            EndsSpanningField = source.EndsSpanningField,
-            DropCap = source.DropCap,
-        };
-        clone.BookmarkNames.AddRange(source.BookmarkNames);
-        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
-        foreach (var run in source.Runs)
-            clone.Runs.Add(CloneRun(run));
-        return clone;
-    }
+        => DocumentModelCloner.CloneParagraph(source, RevisionClonePolicy.Strip);
 
     // A paragraph-level LCS anchor has matching comparison text. When the source text and run boundaries
     // are also exact, preserve the revised appearance and mark only format differences with w:rPrChange.
@@ -817,81 +777,8 @@ public static class DocumentCompare
         return clone;
     }
 
-    // Shallow-clone a non-paragraph block (e.g. a table) so the result owns its own block instances.
-    private static Block CloneBlock(Block block) => block switch
-    {
-        Paragraph paragraph => ClonePlain(paragraph),
-        Table table => CloneTable(table),
-        _ => block
-    };
+    // Clone non-paragraph content while removing revisions that belong to the compared inputs.
+    private static Block CloneBlock(Block block)
+        => DocumentModelCloner.CloneBlock(block, RevisionClonePolicy.Strip);
 
-    private static Table CloneTable(Table source)
-    {
-        var clone = new Table
-        {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            TableStyleId = source.TableStyleId,
-            Borders = source.Borders,
-            PreferredWidthPt = source.PreferredWidthPt,
-            Alignment = source.Alignment,
-            IndentFromLeftPt = source.IndentFromLeftPt,
-            FloatingPosition = source.FloatingPosition,
-            FloatingTableAllowsOverlap = source.FloatingTableAllowsOverlap,
-            DefaultCellMargins = source.DefaultCellMargins,
-            CellSpacingPt = source.CellSpacingPt,
-            AutoFit = source.AutoFit
-        };
-        clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
-        foreach (var row in source.Rows)
-        {
-            var rowClone = new TableRow();
-            foreach (var cell in row.Cells)
-            {
-                var cellClone = new TableCell
-                {
-                    ShadingColorHex = cell.ShadingColorHex,
-                    WidthPt = cell.WidthPt,
-                    GridSpan = cell.GridSpan,
-                    VerticalMerge = cell.VerticalMerge,
-                    VerticalAlignment = cell.VerticalAlignment,
-                    Margins = cell.Margins,
-                    Borders = cell.Borders,
-                    TextDirection = cell.TextDirection,
-                    WrapText = cell.WrapText,
-                    FitText = cell.FitText
-                };
-                foreach (var paragraph in cell.Paragraphs)
-                    cellClone.Paragraphs.Add(ClonePlain(paragraph));
-                foreach (var nestedTable in cell.NestedTables)
-                    cellClone.NestedTables.Add(CloneTable(nestedTable));
-                rowClone.Cells.Add(cellClone);
-            }
-            clone.Rows.Add(rowClone);
-        }
-        return clone;
-    }
-
-    // Copy a run's content and marks (preserving formatting, images, links, fields, controls, etc.) while
-    // dropping any pre-existing revision metadata — the compare result assigns its own revision marks.
-    private static Run CloneRun(Run source) => new(source.Text, source.Formatting)
-    {
-        Image = source.Image,
-        HyperlinkUrl = source.HyperlinkUrl,
-        HyperlinkAnchor = source.HyperlinkAnchor,
-        HyperlinkTooltip = source.HyperlinkTooltip,
-        SubDocument = source.SubDocument,
-        FieldKind = source.FieldKind,
-        FootnoteId = source.FootnoteId,
-        EndnoteId = source.EndnoteId,
-        CommentId = source.CommentId,
-        IsCommentReference = source.IsCommentReference,
-        IsPageBreak = source.IsPageBreak,
-        IsColumnBreak = source.IsColumnBreak,
-        Control = source.Control,
-        Citation = source.Citation,
-        CrossReference = source.CrossReference,
-        ComplexField = source.ComplexField // immutable record — safe to share
-    };
 }

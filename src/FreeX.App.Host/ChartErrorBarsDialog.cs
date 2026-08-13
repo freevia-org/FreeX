@@ -10,18 +10,6 @@ using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
 
-public sealed record ChartErrorBarsDialogResult(
-    bool ShowErrorBars,
-    ChartErrorBarKind Kind,
-    ChartErrorBarDirection Direction,
-    double Value,
-    bool EndCaps)
-{
-    public ChartErrorBarsInput ToInput() => new(ShowErrorBars, Kind, Direction, Value, EndCaps);
-
-    public ChartLayoutOptions ToOptions() => ChartErrorBarsPlanner.Plan(ToInput());
-}
-
 public sealed class ChartErrorBarsDialog : Window
 {
     private readonly CheckBox _showBox = new() { Content = LabelText(ChartErrorBarsDialogFieldId.ShowErrorBars) };
@@ -30,7 +18,7 @@ public sealed class ChartErrorBarsDialog : Window
     private readonly ComboBox _directionBox = new();
     private readonly TextBox _valueBox = new();
 
-    public ChartErrorBarsDialogResult Result { get; private set; }
+    public ChartErrorBarsInput Result { get; private set; }
 
     public ChartErrorBarsDialog(ChartModel chart)
     {
@@ -47,26 +35,21 @@ public sealed class ChartErrorBarsDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static ChartErrorBarsDialogResult FromChart(ChartModel chart)
-    {
-        var input = ChartErrorBarsPlanner.Read(chart);
-        return CreateResult(input.ShowErrorBars, input.Kind, input.Direction, input.Value, input.EndCaps);
-    }
+    public static ChartErrorBarsInput FromChart(ChartModel chart) => ChartErrorBarsPlanner.Read(chart);
 
-    public static ChartErrorBarsDialogResult CreateResult(
+    public static ChartErrorBarsInput CreateResult(
         bool showErrorBars,
         ChartErrorBarKind kind,
         ChartErrorBarDirection direction,
         double value,
         bool endCaps)
     {
-        var input = ChartErrorBarsPlanner.Normalize(new ChartErrorBarsInput(
+        return ChartErrorBarsPlanner.Normalize(new ChartErrorBarsInput(
             showErrorBars,
             kind,
             direction,
             value,
             endCaps));
-        return new(input.ShowErrorBars, input.Kind, input.Direction, input.Value, input.EndCaps);
     }
 
     private StackPanel CreateContent()
@@ -85,7 +68,7 @@ public sealed class ChartErrorBarsDialog : Window
         return root;
     }
 
-    private void Load(ChartErrorBarsDialogResult result)
+    private void Load(ChartErrorBarsInput result)
     {
         _showBox.IsChecked = result.ShowErrorBars;
         _kindBox.SelectedItem = result.Kind;
@@ -132,12 +115,8 @@ public sealed class ChartErrorBarsDialog : Window
 
     private void ShowPlannerParseWarning(ChartErrorBarsParseIssue issue)
     {
-        var (message, target) = issue switch
-        {
-            ChartErrorBarsParseIssue.Value => (UiText.Get("ChartErrorBars_InvalidValueMessage"), _valueBox),
-            _ => (UiText.Get("ChartErrorBars_InvalidValueMessage"), _valueBox),
-        };
-        ShowInvalidInputWarning(message, target);
+        var presentation = ChartValidationPresentationPlanner.Describe(issue);
+        ShowInvalidInputWarning(presentation.Message.Resolve(UiText.Get, UiText.Format), _valueBox);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

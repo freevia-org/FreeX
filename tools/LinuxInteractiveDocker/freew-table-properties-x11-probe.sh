@@ -11,30 +11,33 @@ window_id="$(sed -n 's/.*"windowId": "\{0,1\}\([^",]*\).*/\1/p' /work/ready.json
 sleep 0.5
 
 xdotool windowactivate --sync "$window_id"
+dialog_id="$(xdotool search --onlyvisible --name '^Table Properties$' | tail -n 1)"
+[[ "$dialog_id" =~ ^[0-9]+$ ]] || { echo 'The real Table Properties dialog was not available.' >&2; exit 10; }
+xdotool windowactivate --sync "$dialog_id"
 scrot "$evidence/dialog-open.png"
 
 # Traverse every real production tab header and retain one screenshot per page.
-# Coordinates are calibrated against the fixed 1280x820 desktop and the dialog's
-# stable centered geometry; the app-side SelectionChanged trace proves identity.
-xdotool mousemove 338 200 click 1
+# Dialog-relative coordinates remain stable while Avalonia resizes and re-centers
+# the window for pages with different content heights.
+xdotool mousemove --window "$dialog_id" 36 46 click 1
 sleep 0.2
 scrot "$evidence/table-page.png"
-xdotool mousemove 378 200 click 1
+xdotool mousemove --window "$dialog_id" 76 46 click 1
 sleep 0.2
 scrot "$evidence/row-page.png"
-xdotool mousemove 425 200 click 1
+xdotool mousemove --window "$dialog_id" 123 46 click 1
 sleep 0.2
 scrot "$evidence/column-page.png"
-xdotool mousemove 469 200 click 1
+xdotool mousemove --window "$dialog_id" 169 46 click 1
 sleep 0.2
 scrot "$evidence/cell-page.png"
-xdotool mousemove 338 200 click 1
+xdotool mousemove --window "$dialog_id" 36 46 click 1
 sleep 0.2
 scrot "$evidence/table-page-returned.png"
 
-# Return focus to the Table page's first editor, traverse Alignment and Text
-# wrapping, then edit the real Indent editor.
-xdotool mousemove 580 245 click 1
+# Return focus to the first editor, then keyboard-traverse Alignment and Text
+# wrapping to edit the real Indent editor.
+xdotool mousemove --window "$dialog_id" 280 186 click 1
 xdotool key Tab
 xdotool key Tab
 xdotool key Tab
@@ -42,10 +45,10 @@ xdotool key ctrl+a
 xdotool type --delay 25 12
 scrot "$evidence/focus-traversed.png"
 
-# Move to the real OK button, then Enter activates that focused button. The
-# app-side focus trace below is the authoritative target identity check.
-xdotool mousemove 612 585 click 1
-xdotool key Return
+# Activate the real OK button relative to the current dialog bounds. The app-side
+# focus trace below is the authoritative target identity check.
+eval "$(xdotool getwindowgeometry --shell "$dialog_id")"
+xdotool mousemove --window "$dialog_id" "$((WIDTH - 137))" "$((HEIGHT - 26))" click 1
 for _ in $(seq 1 40); do
   [[ -s "$result" ]] && break
   sleep 0.25

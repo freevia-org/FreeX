@@ -8,8 +8,7 @@ public sealed class AccessibilityCheckerDialogPlannerSourceGuardTests
     public void AccessibilityCheckerDialogPlanner_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(Path.Combine(presentationRoot, "Accessibility", "AccessibilityCheckerDialogPlanner.cs"))
             .Should()
@@ -21,20 +20,24 @@ public sealed class AccessibilityCheckerDialogPlannerSourceGuardTests
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "AccessibilityCheckerDialogPlanner.cs"))
             .Should()
             .BeFalse("Avalonia should use the shared planner instead of carrying a renderer-local copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Services", "AccessibilityIssueFormatter.cs"))
+            .Should()
+            .BeFalse("the obsolete key-returning formatter must not wrap the localized presentation planner");
     }
 
     [Fact]
     public void WpfAndAvaloniaAccessibilityCheckerRenderers_DelegatePlanningToSharedPlanner()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var hostDialogSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
         var hostReviewSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
         var avaloniaSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.AccessibilityChecker.cs"));
+        var captureSource = File.ReadAllText(Path.Combine(repoRoot, "tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
 
         hostDialogSource.Should().Contain("AccessibilityCheckerDialogPlanner.Create(issues, UiText.Get)");
         hostDialogSource.Should().Contain("AccessibilityCheckerDialogPlanner.CreateSelection(");
+        hostDialogSource.Should().Contain("foreach (var node in _plan.TreeNodes)");
         hostDialogSource.Should().NotContain("AccessibilityInspectionResult.Build(");
         hostDialogSource.Should().NotContain("AccessibilityIssueFormatter.Format(");
         hostDialogSource.Should().NotContain("LocalizedFallbackTextResolver");
@@ -46,10 +49,20 @@ public sealed class AccessibilityCheckerDialogPlannerSourceGuardTests
         avaloniaSource.Should().Contain("AccessibilityCheckerDialogPlanner.Create(issues, UiText.Get)");
         avaloniaSource.Should().Contain("AccessibilityCheckerDialogPlanner.CreateSelection(");
         avaloniaSource.Should().Contain("AccessibilityCheckerDialogPlanner.GetNavigationTarget(selectedIssue)");
+        avaloniaSource.Should().Contain("foreach (var node in plan.TreeNodes)");
         avaloniaSource.Should().NotContain("AccessibilityInspectionResult.Build(");
         avaloniaSource.Should().NotContain("ShellLoc_AccessibilityChecker");
         avaloniaSource.Should().NotContain("AcText(");
         avaloniaSource.Should().NotContain("SeverityHeader(");
         avaloniaSource.Should().NotContain("SelectedDescriptor(");
+
+        captureSource.Should().Contain("foreach (var section in plan.TreeNodes)");
+        captureSource.Should().Contain("CreateSelection(plan.InitialItem, null, plan)");
+
+        foreach (var rendererSource in new[] { hostDialogSource, avaloniaSource, captureSource })
+        {
+            rendererSource.Should().NotContain("$\"{section.Header} ({section.IssueCount})\"");
+            rendererSource.Should().NotContain("$\"{group.Label} ({group.Items.Count})\"");
+        }
     }
 }

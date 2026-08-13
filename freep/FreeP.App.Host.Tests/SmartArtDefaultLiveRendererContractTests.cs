@@ -15,7 +15,8 @@ public sealed class SmartArtDefaultLiveRendererContractTests
             "SlideCanvas.cs"));
 
         source.Should().Contain("SlideCompositor.Compose(");
-        source.Should().Contain("RenderOp(");
+        source.Should().Contain("SlideRenderExecutionPlanner.Plan(");
+        source.Should().Contain("RenderCommand(");
         source.Should().NotContain("SmartArtLayoutEngine.Layout(",
             "SmartArt geometry must remain shared with Avalonia through SlideCompositor");
     }

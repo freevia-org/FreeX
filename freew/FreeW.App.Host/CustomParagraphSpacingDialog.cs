@@ -13,6 +13,7 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly CustomParagraphSpacingDialogSession _session;
     private readonly TextBox _beforeBox;
     private readonly TextBox _afterBox;
     private readonly TextBox _lineBox;
@@ -21,18 +22,24 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
 
     private CustomParagraphSpacingDialog(Window? owner, DocumentParagraphSpacingSet? current)
     {
+        var surface = CustomParagraphSpacingDialogPlanner.Surface;
+        _session = new CustomParagraphSpacingDialogSession(current, CultureInfo.CurrentCulture);
         Owner = owner;
-        Title = "Custom Paragraph Spacing";
+        Title = surface.Title;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var state = CustomParagraphSpacingDialogPlanner.BuildInitialState(current, CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
         _beforeBox = NumberBox(state.SpaceBeforeText);
         _afterBox = NumberBox(state.SpaceAfterText);
         _lineBox = NumberBox(state.LineSpacingText);
+        WpfDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(_beforeBox, surface.Field(CustomParagraphSpacingDialogField.SpaceBefore));
+        WpfDialogSurfaceSemantics.Apply(_afterBox, surface.Field(CustomParagraphSpacingDialogField.SpaceAfter));
+        WpfDialogSurfaceSemantics.Apply(_lineBox, surface.Field(CustomParagraphSpacingDialogField.LineSpacing));
 
         Content = BuildContent();
         Loaded += (_, _) => DialogFocus.FocusAndSelect(_beforeBox);
@@ -40,6 +47,7 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
 
     private UIElement BuildContent()
     {
+        var surface = CustomParagraphSpacingDialogPlanner.Surface;
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -67,7 +75,7 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
 
         var hint = new TextBlock
         {
-            Text = "All values in points (pt). Line spacing is a multiple (e.g. 1.15 = 115%).",
+            Text = surface.SupportingText,
             TextWrapping = TextWrapping.Wrap,
             Foreground = System.Windows.Media.Brushes.Gray,
             FontSize = 10,
@@ -77,9 +85,9 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
         Grid.SetColumnSpan(hint, 2);
         grid.Children.Add(hint);
 
-        AddRow(1, "Space before (pt):", _beforeBox);
-        AddRow(2, "Space after (pt):", _afterBox);
-        AddRow(3, "Line spacing (\u00d7):", _lineBox);
+        AddRow(1, surface.Field(CustomParagraphSpacingDialogField.SpaceBefore).Label, _beforeBox);
+        AddRow(2, surface.Field(CustomParagraphSpacingDialogField.SpaceAfter).Label, _afterBox);
+        AddRow(3, surface.Field(CustomParagraphSpacingDialogField.LineSpacing).Label, _lineBox);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Grid.SetRow(buttons, 4);
@@ -96,21 +104,18 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
             _afterBox.Text,
             _lineBox.Text);
 
-        if (!CustomParagraphSpacingDialogPlanner.TryBuildResult(
-                input,
-                CultureInfo.CurrentCulture,
-                out var result,
-                out var validation))
+        var acceptance = _session.PlanAcceptance(input);
+        if (!acceptance.IsAccepted)
         {
             DialogMessageHelper.ShowWarning(
                 this,
-                validation?.Message ?? CustomParagraphSpacingDialogPlanner.LineSpacingValidationMessage,
+                acceptance.Validation?.Message ?? CustomParagraphSpacingDialogPlanner.LineSpacingValidationMessage,
                 Title);
-            FocusFailure(validation?.Field);
+            FocusFailure(acceptance.Validation?.Field);
             return;
         }
 
-        _result = result;
+        _result = acceptance.Result;
         Close();
     }
 

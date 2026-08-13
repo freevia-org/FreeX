@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows.Controls;
 using FreeX.App.Host;
+using FreeX.App.Presentation.Calculation;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -22,15 +23,15 @@ public sealed partial class OptionsDialogSourceTests
     {
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "options.json");
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, path);
 
         StaTestRunner.Run(() =>
         {
             // The persisted app default says Automatic (true), but the live workbook the user is
             // actually editing has been switched to Manual via the ribbon. The dialog must reflect
             // the workbook, not the stale app-wide default.
-            var opts = new FreeXOptions { AutoCalculate = true };
-            var calcSettings = new OptionsDialogCalculationSettings(
+            var opts = new AppOptions { AutoCalculate = true };
+            var calcSettings = new CalculationOptionsDialogState(
                 AutoCalculate: false,
                 IterativeCalculation: false,
                 MaxCalculationIterations: null,
@@ -54,17 +55,17 @@ public sealed partial class OptionsDialogSourceTests
     }
 
     [Fact]
-    public void OptionsDialog_UnrelatedEditLeavesCalculationSettingsResultNull()
+    public void OptionsDialog_UnrelatedEditLeavesCalculationSubmissionNull()
     {
         StaTestRunner.Run(() =>
         {
-            var calcSettings = new OptionsDialogCalculationSettings(
+            var calcSettings = new CalculationOptionsDialogState(
                 AutoCalculate: false,
                 IterativeCalculation: false,
                 MaxCalculationIterations: null,
                 MaxCalculationChange: null);
 
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            var dialog = new OptionsDialog(new AppOptions(), calcSettings: calcSettings);
             dialog.Show();
             try
             {
@@ -74,7 +75,7 @@ public sealed partial class OptionsDialogSourceTests
 
                 ClickOkAllowingNonModalDialogResult(dialog);
 
-                dialog.CalculationSettingsResult.Should().BeNull();
+                dialog.CalculationSubmission.Should().BeNull();
             }
             finally
             {
@@ -84,17 +85,17 @@ public sealed partial class OptionsDialogSourceTests
     }
 
     [Fact]
-    public void OptionsDialog_TogglingCalcModeSurfacesCalculationSettingsResult()
+    public void OptionsDialog_TogglingCalcModeSurfacesCalculationSubmission()
     {
         StaTestRunner.Run(() =>
         {
-            var calcSettings = new OptionsDialogCalculationSettings(
+            var calcSettings = new CalculationOptionsDialogState(
                 AutoCalculate: true,
                 IterativeCalculation: false,
                 MaxCalculationIterations: null,
                 MaxCalculationChange: null);
 
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            var dialog = new OptionsDialog(new AppOptions(), calcSettings: calcSettings);
             dialog.Show();
             try
             {
@@ -102,8 +103,8 @@ public sealed partial class OptionsDialogSourceTests
 
                 ClickOkAllowingNonModalDialogResult(dialog);
 
-                dialog.CalculationSettingsResult.Should().NotBeNull();
-                dialog.CalculationSettingsResult!.AutoCalculate.Should().BeFalse();
+                dialog.CalculationSubmission.Should().NotBeNull();
+                dialog.CalculationSubmission!.RequestedMode.Should().Be(WorkbookCalculationMode.Manual);
             }
             finally
             {
@@ -117,13 +118,13 @@ public sealed partial class OptionsDialogSourceTests
     {
         StaTestRunner.Run(() =>
         {
-            var calcSettings = new OptionsDialogCalculationSettings(
+            var calcSettings = new CalculationOptionsDialogState(
                 AutoCalculate: true,
                 IterativeCalculation: true,
                 MaxCalculationIterations: 250,
                 MaxCalculationChange: 0.0005);
 
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            var dialog = new OptionsDialog(new AppOptions(), calcSettings: calcSettings);
             dialog.Show();
             try
             {
@@ -149,8 +150,8 @@ public sealed partial class OptionsDialogSourceTests
     {
         StaTestRunner.Run(() =>
         {
-            var calcSettings = new OptionsDialogCalculationSettings(true, true, 100, 0.001);
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            var calcSettings = new CalculationOptionsDialogState(true, true, 100, 0.001);
+            var dialog = new OptionsDialog(new AppOptions(), calcSettings: calcSettings);
             dialog.Show();
             try
             {
@@ -171,12 +172,12 @@ public sealed partial class OptionsDialogSourceTests
     }
 
     [Fact]
-    public void OptionsDialog_EditingIterativeCalculationRoundTripsIntoCalculationSettingsResult()
+    public void OptionsDialog_EditingIterativeCalculationRoundTripsIntoCalculationSubmission()
     {
         StaTestRunner.Run(() =>
         {
-            var calcSettings = new OptionsDialogCalculationSettings(true, false, null, null);
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            var calcSettings = new CalculationOptionsDialogState(true, false, null, null);
+            var dialog = new OptionsDialog(new AppOptions(), calcSettings: calcSettings);
             dialog.Show();
             try
             {
@@ -186,10 +187,11 @@ public sealed partial class OptionsDialogSourceTests
 
                 ClickOkAllowingNonModalDialogResult(dialog);
 
-                dialog.CalculationSettingsResult.Should().NotBeNull();
-                dialog.CalculationSettingsResult!.IterativeCalculation.Should().BeTrue();
-                dialog.CalculationSettingsResult!.MaxCalculationIterations.Should().Be(50);
-                dialog.CalculationSettingsResult!.MaxCalculationChange.Should().Be(0.01);
+                dialog.CalculationSubmission.Should().NotBeNull();
+                dialog.CalculationSubmission!.IterativeCalculation.Should().NotBeNull();
+                dialog.CalculationSubmission.IterativeCalculation!.Enabled.Should().BeTrue();
+                dialog.CalculationSubmission.IterativeCalculation.MaxIterations.Should().Be(50);
+                dialog.CalculationSubmission.IterativeCalculation.MaxChange.Should().Be(0.01);
             }
             finally
             {
@@ -203,12 +205,12 @@ public sealed partial class OptionsDialogSourceTests
     {
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "options.json");
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, path);
 
         StaTestRunner.Run(() =>
         {
-            var calcSettings = new OptionsDialogCalculationSettings(true, false, null, null);
-            var dialog = new OptionsDialog(new FreeXOptions(), calcSettings: calcSettings);
+            var calcSettings = new CalculationOptionsDialogState(true, false, null, null);
+            var dialog = new OptionsDialog(new AppOptions(), calcSettings: calcSettings);
             dialog.Show();
             try
             {
@@ -219,7 +221,7 @@ public sealed partial class OptionsDialogSourceTests
                 ClickOkAllowingNonModalDialogResult(dialog);
 
                 dialog.Result.Should().NotBeNull();
-                dialog.CalculationSettingsResult.Should().BeNull();
+                dialog.CalculationSubmission.Should().BeNull();
             }
             finally
             {
@@ -235,8 +237,8 @@ public sealed partial class OptionsDialogSourceTests
 
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
         source.Should().Contain("CalculationOptionsInputParser.TryParseBounds(");
-        source.Should().Contain("CalculationOptionsInputError.InvalidMaxIterations");
-        source.Should().Contain("\"Options_InvalidMaxIterationsMessage\"");
-        source.Should().Contain("invalidIterations ? OptMaxIterations : OptMaxChange");
+        source.Should().Contain("OptionsValidationPresentationPlanner.DescribeCalculationInput(calculationInputError)");
+        source.Should().Contain("presentation.FocusTarget == OptionsValidationFocusTarget.MaxIterations");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
     }
 }

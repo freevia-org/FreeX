@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using FreeX.App.Presentation.Charts.Editing;
 using System.Windows.Input;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
@@ -104,9 +105,6 @@ public partial class MainWindow
         PictureModel? picture,
         FormatPictureDialogResult result)
     {
-        if (picture is null)
-            return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_PictureWasNotFound"));
-
         var formatResult = new FormatPicturePlanner.FormatObjectResult(
             result.Width,
             result.Height,
@@ -120,9 +118,12 @@ public partial class MainWindow
                 result.CropTop,
                 result.CropRight,
                 result.CropBottom));
-        var commands = DrawingObjectFormatCommandPolicy.BuildPictureFormatCommands(sheetId, picture, pictureResult);
-
-        return new CompositeWorkbookCommand("Format Picture", commands);
+        return DrawingObjectFormatCommandPolicy.BuildPictureFormatCommand(
+            sheetId,
+            picture,
+            pictureResult,
+            "Format Picture",
+            UiText.Get("MainWindowMessage_PictureWasNotFound"));
     }
 
     private void PictureRotateBtn_Click(object sender, RoutedEventArgs e)
@@ -143,10 +144,11 @@ public partial class MainWindow
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Rotate Picture",
-                sheetId => new RotatePictureCommand(
+                sheetId => DrawingObjectFormatCommandPolicy.BuildRotationCommand(
                     sheetId,
+                    DrawingObjectTargetKind.Picture,
                     GetTargetPicture(sheetId)?.Id ?? Guid.Empty,
-                    dialog.Result.Degrees)))
+                    new FormatPicturePlanner.RotationResult(dialog.Result.Degrees))))
             return;
 
         UpdateViewport();
@@ -206,10 +208,9 @@ public partial class MainWindow
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Reset Crop",
-                sheetId => new SetPictureCropCommand(
+                sheetId => PictureCropDialogPlanner.BuildResetCommand(
                     sheetId,
-                    GetTargetPicture(sheetId)?.Id ?? Guid.Empty,
-                    0, 0, 0, 0)))
+                    GetTargetPicture(sheetId)?.Id ?? Guid.Empty)))
             return;
 
         UpdateViewport();
@@ -374,7 +375,7 @@ public partial class MainWindow
             return false;
 
         var command = DrawingObjectCommandPlanner.BuildDeleteCommand(_currentSheetId, kind.Value, objectId);
-        if (!TryExecuteCommand(command, DrawingObjectActionPlanner.DeleteObjectCommandTitle, out var outcome))
+        if (!TryExecuteCommand(command, DrawingObjectActionPlanner.DeleteObjectCommandTitle, out _))
         {
             // Rejected (e.g. protection) -- the key press is still "handled" (an object was selected),
             // ShowCommandError already surfaced why.
@@ -383,7 +384,6 @@ public partial class MainWindow
 
         SheetGrid.SelectedObjectId = Guid.Empty;
         SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.None;
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         return true;
     }
@@ -397,13 +397,6 @@ public partial class MainWindow
         ToSelectionPaneObjectKindIncludingChart(SheetGrid.SelectedObjectKind) is not null
         && SheetGrid.SelectedObjectId != Guid.Empty;
 
-    // R129-model-drawing-nudge-1: arrow-key increment (DIP pixels) applied to a genuinely selected
-    // picture/shape/text box/chart, matching Excel's "arrows nudge the object". Ctrl held uses the
-    // finer increment ("Ctrl+arrow moves it by a smaller increment" -- same relationship Excel/
-    // PowerPoint/Word use for their shared drawing-object nudge behavior).
-    private const double DrawingObjectNudgeStep = 3.0;
-    private const double DrawingObjectFineNudgeStep = 1.0;
-
     // R129-model-drawing-nudge-1: Up/Down/Left/Right entry point for MainWindow_KeyDown, invoked
     // only when HasSelectedDrawingObject() is true (see MainWindow.Selection.cs). Mirrors
     // TryDeleteSelectedDrawingObject's shape -- read the selection straight off SheetGrid, build the
@@ -412,29 +405,60 @@ public partial class MainWindow
     // cell selection alone while an object owns the arrow keys.
     private void NudgeSelectedDrawingObject(Key key, bool fine)
     {
-        var kind = ToSelectionPaneObjectKindIncludingChart(SheetGrid.SelectedObjectKind);
-        var objectId = SheetGrid.SelectedObjectId;
-        if (kind is null || objectId == Guid.Empty)
+        var modifiers = fine ? ModifierKeys.Control : ModifierKeys.None;
+        if (!TryPlanSelectedDrawingObjectNudge(key, modifiers, out var plan))
             return;
 
-        var step = fine ? DrawingObjectFineNudgeStep : DrawingObjectNudgeStep;
-        var (deltaX, deltaY) = key switch
-        {
-            Key.Up => (0.0, -step),
-            Key.Down => (0.0, step),
-            Key.Left => (-step, 0.0),
-            Key.Right => (step, 0.0),
-            _ => (0.0, 0.0)
-        };
-        if (deltaX == 0.0 && deltaY == 0.0)
+        ExecuteSelectedDrawingObjectNudge(plan);
+    }
+
+    private bool TryPlanSelectedDrawingObjectNudge(
+        Key key,
+        ModifierKeys modifiers,
+        out DrawingObjectNudgePlan plan) =>
+        DrawingObjectNudgePlanner.TryPlan(
+            ToDrawingObjectNudgeDirection(key),
+            ToDrawingObjectNudgeModifiers(modifiers),
+            ToSelectionPaneObjectKindIncludingChart(SheetGrid.SelectedObjectKind),
+            SheetGrid.SelectedObjectId,
+            out plan);
+
+    private void ExecuteSelectedDrawingObjectNudge(DrawingObjectNudgePlan plan)
+    {
+        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(
+            _currentSheetId,
+            plan.Kind,
+            plan.ObjectId,
+            plan.DeltaX,
+            plan.DeltaY);
+        if (!TryExecuteCommand(command, DrawingObjectActionPlanner.MoveObjectCommandTitle, out _))
             return;
 
-        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(_currentSheetId, kind.Value, objectId, deltaX, deltaY);
-        if (!TryExecuteCommand(command, DrawingObjectActionPlanner.MoveObjectCommandTitle, out var outcome))
-            return;
-
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
+    }
+
+    private static DrawingObjectNudgeDirection? ToDrawingObjectNudgeDirection(Key key) =>
+        key switch
+        {
+            Key.Up => DrawingObjectNudgeDirection.Up,
+            Key.Down => DrawingObjectNudgeDirection.Down,
+            Key.Left => DrawingObjectNudgeDirection.Left,
+            Key.Right => DrawingObjectNudgeDirection.Right,
+            _ => null
+        };
+
+    private static DrawingObjectNudgeModifiers ToDrawingObjectNudgeModifiers(ModifierKeys modifiers)
+    {
+        var result = DrawingObjectNudgeModifiers.None;
+        if ((modifiers & ModifierKeys.Control) != 0)
+            result |= DrawingObjectNudgeModifiers.Control;
+        if ((modifiers & ModifierKeys.Shift) != 0)
+            result |= DrawingObjectNudgeModifiers.Shift;
+        if ((modifiers & ModifierKeys.Alt) != 0)
+            result |= DrawingObjectNudgeModifiers.Alt;
+        if ((modifiers & ModifierKeys.Windows) != 0)
+            result |= DrawingObjectNudgeModifiers.Meta;
+        return result;
     }
 
     private static SelectionPaneObjectKind? ToSelectionPaneObjectKindIncludingChart(FreeX.App.UI.ObjectKind kind) =>
@@ -661,7 +685,7 @@ public partial class MainWindow
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 DrawingObjectActionPlanner.ShapeGradientCommandTitle,
-                sheetId => new SetDrawingShapeGradientCommand(
+                sheetId => ShapeGradientPlanner.BuildCommand(
                     sheetId,
                     GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty,
                     dialog.Result.StartColor,
@@ -681,7 +705,7 @@ public partial class MainWindow
 
         var currentPreset = GetTargetDrawingShape(_currentSheetId)?.GetEffectiveEffectPreset()
             ?? DrawingShapeEffectPreset.None;
-        currentPreset = ShapeEffectsDialogPlanner.NormalizePreset(currentPreset);
+        currentPreset = ShapeEffectsPlanner.NormalizePreset(currentPreset);
 
         foreach (var item in menu.Items)
         {
@@ -709,13 +733,13 @@ public partial class MainWindow
             return;
         }
 
-        var normalizedPreset = ShapeEffectsDialogPlanner.NormalizePreset(preset);
+        var normalizedPreset = ShapeEffectsPlanner.NormalizePreset(preset);
         if (normalizedPreset != preset)
             return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 DrawingObjectActionPlanner.ShapeEffectsCommandTitle,
-                sheetId => new SetDrawingShapeEffectCommand(
+                sheetId => ShapeEffectsPlanner.BuildCommand(
                     sheetId,
                     GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty,
                     normalizedPreset)))
@@ -833,7 +857,15 @@ public partial class MainWindow
 
     private void OnChartBoundsChanged(Guid id, double left, double top, double width, double height)
     {
-        if (!TryExecuteCommand(new SetChartBoundsCommand(_currentSheetId, id, left, top, width, height), "Chart Bounds"))
+        if (!TryExecuteCommand(
+                ChartCommandWorkflowPlanner.BuildBoundsCommand(
+                    _currentSheetId,
+                    id,
+                    left,
+                    top,
+                    width,
+                    height),
+                "Chart Bounds"))
             return;
 
         SheetGrid.SelectedObjectId = id;
@@ -913,7 +945,7 @@ public partial class MainWindow
     private void OnPictureCropped(Guid id, FreeX.App.UI.PictureCropRatios crop)
     {
         if (!TryExecuteCommand(
-                new SetPictureCropCommand(
+                PictureCropDialogPlanner.BuildCommand(
                     _currentSheetId,
                     id,
                     crop.Left,

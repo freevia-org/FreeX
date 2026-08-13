@@ -7,9 +7,7 @@ public sealed partial class SortDialogTests
     [Fact]
     public void DialogCommands_ExposeKeyboardAccessKeys()
     {
-        var source = DialogSourceTestSupport.ReadHostSources(
-            "SortDialog.cs",
-            "SortDialog.Planning.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("SortDialog.cs");
 
         foreach (var content in new[]
         {
@@ -29,7 +27,6 @@ public sealed partial class SortDialogTests
     public void DialogLayout_ExposesExcelCustomSortFields()
     {
         var source = ReadSortDialogSource();
-        var planningSource = DialogSourceTestSupport.ReadHostSources("SortDialog.Planning.cs");
 
         source.Should().Contain("UiText.Get(\"Sort_MyDataHasHeaders\")");
         source.Should().Contain("IsChecked = hasHeaders");
@@ -41,11 +38,11 @@ public sealed partial class SortDialogTests
         source.Should().Contain("Header = UiText.Get(\"Sort_Color\")");
         source.Should().Contain("UiText.Get(\"Sort_SortOnCellValues\")");
         source.Should().Contain("UiText.Get(\"Sort_SortOnCellColor\")");
-        source.Should().Contain("UiText.Get(\"Sort_SortOnFontColor\")");
+        source.Should().Contain("UiText.Get(\"Common_FontColor\")");
         source.Should().Contain("UiText.Get(\"Sort_OrderOnTop\")");
         source.Should().Contain("UiText.Get(\"Sort_OrderOnBottom\")");
         source.Should().Contain("CreateOrderColumn");
-        planningSource.Should().Contain("BuildColorChoices");
+        source.Should().Contain("BuildColorChoices");
         source.Should().Contain("UpdateColumnChoices");
         source.Should().Contain("SortOptionsDialog");
     }

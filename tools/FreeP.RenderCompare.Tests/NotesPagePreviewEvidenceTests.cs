@@ -10,7 +10,8 @@ public sealed class NotesPagePreviewEvidenceTests
     [Fact]
     public void CreatePlan_UsesNotesPagePreviewEvidenceRoutes()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freep-notes-page-preview-" + Guid.NewGuid().ToString("N"));
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-notes-page-preview-");
+        var root = temporaryDirectory.Path;
         var deck = Path.Combine(root, "deck.pptx");
 
         var plan = NotesPagePreviewEvidence.CreatePlan(deck, root);
@@ -46,7 +47,8 @@ public sealed class NotesPagePreviewEvidenceTests
     [Fact]
     public void WriteSummaryCsv_WritesEvidenceRowsWithEscapedText()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freep-notes-page-preview-csv-" + Guid.NewGuid().ToString("N"));
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-notes-page-preview-csv-");
+        var root = temporaryDirectory.Path;
         var csvPath = Path.Combine(root, "summary.csv");
         var rows = new[]
         {
@@ -66,19 +68,11 @@ public sealed class NotesPagePreviewEvidenceTests
                 PowerPointBaseline: "not-required-for-local-wpf-avalonia-evidence")
         };
 
-        try
-        {
-            NotesPagePreviewEvidence.WriteSummaryCsv(csvPath, rows);
+        NotesPagePreviewEvidence.WriteSummaryCsv(csvPath, rows);
 
-            File.ReadAllLines(csvPath).Should().Equal(
-                "outputPage,slideNumber,slideRenderedPage,isContinuation,firstNoteLine,noteLineCount,showsPlaceholder,styledRunCount,thumbnailLabel,detail,wpfEvidence,avaloniaEvidence,powerPointBaseline",
-                "1,2,1,false,0,3,false,2,Slide 2 notes,\"Notes page, with comma\",shared-notes-page-pdf-render-plan,shared-notes-page-pdf-render-plan,not-required-for-local-wpf-avalonia-evidence");
-        }
-        finally
-        {
-            if (Directory.Exists(root))
-                Directory.Delete(root, recursive: true);
-        }
+        File.ReadAllLines(csvPath).Should().Equal(
+            "outputPage,slideNumber,slideRenderedPage,isContinuation,firstNoteLine,noteLineCount,showsPlaceholder,styledRunCount,thumbnailLabel,detail,wpfEvidence,avaloniaEvidence,powerPointBaseline",
+            "1,2,1,false,0,3,false,2,Slide 2 notes,\"Notes page, with comma\",shared-notes-page-pdf-render-plan,shared-notes-page-pdf-render-plan,not-required-for-local-wpf-avalonia-evidence");
     }
 
     private static Presentation BuildOverflowingStyledNotesDeck()

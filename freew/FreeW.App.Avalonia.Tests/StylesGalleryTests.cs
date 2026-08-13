@@ -41,7 +41,7 @@ public sealed class StylesGalleryTests
         }
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { },
@@ -159,7 +159,7 @@ public sealed class StylesGalleryTests
         {
             var (view, doc) = MakeBodyDoc("Heading text");
             view.MoveCaretToBlock(0, 0);
-            var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
             registry.TryGet(new RibbonCommandId("freew.style"), out var command).Should().BeTrue();
             var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
             initialValue = stateful.GetState().Value;
@@ -197,7 +197,7 @@ public sealed class StylesGalleryTests
     [Fact]
     public void Styles_group_exposes_gallery_clear_new_and_manage_controls()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var stylesGroup = definition.FindTab("home")!.Groups.First(g => g.Id == "styles");
 
         stylesGroup.Controls.OfType<RibbonDropdown>()
@@ -329,7 +329,7 @@ public sealed class StylesGalleryTests
             OpenNewStyleDialog = () => calls.Add("new"),
             OpenManageStylesDialog = () => calls.Add("manage"),
         };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
         registry.TryGet(new RibbonCommandId("freew.new-style"), out var newStyle).Should().BeTrue();
         registry.TryGet(new RibbonCommandId("freew.manage-styles"), out var manageStyles).Should().BeTrue();
@@ -342,8 +342,8 @@ public sealed class StylesGalleryTests
     [Fact]
     public void Every_styles_gallery_menu_item_resolves_in_the_registry()
     {
-        var definition = FreeWRibbon.BuildDefinition();
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         var dropdown = definition.FindTab("home")!.Groups.First(g => g.Id == "styles")
             .Controls.OfType<RibbonDropdown>().First(d => d.CommandId.Value == "freew.styles-gallery");
 

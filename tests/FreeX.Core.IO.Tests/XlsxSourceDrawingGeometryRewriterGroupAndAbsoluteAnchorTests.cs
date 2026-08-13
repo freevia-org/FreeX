@@ -131,18 +131,18 @@ public sealed class XlsxSourceDrawingGeometryRewriterGroupAndAbsoluteAnchorTests
         var savedGroupChildA = savedDrawingXml.Descendants(Xdr + "pic")
             .Single(pic => pic.Descendants(Xdr + "cNvPr").Any(c => c.Attribute("name")?.Value == "GroupChildA"));
         var groupChildAExt = savedGroupChildA.Element(Xdr + "spPr")!.Element(A + "xfrm")!.Element(A + "ext")!;
-        groupChildAExt.Attribute("cx")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(500).ToString(),
+        groupChildAExt.Attribute("cx")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(500).ToString(),
             "a grouped picture's resize must be written into its own local xfrm ext, not silently dropped");
-        groupChildAExt.Attribute("cy")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(400).ToString());
+        groupChildAExt.Attribute("cy")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(400).ToString());
 
         // No-regression: the sibling ungrouped picture's own oneCellAnchor must still be rewritten from
         // its model as before.
         var soloAnchor = savedDrawingXml.Root!.Elements(Xdr + "oneCellAnchor")
             .Single(anchor => anchor.Descendants(Xdr + "cNvPr").Any(c => c.Attribute("name")?.Value == "Solo"));
         var soloExt = soloAnchor.Element(Xdr + "ext")!;
-        soloExt.Attribute("cx")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(321).ToString(),
+        soloExt.Attribute("cx")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(321).ToString(),
             "a non-grouped source-loaded picture must still have its width rewritten");
-        soloExt.Attribute("cy")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(111).ToString(),
+        soloExt.Attribute("cy")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(111).ToString(),
             "a non-grouped source-loaded picture must still have its height rewritten");
     }
 
@@ -201,21 +201,21 @@ public sealed class XlsxSourceDrawingGeometryRewriterGroupAndAbsoluteAnchorTests
         var pos = savedAbsoluteAnchor.Element(Xdr + "pos")!;
         var ext = savedAbsoluteAnchor.Element(Xdr + "ext")!;
 
-        pos.Attribute("x")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(800).ToString(),
+        pos.Attribute("x")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(800).ToString(),
             "the absoluteAnchor's xdr:pos x must reflect the model's new AnchorOffsetX, not the stale original");
-        pos.Attribute("y")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(400).ToString(),
+        pos.Attribute("y")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(400).ToString(),
             "the absoluteAnchor's xdr:pos y must reflect the model's new AnchorOffsetY, not the stale original");
-        ext.Attribute("cx")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(500).ToString(),
+        ext.Attribute("cx")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(500).ToString(),
             "the absoluteAnchor's xdr:ext cx must reflect the model's new Width, not the stale original");
-        ext.Attribute("cy")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(250).ToString(),
+        ext.Attribute("cy")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(250).ToString(),
             "the absoluteAnchor's xdr:ext cy must reflect the model's new Height, not the stale original");
 
         // No-regression: an ordinary oneCellAnchor sibling picture must still rewrite its own ext.
         var normalAnchor = savedDrawingXml.Root!.Elements(Xdr + "oneCellAnchor")
             .Single(anchor => anchor.Descendants(Xdr + "cNvPr").Any(c => c.Attribute("name")?.Value == "NormalPic"));
         var normalExt = normalAnchor.Element(Xdr + "ext")!;
-        normalExt.Attribute("cx")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(222).ToString());
-        normalExt.Attribute("cy")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(333).ToString());
+        normalExt.Attribute("cx")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(222).ToString());
+        normalExt.Attribute("cy")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(333).ToString());
 
         // Reload once more end-to-end: the model must come back with exactly the edited geometry.
         secondSave.Position = 0;

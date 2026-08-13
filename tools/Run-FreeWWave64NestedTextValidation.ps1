@@ -8,6 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $resolvedOutput = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetFullPath($OutputDir) } else { [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir)) }
 $fixtureProject = Join-Path $repoRoot "freew/tools/FreeW.GroupChildPhysicalFixture/FreeW.GroupChildPhysicalFixture.csproj"
 $fixturePath = Join-Path $resolvedOutput "nested-text-wave64.docx"
@@ -20,23 +21,11 @@ $started = $false
 $isTextDirection = $Selector -eq "nested-text-direction"
 $isAlignment = $Selector -eq "nested-text-alignment"
 
-function Invoke-Fixture { param([string]$Action, [string]$Path)
-    $lines = @(& dotnet run --project $fixtureProject --configuration Release --no-restore -- $Action $Path 2>&1)
-    if ($LASTEXITCODE -ne 0) { throw "Fixture '$Action' failed: $($lines -join [Environment]::NewLine)" }
-    return $lines
-}
-function Read-Geometry { param([string]$Action, [string]$Path)
-    $values = [ordered]@{}
-    foreach ($line in @(Invoke-Fixture $Action $Path)) {
-        if ($line -match '^([^=]+)=(.*)$') { $values[$Matches[1]] = $Matches[2] }
-    }
-    return $values
-}
-
 try {
     New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
-    Invoke-Fixture generate-nested-text $fixturePath | Out-File (Join-Path $resolvedOutput "fixture-generation.txt") -Encoding utf8
-    $before = Read-Geometry inspect-nested-text $fixturePath
+    Invoke-PhysicalValidationFixture -ProjectPath $fixtureProject -Action "generate-nested-text" -ArtifactPath $fixturePath |
+        Out-File (Join-Path $resolvedOutput "fixture-generation.txt") -Encoding utf8
+    $before = Read-PhysicalValidationFixtureValues -ProjectPath $fixtureProject -Action "inspect-nested-text" -ArtifactPath $fixturePath
     if ($before['child-text'] -ne 'Nested leaf') { throw "Unexpected fixture text: '$($before['child-text'])'." }
     if ($before['child-kind'] -ne 'Shape') { throw "Nested text fixture leaf is not a Shape." }
     if ($before['child-text-direction'] -ne 'Horizontal') { throw "Unexpected fixture text direction: '$($before['child-text-direction'])'." }
@@ -53,7 +42,7 @@ try {
 
     # Run-LinuxInteractiveDocker copies DocumentPath into its bind-mounted documents directory;
     # inspect that saved copy rather than the untouched source fixture.
-    $after = Read-Geometry inspect-nested-text $savedDocumentPath
+    $after = Read-PhysicalValidationFixtureValues -ProjectPath $fixtureProject -Action "inspect-nested-text" -ArtifactPath $savedDocumentPath
     $expectedText = if ($isTextDirection -or $isAlignment) { 'Nested leaf' } else { 'Nested leaf!' }
     $expectedDirection = if ($isTextDirection) { 'Rotate90' } else { 'Horizontal' }
     $expectedAlignment = if ($isAlignment) { 'Center' } else { 'Left' }
@@ -74,7 +63,7 @@ try {
     $reopenScreenshotCommand = 'export DISPLAY=:99; mkdir -p /work/nested-text-wave64; window_id=$(xdotool search --onlyvisible --name "FreeW" 2>/dev/null | tail -1); test -n "$window_id"; xdotool windowactivate --sync "$window_id"; sleep 1; scrot /work/nested-text-wave64/04-reopened.png'
     & docker exec $containerName bash -lc $reopenScreenshotCommand
     if ($LASTEXITCODE -ne 0) { throw "The saved nested text document did not reopen in the Linux harness." }
-    $reopened = Read-Geometry inspect-nested-text $savedDocumentPath
+    $reopened = Read-PhysicalValidationFixtureValues -ProjectPath $fixtureProject -Action "inspect-nested-text" -ArtifactPath $savedDocumentPath
     if ($reopened['child-text'] -ne $expectedText) { throw "Reopened nested text mismatch: '$($reopened['child-text'])'." }
     if ($reopened['child-text-direction'] -ne $expectedDirection) { throw "Reopened nested text direction mismatch: '$($reopened['child-text-direction'])'." }
     if ($reopened['child-text-alignment'] -ne $expectedAlignment) { throw "Reopened nested text alignment mismatch: '$($reopened['child-text-alignment'])'." }

@@ -1,7 +1,8 @@
 using Avalonia.Controls;
-using Avalonia.Input.Platform;
 using Free.Shared.AppServices;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia;
 
@@ -10,13 +11,13 @@ public sealed partial class MainWindow
     private async Task OpenExternalHelpLinkAsync(string url, string title)
     {
         var result = await OpenExternalUriAsync(url);
-        if (result == ExternalUriLaunchResult.Launched)
+        if (FreeWSupportCommandFeedbackPlanner.PlanExternalUriLaunch(result, title, url) is not { } feedback)
             return;
 
         await FreeWInfoDialog.ShowAsync(
             this,
-            $"FreeW could not open {title}. The link is:\n\n{url}",
-            title);
+            feedback.Message,
+            feedback.Title);
         _editor.Focus();
     }
 
@@ -30,29 +31,10 @@ public sealed partial class MainWindow
             typeof(MainWindow).Assembly,
             diagnosticsDirectory,
             optionsPath);
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-
-        if (clipboard is null)
-        {
-            await ShowHelpMessageAsync(
-                "FreeW could not access the clipboard.",
-                "Copy Diagnostics");
-            return;
-        }
-
-        try
-        {
-            await clipboard.SetTextAsync(diagnosticsText);
-            await ShowHelpMessageAsync(
-                "FreeW diagnostics were copied to the clipboard.",
-                "Copy Diagnostics");
-        }
-        catch (Exception ex)
-        {
-            await ShowHelpMessageAsync(
-                $"FreeW could not access the clipboard: {ex.Message}",
-                "Copy Diagnostics");
-        }
+        var write = await _platformClipboard.WriteAsync(
+            new PlatformClipboardContent(Text: diagnosticsText));
+        var feedback = FreeWSupportCommandFeedbackPlanner.PlanDiagnosticsCopy(write);
+        await ShowHelpMessageAsync(feedback.Message, feedback.Title);
     }
 
     private async Task ShowHelpMessageAsync(string message, string title)
@@ -61,12 +43,6 @@ public sealed partial class MainWindow
         _editor.Focus();
     }
 
-    private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)
-    {
-        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
-        Func<Uri, Task<bool>>? launchAsync = launcher is null
-            ? null
-            : uri => launcher.LaunchUriAsync(uri);
-        return await ExternalUriLauncher.OpenAsync(target, launchAsync);
-    }
+    private static Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target) =>
+        Task.FromResult(DesktopExternalUriLauncher.Open(target));
 }

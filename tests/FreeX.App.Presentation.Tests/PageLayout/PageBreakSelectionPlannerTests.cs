@@ -76,6 +76,41 @@ public sealed class PageBreakSelectionPlannerTests
         columnPlan.ColumnBreaks.Should().Equal(7u);
     }
 
+    [Theory]
+    [InlineData(PageBreakAxis.Row, 5u, 8u, new uint[] { 2u, 8u }, new uint[] { 3u, 7u })]
+    [InlineData(PageBreakAxis.Column, 3u, 6u, new uint[] { 2u, 5u }, new uint[] { 6u, 7u })]
+    public void Move_ReplacesOnlyTheSelectedAxisAndKeepsBreaksSorted(
+        PageBreakAxis axis,
+        uint originalIndex,
+        uint newIndex,
+        uint[] expectedRows,
+        uint[] expectedColumns)
+    {
+        var plan = PageBreakSelectionPlanner.Move(
+            axis,
+            originalIndex,
+            newIndex,
+            [5u, 2u],
+            [7u, 3u]);
+
+        plan.RowBreaks.Should().Equal(expectedRows);
+        plan.ColumnBreaks.Should().Equal(expectedColumns);
+    }
+
+    [Fact]
+    public void Move_NullDestinationRemovesDraggedBreak()
+    {
+        var plan = PageBreakSelectionPlanner.Move(
+            PageBreakAxis.Row,
+            originalIndex: 5,
+            newIndex: null,
+            existingRowBreaks: [2u, 5u],
+            existingColumnBreaks: [3u]);
+
+        plan.RowBreaks.Should().Equal(2u);
+        plan.ColumnBreaks.Should().Equal(3u);
+    }
+
     private static GridRange Range(uint startRow, uint startCol, uint endRow, uint endCol)
     {
         var workbook = new Workbook("Book1");

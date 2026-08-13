@@ -3,7 +3,10 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Threading;
+using Free.Shared.Shell.Wpf;
+using FreeX.App.Localization;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Calculation;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -14,6 +17,12 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private WorkbookFileWorkflow CreateWorkbookFileWorkflow() =>
+        new(
+            _fileAdapters,
+            new WorkbookOpenService(openedWorkbook => _recalcEngine.RecalculateAllFormulas(openedWorkbook)),
+            request => RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, request));
+
     private static readonly FreeXBackstageHomePanePlan BackstageHomePanePlan = FreeXBackstageHomePanePlanner.Build();
     private PrintPreviewSettings _backstagePrintPreviewSettings = new();
     private FixedDocument? _backstagePrintPreviewDocument;
@@ -302,27 +311,8 @@ public partial class MainWindow
 
         var settings = _backstagePrintPreviewSettings;
 
-        // Resolve the printer to a PrintQueue (null = Windows default).
-        System.Printing.PrintQueue? printQueue = null;
-        if (!string.IsNullOrWhiteSpace(settings.PrinterName))
-        {
-            try
-            {
-                using var server = new System.Printing.LocalPrintServer();
-                foreach (var q in server.GetPrintQueues())
-                {
-                    if (string.Equals(q.FullName, settings.PrinterName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        printQueue = q;
-                        break;
-                    }
-                }
-            }
-            catch (System.Printing.PrintSystemException)
-            {
-                // Fall through to null (Windows default).
-            }
-        }
+        // A missing saved queue falls through to null so the native dialog uses Windows' default.
+        var printQueue = Free.Shared.Shell.Wpf.WpfPrintQueueCatalog.Resolve(settings.PrinterName);
 
         // Apply page range if one was requested.
         System.Windows.Documents.DocumentPaginator paginator = _backstagePrintPreviewDocument.DocumentPaginator;
@@ -333,9 +323,10 @@ public partial class MainWindow
                     settings.PageFrom, settings.PageTo, totalPages,
                     out var from, out var to))
             {
-                paginator = new PageRangeDocumentPaginator(
+                paginator = WpfPageRangeDocumentPaginator.CreateValidatedInclusive(
                     _backstagePrintPreviewDocument.DocumentPaginator,
-                    new ExportPageRange(from, to));
+                    from,
+                    to);
             }
         }
 
@@ -351,7 +342,7 @@ public partial class MainWindow
     private void UpdateInfoView()
     {
         // Under Manual calculation, a freshly-typed circular formula is never recalculated until
-        // F9/save/an automatic-mode edit, so _recalcEngine.CyclicCells would otherwise still be
+        // F9/save/an automatic-mode edit, so the session's cyclic-cell state would otherwise still be
         // empty here and File > Info would report zero circular references while Formulas >
         // Error Checking (which recalculates first — see ErrorCheckBtn_Click) reports the real
         // count for the identical workbook state. Recalculate here too so both surfaces agree.
@@ -361,13 +352,13 @@ public partial class MainWindow
         var info = BackstageInfoPlanner.Build(
             _workbook,
             _currentFilePath,
-            BackstageInfoResources.Strings,
+            WpfResourceKeyTextResolver.Instance,
             activeSheet,
             hasSelection: SheetGrid.SelectedRange is not null,
-            cyclicCells: _recalcEngine.CyclicCells);
+            cyclicCells: _session.CyclicCells);
         var pane = FreeXBackstageInfoPanePlanner.Build(
             FreeXBackstageInfoSurface.WpfInfoPane,
-            CreateBackstageInfoPaneRequest(info));
+            BackstageInfoPlanner.CreatePaneRequest(info));
 
         foreach (var detail in pane.Details)
         {
@@ -376,22 +367,6 @@ public partial class MainWindow
 
         RefreshBackstageInfoProtectionButton();
     }
-
-    private static FreeXBackstageInfoPaneRequest CreateBackstageInfoPaneRequest(BackstageInfoPlan plan) =>
-        new(
-            plan.WorkbookName,
-            plan.FilePath,
-            plan.SheetCount,
-            plan.Format,
-            plan.FileSize,
-            plan.LastModified,
-            plan.SharingStatus,
-            plan.ExportStatus,
-            plan.Summary.WorkbookProtectionSummary,
-            plan.Summary.ActiveSheetProtectionSummary,
-            plan.StatisticsSummary,
-            plan.AccessibilitySummary,
-            plan.FormulaErrorSummary);
 
     private TextBlock ResolveBackstageInfoDetailTextBlock(FreeXBackstageInfoDetailId id) =>
         id switch
@@ -413,21 +388,22 @@ public partial class MainWindow
         };
 
     private static string ResolveBackstageTextValue(FreeXBackstageTextValue value) =>
-        value.TextKey is { } key
-            ? UiText.Get(key)
-            : value.Text ?? string.Empty;
+        value.Resolve(UiText.Get);
 
     private void RefreshBackstageInfoProtectionButton()
     {
         if (InfoProtectWorkbookButton is null)
             return;
 
-        var uiText = WorkbookProtectionWorkflow.GetUiText(_workbook);
-        InfoProtectWorkbookButton.Content = uiText.ButtonContent;
-        System.Windows.Automation.AutomationProperties.SetName(InfoProtectWorkbookButton, uiText.ButtonContent);
-        System.Windows.Automation.AutomationProperties.SetHelpText(InfoProtectWorkbookButton, uiText.TooltipDescription);
-        RibbonTooltip.SetTitle(InfoProtectWorkbookButton, uiText.TooltipTitle);
-        RibbonTooltip.SetDescription(InfoProtectWorkbookButton, uiText.TooltipDescription);
+        var plan = ProtectionWorkflowSession.CreateWorkbookChromePlan(_workbook);
+        var buttonContent = UiText.Get(plan.ButtonContentResourceKey);
+        var tooltipTitle = UiText.Get(plan.TooltipTitleResourceKey);
+        var tooltipDescription = UiText.Get(plan.TooltipDescriptionResourceKey);
+        InfoProtectWorkbookButton.Content = buttonContent;
+        System.Windows.Automation.AutomationProperties.SetName(InfoProtectWorkbookButton, buttonContent);
+        System.Windows.Automation.AutomationProperties.SetHelpText(InfoProtectWorkbookButton, tooltipDescription);
+        RibbonTooltip.SetTitle(InfoProtectWorkbookButton, tooltipTitle);
+        RibbonTooltip.SetDescription(InfoProtectWorkbookButton, tooltipDescription);
     }
 
     private void UpdateSsGreeting()
@@ -535,19 +511,7 @@ public partial class MainWindow
     private void InitializeNewWorkbook(string? workbookName)
     {
         CloseFindReplaceDialogIfOpen();
-        AdoptWorkbookAsInitial(NewWorkbookFactory.Create(_options, workbookName));
-    }
-
-    /// <summary>
-    /// Replaces the live workbook with <paramref name="wb"/> and rebinds the grid/title/tabs to it, mirroring
-    /// the File &gt; New path. Used by the <c>--parity-capture</c> mode to render a fixed demo workbook so the
-    /// WPF and Avalonia <c>grid.demo</c> surfaces compare identical content (see ParityDemoWorkbookFactory).
-    /// </summary>
-    internal void AdoptWorkbookForParityCapture(Workbook wb)
-    {
-        ArgumentNullException.ThrowIfNull(wb);
-        CloseFindReplaceDialogIfOpen();
-        AdoptWorkbookAsInitial(wb);
+        AdoptWorkbookAsInitial(WorkbookFactory.CreateFromAppOptions(_options, workbookName));
     }
 
     private void AdoptWorkbookAsInitial(Workbook wb)
@@ -555,35 +519,22 @@ public partial class MainWindow
         // When "New Window" siblings still view the current document, leave their context
         // (workbook ref / command bus / dirty state) untouched and continue on a fresh one:
         // File > New replaces the document in THIS window only (H39).
-        var outgoingWorkbook = _workbook;
         if (DocumentSharedWithOtherWindows())
         {
             DetachFromSharedDocumentContext();
         }
-        else
-        {
-            // No sibling window still shares the outgoing workbook, so it is fully replaced here:
-            // release its sheets from the shared app-lifetime RecalcEngine's volatile-cell
-            // tracking, dependency graph, and dependency-plan cache before dropping the reference,
-            // or that state leaks for the life of the app (see RecalcEngine.RetireWorkbook).
-            _recalcEngine.RetireWorkbook(outgoingWorkbook);
-            // R114-commands-workbook-retire-1: this window's CommandBus is app-lifetime too (see
-            // App.CreateWorkbookCommandBus) and is keyed by WorkbookId with no other eviction path
-            // -- without this the outgoing workbook's undo/redo stack (up to the 50 MB byte
-            // budget) would stay a live entry in it forever.
-            _commandBus.Retire(outgoingWorkbook.Id);
-        }
-        _workbook = wb;
-        _workbookRef.Current = wb;
+        ReplaceWorkbookSession(new StartupWorkbookLoadResult(
+            wb,
+            wb.Name,
+            "Created new workbook.",
+            IsFallback: false));
         InvalidateToolbarVisualState();
         _worksheetSelections.Clear();
         _worksheetViewStates.Clear();
-        _currentSheetId = wb.Sheets[0].Id;
         InvalidateNavigationCaches();
-        _currentFilePath = null;
         _currentFileSourceLastWriteTimeUtc = null;
         _currentXlsxFeatureReport = null;
-        _isWorkbookReadOnly = false;
+        _workbookReadOnlySession.Reset();
         UpdateTitleBar();
         RecalculateWorkbook();
         SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
@@ -638,7 +589,7 @@ public partial class MainWindow
 
     private async Task OpenFileAsync(string path, bool suppressRecentFiles = false)
     {
-        if (!WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, path, out var target, out var openTargetMessage))
+        if (!_fileWorkflow.TryResolveOpenTarget(path, out var target, out var openTargetMessage))
         {
             // Surface the planner's discarded failure reason (e.g. "Unsupported file type: .txt." or
             // the renamed-file content/extension mismatch message) instead of silently no-opping, the
@@ -657,7 +608,7 @@ public partial class MainWindow
         var ext = FileFormatResolver.NormalizeExtension(target!.Extension);
         if (_isOpeningFile) return;
         _isOpeningFile = true;
-        using var operationCancellation = BeginFileOperationCancellation();
+        using var operationCancellation = _fileOperationCancellationSession.Begin();
         try
         {
             // Skip the save prompt when a "New Window" sibling still views this document — the
@@ -669,54 +620,71 @@ public partial class MainWindow
             _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
             ShowOpenProgress(CreateOpenProgress("preparing", TimeSpan.Zero, 1));
 
-            var progress = new Progress<OpenProgressUpdate>(
-                update => ShowOpenProgress(update.Title, update.Detail, update.Percent));
-            var loader = new OpenWorkbookLoader(workbook => _recalcEngine.RecalculateAllFormulas(workbook));
-            var result = await loader.LoadAsync(
-                target.Path,
-                target.Adapter,
-                ext,
-                target.Format,
-                progress,
-                operationCancellation.Token);
-            operationCancellation.Token.ThrowIfCancellationRequested();
-
-            var plan = WorkbookFileCompletionPlanner.PlanOpen(
+            var progress = new Progress<WorkbookOpenProgressUpdate>(update =>
+                ShowOpenProgress(WorkbookProgressTextFormatter.FormatOpen(update, UiText.Get)));
+            var workflowResult = await _fileWorkflow.OpenAsync(new WorkbookOpenWorkflowRequest(
                 target,
-                new FreeX.App.Services.WorkbookOpenResult(
-                    result.Workbook,
-                    result.FeatureReport,
-                    result.DisplayName,
-                    result.OpenedAsTemplate,
-                    result.LoadWarnings ?? []),
-                suppressRecentFiles);
+                ApplyOpenedWorkbookAsync,
+                suppressRecentFiles,
+                Progress: progress,
+                CancellationToken: operationCancellation.Token));
+
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Canceled)
+            {
+                RecordDiagnosticEvent("workbook_open_canceled", new Dictionary<string, string?>
+                {
+                    ["extension"] = ext,
+                    ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
+                    ["format"] = target.Format.FormatName
+                });
+                return;
+            }
+
+            if (!workflowResult.Succeeded)
+            {
+                var exception = workflowResult.Exception ?? new InvalidOperationException(workflowResult.Message);
+                RecordDiagnosticEvent("workbook_open_failed", new Dictionary<string, string?>
+                {
+                    ["extension"] = ext,
+                    ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
+                    ["format"] = target.Format.FormatName,
+                    ["reason"] = exception.GetType().Name
+                });
+                ShowOwnedMessage(
+                    UiText.Format("MainWindowMessage_OpenFileFailed", exception.Message),
+                    UiText.Get("MainWindowMessage_OpenErrorTitle"),
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            return;
+
+            Task ApplyOpenedWorkbookAsync(
+                WorkbookOpenWorkflowContext context,
+                CancellationToken cancellationToken)
+            {
+            var plan = context.CompletionPlan;
+            var result = context.Result;
             CloseFindReplaceDialogIfOpen();
             // When "New Window" siblings still view the current document, leave their context
             // (workbook ref / command bus / dirty state) untouched and continue on a fresh one:
             // File > Open loads into THIS window only, the siblings keep their document (H39).
-            var outgoingWorkbook = _workbook;
             if (DocumentSharedWithOtherWindows())
             {
                 DetachFromSharedDocumentContext();
             }
-            else
-            {
-                // No sibling window still shares the outgoing workbook, so it is fully replaced
-                // here: release its sheets from the shared app-lifetime RecalcEngine's
-                // volatile-cell tracking, dependency graph, and dependency-plan cache before
-                // dropping the reference, or that state leaks for the life of the app (see
-                // RecalcEngine.RetireWorkbook).
-                _recalcEngine.RetireWorkbook(outgoingWorkbook);
-                // R114-commands-workbook-retire-1: this window's CommandBus is app-lifetime too
-                // (see App.CreateWorkbookCommandBus) and is keyed by WorkbookId with no other
-                // eviction path -- without this the outgoing workbook's undo/redo stack (up to the
-                // 50 MB byte budget) would stay a live entry in it forever.
-                _commandBus.Retire(outgoingWorkbook.Id);
-            }
             _currentXlsxFeatureReport = plan.FeatureReport;
-            _workbook = plan.Workbook;
-            _workbookRef.Current = plan.Workbook;
-            // OpenWorkbookLoader only recalculates (and thereby rebuilds the dependency graph) when
+            ReplaceWorkbookSession(new StartupWorkbookLoadResult(
+                plan.Workbook,
+                plan.DisplayName,
+                plan.Status,
+                IsFallback: false,
+                SourcePath: plan.SourcePath,
+                OpenedAsTemplate: plan.OpenedAsTemplate,
+                FeatureReport: plan.FeatureReport,
+                LoadWarnings: result.LoadWarnings,
+                SourceFileAccessIdentity: plan.SourceFileAccessIdentity));
+            // WorkbookOpenService only recalculates (and thereby rebuilds the dependency graph) when
             // the file demands a full recalc on load; most real-world workbooks trust their cached
             // values and skip that branch entirely (WorkbookOpenService.ShouldRecalculateLoadedFormulas).
             // Without this, _recalcEngine's single persistent graph stays empty for every formula in
@@ -749,7 +717,6 @@ public partial class MainWindow
             _worksheetViewStates.Clear();
             _currentSheetId = plan.ActiveSheetId;
             InvalidateNavigationCaches();
-            _currentFilePath = plan.CurrentFilePath;
             _currentFileSourceLastWriteTimeUtc = result.SourceLastWriteTimeUtc;
             UpdateTitleBar();
             MarkWorkbookSaved();
@@ -765,30 +732,31 @@ public partial class MainWindow
             // process (View > New Window), each window's cached _recentFiles snapshot goes stale
             // the moment a sibling window registers/pins/removes an entry. Writing through the
             // stale cache would silently clobber the sibling's write (last-writer-wins data loss).
-            RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, plan.RecentFileRegistration);
             ShowOpenProgress(CreateOpenProgress("preparing view", TimeSpan.Zero, null));
-            operationCancellation.Token.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
             ApplyOpenedWorksheetViewState();
             RefreshSheetTabs();
             HideStartScreen();
             ShowOpenProgress(CreateOpenProgress("done", TimeSpan.Zero, 100));
             ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();
             ShowXlsxLoadWarningsIfNeeded(result.LoadWarnings);
-            ApplyReadOnlyRecommendedPromptIfNeeded(_workbook);
+            ApplyWorkbookReadOnlyOpenPolicy(_workbook);
             RecordDiagnosticEvent("workbook_opened", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Format.FormatName,
                 ["worksheetCount"] = _workbook.Sheets.Count.ToString()
             });
+            return Task.CompletedTask;
+            }
         }
-        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
+        catch (OperationCanceledException) when (operationCancellation.Token.IsCancellationRequested)
         {
             RecordDiagnosticEvent("workbook_open_canceled", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Format.FormatName
             });
         }
@@ -797,7 +765,7 @@ public partial class MainWindow
             RecordDiagnosticEvent("workbook_open_failed", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Format.FormatName,
                 ["reason"] = ex.GetType().Name
             });
@@ -809,18 +777,14 @@ public partial class MainWindow
         finally
         {
             _isOpeningFile = false;
-            ClearFileOperationCancellation(operationCancellation);
             HideOpenProgress();
         }
     }
 
-    private static OpenProgressUpdate CreateOpenProgress(string phase, TimeSpan elapsed, double? percent) =>
-        FromSharedOpenProgressText(WorkbookProgressTextFormatter.FormatOpen(phase, elapsed, percent, UiText.Get));
+    private static WorkbookProgressText CreateOpenProgress(string phase, TimeSpan elapsed, double? percent) =>
+        WorkbookProgressTextFormatter.FormatOpen(phase, elapsed, percent, UiText.Get);
 
-    private static OpenProgressUpdate FromSharedOpenProgressText(WorkbookProgressText text) =>
-        new(text.Title, text.Detail, text.Percent);
-
-    private void ShowOpenProgress(OpenProgressUpdate update) =>
+    private void ShowOpenProgress(WorkbookProgressText update) =>
         ShowOpenProgress(update.Title, update.Detail, update.Percent);
 
     private void ApplyOpenedWorksheetViewState()
@@ -884,7 +848,7 @@ public partial class MainWindow
             percent);
         StatusSaveProgressPanel.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, title);
         StatusSaveProgressCancelButton.Visibility = Visibility.Visible;
-        StatusSaveProgressCancelButton.IsEnabled = true;
+        StatusSaveProgressCancelButton.IsEnabled = _fileOperationCancellationSession.CanCancel;
         StatusReadyText.Visibility = Visibility.Collapsed;
         StatusStatsPanel.Visibility = Visibility.Collapsed;
     }
@@ -897,24 +861,10 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
-    private CancellationTokenSource BeginFileOperationCancellation()
-    {
-        _fileOperationCancellation?.Dispose();
-        var cancellation = new CancellationTokenSource();
-        _fileOperationCancellation = cancellation;
-        return cancellation;
-    }
-
-    private void ClearFileOperationCancellation(CancellationTokenSource operationCancellation)
-    {
-        if (ReferenceEquals(_fileOperationCancellation, operationCancellation))
-            _fileOperationCancellation = null;
-    }
-
     private void CancelFileOperation_Click(object sender, RoutedEventArgs e)
     {
-        _fileOperationCancellation?.Cancel();
-        StatusSaveProgressCancelButton.IsEnabled = false;
+        _fileOperationCancellationSession.CancelCurrent();
+        StatusSaveProgressCancelButton.IsEnabled = _fileOperationCancellationSession.CanCancel;
     }
 
     private void SetFileOperationInputEnabled(bool isEnabled)
@@ -1033,13 +983,10 @@ public partial class MainWindow
 
     private void SsAccountBtn_Click(object sender, RoutedEventArgs e)
     {
-        var plan = LocalAccountPlanner.Create(
-            _options,
-            _currentFilePath,
-            _workbook.Name,
-            workbook: _workbook,
-            hasSelection: SheetGrid.SelectedRange is not null);
-        var message = DeferredCommandMessages.LocalAccountInfo(plan);
+        var plan = BuildLocalAccountPanePlan();
+        var message = WpfResourceKeyTextResolver.Resolve(
+            DeferredCommandMessagePlanner.LocalAccountInfo(),
+            body => FreeXBackstageAccountPanePlanner.FormatMessageBody(plan, body, UiText.Get));
         ShowOwnedMessage(
             message.Body,
             message.Title,
@@ -1047,9 +994,30 @@ public partial class MainWindow
             MessageBoxImage.Information);
     }
 
+    private FreeXBackstageAccountPanePlan BuildLocalAccountPanePlan()
+    {
+        var accountInfo = LocalAccountInfoPlanner.Build(new LocalAccountInfoRequest(
+            typeof(MainWindow).Assembly,
+            DeviceName: Environment.MachineName,
+            UserName: _options.UserName,
+            LocalOsUserName: Environment.UserName,
+            LocalOsUserDomain: Environment.UserDomainName,
+            OptionsFile: AppOptionsStore.StorePath,
+            CurrentWorkbookPath: _currentFilePath,
+            CurrentWorkbookName: _workbook.Name,
+            Workbook: _workbook,
+            HasSelection: SheetGrid.SelectedRange is not null));
+
+        return FreeXBackstageAccountPanePlanner.Build(
+            LocalAccountInfoPlanner.CreateBackstageAccountPaneRequest(
+                accountInfo,
+                _currentFilePath,
+                _workbook.Name));
+    }
+
     private void SsMoreTemplatesBtn_Click(object sender, RoutedEventArgs e)
     {
-        var message = DeferredCommandMessages.OnlineTemplatesExcluded();
+        var message = WpfResourceKeyTextResolver.Resolve(DeferredCommandMessagePlanner.OnlineTemplatesExcluded());
         ShowOwnedMessage(
             message.Body,
             message.Title,
@@ -1072,7 +1040,8 @@ public partial class MainWindow
             _options,
             _workbook.DisabledFormulaErrorCodes,
             initialSection,
-            OptionsDialogCalculationSettings.FromWorkbook(_workbook));
+            CalculationOptionsDialogState.FromWorkbook(_workbook),
+            _optionsRuntimeSession);
         if (ShowOwnedDialog(dlg) == true)
         {
             _options = dlg.Result;
@@ -1083,7 +1052,7 @@ public partial class MainWindow
                 AppLocalization.Bootstrap.ApplyAppLanguage(_options.AppLanguage);
 
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
-            ApplyOptionsCalculationSettings(dlg.CalculationSettingsResult);
+            ApplyOptionsCalculationSubmission(dlg.CalculationSubmission);
             RebuildQuickAccessToolbar();
             ApplyOptionsWorksheetViewSettings();
             ApplyOptionsToView();
@@ -1101,54 +1070,13 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Applies the Options dialog's Formulas panel calc-mode/iterative-calculation edits to the
-    /// live workbook. <paramref name="calcSettings"/> is null when the dialog detected no change
-    /// from what it seeded (see <see cref="OptionsDialog.CalculationSettingsResult"/>), so an
-    /// unrelated Options edit never silently flips the workbook's calculation state.
+    /// Applies the portable calculation submission emitted by the Options dialog.
     /// </summary>
-    private void ApplyOptionsCalculationSettings(OptionsDialogCalculationSettings? calcSettings)
+    private void ApplyOptionsCalculationSubmission(CalculationOptionsSubmission? submission)
     {
-        if (calcSettings is null)
-            return;
-
-        // The dialog's calc-mode radios only ever express Automatic/Manual (there is no third
-        // "Automatic except for data tables" option), so comparing calcSettings.AutoCalculate
-        // against the exact _workbook.CalculationMode would spuriously fire a mode change for a
-        // workbook that's WorkbookCalculationMode.AutomaticExceptDataTables whenever the user
-        // never touched the calc-mode radios at all (e.g. edited only the iterative-calculation
-        // fields) -- silently downgrading "except data tables" to plain Automatic or Manual.
-        // Compare against the boolean "currently Manual" state instead (mirrors the Avalonia
-        // host's MainWindow.Options.cs CalculationModeIsManual guard) so the workbook's calc mode
-        // is only ever touched when the user's Automatic/Manual choice actually changed.
-        var workbookIsManual = _workbook.CalculationMode == WorkbookCalculationMode.Manual;
-        var wantManual = !calcSettings.AutoCalculate;
-        if (workbookIsManual != wantManual)
-        {
-            var wantMode = wantManual ? WorkbookCalculationMode.Manual : WorkbookCalculationMode.Automatic;
-            if (TryExecuteCommand(new SetCalculationModeCommand(wantMode), "Calculation Options") &&
-                wantMode == WorkbookCalculationMode.Automatic)
-            {
-                RecalculateWorkbook();
-            }
-        }
-
-        if (_workbook.IterativeCalculation != calcSettings.IterativeCalculation ||
-            _workbook.MaxCalculationIterations != calcSettings.MaxCalculationIterations ||
-            _workbook.MaxCalculationChange != calcSettings.MaxCalculationChange)
-        {
-            // Toggling iterative calculation changes whether circular-reference cells resolve at
-            // all (Excel re-evaluates them the moment the setting changes), so any existing
-            // #CIRCULAR! cells would otherwise stay stale until an unrelated edit forces a recalc.
-            if (TryExecuteCommand(
-                    new SetIterativeCalculationOptionsCommand(
-                        calcSettings.IterativeCalculation,
-                        calcSettings.MaxCalculationIterations,
-                        calcSettings.MaxCalculationChange),
-                    "Calculation Options"))
-            {
-                RecalculateWorkbook();
-            }
-        }
+        var outcome = CalculationOptionsSubmissionCoordinator.Apply(CalculationWorkflow, submission);
+        if (outcome.ModeOutcome is { } modeOutcome)
+            ApplyCalculationWorkflowOutcome(modeOutcome);
     }
 
     private void ApplyOptionsWorksheetViewSettings()
@@ -1172,20 +1100,7 @@ public partial class MainWindow
 
     private void ApplyFormulaErrorCheckingOptions(IReadOnlySet<string> disabledErrorCodes)
     {
-        foreach (var rule in FormulaErrorCheckingRuleCatalog.SupportedRules)
-        {
-            var shouldDisable = disabledErrorCodes.Contains(rule.ErrorCode);
-            var isDisabled = _workbook.DisabledFormulaErrorCodes.Contains(rule.ErrorCode);
-            if (shouldDisable == isDisabled)
-                continue;
-
-            if (!TryExecuteCommand(
-                    new SetFormulaErrorCheckingRuleCommand(rule.ErrorCode, enabled: !shouldDisable),
-                    "Error Checking Options"))
-            {
-                return;
-            }
-        }
+        CalculationWorkflow.ChangeFormulaErrorRules(disabledErrorCodes);
     }
 
     private bool OpenFileBackstageFromKeyTip()
@@ -1298,8 +1213,8 @@ public partial class MainWindow
 
         if (result.Chosen)
         {
-            if (!WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, result.FilterIndex, out var target) ||
-                target is null)
+            if (!_fileWorkflow.TryResolveSaveTarget(
+                    result.FileName!, out var target, out _, result.FilterIndex) || target is null)
             {
                 return false;
             }
@@ -1315,27 +1230,12 @@ public partial class MainWindow
         if (_isSavingFile)
             return false;
 
-        if (WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(_workbookDirty, _currentFilePath, target)
-            == WorkbookSaveTargetIntent.SkipCleanCurrentPath)
+        if (_fileWorkflow.ShouldSkipSaveTargetWrite(_workbookDirty, _currentFilePath, target))
             return true;
 
         var ext = System.IO.Path.GetExtension(target.Path).ToLowerInvariant();
         if (ext == ".xlsx" && !ConfirmUnsupportedXlsxFeatureSave())
             return false;
-
-        // Detect a concurrent second writer before doing any work: if this save targets the same
-        // path this window loaded from, and the on-disk write time no longer matches what was
-        // captured at open, someone else (another FreeX/Excel instance, a colleague on a shared
-        // drive) has changed the file since -- writing over it here would silently discard their
-        // changes. Ask before clobbering, matching Excel's own behavior for this scenario.
-        if (string.Equals(target.Path, _currentFilePath, StringComparison.OrdinalIgnoreCase) &&
-            _currentFileSourceLastWriteTimeUtc is { } expectedWriteTimeUtc &&
-            System.IO.File.Exists(target.Path) &&
-            System.IO.File.GetLastWriteTimeUtc(target.Path) != expectedWriteTimeUtc &&
-            !ConfirmExternallyModifiedFileOverwrite(target.Path))
-        {
-            return false;
-        }
 
         // Save-As to a plain/single-sheet lossy format (CSV/TXT/PRN/SLK/DIF/DBF, ...) has no gate at
         // all otherwise: a multi-sheet workbook or one with charts would write silently, dropping
@@ -1348,12 +1248,7 @@ public partial class MainWindow
             return false;
         }
 
-        // Capture identity/generation before any await so we can detect edits or
-        // workbook replacement that occur while the serialization is running.
-        var generationAtSaveStart = _workbookDirtyGeneration;
-        var workbookAtSaveStart = _workbook;
-
-        using var operationCancellation = BeginFileOperationCancellation();
+        using var operationCancellation = _fileOperationCancellationSession.Begin();
         try
         {
             _isSavingFile = true;
@@ -1374,101 +1269,92 @@ public partial class MainWindow
             _windowRegistry?.BroadcastSaveInProgress(this, inProgress: true);
             _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
             ShowSaveProgress(CreateSaveProgress("preparing", TimeSpan.Zero, 1));
-            // R120-corewriter-persist-saving-window-view-1: reconcile THIS window's own
-            // per-window view state (zoom/view-mode/gridlines/headings/rulers/show-formulas/
-            // freeze/split) onto the shared Sheet fields before the writer reads them, so a save
-            // from THIS window persists what THIS window is displaying rather than whichever
-            // "New Window" sibling last touched those shared fields. Must run synchronously,
-            // before any of the workbook is handed off for background serialization below.
-            ReconcileViewStateForSave();
-            var progress = new Progress<SaveProgressUpdate>(
-                update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
-            var saveWarnings = await new SaveWorkbookWriter().SaveAsync(
-                target.Path,
-                target.Adapter,
-                _workbook,
-                progress,
-                operationCancellation.Token,
-                string.Equals(target.Path, _currentFilePath, StringComparison.OrdinalIgnoreCase)
-                    ? _currentFileSourceLastWriteTimeUtc
-                    : null);
-            operationCancellation.Token.ThrowIfCancellationRequested();
+            var progress = new Progress<WorkbookSaveProgressUpdate>(update =>
+                ShowSaveProgress(WorkbookProgressTextFormatter.FormatSave(update, UiText.Get)));
+            var saveService = new WorkbookSaveService();
+            var workflowResult = await _fileWorkflow.SaveTargetAsync(new WorkbookSaveWorkflowRequest(
+                _workbookDirty,
+                _currentFilePath,
+                target,
+                _currentFileSourceLastWriteTimeUtc,
+                GetCurrentWorkbook: () => _workbook,
+                GetDirtyGeneration: () => _workbookDirtyGeneration,
+                ConfirmExternallyModifiedOverwrite: ConfirmExternallyModifiedFileOverwrite,
+                ProjectViewStateForSave: ReconcileViewStateForSave,
+                SaveAsync: invocation => saveService.SaveAsync(
+                    invocation.Target.Path,
+                    invocation.Target.Adapter,
+                    invocation.Workbook,
+                    progress,
+                    invocation.CancellationToken,
+                    invocation.ExpectedLastWriteTimeUtc),
+                ApplyCompletion: ApplyWpfSaveCompletion,
+                CancellationToken: operationCancellation.Token));
 
-            var plan = SaveCompletionPlanner.Plan(
-                generationAtSaveStart,
-                _workbookDirtyGeneration,
-                sameWorkbook: ReferenceEquals(_workbook, workbookAtSaveStart),
-                target.Path);
-
-            if (plan.ApplyFileContext && plan.FileContext is { } fileContext)
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Canceled)
             {
-                _currentFilePath = fileContext.Path;
-                _workbook.Name = fileContext.DisplayName;
-                RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, fileContext.RecentFileRegistration);
-            }
-            if (plan.ApplyFileContext)
-            {
-                // The save just wrote target.Path, so refresh our "known good" write-time snapshot
-                // to the file's new on-disk timestamp -- otherwise the very next save would think
-                // ITS OWN prior write was an external modification and warn spuriously.
-                _currentFileSourceLastWriteTimeUtc = System.IO.File.Exists(target.Path)
-                    ? System.IO.File.GetLastWriteTimeUtc(target.Path)
-                    : null;
+                RecordDiagnosticEvent("workbook_save_canceled", new Dictionary<string, string?>
+                {
+                    ["extension"] = ext,
+                    ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
+                    ["format"] = target.Adapter.FormatName
+                });
+                return false;
             }
 
-            if (plan.MarkSaved)
-                MarkWorkbookSaved();
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Rejected)
+                return false;
 
-            UpdateTitleBar();
-            // Notify sibling windows so they pick up the new file path/name in their
-            // title bars.  MarkWorkbookSaved() already fans out the dirty-state change;
-            // this call ensures the full viewport/title refresh for the file-context.
-            if (plan.ApplyFileContext)
-                NotifyOtherWindowsOfWorkbookChange();
-            ShowXlsxSaveWarningsIfNeeded(saveWarnings);
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.ExternalWriteConflict)
+            {
+                RecordDiagnosticEvent("workbook_save_externally_modified", new Dictionary<string, string?>
+                {
+                    ["extension"] = ext,
+                    ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
+                    ["format"] = target.Adapter.FormatName
+                });
+                ShowOwnedMessage(
+                    UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", System.IO.Path.GetFileName(target.Path)),
+                    UiText.Get("MainWindowMessage_ExternallyModifiedFileTitle"),
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Failed)
+            {
+                var saveException = workflowResult.Exception ?? new InvalidOperationException("Save failed.");
+                RecordDiagnosticEvent("workbook_save_failed", new Dictionary<string, string?>
+                {
+                    ["extension"] = ext,
+                    ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
+                    ["format"] = target.Adapter.FormatName,
+                    ["reason"] = saveException.GetType().Name
+                });
+                ShowOwnedMessage(
+                    UiText.Format("MainWindowMessage_SaveFileFailed", saveException.Message),
+                    UiText.Get("MainWindowMessage_SaveErrorTitle"),
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+
+            var executionResult = workflowResult.RequireExecutionResult();
+            _currentFileSourceLastWriteTimeUtc = executionResult.SavedLastWriteTimeUtc;
+            ShowXlsxSaveWarningsIfNeeded(executionResult.Warnings);
             RecordDiagnosticEvent("workbook_saved", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Adapter.FormatName,
                 ["worksheetCount"] = _workbook.Sheets.Count.ToString()
             });
             return true;
-        }
-        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
-        {
-            RecordDiagnosticEvent("workbook_save_canceled", new Dictionary<string, string?>
-            {
-                ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
-                ["format"] = target.Adapter.FormatName
-            });
-            return false;
-        }
-        catch (WorkbookExternallyModifiedException)
-        {
-            // Belt-and-suspenders: the proactive check above already covers the common case, but
-            // the file could still have changed in the (check-then-act) gap between that check and
-            // WorkbookSaveService actually writing. Surface the same warning rather than silently
-            // failing or (worse) letting a stale exception type escape as an unhandled save error.
-            RecordDiagnosticEvent("workbook_save_externally_modified", new Dictionary<string, string?>
-            {
-                ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
-                ["format"] = target.Adapter.FormatName
-            });
-            ShowOwnedMessage(
-                UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", System.IO.Path.GetFileName(target.Path)),
-                UiText.Get("MainWindowMessage_ExternallyModifiedFileTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return false;
         }
         catch (Exception ex)
         {
             RecordDiagnosticEvent("workbook_save_failed", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Adapter.FormatName,
                 ["reason"] = ex.GetType().Name
             });
@@ -1480,7 +1366,6 @@ public partial class MainWindow
         }
         finally
         {
-            ClearFileOperationCancellation(operationCancellation);
             _isSavingFile = false;
             AdjustSaveGate(acquire: false);
             _windowRegistry?.BroadcastSaveInProgress(this, inProgress: false);
@@ -1488,19 +1373,32 @@ public partial class MainWindow
         }
     }
 
+    private void ApplyWpfSaveCompletion(SaveCompletionPlan plan)
+    {
+        if (plan.ApplyFileContext && plan.FileContext is { } fileContext)
+        {
+            _currentFilePath = fileContext.Path;
+            _workbook.Name = fileContext.DisplayName;
+        }
+
+        if (plan.MarkSaved)
+            MarkWorkbookSaved();
+
+        UpdateTitleBar();
+        if (plan.ApplyFileContext)
+            NotifyOtherWindowsOfWorkbookChange();
+    }
+
     private void ShowSaveProgress(string title, string detail, double? percent = null)
     {
         ShowOperationFooterProgress(title, detail, percent);
     }
 
-    private void ShowSaveProgress(SaveProgressUpdate update) =>
+    private void ShowSaveProgress(WorkbookProgressText update) =>
         ShowSaveProgress(update.Title, update.Detail, update.Percent);
 
-    private static SaveProgressUpdate CreateSaveProgress(string phase, TimeSpan elapsed, double? percent) =>
-        FromSharedSaveProgressText(WorkbookProgressTextFormatter.FormatSave(phase, elapsed, percent, UiText.Get));
-
-    private static SaveProgressUpdate FromSharedSaveProgressText(WorkbookProgressText text) =>
-        new(text.Title, text.Detail, text.Percent);
+    private static WorkbookProgressText CreateSaveProgress(string phase, TimeSpan elapsed, double? percent) =>
+        WorkbookProgressTextFormatter.FormatSave(phase, elapsed, percent, UiText.Get);
 
     private void HideSaveProgress()
     {
@@ -1509,13 +1407,8 @@ public partial class MainWindow
 
     private bool ConfirmExternallyModifiedFileOverwrite(string path)
     {
-        var result = ShowOwnedMessage(
-            UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", System.IO.Path.GetFileName(path)),
-            UiText.Get("MainWindowMessage_ExternallyModifiedFileTitle"),
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
-        return result == MessageBoxResult.Yes;
+        return ShowOwnedSynchronousPrompt(
+            FreeXSynchronousPromptCatalog.ForExternallyModifiedFile(path)) == UserMessageResult.Yes;
     }
 
     private bool ConfirmUnsupportedXlsxFeatureSave()
@@ -1523,7 +1416,8 @@ public partial class MainWindow
         if (_currentXlsxFeatureReport?.HasUnsupportedFeatures != true)
             return true;
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport);
+        var message = WpfResourceKeyTextResolver.Resolve(
+            DeferredCommandMessagePlanner.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport));
 
         var result = ShowOwnedMessage(
             message.Body,
@@ -1536,16 +1430,8 @@ public partial class MainWindow
 
     private bool ConfirmLossyFormatFeatureLossSave(string extension)
     {
-        var formatLabel = FileFormatResolver.SafeFileTypeFromExtension(extension).ToUpperInvariant();
-        var body = UiText.Format("MainWindowMessage_LossyFormatFeatureLossBodyFormat", formatLabel);
-
-        var result = ShowOwnedMessage(
-            body,
-            UiText.Get("MainWindowMessage_LossyFormatFeatureLossTitle"),
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
-        return result == MessageBoxResult.Yes;
+        return ShowOwnedSynchronousPrompt(
+            FreeXSynchronousPromptCatalog.ForLossyFormatFeatureLoss(extension)) == UserMessageResult.Yes;
     }
 
     /// <summary>
@@ -1556,73 +1442,46 @@ public partial class MainWindow
     /// Modify" -- it is not encryption and provides no confidentiality; the file contents remain
     /// plainly readable regardless of the password.
     /// <para>
-    /// A write-reservation password now actually gates write access: <see cref="ResolveReservationPasswordPrompt"/>
-    /// prompts for the password (via <see cref="PasswordProtectionDialog"/> in production, or the
-    /// <see cref="_reservationPasswordPromptOverrideForTest"/> seam in tests) and verifies it against the
-    /// stored hash with <see cref="ProtectionPasswordHelper.VerifyStoredPassword"/> -- the same verifier
-    /// used for sheet/workbook structure protection. Matching Excel's actual behaviour, a wrong password
-    /// or Cancel does not refuse to open the file: it falls back to a read-only session, exactly like
-    /// declining a plain "Read-Only Recommended" prompt.
+    /// A write-reservation password now actually gates write access: the host realizes the native
+    /// password dialog, while <see cref="WorkbookReadOnlySession"/> classifies the prompt, verifies the
+    /// stored password, and owns the resulting read-only state. A wrong password or Cancel falls back
+    /// to a read-only session rather than refusing to open the file.
     /// </para>
     /// <see cref="ResolveExistingSaveTarget"/> (MainWindow.WorkbookLifecycle.cs) reads the
-    /// <see cref="_isWorkbookReadOnly"/> flag on every Save to force Save-over-original through the
+    /// shared read-only state on every Save to force Save-over-original through the
     /// Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1). Individual
     /// edit commands are not yet blocked -- that remains out of scope (tracked separately).
     /// </summary>
-    private void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook)
+    private WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicy(Workbook workbook) =>
+        _workbookReadOnlySession.RunOpen(workbook, new WpfWorkbookReadOnlyOpenPromptPort(this));
+
+    private sealed class WpfWorkbookReadOnlyOpenPromptPort(MainWindow owner) : IWorkbookReadOnlyOpenPromptPort
     {
-        _isWorkbookReadOnly = false;
+        public WorkbookReadOnlyRecommendationChoice PromptReadOnlyRecommended(WorkbookReadOnlyOpenPlan plan) =>
+            owner.ShowOwnedSynchronousPrompt(
+                FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(plan.WorkbookName)) == UserMessageResult.Yes
+                ? WorkbookReadOnlyRecommendationChoice.OpenReadOnly
+                : WorkbookReadOnlyRecommendationChoice.OpenEditable;
 
-        var sharing = workbook.FileSharing;
-        if (sharing is null)
-            return;
+        public WorkbookReservationPasswordResponse PromptReservationPassword(WorkbookReadOnlyOpenPlan plan) =>
+            WorkbookReservationPasswordResponse.FromPromptResult(
+                owner.ResolveReservationPasswordPrompt(plan.WorkbookName));
 
-        if (!string.IsNullOrEmpty(sharing.ReservationPassword))
-        {
-            var entered = ResolveReservationPasswordPrompt(workbook.Name);
-            var unlocked = ProtectionPasswordHelper.VerifyStoredPassword(sharing.ReservationPassword, entered);
-            _isWorkbookReadOnly = !unlocked;
-
-            if (!unlocked && entered is not null)
-            {
-                // Only the case where the user actually typed something wrong needs an explicit
-                // "opened as read-only" notice -- a plain Cancel already communicated its own intent.
-                ShowOwnedMessage(
-                    UiText.Get("MainWindowMessage_ReservationPasswordIncorrectBody"),
-                    UiText.Get("MainWindowMessage_ReservationPasswordTitle"),
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-            }
-
-            return;
-        }
-
-        if (sharing.ReadOnlyRecommended != true)
-            return;
-
-        var body = UiText.Format("MainWindowMessage_ReadOnlyRecommendedBodyFormat", workbook.Name);
-        var result = ShowOwnedMessage(
-            body,
-            UiText.Get("MainWindowMessage_ReadOnlyRecommendedTitle"),
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        _isWorkbookReadOnly = result == MessageBoxResult.Yes;
+        public void ShowIncorrectReservationPasswordNotice(WorkbookReadOnlyOpenPlan plan) =>
+            owner.ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_ReservationPasswordIncorrectBody"),
+                UiText.Get("MainWindowMessage_ReservationPasswordTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
     }
 
-    /// <summary>
-    /// Test-only override for <see cref="ResolveReservationPasswordPrompt"/> -- unit tests inject a
-    /// canned password (or <c>null</c> to simulate Cancel) instead of driving the real modal
-    /// <see cref="PasswordProtectionDialog"/> window. Not used by production code paths. Set via
-    /// reflection from tests (mirrors how <see cref="_isWorkbookReadOnly"/> itself is read by
-    /// R69_ReadOnlyRecommendedPromptTests) since this assembly has no test-project InternalsVisibleTo.
-    /// </summary>
-    private Func<string, string?>? _reservationPasswordPromptOverrideForTest = null;
-
-    private string? ResolveReservationPasswordPrompt(string workbookName) =>
-        _reservationPasswordPromptOverrideForTest is not null
-            ? _reservationPasswordPromptOverrideForTest(workbookName)
-            : ShowReservationPasswordPromptDialog(workbookName);
+    private string? ResolveReservationPasswordPrompt(string workbookName)
+    {
+        var handled = false;
+        string? password = null;
+        TryResolveExternalReservationPasswordPrompt(workbookName, ref handled, ref password);
+        return handled ? password : ShowReservationPasswordPromptDialog(workbookName);
+    }
 
     private string? ShowReservationPasswordPromptDialog(string workbookName)
     {
@@ -1642,7 +1501,8 @@ public partial class MainWindow
         if (_currentXlsxFeatureReport?.HasUnsupportedFeatures != true)
             return;
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport);
+        var message = WpfResourceKeyTextResolver.Resolve(
+            DeferredCommandMessagePlanner.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport));
         ShowOwnedMessage(
             message.Body,
             message.Title,

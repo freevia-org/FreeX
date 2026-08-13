@@ -128,6 +128,7 @@ public sealed class PresentationDesignCommandPlannerTests
         current.MasterDisplayName.Should().Be("Master 1");
         current.PlaceholderCount.Should().Be(0);
         current.DisplayOrder.Should().Be(0);
+        current.AutomationId.Should().Be("layout-rId1");
         current.Chrome.State.Should().Be(PresentationLayoutChoiceChromeState.Current);
 
         var blank = plan.Choices.Single(choice => choice.LayoutId == "rId2");
@@ -138,11 +139,31 @@ public sealed class PresentationDesignCommandPlannerTests
         blank.MasterDisplayName.Should().Be("Master 1");
         blank.PlaceholderCount.Should().Be(1);
         blank.DisplayOrder.Should().Be(1);
+        blank.AutomationId.Should().Be("layout-rId2");
         blank.Chrome.State.Should().Be(PresentationLayoutChoiceChromeState.Available);
         blank.ThumbnailPlaceholders.Should().ContainSingle(slot =>
             slot.PlaceholderType == PlaceholderType.Title &&
             slot.Bounds.Width > 0 &&
             slot.Bounds.Height > 0);
+    }
+
+    [Fact]
+    public void LayoutPickerVisuals_OwnPlaceholderCategoriesAndRendererColorTokens()
+    {
+        var visuals = PresentationDesignCommandPlanner.LayoutPickerVisuals;
+        var title = visuals.ResolvePlaceholder(PlaceholderType.CenteredTitle);
+        var subtitle = visuals.ResolvePlaceholder(PlaceholderType.SubTitle);
+        var content = visuals.ResolvePlaceholder(PlaceholderType.Body);
+
+        title.Category.Should().Be(PresentationLayoutPlaceholderCategory.Title);
+        subtitle.Should().Be(title);
+        title.FillBrushHex.Should().Be("#F8DDD1");
+        content.Category.Should().Be(PresentationLayoutPlaceholderCategory.Content);
+        content.FillBrushHex.Should().Be("#EAF1F6");
+        title.StrokeBrushHex.Should().Be(content.StrokeBrushHex);
+        visuals.ThumbnailBackgroundBrushHex.Should().Be("#FFFFFF");
+        visuals.ThumbnailBorderBrushHex.Should().Be("#D9D9D9");
+        visuals.BadgeForegroundBrushHex.Should().Be("#B7472A");
     }
 
     [Fact]
@@ -206,6 +227,29 @@ public sealed class PresentationDesignCommandPlannerTests
         plan.Choices[2].MasterDisplayName.Should().Be("Master 1");
         plan.Choices[2].PlaceholderCount.Should().Be(1);
         plan.Choices[2].DisplayOrder.Should().Be(2);
+    }
+
+    [Theory]
+    [InlineData(false, 0, "Title and Content\nMaster 1 - 0 placeholders")]
+    [InlineData(false, 1, "Title and Content\nMaster 1 - 1 placeholder")]
+    [InlineData(false, 2, "Title and Content\nMaster 1 - 2 placeholders")]
+    [InlineData(true, 2, "Current - Title and Content\nMaster 1 - 2 placeholders")]
+    public void LayoutChoiceDisplayLabel_ProjectsCurrentStateAndPlaceholderCount(
+        bool isCurrent,
+        int placeholderCount,
+        string expected)
+    {
+        var choice = new PresentationLayoutChoice(
+            "rId1",
+            "Title and Content",
+            SlideLayoutType.TitleContent,
+            isCurrent,
+            "rIdMaster1",
+            "Master 1",
+            placeholderCount,
+            0);
+
+        choice.DisplayLabel.Should().Be(expected);
     }
 
     [Fact]

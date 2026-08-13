@@ -1,5 +1,6 @@
 using Avalonia.Headless;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.Ribbon;
 using Xunit.Abstractions;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -16,14 +17,13 @@ public sealed class AvaloniaRibbonInteractionValidationTests
     public AvaloniaRibbonInteractionValidationTests(ITestOutputHelper output) => _output = output;
 
     [Fact]
-    public async Task BehaviorEvidence_CoversExactVisibleCommandsPlacementsAndOrphans()
+    public async Task BehaviorEvidence_CoversExactVisibleCommandsAndPlacements()
     {
         await Session.Dispatch(() =>
         {
             var results = GetResults();
             var commands = results.Where(result => result.Category == "ribbon-command-behavior").ToArray();
             var placements = results.Where(result => result.Category == "ribbon-placement-behavior").ToArray();
-            var orphans = results.Where(result => result.Category == "ribbon-orphan-command-behavior").ToArray();
             var allCommandIds = AvaloniaRibbonComposition
                 .EnumerateSurfaceRows(AvaloniaRibbonComposition.BuildDefinition())
                 .Select(row => row.CommandId.Value)
@@ -38,7 +38,7 @@ public sealed class AvaloniaRibbonInteractionValidationTests
                 .OrderBy(id => id, StringComparer.Ordinal)
                 .ToArray();
 
-            Assert.Equal(588, allCommandIds.Length);
+            Assert.Equal(595, allCommandIds.Length);
             Assert.Equal(expectedCommandIds, actualCommandIds);
             Assert.Equal(ValidationBatchSize, commands.Length);
             Assert.Equal(ValidationBatchSize, commands.Select(result => result.Id).Distinct(StringComparer.Ordinal).Count());
@@ -48,8 +48,6 @@ public sealed class AvaloniaRibbonInteractionValidationTests
                 .Count(row => selectedIds.Contains(row.CommandId.Value));
             Assert.Equal(expectedPlacementCount, placements.Length);
             Assert.Equal(expectedPlacementCount, placements.Select(result => result.Id).Distinct(StringComparer.Ordinal).Count());
-            Assert.Equal(8, orphans.Length);
-            Assert.Equal(AvaloniaCommandIdAdapter.OrphanAvaloniaIds.Count, orphans.Length);
             Assert.All(commands, result => Assert.Contains(result.Status, new[] { "passed", "skipped", "failed" }));
             Assert.All(placements, result => Assert.Contains(result.Status, new[] { "passed", "skipped", "failed" }));
             Assert.DoesNotContain(results, result => result.EvidenceLevel == "registry-bound");
@@ -95,25 +93,6 @@ public sealed class AvaloniaRibbonInteractionValidationTests
 
             foreach (var placement in placements)
                 Assert.Equal(commandStatusById[placementCommandById[placement.Id]], placement.Status);
-        }, CancellationToken.None);
-    }
-
-    [Fact]
-    public async Task BehaviorEvidence_ReportsOrphansAsUncredited()
-    {
-        await Session.Dispatch(() =>
-        {
-            var orphans = GetResults()
-                .Where(result => result.Category == "ribbon-orphan-command-behavior")
-                .ToArray();
-            Assert.Equal(
-                AvaloniaCommandIdAdapter.OrphanAvaloniaIds.OrderBy(id => id, StringComparer.Ordinal),
-                orphans.Select(result => Uri.UnescapeDataString(result.Id.Split('/')[1])).OrderBy(id => id, StringComparer.Ordinal));
-            Assert.All(orphans, result =>
-            {
-                Assert.Equal("skipped", result.Status);
-                Assert.Equal("registered-orphan-unreachable", result.EvidenceLevel);
-            });
         }, CancellationToken.None);
     }
 

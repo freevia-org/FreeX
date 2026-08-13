@@ -1,0 +1,40 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)..\'))" />
+
+  <!-- The canonical project remains visible to the solution and IDE, but the UI lane executes its
+       complete A-Z partitions serially so each partition receives a fresh bounded testhost. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'FreeX.App.Host.Tests' And '$(SolutionFileName)' == 'FreeX.UiTests.slnx'">
+    <_FreeXHostTestBatchProject Include="$(MSBuildProjectDirectory)\FreeX.App.Host.Tests.Batch1.csproj" />
+    <_FreeXHostTestBatchProject Include="$(MSBuildProjectDirectory)\FreeX.App.Host.Tests.Batch2.csproj" />
+    <_FreeXHostTestBatchProject Include="$(MSBuildProjectDirectory)\FreeX.App.Host.Tests.Batch3.csproj" />
+    <_FreeXHostTestBatchProject Include="$(MSBuildProjectDirectory)\FreeX.App.Host.Tests.Batch4.csproj" />
+    <_FreeXHostTestBatchProject Include="$(MSBuildProjectDirectory)\FreeX.App.Host.Tests.Batch5.csproj" />
+    <_FreeXHostTestBatchProject Include="$(MSBuildProjectDirectory)\FreeX.App.Host.Tests.Batch6.csproj" />
+    <_FreeXHostTestBatchProject Include="$(MSBuildProjectDirectory)\FreeX.App.Host.Tests.Batch7.csproj" />
+  </ItemGroup>
+
+  <Target Name="BuildFreeXHostTestBatches"
+          AfterTargets="Build"
+          Condition="'@(_FreeXHostTestBatchProject)' != ''">
+    <MSBuild Projects="@(_FreeXHostTestBatchProject)"
+             Targets="Build"
+             BuildInParallel="false"
+             StopOnFirstFailure="true"
+             Properties="Configuration=$(Configuration)" />
+  </Target>
+
+  <Target Name="RunFreeXHostTestBatches"
+          BeforeTargets="VSTest"
+          Condition="'@(_FreeXHostTestBatchProject)' != ''">
+    <MSBuild Projects="@(_FreeXHostTestBatchProject)"
+             Targets="VSTest"
+             BuildInParallel="false"
+             StopOnFirstFailure="false"
+             Properties="Configuration=$(Configuration);VSTestNoBuild=$(VSTestNoBuild)" />
+
+    <!-- The batch calls above replace the canonical VSTest task for this solution invocation. -->
+    <PropertyGroup>
+      <IsTestProject>false</IsTestProject>
+    </PropertyGroup>
+  </Target>
+</Project>

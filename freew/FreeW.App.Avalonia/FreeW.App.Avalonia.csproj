@@ -12,6 +12,67 @@
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
   </PropertyGroup>
 
+  <Import Project="..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Assets.props" />
+
+  <PropertyGroup Condition="'$(FreeWValidationHost)' == 'true'">
+    <OutputPath>bin\Validation\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\Validation\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
+    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
+    <OutputPath>bin\DialogHarness\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\DialogHarness\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.TestAccess.cs"
+             Link="MainWindow.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\DocumentView.TestAccess.cs"
+             Link="Editing\DocumentView.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\AutosaveAdapter.TestAccess.cs"
+             Link="AutosaveAdapter.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\DialogsAndPanes.TestAccess.cs"
+             Link="DialogsAndPanes.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\Backstage.TestAccess.cs"
+             Link="Backstage\Backstage.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\CupsPrintDialog.TestAccess.cs"
+             Link="Printing\CupsPrintDialog.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\EditingControls.TestAccess.cs"
+             Link="Editing\EditingControls.TestAccess.cs" />
+  </ItemGroup>
+
+  <ItemDefinitionGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeWHostTestSupport</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeWDialogHarnessSupport</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
+  <ItemGroup Condition="'$(FreeWValidationHost)' == 'true'">
+    <Compile Include="..\TestSupport\Validation.Avalonia\Program.ValidationHost.cs"
+             Link="Program.ValidationHost.cs" />
+    <Compile Include="..\TestSupport\Validation.Avalonia\MainWindow.ValidationAccessAdapter.cs"
+             Link="MainWindow.ValidationAccessAdapter.cs" />
+    <Compile Include="..\TestSupport\Validation.Avalonia\AvaloniaSpeechEngine.ValidationAccess.cs"
+             Link="AvaloniaSpeechEngine.ValidationAccess.cs" />
+  </ItemGroup>
+
+  <ItemDefinitionGroup Condition="'$(FreeWValidationHost)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeWValidationHost</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
@@ -20,12 +81,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
     <ProjectReference Include="..\FreeW.Core.IO\FreeW.Core.IO.csproj" />
     <ProjectReference Include="..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
     <ProjectReference Include="..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj" />
     <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj" />
@@ -36,8 +99,28 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
     <InternalsVisibleTo Include="FreeW.App.Avalonia.Tests" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\DialogsAndPanes.TestAccess.cs"
+             Link="DialogsAndPanes.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\ScreenClipOverlay.DialogHarnessAccess.cs"
+             Link="Editing\ScreenClipOverlay.DialogHarnessAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\Backstage.TestAccess.cs"
+             Link="Backstage\Backstage.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\CupsPrintDialog.TestAccess.cs"
+             Link="Printing\CupsPrintDialog.TestAccess.cs" />
+    <InternalsVisibleTo Include="FreeW.DialogVisualHarness.Avalonia" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreeWValidationHost)' == 'true'">
+    <InternalsVisibleTo Include="FreeW.Validation.Avalonia" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="FreeW.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 
   <ItemGroup>
@@ -54,23 +137,6 @@
              Link="FreeW.icns"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <!-- Reuse the canonical command SVGs that FreeW's WPF host links from FreeX. The shared
-         Avalonia loader resolves these from Resources\CommandIconsSvg at runtime. -->
-    <Content Include="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
-             Exclude="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\arrange-all.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\breaks.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\eraser.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\new-window.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\paste-special.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\show-comments.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\show-notes.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\sort.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\strikethrough.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-colors.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-effects.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-fonts.svg"
-             Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
-    <!-- FreeW-specific canonical artwork remains owned by the WPF host; link it into the same
-         flat runtime directory so Avalonia resolves the shared aliases identically. -->
-    <Content Include="..\FreeW.App.Host\Resources\CommandIconsSvg\**\*.svg"
-             Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\FreeW.App.Host\Resources\ContentIconsSvg\**\*.svg"
-             Link="Resources\ContentIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -84,6 +150,7 @@
   <ItemGroup>
     <Using Include="Free.Shared.IO" />
     <Using Include="Free.Shared.AppServices" />
+    <Using Include="FreeW.App.Presentation.DocumentView" />
   </ItemGroup>
 
 </Project>

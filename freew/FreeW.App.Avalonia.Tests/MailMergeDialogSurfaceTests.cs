@@ -26,6 +26,7 @@ public sealed class MailMergeDialogSurfaceTests
             "AskFinishMergeAsync",
             "AskCheckForErrorsAsync",
             "AskEmailMergeDeliveryAsync",
+            "AskMergeRuleAsync",
             "AskMergeRuleIfAsync",
             "AskMergeRuleConditionAsync",
             "AskMergeRulePromptAsync",
@@ -40,8 +41,10 @@ public sealed class MailMergeDialogSurfaceTests
         methods.Where(method => method.Name.StartsWith("Ask", StringComparison.Ordinal))
             .Should()
             .OnlyContain(method => method.ReturnType == typeof(Task) ||
+                                   method.ReturnType == typeof(ValueTask) ||
                                    (method.ReturnType.IsGenericType &&
-                                   method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>)));
+                                   (method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>) ||
+                                    method.ReturnType.GetGenericTypeDefinition() == typeof(ValueTask<>))));
     }
 
     [Fact]
@@ -51,16 +54,16 @@ public sealed class MailMergeDialogSurfaceTests
 
         source.Should().Contain("OpenFindRecipientAsync");
         source.Should().Contain("MailMergeDialogs.AskFindRecipientAsync(this)");
-        source.Should().Contain("MailMergeFindRecipientPlanner.Find(data, query");
+        source.Should().Contain("_mailMerge!.FindRecipient(query)");
         source.Should().Contain("if (query is null)");
         source.Should().Contain("OpenCheckForErrorsAsync");
         source.Should().Contain("MailMergeDialogs.AskCheckForErrorsAsync(this)");
-        source.Should().Contain("_mailMerge.CheckForErrors(selected, completeMerge: false)");
+        source.Should().Contain("_mailMerge!.CheckForErrorsPlan(selected)");
         source.Should().Contain("FreeWInfoDialog.ShowAsync(this, result.Message)");
     }
 
     [Fact]
-    public void MailingsCommandHost_CollectsInteractiveRuleAnswersBeforeEveryFinishDestination()
+    public void MailingsCommandHost_UsesSharedFinishRoutingAndCollectsDocumentPrompts()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
 
@@ -68,12 +71,11 @@ public sealed class MailMergeDialogSurfaceTests
         source.Should().Contain("_mailMerge.GetInteractiveFinishPrompts()");
         source.Should().Contain("this, title, prompt.Prompt, prompt.DefaultAnswer");
         source.Should().Contain("mergeState.RecordPromptResolver = ResolvePerRecordMergePrompt;");
-        // The merge stays off the UI thread (its per-record prompts post back to the UI thread and
-        // wait, so running it inline would deadlock) — and because it is off-thread it must merge
-        // from a snapshot taken on the UI thread, not from the live, still-editable document.
+        source.Should().Contain("_mailMerge.RouteFinish(");
+        source.Should().Contain("FreeWDocumentSnapshot.Clone(_editor.Document)");
+        source.Should().NotContain("private static TextDocument CloneDocument(");
         source.Should().Contain("Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState, templateSnapshot))");
-        source.Should().Contain("var templateSnapshot = _mailMerge.Session.IsPreviewing ? null : CloneDocument(_editor.Document);");
-        source.Should().Contain("await PlanEmailMergeAsync(plan.RowIndexes)");
+        source.Should().Contain("await PlanEmailMergeAsync(route.EmailRecordIndexes)");
         source.Should().Contain("selectedRecordIndexes ?? Array.Empty<int>()");
         source.Should().Contain("Dispatcher.UIThread.Post(async () =>");
         source.Should().Contain("_mailMerge.ApplyFinishedMerge(result)");
@@ -97,16 +99,14 @@ public sealed class MailMergeDialogSurfaceTests
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
-        source.Should().Contain("if (!_mailMerge.EnsurePreviewingForNavigation())");
+        source.Should().Contain("_mailMerge.EnsurePreviewingForNavigation()");
         source.Should().Contain("_mailMerge.ApplyFieldMapping(mapping);");
-        source.Should().Contain(
-            "Select recipients first (Mailings > Select Recipients), then match fields.");
-        source.Should().Contain(
-            "Select recipients first (Mailings > Select Recipients), then filter and sort.");
-        source.Should().Contain(
-            "Select recipients first (Mailings > Select Recipients), then preview a record.");
-        source.Should().Contain(
-            "Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
+        source.Should().Contain("_mailMerge.ApplyRecipientFilter(filtered);");
+        source.Should().Contain("ValidateMailMergeOperationAsync(MailMergeOperation.MatchFields)");
+        source.Should().Contain("ValidateMailMergeOperationAsync(MailMergeOperation.FilterSortRecipients)");
+        source.Should().Contain("ValidateMailMergeOperationAsync(MailMergeOperation.PreviewRecord)");
+        source.Should().Contain("ValidateMailMergeOperationAsync(MailMergeOperation.FinishMerge)");
+        source.Should().Contain("FreeWInfoDialog.ShowAsync(this, validation.Message)");
     }
 
     [Fact]
@@ -117,17 +117,22 @@ public sealed class MailMergeDialogSurfaceTests
         source.Should().Contain("_mailMerge?.ApplyLabels(labels);");
     }
 
-    private static string RepositoryFile(params string[] relativeParts)
+    [Fact]
+    public void MailingsCommandHost_UsesOneTypedRuleAuthoringRoute()
     {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-        }
+        var mainWindow = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        var engine = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Ribbon", "MailMergeEngine.cs"));
 
-        throw new FileNotFoundException($"Could not locate {Path.Combine(relativeParts)}.");
+        mainWindow.Should().Contain("InsertMergeRuleAsync(MailMergeRuleKind kind)");
+        mainWindow.Should().Contain("_mailMerge.AuthorRuleAsync(");
+        mainWindow.Should().Contain("MailMergeDialogs.AskMergeRuleAsync(this, request)");
+        mainWindow.Should().NotContain("InsertMergeRuleIfAsync()");
+        mainWindow.Should().NotContain("InsertMergeRuleConditionAsync(");
+        engine.Should().Contain("MailMergeRuleAuthoringWorkflow.RunAsync(");
+        engine.Should().NotContain("CreateIfPlan(");
+        engine.Should().NotContain("CreateConditionPlan(");
     }
+
+    private static string RepositoryFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.Find(relativeParts);
 }

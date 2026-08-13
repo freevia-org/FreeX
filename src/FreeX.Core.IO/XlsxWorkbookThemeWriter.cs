@@ -98,7 +98,7 @@ internal static class XlsxWorkbookThemeWriter
         return new XElement(drawingNs + "fmtScheme",
             new XAttribute("name", theme.EffectsName),
             new XElement(drawingNs + "fillStyleLst", SolidPhClrFill(), SolidPhClrFill(), SolidPhClrFill()),
-            new XElement(drawingNs + "lnStyleLst", Line((int)(DrawingMlUnits.EmuPerPoint / 2)), Line((int)DrawingMlUnits.EmuPerPoint), Line((int)(DrawingMlUnits.EmuPerPoint * 3 / 2))),
+            new XElement(drawingNs + "lnStyleLst", Line((int)(DrawingMlCoordinateUnits.EmuPerPoint / 2)), Line((int)DrawingMlCoordinateUnits.EmuPerPoint), Line((int)(DrawingMlCoordinateUnits.EmuPerPoint * 3 / 2))),
             new XElement(drawingNs + "effectStyleLst", EffectStyle(), EffectStyle(), EffectStyle()),
             new XElement(drawingNs + "bgFillStyleLst", SolidPhClrFill(), SolidPhClrFill(), SolidPhClrFill()));
     }
@@ -310,7 +310,7 @@ internal static class XlsxWorkbookThemeWriter
 
         var line = new XElement(drawingNs + "ln", fill);
         if (widthPoints is > 0)
-            line.SetAttributeValue("w", (int)Math.Round(widthPoints.Value * DrawingMlUnits.EmuPerPoint));
+            line.SetAttributeValue("w", (int)Math.Round(widthPoints.Value * DrawingMlCoordinateUnits.EmuPerPoint));
         return line;
     }
 

@@ -15,7 +15,7 @@ namespace FreeW.App.Presentation.Options;
 /// constructor, so a missing or corrupt settings file degrades to <c>new FreeWOptions()</c>.
 /// </para>
 /// </summary>
-public sealed class FreeWOptions : INormalizableApplicationOptions, IApplicationOptionsSummarySource
+public sealed class FreeWOptions : IBasicApplicationOptions, IApplicationOptionsSummarySource
 {
     public const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
     public const int MinRecentFilesCap = ApplicationOptionsNormalizer.MinRecentFilesCap;

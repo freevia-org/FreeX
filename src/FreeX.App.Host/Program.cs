@@ -28,9 +28,9 @@ public static class Program
         // Install FreeX's product identity before any App code runs, so the shared storage
         // helpers resolve %LOCALAPPDATA%\FreeX (settings, recent files, autosave, diagnostics)
         // and never fall back to the neutral default. Must precede the first storage-path read,
-        // which happens in App startup's FreeXOptions.Load().
+        // which happens when App startup creates the FreeX options runtime session.
         Free.Shared.AppServices.AppProduct.Current =
-            new Free.Shared.AppServices.AppProductIdentity("FreeX", "FREEX_DIAGNOSTICS", "FreeX");
+            FreeX.App.Services.FreeXApplicationStartupDescriptor.ProductIdentity;
 
         var app = new App();
         app.InitializeComponent();

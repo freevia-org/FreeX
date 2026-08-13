@@ -78,19 +78,6 @@ public sealed class LinuxPackagingMetadataTests
     private static string SharedPackagingFile() =>
         Path.Combine(FindRepositoryRoot(), "tools", "packaging", "linux", "package-linux.sh");
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")) &&
-                Directory.Exists(Path.Combine(directory.FullName, "freew", "FreeW.App.Avalonia")))
-            {
-                return directory.FullName;
-            }
-        }
-
-        throw new DirectoryNotFoundException($"Could not find repository root from {AppContext.BaseDirectory}.");
-    }
+    private static string FindRepositoryRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
 }

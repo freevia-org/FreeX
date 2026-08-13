@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -23,7 +24,7 @@ public sealed class TopBottomRuleDialog : ConditionalFormatDialog
 public sealed class DataBarRuleDialog : ConditionalFormatDialog
 {
     public DataBarRuleDialog(GridRange range)
-        : base("Data Bar", range)
+        : base(ConditionalFormatDialogCatalog.DataBarRule, range)
     {
         Title = UiText.Get("ConditionalFormatDialog_DataBarRuleTitle");
     }
@@ -32,7 +33,7 @@ public sealed class DataBarRuleDialog : ConditionalFormatDialog
 public sealed class ColorScaleRuleDialog : ConditionalFormatDialog
 {
     public ColorScaleRuleDialog(GridRange range)
-        : base("Color Scale", range)
+        : base(ConditionalFormatDialogCatalog.ColorScaleRule, range)
     {
         Title = UiText.Get("ConditionalFormatDialog_ColorScaleRuleTitle");
     }
@@ -41,7 +42,7 @@ public sealed class ColorScaleRuleDialog : ConditionalFormatDialog
 public sealed class IconSetRuleDialog : ConditionalFormatDialog
 {
     public IconSetRuleDialog(GridRange range)
-        : base("Icon Set", range)
+        : base(ConditionalFormatDialogCatalog.IconSetRule, range)
     {
         Title = UiText.Get("ConditionalFormatDialog_IconSetRuleTitle");
     }
@@ -59,16 +60,13 @@ public sealed class NewConditionalFormatRuleDialog : ConditionalFormatDialog
 public static class ConditionalFormatDialogFactory
 {
     public static ConditionalFormatDialog Create(string ruleType, GridRange range) =>
-        ruleType switch
+        ConditionalFormatDialogCatalog.DialogFamilyForRuleType(ruleType) switch
         {
-            "Greater Than" or "Less Than" or "Equal To" or "Between" or "Text Contains" or "Date Occurring" or "Duplicate Values" or
-            "Blanks" or "No Blanks" or "Errors" or "No Errors" =>
-                new HighlightCellsRuleDialog(ruleType, range),
-            "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" or "Above Average" or "Below Average" =>
-                new TopBottomRuleDialog(ruleType, range),
-            "Data Bar" => new DataBarRuleDialog(range),
-            "Color Scale" => new ColorScaleRuleDialog(range),
-            "Icon Set" => new IconSetRuleDialog(range),
+            ConditionalFormatDialogFamily.HighlightCells => new HighlightCellsRuleDialog(ruleType, range),
+            ConditionalFormatDialogFamily.TopBottom => new TopBottomRuleDialog(ruleType, range),
+            ConditionalFormatDialogFamily.DataBar => new DataBarRuleDialog(range),
+            ConditionalFormatDialogFamily.ColorScale => new ColorScaleRuleDialog(range),
+            ConditionalFormatDialogFamily.IconSet => new IconSetRuleDialog(range),
             _ => new NewConditionalFormatRuleDialog(ruleType, range)
         };
 }

@@ -5,6 +5,52 @@ namespace FreeX.App.Services.Tests;
 public sealed class FileWorkflowDedupSourceTests
 {
     [Fact]
+    public void FreeXHostsShareWorkbookDocumentStateOwnership()
+    {
+        var documentStateSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared",
+            "Free.Shared.AppServices",
+            "WorkbookDocumentState.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookSession.cs"));
+        var wpfWindowSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.xaml.cs"));
+        var avaloniaWindowSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.cs"));
+
+        documentStateSource.Should().Contain("public sealed class WorkbookDocumentState");
+        documentStateSource.Should().Contain("public void MarkDirty()");
+        documentStateSource.Should().Contain("public void MarkSavedAtUndoDepth(int undoDepthAtSave, long undoStackVersionAtSave)");
+        documentStateSource.Should().Contain("public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth, long currentUndoStackVersion)");
+
+        sessionSource.Should().Contain("private readonly WorkbookDocumentState _documentState;");
+        sessionSource.Should().Contain("sharedDocumentStateOwner?._documentState ?? documentState ?? new WorkbookDocumentState()");
+        sessionSource.Should().Contain("_documentState.MarkDirty();");
+        sessionSource.Should().Contain("_documentState.MarkSavedAtUndoDepth(");
+        sessionSource.Should().Contain("_documentState.TryMarkCleanIfAtSavePoint(");
+        sessionSource.Should().NotContain("private bool _isDirty;");
+        sessionSource.Should().NotContain("private int _dirtyGeneration;");
+        sessionSource.Should().NotContain("private string? _currentFilePath;");
+        sessionSource.Should().NotContain("private int _savedUndoDepth");
+        sessionSource.Should().NotContain("private long? _savedUndoStackVersion");
+
+        wpfWindowSource.Should().Contain("private bool _workbookDirty => _session.IsDirty;");
+        wpfWindowSource.Should().Contain("private int _workbookDirtyGeneration => _session.DirtyGeneration;");
+        wpfWindowSource.Should().NotContain("private WorkbookDocumentState _documentState;");
+
+        avaloniaWindowSource.Should().Contain("isDirty: _session.IsDirty");
+        avaloniaWindowSource.Should().Contain("GetDirtyGeneration: () => _session.DirtyGeneration");
+        avaloniaWindowSource.Should().NotContain("private bool _workbookDirty;");
+        avaloniaWindowSource.Should().NotContain("private int _workbookDirtyGeneration;");
+    }
+
+    [Fact]
     public void RecentFileRegistrationDecision_StaysInSharedService()
     {
         var serviceSource = File.ReadAllText(RepositoryFileLocator.Find(
@@ -15,6 +61,10 @@ public sealed class FileWorkflowDedupSourceTests
             "shared",
             "Free.Shared.AppServices",
             "FileCommandSession.cs"));
+        var workflowSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFileWorkflow.cs"));
         var wpfWorkbookSource = File.ReadAllText(RepositoryFileLocator.Find(
             "src",
             "FreeX.App.Host",
@@ -34,8 +84,11 @@ public sealed class FileWorkflowDedupSourceTests
 
         serviceSource.Should().Contain("FileLifecyclePlanner.PlanRecentRegistration(");
         sessionSource.Should().Contain("RecentFileRegistrationService.RegisterIfNeeded(");
-        wpfWorkbookSource.Should().Contain("RecentFileRegistrationService.RegisterIfNeeded(");
-        avaloniaWorkbookSource.Should().Contain("RecentFileRegistrationService.RegisterIfNeeded(");
+        workflowSource.Should().Contain("RegisterRecentFile(completionPlan.RecentFileRegistration)");
+        workflowSource.Should().Contain("RegisterRecentFile(fileContext.RecentFileRegistration)");
+        wpfWorkbookSource.Should().Contain(
+            "request => RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, request)");
+        avaloniaWorkbookSource.Should().Contain("_fileWorkflow.RegisterRecentFile(");
         avaloniaWorkbookSource.Should().Contain("FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity");
 
         sessionSource.Should().NotContain("FileLifecyclePlanner.PlanRecentRegistration(");
@@ -48,7 +101,7 @@ public sealed class FileWorkflowDedupSourceTests
     }
 
     [Fact]
-    public void AvaloniaPortablePdfExportTargetDecision_StaysInExportPickerPlanner()
+    public void PortablePdfExportTargetDecision_StaysInSharedInteractionPolicy()
     {
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
             "src",
@@ -58,6 +111,10 @@ public sealed class FileWorkflowDedupSourceTests
             "src",
             "FreeX.App.Avalonia",
             "MainWindow.cs"));
+        var interactionSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookExportInteractionPlanner.cs"));
         var printSource = File.ReadAllText(RepositoryFileLocator.Find(
             "src",
             "FreeX.App.Avalonia",
@@ -67,7 +124,8 @@ public sealed class FileWorkflowDedupSourceTests
         plannerSource.Should().Contain("ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf)");
         plannerSource.Should().Contain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, pathPlan, pathExists)");
 
-        avaloniaSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists)");
+        interactionSource.Should().Contain("ExportPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, request, pathExists)");
+        avaloniaSource.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
         printSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists)");
         avaloniaSource.Should().NotContain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
         printSource.Should().NotContain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
@@ -96,8 +154,9 @@ public sealed class FileWorkflowDedupSourceTests
         plannerSource.Should().Contain("FileOpenPickerPlan Picker");
         plannerSource.Should().Contain("FileSavePickerPlan Picker");
 
-        avaloniaSource.Should().Contain("WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats)");
+        avaloniaSource.Should().Contain("WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _fileWorkflow.OpenFormats)");
         avaloniaSource.Should().Contain("WorkbookFileCommandPlanner.PlanSaveAsPicker(");
+        avaloniaSource.Should().Contain("_fileWorkflow.SaveFormats,");
         avaloniaSource.Should().Contain("StorageProvider.CanSave,");
         avaloniaSource.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
         avaloniaSource.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
@@ -106,10 +165,11 @@ public sealed class FileWorkflowDedupSourceTests
         avaloniaSource.Should().NotContain("\"Save As unavailable on this platform.\"");
         avaloniaSource.Should().NotContain("\"No save formats are available.\"");
 
-        wpfLifecycleSource.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
-        wpfLifecycleSource.Should().Contain("WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(");
-        wpfLifecycleSource.Should().Contain("WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(");
-        avaloniaSource.Should().Contain("WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(");
+        wpfLifecycleSource.Should().Contain("_fileWorkflow.SaveResolvedAsync(");
+        wpfLifecycleSource.Should().Contain("_fileWorkflow.ConfirmBeforeDestructiveActionAsync(");
+        wpfLifecycleSource.Should().Contain("_fileWorkflow.CanProceedAfterDirtyGateWithCleanSaveAsync(");
+        avaloniaSource.Should().Contain("_fileWorkflow.CanProceedAfterDirtyGateWithCleanSaveAsync(");
+        avaloniaSource.Should().NotContain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
         avaloniaSource.Should().NotContain("SaveCurrentWorkbookThenConfirmCleanAsync");
     }
 
@@ -124,6 +184,10 @@ public sealed class FileWorkflowDedupSourceTests
             "src",
             "FreeX.App.Services",
             "WorkbookSession.cs"));
+        var workflowSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFileWorkflow.cs"));
         var wpfSource = File.ReadAllText(RepositoryFileLocator.Find(
             "src",
             "FreeX.App.Host",
@@ -135,8 +199,10 @@ public sealed class FileWorkflowDedupSourceTests
 
         sessionSource.Should().Contain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(");
         sessionSource.Should().NotContain("FileFormatResolver.FindOpenAdapter(_adapters, extension");
+        workflowSource.Should().Contain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(");
 
-        wpfSource.Should().Contain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, path");
+        wpfSource.Should().Contain("_fileWorkflow.TryResolveOpenTarget(path");
+        wpfSource.Should().NotContain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(");
         wpfSource.Should().NotContain("FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext");
     }
 
@@ -155,20 +221,51 @@ public sealed class FileWorkflowDedupSourceTests
             "src",
             "FreeX.App.Host",
             "MainWindow.Backstage.cs"));
+        var workflowSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFileWorkflow.cs"));
 
         coordinatorSource.Should().Contain("PlanSaveTargetWrite(");
         coordinatorSource.Should().Contain("FileSavePlanner.CanSkipCleanSave(");
         coordinatorSource.Should().Contain("PlanSavePathNormalization(");
         coordinatorSource.Should().Contain("WorkbookSession.EnsureSaveExtension(");
 
-        avaloniaSource.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(");
-        avaloniaSource.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(");
+        workflowSource.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(");
+        workflowSource.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(");
+        avaloniaSource.Should().Contain("_fileWorkflow.ShouldSkipSaveTargetWrite(");
+        avaloniaSource.Should().Contain("_fileWorkflow.PlanSavePathNormalization(");
+        avaloniaSource.Should().NotContain("WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(");
         avaloniaSource.Should().NotContain("FileSavePlanner.CanSkipCleanSave(");
         avaloniaSource.Should().NotContain("ShouldPromptForNormalizedWorkbookOverwrite(");
         avaloniaSource.Should().NotContain("Path.GetFullPath(requestedPath)");
 
-        wpfSource.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(");
+        wpfSource.Should().Contain("_fileWorkflow.ShouldSkipSaveTargetWrite(");
+        wpfSource.Should().NotContain("WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(");
         wpfSource.Should().NotContain("FileSavePlanner.CanSkipCleanSave(");
+    }
+
+    [Fact]
+    public void ResolvedSaveChoreography_StaysInSharedCoordinator()
+    {
+        var sharedSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared",
+            "Free.Shared.AppServices",
+            "AsyncFileLifecycleCoordinator.cs"));
+        var workbookSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFileLifecycleCoordinator.cs"));
+
+        sharedSource.Should().Contain("FileLifecyclePlanner.PlanSave(");
+        sharedSource.Should().Contain("var target = resolveCurrentTarget();");
+        sharedSource.Should().Contain("resolvedTargetPolicy?.Invoke(target)");
+
+        workbookSource.Should().Contain("AsyncFileLifecycleCoordinator.SaveResolvedAsync(");
+        workbookSource.Should().Contain("resolvedTargetPolicy: target =>");
+        workbookSource.Should().Contain("PlanSaveTargetWrite(isDirty, currentFilePath, target)");
+        workbookSource.Should().NotContain("FileLifecyclePlanner.PlanSave(");
+        workbookSource.Should().NotContain("var target = resolveCurrentTarget();");
     }
 
     [Fact]
@@ -190,6 +287,10 @@ public sealed class FileWorkflowDedupSourceTests
             "src",
             "FreeX.App.Host",
             "MainWindow.Backstage.cs"));
+        var workflowSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFileWorkflow.cs"));
 
         completionSource.Should().Contain("PlanOpen(");
         completionSource.Should().Contain("ResolveActiveSheetId(result.Workbook)");
@@ -198,8 +299,12 @@ public sealed class FileWorkflowDedupSourceTests
         completionSource.Should().Contain("PlanSaveFileContext(");
         saveCompletionSource.Should().Contain("WorkbookFileCompletionPlanner.PlanSaveFileContext(");
         sessionFactorySource.Should().Contain("WorkbookFileCompletionPlanner.PlanOpen(");
-        wpfSource.Should().Contain("WorkbookFileCompletionPlanner.PlanOpen(");
-        wpfSource.Should().Contain("new FreeX.App.Services.WorkbookOpenResult(");
+        workflowSource.Should().Contain("WorkbookFileCompletionPlanner.PlanOpen(");
+        workflowSource.Should().Contain("WorkbookSaveExecutionCoordinator.Begin(");
+        wpfSource.Should().Contain("_fileWorkflow.OpenAsync(");
+        wpfSource.Should().Contain("_fileWorkflow.SaveTargetAsync(");
+        wpfSource.Should().NotContain("WorkbookFileCompletionPlanner.PlanOpen(");
+        wpfSource.Should().NotContain("new FreeX.App.Services.WorkbookOpenResult(");
         wpfSource.Should().Contain("plan.FileContext is { } fileContext");
         wpfSource.Should().NotContain("_currentFilePath = result.OpenedAsTemplate");
         wpfSource.Should().NotContain("var activeSheetIndex =");
@@ -257,7 +362,8 @@ public sealed class FileWorkflowDedupSourceTests
         resolverSource.Should().Contain("resolveByExtension(adapterRows, chosenExtension)");
         workbookPlannerSource.Should().Contain("FileDialogSaveSelectionResolver.ResolveAdapter(");
         workbookPlannerSource.Should().Contain("filterIndex");
-        wpfWorkbookSource.Should().Contain("WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, result.FilterIndex, out var target)");
+        wpfWorkbookSource.Should().Contain("_fileWorkflow.TryResolveSaveTarget(");
+        wpfWorkbookSource.Should().NotContain("WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(");
         freewSource.Should().Contain("FileDialogSaveSelectionResolver.ResolveAdapter(");
         freewSource.Should().NotContain("private IDocumentFileAdapter? ResolveSaveAdapter");
         freewSource.Should().NotContain("savePairs");
@@ -309,7 +415,8 @@ public sealed class FileWorkflowDedupSourceTests
         plannerSource.Should().Contain("\".csv\",");
         plannerSource.Should().Contain("\".xml\"");
         plannerSource.Should().Contain("TextImportPatterns");
-        plannerSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(importAdapters)");
+        plannerSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(");
+        plannerSource.Should().Contain("FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(");
 
         wpfSource.Should().Contain("ImportDataFilePickerPlanner.BuildAdapterOpenDialogPlan(_fileAdapters)");
         wpfSource.Should().Contain("var adapters = plan.Adapters;");
@@ -378,20 +485,34 @@ public sealed class FileWorkflowDedupSourceTests
         var freepWpfSource = File.ReadAllText(RepositoryFileLocator.Find(
             "freep",
             "FreeP.App.Host",
-            "FileCommands.cs"));
+            "MainWindow.cs"));
         var freepAvaloniaSource = File.ReadAllText(RepositoryFileLocator.Find(
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
+        var freepLifecycleSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationFileLifecycleAdapter.cs"));
+        var freepSessionSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationFileCommandSession.cs"));
 
         workflowSource.Should().Contain("CurrentFileName");
         workflowSource.Should().Contain("CurrentFileNameWithoutExtensionOr");
         freewWpfSource.Should().Contain("_workflow.CurrentFileName");
         freewAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileName");
-        freewAvaloniaSource.Should().Contain("SisterAppFileTextPlanner.Document");
+        freewAvaloniaSource.Should().Contain("FreeWFileTextResources.Document");
+        freewAvaloniaSource.Should().NotContain("SisterAppFileTextPlanner.Document");
         freewAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName)");
-        freepWpfSource.Should().Contain("_workflow.CurrentFileName");
-        freepAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileName");
+        freepLifecycleSource.Should().Contain("public string DisplayName => _workflow.DisplayName;");
+        freepSessionSource.Should().Contain("public string DisplayName => _lifecycle.DisplayName;");
+        freepWpfSource.Should().Contain("DisplayName: _fileSession.DisplayName,");
+        freepWpfSource.Should().NotContain("_workflow.CurrentFileName");
+        freepAvaloniaSource.Should().Contain("private readonly PresentationFileCommandSession _fileSession;");
+        freepAvaloniaSource.Should().Contain("new PresentationFileLifecycleAdapter(");
+        freepAvaloniaSource.Should().NotContain("_fileWorkflow.CurrentFileName");
 
         freewWpfSource.Should().NotContain("Path.GetFileName(_workflow.CurrentPath)");
         freewAvaloniaSource.Should().NotContain("Path.GetFileName(_fileWorkflow.CurrentPath)");

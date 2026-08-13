@@ -52,6 +52,109 @@ public sealed class PresentationPaneAccessibilityPlannerTests
     }
 
     [Fact]
+    public void Pane_projection_owns_shared_metadata_status_and_keyboard_decisions()
+    {
+        var projection = PresentationPaneAccessibilityPlanner.ProjectPane(
+            PresentationPaneAccessibilityPlanner.NotesPaneId,
+            isVisible: true,
+            itemCount: 2,
+            selectedIndex: 1);
+
+        projection.State.Should().Be(new PresentationPaneAccessibilityState(
+            PresentationPaneAccessibilityPlanner.NotesPaneId,
+            true,
+            2,
+            1));
+        projection.AutomationId.Should().Be("FreePNotesPane");
+        projection.Name.Should().Be("Notes");
+        projection.HelpText.Should().Be("Read or edit notes for the current slide.");
+        projection.ItemStatus.Should().Be("Visible; Order 2");
+        projection.IsKeyboardNavigationEnabled.Should().BeTrue();
+        projection.KeyboardOrder.Should().Be(2);
+
+        PresentationPaneAccessibilityPlanner.ProjectPane(
+                PresentationPaneAccessibilityPlanner.NotesPaneId,
+                isVisible: false)
+            .Should().Match<PresentationPaneAccessibilityPaneProjection>(pane =>
+                pane.ItemStatus == "Hidden; Order 2" &&
+                !pane.IsKeyboardNavigationEnabled &&
+                pane.KeyboardOrder == 2);
+    }
+
+    [Fact]
+    public void Item_projection_owns_shared_status_formatting()
+    {
+        var selected = PresentationPaneAccessibilityPlanner.ProjectItem(
+            PresentationPaneAccessibilityPlanner.SelectionPaneId,
+            0,
+            "Title",
+            "Selected");
+        var unqualified = PresentationPaneAccessibilityPlanner.ProjectItem(
+            PresentationPaneAccessibilityPlanner.SelectionPaneId,
+            1,
+            "Subtitle",
+            stableKey: "subtitle");
+
+        selected.Should().Be(new PresentationPaneAccessibilityItemProjection(
+            "FreePSelectionPaneItem1",
+            "Title",
+            "Selection Pane item 1.",
+            "Selected; Order 1"));
+        unqualified.AutomationId.Should().Be("FreePSelectionPaneItemsubtitle");
+        unqualified.ItemStatus.Should().Be("Order 2");
+    }
+
+    [Fact]
+    public void Item_plans_own_selection_vocabulary_and_stable_key_families()
+    {
+        var slide = PresentationPaneAccessibilityPlanner.PlanSlideItem(
+            index: 4,
+            slideIndex: 2,
+            name: "Slide 3",
+            isSelected: true,
+            isActive: true);
+        var section = PresentationPaneAccessibilityPlanner.PlanSectionItem(
+            index: 1,
+            sectionIndex: 6,
+            name: "Results");
+        var shape = PresentationPaneAccessibilityPlanner.PlanItem(
+            PresentationPaneAccessibilityPlanner.SelectionPaneId,
+            index: 0,
+            name: "Chart 1",
+            isSelected: false,
+            stableKey: PresentationPaneAccessibilityPlanner.BuildShapeKey(42));
+
+        slide.State.Should().Be(PresentationPaneAccessibilityPlanner.ActiveAndSelectedState);
+        slide.StableKey.Should().Be("Slide3");
+        PresentationPaneAccessibilityPlanner.ProjectItem(slide).AutomationId
+            .Should().Be("FreePSlidePaneItemSlide3");
+        section.State.Should().Be(PresentationPaneAccessibilityPlanner.NotSelectedState);
+        section.StableKey.Should().Be("Section7");
+        shape.StableKey.Should().Be("Shape42");
+        PresentationPaneAccessibilityPlanner.BuildAnimationKey(42, 1).Should().Be("Animation42-2");
+    }
+
+    [Fact]
+    public void Session_owns_live_state_and_keeps_last_update_for_each_pane()
+    {
+        var session = new PresentationPaneAccessibilitySession();
+
+        session.UpdatePane(PresentationPaneAccessibilityPlanner.CommentsPaneId, true, 3, 1);
+        session.UpdatePane(PresentationPaneAccessibilityPlanner.NotesPaneId, true, 1, 0);
+        session.UpdatePane(PresentationPaneAccessibilityPlanner.CommentsPaneId, false, -2, 9);
+
+        var snapshot = session.BuildSnapshot();
+        snapshot.Single(entry => entry.PaneId == PresentationPaneAccessibilityPlanner.NotesPaneId)
+            .Should().Match<PresentationPaneAccessibilitySnapshotEntry>(entry =>
+                entry.State == "Visible" && entry.ItemCount == 1 && entry.SelectedIndex == 0);
+        snapshot.Single(entry => entry.PaneId == PresentationPaneAccessibilityPlanner.CommentsPaneId)
+            .Should().Match<PresentationPaneAccessibilitySnapshotEntry>(entry =>
+                entry.State == "Hidden" && entry.ItemCount == 0 && entry.SelectedIndex == -1);
+        session.SerializeSnapshot().Should().Contain("02|comments-pane|FreePCommentsPane|Comments|")
+            .And.Contain("|Hidden|0|-1");
+    }
+
+    [Fact]
     public void Snapshot_serialization_is_ordered_and_normalizes_invalid_selection()
     {
         var snapshot = PresentationPaneAccessibilityPlanner.SerializeSnapshot(

@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -26,8 +27,8 @@ namespace FreeX.App.Host.Tests;
 /// was invoked on.
 ///
 /// After the fix, the target workbook/sheet/destination are captured before the await and the
-/// ImportSheetCommand is executed directly against the captured workbook id (<c>_commandBus.Execute
-/// (targetWorkbook.Id, ...)</c>), so the import always lands in the workbook it was invoked on. Input is
+/// ImportSheetCommand is executed through the captured <see cref="WorkbookSession"/>, so the import
+/// always lands in the workbook it was invoked on. Input is
 /// also blocked for the duration (RootGrid.IsEnabled = false, mirroring ExportAsPdf) so File &gt; Open is
 /// unreachable via the ribbon while the import is in flight -- matching Excel's modal Get Data.
 /// </summary>
@@ -121,33 +122,26 @@ public sealed class R68_GetDataImportOrderingRaceTests
     private sealed class ImportRaceHarness : IDisposable
     {
         private readonly MethodInfo _importDataFromFileAsync;
-        private readonly FieldInfo _workbookField;
-        private readonly FieldInfo _currentSheetIdField;
+        private readonly MethodInfo _replaceWorkbookSession;
         private readonly FieldInfo _isImportingDataField;
         private readonly Dictionary<WorkbookId, Workbook> _workbooksById;
-        private readonly WorkbookRef _workbookRef;
 
         private ImportRaceHarness(
             MainWindow window,
             Workbook originalWorkbook,
-            Dictionary<WorkbookId, Workbook> workbooksById,
-            WorkbookRef workbookRef)
+            Dictionary<WorkbookId, Workbook> workbooksById)
         {
             Window = window;
             OriginalWorkbook = originalWorkbook;
             OriginalSheetId = originalWorkbook.Sheets[0].Id;
             _workbooksById = workbooksById;
-            _workbookRef = workbookRef;
 
             _importDataFromFileAsync = typeof(MainWindow)
                 .GetMethod("ImportDataFromFileAsync", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ImportDataFromFileAsync");
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
-            _currentSheetIdField = typeof(MainWindow)
-                .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
+            _replaceWorkbookSession = typeof(MainWindow)
+                .GetMethod("ReplaceWorkbookSession", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ReplaceWorkbookSession");
             _isImportingDataField = typeof(MainWindow)
                 .GetField("_isImportingData", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_isImportingData");
@@ -180,15 +174,19 @@ public sealed class R68_GetDataImportOrderingRaceTests
         public void RegisterWorkbook(Workbook workbook) => _workbooksById[workbook.Id] = workbook;
 
         /// <summary>
-        /// Simulates a concurrent File > Open landing mid-import: swaps the window's live
-        /// _workbook/_currentSheetId fields (and _workbookRef.Current) onto a different workbook,
-        /// exactly as MainWindow.Backstage.cs's OpenFileAsync does.
+        /// Simulates a concurrent File > Open landing mid-import by replacing the window's
+        /// authoritative session on its dispatcher, exactly as MainWindow.Backstage.cs does.
         /// </summary>
         public void SwapCurrentWorkbook(Workbook newWorkbook)
         {
-            _workbookField.SetValue(Window, newWorkbook);
-            _currentSheetIdField.SetValue(Window, newWorkbook.Sheets[0].Id);
-            _workbookRef.Current = newWorkbook;
+            Window.Dispatcher.Invoke(() =>
+                _replaceWorkbookSession.Invoke(
+                    Window,
+                    [new StartupWorkbookLoadResult(
+                        newWorkbook,
+                        "Book2.fxl",
+                        "Opened .fxl.",
+                        IsFallback: false)]));
         }
 
         public void RunImport(string importPath, IFileAdapter adapter)
@@ -236,7 +234,7 @@ public sealed class R68_GetDataImportOrderingRaceTests
             var originalWorkbook = workbookRef.Current;
             workbooksById[originalWorkbook.Id] = originalWorkbook;
 
-            return new ImportRaceHarness(window, originalWorkbook, workbooksById, workbookRef);
+            return new ImportRaceHarness(window, originalWorkbook, workbooksById);
         }
 
         public void Dispose()

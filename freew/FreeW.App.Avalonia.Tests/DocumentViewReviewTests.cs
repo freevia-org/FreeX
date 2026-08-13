@@ -293,6 +293,38 @@ public sealed class DocumentViewReviewTests
         revisionsAfterUndo.Should().BeTrue("Undo restores every revision accept-all resolved");
     }
 
+    [Fact]
+    public async Task Shared_table_cell_revision_target_keeps_Avalonia_resolution_undoable()
+    {
+        bool resolved = false, tableRevisionAfterAccept = true, tableRevisionAfterUndo = false;
+        var ran = await OnUiThread(() =>
+        {
+            var document = new TextDocument();
+            document.Blocks.Add(new Paragraph("before"));
+            var table = Table.Create(1, 1);
+            var tableParagraph = table.Rows[0].Cells[0].Paragraphs[0];
+            tableParagraph.Runs.Clear();
+            tableParagraph.Runs.Add(new Run("table change") { Revision = RevisionKind.Inserted });
+            document.Blocks.Add(table);
+            var after = new Paragraph();
+            after.Runs.Add(new Run("later change") { Revision = RevisionKind.Inserted });
+            document.Blocks.Add(after);
+
+            var view = Build(document);
+            view.MoveCaretToBlock(1, 0);
+            resolved = view.AcceptCurrentRevision();
+            tableRevisionAfterAccept = tableParagraph.Runs.Any(run => run.Revision != RevisionKind.None);
+            view.Undo();
+            tableRevisionAfterUndo = tableParagraph.Runs.Any(run => run.Revision == RevisionKind.Inserted);
+        });
+        if (!ran) return;
+
+        resolved.Should().BeTrue();
+        tableRevisionAfterAccept.Should().BeFalse();
+        tableRevisionAfterUndo.Should().BeTrue(
+            "the renderer must still execute the shared target through its undoable command bus");
+    }
+
     // ── Track Changes toggle + mark selection ─────────────────────────────────────
 
     [Fact]
@@ -332,7 +364,7 @@ public sealed class DocumentViewReviewTests
             doc.Blocks.Add(new Paragraph("Hello world"));
             var view = Build(doc);
             view.SetSelectionRangePublic(0, 6, 0, 11);
-            var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
             registry.TryGet(new RibbonCommandId("freew.track-changes"), out var command).Should().BeTrue();
             var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
 
@@ -380,7 +412,7 @@ public sealed class DocumentViewReviewTests
             doc.Blocks.Clear();
             doc.Blocks.Add(new Paragraph("Hello world"));
             var view = Build(doc);
-            var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
             registry.TryGet(new RibbonCommandId("freew.track-changes"), out var command).Should().BeTrue();
             var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
 
@@ -1329,7 +1361,7 @@ public sealed class DocumentViewReviewTests
     [Fact]
     public void Review_command_ids_are_declared_in_the_ribbon_definition()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var ids = definition.Tabs
             .SelectMany(t => t.Groups)
             .SelectMany(g => g.Controls)
@@ -1461,7 +1493,7 @@ public sealed class DocumentViewReviewTests
         calls.Should().Equal("reply", "show:1");
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },

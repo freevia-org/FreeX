@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services.Ribbon;
@@ -210,34 +211,59 @@ public sealed partial class MainWindow
     private bool HasSelectedDrawingObject() =>
         _selectedDrawingObjectKind is not null && _selectedDrawingObjectId is not null;
 
-    // R129-model-drawing-nudge-1: arrow-key increment (DIP pixels) applied to a genuinely selected
-    // picture/shape/text box/chart, matching Excel's "arrows nudge the object" / "Ctrl+arrow nudges
-    // by a smaller increment". Mirrors the WPF host's NudgeSelectedDrawingObject
-    // (MainWindow.Drawing.cs) -- same step constants, same per-kind command via
-    // DrawingObjectCommandPlanner.BuildNudgeCommand. Deliberately does NOT move the active cell --
-    // Excel leaves the underlying cell selection alone while an object owns the arrow keys.
-    private const double DrawingObjectNudgeStep = 3.0;
-    private const double DrawingObjectFineNudgeStep = 1.0;
-
     private void NudgeSelectedDrawingObject(Key key, bool fine)
     {
-        if (_selectedDrawingObjectKind is not { } kind || _selectedDrawingObjectId is not { } objectId)
+        var modifiers = fine ? KeyModifiers.Control : KeyModifiers.None;
+        if (!TryPlanSelectedDrawingObjectNudge(key, modifiers, out var plan))
             return;
 
-        var step = fine ? DrawingObjectFineNudgeStep : DrawingObjectNudgeStep;
-        var (deltaX, deltaY) = key switch
-        {
-            Key.Up => (0.0, -step),
-            Key.Down => (0.0, step),
-            Key.Left => (-step, 0.0),
-            Key.Right => (step, 0.0),
-            _ => (0.0, 0.0)
-        };
-        if (deltaX == 0.0 && deltaY == 0.0)
-            return;
+        ExecuteSelectedDrawingObjectNudge(plan);
+    }
 
-        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(_session.ActiveSheet.Id, kind, objectId, deltaX, deltaY);
+    private bool TryPlanSelectedDrawingObjectNudge(
+        Key key,
+        KeyModifiers modifiers,
+        out DrawingObjectNudgePlan plan) =>
+        DrawingObjectNudgePlanner.TryPlan(
+            ToDrawingObjectNudgeDirection(key),
+            ToDrawingObjectNudgeModifiers(modifiers),
+            _selectedDrawingObjectKind,
+            _selectedDrawingObjectId,
+            out plan);
+
+    private void ExecuteSelectedDrawingObjectNudge(DrawingObjectNudgePlan plan)
+    {
+        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(
+            _session.ActiveSheet.Id,
+            plan.Kind,
+            plan.ObjectId,
+            plan.DeltaX,
+            plan.DeltaY);
         RunDrawingObjectCommand(command, "Ready", DrawingObjectActionPlanner.MoveObjectCommandTitle);
+    }
+
+    private static DrawingObjectNudgeDirection? ToDrawingObjectNudgeDirection(Key key) =>
+        key switch
+        {
+            Key.Up => DrawingObjectNudgeDirection.Up,
+            Key.Down => DrawingObjectNudgeDirection.Down,
+            Key.Left => DrawingObjectNudgeDirection.Left,
+            Key.Right => DrawingObjectNudgeDirection.Right,
+            _ => null
+        };
+
+    private static DrawingObjectNudgeModifiers ToDrawingObjectNudgeModifiers(KeyModifiers modifiers)
+    {
+        var result = DrawingObjectNudgeModifiers.None;
+        if ((modifiers & KeyModifiers.Control) != 0)
+            result |= DrawingObjectNudgeModifiers.Control;
+        if ((modifiers & KeyModifiers.Shift) != 0)
+            result |= DrawingObjectNudgeModifiers.Shift;
+        if ((modifiers & KeyModifiers.Alt) != 0)
+            result |= DrawingObjectNudgeModifiers.Alt;
+        if ((modifiers & KeyModifiers.Meta) != 0)
+            result |= DrawingObjectNudgeModifiers.Meta;
+        return result;
     }
 
     private async Task ResizeSelectedChartObjectAsync()
@@ -254,9 +280,9 @@ public sealed partial class MainWindow
             return;
 
         RunDrawingObjectCommand(
-            new SetChartBoundsCommand(
+            ChartCommandWorkflowPlanner.BuildBoundsCommand(
                 _session.ActiveSheet.Id,
-                chart.Id,
+                chart,
                 chart.Left,
                 chart.Top,
                 chosen.Width,
@@ -269,21 +295,11 @@ public sealed partial class MainWindow
     /// Bring Forward for the selected drawing object, matching the contextual tab handlers and the
     /// cross-kind <see cref="FreeX.Core.Commands.MoveSelectionPaneObjectCommand"/> path.
     /// </summary>
-    private void BringSelectedDrawingObjectForward()
-    {
-        if (_selectedDrawingObjectKind == SelectionPaneObjectKind.Picture)
-            BringSelectedPictureForward();
-        else
-            BringSelectedShapeForward();
-    }
+    private void BringSelectedDrawingObjectForward() =>
+        ReorderSelectedDrawingObject(forward: true);
 
-    private void SendSelectedDrawingObjectBackward()
-    {
-        if (_selectedDrawingObjectKind == SelectionPaneObjectKind.Picture)
-            SendSelectedPictureBackward();
-        else
-            SendSelectedShapeBackward();
-    }
+    private void SendSelectedDrawingObjectBackward() =>
+        ReorderSelectedDrawingObject(forward: false);
 
     // Drawing-object selection chrome matches the WPF grid: eight 8px resize handles, a 10px
     // rotation grip 20px above the object, and a 4px hit pad around each affordance.
@@ -686,7 +702,7 @@ public sealed partial class MainWindow
 
     private bool ApplyPictureCrop(Guid pictureId, PictureCropRatios crop)
     {
-        var result = _session.ExecuteReviewCommand(new SetPictureCropCommand(
+        var result = _session.ExecuteReviewCommand(PictureCropDialogPlanner.BuildCommand(
             _session.ActiveSheet.Id,
             pictureId,
             crop.Left,
@@ -989,95 +1005,48 @@ public sealed partial class MainWindow
         }
 
         var sheetId = _session.ActiveSheet.Id;
-        IWorkbookCommand? command = null;
-        string successStatus;
-        string failureTitle;
-
-        if (session.Kind == ObjectDragKind.Rotate)
+        CellAddress? currentAnchor = null;
+        if (session.Kind != ObjectDragKind.Rotate &&
+            TryResolveCellAddressFromSheetGridPosition(
+                new Point(session.CurrentCanvasRect.Left, session.CurrentCanvasRect.Top),
+                out var resolvedAnchor))
         {
-            command = DrawingObjectCommandPlanner.BuildRotateCommand(
-                sheetId,
-                targetKind,
-                session.RenderPlan.Bounds.Id,
-                session.CurrentRotationDegrees);
-            successStatus = FormatDrawingObjectResourceText(DrawingObjectActionPlanner.RotationSuccess(
-                new FormatPicturePlanner.RotationResult(session.CurrentRotationDegrees)));
-            failureTitle = DrawingObjectActionPlanner.RotateObjectCommandTitle;
+            currentAnchor = resolvedAnchor;
         }
-        else if (session.Kind == ObjectDragKind.Move)
+
+        var zoomFactor = Math.Max(0.01, GetActiveZoomFactor());
+        var plan = ObjectDragPlanner.PlanCommit(
+            session.Kind,
+            session.StartCanvasRect,
+            session.CurrentCanvasRect,
+            session.StartAnchor,
+            currentAnchor,
+            Math.Max(ObjectDragPlanner.MinimumObjectSize, session.CurrentCanvasRect.Width / zoomFactor),
+            Math.Max(ObjectDragPlanner.MinimumObjectSize, session.CurrentCanvasRect.Height / zoomFactor),
+            session.CurrentRotationDegrees,
+            session.StartFlipHorizontal,
+            session.StartFlipVertical,
+            session.CurrentFlipHorizontal,
+            session.CurrentFlipVertical);
+        if (plan.Kind == ObjectDragCommitKind.Unavailable)
         {
-            if (!TryResolveCellAddressFromSheetGridPosition(
-                    new Point(session.CurrentCanvasRect.Left, session.CurrentCanvasRect.Top),
-                    out var anchor))
-            {
-                RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
-                return;
-            }
-
-            if (!ObjectDragPlanner.ShouldCommitMove(session.StartAnchor, anchor))
-            {
-                RefreshShell(string.Empty);
-                return;
-            }
-
-            command = DrawingObjectCommandPlanner.BuildMoveCommand(
-                sheetId,
-                targetKind,
-                session.RenderPlan.Bounds.Id,
-                anchor);
-            successStatus = UiText.Get("DrawingInteract_Moved");
-            failureTitle = DrawingObjectActionPlanner.MoveObjectCommandTitle;
+            RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
+            return;
         }
-        else
+
+        if (plan.Kind == ObjectDragCommitKind.None)
         {
-            var zoomFactor = Math.Max(0.01, GetActiveZoomFactor());
-            var width = Math.Max(ObjectDragPlanner.MinimumObjectSize, session.CurrentCanvasRect.Width / zoomFactor);
-            var height = Math.Max(ObjectDragPlanner.MinimumObjectSize, session.CurrentCanvasRect.Height / zoomFactor);
-            var movedTopLeft =
-                Math.Abs(session.CurrentCanvasRect.Left - session.StartCanvasRect.Left) > 1 ||
-                Math.Abs(session.CurrentCanvasRect.Top - session.StartCanvasRect.Top) > 1;
-            if (!ObjectDragPlanner.ShouldCommitResize(
-                    session.StartCanvasRect,
-                    session.CurrentCanvasRect,
-                    session.StartFlipHorizontal,
-                    session.StartFlipVertical,
-                    session.CurrentFlipHorizontal,
-                    session.CurrentFlipVertical))
-            {
-                RefreshShell(string.Empty);
-                return;
-            }
-
-            if (movedTopLeft && TryResolveCellAddressFromSheetGridPosition(
-                    new Point(session.CurrentCanvasRect.Left, session.CurrentCanvasRect.Top),
-                    out var anchor))
-            {
-                command = DrawingObjectCommandPlanner.BuildResizeWithAnchorCommand(
-                    sheetId,
-                    targetKind,
-                    session.RenderPlan.Bounds.Id,
-                    anchor,
-                    width,
-                    height,
-                    session.CurrentFlipHorizontal,
-                    session.CurrentFlipVertical);
-            }
-            else
-            {
-                command = DrawingObjectCommandPlanner.BuildResizeCommand(
-                    sheetId,
-                    targetKind,
-                    session.RenderPlan.Bounds.Id,
-                    width,
-                    height,
-                    session.CurrentFlipHorizontal,
-                    session.CurrentFlipVertical);
-            }
-
-            successStatus = FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ResizeSuccess(
-                new ObjectSizeDialogSize(width, height)));
-            failureTitle = DrawingObjectActionPlanner.ResizeObjectCommandTitle;
+            RefreshShell(string.Empty);
+            return;
         }
+
+        var command = DrawingObjectCommandPlanner.BuildDragCommitCommand(
+            sheetId,
+            targetKind,
+            session.RenderPlan.Bounds.Id,
+            plan)!;
+        var successStatus = FormatDrawingObjectResourceText(DrawingObjectActionPlanner.DragCommitSuccess(plan));
+        var failureTitle = DrawingObjectActionPlanner.DragCommitCommandTitle(plan.Kind);
 
         var result = _session.ExecuteReviewCommand(command);
         RefreshShell(result.Success
@@ -1267,7 +1236,13 @@ public sealed partial class MainWindow
         var sheetWidth = Math.Max(minimumChartWidth, container.Width / zoomFactor);
         var sheetHeight = Math.Max(minimumChartHeight, container.Height / zoomFactor);
 
-        var command = new SetChartBoundsCommand(sheet.Id, session.Chart.Id, sheetLeft, sheetTop, sheetWidth, sheetHeight);
+        var command = ChartCommandWorkflowPlanner.BuildBoundsCommand(
+            sheet.Id,
+            session.Chart,
+            sheetLeft,
+            sheetTop,
+            sheetWidth,
+            sheetHeight);
         var status = session.Kind == ObjectDragKind.Move
             ? UiText.Get("DrawingInteract_Moved")
             : UiText.Get("DrawingInteract_Resized");

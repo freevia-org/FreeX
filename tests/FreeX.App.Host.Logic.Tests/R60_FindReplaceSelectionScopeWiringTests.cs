@@ -39,7 +39,7 @@ public sealed class R60_FindReplaceSelectionScopeWiringTests
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
-                    commandBus,
+                    command => commandBus.Execute(workbook.Id, command),
                     _ => { },
                     replaceMode: true,
                     getCurrentSheetId: () => sheet.Id,
@@ -89,7 +89,7 @@ public sealed class R60_FindReplaceSelectionScopeWiringTests
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
-                    commandBus,
+                    command => commandBus.Execute(workbook.Id, command),
                     _ => { },
                     replaceMode: true,
                     getCurrentSheetId: () => sheet.Id,
@@ -141,7 +141,7 @@ public sealed class R60_FindReplaceSelectionScopeWiringTests
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
-                    commandBus,
+                    command => commandBus.Execute(workbook.Id, command),
                     _ => { },
                     replaceMode: true,
                     getCurrentSheetId: () => sheet.Id,

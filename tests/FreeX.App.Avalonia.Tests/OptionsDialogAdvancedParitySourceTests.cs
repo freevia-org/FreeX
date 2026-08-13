@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 
 using Avalonia.Automation;
@@ -23,7 +22,6 @@ public sealed class OptionsDialogAdvancedParitySourceTests
     public void AdvancedOptions_UsesSharedMetricsAndWpfRowGeometry()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
-
         source.Should().Contain("OptionsDialogPlanner.CategoryColumnWidth");
         source.Should().Contain("OptionsDialogPlanner.ContentPaddingHorizontal");
         source.Should().Contain("OptionsDialogPlanner.FooterHeight");
@@ -38,10 +36,14 @@ public sealed class OptionsDialogAdvancedParitySourceTests
     public void ViewOptions_UsesWpfHeaderRhythmAndCaptureFixture()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
-        var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "ParityCapture.cs"));
-        var fixture = File.ReadAllText(RepoFile("src", "FreeX.App.Services", "OptionsDialogParityFixture.cs"));
+        var avaloniaCapture = File.ReadAllText(RepoFile(
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "Program.cs"));
+        var wpf = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
+        var fixture = File.ReadAllText(RepoFile(
+            "tools", "FreeX.ParityCapture.Support", "Services", "OptionsDialogParityFixture.cs"));
 
-        source.Should().Contain("OptionsDialogParityFixture.Create()");
+        source.Should().NotContain("OptionsDialogParityFixture.Create");
+        avaloniaCapture.Should().Contain(": OptionsDialogParityFixture.Create;");
         source.Should().Contain("OptionsSectionHeader(OptionsText(\"Options_WorkbookViewOptions\"), topMargin: 0, bottomMargin: 12)");
         source.Should().Contain("viewPanel.Spacing = 0;");
         source.Should().Contain("RowDefinitions = new RowDefinitions(\"*,Auto\")");
@@ -58,9 +60,8 @@ public sealed class OptionsDialogAdvancedParitySourceTests
         source.Should().Contain("isChecked: current.EnableAutoCompleteForCellValues");
         source.Should().Contain("isEnabled: true,");
         source.Should().Contain("AutomationProperties.SetAutomationId(objectsDisplayBox, \"OptionsObjectsDisplayComboBox\")");
-        source.Should().Contain("objectsDisplay: objectsDisplayBox.SelectedIndex switch");
-        source.Should().Contain("AppOptionsObjectDisplay.Placeholders");
-        source.Should().Contain("AppOptionsObjectDisplay.Nothing");
+        source.Should().Contain("objectsDisplay: OptionsDialogPlanner.IndexToObjectDisplay(objectsDisplayBox.SelectedIndex)");
+        source.Should().Contain("OptionsDialogPlanner.ObjectDisplayToIndex(current.ObjectsDisplay)");
     }
 
     [Fact]
@@ -70,7 +71,7 @@ public sealed class OptionsDialogAdvancedParitySourceTests
 
         source.Should().Contain("isChecked: current.EnableFillHandleAndCellDragAndDrop");
         source.Should().Contain("OptionsEnableFillHandleAndCellDragAndDropCheckBox");
-        source.Should().Contain("projected.EnableFillHandleAndCellDragAndDrop = advancedFillHandleBox.IsChecked == true");
+        source.Should().Contain("enableFillHandleAndCellDragAndDrop: advancedFillHandleBox.IsChecked == true");
         source.Should().NotContain("isChecked: true,\n            isEnabled: false");
     }
 
@@ -93,9 +94,10 @@ public sealed class OptionsDialogAdvancedParitySourceTests
         source.Should().Contain("Key.End");
         source.Should().Contain("Key.Enter or Key.Space");
         source.Should().Contain("args.Handled = true;");
-        source.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord");
-        source.Should().Contain("SpellCheckWorkflowPlanner.RemoveCustomDictionaryWordAndSelectNext");
-        source.Should().Contain("SpellCheckWorkflowPlanner.ClearCustomDictionaryWords");
+        source.Should().Contain("var customDictionaryEditor = optionsDialogSession.CustomDictionary;");
+        source.Should().Contain("customDictionaryEditor.AddPendingWord();");
+        source.Should().Contain("customDictionaryEditor.RemoveSelectedWord();");
+        source.Should().Contain("customDictionaryEditor.Clear();");
         source.Should().Contain("proofingAddButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));");
 
         wpf.Should().Contain("Height=\"108\"");
@@ -186,7 +188,7 @@ public sealed class OptionsDialogAdvancedParitySourceTests
             try
             {
                 owner.Show();
-                optionsTask = InvokePrivateTaskAsync(owner, "ShowOptionsDialogAsync");
+                optionsTask = owner.ShowOptionsDialogForTestAsync();
                 await DrainInputAsync();
 
                 var options = FindOwnedWindow(owner, "OptionsDialog");
@@ -260,29 +262,12 @@ public sealed class OptionsDialogAdvancedParitySourceTests
     private static AvaloniaUserMessageDialog FindOwnedMessage(Window owner) =>
         owner.OwnedWindows.OfType<AvaloniaUserMessageDialog>().Single(window => window.IsVisible);
 
-    private static Task InvokePrivateTaskAsync(MainWindow owner, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Missing production dialog opener {methodName}.");
-        return method.Invoke(owner, null) as Task
-            ?? throw new InvalidOperationException($"Production dialog opener {methodName} did not return Task.");
-    }
-
     private static async Task DrainInputAsync()
     {
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

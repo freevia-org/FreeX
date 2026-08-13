@@ -43,9 +43,9 @@ public sealed class DrawingAnchorOffsetWriterTests
         adapter.Save(workbook, stream);
 
         var (colOff, rowOff) = ReadFirstAnchorOffsets(stream);
-        colOff.Should().Be(DrawingMlUnits.PixelsToEmu(12.5),
+        colOff.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(12.5),
             "a nonzero AnchorOffsetX must be emitted as EMU, not hardcoded to 0");
-        rowOff.Should().Be(DrawingMlUnits.PixelsToEmu(30),
+        rowOff.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(30),
             "a nonzero AnchorOffsetY must be emitted as EMU, not hardcoded to 0");
 
         // Round-trip: reloading must recover the same sub-cell offset (in pixels).
@@ -104,8 +104,8 @@ public sealed class DrawingAnchorOffsetWriterTests
         adapter.Save(workbook, stream);
 
         var (colOff, rowOff) = ReadFirstAnchorOffsets(stream);
-        colOff.Should().Be(DrawingMlUnits.PixelsToEmu(15));
-        rowOff.Should().Be(DrawingMlUnits.PixelsToEmu(5));
+        colOff.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(15));
+        rowOff.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(5));
     }
 
     private static (long ColOff, long RowOff) ReadFirstAnchorOffsets(MemoryStream stream)

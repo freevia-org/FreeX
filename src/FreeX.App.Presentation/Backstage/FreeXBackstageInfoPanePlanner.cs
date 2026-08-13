@@ -79,13 +79,20 @@ public static class FreeXBackstageInfoPanePlanner
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var protectionSectionHeaderKey = surface == FreeXBackstageInfoSurface.AvaloniaLivePane
+            ? "Backstage_LiveInfo_ProtectionSectionHeader"
+            : "Backstage_Info_ProtectionSectionHeader";
+        var statisticsSectionHeaderKey = surface == FreeXBackstageInfoSurface.AvaloniaLivePane
+            ? "Backstage_LiveInfo_StatisticsSectionHeader"
+            : "Backstage_Info_StatisticsSectionHeader";
+
         return new FreeXBackstageInfoPanePlan(
             "MainWindow_Text_Info",
             "MainWindow_Text_WorkbookActions",
             "MainWindow_Text_Properties",
             "Backstage_Info_FileSectionHeader",
-            "Backstage_Info_ProtectionSectionHeader",
-            "Backstage_Info_StatisticsSectionHeader",
+            protectionSectionHeaderKey,
+            statisticsSectionHeaderKey,
             BuildActions(surface),
             BuildDetails(surface, request),
             request.UnsavedChangesNote is null

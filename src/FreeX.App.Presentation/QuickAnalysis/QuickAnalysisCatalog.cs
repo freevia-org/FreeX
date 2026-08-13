@@ -398,7 +398,7 @@ internal static class QuickAnalysisCatalog
             visualKind,
             new QuickAnalysisCommandRoute(
                 QuickAnalysisCommandKind.ConditionalFormat,
-                ConditionalFormat: ToConditionalFormatCommand(formatKind)),
+                ConditionalFormat: QuickAnalysisConditionalFormatCatalog.ForFormatKind(formatKind).Command),
             QuickAnalysisActionKind.ConditionalFormat,
             ConditionalFormat: new QuickAnalysisConditionalFormatAction(formatKind, ruleType));
 
@@ -529,28 +529,6 @@ internal static class QuickAnalysisCatalog
             visualKind,
             route,
             ActionKind: null);
-
-    private static QuickAnalysisConditionalFormatCommand ToConditionalFormatCommand(QuickAnalysisFormatKind formatKind) =>
-        formatKind switch
-        {
-            QuickAnalysisFormatKind.DataBars => QuickAnalysisConditionalFormatCommand.DataBar,
-            QuickAnalysisFormatKind.ColorScale => QuickAnalysisConditionalFormatCommand.ColorScale,
-            QuickAnalysisFormatKind.IconSet => QuickAnalysisConditionalFormatCommand.IconSet,
-            QuickAnalysisFormatKind.GreaterThan => QuickAnalysisConditionalFormatCommand.GreaterThan,
-            QuickAnalysisFormatKind.LessThan => QuickAnalysisConditionalFormatCommand.LessThan,
-            QuickAnalysisFormatKind.Between => QuickAnalysisConditionalFormatCommand.Between,
-            QuickAnalysisFormatKind.EqualTo => QuickAnalysisConditionalFormatCommand.EqualTo,
-            QuickAnalysisFormatKind.TextContains => QuickAnalysisConditionalFormatCommand.TextContains,
-            QuickAnalysisFormatKind.DateOccurring => QuickAnalysisConditionalFormatCommand.DateOccurring,
-            QuickAnalysisFormatKind.DuplicateValues => QuickAnalysisConditionalFormatCommand.DuplicateValues,
-            QuickAnalysisFormatKind.Top10 => QuickAnalysisConditionalFormatCommand.Top10Items,
-            QuickAnalysisFormatKind.Top10Percent => QuickAnalysisConditionalFormatCommand.Top10Percent,
-            QuickAnalysisFormatKind.Bottom10 => QuickAnalysisConditionalFormatCommand.Bottom10Items,
-            QuickAnalysisFormatKind.Bottom10Percent => QuickAnalysisConditionalFormatCommand.Bottom10Percent,
-            QuickAnalysisFormatKind.AboveAverage => QuickAnalysisConditionalFormatCommand.AboveAverage,
-            QuickAnalysisFormatKind.BelowAverage => QuickAnalysisConditionalFormatCommand.BelowAverage,
-            _ => throw new ArgumentOutOfRangeException(nameof(formatKind), formatKind, "Unknown Quick Analysis format kind.")
-        };
 
     private static QuickAnalysisCommandRoute ToTotalRoute(QuickAnalysisTotalFunction function) =>
         function switch

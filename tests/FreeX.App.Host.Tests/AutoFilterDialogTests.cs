@@ -11,8 +11,6 @@ public sealed partial class AutoFilterDialogTests
         var hostSources = DialogSourceTestSupport.ReadHostSources(
             "AutoFilterDialog.cs",
             "AutoFilterDialog.Controls.cs",
-            "AutoFilterDialog.Criteria.cs",
-            "AutoFilterCriteriaLabels.cs",
             "AutoFilterDialog.State.cs");
 
         // The pure criteria planner and the dialog/menu model types moved to the portable
@@ -23,7 +21,9 @@ public sealed partial class AutoFilterDialogTests
             WorkspaceFileLocator.ReadAllText(
                 "src", "FreeX.App.Presentation", "Filtering", "AutoFilterDialogCriteriaPlanner.cs"),
             WorkspaceFileLocator.ReadAllText(
-                "src", "FreeX.App.Presentation", "Filtering", "AutoFilterDialogModel.cs"));
+                "src", "FreeX.App.Presentation", "Filtering", "AutoFilterDialogModel.cs"),
+            WorkspaceFileLocator.ReadAllText(
+                "src", "FreeX.App.Presentation", "Filtering", "AutoFilterMenuPlanner.cs"));
 
         return string.Join(Environment.NewLine, hostSources, portableSources);
     }

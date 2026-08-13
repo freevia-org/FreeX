@@ -39,6 +39,32 @@ public static class ImageAdjustDialogPlanner
     public const string SaturationValidationMessage = "Saturation must be a number between 0 and 400.";
     public const string TransparencyValidationMessage = "Transparency must be a number between 0 and 100.";
 
+    public static DialogSurfaceSpec<ImageAdjustDialogField> DetailedSurface { get; } = new(
+        Title: "Picture Corrections and Color",
+        AutomationId: "ImageAdjustDialog",
+        AutomationName: "Picture Corrections and Color",
+        Fields:
+        [
+            new(ImageAdjustDialogField.Brightness, "Brightness (-100 to +100):", "ImageAdjustBrightnessTextBox", "Picture brightness"),
+            new(ImageAdjustDialogField.Contrast, "Contrast (-100 to +100):", "ImageAdjustContrastTextBox", "Picture contrast"),
+            new(ImageAdjustDialogField.Saturation, "Saturation (0\u2013400, 100=normal):", "ImageAdjustSaturationTextBox", "Picture saturation"),
+            new(ImageAdjustDialogField.Transparency, "Transparency (0\u2013100):", "ImageAdjustTransparencyTextBox", "Picture transparency"),
+        ],
+        ValidationAutomationId: "ImageAdjustValidationText");
+
+    public static DialogSurfaceSpec<ImageAdjustDialogField> CompactSurface { get; } = new(
+        Title: "Picture Corrections",
+        AutomationId: DetailedSurface.AutomationId,
+        AutomationName: "Picture Corrections",
+        Fields:
+        [
+            new(ImageAdjustDialogField.Brightness, "Brightness (-100 to 100):", "ImageAdjustBrightnessTextBox", "Picture brightness"),
+            new(ImageAdjustDialogField.Contrast, "Contrast (-100 to 100):", "ImageAdjustContrastTextBox", "Picture contrast"),
+            new(ImageAdjustDialogField.Saturation, "Saturation (0 to 400):", "ImageAdjustSaturationTextBox", "Picture saturation"),
+            new(ImageAdjustDialogField.Transparency, "Transparency (0 to 100):", "ImageAdjustTransparencyTextBox", "Picture transparency"),
+        ],
+        ValidationAutomationId: DetailedSurface.ValidationAutomationId);
+
     public static ImageAdjustDialogInitialState BuildInitialState(
         double brightnessPct,
         double contrastPct,

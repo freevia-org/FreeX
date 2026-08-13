@@ -9,6 +9,7 @@ using System.Windows.Media.Imaging;
 using FreeX.App.UI;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using Free.ToolsShared;
 using FreeX.ToolsShared;
 using FreeX.ToolsShared.Wpf;
 

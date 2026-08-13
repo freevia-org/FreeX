@@ -190,7 +190,7 @@ public sealed class LinuxFamilyInteractionToolTests
         runner.Should().Contain("contractValidation");
         runner.Should().Contain("parameters.fileKey");
         runner.Should().Contain("appSurface");
-        runner.Should().Contain("Length -le 0");
+        source.Should().Contain("Length -le 0");
         runner.Should().Contain("exhaustive -ne $false");
         runner.Should().Contain("Run-FreeXLinuxInteractionValidation.ps1");
         runner.Should().Contain("$expectedResultCount = if ($App -eq \"FreeP\") { 24 } else { 45 }");
@@ -304,13 +304,16 @@ public sealed class LinuxFamilyInteractionToolTests
     public void FamilyRunnerUsesCurrentAvaloniaRibbonTabKeyTipsAndFileSurfaceContracts()
     {
         var freeWDefinition = File.ReadAllText(RepositoryFileLocator.Find(
-            "freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs"));
+            "freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs"));
+        var freeWCanonicalTabs = File.ReadAllText(RepositoryFileLocator.Find(
+            "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs"));
         var freePResources = File.ReadAllText(RepositoryFileLocator.Find(
             "freep", "FreeP.App.Localization", "Resources", "Strings.resx"));
         var runner = File.ReadAllText(RepositoryFileLocator.Find(
             "tools", "Run-FamilyLinuxInteractionValidation.ps1"));
 
-        freeWDefinition.Should().Contain(".Tab(\"insert\", \"Insert\", \"I\"");
+        freeWDefinition.Should().Contain(".AddInsertTab(capabilities)");
+        freeWCanonicalTabs.Should().Contain(".Tab(\"insert\", \"Insert\", (capabilities.UsesPortableControls ? \"I\" : \"N\")");
         freePResources.Should().Contain("Ribbon_Tab_Insert_KeyTip").And.Contain("<value>N</value>");
         runner.Should().Contain("RibbonTabKey = \"I\"").And.Contain("RibbonTabKey = \"N\"");
         runner.Should().Contain("WindowPattern = \"FreeW\"").And.Contain("WindowPattern = \"FreeP\"");
@@ -400,6 +403,173 @@ public sealed class LinuxFamilyInteractionToolTests
 
         result.ExitCode.Should().Be(0, result.Output);
         result.Output.Should().Contain("settled");
+    }
+
+    [Fact]
+    public void ManifestEvidenceContractHelpers_ValidateAndCompleteTheGenericContract()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var powershell = ResolvePowerShellExecutable();
+        powershell.Should().NotBeNull("the manifest helper regression requires PowerShell");
+
+        using var temporary = new TestTemporaryDirectory();
+        var schemaPath = Path.Combine(temporary.Path, "schema.json");
+        var evidencePath = Path.Combine(temporary.Path, "proof.txt");
+        var manifestPath = Path.Combine(temporary.Path, "manifest.json");
+        File.WriteAllText(schemaPath, "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\"}", Encoding.UTF8);
+        File.WriteAllText(evidencePath, "proof", Encoding.UTF8);
+        File.WriteAllText(manifestPath, JsonSerializer.Serialize(new
+        {
+            schemaVersion = 1,
+            suite = "synthetic-validation",
+            platform = "linux",
+            shell = "avalonia",
+            app = "FreeX",
+            baseline = false,
+            contractValidation = new { status = "pending" },
+            summary = new { passed = 1, failed = 0, total = 1 },
+            results = new[]
+            {
+                new
+                {
+                    id = "ok",
+                    category = "physical-x11-synthetic",
+                    status = "passed",
+                    evidenceLevel = "physical-x11-input",
+                    evidence = new[] { "proof.txt" },
+                    note = "Synthetic proof"
+                }
+            },
+            screenshots = Array.Empty<object>()
+        }), Encoding.UTF8);
+
+        var helperPath = RepositoryFileLocator.Find("tools", "LinuxInteractiveDocker", "ManifestEvidence.ps1");
+        var command =
+            $". '{EscapePowerShell(helperPath)}'; " +
+            $"$manifest = Read-ManifestContract -ManifestPath '{EscapePowerShell(manifestPath)}' -SchemaPath '{EscapePowerShell(schemaPath)}'; " +
+            "$results = @($manifest.results); " +
+            "Assert-ManifestContractPending -Manifest $manifest; " +
+            "Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{ schemaVersion = 1; suite = 'synthetic-validation'; platform = 'linux'; shell = 'avalonia'; app = 'FreeX'; baseline = $false }); " +
+            "Assert-ManifestResultIds -Results $results -ExpectedIds @('ok'); " +
+            "Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 1 -RequireCompleteStatuses; " +
+            $"$map = Get-ManifestEvidenceFileMap -EvidenceDirectory '{EscapePowerShell(temporary.Path)}'; " +
+            "Assert-ManifestResultEvidence -Results $results -FileMap $map -Category 'physical-x11-synthetic' -EvidenceLevel 'physical-x11-input' -ValidStatuses @('passed') -RequireNote; " +
+            "Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $map -ExpectedCount 0 -RequireKind; " +
+            "$rejected = $false; try { Assert-ManifestEvidenceReference -FileMap $map -Name '../proof.txt' -Owner 'Result bad' } catch { $rejected = $true }; " +
+            "if (-not $rejected) { throw 'non-basename evidence was accepted' }; " +
+            $"Complete-ManifestContract -Manifest $manifest -ManifestPath '{EscapePowerShell(manifestPath)}' -Validator 'test-validator' -ContractReference 'schema.json' | Out-Null; " +
+            "'validated'";
+
+        var result = RunPowerShellCommand(powershell!, command);
+
+        result.ExitCode.Should().Be(0, result.Output);
+        result.Output.Should().Contain("validated");
+        using var completed = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        completed.RootElement.GetProperty("contractValidation").GetProperty("status").GetString()
+            .Should().Be("passed");
+    }
+
+    [Fact]
+    public void ToolTemporaryDirectoryHelpers_CreateAndGuardOwnedDirectories()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var powershell = ResolvePowerShellExecutable();
+        powershell.Should().NotBeNull("the temporary-directory regression requires PowerShell");
+        var helperPath = RepositoryFileLocator.Find("tools", "ToolScriptSupport.ps1");
+        var repositoryRoot = Path.GetDirectoryName(Path.GetDirectoryName(helperPath))!;
+        var command =
+            $". '{EscapePowerShell(helperPath)}'; " +
+            "$errors = [Collections.Generic.List[string]]::new(); $env:GITHUB_ACTIONS = 'true'; " +
+            "Add-ToolValidationError -Errors $errors -Message \"percent%`r`nline\" -GitHubTitle 'Synthetic readiness' -SuppressWriteError; " +
+            "if ($errors.Count -ne 1) { throw 'validation error was not collected' }; " +
+            "$path = New-ToolTemporaryDirectory -Prefix 'freex-tool-test-'; " +
+            "if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw 'temporary directory was not created' }; " +
+            "Set-Content -LiteralPath (Join-Path $path 'owned.txt') -Value 'proof'; " +
+            "Remove-ToolTemporaryDirectory -Path $path; " +
+            "if (Test-Path -LiteralPath $path) { throw 'temporary directory was not removed' }; " +
+            $"$rejected = $false; try {{ Remove-ToolTemporaryDirectory -Path '{EscapePowerShell(repositoryRoot)}' }} catch {{ $rejected = $true }}; " +
+            "if (-not $rejected) { throw 'non-temporary directory was accepted' }; 'validated'";
+
+        var result = RunPowerShellCommand(powershell!, command);
+
+        result.ExitCode.Should().Be(0, result.Output);
+        result.Output.Should().Contain("validated");
+        result.Output.Should().Contain("::error title=Synthetic readiness::percent%25%0D%0Aline");
+    }
+
+    [Fact]
+    public void ProbeScriptSupport_OwnsSharedRotatedAndTransformedX11Primitives()
+    {
+        var support = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "ProbeScriptSupport.sh"));
+        foreach (var helper in new[]
+        {
+            "probe_capture()",
+            "probe_focus_owner()",
+            "probe_send_owner_key()",
+            "probe_capture_window_state()"
+        })
+        {
+            support.Should().Contain(helper);
+        }
+
+        foreach (var probeName in new[]
+        {
+            "run-freep-rotated-shape-text-edit.sh",
+            "run-freep-transformed-table-cell-edit.sh"
+        })
+        {
+            var probe = File.ReadAllText(RepositoryFileLocator.Find(
+                "tools", "LinuxInteractiveDocker", probeName));
+            probe.Should().Contain("ProbeScriptSupport.sh")
+                .And.NotContain("capture()")
+                .And.NotContain("focus_owner()")
+                .And.NotContain("send_owner_key()")
+                .And.NotContain("capture_window_state()");
+        }
+    }
+
+    [Fact]
+    public void PhysicalValidationSupport_OwnsFixtureInvocationAndKeyValueParsing()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var supportPath = RepositoryFileLocator.Find("tools", "PhysicalValidationScriptSupport.ps1");
+        var support = File.ReadAllText(supportPath);
+        support.Should().Contain("function Invoke-PhysicalValidationFixture")
+            .And.Contain("function ConvertFrom-PhysicalValidationKeyValueLines")
+            .And.Contain("function Read-PhysicalValidationFixtureValues")
+            .And.Contain("--configuration Release --no-restore");
+
+        foreach (var runnerName in new[]
+        {
+            "Run-FreeWWave61GroupedChildValidation.ps1",
+            "Run-FreeWWave62NestedGroupChildValidation.ps1",
+            "Run-FreeWWave63NestedEditPointsValidation.ps1",
+            "Run-FreeWWave64NestedTextValidation.ps1"
+        })
+        {
+            var runner = File.ReadAllText(RepositoryFileLocator.Find("tools", runnerName));
+            runner.Should().Contain("PhysicalValidationScriptSupport.ps1")
+                .And.NotContain("function Invoke-Fixture")
+                .And.NotContain("function Read-Geometry");
+        }
+
+        var powershell = ResolvePowerShellExecutable();
+        powershell.Should().NotBeNull("the physical validation helper regression requires PowerShell");
+        var command =
+            $". '{EscapePowerShell(supportPath)}'; " +
+            "$values = ConvertFrom-PhysicalValidationKeyValueLines -Lines @('alpha=one=two', 'ignored', 'beta=3'); " +
+            "\"$($values['alpha'])|$($values['beta'])\"";
+        var result = RunPowerShellCommand(powershell!, command);
+
+        result.ExitCode.Should().Be(0, result.Output);
+        result.Output.Should().Contain("one=two|3");
     }
 
     private static string EscapePowerShell(string value) => value.Replace("'", "''", StringComparison.Ordinal);

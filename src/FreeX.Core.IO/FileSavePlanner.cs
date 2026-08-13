@@ -1,3 +1,5 @@
+using Free.Shared.IO;
+
 namespace FreeX.Core.IO;
 
 public sealed record FileSaveTarget(string Path, IFileAdapter Adapter);
@@ -34,8 +36,8 @@ public static class FileSavePlanner
             return false;
         }
 
-        return TryNormalizePath(currentFilePath, out var current) &&
-               TryNormalizePath(targetPath, out var target) &&
+        return FilePathPolicy.TryGetFullPath(currentFilePath, out var current) &&
+               FilePathPolicy.TryGetFullPath(targetPath, out var target) &&
                string.Equals(current, target, pathComparison);
     }
 
@@ -49,7 +51,7 @@ public static class FileSavePlanner
             return false;
 
         var savePath = currentFilePath.Trim();
-        if (!TryGetExtension(savePath, out var extension))
+        if (!FilePathPolicy.TryGetExtension(savePath, out var extension))
             return false;
 
         var adapter = FileFormatResolver.FindSaveAdapter(adapters, extension, out _);
@@ -58,68 +60,6 @@ public static class FileSavePlanner
 
         target = new FileSaveTarget(savePath, adapter);
         return true;
-    }
-
-    private static bool ContainsInvalidPathCharacters(string path) =>
-        path.Contains('\0', StringComparison.Ordinal) ||
-        path.IndexOfAny(Path.GetInvalidPathChars()) >= 0;
-
-    private static bool TryGetExtension(string path, out string extension)
-    {
-        try
-        {
-            if (ContainsInvalidPathCharacters(path))
-            {
-                extension = "";
-                return false;
-            }
-
-            extension = Path.GetExtension(path) ?? "";
-            return !string.IsNullOrWhiteSpace(extension);
-        }
-        catch (ArgumentException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            extension = "";
-            return false;
-        }
-    }
-
-    private static bool TryNormalizePath(string path, out string normalized)
-    {
-        normalized = "";
-        try
-        {
-            var trimmed = path.Trim();
-            if (ContainsInvalidPathCharacters(trimmed))
-            {
-                return false;
-            }
-
-            normalized = Path.GetFullPath(trimmed);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            return false;
-        }
     }
 
     private static StringComparison PathComparison =>

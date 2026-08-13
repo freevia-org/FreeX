@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using FreeX.App.Services;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using Free.ToolsShared;
 using FreeX.ToolsShared;
 
 namespace FreeX.FormatCrossCheck;

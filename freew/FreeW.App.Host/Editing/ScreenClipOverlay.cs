@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeW.App.Presentation.Dialogs;
 using WpfRectangle = System.Windows.Shapes.Rectangle;
 
 namespace FreeW.App.Host.Editing;
@@ -13,12 +14,11 @@ namespace FreeW.App.Host.Editing;
 /// <see cref="ScreenshotCapture.CaptureRegionPng"/>); pressing Escape, right-clicking, or a zero-size
 /// drag cancels and returns <see langword="null"/>.
 /// </summary>
-internal sealed class ScreenClipOverlay : Window
+internal sealed partial class ScreenClipOverlay : Window
 {
     private readonly Canvas _canvas;
     private readonly WpfRectangle _selection;
-    private System.Windows.Point _origin;
-    private bool _dragging;
+    private readonly ScreenClipSelectionSession _selectionSession = new();
     private System.Drawing.Rectangle? _resultPhysical;
 
     private ScreenClipOverlay()
@@ -84,71 +84,61 @@ internal sealed class ScreenClipOverlay : Window
 
     private void OnMouseDown(object sender, MouseButtonEventArgs e)
     {
-        _origin = e.GetPosition(_canvas);
-        _dragging = true;
-        Canvas.SetLeft(_selection, _origin.X);
-        Canvas.SetTop(_selection, _origin.Y);
-        _selection.Width = 0;
-        _selection.Height = 0;
-        _selection.Visibility = Visibility.Visible;
+        var point = e.GetPosition(_canvas);
+        ApplySelectionVisual(_selectionSession.Begin(point.X, point.Y));
         _canvas.CaptureMouse();
     }
 
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
-        if (!_dragging)
-            return;
-
         var current = e.GetPosition(_canvas);
-        var x = System.Math.Min(_origin.X, current.X);
-        var y = System.Math.Min(_origin.Y, current.Y);
-        Canvas.SetLeft(_selection, x);
-        Canvas.SetTop(_selection, y);
-        _selection.Width = System.Math.Abs(current.X - _origin.X);
-        _selection.Height = System.Math.Abs(current.Y - _origin.Y);
+        if (_selectionSession.Update(current.X, current.Y) is { } update)
+            ApplySelectionVisual(update);
     }
 
     private void OnMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_dragging)
-            return;
-        _dragging = false;
-        _canvas.ReleaseMouseCapture();
-
         var current = e.GetPosition(_canvas);
-        _resultPhysical = ToPhysicalScreenRect(_origin, current);
+        if (_selectionSession.Complete(current.X, current.Y) is not { } completion)
+            return;
+
+        _canvas.ReleaseMouseCapture();
+        _resultPhysical = ToPhysicalScreenRect(completion.Origin, completion.Current);
         Close();
     }
 
     private void Cancel()
     {
+        _selectionSession.Cancel();
         _resultPhysical = null;
         Close();
     }
 
-    // Map the DIP selection (relative to the overlay) back to absolute physical screen pixels.
-    private System.Drawing.Rectangle? ToPhysicalScreenRect(System.Windows.Point a, System.Windows.Point b)
+    private void ApplySelectionVisual(ScreenClipSelectionUpdate update)
     {
-        var topLeftDip = new System.Windows.Point(System.Math.Min(a.X, b.X), System.Math.Min(a.Y, b.Y));
-        var bottomRightDip = new System.Windows.Point(System.Math.Max(a.X, b.X), System.Math.Max(a.Y, b.Y));
+        Canvas.SetLeft(_selection, update.Bounds.Left);
+        Canvas.SetTop(_selection, update.Bounds.Top);
+        _selection.Width = update.Bounds.Width;
+        _selection.Height = update.Bounds.Height;
+        _selection.Visibility = Visibility.Visible;
+    }
 
+    // Map the DIP selection (relative to the overlay) back to absolute physical screen pixels.
+    private System.Drawing.Rectangle? ToPhysicalScreenRect(ScreenClipPoint a, ScreenClipPoint b)
+    {
         var source = PresentationSource.FromVisual(this);
         if (source is null)
             return null;
 
         // PointToScreen yields absolute physical device pixels (accounts for window position + DPI).
-        var topLeftPx = PointToScreen(topLeftDip);
-        var bottomRightPx = PointToScreen(bottomRightDip);
-
-        var width = (int)System.Math.Round(bottomRightPx.X - topLeftPx.X);
-        var height = (int)System.Math.Round(bottomRightPx.Y - topLeftPx.Y);
-        if (width <= 0 || height <= 0)
-            return null;
-
-        return new System.Drawing.Rectangle(
-            (int)System.Math.Round(topLeftPx.X),
-            (int)System.Math.Round(topLeftPx.Y),
-            width,
-            height);
+        var startPx = PointToScreen(new System.Windows.Point(a.X, a.Y));
+        var endPx = PointToScreen(new System.Windows.Point(b.X, b.Y));
+        return ScreenClipPlanner.BuildPhysicalSelectionFromMappedEndpoints(
+            startPx.X,
+            startPx.Y,
+            endPx.X,
+            endPx.Y) is { } region
+                ? new System.Drawing.Rectangle(region.X, region.Y, region.Width, region.Height)
+                : null;
     }
 }

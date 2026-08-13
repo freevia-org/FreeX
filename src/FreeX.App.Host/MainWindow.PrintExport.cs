@@ -1,10 +1,10 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Documents;
-using System.Windows.Markup;
+using Free.Shared.Shell.Wpf;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -18,12 +18,20 @@ public partial class MainWindow
     /// (R15-header-footer-print-titles-2); empty when the workbook has never been saved.
     /// </summary>
     private string ResolveWorkbookDirectoryForHeaderFooter() =>
-        Path.GetDirectoryName(_currentFilePath) is { Length: > 0 } directory
-            ? directory + Path.DirectorySeparatorChar
-            : "";
+        PagePrintTextPlanner.ResolveWorkbookDirectoryTokenValue(_currentFilePath);
 
     private void PrintButton_Click(object sender, RoutedEventArgs e)
     {
+        var workflowPlan = WorkbookPrintWorkflow.CreatePlan(
+            _workbook,
+            SheetGrid.SelectedRange is not null,
+            new PrintJobRequest(
+                WorkbookExportPrintScope.ActiveSheet,
+                ActiveSheetIndex: _workbook.ActiveSheetIndex),
+            PrintExportHostCapabilities.WindowsWpf());
+        if (!workflowPlan.IsReady)
+            return;
+
         var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
         var sheet = _workbook.GetSheet(_currentSheetId);
         var settings = sheet is null
@@ -86,23 +94,8 @@ public partial class MainWindow
             {
                 var rangedDoc = new FixedDocument();
                 rangedDoc.DocumentPaginator.PageSize = document.DocumentPaginator.PageSize;
-                // Each source PageContent (and its FixedPage) is still a logical child of the
-                // source 'document'; WPF's PageContentCollection.Add throws InvalidOperationException
-                // ("already the logical child of another element") if we add one still parented
-                // elsewhere, and PageContentCollection exposes no Remove. So detach each selected
-                // page's FixedPage and re-wrap it in a fresh PageContent added to rangedDoc.
-                // 'document' is discarded once this subset is built (reassigned below, never read).
-                var selectedPages = new List<PageContent>();
                 for (var i = from - 1; i <= to - 1 && i < document.Pages.Count; i++)
-                    selectedPages.Add(document.Pages[i]);
-                foreach (var page in selectedPages)
-                {
-                    var fixedPage = page.Child;
-                    page.Child = null;
-                    var moved = new PageContent();
-                    ((IAddChild)moved).AddChild(fixedPage);
-                    rangedDoc.Pages.Add(moved);
-                }
+                    rangedDoc.Pages.Add(PrintRenderer.ClonePageAsBitmap(document, document.Pages[i]));
                 document = rangedDoc;
             }
         }
@@ -129,24 +122,30 @@ public partial class MainWindow
             UiText.Get("MainWindowDialog_ExportPdfXpsTitle"));
         if (!saveResult.Chosen) return;
 
-        var selectedExportFileFormat = ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex);
-        var selectedFormat = selectedExportFileFormat == ExportFileFormat.Xps
-            ? ExportFormat.Xps
-            : ExportFormat.Pdf;
-        var optionsDialog = new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage, selectedFormat) { Owner = this };
+        var selectedFormat = ExportFormatCatalog.Get(
+            ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex)).Format;
+        var commandPlan = WorkbookExportInteractionPlanner.CreateCommandPlan(
+            _workbook,
+            SheetGrid.SelectedRange,
+            WorkbookExportPrintSurface.WindowsDesktop);
+        var optionsDialog = new ExportOptionsDialog(commandPlan.HasSelection, _options.PdfExportLanguage, selectedFormat) { Owner = this };
         if (optionsDialog.ShowDialog() != true)
             return;
 
-        if (selectedFormat == ExportFormat.Pdf)
+        var requestPlan = WorkbookExportInteractionPlanner.CreateRequestPlan(
+            saveResult.FileName!,
+            selectedFormat,
+            optionsDialog.Result,
+            File.Exists);
+        if (requestPlan.ShouldPersistPdfLanguage)
         {
-            _options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;
-            _options.Save();
+            MutateRuntimeOptions(options =>
+                options.PdfExportLanguage = optionsDialog.Result.PdfLanguage);
         }
 
-        var request = ExportPlanner.PlanExport(saveResult.FileName!, selectedFormat, optionsDialog.Result);
-        if (ExportPlanner.ShouldPromptForNormalizedOverwrite(saveResult.FileName!, request, File.Exists) &&
+        if (requestPlan.ShouldConfirmNormalizedOverwrite &&
             ShowOwnedMessage(
-                UiText.Format("MainWindowMessage_ExportNormalizedOverwritePrompt", request.Path),
+                UiText.Format("MainWindowMessage_ExportNormalizedOverwritePrompt", requestPlan.Request.Path),
                 UiText.Get("MainWindowDialog_ExportPdfXpsTitle"),
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning) != MessageBoxResult.Yes)
@@ -154,24 +153,37 @@ public partial class MainWindow
             return;
         }
 
-        if (!ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError, WpfExportPlannerTextResolver.Instance))
+        var exportResult = await WorkbookExportWorkflow.ExecuteBooleanAsync(
+            requestPlan.Request,
+            (effectiveRequest, _) => effectiveRequest.Format == ExportFormat.Pdf
+                ? ExportAsPdf(
+                    effectiveRequest.Path,
+                    WpfExportDescriptionPlanner.DescribeRequest(effectiveRequest),
+                    effectiveRequest.Options)
+                : ExportAsXps(
+                    effectiveRequest.Path,
+                    WpfExportDescriptionPlanner.DescribeRequest(effectiveRequest),
+                    effectiveRequest.Options),
+            WpfExportPlannerTextResolver.Instance);
+        var resultPlan = WorkbookExportInteractionPlanner.CreateResultPlan(
+            exportResult,
+            IsStartScreenVisible(),
+            adapterOwnsFailurePresentation: true);
+        if (resultPlan.ShouldPresentIssue)
         {
             ShowOwnedMessage(
-                publishOptionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions"),
+                resultPlan.Message,
                 UiText.Get("MainWindowMessage_ExportOptionsTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;
         }
 
-        var exported = request.Format == ExportFormat.Pdf
-            ? await ExportAsPdf(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options)
-            : await ExportAsXps(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options);
-        if (exported && request.Options.OpenAfterPublish)
-            OpenExportedFile(request.ActualPath);
+        if (resultPlan.ShouldOpenDestination)
+            OpenExportedFile(resultPlan.DestinationPath);
         // Return to the workbook after a successful export instead of leaving the user
         // stranded in the File backstage (Issue 118).
-        if (exported && IsStartScreenVisible())
+        if (resultPlan.ShouldCloseBackstage)
             HideStartScreen();
     }
 
@@ -197,7 +209,7 @@ public partial class MainWindow
             if (!ExportPlanner.TryValidatePageRange(effectiveOptions.PageRange, document.Pages.Count, out var pageRangeError, WpfExportPlannerTextResolver.Instance))
                 throw new InvalidOperationException(pageRangeError);
 
-            var properties = PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions);
+            var properties = PdfDocumentExporter.CreateProperties(_workbook, effectiveOptions);
             var bookmarks = CreatePdfBookmarks(effectiveOptions);
 
             // Render the PDF bytes on the UI thread (WPF visual tree access), then flush to disk on a
@@ -218,7 +230,7 @@ public partial class MainWindow
                 UiText.Get("Progress_ExportingFileWriting"),
                 50);
 
-            await Task.Run(() => ExportAtomicWriter.WriteAllBytes(pdfPath, pdfBytes));
+            await Task.Run(() => AtomicFileWriter.WriteAllBytes(pdfPath, pdfBytes));
 
             ShowOwnedMessage(
                 UiText.Format("MainWindowMessage_ExportPdfSavedFormat", optionSummary, pdfPath),
@@ -305,7 +317,8 @@ public partial class MainWindow
 
             // Write to a sibling temp file so that a mid-write failure does not corrupt or lock the
             // destination the user chose, then atomically replace the destination on success.
-            var tempPath = ExportAtomicWriter.CreateTempPath(xpsPath);
+            using var temporaryFile = AtomicFileWriter.CreateTempLease(xpsPath);
+            var tempPath = temporaryFile.Path;
             try
             {
                 // Open the XPS package for write and close it before replacing the destination.
@@ -317,7 +330,9 @@ public partial class MainWindow
                     System.IO.FileMode.Create,
                     System.IO.FileAccess.ReadWrite))
                 {
-                    XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions));
+                    XpsPackagePropertiesAdapter.Apply(
+                        pkg,
+                        ExportDocumentPropertiesPlanner.FromWorkbook(_workbook, effectiveOptions));
 
                     using var xpsDoc = new System.Windows.Xps.Packaging.XpsDocument(pkg);
 
@@ -336,16 +351,14 @@ public partial class MainWindow
                     writer.Write(paginator);
                 }
 
-                ExportAtomicWriter.ReplaceTarget(tempPath, xpsPath);
+                AtomicFileWriter.ReplaceTarget(tempPath, xpsPath);
+                temporaryFile.Commit();
             }
             catch
             {
                 // On any failure ensure the temp artifact is cleaned up.  The destination is
                 // untouched — ReplaceTarget has not been called yet.
-                if (File.Exists(tempPath))
-                {
-                    try { File.Delete(tempPath); } catch { /* best effort */ }
-                }
+                temporaryFile.Release();
 
                 throw;
             }
@@ -446,55 +459,8 @@ public partial class MainWindow
         return result;
     }
 
-    private static PageContent CloneExportPage(FixedDocument document, PageContent pageContent)
-    {
-        pageContent.GetPageRoot(forceReload: false);
-        var sourcePage = pageContent.Child ??
-            throw new InvalidOperationException("FixedDocument page content did not contain a FixedPage.");
-        var width = sourcePage.Width > 0 && !double.IsNaN(sourcePage.Width)
-            ? sourcePage.Width
-            : document.DocumentPaginator.PageSize.Width;
-        var height = sourcePage.Height > 0 && !double.IsNaN(sourcePage.Height)
-            ? sourcePage.Height
-            : document.DocumentPaginator.PageSize.Height;
-        var size = new Size(width, height);
-        sourcePage.Measure(size);
-        sourcePage.Arrange(new Rect(size));
-        sourcePage.UpdateLayout();
-        var textOverlays = PdfTextOverlayExtractor.Extract(sourcePage);
-        var linkOverlays = PdfLinkOverlayExtractor.Extract(sourcePage);
-        var cellDestinationOverlays = PdfCellDestinationOverlayExtractor.Extract(sourcePage);
-
-        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
-            Math.Max(1, (int)Math.Ceiling(width)),
-            Math.Max(1, (int)Math.Ceiling(height)),
-            96,
-            96,
-            System.Windows.Media.PixelFormats.Pbgra32);
-        bitmap.Render(sourcePage);
-        bitmap.Freeze();
-
-        var fixedPage = new FixedPage { Width = width, Height = height };
-        fixedPage.Children.Add(new System.Windows.Controls.Image
-        {
-            Source = bitmap,
-            Width = width,
-            Height = height
-        });
-        if (textOverlays.Count > 0 || linkOverlays.Count > 0 || cellDestinationOverlays.Count > 0)
-        {
-            fixedPage.Children.Add(new VisualHost
-            {
-                TextOverlays = textOverlays,
-                LinkOverlays = linkOverlays,
-                CellDestinationOverlays = cellDestinationOverlays
-            });
-        }
-
-        var clone = new PageContent();
-        ((System.Windows.Markup.IAddChild)clone).AddChild(fixedPage);
-        return clone;
-    }
+    private static PageContent CloneExportPage(FixedDocument document, PageContent pageContent) =>
+        PrintRenderer.ClonePageAsBitmap(document, pageContent);
 
     private IReadOnlyList<PdfBookmark>? CreatePdfBookmarks(ExportOptions options)
     {
@@ -570,25 +536,15 @@ public partial class MainWindow
         ExportOptions options,
         System.Windows.Documents.DocumentPaginator paginator) =>
         options.PageRange is { } pageRange
-            ? new PageRangeDocumentPaginator(paginator, pageRange)
+            ? WpfPageRangeDocumentPaginator.CreateValidatedInclusive(
+                paginator,
+                pageRange.FromPage,
+                pageRange.ToPage)
             : paginator;
 
     private static void OpenExportedFile(string path)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            return;
-
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = path,
-                UseShellExecute = true
-            });
-        }
-        catch
-        {
-            // Export has already succeeded; opening the shell association is best effort.
-        }
+        // Export has already succeeded; opening the shell association remains best effort.
+        _ = DesktopPathLauncher.OpenFile(path);
     }
 }

@@ -61,6 +61,38 @@ public sealed class BackstageRecentFileListPlannerTests
     }
 
     [Fact]
+    public void SelectPinnedFirst_ComposesCappedLiveBackstageRows()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var plan = BackstageRecentFileListPlanner.Build(
+            new[]
+            {
+                new RecentFileEntry { Path = @"C:\Work\Recent.xlsx", LastOpened = now },
+                new RecentFileEntry { Path = @"C:\Work\OlderPinned.xlsx", LastOpened = now.AddDays(-2), IsPinned = true },
+                new RecentFileEntry { Path = @"C:\Work\NewerPinned.xlsx", LastOpened = now.AddDays(-1), IsPinned = true },
+            },
+            filter: null);
+
+        var rows = BackstageRecentFileListPlanner.SelectPinnedFirst(plan, maximumCount: 2);
+
+        rows.Select(item => item.FileName).Should().Equal("NewerPinned.xlsx", "OlderPinned.xlsx");
+    }
+
+    [Fact]
+    public void Build_PreservesPortableFileAccessIdentityForRendererOpenAction()
+    {
+        var identity = new WorkbookFileAccessIdentity(
+            @"C:\Work\Budget.xlsx",
+            bookmarkKind: "security-scoped",
+            bookmarkPayload: "bookmark");
+        var plan = BackstageRecentFileListPlanner.Build(
+            [new RecentFileEntry { Path = identity.LocalPath, FileAccessIdentity = identity }],
+            filter: null);
+
+        plan.AllItems.Single().FileAccessIdentity.Should().BeSameAs(identity);
+    }
+
+    [Fact]
     public void Build_RemovesMissingFilesBeforeSplittingRecentAndPinnedItems()
     {
         var entries = new[]

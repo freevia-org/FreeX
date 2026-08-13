@@ -867,9 +867,9 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 XlsxWorkbookPivotCachesNormalizer.NormalizeWorkbookRoot(root, workbookNs);
         }
         if (workbookXml.Root?.Element(workbookNs + "workbookPr") is { } workbookPr)
-            XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr);
+            XlsxWorkbookLeafElementNormalizer.Normalize(workbookPr);
         if (workbookXml.Root?.Element(workbookNs + "fileVersion") is { } fileVersion)
-            XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
+            XlsxWorkbookLeafElementNormalizer.Normalize(fileVersion);
         if (workbookXml.Root?.Element(workbookNs + "functionGroups") is { } functionGroups)
             XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
         if (workbookXml.Root?.Element(workbookNs + "smartTagPr") is { } smartTagPr)
@@ -883,13 +883,13 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         if (workbookXml.Root?.Element(workbookNs + "bookViews") is { } bookViews)
             XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews);
         if (workbookXml.Root?.Element(workbookNs + "calcPr") is { } calcPr)
-            XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr);
+            XlsxWorkbookLeafElementNormalizer.Normalize(calcPr);
         if (workbookXml.Root?.Element(workbookNs + "fileSharing") is { } fileSharing)
-            XlsxWorkbookFileSharingNormalizer.NormalizeElement(fileSharing);
+            XlsxWorkbookLeafElementNormalizer.Normalize(fileSharing);
         foreach (var fileRecoveryPr in workbookXml.Root?.Elements(workbookNs + "fileRecoveryPr") ?? [])
-            XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(fileRecoveryPr);
+            XlsxWorkbookLeafElementNormalizer.Normalize(fileRecoveryPr);
         if (workbookXml.Root?.Element(workbookNs + "workbookProtection") is { } workbookProtection)
-            XlsxWorkbookProtectionNormalizer.NormalizeElement(workbookProtection);
+            XlsxWorkbookLeafElementNormalizer.Normalize(workbookProtection);
         if (workbookXml.Root is { } workbookRoot)
         {
             foreach (var customWorkbookViews in workbookRoot.Elements(workbookNs + "customWorkbookViews").ToList())
@@ -1674,7 +1674,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 "calcPr",
                 "http://schemas.openxmlformats.org/spreadsheetml/2006/main"));
             return calcPr is not null &&
-                   XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr);
+                   XlsxWorkbookLeafElementNormalizer.Normalize(calcPr);
         }
         catch
         {
@@ -1692,7 +1692,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
         var calcPr = workbookXml.Root?.Element(workbookNs + "calcPr");
         if (calcPr is not null &&
-            XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr))
+            XlsxWorkbookLeafElementNormalizer.Normalize(calcPr))
         {
             XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
         }
@@ -1711,7 +1711,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 "fileSharing",
                 "http://schemas.openxmlformats.org/spreadsheetml/2006/main"));
             return fileSharing is not null &&
-                   XlsxWorkbookFileSharingNormalizer.NormalizeElement(fileSharing);
+                   XlsxWorkbookLeafElementNormalizer.Normalize(fileSharing);
         }
         catch
         {
@@ -1729,7 +1729,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
         var fileSharing = workbookXml.Root?.Element(workbookNs + "fileSharing");
         if (fileSharing is not null &&
-            XlsxWorkbookFileSharingNormalizer.NormalizeElement(fileSharing))
+            XlsxWorkbookLeafElementNormalizer.Normalize(fileSharing))
         {
             XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
         }
@@ -1749,7 +1749,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                          "fileRecoveryPr",
                          "http://schemas.openxmlformats.org/spreadsheetml/2006/main")) ?? [])
             {
-                changed |= XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(fileRecoveryPr);
+                changed |= XlsxWorkbookLeafElementNormalizer.Normalize(fileRecoveryPr);
             }
 
             return changed;
@@ -1770,7 +1770,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
         var changed = false;
         foreach (var fileRecoveryPr in workbookXml.Root?.Elements(workbookNs + "fileRecoveryPr") ?? [])
-            changed |= XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(fileRecoveryPr);
+            changed |= XlsxWorkbookLeafElementNormalizer.Normalize(fileRecoveryPr);
 
         if (changed)
             XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
@@ -1789,7 +1789,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 "workbookProtection",
                 "http://schemas.openxmlformats.org/spreadsheetml/2006/main"));
             return workbookProtection is not null &&
-                   XlsxWorkbookProtectionNormalizer.NormalizeElement(workbookProtection);
+                   XlsxWorkbookLeafElementNormalizer.Normalize(workbookProtection);
         }
         catch
         {
@@ -1807,7 +1807,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
         var workbookProtection = workbookXml.Root?.Element(workbookNs + "workbookProtection");
         if (workbookProtection is not null &&
-            XlsxWorkbookProtectionNormalizer.NormalizeElement(workbookProtection))
+            XlsxWorkbookLeafElementNormalizer.Normalize(workbookProtection))
         {
             XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
         }
@@ -1958,7 +1958,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
         var changed = false;
         if (root.Element(workbookNs + "workbookPr") is { } workbookPr)
-            changed |= XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr);
+            changed |= XlsxWorkbookLeafElementNormalizer.Normalize(workbookPr);
         foreach (var customWorkbookViews in root.Elements(workbookNs + "customWorkbookViews").ToList())
         {
             changed |= XlsxWorkbookCustomViewNormalizer.NormalizeCustomWorkbookViewsElement(customWorkbookViews);
@@ -1982,7 +1982,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         changed |= XlsxWorkbookPivotCachesNormalizer.NormalizeWorkbookRoot(root, workbookNs);
         changed |= XlsxWorkbookExtensionListNormalizer.NormalizeWorkbookRoot(root, workbookNs);
         if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
-            changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
+            changed |= XlsxWorkbookLeafElementNormalizer.Normalize(fileVersion);
         if (root.Element(workbookNs + "functionGroups") is { } functionGroups)
             changed |= XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
 

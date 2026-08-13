@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -325,7 +326,7 @@ public sealed partial class MainWindow
             return;
 
         RunDrawingObjectCommand(
-            new SetPictureCropCommand(_session.ActiveSheet.Id, current.Id, result.Left, result.Top, result.Right, result.Bottom),
+            PictureCropDialogPlanner.BuildCommand(_session.ActiveSheet.Id, current.Id, result),
             UiText.Get("PictureCrop_Applied"),
             "Crop Picture");
     }
@@ -343,7 +344,7 @@ public sealed partial class MainWindow
 
         _isPictureCropMode = true;
         RunDrawingObjectCommand(
-            new SetPictureCropCommand(_session.ActiveSheet.Id, picture.Id, 0, 0, 0, 0),
+            PictureCropDialogPlanner.BuildResetCommand(_session.ActiveSheet.Id, picture.Id),
             UiText.Get("PictureCrop_Applied"),
             "Crop Picture");
     }
@@ -367,18 +368,13 @@ public sealed partial class MainWindow
         if (ResolveSelectedShape() is not { } shape)
             return;
 
-        var plan = ShapeEffectsPlanner.CreatePlan(shape.GetEffectiveEffectPreset());
-        var options = plan.Options
-            .Select(option => new ShapeEffectsChoice(
-                option.Preset,
-                UiText.Get(option.LabelKey),
-                UiText.Get(option.DescriptionKey)))
-            .ToArray();
+        var plan = ShapeEffectsPlanner.CreateResolvedPlan(shape.GetEffectiveEffectPreset(), UiText.Get);
 
         var effectBox = new ComboBox
         {
-            ItemsSource = options,
-            SelectedIndex = ShapeEffectsPlanner.FindOptionIndex(plan.Options, plan.SelectedPreset),
+            ItemsSource = plan.Options,
+            SelectedItem = plan.SelectedOption,
+            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ShapeEffectsPlanner.ResolvedShapeEffectOption.Label)),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         effectBox.Margin = new Thickness(0, 0, 0, 10);
@@ -393,7 +389,7 @@ public sealed partial class MainWindow
 
         void UpdateDescription()
         {
-            descriptionText.Text = effectBox.SelectedItem is ShapeEffectsChoice choice
+            descriptionText.Text = effectBox.SelectedItem is ShapeEffectsPlanner.ResolvedShapeEffectOption choice
                 ? choice.Description
                 : string.Empty;
         }
@@ -419,7 +415,10 @@ public sealed partial class MainWindow
         ApplyDrawingButtonChrome(cancel, width: 80);
         AutomationProperties.SetAutomationId(cancel, "ShapeEffectsCancelButton");
         cancel.Click += (_, _) => dialog.Close((DrawingShapeEffectPreset?)null);
-        ok.Click += (_, _) => dialog.Close(effectBox.SelectedItem is ShapeEffectsChoice choice ? (DrawingShapeEffectPreset?)choice.Preset : null);
+        ok.Click += (_, _) => dialog.Close(
+            effectBox.SelectedItem is ShapeEffectsPlanner.ResolvedShapeEffectOption choice
+                ? (DrawingShapeEffectPreset?)choice.Preset
+                : null);
 
         var content = new StackPanel
         {
@@ -458,19 +457,11 @@ public sealed partial class MainWindow
 
         var normalized = ShapeEffectsPlanner.NormalizePreset(preset);
         RunDrawingObjectCommand(
-            new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, current.Id, normalized),
+            ShapeEffectsPlanner.BuildCommand(_session.ActiveSheet.Id, current.Id, normalized),
             normalized == DrawingShapeEffectPreset.None
                 ? UiText.Get("ShapeEffects_Cleared")
                 : UiText.Format("ShapeEffects_Applied", ShapeEffectPresetLabel(normalized)),
             UiText.Get("InsertLoc_ShapeEffectsLabel"));
-    }
-
-    private sealed record ShapeEffectsChoice(
-        DrawingShapeEffectPreset Preset,
-        string Label,
-        string Description)
-    {
-        public override string ToString() => Label;
     }
 
     // -------------------------------------------------------------------------------------------------------
@@ -585,7 +576,8 @@ public sealed partial class MainWindow
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
         {
-            if (!TryParseRgb(startBox.Text, out startColor) || !TryParseRgb(endBox.Text, out endColor))
+            if (!ColorInputParser.TryParseRgbColorText(startBox.Text ?? string.Empty, out startColor) ||
+                !ColorInputParser.TryParseRgbColorText(endBox.Text ?? string.Empty, out endColor))
             {
                 ShowEditIssue(UiText.Get("ShapeGradient_InvalidRgbColorMessage"));
                 return;
@@ -594,8 +586,8 @@ public sealed partial class MainWindow
             dialog.Close(true);
         };
 
-        startBox.LostFocus += (_, _) => { if (TryParseRgb(startBox.Text, out var parsed)) { startColor = parsed; UpdatePreview(); } };
-        endBox.LostFocus += (_, _) => { if (TryParseRgb(endBox.Text, out var parsed)) { endColor = parsed; UpdatePreview(); } };
+        startBox.LostFocus += (_, _) => { if (ColorInputParser.TryParseRgbColorText(startBox.Text ?? string.Empty, out var parsed)) { startColor = parsed; UpdatePreview(); } };
+        endBox.LostFocus += (_, _) => { if (ColorInputParser.TryParseRgbColorText(endBox.Text ?? string.Empty, out var parsed)) { endColor = parsed; UpdatePreview(); } };
 
         var stopGrid = new Grid
         {
@@ -656,7 +648,7 @@ public sealed partial class MainWindow
 
         var result = ShapeGradientPlanner.CreateResult(startColor, endColor, SelectedDirection());
         RunDrawingObjectCommand(
-            new SetDrawingShapeGradientCommand(_session.ActiveSheet.Id, current.Id, result.StartColor, result.EndColor, result.Direction),
+            ShapeGradientPlanner.BuildCommand(_session.ActiveSheet.Id, current.Id, result),
             FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ShapeGradientSuccess(
                 FormatHex(result.StartColor),
                 FormatHex(result.EndColor))),
@@ -785,23 +777,10 @@ public sealed partial class MainWindow
     }
 
     private static string FormatRgb(CellColor color) =>
-        $"{color.R},{color.G},{color.B}";
+        ColorInputParser.FormatRgbColor(color);
 
-    private static bool TryParseRgb(string? text, out CellColor color)
-    {
-        color = new CellColor(0, 0, 0);
-        var parts = (text ?? "").Split(',', StringSplitOptions.TrimEntries);
-        if (parts.Length != 3)
-            return false;
-
-        if (!byte.TryParse(parts[0], out var r) ||
-            !byte.TryParse(parts[1], out var g) ||
-            !byte.TryParse(parts[2], out var b))
-            return false;
-
-        color = new CellColor(r, g, b);
-        return true;
-    }
+    private static bool TryParseRgb(string? text, out CellColor color) =>
+        ColorInputParser.TryParseRgbColorText(text ?? string.Empty, out color);
 
     private static IBrush SolidColor(CellColor color) => new SolidColorBrush(ToColor(color));
 

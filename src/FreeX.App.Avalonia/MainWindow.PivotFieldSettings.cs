@@ -6,7 +6,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using FreeX.App.Presentation.PivotUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using Free.Shared.Shell.Avalonia;
 
@@ -21,9 +20,8 @@ namespace FreeX.App.Avalonia;
 /// "More Sort Options" dialog (label/value ascending/descending + value field). Both collect input then
 /// call the portable planners (<see cref="PivotValueFieldPlanner"/> / <see cref="PivotSortPlanner"/>) for all
 /// validation/result building, so the logic is single-sourced with the WPF host and reusable on macOS. The
-/// value-field result replaces the data field in the layout (<see cref="ConfigurePivotTableLayoutCommand"/>);
-/// the sort result replaces the field's sort in the pivot's view state
-/// (<see cref="ConfigurePivotTableViewCommand"/>). These header actions are dialog routes in
+/// value-field result replaces the data field through a shared layout plan; the sort result replaces the
+/// field's sort through a shared view plan. These header actions are dialog routes in
 /// <c>PivotHeaderActionPlanner</c>; <c>InvokePivotHeaderAction</c> routes them here before the UI-free
 /// command factory. Field Settings reuses the same value-field dialog and data-field ownership fallback
 /// as the WPF host.
@@ -91,7 +89,7 @@ public sealed partial class MainWindow
         ApplyPivotTextBoxChrome(nameBox, fixedHeight: false);
         SetWpfValueFieldTextBoxHeight(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "PivotValueFieldSettingsNameBox");
-        AutomationProperties.SetName(nameBox, "Custom name");
+        AutomationProperties.SetName(nameBox, UiText.Get("PivotValueFieldSettings_CustomName2"));
 
         var summaryBox = new ComboBox { MinWidth = 240, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         foreach (var (label, _) in PivotValueFieldPlanner.SummaryFunctions)
@@ -100,7 +98,7 @@ public sealed partial class MainWindow
         ApplyPivotComboBoxChrome(summaryBox);
         PivotValueFieldSettingsVisual.ApplyComboBox(summaryBox);
         AutomationProperties.SetAutomationId(summaryBox, "PivotValueFieldSettingsSummaryBox");
-        AutomationProperties.SetName(summaryBox, "Summarize by");
+        AutomationProperties.SetName(summaryBox, UiText.Get("PivotValueFieldSettings_SummarizeByAutomationName"));
 
         var showValuesAsBox = new ComboBox { MinWidth = 240, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         foreach (var (label, _) in PivotValueFieldPlanner.ShowValuesAsOptions)
@@ -109,7 +107,7 @@ public sealed partial class MainWindow
         ApplyPivotComboBoxChrome(showValuesAsBox);
         PivotValueFieldSettingsVisual.ApplyComboBox(showValuesAsBox);
         AutomationProperties.SetAutomationId(showValuesAsBox, "PivotValueFieldSettingsShowValuesAsBox");
-        AutomationProperties.SetName(showValuesAsBox, "Show values as");
+        AutomationProperties.SetName(showValuesAsBox, UiText.Get("PivotValueFieldSettings_ShowValuesAs3"));
 
         var baseFieldBox = new ComboBox { MinWidth = 240, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         baseFieldBox.Items.Add(PivotValueFieldPlanner.AutomaticBaseFieldLabel);
@@ -119,13 +117,13 @@ public sealed partial class MainWindow
         ApplyPivotComboBoxChrome(baseFieldBox);
         PivotValueFieldSettingsVisual.ApplyComboBox(baseFieldBox);
         AutomationProperties.SetAutomationId(baseFieldBox, "PivotValueFieldSettingsBaseFieldBox");
-        AutomationProperties.SetName(baseFieldBox, "Base field");
+        AutomationProperties.SetName(baseFieldBox, UiText.Get("PivotValueFieldSettings_BaseField2"));
 
         var baseItemBox = new TextBox { MinWidth = 240, Text = field.BaseItem ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_BaseItemPlaceholder") };
         ApplyPivotTextBoxChrome(baseItemBox);
         PivotValueFieldSettingsVisual.ApplyTextBox(baseItemBox, PivotValueFieldSettingsVisual.ControlHeight);
         AutomationProperties.SetAutomationId(baseItemBox, "PivotValueFieldSettingsBaseItemBox");
-        AutomationProperties.SetName(baseItemBox, "Base item");
+        AutomationProperties.SetName(baseItemBox, UiText.Get("PivotValueFieldSettings_BaseItem2"));
 
         var basePanel = new StackPanel { Spacing = 0 };
         basePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_BaseField"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground, Margin = new Thickness(0, 10, 0, 6) });
@@ -407,14 +405,14 @@ public sealed partial class MainWindow
         var dataFields = pivot.DataFields.ToList();
         dataFields[dataFieldIndex.Value] = result;
 
-        var command = new ConfigurePivotTableLayoutCommand(
-            _session.ActiveSheet.Id,
-            pivot.Name,
-            pivot.RowFields.ToList(),
-            pivot.ColumnFields.ToList(),
-            pivot.PageFields.ToList(),
-            dataFields);
-        ExecutePivotCommand(command);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanLayout(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                new PivotFieldAreas(
+                    pivot.RowFields.ToList(),
+                    pivot.ColumnFields.ToList(),
+                    pivot.PageFields.ToList(),
+                    dataFields)));
     }
 
     internal static void FocusInvalidShowValuesAsInput(
@@ -446,21 +444,23 @@ public sealed partial class MainWindow
         var currentSort = pivot.Sorts.FirstOrDefault(sort => sort.FieldIndex == target.SourceFieldIndex);
         var dataFieldCount = pivot.DataFields.Count;
 
-        var labelAscending = new RadioButton { Content = UiText.Get("PivotSort_AscendingByLabels"), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
-        var labelDescending = new RadioButton { Content = UiText.Get("PivotSort_DescendingByLabels"), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
-        var valueAscending = new RadioButton { Content = UiText.Get("PivotSort_AscendingByValues"), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
-        var valueDescending = new RadioButton { Content = UiText.Get("PivotSort_DescendingByValues"), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
-        AutomationProperties.SetAutomationId(labelAscending, "PivotSortOptionsLabelAscending");
-        AutomationProperties.SetAutomationId(labelDescending, "PivotSortOptionsLabelDescending");
-        AutomationProperties.SetAutomationId(valueAscending, "PivotSortOptionsValueAscending");
-        AutomationProperties.SetAutomationId(valueDescending, "PivotSortOptionsValueDescending");
+        var labelAscending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.LabelAscending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var labelDescending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.LabelDescending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var valueAscending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.ValueAscending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var valueDescending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.ValueDescending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
+        AutomationProperties.SetAutomationId(labelAscending, PivotSortPlanner.GetOption(PivotSortOptionMode.LabelAscending).AutomationId);
+        AutomationProperties.SetAutomationId(labelDescending, PivotSortPlanner.GetOption(PivotSortOptionMode.LabelDescending).AutomationId);
+        AutomationProperties.SetAutomationId(valueAscending, PivotSortPlanner.GetOption(PivotSortOptionMode.ValueAscending).AutomationId);
+        AutomationProperties.SetAutomationId(valueDescending, PivotSortPlanner.GetOption(PivotSortOptionMode.ValueDescending).AutomationId);
 
         var valueFieldBox = new ComboBox { MinWidth = 220 };
         foreach (var dataField in pivot.DataFields)
             valueFieldBox.Items.Add(dataField.Name);
         ApplyPivotComboBoxChrome(valueFieldBox);
         AutomationProperties.SetAutomationId(valueFieldBox, "PivotSortOptionsValueFieldBox");
-        AutomationProperties.SetName(valueFieldBox, "Value field");
+        AutomationProperties.SetName(
+            valueFieldBox,
+            UiText.CreateAutomationName(UiText.Get("PivotSort_ValueField")));
 
         var initialMode = PivotSortPlanner.InitialMode(currentSort, target.SourceFieldIndex);
         switch (initialMode)
@@ -517,7 +517,7 @@ public sealed partial class MainWindow
         {
             if (!PivotSortPlanner.TryValidate(CurrentMode(), dataFieldCount, valueFieldBox.SelectedIndex, out var error))
             {
-                ShowEditIssue(error ?? PivotSortPlanner.ValueSortRequiresValueFieldMessage);
+                ShowEditIssue((error ?? PivotSortPlanner.ValueSortRequiresValueField).Resolve(UiText.Get));
                 return;
             }
 
@@ -555,16 +555,13 @@ public sealed partial class MainWindow
         if (!confirmed)
             return;
 
-        var sort = PivotSortPlanner.CreateResult(CurrentMode(), target.SourceFieldIndex, valueFieldBox.SelectedIndex);
-        var sorts = PivotSortPlanner.ReplaceFieldSort(pivot.Sorts.ToList(), sort);
-
-        var command = new ConfigurePivotTableViewCommand(
-            _session.ActiveSheet.Id,
-            pivot.Name,
-            pivot.LabelFilters.ToList(),
-            pivot.ValueFilters.ToList(),
-            sorts);
-        ExecutePivotCommand(command);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanFieldSort(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                PivotSortPlanner.CreateResult(
+                    CurrentMode(),
+                    target.SourceFieldIndex,
+                    valueFieldBox.SelectedIndex)));
     }
 
     // The pane chip carries the value-area data-field index directly; fall back to a source-field match.

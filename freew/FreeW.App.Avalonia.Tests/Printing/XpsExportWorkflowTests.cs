@@ -8,10 +8,13 @@ using FreeW.App.Presentation.Options;
 
 namespace FreeW.App.Avalonia.Tests.Printing;
 
-public sealed class XpsExportWorkflowTests
+public sealed class XpsExportWorkflowTests : IDisposable
 {
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.XpsExportWorkflowTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public async Task ExportXps_CancelLeavesNoOutput()
@@ -26,7 +29,7 @@ public sealed class XpsExportWorkflowTests
     [Fact]
     public async Task ExportXps_UsesOverwritePromptAndReplacesExistingLocalPath()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"freew-xps-overwrite-{Guid.NewGuid():N}.xps");
+        var path = Path.Combine(_temporaryDirectory.Path, "overwrite.xps");
         await File.WriteAllTextAsync(path, "old export");
         AvaloniaFilePickerSaveRequest? request = null;
         try
@@ -66,12 +69,11 @@ public sealed class XpsExportWorkflowTests
         status.Should().Contain("local");
     }
 
-    private static MainWindow CreateWindow(
+    private MainWindow CreateWindow(
         Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>> pickExportPath)
     {
         var settingsPath = Path.Combine(
-            Path.GetTempPath(),
-            "FreeW.XpsExportWorkflowTests",
+            _temporaryDirectory.Path,
             Guid.NewGuid().ToString("N"),
             "settings.json");
         return new MainWindow(

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -195,6 +196,9 @@ public sealed class InCanvasTextEditor : IDisposable
                 InCanvasRichTextSelectionVisualContract.ForegroundGreen,
                 InCanvasRichTextSelectionVisualContract.ForegroundBlue)),
         };
+        AutomationProperties.SetAutomationId(
+            _richBox,
+            PresentationSemanticIdentityCatalog.RichTextEditorInputAutomationId);
 
         Canvas.SetLeft(_richBox, placement.Left);
         Canvas.SetTop(_richBox, placement.Top);
@@ -587,31 +591,32 @@ public sealed class InCanvasTextEditor : IDisposable
             Commit();
     }
 
-    private void OnRichBoxPreviewKeyDown(object sender, KeyEventArgs e)
+    private async void OnRichBoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) == 0)
             return;
 
-        if (e.Key == Key.C)
+        if (e.Key is Key.C or Key.X or Key.V)
         {
-            e.Handled = WpfRichTextClipboardAdapter.TryCopy(_richBox!, _shapeParagraphBody, out var error);
-            if (!e.Handled && error is not null)
-                _onClipboardWriteFailed?.Invoke("Copy", error);
-        }
-        else if (e.Key == Key.X)
-        {
-            e.Handled = WpfRichTextClipboardAdapter.TryCut(_richBox!, _shapeParagraphBody, out var error);
-            if (!e.Handled && error is not null)
-                _onClipboardWriteFailed?.Invoke("Cut", error);
-        }
-        else if (e.Key == Key.V)
-        {
-            e.Handled = WpfRichTextClipboardAdapter.TryPaste(
+            var result = await WpfRichTextClipboardAdapter.HandlePreviewKeyDownAsync(
+                e,
                 _richBox!,
-                _shapeParagraphBody,
-                out _shapeParagraphBody);
+                _shapeParagraphBody);
+            if (e.Key == Key.V && result.Handled)
+                _shapeParagraphBody = result.UpdatedBody;
+            else if (e.Key is Key.C or Key.X &&
+                     !result.Handled &&
+                     result.FailureMessage is { } failureMessage)
+                _onClipboardWriteFailed?.Invoke(
+                    PresentationShellTextCatalog.Resolve(
+                        e.Key == Key.X
+                            ? PresentationShellTextCatalog.EditCutCommand
+                            : PresentationShellTextCatalog.EditCopyCommand),
+                    failureMessage);
+            return;
         }
-        else if (e.Key == Key.B)
+
+        if (e.Key == Key.B)
         {
             ApplyBold();
             e.Handled = true;

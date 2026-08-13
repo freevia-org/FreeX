@@ -1,3 +1,5 @@
+using Free.Shared.AppServices;
+
 namespace FreeX.ParityCompare.Core;
 
 /// <summary>Top-level result of a parity comparison run, ready for report emission.</summary>
@@ -160,9 +162,6 @@ public sealed class ParityComparisonEngine
     }
 
     /// <summary>Make a surface id safe for use as a file name.</summary>
-    public static string SafeName(string id)
-    {
-        var chars = id.Select(ch => char.IsLetterOrDigit(ch) || ch is '.' or '-' or '_' ? ch : '_');
-        return new string(chars.ToArray());
-    }
+    public static string SafeName(string id) =>
+        VisualEvidenceTextPolicy.ToAlphaNumericSafeArtifactName(id);
 }

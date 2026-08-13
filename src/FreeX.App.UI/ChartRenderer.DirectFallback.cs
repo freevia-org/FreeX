@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -105,64 +106,47 @@ public static partial class ChartRenderer
 
     private static DirectChartData? BuildDirectChartData(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)
     {
-        var cellLookup = BuildChartCellLookup(chart, viewport);
-        var startRow = chart.DataRange.Start.Row;
-        var endRow = chart.DataRange.End.Row;
-        var startCol = chart.DataRange.Start.Col;
-        var endCol = chart.DataRange.End.Col;
-        if (chart.SeriesInRows)
-            (cellLookup, endRow, endCol) = TransposeChartCellLookup(cellLookup, startRow, startCol, endRow, endCol);
-        var dataStartRow = chart.FirstRowIsHeader ? startRow + 1 : startRow;
-        var dataStartCol = chart.FirstColIsCategories ? startCol + 1 : startCol;
-        if (endRow < dataStartRow || endCol < dataStartCol)
+        var accessor = ChartViewportCellAccessorBuilder.BuildValueAccessor(
+            viewport,
+            chart.DataRange.Start.Sheet,
+            chart.DataRange);
+        var dataPlan = ChartLayoutRequestBuilder.TryResolveData(
+            chart,
+            accessor,
+            missingScatterXOffset: 1);
+        if (dataPlan is null || dataPlan.Series.Count == 0)
             return null;
 
-        var categories = new List<string>(GetDataPointCapacity(dataStartRow, endRow));
-        for (var row = dataStartRow; row <= endRow; row++)
+        if (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories)
+            return BuildDirectScatterData(chart, dataPlan, theme);
+
+        var categoryCount = Math.Max(
+            dataPlan.Categories.Count,
+            dataPlan.Series.Count == 0 ? 0 : dataPlan.Series.Max(series => series.Values.Count));
+        var categories = new List<string>(categoryCount);
+        for (var pointIndex = 0; pointIndex < categoryCount; pointIndex++)
         {
-            var category = chart.FirstColIsCategories &&
-                cellLookup.TryGetValue((row, startCol), out var categoryCell) &&
-                !string.IsNullOrWhiteSpace(categoryCell.DisplayText)
-                    ? categoryCell.DisplayText
-                    : (row - dataStartRow + 1).ToString(CultureInfo.InvariantCulture);
-            categories.Add(category);
+            categories.Add(pointIndex < dataPlan.Categories.Count &&
+                !string.IsNullOrWhiteSpace(dataPlan.Categories[pointIndex])
+                    ? dataPlan.Categories[pointIndex]
+                    : (pointIndex + 1).ToString(CultureInfo.InvariantCulture));
         }
 
-        if (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories)
-            return BuildDirectScatterData(chart, cellLookup, theme, dataStartRow, endRow, dataStartCol, endCol);
-
         var series = new List<DirectChartSeries>();
-        for (var col = dataStartCol; col <= endCol; col++)
+        foreach (var sourceSeries in dataPlan.Series)
         {
-            if (ShouldSkipScatterXColumn(chart, col, dataStartCol))
+            if (!sourceSeries.Values.Any(value => value is not null))
                 continue;
 
-            var seriesIndex = GetSeriesIndex(chart, col, dataStartCol);
-            var values = new List<double?>(categories.Count);
-            var hasValue = false;
-            for (var row = dataStartRow; row <= endRow; row++)
-            {
-                if (cellLookup.TryGetValue((row, col), out var cell) &&
-                    TryGetChartNumericValue(cell, out var value))
-                {
-                    values.Add(value);
-                    hasValue = true;
-                }
-                else
-                {
-                    values.Add(null);
-                }
-            }
-
-            if (!hasValue)
-                continue;
-
-            var name = chart.FirstRowIsHeader &&
-                cellLookup.TryGetValue((startRow, col), out var header) &&
-                !string.IsNullOrWhiteSpace(header.DisplayText)
-                    ? header.DisplayText
-                    : $"Series {seriesIndex + 1}";
-            series.Add(CreateDirectSeries(chart, theme, seriesIndex, name, values));
+            var name = string.IsNullOrWhiteSpace(sourceSeries.Name)
+                ? $"Series {sourceSeries.SeriesIndex + 1}"
+                : sourceSeries.Name!;
+            series.Add(CreateDirectSeries(
+                chart,
+                theme,
+                sourceSeries.SeriesIndex,
+                name,
+                sourceSeries.Values));
         }
 
         return series.Count == 0 ? null : new DirectChartData(categories, series);
@@ -170,51 +154,26 @@ public static partial class ChartRenderer
 
     private static DirectChartData? BuildDirectScatterData(
         ChartModel chart,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
-        WorkbookTheme theme,
-        uint dataStartRow,
-        uint endRow,
-        uint dataStartCol,
-        uint endCol)
+        ChartDataPlan dataPlan,
+        WorkbookTheme theme)
     {
-        if (dataStartCol >= endCol)
+        var sourceSeries = dataPlan.Series.FirstOrDefault();
+        if (sourceSeries is null || !sourceSeries.Values.Any(value => value is not null))
             return null;
 
-        var categories = new List<string>(GetDataPointCapacity(dataStartRow, endRow));
-        var values = new List<double?>(categories.Capacity);
-        var hasValue = false;
-        for (var row = dataStartRow; row <= endRow; row++)
+        var categories = new List<string>(sourceSeries.Values.Count);
+        for (var pointIndex = 0; pointIndex < sourceSeries.Values.Count; pointIndex++)
         {
-            if (!cellLookup.TryGetValue((row, dataStartCol), out var xCell) ||
-                !TryGetChartNumericValue(xCell, out var x))
-            {
-                x = row - dataStartRow + 1;
-            }
-
+            var x = sourceSeries.XValues is { } xValues && pointIndex < xValues.Count
+                ? xValues[pointIndex]
+                : pointIndex + 1;
             categories.Add(x.ToString(CultureInfo.InvariantCulture));
-            if (cellLookup.TryGetValue((row, dataStartCol + 1), out var yCell) &&
-                TryGetChartNumericValue(yCell, out var y))
-            {
-                values.Add(y);
-                hasValue = true;
-            }
-            else
-            {
-                values.Add(null);
-            }
         }
 
-        if (!hasValue)
-            return null;
-
-        var name = chart.FirstRowIsHeader &&
-            cellLookup.TryGetValue((chart.DataRange.Start.Row, dataStartCol + 1), out var header) &&
-            !string.IsNullOrWhiteSpace(header.DisplayText)
-                ? header.DisplayText
-                : "Series 1";
+        var name = string.IsNullOrWhiteSpace(sourceSeries.Name) ? "Series 1" : sourceSeries.Name!;
         return new DirectChartData(
             categories,
-            [CreateDirectSeries(chart, theme, 0, name, values)]);
+            [CreateDirectSeries(chart, theme, sourceSeries.SeriesIndex, name, sourceSeries.Values)]);
     }
 
     private static DirectChartSeries CreateDirectSeries(

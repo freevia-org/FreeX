@@ -19,6 +19,9 @@ function Assert-ToolSourceCentralization {
             "function ConvertTo-ToolPlatformPath",
             "function Resolve-ToolFullPath",
             "function Resolve-ToolProviderPath",
+            "function New-ToolTemporaryDirectory",
+            "function Remove-ToolTemporaryDirectory",
+            "function Add-ToolValidationError",
             "function Resolve-InputPath",
             "function Get-ToolRelativePath",
             "function ConvertTo-ToolNormalizedRelativePath",
@@ -65,15 +68,27 @@ function Assert-ToolSourceCentralization {
         }
     }
 
+    $crossAppDashboard = Get-Content -LiteralPath (Join-Path $ToolRoot "Generate-CrossAppParityDashboard.ps1") -Raw
+    foreach ($requiredCall in @("New-ToolTemporaryDirectory", "Remove-ToolTemporaryDirectory")) {
+        if (-not $crossAppDashboard.Contains($requiredCall)) {
+            throw "Generate-CrossAppParityDashboard.ps1 must use shared temporary-directory helper '$requiredCall'."
+        }
+    }
+    if ($crossAppDashboard.Contains("GetTempPath") -or $crossAppDashboard.Contains("Guid]::NewGuid") -or
+        $crossAppDashboard -match 'Remove-Item\s+-LiteralPath\s+\$tempRoot\s+-Recurse') {
+        throw "Generate-CrossAppParityDashboard.ps1 redeclares temporary-directory ownership."
+    }
+
     $centralizedScriptHelpers = [ordered]@{
         "Test-JsonFiles.ps1" = @("Resolve-RepoPath", "Test-IsExcludedPath", "Get-RepositoryRelativePath", "Get-TrackedRepositoryFiles")
         "Test-XmlFiles.ps1" = @("Resolve-RepoPath", "Test-IsBuildOutputPath", "Get-RepositoryRelativePath", "Get-TrackedRepositoryFiles")
         "Test-RepositoryPreflight.ps1" = @("Resolve-RepoPath")
-        "Test-SolutionProjects.ps1" = @("Resolve-RepoPath", "Normalize-RelativePath", "Get-RelativePath", "Test-IsIgnoredDirectoryName", "Get-ProjectFiles")
-        "Test-DotNetProjectReferences.ps1" = @("Resolve-RepoPath", "Get-RelativeRepoPath", "Test-IsIgnoredDirectoryName", "Get-ProjectFiles")
-        "Test-DotNetSdkReadiness.ps1" = @("Resolve-RepoPath", "Get-RelativeRepoPath", "Test-IsIgnoredDirectoryName", "Get-ProjectFiles")
+        "Test-SolutionProjects.ps1" = @("Resolve-RepoPath", "Normalize-RelativePath", "Get-RelativePath", "Test-IsIgnoredDirectoryName", "Test-IsIgnoredProjectPath", "Get-ProjectFiles")
+        "Test-DotNetProjectReferences.ps1" = @("Resolve-RepoPath", "Get-RelativeRepoPath", "Test-IsIgnoredDirectoryName", "Test-IsIgnoredProjectPath", "Get-ProjectFiles")
+        "Test-DotNetSdkReadiness.ps1" = @("Resolve-RepoPath", "Get-RelativeRepoPath", "Test-IsIgnoredDirectoryName", "Test-IsIgnoredProjectPath", "Get-ProjectFiles")
         "Test-ConflictMarkers.ps1" = @("Resolve-RepoPath", "Get-RelativeRepoPath", "Test-IsIgnoredPath")
         "Test-TesterReleaseReadiness.ps1" = @("Resolve-RepoPath")
+        "Test-LinuxAppReadiness.ps1" = @()
         "Invoke-ForegroundCapture.ps1" = @("Resolve-RepoPath")
         "Test-LinuxPublicPreviewReadiness.ps1" = @("Resolve-InputPath")
         "Test-LinuxPublicPreviewPromotion.ps1" = @("Resolve-InputPath")
@@ -97,6 +112,46 @@ function Assert-ToolSourceCentralization {
                 throw "$($entry.Key) redeclares shared helper '$helperName'."
             }
         }
+    }
+
+    $sharedProcessScripts = @(
+        "Run-FreePMultiSelectionX11Validation.ps1",
+        "Run-FreePPortablePrinterValidation.ps1",
+        "Run-FreeWFieldShortcutValidation.ps1",
+        "Run-FreeWTablePaginationValidation.ps1"
+    )
+    foreach ($scriptName in $sharedProcessScripts) {
+        $script = Get-Content -LiteralPath (Join-Path $ToolRoot $scriptName) -Raw
+        if (-not $script.Contains("ToolScriptSupport.ps1") -or -not $script.Contains("Invoke-ToolProcess")) {
+            throw "$scriptName must use Invoke-ToolProcess from ToolScriptSupport.ps1."
+        }
+    }
+
+    $compatibilityAdapterFound = $false
+    foreach ($scriptFile in Get-ChildItem -LiteralPath $ToolRoot -Filter "*.ps1" -File -Recurse) {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($scriptFile.FullName, [ref]$tokens, [ref]$parseErrors)
+        $externalDeclarations = $ast.FindAll({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq "Invoke-External"
+            }, $true)
+        if ($externalDeclarations.Count -eq 0) {
+            continue
+        }
+
+        if ($scriptFile.Name -eq "Run-FreePMultiSelectionX11Validation.ps1" -and
+            $externalDeclarations.Count -eq 1 -and
+            $externalDeclarations[0].Extent.Text.Contains("Invoke-ToolProcess")) {
+            $compatibilityAdapterFound = $true
+            continue
+        }
+
+        throw "$($scriptFile.Name) redeclares process invocation owned by ToolScriptSupport.ps1."
+    }
+    if (-not $compatibilityAdapterFound) {
+        throw "Run-FreePMultiSelectionX11Validation.ps1 must retain its source-contract adapter to Invoke-ToolProcess."
     }
 
     $repoRoot = Split-Path -Parent $ToolRoot
@@ -159,6 +214,10 @@ function Assert-ToolSourceCentralization {
             "function Get-WindowTitle",
             "function Get-ForegroundWindowInfo",
             "function Assert-ForegroundWindowOwnership",
+            "function Assert-ForegroundProcessOwnership",
+            "function Clear-ScreenshotTourEvidenceArtifacts",
+            "function Set-ScreenshotCaptureWindowWidth",
+            "function Write-RibbonScreenshotEvidenceManifest",
             "function Capture-ScreenRectangle")) {
         if (-not $screenshotSupport.Contains($requiredCaptureHelper)) {
             throw "ScreenshotCaptureSupport.ps1 is missing required helper '$requiredCaptureHelper'."
@@ -175,8 +234,151 @@ function Assert-ToolSourceCentralization {
             throw "$scenarioName must dot-source ScreenshotCaptureSupport.ps1."
         }
 
-        if ($scenario -match 'function\s+(Get-WindowTitle|Get-ForegroundWindowInfo|Assert-ForegroundWindowOwnership)\b') {
+        if ($scenario -match 'function\s+(Get-WindowTitle|Get-ForegroundWindowInfo|Assert-ForegroundWindowOwnership|Assert-ForegroundProcessOwnership|Set-CaptureWindowWidth|Write-ScreenshotEvidenceManifest|Clear-(?:AutoFilterFlyout|NumberFormatDropdown|HomeBordersDropdown|WorksheetContextMenu|OpenWorkbookDialog|SaveAsWorkbookDialog)EvidenceArtifacts)\b') {
             throw "$scenarioName redeclares a helper owned by ScreenshotCaptureSupport.ps1."
+        }
+
+        foreach ($requiredCall in @("Clear-ScreenshotTourEvidenceArtifacts", "Set-ScreenshotCaptureWindowWidth", "Write-RibbonScreenshotEvidenceManifest")) {
+            if (-not $scenario.Contains($requiredCall)) {
+                throw "$scenarioName must use shared screenshot-tour helper '$requiredCall'."
+            }
+        }
+    }
+
+    $visualEvidenceSupportPath = Join-Path $ToolRoot "VisualEvidenceScriptSupport.ps1"
+    $visualEvidenceSupport = Get-Content -LiteralPath $visualEvidenceSupportPath -Raw
+    foreach ($requiredHelper in @(
+            "function Resolve-VisualEvidenceOutputDirectory",
+            "function Invoke-VisualEvidenceProcess",
+            "function Copy-VisualEvidenceProbe",
+            "function Wait-VisualEvidenceFile",
+            "function Read-VisualEvidenceJson",
+            "function Add-VisualEvidenceResultReferences",
+            "function Get-VisualEvidenceFileSha256",
+            "function Get-VisualEvidenceNormalizedTextSha256",
+            "function Get-VisualEvidenceArtifactInventory")) {
+        if (-not $visualEvidenceSupport.Contains($requiredHelper)) {
+            throw "VisualEvidenceScriptSupport.ps1 is missing required helper '$requiredHelper'."
+        }
+    }
+
+    foreach ($readinessScriptName in @(
+            "Test-LinuxAppReadiness.ps1",
+            "Test-LinuxHumanValidationChecklist.ps1",
+            "Test-LinuxPublicPreviewPromotion.ps1",
+            "Test-LinuxPublicPreviewReadiness.ps1",
+            "Test-MacOsHumanValidationChecklist.ps1")) {
+        $readinessScript = Get-Content -LiteralPath (Join-Path $ToolRoot $readinessScriptName) -Raw
+        if (-not $readinessScript.Contains("Add-ToolValidationError") -or
+            $readinessScript.Contains('.Replace("%", "%25")')) {
+            throw "$readinessScriptName must use shared validation error reporting."
+        }
+    }
+    if (-not $visualEvidenceSupport.Contains("ToolScriptSupport.ps1") -or
+        -not $visualEvidenceSupport.Contains("Resolve-ToolRepoPath") -or
+        -not $visualEvidenceSupport.Contains("Invoke-ToolProcess")) {
+        throw "VisualEvidenceScriptSupport.ps1 must delegate path and process ownership to ToolScriptSupport.ps1."
+    }
+
+    $visualEvidenceRunnerNames = @(
+        "Run-FamilyLinuxInteractionValidation.ps1",
+        "Run-FreePAccessibilityValidation.ps1",
+        "Run-FreePClipboardShortcutValidation.ps1",
+        "Run-FreePFileSlideshowShortcutValidation.ps1",
+        "Run-FreePNativePickerX11Validation.ps1",
+        "Run-FreePPhysicalLinuxValidation.ps1",
+        "Run-FreePRichTextShortcutValidation.ps1",
+        "Run-FreePRotatedShapeTextEditValidation.ps1",
+        "Run-FreePSmartArtAuthoringValidation.ps1",
+        "Run-FreePTransformedTableCellEditValidation.ps1",
+        "Run-FreeWForegroundPrintValidation.ps1"
+    )
+    foreach ($runnerName in $visualEvidenceRunnerNames) {
+        $runner = Get-Content -LiteralPath (Join-Path $ToolRoot $runnerName) -Raw
+        if (-not $runner.Contains("VisualEvidenceScriptSupport.ps1") -or
+            -not $runner.Contains("Invoke-VisualEvidenceProcess") -or
+            $runner -match 'function\s+Invoke-External\b') {
+            throw "$runnerName must use shared visual-evidence process orchestration."
+        }
+    }
+
+    foreach ($runnerName in @(
+            "Run-FreePClipboardShortcutValidation.ps1",
+            "Run-FreePFileSlideshowShortcutValidation.ps1",
+            "Run-FreePNativePickerX11Validation.ps1",
+            "Run-FreePRichTextShortcutValidation.ps1")) {
+        $runner = Get-Content -LiteralPath (Join-Path $ToolRoot $runnerName) -Raw
+        if (-not $runner.Contains("Add-VisualEvidenceResultReferences") -or
+            $runner -match 'function\s+Add-ResultEvidence\b') {
+            throw "$runnerName must use shared evidence-reference merging."
+        }
+    }
+
+    $manifestSupportPath = Join-Path $ToolRoot "LinuxInteractiveDocker/ManifestEvidence.ps1"
+    $manifestSupport = Get-Content -LiteralPath $manifestSupportPath -Raw
+    foreach ($requiredHelper in @(
+            "function Read-ManifestContract",
+            "function Assert-ManifestIdentity",
+            "function Assert-ManifestResultIds",
+            "function Assert-ManifestResultSummary",
+            "function Assert-ManifestResultEvidence",
+            "function Assert-ManifestScreenshotEvidence",
+            "function Assert-ManifestContractPending",
+            "function Complete-ManifestContract",
+            "function Wait-ForManifestEvidence")) {
+        if (-not $manifestSupport.Contains($requiredHelper)) {
+            throw "ManifestEvidence.ps1 is missing required helper '$requiredHelper'."
+        }
+    }
+
+    foreach ($runnerName in @(
+            "Run-FamilyLinuxInteractionValidation.ps1",
+            "Run-FreePClipboardShortcutValidation.ps1",
+            "Run-FreePFileSlideshowShortcutValidation.ps1",
+            "Run-FreePMultiSelectionX11Validation.ps1",
+            "Run-FreePNativePickerX11Validation.ps1",
+            "Run-FreePPortablePrinterValidation.ps1",
+            "Run-FreePRichTextShortcutValidation.ps1",
+            "Run-FreePRotatedShapeTextEditValidation.ps1",
+            "Run-FreePTransformedTableCellEditValidation.ps1",
+            "Run-FreeWFieldShortcutValidation.ps1",
+            "Run-FreeWTablePaginationValidation.ps1")) {
+        $runner = Get-Content -LiteralPath (Join-Path $ToolRoot $runnerName) -Raw
+        if (-not $runner.Contains("ManifestEvidence.ps1") -or
+            -not $runner.Contains("Assert-ManifestIdentity") -or
+            -not $runner.Contains("Assert-ManifestResultSummary")) {
+            throw "$runnerName must use shared manifest contract infrastructure."
+        }
+    }
+
+    $probeSupport = Get-Content -LiteralPath (Join-Path $ToolRoot "LinuxInteractiveDocker/ProbeScriptSupport.sh") -Raw
+    foreach ($helperName in @("probe_capture", "probe_focus_owner", "probe_send_owner_key", "probe_capture_window_state")) {
+        if ($probeSupport -notmatch "(?m)^$([regex]::Escape($helperName))\(\)") {
+            throw "ProbeScriptSupport.sh is missing '$helperName'."
+        }
+    }
+    foreach ($probeName in @(
+            "run-freep-rotated-shape-text-edit.sh",
+            "run-freep-transformed-table-cell-edit.sh")) {
+        $probe = Get-Content -LiteralPath (Join-Path $ToolRoot "LinuxInteractiveDocker/$probeName") -Raw
+        if (-not $probe.Contains("ProbeScriptSupport.sh") -or
+            $probe -match '(?m)^(capture|focus_owner|send_owner_key|capture_window_state)\(\)') {
+            throw "$probeName must use shared X11 probe primitives."
+        }
+    }
+
+    foreach ($generatorName in @(
+            "Generate-FreePDialogPaneVisualEvidenceManifest.ps1",
+            "Generate-FreePWholeWindowVisualEvidenceManifest.ps1")) {
+        $generator = Get-Content -LiteralPath (Join-Path $ToolRoot $generatorName) -Raw
+        foreach ($requiredCall in @("Get-VisualEvidenceFileSha256", "Get-VisualEvidenceArtifactInventory")) {
+            if (-not $generator.Contains($requiredCall)) {
+                throw "$generatorName must use shared visual-evidence helper '$requiredCall'."
+            }
+        }
+        if ($generator -match 'function\s+(Get-EvidenceRelativePath|Get-RelativePath|Get-NormalizedTextSha256)\b' -or
+            $generator.Contains("Get-FileHash")) {
+            throw "$generatorName redeclares visual-evidence hashing or inventory logic."
         }
     }
 
@@ -204,6 +406,25 @@ function Assert-ToolSourceCentralization {
 
         if ($projectText -match '<Nullable>\s*enable\s*</Nullable>|<ImplicitUsings>\s*enable\s*</ImplicitUsings>') {
             throw "$($project.FullName) redeclares metadata centralized in tools/ToolProjects.props."
+        }
+    }
+
+    $externalToolSupportProjects = @(
+        "..\freep\TestSupport\VisualEvidence\FreeP.VisualEvidence.csproj",
+        "..\freep\TestSupport\VisualEvidence.Avalonia\FreeP.VisualEvidence.Avalonia.csproj",
+        "..\freep\TestSupport\VisualEvidence.Wpf\FreeP.VisualEvidence.Wpf.csproj",
+        "..\freew\tests\FreeW.VisualEvidence.TestSupport\FreeW.VisualEvidence.TestSupport.csproj",
+        "..\freew\tools\FreeW.VisualEvidenceSummary\FreeW.VisualEvidenceSummary.csproj"
+    )
+    foreach ($relativeProjectPath in $externalToolSupportProjects) {
+        $projectPath = Join-Path $ToolRoot $relativeProjectPath
+        $projectText = Get-Content -LiteralPath $projectPath -Raw
+        if (-not $projectText.Contains('Import Project="..\..\..\tools\ToolProjects.props"')) {
+            throw "$projectPath does not import tools/ToolProjects.props."
+        }
+
+        if ($projectText -match '<Nullable>\s*enable\s*</Nullable>|<ImplicitUsings>\s*enable\s*</ImplicitUsings>') {
+            throw "$projectPath redeclares metadata centralized in tools/ToolProjects.props."
         }
     }
 
@@ -819,6 +1040,41 @@ Write-Output "synthetic stdout"
             throw "Invoke-ToolProcess did not restore the parent working directory."
         }
 
+        $teeProbeOutputPath = Join-Path $tempRoot "tee-probe-output.json"
+        $teeStreamPath = Join-Path $tempRoot "tee-stream.txt"
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            $teeOutput = @(Invoke-ToolProcess `
+                -FilePath $powerShell `
+                -Arguments @(
+                    "-NoProfile",
+                    "-ExecutionPolicy", "Bypass",
+                    "-File", $probePath,
+                    "-OutputPath", $teeProbeOutputPath,
+                    "first tee value",
+                    "second tee value"
+                ) `
+                -WorkingDirectory $workingRoot `
+                -OutputPath $teeStreamPath)
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        $teeStream = Get-Content -LiteralPath $teeStreamPath -Raw
+        if ($teeOutput.Count -lt 2 -or $teeStream -notmatch 'synthetic stdout' -or $teeStream -notmatch 'synthetic stderr') {
+            throw "Invoke-ToolProcess did not preserve tee-to-file stdout/stderr behavior."
+        }
+
+        $hostOnlyOutput = @(Invoke-ToolProcess `
+            -FilePath $powerShell `
+            -Arguments @("-NoProfile", "-Command", "Write-Output 'synthetic host-only stdout'") `
+            -WorkingDirectory $workingRoot `
+            -OutputToHost)
+        if ($hostOnlyOutput.Count -ne 0) {
+            throw "Invoke-ToolProcess did not preserve host-only output behavior."
+        }
+
         $capturePath = Join-Path $shimRoot "capture-process.ps1"
         $wrapperOutputPath = Join-Path $tempRoot "wrapper-output.json"
         @'
@@ -918,6 +1174,20 @@ exit /b %ERRORLEVEL%
 
         if ($nonzeroMessage -ne "synthetic nonzero process with exit code 17" -or $LASTEXITCODE -ne 17) {
             throw "Invoke-ToolProcess did not preserve nonzero exit propagation: message='$nonzeroMessage', exit=$LASTEXITCODE."
+        }
+
+        $defaultNonzeroMessage = $null
+        try {
+            Invoke-ToolProcess `
+                -FilePath $powerShell `
+                -Arguments @("-NoProfile", "-Command", "exit 19")
+        }
+        catch {
+            $defaultNonzeroMessage = $_.Exception.Message
+        }
+
+        if ($defaultNonzeroMessage -ne "$powerShell exited with code 19." -or $LASTEXITCODE -ne 19) {
+            throw "Invoke-ToolProcess did not preserve default nonzero exit propagation: message='$defaultNonzeroMessage', exit=$LASTEXITCODE."
         }
     }
     finally {

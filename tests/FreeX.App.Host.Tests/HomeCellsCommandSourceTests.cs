@@ -6,7 +6,7 @@ public sealed class HomeCellsCommandSourceTests
 {
 
     [Fact]
-    public void CellsCommandHandlers_RouteThroughInsertDeleteDimensionAndFormatCellsCommands()
+    public void CellsCommandHandlers_RouteInsertDeleteThroughWorkbookSession()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
 
@@ -14,22 +14,30 @@ public sealed class HomeCellsCommandSourceTests
             .Should().Contain("InsertCellsMenuItem_Click(sender, e);");
         SourceMethodExtractor.ExtractMethodSource(source, "private void DeletePickerBtn_Click(")
             .Should().Contain("DeleteCellsMenuItem_Click(sender, e);");
-        source.Should().Contain("new InsertCellsCommand(_currentSheetId, currentRange, InsertCellsShiftDirection.Down)");
-        source.Should().Contain("new InsertCellsCommand(_currentSheetId, currentRange, InsertCellsShiftDirection.Right)");
-        source.Should().Contain("new InsertRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.RowCount)");
-        source.Should().Contain("new InsertColumnsCommand(_currentSheetId, currentRange.Start.Col, currentRange.ColCount)");
+        source.Should().Contain("_session.InsertSelectedCells(InsertCellsShiftDirection.Down)");
+        source.Should().Contain("_session.InsertSelectedCells(InsertCellsShiftDirection.Right)");
+        source.Should().Contain("_session.InsertSelectedRows()");
+        source.Should().Contain("_session.InsertSelectedColumns()");
         source.Should().Contain("private void InsertSheetMenuItem_Click(object sender, RoutedEventArgs e)   { AddSheetButton_Click(sender, e); }");
-        source.Should().Contain("new DeleteCellsCommand(_currentSheetId, currentRange, DeleteCellsShiftDirection.Up)");
-        source.Should().Contain("new DeleteCellsCommand(_currentSheetId, currentRange, DeleteCellsShiftDirection.Left)");
-        source.Should().Contain("new DeleteRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.RowCount)");
-        source.Should().Contain("new DeleteColumnsCommand(_currentSheetId, currentRange.Start.Col, currentRange.ColCount)");
-        source.Should().Contain("new RemoveSheetCommand(_currentSheetId)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden)");
+        source.Should().Contain("_session.DeleteSelectedCells(DeleteCellsShiftDirection.Up)");
+        source.Should().Contain("_session.DeleteSelectedCells(DeleteCellsShiftDirection.Left)");
+        source.Should().Contain("_session.DeleteSelectedRows()");
+        source.Should().Contain("_session.DeleteSelectedColumns()");
+        source.Should().Contain("CompleteWorksheetStructureEdit(result");
+        source.Should().NotContain("new InsertRowsCommand");
+        source.Should().NotContain("new InsertColumnsCommand");
+        source.Should().NotContain("new InsertCellsCommand");
+        source.Should().NotContain("new DeleteRowsCommand");
+        source.Should().NotContain("new DeleteColumnsCommand");
+        source.Should().NotContain("new DeleteCellsCommand");
+        source.Should().Contain("var deletedSheetId = _currentSheetId;");
+        source.Should().Contain("new RemoveSheetCommand(deletedSheetId)");
+        source.Should().Contain("_session.SetSelectedRowsHeight(dialog.Result.Height)");
+        source.Should().Contain("_session.SetSelectedColumnsWidth(dialog.Result.Width)");
+        source.Should().Contain("TryExecuteWorksheetLayout(_session.AutoFitSelectedRowHeight, \"Auto Row Height\")");
+        source.Should().Contain("TryExecuteWorksheetLayout(_session.AutoFitSelectedColumnWidth, \"Auto Column Width\")");
+        source.Should().Contain("_session.SetSelectedRowsHidden(hidden)");
+        source.Should().Contain("_session.SetSelectedColumnsHidden(hidden)");
         source.Should().Contain("private void FormatRenameSheetMenuItem_Click(object sender, RoutedEventArgs e) => RenameCurrentSheet();");
         source.Should().Contain("private void FormatTabColorMenuItem_Click(object sender, RoutedEventArgs e) => ColorCurrentSheetTab();");
         source.Should().Contain("private void FormatHideSheetMenuItem_Click(object sender, RoutedEventArgs e) => HideCurrentSheet();");
@@ -73,12 +81,11 @@ public sealed class HomeCellsCommandSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
 
         source.Should().Contain("private void SheetCtxHide_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("HideSheet(tab.Id);");
+        source.Should().Contain("HideSheets(selectedSheetIds);");
         source.Should().Contain("private void SheetCtxUnhide_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("UnhideSheet();");
         source.Should().Contain("private void HideCurrentSheet()");
-        source.Should().Contain("HideSheet(_currentSheetId);");
-        source.Should().Contain("private void HideSheet(SheetId sheetId)");
+        source.Should().Contain("private void HideSheets(IReadOnlyCollection<SheetId> sheetIds)");
         source.Should().Contain("new SetSheetHiddenCommand(sheetId, hidden: true)");
         source.Should().Contain("private void UnhideSheet()");
         source.Should().Contain("new UnhideSheetDialog(hiddenSheets.Select(sheet => sheet.Name))");
@@ -91,12 +98,12 @@ public sealed class HomeCellsCommandSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
 
         source.Should().Contain("private void SheetCtxTabColor_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("ColorSheetTab(tab.Id);");
+        source.Should().Contain("ColorSheetTabs(tab.Id, selectedSheetIds);");
         source.Should().Contain("private void ColorCurrentSheetTab()");
-        source.Should().Contain("ColorSheetTab(_currentSheetId);");
-        source.Should().Contain("private void ColorSheetTab(SheetId sheetId)");
+        source.Should().Contain("ColorSheetTabs(_currentSheetId, selectedSheetIds);");
+        source.Should().Contain("private void ColorSheetTabs(SheetId sheetId, IReadOnlyCollection<SheetId> sheetIds)");
         source.Should().Contain("TryShowColorPicker(\"Tab Color\"");
-        source.Should().Contain("new SetSheetTabColorCommand(sheetId, tabColor)");
+        source.Should().Contain("new SetSheetTabColorCommand(id, tabColor)");
     }
 
 }

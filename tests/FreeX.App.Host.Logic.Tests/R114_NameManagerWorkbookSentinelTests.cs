@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.App.Host;
-using FreeX.App.Presentation.NamedRanges;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -20,8 +20,8 @@ namespace FreeX.App.Host.Tests;
 /// sentinel, so the Scope combo could never even present that sheet's scope separately.
 ///
 /// The fix threads the real scope identity (a nullable <see cref="SheetId"/>) end to end instead of
-/// re-deriving it from the display label: <see cref="NamedRangeViewModel.ScopeSheetId"/> tracks each
-/// row's actual scope, <c>NamedRangeScopeOption</c> gives the Scope combo two distinct entries that
+/// re-deriving it from the display label: <see cref="DefinedNameRow.Scope"/> tracks each
+/// row's actual scope, <see cref="DefinedNameScopeOption"/> gives the Scope combo two distinct entries that
 /// may share a label but not an identity, and <c>ResolveScopeSheetId(string)</c> was deleted outright
 /// -- every caller that needs a scope identity now already has the real one in hand.
 /// </summary>
@@ -54,7 +54,7 @@ public sealed class R114_NameManagerWorkbookSentinelTests
                 // the pre-fix code instead of merely failing to compile.
                 var namesList = DialogSourceTestSupport.GetPrivateField<ListView>(dialog, "NamesList");
                 var scopedRow = namesList.Items
-                    .Cast<NamedRangeViewModel>()
+                    .Cast<DefinedNameRow>()
                     .Single(vm => vm.Name == "Rate" && vm.RefersTo == "Workbook!B2:B2");
                 namesList.SelectedItem = scopedRow;
 
@@ -100,7 +100,7 @@ public sealed class R114_NameManagerWorkbookSentinelTests
                 // compiles and runs against the pre-fix code.
                 var namesList = DialogSourceTestSupport.GetPrivateField<ListView>(dialog, "NamesList");
                 var globalRow = namesList.Items
-                    .Cast<NamedRangeViewModel>()
+                    .Cast<DefinedNameRow>()
                     .Single(vm => vm.Name == "Rate" && vm.RefersTo == "Sheet1!A1:A1");
                 namesList.SelectedItem = globalRow;
 
@@ -136,7 +136,7 @@ public sealed class R114_NameManagerWorkbookSentinelTests
             {
                 var method = typeof(NamedRangeDialog).GetMethod("GetScopeOptions", BindingFlags.NonPublic | BindingFlags.Instance)
                     ?? throw new MissingMethodException(nameof(NamedRangeDialog), "GetScopeOptions");
-                var options = (IReadOnlyList<NamedRangeScopeOption>)method.Invoke(dialog, null)!;
+                var options = (IReadOnlyList<DefinedNameScopeOption>)method.Invoke(dialog, null)!;
 
                 var workbookLabelled = options.Where(o => o.Label == "Workbook").ToList();
                 workbookLabelled.Should().HaveCount(2,
@@ -167,7 +167,7 @@ public sealed class R114_NameManagerWorkbookSentinelTests
             {
                 var method = typeof(NamedRangeDialog).GetMethod("GetScopeOptions", BindingFlags.NonPublic | BindingFlags.Instance)
                     ?? throw new MissingMethodException(nameof(NamedRangeDialog), "GetScopeOptions");
-                var options = (IReadOnlyList<NamedRangeScopeOption>)method.Invoke(dialog, null)!;
+                var options = (IReadOnlyList<DefinedNameScopeOption>)method.Invoke(dialog, null)!;
 
                 options.Should().HaveCount(3);
                 options.Should().ContainSingle(o => o.Label == "Workbook" && o.SheetId == null);
@@ -246,6 +246,9 @@ public sealed class R114_NameManagerWorkbookSentinelTests
         method.Invoke(dialog, [definition, originalName, originalScope, originalScopeSheetId]);
     }
 
-    private static ICommandBus CreateCommandBus(Workbook workbook) =>
-        new CommandBus(_ => new TestCommandContext(workbook));
+    private static Func<IWorkbookCommand, CommandOutcome> CreateCommandBus(Workbook workbook)
+    {
+        var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
+        return command => commandBus.Execute(workbook.Id, command);
+    }
 }

@@ -1,10 +1,10 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.AppServices;
 using FreeP.App.Compositor;
-using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
@@ -21,10 +21,9 @@ namespace FreeP.App.Host;
 /// The dialog is modeless (Show, not ShowDialog) so the user can interact with
 /// the slide canvas while the dialog is open.
 /// </summary>
-public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly EditingSession _editor;
-    private readonly Action? _onNavigationOrMutation;
+    private readonly FindReplaceDialogSession _session;
 
     // UI elements
     private readonly TextBox   _findBox;
@@ -39,15 +38,6 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly Button _replaceButton;
     private readonly Button _replaceAllButton;
 
-    // Search state
-    private List<TextSearchMatch> _matches = new();
-    private int _currentMatchIndex = -1;
-    private bool _showReplace;
-
-    internal FindReplaceWorkflowPlan LastWorkflowPlan { get; private set; } = null!;
-    internal bool ShowReplace => _showReplace;
-    internal string StatusText => _statusText.Text;
-
     // ── Construction ──────────────────────────────────────────────────────────
 
     public FindReplaceDialog(
@@ -55,15 +45,18 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         bool showReplace = false,
         Action? onNavigationOrMutation = null)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        _onNavigationOrMutation = onNavigationOrMutation;
+        _session = new FindReplaceDialogSession(editor, showReplace, onNavigationOrMutation);
+        var initial = _session.InitialState;
+        var surface = _session.Surface;
 
-        Title  = FindReplaceDialogPlanner.TitleForMode(showReplace);
+        Title  = _session.LastWorkflowPlan.Title;
         Width  = 440;
         SizeToContent = SizeToContent.Height;
         ResizeMode    = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
+        AutomationProperties.SetName(this, surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
 
         // ── Layout ────────────────────────────────────────────────────────────
 
@@ -88,26 +81,38 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 5 status
 
         // Row 0 — Find
-        var findLabel = MakeLabel("Find what:");
+        var findField = surface.Field(FindReplaceDialogField.Query);
+        var findLabel = MakeLabel(findField.Label);
         Grid.SetRow(findLabel, 0);
         Grid.SetColumn(findLabel, 0);
         grid.Children.Add(findLabel);
 
-        _findBox = new TextBox { Margin = new Thickness(6, 4, 0, 4) };
-        _findBox.TextChanged += (_, _) => InvalidateSearch();
+        _findBox = new TextBox
+        {
+            Text = initial.Query,
+            Margin = new Thickness(6, 4, 0, 4),
+        };
+        _findBox.TextChanged += (_, _) => ApplyWorkflowPlan(_session.SetQuery(_findBox.Text));
         _findBox.KeyDown += OnFindBoxKeyDown;
+        PresentationDialogControlAdapter.ApplySemantic(_findBox, findField);
         Grid.SetRow(_findBox, 0);
         Grid.SetColumn(_findBox, 1);
         grid.Children.Add(_findBox);
 
         // Row 1 — Replace
-        var replaceLabel = MakeLabel("Replace with:");
+        var replacementField = surface.Field(FindReplaceDialogField.Replacement);
+        var replaceLabel = MakeLabel(replacementField.Label);
         Grid.SetRow(replaceLabel, 1);
         Grid.SetColumn(replaceLabel, 0);
         grid.Children.Add(replaceLabel);
 
-        _replaceBox = new TextBox { Margin = new Thickness(6, 4, 0, 4) };
-        _replaceBox.TextChanged += (_, _) => RefreshWorkflowPlan();
+        _replaceBox = new TextBox
+        {
+            Text = initial.Replacement,
+            Margin = new Thickness(6, 4, 0, 4),
+        };
+        _replaceBox.TextChanged += (_, _) => ApplyWorkflowPlan(_session.SetReplacement(_replaceBox.Text));
+        PresentationDialogControlAdapter.ApplySemantic(_replaceBox, replacementField);
         Grid.SetRow(_replaceBox, 1);
         Grid.SetColumn(_replaceBox, 1);
         grid.Children.Add(_replaceBox);
@@ -118,12 +123,24 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Orientation = Orientation.Horizontal,
             Margin      = new Thickness(0, 4, 0, 4)
         };
-        _matchCaseBox = new CheckBox { Content = "Match case",  Margin = new Thickness(0, 0, 12, 0) };
-        _wholeWordBox = new CheckBox { Content = "Whole word",  Margin = new Thickness(0, 0, 0, 0)  };
-        _matchCaseBox.Checked   += (_, _) => InvalidateSearch();
-        _matchCaseBox.Unchecked += (_, _) => InvalidateSearch();
-        _wholeWordBox.Checked   += (_, _) => InvalidateSearch();
-        _wholeWordBox.Unchecked += (_, _) => InvalidateSearch();
+        _matchCaseBox = new CheckBox
+        {
+            Content = surface.OptionLabel(FindReplaceDialogOptionKind.MatchCase),
+            IsChecked = initial.MatchCase,
+            Margin = new Thickness(0, 0, 12, 0),
+        };
+        _wholeWordBox = new CheckBox
+        {
+            Content = surface.OptionLabel(FindReplaceDialogOptionKind.WholeWord),
+            IsChecked = initial.WholeWord,
+            Margin = new Thickness(0, 0, 0, 0),
+        };
+        _matchCaseBox.Checked   += (_, _) => ApplyWorkflowPlan(_session.SetMatchCase(true));
+        _matchCaseBox.Unchecked += (_, _) => ApplyWorkflowPlan(_session.SetMatchCase(false));
+        _wholeWordBox.Checked   += (_, _) => ApplyWorkflowPlan(_session.SetWholeWord(true));
+        _wholeWordBox.Unchecked += (_, _) => ApplyWorkflowPlan(_session.SetWholeWord(false));
+        PresentationDialogControlAdapter.ApplySemantic(_matchCaseBox, surface.Field(FindReplaceDialogField.MatchCase));
+        PresentationDialogControlAdapter.ApplySemantic(_wholeWordBox, surface.Field(FindReplaceDialogField.WholeWord));
         optPanel.Children.Add(_matchCaseBox);
         optPanel.Children.Add(_wholeWordBox);
         Grid.SetRow(optPanel, 2);
@@ -137,8 +154,12 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 4, 0, 0)
         };
-        _replaceButton = MakeButton("Replace", OnReplace);
-        _replaceAllButton = MakeButton("Replace All", OnReplaceAll);
+        _replaceButton = MakeButton(
+            surface.Action(FindReplaceDialogAction.ReplaceCurrent),
+            OnReplace);
+        _replaceAllButton = MakeButton(
+            surface.Action(FindReplaceDialogAction.ReplaceAll),
+            OnReplaceAll);
         replBtnPanel.Children.Add(_replaceButton);
         replBtnPanel.Children.Add(_replaceAllButton);
         Grid.SetRow(replBtnPanel, 3);
@@ -152,10 +173,15 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 4, 0, 0)
         };
-        _findNextButton = MakeButton("Find Next", OnFindNext, isDefault: true);
-        _findPreviousButton = MakeButton("Find Previous", OnFindPrev);
-        var closeBtn    = MakeButton("Close",         (_, _) => Close());
-        closeBtn.IsCancel = true;
+        _findNextButton = MakeButton(
+            surface.Action(FindReplaceDialogAction.FindNext),
+            OnFindNext);
+        _findPreviousButton = MakeButton(
+            surface.Action(FindReplaceDialogAction.FindPrevious),
+            OnFindPrev);
+        var closeBtn = MakeButton(
+            surface.Action(FindReplaceDialogAction.Close),
+            (_, _) => Close());
         findBtnPanel.Children.Add(_findNextButton);
         findBtnPanel.Children.Add(_findPreviousButton);
         findBtnPanel.Children.Add(closeBtn);
@@ -170,6 +196,7 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             FontSize   = 11,
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66))
         };
+        PresentationDialogControlAdapter.ApplySemantic(_statusText, surface.Field(FindReplaceDialogField.Status));
         Grid.SetRow(_statusText, 5);
         Grid.SetColumnSpan(_statusText, 2);
         grid.Children.Add(_statusText);
@@ -190,7 +217,7 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
 
         // Apply mode.
-        ShowReplaceMode(showReplace);
+        ApplyWorkflowPlan(_session.LastWorkflowPlan);
     }
 
     // ── Mode switching ────────────────────────────────────────────────────────
@@ -201,28 +228,8 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     /// </summary>
     public void ShowReplaceMode(bool show)
     {
-        _showReplace = show;
-        SetReplaceRowsVisible(show);
-        Title = FindReplaceDialogPlanner.TitleForMode(show);
-        RefreshWorkflowPlan();
+        ApplyWorkflowPlan(_session.SetShowReplace(show));
     }
-
-    internal FindReplaceWorkflowPlan SetInputForTests(
-        string? query,
-        string? replacement = null,
-        bool matchCase = false,
-        bool wholeWord = false)
-    {
-        _findBox.Text = query ?? string.Empty;
-        _replaceBox.Text = replacement ?? string.Empty;
-        _matchCaseBox.IsChecked = matchCase;
-        _wholeWordBox.IsChecked = wholeWord;
-        InvalidateSearch();
-        return LastWorkflowPlan;
-    }
-
-    internal FindReplaceWorkflowPlan NavigateForTests(int direction) => Navigate(direction);
-    internal FindReplaceWorkflowPlan ReplaceAllForTests() => ReplaceAll();
 
     private void SetReplaceRowsVisible(bool visible)
     {
@@ -242,46 +249,17 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     // ── Button handlers ───────────────────────────────────────────────────────
 
-    private void OnFindNext(object sender, RoutedEventArgs e) => Navigate(+1);
-    private void OnFindPrev(object sender, RoutedEventArgs e) => Navigate(-1);
+    private void OnFindNext(object sender, RoutedEventArgs e) =>
+        ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.FindNext));
 
-    private void OnReplace(object sender, RoutedEventArgs e) => ReplaceCurrent();
+    private void OnFindPrev(object sender, RoutedEventArgs e) =>
+        ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.FindPrevious));
 
-    private FindReplaceWorkflowPlan ReplaceCurrent()
-    {
-        EnsureMatches();
-        int idx = FindReplaceDialogPlanner.ReplacementTargetIndex(_currentMatchIndex, _matches.Count);
-        if (idx < 0)
-        {
-            return RefreshWorkflowPlan(
-                FindReplaceDialogPolicy.NoMatchesStatus,
-                FindReplacePolicyStatusKind.NoMatches);
-        }
+    private void OnReplace(object sender, RoutedEventArgs e) =>
+        ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.ReplaceCurrent));
 
-        _editor.ReplaceOne(_matches[idx], _replaceBox.Text ?? string.Empty);
-        _onNavigationOrMutation?.Invoke();
-        InvalidateSearch();
-        return Navigate(+1);
-    }
-
-    private void OnReplaceAll(object sender, RoutedEventArgs e) => ReplaceAll();
-
-    private FindReplaceWorkflowPlan ReplaceAll()
-    {
-        var query = _findBox.Text;
-        if (!FindReplaceDialogPlanner.CanReplaceAll(query))
-        {
-            return RefreshWorkflowPlan(
-                FindReplaceDialogPolicy.SearchTermRequiredMessage,
-                FindReplacePolicyStatusKind.None);
-        }
-
-        int count = _editor.ReplaceAll(query, _replaceBox.Text ?? string.Empty, BuildOptions());
-        _onNavigationOrMutation?.Invoke();
-        InvalidateSearch();
-        var status = FindReplaceDialogPlanner.ReplacementStatus(count);
-        return RefreshWorkflowPlan(status.StatusText, status.StatusKind);
-    }
+    private void OnReplaceAll(object sender, RoutedEventArgs e) =>
+        ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.ReplaceAll));
 
     // ── Keyboard shortcut: Enter = Find Next ─────────────────────────────────
 
@@ -289,64 +267,19 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         if (e.Key == Key.Return || e.Key == Key.Enter)
         {
-            Navigate(+1);
+            ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.FindNext));
             e.Handled = true;
         }
     }
 
     // ── Search helpers ────────────────────────────────────────────────────────
 
-    private void EnsureMatches()
+    private FindReplaceWorkflowPlan ApplyWorkflowPlan(FindReplaceWorkflowPlan plan)
     {
-        if (_matches.Count == 0)
-            _matches = _editor.FindAll(_findBox.Text, BuildOptions());
-    }
-
-    private void InvalidateSearch()
-    {
-        _matches.Clear();
-        _currentMatchIndex = -1;
-        RefreshWorkflowPlan();
-    }
-
-    private FindReplaceWorkflowPlan Navigate(int direction)
-    {
-        EnsureMatches();
-
-        var plan = FindReplaceDialogPlanner.Navigate(_currentMatchIndex, _matches.Count, direction);
-        if (!plan.HasMatch)
-            return RefreshWorkflowPlan(plan.StatusText, plan.StatusKind);
-
-        _currentMatchIndex = plan.MatchIndex;
-        var match = _matches[_currentMatchIndex];
-
-        _editor.NavigateTo(match);
-        _onNavigationOrMutation?.Invoke();
-
-        return RefreshWorkflowPlan(plan.StatusText, plan.StatusKind);
-    }
-
-    private TextSearchOptions BuildOptions() => FindReplaceDialogPlanner.BuildOptions(
-        _matchCaseBox.IsChecked == true,
-        _wholeWordBox.IsChecked == true);
-
-    private FindReplaceWorkflowPlan RefreshWorkflowPlan(
-        string? statusText = null,
-        FindReplacePolicyStatusKind statusKind = FindReplacePolicyStatusKind.None)
-    {
-        LastWorkflowPlan = FindReplaceDialogPlanner.BuildWorkflowPlan(
-            _showReplace,
-            _findBox.Text,
-            _replaceBox.Text,
-            _matchCaseBox.IsChecked == true,
-            _wholeWordBox.IsChecked == true,
-            _matches,
-            _currentMatchIndex,
-            statusText,
-            statusKind);
-
-        _statusText.Text = LastWorkflowPlan.StatusText;
-        _statusText.Foreground = LastWorkflowPlan.StatusKind switch
+        SetReplaceRowsVisible(plan.ShowReplace);
+        Title = plan.Title;
+        _statusText.Text = plan.StatusText;
+        _statusText.Foreground = plan.StatusKind switch
         {
             FindReplacePolicyStatusKind.NoMatches or FindReplacePolicyStatusKind.NoReplacements =>
                 new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28)),
@@ -354,11 +287,11 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 new SolidColorBrush(Color.FromRgb(0x1B, 0x7E, 0x30)),
             _ => new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
         };
-        _findNextButton.IsEnabled = LastWorkflowPlan.CanSearch;
-        _findPreviousButton.IsEnabled = LastWorkflowPlan.CanSearch;
-        _replaceButton.IsEnabled = LastWorkflowPlan.CanReplace;
-        _replaceAllButton.IsEnabled = LastWorkflowPlan.CanReplaceAll;
-        return LastWorkflowPlan;
+        _findNextButton.IsEnabled = plan.CanSearch;
+        _findPreviousButton.IsEnabled = plan.CanSearch;
+        _replaceButton.IsEnabled = plan.CanReplace;
+        _replaceAllButton.IsEnabled = plan.CanReplaceAll;
+        return plan;
     }
 
     // ── UI factory helpers ────────────────────────────────────────────────────
@@ -372,19 +305,22 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     };
 
     private static Button MakeButton(
-        string text,
-        RoutedEventHandler handler,
-        bool isDefault = false)
+        PresentationDialogActionPlan<FindReplaceDialogAction> action,
+        RoutedEventHandler handler)
     {
         var btn = new Button
         {
-            Content = text,
+            Content = action.Label,
             Padding = new Thickness(10, 4, 10, 4),
             Margin  = new Thickness(4, 0, 0, 0),
             MinWidth = 80,
-            IsDefault = isDefault,
+            IsDefault = action.IsDefault,
+            IsCancel = action.IsCancel,
         };
+        AutomationProperties.SetName(btn, action.AccessibleName);
+        AutomationProperties.SetAutomationId(btn, action.AutomationId);
         btn.Click += handler;
         return btn;
     }
+
 }

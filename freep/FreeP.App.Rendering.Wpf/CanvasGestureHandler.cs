@@ -4,7 +4,6 @@ using System.Windows.Input;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 using Free.Shared.Drawing;
-using System.Collections.Generic;
 
 namespace FreeP.App.Rendering.Wpf;
 
@@ -19,12 +18,11 @@ namespace FreeP.App.Rendering.Wpf;
 ///   <item>Maintains a live-preview offset/resize/rotate state during drag; commits one
 ///         command to <see cref="FreeP.App.Compositor.EditingSession"/> on mouse-up.</item>
 ///   <item>Drives a <see cref="SelectionAdorner"/> for visual feedback.</item>
-///   <item>All coordinate work is delegated to the framework-free helpers
-///         <see cref="SlideTransform"/> and <see cref="ShapeHitTester"/> so the logic
-///         is fully unit-testable.</item>
+///   <item>All coordinate work is delegated to the framework-free gesture router and preview
+///         projector so the logic is fully unit-testable.</item>
 /// </list>
 /// </summary>
-public sealed class CanvasGestureHandler : IDisposable
+public sealed partial class CanvasGestureHandler : IDisposable, ICanvasGesturePreviewSurface
 {
     // ── Wiring ────────────────────────────────────────────────────────────────────────────────
 
@@ -39,60 +37,45 @@ public sealed class CanvasGestureHandler : IDisposable
 
     // ── Drag state ────────────────────────────────────────────────────────────────────────────
 
-    private enum GestureKind { None, Move, Resize, Rotate, GeometryAdjustment, Marquee }
-
-    private GestureKind                     _gesture = GestureKind.None;
-    private Point                           _dragStartScreen;          // screen px at start
-    private bool                            _dragStarted;
+    private readonly CanvasGestureRouter _gestureRouter;
 
     // ── Move ──────────────────────────────────────────────────────────────────────────────────
-    private IReadOnlyList<CanvasMoveShapeState>? _moveStartShapes;
 
     // ── Resize ────────────────────────────────────────────────────────────────────────────────
-    private uint                    _resizeShapeId;
-    private long                    _resizeOrigX, _resizeOrigY, _resizeOrigCx, _resizeOrigCy;
-    private double                  _resizeOrigRotationDeg;
-    private CanvasGestureHandleKind     _resizeHandle;
-    private IReadOnlyList<CanvasTransformShapeState>? _multiTransformStartShapes;
 
     // ── Rotate ────────────────────────────────────────────────────────────────────────────────
-    private uint   _rotateShapeId;
-    private double _rotateOrigDeg;
-    private Point  _rotateCenterSlide;  // shape center in slide DIP
 
     // Preset geometry edit-point gesture
-    private uint _geometryShapeId;
-    private string? _geometryHandleName;
-    private LayoutRect _geometryBoundsDip;
-    private Point _geometryDragStartScreen;
 
     // ── Marquee ───────────────────────────────────────────────────────────────────────────────
-    private Point  _marqueeStartSlide;
 
     // ── Small nudge step ──────────────────────────────────────────────────────────────────────
-    private const long SmallNudgeEmu = 91440L;    // ~0.1 inch
-    private const long LargeNudgeEmu = 914400L;   // 1 inch
-
     // ── Wave 12B: Snap settings ───────────────────────────────────────────────────────────────
     // Both default on; holding Alt during drag disables snapping (PowerPoint convention).
 
     /// <summary>When true (default), shapes snap to the background grid during move/resize.</summary>
-    public bool SnapToGrid   { get; set; } = true;
+    public bool SnapToGrid
+    {
+        get => _gestureRouter.SnapToGrid;
+        set => _gestureRouter.SnapToGrid = value;
+    }
 
     /// <summary>When true (default), shapes snap to other shapes' edges and centers during move/resize.</summary>
-    public bool SnapToShapes { get; set; } = true;
-
-    private bool _editPointsEnabled = true;
+    public bool SnapToShapes
+    {
+        get => _gestureRouter.SnapToShapes;
+        set => _gestureRouter.SnapToShapes = value;
+    }
 
     /// <summary>When enabled, supported preset shapes expose draggable edit points.</summary>
     public bool EditPointsEnabled
     {
-        get => _editPointsEnabled;
+        get => _gestureRouter.EditPointsEnabled;
         set
         {
-            if (_editPointsEnabled == value)
+            if (_gestureRouter.EditPointsEnabled == value)
                 return;
-            _editPointsEnabled = value;
+            _gestureRouter.EditPointsEnabled = value;
             RefreshAdorner();
         }
     }
@@ -108,6 +91,7 @@ public sealed class CanvasGestureHandler : IDisposable
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+        _gestureRouter = new CanvasGestureRouter(_editor);
         _tryOpenOleInPlace = tryOpenOleInPlace;
         _onChartPointDoubleClick = onChartPointDoubleClick;
         _tryActivateOleExternally = tryActivateOleExternally;
@@ -165,192 +149,65 @@ public sealed class CanvasGestureHandler : IDisposable
     private void OnMouseDown(object sender, MouseButtonEventArgs e)
     {
         _canvas.Focus();
-        var pt   = e.GetPosition(_canvas);
-        var xf   = _canvas.CurrentTransform;
+        var pt = e.GetPosition(_canvas);
+        var xf = _canvas.CurrentTransform;
         var slide = _editor.CurrentSlide;
 
         if (slide is null || _editor.Presentation is null)
             return;
 
-        // PowerPoint's single-click Format Painter waits for the next shape hit instead of
-        // turning that click into a move, resize, marquee, OLE activation, or zoom action.
-        if (_editor.IsFormatPainterActive)
-        {
-            var painterSlidePoint = xf.ScreenToSlide(pt.X, pt.Y);
-            var painterHitId = ShapeHitTester.HitTest(
-                slide,
-                _editor.Presentation,
-                painterSlidePoint.X,
-                painterSlidePoint.Y);
-            if (painterHitId.HasValue)
-                _editor.TryApplyFormatPainterToShape(painterHitId.Value);
-
-            e.Handled = true;
-            return;
-        }
-
-        if (e.ClickCount >= 2)
-        {
-            var slidePoint = xf.ScreenToSlide(pt.X, pt.Y);
-            if (_onChartPointDoubleClick is not null &&
-                ChartPointHitTester.TryHitTest(
-                    slide,
-                    _editor.Presentation,
-                    slidePoint.X,
-                    slidePoint.Y,
-                    out var chartPointHit))
-            {
-                _onChartPointDoubleClick(chartPointHit);
-                e.Handled = true;
-                return;
-            }
-            var oleHitId = ShapeHitTester.HitTest(
-                slide,
-                _editor.Presentation,
-                slidePoint.X,
-                slidePoint.Y);
-            var shape = oleHitId.HasValue
-                ? ShapeHitTester.FindShape(slide, oleHitId.Value)
-                : null;
-            if (shape?.Kind == SlideShapeKind.Ole)
-            {
-                HandleOleDoubleClick(shape);
-                e.Handled = true;
-                return;
-            }
-            if (shape?.Kind == SlideShapeKind.Zoom &&
-                ZoomNavigationService.TryGetTargetSlideIndex(
-                    _editor.Presentation,
-                    shape.PreservedObject,
-                    out var targetSlideIndex))
-            {
-                _editor.SelectSlide(targetSlideIndex);
-                e.Handled = true;
-                return;
-            }
-
-            // Text editing remains the responsibility of InCanvasTextEditor. Keep text-bearing
-            // shapes out of the normal selection path while allowing textless shapes to select.
-            if (!ShouldContinueDoubleClickSelection(shape))
-                return;
-        }
-
-        // Determine what was hit first for the existing selection (handles take priority)
-        if (_editor.SelectedShapeIds.Count > 0)
-        {
-            // A multi-selection has one group box. Its handles operate on every selected shape.
-            if (_editor.SelectedShapeIds.Count > 1 && _adorner.SelectionBounds is { } groupRect)
-            {
-                var groupHandle = _adorner.HitTestHandle(groupRect, pt);
-                if (groupHandle == CanvasGestureHandleKind.Rotate)
-                {
-                    StartMultiRotate(slide, pt);
-                    e.Handled = true;
-                    return;
-                }
-                if (groupHandle is not CanvasGestureHandleKind.None and not CanvasGestureHandleKind.Body)
-                {
-                    StartMultiResize(slide, groupHandle, pt);
-                    e.Handled = true;
-                    return;
-                }
-            }
-
-            // Single-selection handles retain their existing shape-local behavior.
-            if (_editor.SelectedShapeIds.Count == 1)
-            {
-                var selId   = _editor.SelectedShapeIds[0];
-                var selRect = GetSelectionScreenRect(selId, slide, xf);
-                if (selRect.HasValue)
-                {
-                    if (EditPointsEnabled)
-                    {
-                        var geometryHandle = _adorner.HitTestGeometryHandle(pt);
-                        if (geometryHandle is not null)
-                        {
-                            StartGeometryAdjustment(selId, slide, xf, geometryHandle, pt);
-                            e.Handled = true;
-                            return;
-                        }
-                    }
-
-                    var hitHandle = _adorner.HitTestHandle(selRect.Value, pt);
-                    if (hitHandle == CanvasGestureHandleKind.Rotate)
-                    {
-                        StartRotate(selId, slide, xf, pt);
-                        e.Handled = true;
-                        return;
-                    }
-                    if (hitHandle != CanvasGestureHandleKind.None &&
-                        hitHandle != CanvasGestureHandleKind.Body)
-                    {
-                        StartResize(selId, slide, hitHandle, pt);
-                        e.Handled = true;
-                        return;
-                    }
-                    if (hitHandle == CanvasGestureHandleKind.Body)
-                    {
-                        // Body of already-selected shape: start move
-                        StartMove(slide, xf, pt);
-                        e.Handled = true;
-                        return;
-                    }
-                }
-            }
-            else
-            {
-                // Multi-selection: hit any selected body -> move
-                var slidePt = xf.ScreenToSlide(pt.X, pt.Y);
-                bool hitAny = false;
-                foreach (var sid in _editor.SelectedShapeIds)
-                {
-                    var b = ShapeHitTester.GetShapeBoundsDip(
-                        slide,
-                        _editor.Presentation,
-                        sid);
-                    if (b is { } bounds &&
-                        slidePt.X >= bounds.Left && slidePt.X <= bounds.Right &&
-                        slidePt.Y >= bounds.Top  && slidePt.Y <= bounds.Bottom)
-                    {
-                        hitAny = true;
-                        break;
-                    }
-                }
-                if (hitAny)
-                {
-                    StartMove(slide, xf, pt);
-                    e.Handled = true;
-                    return;
-                }
-            }
-        }
-
-        // Hit-test slide shapes
-        var slidePt2 = xf.ScreenToSlide(pt.X, pt.Y);
-        var hitId    = ShapeHitTester.HitTest(slide, _editor.Presentation, slidePt2.X, slidePt2.Y);
-
-        if (hitId.HasValue)
-        {
-            bool addToSelection = (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) != 0;
-            _editor.Select(hitId.Value, addToSelection);
-            // If not multi-select, prepare for possible move
-            if (!addToSelection || _editor.SelectedShapeIds.Count <= 1)
-            {
-                StartMove(slide, xf, pt);
-            }
-        }
-        else
-        {
-            // Click on empty -> start marquee or clear
-            _editor.ClearSelection();
-            StartMarquee(xf, pt);
-        }
-
-        e.Handled = true;
+        var plan = _gestureRouter.HandlePointerPressed(CreatePressRequest(
+            pt,
+            xf,
+            slide,
+            e.ClickCount,
+            ToGestureModifiers(Keyboard.Modifiers)));
+        ApplyPressAction(plan);
+        if (plan.CapturePointer)
+            _canvas.CaptureMouse();
+        e.Handled = plan.Handled;
     }
 
     internal static bool ShouldContinueDoubleClickSelection(SlideShape? shape) =>
-        shape?.TextBody is null;
+        CanvasGesturePlanner.ShouldContinueDoubleClickSelection(shape);
+
+    private CanvasGesturePressRequest CreatePressRequest(
+        Point point,
+        SlideTransform transform,
+        Slide slide,
+        int clickCount,
+        CanvasGestureModifiers modifiers)
+    {
+        var coreTransform = ToCoreTransform(transform);
+        var projection = SelectionAdornerGeometry.BuildProjection(
+            slide,
+            _editor.Presentation!,
+            _editor.SelectedShapeIds,
+            coreTransform,
+            EditPointsEnabled);
+        return CanvasGestureInteractionPlanner.BuildPressRequest(
+            ToGesturePoint(point),
+            coreTransform,
+            projection,
+            clickCount,
+            modifiers,
+            EditPointsEnabled,
+            _onChartPointDoubleClick is not null);
+    }
+
+    private void ApplyPressAction(CanvasGesturePressPlan plan)
+    {
+        switch (plan.Action)
+        {
+            case CanvasGesturePressActionKind.NotifyChartPointDoubleClick
+                when plan.ChartPoint is { } chartPoint:
+                _onChartPointDoubleClick?.Invoke(chartPoint);
+                break;
+            case CanvasGesturePressActionKind.ActivateOle when plan.Shape is { } shape:
+                HandleOleDoubleClick(shape);
+                break;
+        }
+    }
 
     // ── Mouse move ────────────────────────────────────────────────────────────────────────────
 
@@ -362,81 +219,51 @@ public sealed class CanvasGestureHandler : IDisposable
             return;
         }
 
-        var pt  = e.GetPosition(_canvas);
-        var xf  = _canvas.CurrentTransform;
-        var slide = _editor.CurrentSlide;
-        if (slide is null) return;
-
-        switch (_gesture)
-        {
-            case GestureKind.Move:
-                PreviewMove(pt, xf, slide);
-                break;
-            case GestureKind.Resize:
-                PreviewResize(pt, xf);
-                break;
-            case GestureKind.Rotate:
-                PreviewRotate(pt, xf);
-                break;
-            case GestureKind.GeometryAdjustment:
-                PreviewGeometryAdjustment(pt, xf);
-                break;
-            case GestureKind.Marquee:
-                PreviewMarquee(pt, xf);
-                break;
-        }
+        var point = e.GetPosition(_canvas);
+        var transform = _canvas.CurrentTransform;
+        ApplyPreviewPlan(
+            _gestureRouter.PreviewPointer(
+                ToGesturePoint(point),
+                ToCoreTransform(transform),
+                ToGestureModifiers(Keyboard.Modifiers)),
+            transform);
     }
 
-    internal bool HandleOleDoubleClickForTests(SlideShape shape) => HandleOleDoubleClick(shape);
-
-    private bool HandleOleDoubleClick(SlideShape shape)
-    {
-        if (shape.Kind != SlideShapeKind.Ole)
-            return false;
-        if (_tryOpenOleInPlace?.Invoke(shape) == true)
-            return true;
-        return _tryActivateOleExternally?.Invoke(shape.OleObject)
-            ?? OleActivationService.TryActivate(shape.OleObject);
-    }
+    private bool HandleOleDoubleClick(SlideShape shape) =>
+        OleActivationCoordinator.TryActivate(
+            shape,
+            _tryOpenOleInPlace,
+            _tryActivateOleExternally);
 
     // ── Mouse up ──────────────────────────────────────────────────────────────────────────────
 
     private void OnMouseUp(object sender, MouseButtonEventArgs e)
     {
-        CompleteGesture(e.GetPosition(_canvas), _canvas.CurrentTransform);
+        CompleteGesture(
+            e.GetPosition(_canvas),
+            _canvas.CurrentTransform,
+            ToGestureModifiers(Keyboard.Modifiers));
         _canvas.ReleaseMouseCapture();
     }
 
     private void OnLostMouseCapture(object sender, MouseEventArgs e) =>
         CancelActiveGesture(releaseCapture: false);
 
-    private void CompleteGesture(Point pt, SlideTransform xf)
+    private void CompleteGesture(
+        Point point,
+        SlideTransform transform,
+        CanvasGestureModifiers modifiers)
     {
-        switch (_gesture)
-        {
-            case GestureKind.Move:
-                CommitMove(pt, xf);
-                break;
-            case GestureKind.Resize:
-                CommitResize(pt, xf);
-                break;
-            case GestureKind.Rotate:
-                CommitRotate(pt, xf);
-                break;
-            case GestureKind.GeometryAdjustment:
-                CommitGeometryAdjustment(pt, xf);
-                break;
-            case GestureKind.Marquee:
-                CommitMarquee(pt, xf);
-                break;
-        }
-
-        ClearGestureState();
+        _gestureRouter.CompletePointer(
+            ToGesturePoint(point),
+            ToCoreTransform(transform),
+            modifiers);
+        ClearTransientInteractionVisuals();
     }
 
     private void CancelActiveGesture(bool releaseCapture)
     {
-        bool wasActive = _gesture != GestureKind.None;
+        bool wasActive = _gestureRouter.IsActive;
         ClearGestureState();
         if (wasActive && releaseCapture)
             _canvas.ReleaseMouseCapture();
@@ -444,175 +271,62 @@ public sealed class CanvasGestureHandler : IDisposable
 
     private void ClearGestureState()
     {
-        _gesture = GestureKind.None;
+        _gestureRouter.Cancel();
+        ClearTransientInteractionVisuals();
+    }
 
-        _dragStarted = false;
-        _moveStartShapes = null;
-        _multiTransformStartShapes = null;
-        _dragStartScreen = default;
-        _resizeShapeId = 0;
-        _resizeOrigX = _resizeOrigY = _resizeOrigCx = _resizeOrigCy = 0;
-        _resizeOrigRotationDeg = 0;
-        _resizeHandle = CanvasGestureHandleKind.None;
-        _rotateShapeId = 0;
-        _rotateOrigDeg = 0;
-        _rotateCenterSlide = default;
-        _geometryShapeId = 0;
-        _geometryHandleName = null;
-        _geometryBoundsDip = default;
-        _geometryDragStartScreen = default;
-        _marqueeStartSlide = default;
+    private void ClearTransientInteractionVisuals()
+    {
         _canvas.UpdateTransformPreview(CanvasMultiTransformPlan.Empty);
         _adorner.UpdatePreview(null);
         _adorner.UpdateTransformPreview(CanvasMultiTransformPlan.Empty);
         _adorner.UpdateGeometryPreview(null, null);
         _adorner.UpdateMarquee(null);
-        _adorner.UpdateSnapGuides(null, SlideTransform.Identity);
+        _adorner.UpdateSnapGuides(null, SlideTransformCore.Identity);
     }
 
     // ── Move gesture ──────────────────────────────────────────────────────────────────────────
 
-    private void StartMove(Slide slide, SlideTransform xf, Point screenPt)
+    private void ApplyPreviewPlan(CanvasGesturePreviewPlan plan, SlideTransform transform)
     {
-        _gesture          = GestureKind.Move;
-        _dragStartScreen  = screenPt;
-        _dragStarted      = false;
-        _moveStartShapes = CanvasGesturePlanner.CaptureMoveState(slide, _editor.SelectedShapeIds);
-        _canvas.CaptureMouse();
+        var coreTransform = ToCoreTransform(transform);
+        var visual = CanvasGesturePreviewProjector.Project(
+            plan,
+            _editor.CurrentSlide,
+            _editor.Presentation,
+            coreTransform);
+        CanvasGesturePreviewDispatcher.Apply(visual, coreTransform, this);
     }
 
-    private void PreviewMove(Point screenPt, SlideTransform xf, Slide slide)
+    void ICanvasGesturePreviewSurface.UpdatePreview(
+        SlideScreenRect? bounds,
+        double rotationDegrees) =>
+        _adorner.UpdatePreview(
+            bounds is { } value ? ToWpfRect(value) : null,
+            rotationDegrees);
+
+    void ICanvasGesturePreviewSurface.UpdateSnapGuides(
+        IReadOnlyList<SnapGuideLine>? guides,
+        SlideTransformCore transform) =>
+        _adorner.UpdateSnapGuides(guides, transform);
+
+    void ICanvasGesturePreviewSurface.UpdateTransformPreview(CanvasMultiTransformPlan plan)
     {
-        var drag = ReduceDrag(screenPt);
-        if (!drag.DragStarted)
-            return;
-        _dragStarted = drag.DragStarted;
-
-        if (_moveStartShapes is null)
-            return;
-
-        var plan = CanvasGesturePlanner.PlanMove(new CanvasMoveRequest(
-            StartScreen: ToGesturePoint(_dragStartScreen),
-            CurrentScreen: ToGesturePoint(screenPt),
-            Transform: ToCoreTransform(xf),
-            Shapes: _moveStartShapes,
-            CurrentSlide: slide,
-            SnapToGrid: SnapToGrid,
-            SnapToShapes: SnapToShapes,
-            BypassSnap: (Keyboard.Modifiers & ModifierKeys.Alt) != 0));
-
-        _adorner.UpdatePreview(plan.PreviewBounds is { } bounds ? ToWpfRect(bounds) : null);
-        _adorner.UpdateSnapGuides(plan.SnapGuides.Count > 0 ? plan.SnapGuides : null, xf);
+        _adorner.UpdateTransformPreview(plan);
+        _canvas.UpdateTransformPreview(plan);
     }
 
-    private void CommitMove(Point screenPt, SlideTransform xf)
-    {
-        if (_moveStartShapes is null) return;
-        var drag = ReduceDrag(screenPt);
-        if (!_dragStarted || !drag.ShouldCommit) return;
+    void ICanvasGesturePreviewSurface.UpdateGeometryPreview(
+        string handleName,
+        CanvasGesturePoint screenPoint) =>
+        _adorner.UpdateGeometryPreview(
+            handleName,
+            new Point(screenPoint.X, screenPoint.Y));
 
-        var plan = CanvasGesturePlanner.PlanMove(new CanvasMoveRequest(
-            StartScreen: ToGesturePoint(_dragStartScreen),
-            CurrentScreen: ToGesturePoint(screenPt),
-            Transform: ToCoreTransform(xf),
-            Shapes: _moveStartShapes,
-            CurrentSlide: _editor.CurrentSlide,
-            SnapToGrid: SnapToGrid,
-            SnapToShapes: SnapToShapes,
-            BypassSnap: (Keyboard.Modifiers & ModifierKeys.Alt) != 0));
-
-        _editor.MoveSelected(plan.DeltaXEmu, plan.DeltaYEmu);
-    }
+    void ICanvasGesturePreviewSurface.UpdateMarquee(SlideScreenRect bounds) =>
+        _adorner.UpdateMarquee(ToWpfRect(bounds));
 
     // ── Resize gesture ────────────────────────────────────────────────────────────────────────
-
-    private void StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle, Point screenPt)
-    {
-        var s = slide.Shapes.FirstOrDefault(sh => sh.Id == shapeId);
-        if (s is null) return;
-
-        _gesture               = GestureKind.Resize;
-        _dragStartScreen       = screenPt;
-        _dragStarted           = false;
-        _resizeShapeId         = shapeId;
-        _resizeOrigX           = s.OffsetXEmu;
-        _resizeOrigY           = s.OffsetYEmu;
-        _resizeOrigCx          = s.ExtentCxEmu;
-        _resizeOrigCy          = s.ExtentCyEmu;
-        _resizeOrigRotationDeg = s.RotationDeg;
-        _resizeHandle          = handle;
-        _canvas.CaptureMouse();
-    }
-
-    private void StartMultiResize(Slide slide, CanvasGestureHandleKind handle, Point screenPt)
-    {
-        _multiTransformStartShapes = CanvasGesturePlanner.CaptureTransformState(
-            slide,
-            _editor.SelectedShapeIds);
-        if (_multiTransformStartShapes.Count == 0)
-            return;
-
-        _gesture = GestureKind.Resize;
-        _dragStartScreen = screenPt;
-        _dragStarted = false;
-        _resizeHandle = handle;
-        _canvas.CaptureMouse();
-    }
-
-    private void PreviewResize(Point screenPt, SlideTransform xf)
-    {
-        var drag = ReduceDrag(screenPt);
-        if (!drag.DragStarted)
-            return;
-        _dragStarted = drag.DragStarted;
-
-        if (_multiTransformStartShapes is not null)
-        {
-            var plan = CanvasGesturePlanner.PlanMultiResize(new CanvasMultiResizeRequest(
-                ToGesturePoint(_dragStartScreen),
-                ToGesturePoint(screenPt),
-                ToCoreTransform(xf),
-                _resizeHandle,
-                _multiTransformStartShapes,
-                _editor.CurrentSlide,
-                SnapToGrid,
-                SnapToShapes,
-                (Keyboard.Modifiers & ModifierKeys.Alt) != 0));
-            _adorner.UpdateTransformPreview(plan);
-            _canvas.UpdateTransformPreview(plan);
-            return;
-        }
-
-        var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf);
-        var r = SlideCanvasGeometryPlanner.EmuBoundsToScreen(nx, ny, ncx, ncy, ToCoreTransform(xf));
-        _adorner.UpdatePreview(ToWpfRect(r));
-    }
-
-    private void CommitResize(Point screenPt, SlideTransform xf)
-    {
-        var drag = ReduceDrag(screenPt);
-        if (!_dragStarted || !drag.ShouldCommit)
-            return;
-
-        if (_multiTransformStartShapes is not null)
-        {
-            var plan = CanvasGesturePlanner.PlanMultiResize(new CanvasMultiResizeRequest(
-                ToGesturePoint(_dragStartScreen),
-                ToGesturePoint(screenPt),
-                ToCoreTransform(xf),
-                _resizeHandle,
-                _multiTransformStartShapes,
-                _editor.CurrentSlide,
-                SnapToGrid,
-                SnapToShapes,
-                (Keyboard.Modifiers & ModifierKeys.Alt) != 0));
-            _editor.ApplySelectedTransforms(plan.Shapes);
-            return;
-        }
-
-        var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf);
-        _editor.ResizeShape(_resizeShapeId, nx, ny, ncx, ncy);
-    }
 
     /// <summary>
     /// Given the current drag screen point, computes the new shape bounds in EMU.
@@ -625,241 +339,17 @@ public sealed class CanvasGestureHandler : IDisposable
     public (long newX, long newY, long newCx, long newCy) ComputeResizeBounds(
         Point screenPt, SlideTransform xf)
     {
-        var result = CanvasGesturePlanner.ComputeResizeBounds(new CanvasResizeRequest(
-            StartScreen: ToGesturePoint(_dragStartScreen),
-            CurrentScreen: ToGesturePoint(screenPt),
-            Transform: ToCoreTransform(xf),
-            State: new CanvasResizeState(
-                _resizeShapeId,
-                _resizeOrigX,
-                _resizeOrigY,
-                _resizeOrigCx,
-                _resizeOrigCy,
-                _resizeOrigRotationDeg,
-                _resizeHandle),
-            CurrentSlide: _editor.CurrentSlide,
-            SnapToGrid: SnapToGrid,
-            SnapToShapes: SnapToShapes,
-            BypassSnap: (Keyboard.Modifiers & ModifierKeys.Alt) != 0));
+        var result = _gestureRouter.PlanResize(
+            ToGesturePoint(screenPt),
+            ToCoreTransform(xf),
+            ToGestureModifiers(Keyboard.Modifiers));
 
         return (result.XEmu, result.YEmu, result.CxEmu, result.CyEmu);
     }
 
     // ── Rotate gesture ────────────────────────────────────────────────────────────────────────
 
-    private void StartRotate(uint shapeId, Slide slide, SlideTransform xf, Point screenPt)
-    {
-        var s = slide.Shapes.FirstOrDefault(sh => sh.Id == shapeId);
-        if (s is null) return;
-
-        _gesture        = GestureKind.Rotate;
-        _dragStartScreen= screenPt;
-        _dragStarted    = false;
-        _rotateShapeId  = shapeId;
-        _rotateOrigDeg  = s.RotationDeg;
-
-        // Shape center in slide DIP
-        double cx = SlideTransform.EmuToDip(s.OffsetXEmu + s.ExtentCxEmu / 2);
-        double cy = SlideTransform.EmuToDip(s.OffsetYEmu + s.ExtentCyEmu / 2);
-        _rotateCenterSlide = new Point(cx, cy);
-
-        _canvas.CaptureMouse();
-    }
-
-    private void StartMultiRotate(Slide slide, Point screenPt)
-    {
-        _multiTransformStartShapes = CanvasGesturePlanner.CaptureTransformState(
-            slide,
-            _editor.SelectedShapeIds);
-        if (_multiTransformStartShapes.Count == 0)
-            return;
-
-        _gesture = GestureKind.Rotate;
-        _dragStartScreen = screenPt;
-        _dragStarted = false;
-        _canvas.CaptureMouse();
-    }
-
-    private void PreviewRotate(Point screenPt, SlideTransform xf)
-    {
-        var drag = ReduceDrag(screenPt);
-        if (!drag.DragStarted)
-            return;
-        _dragStarted = drag.DragStarted;
-
-        if (_multiTransformStartShapes is not null)
-        {
-            var plan = CanvasGesturePlanner.PlanMultiRotate(new CanvasMultiRotateRequest(
-                ToGesturePoint(_dragStartScreen),
-                ToGesturePoint(screenPt),
-                ToCoreTransform(xf),
-                _multiTransformStartShapes,
-                (Keyboard.Modifiers & ModifierKeys.Shift) != 0));
-            _adorner.UpdateTransformPreview(plan);
-            _canvas.UpdateTransformPreview(plan);
-            return;
-        }
-
-        double angle = ComputeRotationAngle(screenPt, xf);
-        // Show preview using selection rect with rotation hint
-        if (_editor.CurrentSlide is not null && _editor.Presentation is not null)
-        {
-            var s = _editor.CurrentSlide.Shapes.FirstOrDefault(sh => sh.Id == _rotateShapeId);
-            if (s is not null)
-            {
-                var r = GetSelectionScreenRect(_rotateShapeId, _editor.CurrentSlide, xf);
-                if (r.HasValue)
-                    _adorner.UpdatePreview(r.Value, angle);
-            }
-        }
-    }
-
-    private void CommitRotate(Point screenPt, SlideTransform xf)
-    {
-        var drag = ReduceDrag(screenPt);
-        if (!_dragStarted || !drag.ShouldCommit)
-            return;
-
-        if (_multiTransformStartShapes is not null)
-        {
-            var plan = CanvasGesturePlanner.PlanMultiRotate(new CanvasMultiRotateRequest(
-                ToGesturePoint(_dragStartScreen),
-                ToGesturePoint(screenPt),
-                ToCoreTransform(xf),
-                _multiTransformStartShapes,
-                (Keyboard.Modifiers & ModifierKeys.Shift) != 0));
-            _editor.ApplySelectedTransforms(plan.Shapes);
-            return;
-        }
-
-        double angle = ComputeRotationAngle(screenPt, xf);
-        _editor.RotateShape(_rotateShapeId, angle);
-    }
-
     // ── Preset geometry edit-point gesture ─────────────────────────────────────────────────────
-
-    private void StartGeometryAdjustment(
-        uint shapeId,
-        Slide slide,
-        SlideTransform xf,
-        string handleName,
-        Point screenPt)
-    {
-        if (_editor.Presentation is null)
-            return;
-
-        var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
-        if (shape is null)
-            return;
-
-        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, slide, _editor.Presentation).ToLayoutRect();
-        if (shape.Kind == SlideShapeKind.Picture)
-        {
-            var cropPlan = PictureCropAuthoringPlanner.Build(shape, bounds);
-            if (!cropPlan.CanEdit || cropPlan.Handles.All(handle => handle.Name != handleName))
-                return;
-        }
-        else
-        {
-            var plan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
-            if (!plan.CanEdit || plan.Handles.All(handle => handle.Name != handleName))
-                return;
-        }
-
-        _gesture = GestureKind.GeometryAdjustment;
-        _geometryShapeId = shapeId;
-        _geometryHandleName = handleName;
-        _geometryBoundsDip = bounds;
-        _geometryDragStartScreen = screenPt;
-        _canvas.CaptureMouse();
-    }
-
-    private void PreviewGeometryAdjustment(Point screenPt, SlideTransform xf)
-    {
-        if (_geometryHandleName is null)
-            return;
-
-        var pointerSlide = xf.ScreenToSlide(screenPt.X, screenPt.Y);
-        if (_editor.CurrentSlide is { } slide &&
-            slide.Shapes.FirstOrDefault(candidate => candidate.Id == _geometryShapeId) is { Kind: SlideShapeKind.Picture } picture)
-        {
-            var cropMutation = PictureCropAuthoringPlanner.BuildMutationPlan(
-                picture,
-                _geometryBoundsDip,
-                _geometryHandleName,
-                new LayoutPoint(pointerSlide.X, pointerSlide.Y));
-            if (cropMutation.Values is { } cropValues)
-            {
-                var cropPosition = PictureCropAuthoringPlanner.PositionFor(
-                    _geometryBoundsDip,
-                    cropValues,
-                    _geometryHandleName);
-                var cropScreen = xf.SlideToScreen(cropPosition.X, cropPosition.Y);
-                _adorner.UpdateGeometryPreview(
-                    _geometryHandleName,
-                    new Point(cropScreen.X, cropScreen.Y));
-            }
-            return;
-        }
-
-        var previewScreen = xf.SlideToScreen(pointerSlide.X, pointerSlide.Y);
-        _adorner.UpdateGeometryPreview(_geometryHandleName, previewScreen);
-    }
-
-    private void CommitGeometryAdjustment(Point screenPt, SlideTransform xf)
-    {
-        if (_geometryHandleName is null || _editor.CurrentSlide is null)
-            return;
-
-        var dx = screenPt.X - _geometryDragStartScreen.X;
-        var dy = screenPt.Y - _geometryDragStartScreen.Y;
-        if (dx * dx + dy * dy < 1.0)
-            return;
-
-        var shape = _editor.CurrentSlide.Shapes.FirstOrDefault(candidate => candidate.Id == _geometryShapeId);
-        if (shape is null)
-            return;
-
-        var pointerSlide = xf.ScreenToSlide(screenPt.X, screenPt.Y);
-        if (shape.Kind == SlideShapeKind.Picture)
-        {
-            var cropMutation = PictureCropAuthoringPlanner.BuildMutationPlan(
-                shape,
-                _geometryBoundsDip,
-                _geometryHandleName,
-                new LayoutPoint(pointerSlide.X, pointerSlide.Y));
-            if (cropMutation.ShouldApply && cropMutation.Values is { } cropValues)
-                _editor.SetPictureCrop(_geometryShapeId, cropValues);
-            return;
-        }
-
-        var mutation = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
-            shape,
-            _geometryBoundsDip,
-            _geometryHandleName,
-            new LayoutPoint(pointerSlide.X, pointerSlide.Y));
-        if (mutation.ShouldApply && mutation.CustomPoint is { } customPoint)
-        {
-            _editor.SetCustomGeometryPoint(
-                _geometryShapeId,
-                customPoint.PathIndex,
-                customPoint.SegmentIndex,
-                customPoint.X,
-                customPoint.Y,
-                customPoint.Slot);
-        }
-        else if (mutation.ShouldApply && mutation.ArcPoint is { } arcPoint)
-        {
-            _editor.SetCustomGeometryArcPoint(
-                _geometryShapeId,
-                arcPoint.PathIndex,
-                arcPoint.SegmentIndex,
-                arcPoint.Value,
-                arcPoint.Slot);
-        }
-        else if (mutation.ShouldApply && mutation.Name is not null && mutation.Value is { } value)
-            _editor.SetShapeGeometryAdjustment(_geometryShapeId, mutation.Name, value);
-    }
 
     /// <summary>
     /// Computes the new absolute rotation angle in degrees given the current drag position.
@@ -867,213 +357,31 @@ public sealed class CanvasGestureHandler : IDisposable
     /// </summary>
     public double ComputeRotationAngle(Point screenPt, SlideTransform xf)
     {
-        return CanvasGesturePlanner.ComputeRotationAngle(new CanvasRotationRequest(
-            CurrentScreen: ToGesturePoint(screenPt),
-            CenterSlide: ToGesturePoint(_rotateCenterSlide),
-            Transform: ToCoreTransform(xf),
-            OriginalRotationDeg: _rotateOrigDeg,
-            SnapToFifteenDegrees: (Keyboard.Modifiers & ModifierKeys.Shift) != 0));
+        return _gestureRouter.PlanRotation(
+            ToGesturePoint(screenPt),
+            ToCoreTransform(xf),
+            ToGestureModifiers(Keyboard.Modifiers));
     }
 
     // ── Marquee gesture ───────────────────────────────────────────────────────────────────────
-
-    private void StartMarquee(SlideTransform xf, Point screenPt)
-    {
-        _gesture            = GestureKind.Marquee;
-        _dragStartScreen    = screenPt;
-        _marqueeStartSlide  = xf.ScreenToSlide(screenPt.X, screenPt.Y);
-        _canvas.CaptureMouse();
-    }
-
-    private void PreviewMarquee(Point screenPt, SlideTransform xf)
-    {
-        var r = SlideCanvasGeometryPlanner.ScreenRectBetween(
-            ToGesturePoint(_dragStartScreen),
-            ToGesturePoint(screenPt));
-        _adorner.UpdateMarquee(ToWpfRect(r));
-    }
-
-    private void CommitMarquee(Point screenPt, SlideTransform xf)
-    {
-        _adorner.UpdateMarquee(null);
-        var slide = _editor.CurrentSlide;
-        if (slide is null || _editor.Presentation is null) return;
-
-        var endSlide = xf.ScreenToSlide(screenPt.X, screenPt.Y);
-        var ids = ShapeHitTester.MarqueeHitTest(
-            slide, _editor.Presentation,
-            _marqueeStartSlide.X, _marqueeStartSlide.Y,
-            endSlide.X, endSlide.Y);
-
-        if (ids.Count == 0) return;
-
-        _editor.ClearSelection();
-        foreach (var id in ids)
-            _editor.Select(id, addToSelection: true);
-    }
 
     // ── Keyboard ──────────────────────────────────────────────────────────────────────────────
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (HandleKeyDown(e.Key))
+        if (HandleKeyDown(e.Key, Keyboard.Modifiers))
             e.Handled = true;
     }
 
-    private bool HandleKeyDown(Key key)
+    private bool HandleKeyDown(Key key, ModifierKeys modifiers)
     {
-        switch (CanvasGesturePlanner.ResolveEscapeAction(
-            _editor.IsFormatPainterActive,
-            _gesture != GestureKind.None))
-        {
-            case CanvasEscapeAction.CancelFormatPainter when key == Key.Escape:
-                _editor.CancelFormatPainter();
-                return true;
-            case CanvasEscapeAction.CancelGesture when key == Key.Escape:
-                CancelActiveGesture(releaseCapture: true);
-                return true;
-        }
-
-        if (_editor.SelectedShapeIds.Count == 0) return false;
-
-        if (TryHandleCustomGeometryKey(key))
-            return true;
-
-        bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
-        long step  = shift ? LargeNudgeEmu : SmallNudgeEmu;
-
-        switch (key)
-        {
-            case Key.Left:
-                _editor.MoveSelected(-step, 0);
-                return true;
-            case Key.Right:
-                _editor.MoveSelected(step, 0);
-                return true;
-            case Key.Up:
-                _editor.MoveSelected(0, -step);
-                return true;
-            case Key.Down:
-                _editor.MoveSelected(0, step);
-                return true;
-            case Key.Delete:
-            case Key.Back:
-                _editor.DeleteSelected();
-                return true;
-        }
-
-        return false;
+        var plan = _gestureRouter.HandleKeyDown(
+            ToGestureKey(key),
+            ToGestureModifiers(modifiers));
+        if (plan.Action == CanvasGestureKeyboardActionKind.CancelGesture)
+            CancelActiveGesture(releaseCapture: true);
+        return plan.Handled;
     }
-
-    internal bool IsGestureActiveForTests => _gesture != GestureKind.None;
-
-    internal bool HasPendingGestureStateForTests =>
-        _moveStartShapes is not null ||
-        _multiTransformStartShapes is not null ||
-        _resizeShapeId != 0 ||
-        _rotateShapeId != 0 ||
-        _geometryShapeId != 0 ||
-        _geometryHandleName is not null;
-
-    internal bool HasTransientInteractionVisualsForTests =>
-        _adorner.HasTransientInteractionVisualsForTests ||
-        _canvas.HasLiveTransformPreviewForTests;
-
-    internal SelectionAdorner AdornerForTests => _adorner;
-
-    internal bool HandleEscapeForTests() => HandleKeyDown(Key.Escape);
-
-    internal void SimulateStaleMouseUpForTests() =>
-        CompleteGesture(new Point(0, 0), SlideTransform.Identity);
-
-    internal void SeedTransientInteractionVisualsForTests()
-    {
-        if (_editor.CurrentSlide is { } slide)
-        {
-            var states = CanvasGesturePlanner.CaptureTransformState(slide, _editor.SelectedShapeIds);
-            if (states.Count > 0)
-            {
-                _canvas.UpdateTransformPreview(CanvasGesturePlanner.PlanMultiResize(
-                    new CanvasMultiResizeRequest(
-                        new CanvasGesturePoint(0, 0),
-                        new CanvasGesturePoint(1, 1),
-                        ToCoreTransform(_canvas.CurrentTransform),
-                        CanvasGestureHandleKind.ResizeSE,
-                        states,
-                        slide,
-                        false,
-                        false,
-                        false)));
-            }
-        }
-        _adorner.UpdatePreview(new Rect(1, 1, 10, 10));
-        _adorner.UpdateGeometryPreview("test", new Point(2, 2));
-        _adorner.UpdateMarquee(new Rect(3, 3, 8, 8));
-        _adorner.UpdateSnapGuides(
-            [new SnapGuideLine { IsHorizontal = true, Position = 4, Label = "test" }],
-            SlideTransform.Identity);
-    }
-
-    internal void SeedResizeStateForTests(
-        Point startScreen,
-        SlideShape shape,
-        CanvasGestureHandleKind handle)
-    {
-        _dragStartScreen = startScreen;
-        _resizeShapeId = shape.Id;
-        _resizeOrigX = shape.OffsetXEmu;
-        _resizeOrigY = shape.OffsetYEmu;
-        _resizeOrigCx = shape.ExtentCxEmu;
-        _resizeOrigCy = shape.ExtentCyEmu;
-        _resizeOrigRotationDeg = shape.RotationDeg;
-        _resizeHandle = handle;
-        _dragStarted = false;
-        _gesture = GestureKind.Resize;
-    }
-
-    internal void SeedMoveStateForTests(Point startScreen)
-    {
-        if (_editor.CurrentSlide is null)
-            throw new InvalidOperationException("A current slide is required to seed a move gesture.");
-
-        _dragStartScreen = startScreen;
-        _dragStarted = false;
-        _moveStartShapes = CanvasGesturePlanner.CaptureMoveState(
-            _editor.CurrentSlide,
-            _editor.SelectedShapeIds);
-        _gesture = GestureKind.Move;
-    }
-
-    internal void CompleteGestureForTests(Point currentScreen) =>
-        CompleteGesture(currentScreen, _canvas.CurrentTransform);
-
-    private bool TryHandleCustomGeometryKey(Key key)
-    {
-        if (!EditPointsEnabled || _geometryHandleName is null || _editor.SelectedShapeIds.Count != 1)
-            return false;
-
-        var shapeId = _editor.SelectedShapeIds[0];
-        if (_geometryShapeId != shapeId)
-            return false;
-
-        var handled = key switch
-        {
-            Key.Insert => _editor.TryInsertCustomGeometryPoint(shapeId, _geometryHandleName),
-            Key.Delete or Key.Back => _editor.TryDeleteCustomGeometryPoint(shapeId, _geometryHandleName),
-            _ => false,
-        };
-        if (handled)
-            _geometryHandleName = null;
-        return handled;
-    }
-
-    private CanvasDragReducerPlan ReduceDrag(Point screenPt) =>
-        CanvasGesturePlanner.ReduceDrag(new CanvasDragReducerRequest(
-            StartScreen: ToGesturePoint(_dragStartScreen),
-            CurrentScreen: ToGesturePoint(screenPt),
-            DragStarted: _dragStarted,
-            StartThresholdPx: CanvasGesturePlanner.DefaultDragStartThresholdPx,
-            CommitThresholdPx: CanvasGesturePlanner.MeaningfulDragCommitThresholdPx));
 
     // ── Cursor feedback ───────────────────────────────────────────────────────────────────────
 
@@ -1086,73 +394,31 @@ public sealed class CanvasGestureHandler : IDisposable
             return;
         }
 
-        var xf = _canvas.CurrentTransform;
-
-        if (_editor.SelectedShapeIds.Count > 1 && _adorner.SelectionBounds is { } groupRect)
+        var transform = ToCoreTransform(_canvas.CurrentTransform);
+        var projection = SelectionAdornerGeometry.BuildProjection(
+            slide,
+            _editor.Presentation,
+            _editor.SelectedShapeIds,
+            transform,
+            EditPointsEnabled);
+        _canvas.Cursor = CanvasGestureInteractionPlanner.PlanCursor(
+            slide,
+            _editor.Presentation,
+            _editor.SelectedShapeIds,
+            transform,
+            projection,
+            ToGesturePoint(screenPt),
+            EditPointsEnabled) switch
         {
-            var groupHandle = _adorner.HitTestHandle(groupRect, screenPt);
-            _canvas.Cursor = groupHandle switch
-            {
-                CanvasGestureHandleKind.Rotate => Cursors.Cross,
-                CanvasGestureHandleKind.ResizeN or CanvasGestureHandleKind.ResizeS => Cursors.SizeNS,
-                CanvasGestureHandleKind.ResizeE or CanvasGestureHandleKind.ResizeW => Cursors.SizeWE,
-                CanvasGestureHandleKind.ResizeNE or CanvasGestureHandleKind.ResizeSW => Cursors.SizeNESW,
-                CanvasGestureHandleKind.ResizeNW or CanvasGestureHandleKind.ResizeSE => Cursors.SizeNWSE,
-                _ => Cursors.Arrow
-            };
-            if (groupHandle != CanvasGestureHandleKind.None)
-                return;
-        }
-
-        if (_editor.SelectedShapeIds.Count == 1)
-        {
-            var selId = _editor.SelectedShapeIds[0];
-            var selRect = GetSelectionScreenRect(selId, slide, xf);
-            if (selRect.HasValue)
-            {
-                if (EditPointsEnabled && _adorner.HitTestGeometryHandle(screenPt) is not null)
-                {
-                    _canvas.Cursor = Cursors.Hand;
-                    return;
-                }
-
-                var handle = _adorner.HitTestHandle(selRect.Value, screenPt);
-                _canvas.Cursor = handle switch
-                {
-                    CanvasGestureHandleKind.Rotate              => Cursors.Cross,
-                    CanvasGestureHandleKind.ResizeN or
-                    CanvasGestureHandleKind.ResizeS             => Cursors.SizeNS,
-                    CanvasGestureHandleKind.ResizeE or
-                    CanvasGestureHandleKind.ResizeW             => Cursors.SizeWE,
-                    CanvasGestureHandleKind.ResizeNE or
-                    CanvasGestureHandleKind.ResizeSW            => Cursors.SizeNESW,
-                    CanvasGestureHandleKind.ResizeNW or
-                    CanvasGestureHandleKind.ResizeSE            => Cursors.SizeNWSE,
-                    CanvasGestureHandleKind.Body                => Cursors.SizeAll,
-                    _                                               => Cursors.Arrow
-                };
-                return;
-            }
-        }
-
-        // Check if hovering over any selected body
-        var slidePt = xf.ScreenToSlide(screenPt.X, screenPt.Y);
-        foreach (var id in _editor.SelectedShapeIds)
-        {
-            var s = slide.Shapes.FirstOrDefault(sh => sh.Id == id);
-            if (s is null) continue;
-            var b = ShapeHitTester.GetShapeBoundsDip(s, slide, _editor.Presentation);
-            if (slidePt.X >= b.Left && slidePt.X <= b.Right &&
-                slidePt.Y >= b.Top  && slidePt.Y <= b.Bottom)
-            {
-                _canvas.Cursor = Cursors.SizeAll;
-                return;
-            }
-        }
-
-        // Check any shape for hover
-        var hitId = ShapeHitTester.HitTest(slide, _editor.Presentation, slidePt.X, slidePt.Y);
-        _canvas.Cursor = hitId.HasValue ? Cursors.Hand : Cursors.Arrow;
+            CanvasGestureCursorKind.Pointer => Cursors.Hand,
+            CanvasGestureCursorKind.Move => Cursors.SizeAll,
+            CanvasGestureCursorKind.Rotate => Cursors.Cross,
+            CanvasGestureCursorKind.ResizeNorthSouth => Cursors.SizeNS,
+            CanvasGestureCursorKind.ResizeWestEast => Cursors.SizeWE,
+            CanvasGestureCursorKind.ResizeNorthEastSouthWest => Cursors.SizeNESW,
+            CanvasGestureCursorKind.ResizeNorthWestSouthEast => Cursors.SizeNWSE,
+            _ => Cursors.Arrow
+        };
     }
 
     // ── Adorner refresh ───────────────────────────────────────────────────────────────────────
@@ -1160,59 +426,19 @@ public sealed class CanvasGestureHandler : IDisposable
     private void RefreshAdorner()
     {
         var slide = _editor.CurrentSlide;
-        if (slide is null || _editor.Presentation is null)
-        {
-            _adorner.UpdateSelection(Array.Empty<(uint, Rect)>());
-            _adorner.UpdateGeometryHandles(Array.Empty<(string Name, Point Position)>());
-            return;
-        }
+        var projection = slide is null || _editor.Presentation is not { } presentation
+            ? SelectionAdornerProjectionPlan.Empty
+            : SelectionAdornerGeometry.BuildProjection(
+                slide,
+                presentation,
+                _editor.SelectedShapeIds,
+                ToCoreTransform(_canvas.CurrentTransform),
+                EditPointsEnabled);
 
-        var xf    = _canvas.CurrentTransform;
-        var rects = new List<(uint, Rect)>();
-        foreach (var id in _editor.SelectedShapeIds)
-        {
-            var r = GetSelectionScreenRect(id, slide, xf);
-            if (r.HasValue)
-                rects.Add((id, r.Value));
-        }
-        _adorner.UpdateSelection(rects);
-
-        if (EditPointsEnabled && _editor.SelectedShapeIds.Count == 1)
-        {
-            var id = _editor.SelectedShapeIds[0];
-            var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == id);
-            if (shape is not null)
-            {
-                var bounds = ShapeHitTester.GetShapeBoundsDip(shape, slide, _editor.Presentation).ToLayoutRect();
-                IEnumerable<(string Name, Point Position)> handles;
-                if (shape.Kind == SlideShapeKind.Picture)
-                {
-                    var cropPlan = PictureCropAuthoringPlanner.Build(shape, bounds);
-                    handles = cropPlan.CanEdit
-                        ? cropPlan.Handles.Select(handle =>
-                        {
-                            var screen = xf.SlideToScreen(handle.PositionDip.X, handle.PositionDip.Y);
-                            return (handle.Name, new Point(screen.X, screen.Y));
-                        })
-                        : Enumerable.Empty<(string Name, Point Position)>();
-                }
-                else
-                {
-                    var plan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
-                    handles = plan.CanEdit
-                        ? plan.Handles.Select(handle =>
-                    {
-                        var screen = xf.SlideToScreen(handle.PositionDip.X, handle.PositionDip.Y);
-                        return (handle.Name, new Point(screen.X, screen.Y));
-                    })
-                    : Enumerable.Empty<(string Name, Point Position)>();
-                }
-                _adorner.UpdateGeometryHandles(handles);
-                return;
-            }
-        }
-
-        _adorner.UpdateGeometryHandles(Array.Empty<(string Name, Point Position)>());
+        _adorner.UpdateSelection(projection.Selections.Select(selection =>
+            (selection.ShapeId, ToWpfRect(selection.ScreenRect))));
+        _adorner.UpdateGeometryHandles(projection.GeometryHandles.Select(handle =>
+            (handle.Name, new Point(handle.ScreenPosition.X, handle.ScreenPosition.Y))));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────
@@ -1220,23 +446,39 @@ public sealed class CanvasGestureHandler : IDisposable
     private static CanvasGesturePoint ToGesturePoint(Point point)
         => new(point.X, point.Y);
 
+    private static CanvasGestureKey ToGestureKey(Key key) => key switch
+    {
+        Key.Escape => CanvasGestureKey.Escape,
+        Key.Left => CanvasGestureKey.Left,
+        Key.Right => CanvasGestureKey.Right,
+        Key.Up => CanvasGestureKey.Up,
+        Key.Down => CanvasGestureKey.Down,
+        Key.Delete => CanvasGestureKey.Delete,
+        Key.Back => CanvasGestureKey.Backspace,
+        Key.Insert => CanvasGestureKey.Insert,
+        _ => CanvasGestureKey.None,
+    };
+
+    private static CanvasGestureModifiers ToGestureModifiers(ModifierKeys modifiers)
+    {
+        var result = CanvasGestureModifiers.None;
+        if ((modifiers & ModifierKeys.Shift) != 0)
+            result |= CanvasGestureModifiers.Shift;
+        if ((modifiers & ModifierKeys.Control) != 0)
+            result |= CanvasGestureModifiers.Control;
+        if ((modifiers & ModifierKeys.Alt) != 0)
+            result |= CanvasGestureModifiers.Alt;
+        if ((modifiers & ModifierKeys.Windows) != 0)
+            result |= CanvasGestureModifiers.Meta;
+        return result;
+    }
+
     private static SlideTransformCore ToCoreTransform(SlideTransform xf)
         => xf.Core;
 
-    private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransform xf)
-    {
-        if (_editor.Presentation is null) return null;
-        var shape = ShapeHitTester.FindShape(slide, shapeId);
-        var rect = shape is null
-            ? (SlideScreenRect?)null
-            : SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(
-                shape,
-                slide,
-                _editor.Presentation,
-                ToCoreTransform(xf));
-        return rect is { } screenRect ? ToWpfRect(screenRect) : null;
-    }
-
     private static Rect ToWpfRect(SlideScreenRect rect)
+        => new(rect.Left, rect.Top, rect.Width, rect.Height);
+
+    private static Rect ToWpfRect(SelectionAdornerRect rect)
         => new(rect.Left, rect.Top, rect.Width, rect.Height);
 }

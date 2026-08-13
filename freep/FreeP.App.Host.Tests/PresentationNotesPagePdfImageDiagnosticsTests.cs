@@ -1,4 +1,3 @@
-using Free.Shared.Pdf;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Host.Tests;
@@ -7,10 +6,9 @@ namespace FreeP.App.Host.Tests;
 /// R133-imageDiagnostics-wiring: an embedded slide picture with bytes the PDF writer cannot decode
 /// (corrupt or an unrecognized format) used to be silently omitted from the exported page with no
 /// trace anywhere -- the shared writer's imageDiagnostics sink existed since r132 but no production
-/// caller ever passed a collection in. <see cref="FileCommands.ExportNotesPagePdf"/> (File &gt; Export
-/// &gt; Notes Page PDF) calls <c>PresentationNotesPagePdfExporter.ExportToBytes</c> with
-/// <see cref="FileCommands.WriteVectorPdfWithPortableFallback"/> as the writer delegate; this test
-/// calls that exact internal method (not a re-implementation) to prove the production wiring itself
+/// caller ever passed a collection in. <see cref="PresentationFileCommandSession.ExportNotesPagePdfAsync"/> (File &gt; Export
+/// &gt; Notes Page PDF) delegates to <see cref="PresentationFilePdfExportExecutor"/>; this test calls
+/// that exact shared pipeline (not a re-implementation) to prove the production wiring itself
 /// -- not just the shared library underneath it -- surfaces the loss instead of discarding it.
 /// </summary>
 public class PresentationNotesPagePdfImageDiagnosticsTests
@@ -42,19 +40,14 @@ public class PresentationNotesPagePdfImageDiagnosticsTests
     [Fact]
     public void ExportToBytes_SurfacesImageDiagnostics_WhenSlidePictureBytesAreUndecodable()
     {
-        // Calls FileCommands' own internal writer wrapper directly -- the exact delegate
-        // ExportNotesPagePdf passes to PresentationNotesPagePdfExporter.ExportToBytes -- so this
-        // proves the production wiring reaches the fix, not just the shared writer underneath it.
         var deck = DeckWithPicture([0x00, 0x01, 0x02, 0x03, 0x04]);
-        var imageDiagnostics = new List<string>();
-
-        var bytes = PresentationNotesPagePdfExporter.ExportToBytes(
+        var artifact = PresentationFilePdfExportExecutor.ExportNotesPages(
             deck,
             AllSlidesRequest(),
-            document => FileCommands.WriteVectorPdfWithPortableFallback(document, imageDiagnostics));
+            new WpfPresentationFileRenderPort());
 
-        bytes.Should().NotBeEmpty();
-        imageDiagnostics.Should().NotBeEmpty(
+        artifact.Bytes.Should().NotBeEmpty();
+        artifact.ImageDiagnostics.Should().NotBeEmpty(
             "the slide picture's undecodable bytes must be surfaced, not silently dropped");
     }
 
@@ -63,14 +56,12 @@ public class PresentationNotesPagePdfImageDiagnosticsTests
     {
         // Sibling no-regression: a valid embedded picture must not spuriously report an image warning.
         var deck = DeckWithPicture(MinimalPngBytes());
-        var imageDiagnostics = new List<string>();
-
-        PresentationNotesPagePdfExporter.ExportToBytes(
+        var artifact = PresentationFilePdfExportExecutor.ExportNotesPages(
             deck,
             AllSlidesRequest(),
-            document => FileCommands.WriteVectorPdfWithPortableFallback(document, imageDiagnostics));
+            new WpfPresentationFileRenderPort());
 
-        imageDiagnostics.Should().BeEmpty();
+        artifact.ImageDiagnostics.Should().BeEmpty();
     }
 
     private static byte[] MinimalPngBytes() =>

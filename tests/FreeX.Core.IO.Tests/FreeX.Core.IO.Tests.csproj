@@ -29,10 +29,12 @@
     <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="..\..\tools\FreeX.XlsxPackageDiagnostics\FreeX.XlsxPackageDiagnostics.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="..\CommandTestInfrastructure\TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <Compile Include="..\SharedTestInfrastructure\FreeX\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -45,5 +47,6 @@
   <ItemGroup>
     <Using Include="Free.Shared.IO.FileFormatDescriptor" Alias="FileFormatDescriptor" />
     <Using Include="Free.Shared.Opc" />
+    <Using Include="FreeX.XlsxPackageDiagnostics" />
   </ItemGroup>
 </Project>

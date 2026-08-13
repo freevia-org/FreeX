@@ -12,14 +12,16 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System.Globalization;
-using System.Text.Json;
 using Free.Shared.AppServices;
 using Free.Shared.AppServices.Printing;
+using Free.Shared.AppServices.Windows;
+using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
@@ -29,11 +31,15 @@ using FreeW.App.Presentation;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentFragments;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Editing;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.QuickParts;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.Ribbon.Definitions;
 using FreeW.App.Presentation.Shell;
+using FreeW.App.Presentation.Speech;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -41,34 +47,29 @@ namespace FreeW.App.Avalonia;
 
 public sealed partial class MainWindow : Window
 {
-    private const string DefaultTitle = "FreeW";
-    private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Document;
+    private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeW;
 
-    private static readonly FilePickerFileType PdfFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            FreeWFileTextResources.PdfFileTypeName,
-            ["*.pdf"],
-            ["application/pdf"]);
-    private static readonly FilePickerFileType XpsFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            FreeWFileTextResources.XpsFileTypeName,
-            ["*.xps"],
-            ["application/oxps", "application/vnd.ms-xpsdocument"]);
+    private static readonly SisterAppFileTextSpec FileText = FreeWFileTextResources.Document;
 
-    private readonly DocumentPersistenceWorkflow _documentPersistence = new();
+    private readonly DocumentPersistenceWorkflow _documentPersistence;
+    private readonly FreeWDocumentFileWorkflow _documentFileWorkflow;
+    private readonly FreeWDocumentFileCommandSession _fileCommands;
     private readonly IPlatformPrintService _printService;
+    private readonly FreeWPortablePrintWorkflow _portablePrintWorkflow;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
-    private readonly Func<DocumentView, string, PrintSelection, FreeWAvaloniaPdfExportResult> _savePrintPdf;
+    private readonly Func<DocumentView, Stream, PrintSelection, FreeWAvaloniaPdfExportResult> _savePrintPdf;
 
     // Test-injected save-PDF seams (savePrintPdf/saveSelectedPrintPdf) are void Actions that write a
     // synthetic file and don't go through the shared PDF writers, so they cannot produce real image
     // diagnostics; this stands in for "none" so the result shape matches the production Save() path.
     private static readonly FreeWAvaloniaPdfExportResult NoImageDiagnosticsPrintResult =
-        new(0, FreeWAvaloniaPdfBackend.PortableWinAnsi, []);
+        new(0, Free.Shared.Pdf.Skia.PdfExportBackend.PortableWinAnsi, []);
     private readonly Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>> _pickExportPath;
+    private readonly Func<Task<string?>> _pickPdfImportPathAsync;
     private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
     private readonly IScreenClipService _screenClipService;
+    private readonly IPlatformClipboard _platformClipboard;
     private readonly DocumentView _editor = new();
     private readonly QuickPartLibrary _quickParts = QuickPartLibrary.Load();
     private TextBlock _pageStatus = null!;
@@ -79,6 +80,7 @@ public sealed partial class MainWindow : Window
     private MailMergeEngine? _mailMerge;
     private readonly TextBox _findBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
+    private readonly FindReplaceDialogSession _inlineFindReplaceSession;
     private TextBlock _zoomLabel = null!;
     private Slider _zoomSlider = null!;
     private readonly ScaleTransform _zoom = new(1, 1);
@@ -97,7 +99,8 @@ public sealed partial class MainWindow : Window
     private Control? _statusZoomControl;
     private IReadOnlyList<Button> _quickAccessButtons = [];
     private readonly FreeWOptions _options;
-    private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
+    private readonly FreeWOptionsRuntimeSession _optionsRuntime;
+    private readonly IApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly FreeWDocumentWindowPlanner _documentWindowPlanner;
     private readonly int _documentWindowNumber;
     private readonly AutosaveAdapter _autosave;
@@ -123,23 +126,17 @@ public sealed partial class MainWindow : Window
     private Control? _liveWorkspaceContent;
     private Grid? _splitPreviewGrid;
     private Control? _splitPreviewSnapshot;
-    private FreeWViewDepthPlan _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
-    private FreeWViewDepthPagePairNavigationState _sideToSideNavigation =
-        FreeWViewDepthPlanner.BuildPagePairNavigation(
-            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
-            requestedFirstVisiblePageNumber: 1,
-            totalPages: 1);
+    private readonly FreeWViewSession _viewSession = new(FreeWViewDepthCapabilities.FullDesktop);
     private ScrollViewer? _sideToSidePreviewScrollViewer;
     private Button? _sideToSidePreviousPairButton;
     private Button? _sideToSideNextPairButton;
     private TextBlock? _sideToSidePairStatusText;
     private double _sideToSidePairScrollStrideDip;
     private double _sideToSidePlannedHorizontalOffsetDip;
-    private bool _sideToSideUsesLiveEditor;
-    private bool _multiplePagesUsesLiveEditor;
     private double _zoomScale = 1.0;
     private bool _updatingZoomSlider;
-    private bool _readMode;
+    private readonly FreeWEditorInteractionSession _editorInteraction = new();
+    private readonly FreeWApplicationCommandRouter _applicationCommands;
     private bool _pagedEditMode;
     // Avalonia's PrintLayout is already the live, multi-page editing surface used by Page Edit.
     // Keep the prior continuous view so entering the alias does not change the user's view when it
@@ -150,20 +147,9 @@ public sealed partial class MainWindow : Window
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
     private Thickness _editorMarginBeforeReadMode;
-    private bool _navPaneVisibleBeforeReadMode;
-    private bool _reviewingPaneVisibleBeforeReadMode;
-    private bool _revealPaneVisibleBeforeReadMode;
-    private bool _titleBarVisibleBeforeReadMode;
-    private bool _ribbonVisibleBeforeReadMode;
-    private bool _dataFolderVisibleBeforeReadMode;
-    private bool _statusViewSwitchVisibleBeforeReadMode;
-    private bool _statusZoomVisibleBeforeReadMode;
     private IBrush _workspaceBackgroundBeforeReadMode = Brushes.Transparent;
-    private string _readModeColumnWidth = FreeWReadModePlanner.DefaultColumn;
-    private string _readModePageColor = FreeWReadModePlanner.NoColor;
     private bool _suppressEditorDirty;
-    private AvaloniaSpeechEngine? _readAloudEngine;
-    private ReadAloudController? _readAloudController;
+    private ReadAloudSession? _readAloudSession;
     private CancellationTokenSource? _printCancellation;
     private PrinterDiscoveryResult? _latestPrinterDiscovery;
 
@@ -176,14 +162,15 @@ public sealed partial class MainWindow : Window
         : this(
             startupArguments,
             null,
-            ApplicationOptionsStore<FreeWOptions>.Create(PlatformApplicationDataPathProvider.LocalInstance))
+            InMemoryApplicationOptionsStore<FreeWOptions>.ForProductFile(
+                PlatformApplicationDataPathProvider.LocalInstance))
     {
     }
 
     internal MainWindow(
         IReadOnlyList<string> startupArguments,
         FreeWOptions? options,
-        ApplicationOptionsStore<FreeWOptions> optionsStore,
+        IApplicationOptionsStore<FreeWOptions> optionsStore,
         IScreenClipService? screenClipService = null,
         IPlatformPrintService? printService = null,
         Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>>? showPrintSelectionDialog = null,
@@ -192,8 +179,11 @@ public sealed partial class MainWindow : Window
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
         Func<string, Exception, Task>? showFileCommandErrorAsync = null,
         Func<bool, string, Task<string?>>? askHeaderFooterText = null,
-        Action<DocumentView, string>? savePrintPdf = null,
-        Action<DocumentView, string, PrintSelection>? saveSelectedPrintPdf = null,
+        Action<DocumentView, Stream>? savePrintPdf = null,
+        DocumentPersistenceWorkflow? documentPersistence = null,
+        Func<Task<string?>>? pickPdfImportPathAsync = null,
+        Action<DocumentView, Stream, PrintSelection>? saveSelectedPrintPdf = null,
+        IPlatformClipboard? platformClipboard = null,
         bool suppressStartupRecoveryOffer = false,
         FreeWDocumentWindowPlanner? documentWindowPlanner = null,
         int documentWindowNumber = 1)
@@ -204,34 +194,40 @@ public sealed partial class MainWindow : Window
         _optionsStore = optionsStore;
         _documentWindowPlanner = documentWindowPlanner ?? new FreeWDocumentWindowPlanner();
         _documentWindowNumber = documentWindowNumber;
+        _documentPersistence = documentPersistence ?? new DocumentPersistenceWorkflow();
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
-        _printService = printService ?? PlatformPrintServiceFactory.Create();
+        _platformClipboard = platformClipboard ?? new AvaloniaPlatformClipboard(
+            () => TopLevel.GetTopLevel(this)?.Clipboard);
+        _editor.CanPasteProvider = () => _platformClipboard.IsAvailable;
+        _printService = printService ?? PlatformPrintServiceSelector.Select(
+            windowsFactory: static () => new WindowsPrintService(),
+            cupsFactory: static () => new CupsPrintService());
+        _portablePrintWorkflow = new FreeWPortablePrintWorkflow(_printService);
         _showPrintSelectionDialog = showPrintSelectionDialog ??
             ((owner, discovery, cancellationToken) =>
                 CupsPrintDialog.ShowAsync(owner, discovery, cancellationToken: cancellationToken));
         _restorePrintOwnerFocus = restorePrintOwnerFocus ?? RestorePrintOwnerFocus;
         _savePrintPdf = saveSelectedPrintPdf is not null
-            ? (view, path, selection) =>
+            ? (view, stream, selection) =>
             {
-                saveSelectedPrintPdf(view, path, selection);
+                saveSelectedPrintPdf(view, stream, selection);
                 return NoImageDiagnosticsPrintResult;
             }
             : savePrintPdf is not null
-                ? (view, path, _) =>
+                ? (view, stream, _) =>
                 {
-                    savePrintPdf(view, path);
+                    savePrintPdf(view, stream);
                     return NoImageDiagnosticsPrintResult;
                 }
-                : (view, path, selection) => FreeWAvaloniaPdfExport.Save(view, path, selection);
+                : (view, stream, selection) => FreeWAvaloniaPdfExport.Save(view, stream, selection);
         _pickExportPath = pickExportPath ?? PickExportPathAsync;
+        _pickPdfImportPathAsync = pickPdfImportPathAsync ?? PromptPdfImportPathAsync;
         _askHeaderFooterText = askHeaderFooterText;
         _options = options ?? _optionsStore.Load();
-        _options.Normalize();
-        _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
-        _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
-        _editor.AutoCorrectOptions = _options.AutoCorrect ?? AutoCorrectOptions.Default;
+        _optionsRuntime = new FreeWOptionsRuntimeSession(_options);
+        ApplyEditorTypingOptions(_optionsRuntime.EditorTypingOptions);
 
-        Title = DefaultTitle;
+        Title = FreeWApplicationFrameDescriptor.Title.ApplicationName;
         Width = 1040;
         Height = 720;
         MinWidth = 720;
@@ -241,16 +237,88 @@ public sealed partial class MainWindow : Window
         _fileWorkflow = new SisterAvaloniaFileCommandWorkflow(
             owner: this,
             titleSpec: new SisterAvaloniaFileTitleSpec(
-                ApplicationName: DefaultTitle,
-                Separator: " \u2014 ",
-                ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication,
-                WindowSuffix: FreeWDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber)),
+                ApplicationName: FreeWApplicationFrameDescriptor.Title.ApplicationName,
+                Separator: FreeWApplicationFrameDescriptor.Title.Separator,
+                DirtyMarker: FreeWApplicationFrameDescriptor.Title.DirtyMarker,
+                ApplicationPlacement: FreeWApplicationFrameDescriptor.Title.ApplicationPlacement,
+                UntitledDisplayName: FreeWApplicationFrameDescriptor.Title.DefaultDocumentDisplayName,
+                CollapseCleanUntitledTitle: FreeWApplicationFrameDescriptor.Title.CollapseCleanDefaultDocumentTitle),
             maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: OnFileWorkflowChanged,
             saveAsync: SaveAsync,
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
             restoreOwnerFocus: RestoreOwnerFocus);
+        RefreshDocumentWindowTitle();
+        _documentFileWorkflow = new FreeWDocumentFileWorkflow(
+            _fileWorkflow.Workflow,
+            _documentPersistence,
+            new FreeWDocumentFilePorts(
+                GetDocument: () => _editor.Document,
+                LoadDocumentAsync: (document, _) =>
+                {
+                    LoadDocumentContent(document);
+                    return ValueTask.CompletedTask;
+                },
+                ConfirmSaveCompatibilityAsync: (plan, _) =>
+                    new ValueTask<bool>(SaveCompatibilityWarningDialog.ShowAsync(this, plan)),
+                UpdateFieldsAsync: _ =>
+                {
+                    _suppressEditorDirty = true;
+                    try
+                    {
+                        _editor.UpdateFields();
+                    }
+                    finally
+                    {
+                        _suppressEditorDirty = false;
+                    }
+                    return ValueTask.CompletedTask;
+                }));
+        _fileCommands = new FreeWDocumentFileCommandSession(
+            _documentFileWorkflow,
+            new FreeWFileCommandLifecyclePorts(
+                CurrentPath: () => _fileWorkflow.CurrentPath,
+                CurrentFileName: () => _fileWorkflow.CurrentFileName,
+                NewAsync: (action, loadAsync) => _fileWorkflow.NewAsync(action, loadAsync),
+                OpenAsync: _fileWorkflow.OpenAsync,
+                SaveAsync: _fileWorkflow.SaveAsync),
+            new FreeWDocumentFileCommandPorts(
+                LoadNewDocumentAsync: () =>
+                {
+                    LoadDocumentContent(TextDocument.CreateEmpty());
+                    return Task.CompletedTask;
+                },
+                PickOpenPathAsync: PromptOpenPathAsync,
+                PickPdfImportPathAsync: _pickPdfImportPathAsync,
+                PickSaveTargetAsync: PromptSavePathAsync,
+                PresentFeedback: feedback => ApplyFileFeedback(feedback)),
+            FileText);
+        _inlineFindReplaceSession = new FindReplaceDialogSession(
+            new AvaloniaFindReplaceCommandHost(_editor));
+        _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
+            NewDocument: NewDocument,
+            OpenDocument: () => _ = OpenAsync(),
+            SaveDocument: () => _ = SaveAsync(),
+            SaveDocumentAs: () => _ = SaveAsAsync(),
+            PrintDocument: () => _ = PrintAsync(),
+            Find: () => OpenFindReplaceDialog(FindReplaceDialogOpenMode.Find),
+            Replace: () => OpenFindReplaceDialog(FindReplaceDialogOpenMode.Replace),
+            Cut: () => _ = CutAsync(),
+            Copy: () => _ = CopyAsync(),
+            Paste: () => _ = PasteAsync(),
+            PasteTextOnly: () => _ = PastePlainTextAsync(),
+            SelectAll: _editor.SelectAll,
+            Undo: _editor.Undo,
+            Redo: _editor.Redo,
+            RevealFormatting: ToggleRevealFormatting,
+            Thesaurus: ToggleThesaurusPane,
+            LockCurrentField: () => _editor.SetFieldLockAtCaret(true),
+            UnlockCurrentField: () => _editor.SetFieldLockAtCaret(false),
+            UnlinkCurrentField: _editor.UnlinkFieldAtCaret,
+            ToggleCurrentFieldCode: _editor.ToggleFieldCodeAtCaret,
+            ToggleFieldCodes: _editor.ToggleFieldCodes,
+            UpdateCurrentField: _editor.UpdateFieldAtCaret));
         _autosave = new AutosaveAdapter(
             _editor,
             _fileWorkflow.Workflow,
@@ -268,7 +336,10 @@ public sealed partial class MainWindow : Window
         _reviewBalloonsPane = new ReviewBalloonsPane(_editor);
         _revealPane = new RevealFormattingPane(_editor);
         _notesPane = new NotesPane(_editor);
-        _thesaurusPane = new ThesaurusPane(_editor);
+        _thesaurusPane = new ThesaurusPane(
+            _editor,
+            async text => (await _platformClipboard.WriteAsync(
+                new PlatformClipboardContent(Text: text))).IsSuccess);
         _outlineView = new OutlineView(_editor);
 
         var ribbon = BuildRibbon();
@@ -327,13 +398,9 @@ public sealed partial class MainWindow : Window
         _editor.ContextMenuCommandRequested += OnEditorContextMenuCommandRequested;
 
         UpdateViewModeButtons();
-        _editor.CellEditRequested += async req =>
-        {
-            var result = await new CellEditDialog(req.Text).ShowDialog<string?>(this);
-            if (result is not null)
-                _editor.SetCellText(req.Block, req.Row, req.Col, result);
-        };
-        var startupDocument = LoadStartupDocument(startupArguments);
+        var startupDocument = FreeWApplicationStartup.TryOpenStartupDocument(
+            startupArguments,
+            _documentPersistence);
         if (startupDocument is null)
             LoadDocumentAsSaved(SampleDocument.Create(), path: null);
         else
@@ -358,7 +425,6 @@ public sealed partial class MainWindow : Window
             if (!suppressStartupRecoveryOffer)
                 await _autosave.OfferRecoveryAsync(this);
             await RefreshPrinterDiscoveryAsync();
-            await RunTablePropertiesX11ValidationSeedAsync();
         };
 
         // Dirty-gate on close: cancel the synchronous event and let the shared async
@@ -374,68 +440,29 @@ public sealed partial class MainWindow : Window
         var windowFrame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(
             Window: this,
             Body: frame.Root,
-            TitleBarBackground: ResolveThemeBrush(
-                "FreeWTitleBarBrush",
+            TitleBarBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.TitleBarBrush,
                 new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))),
-            TitleBarForeground: ResolveThemeBrush("FreeWWhiteBrush", Brushes.White)));
+            TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White)));
         _titleBar = windowFrame.TitleBar;
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
             windowFrame.QatHost,
             new SisterQuickAccessToolbarActions(
-                Save: () => _ = SaveAsync(),
-                Undo: _editor.Undo,
-                Redo: _editor.Redo),
-            ResolveThemeBrush("FreeWWhiteBrush", Brushes.White));
+                Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
+                Undo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Undo),
+                Redo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Redo)),
+            AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White));
 
         Content = windowFrame.Root;
         UpdateStatus();
     }
 
-    private void ApplyWindowIcon()
-    {
-        var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "FreeW.ico");
-        if (!File.Exists(iconPath))
-            return;
-
-        try
-        {
-            using var stream = File.OpenRead(iconPath);
-            Icon = new WindowIcon(stream);
-        }
-        catch
-        {
-            // Unsupported desktop icon formats must not prevent the document from opening.
-        }
-    }
-
-    private static IBrush ResolveThemeBrush(string key, IBrush fallback)
-    {
-        if (Application.Current is { } app &&
-            app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
-            value is IBrush brush)
-        {
-            return brush;
-        }
-
-        return fallback;
-    }
+    private void ApplyWindowIcon() =>
+        AvaloniaWindowIconLoader.TryApply(this, "FreeW.ico");
 
     public DocumentView Editor => _editor;
 
-    internal bool IsReadAloudActiveForTest => _readAloudController?.IsActive == true;
-
-    internal void ToggleReadAloudForTest() => ToggleReadAloud();
     public bool HasToolbar { get; private set; }
-
-    /// <summary>
-    /// Exposes the navigation pane for tests that need to inspect its state headlessly.
-    /// </summary>
-    internal NavigationPane NavPane => _navPane;
-
-    /// <summary>
-    /// Exposes the reviewing pane for tests that need to inspect its state headlessly.
-    /// </summary>
-    internal ReviewingPane ReviewingPane => _reviewingPane;
 
     internal bool StepRevision(int direction)
     {
@@ -459,58 +486,6 @@ public sealed partial class MainWindow : Window
         if (_reviewingPane.SelectedRevision is { } entry)
             _reviewingPane.RejectEntry(entry);
     }
-
-    internal ReviewBalloonsPane ReviewBalloonsPane => _reviewBalloonsPane;
-    internal bool RibbonKeyTipsVisibleForTest => _ribbonKeyTipsVisible;
-    internal Control? RibbonControlForTest => _ribbonControl;
-    internal IRibbonCommandRegistry? RibbonRegistryForTests => _ribbonRegistry;
-    internal bool HasWindowIconForTests => Icon is not null;
-    internal Border TitleBarForTests => _titleBar;
-    internal IReadOnlyList<Button> QuickAccessButtonsForTests => _quickAccessButtons;
-    internal IReadOnlyList<Control> StatusViewControlsForTests =>
-        [_readModeSwitch, _printLayoutSwitch, _webLayoutSwitch, _draftSwitch, _pagedEditSwitch];
-    internal string PageStatusForTests => _pageStatus.Text ?? string.Empty;
-    internal string SectionStatusForTests => _sectionStatus.Text ?? string.Empty;
-    internal string CountsStatusForTests => _status.Text ?? string.Empty;
-    internal string PrintStatusForTests => _status.Text ?? string.Empty;
-    internal MailMergeEngine MailMergeForTests => _mailMerge!;
-    internal Task ExecuteFinishMergePlanForTests(MailMergeFinishPlan plan) => ExecuteFinishMergePlanAsync(plan);
-    internal string DataFolderStatusForTests => _dataFolderStatus.Text ?? string.Empty;
-    internal Slider ZoomSliderForTests => _zoomSlider;
-    internal string ZoomLabelForTests => _zoomLabel.Text ?? string.Empty;
-    internal void ApplyZoomForTests(double scale) => ApplyZoom(scale);
-    internal void RaiseKeyDownForTest(KeyEventArgs args) => MainWindow_KeyDown(this, args);
-    internal bool IsCloseDecisionPendingForTests => _closeCoordinator.IsClosePending;
-
-    /// <summary>
-    /// Exposes the reveal-formatting pane for tests that need to inspect its state headlessly.
-    /// </summary>
-    internal RevealFormattingPane RevealPane => _revealPane;
-    internal NotesPane NotesPaneForTest => _notesPane;
-    internal ThesaurusPane ThesaurusPaneForTest => _thesaurusPane;
-
-    internal FreeWViewDepthMode ViewDepthMode => _viewDepthPlan.Mode;
-    internal bool IsSplitPreviewActive => _viewDepthPlan.IsSplitActive;
-    internal bool IsMultiplePagesPreviewActive => _viewDepthPlan.IsMultiplePagesActive;
-    internal bool IsSideToSidePreviewActive => _viewDepthPlan.IsSideToSideActive;
-    internal string? ViewDepthLimitation => _viewDepthPlan.Limitation;
-    internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests => _sideToSideNavigation;
-    internal bool HasSideToSidePagePairNavigationForTests =>
-        _sideToSidePreviewScrollViewer is not null &&
-        _sideToSidePreviousPairButton is not null &&
-        _sideToSideNextPairButton is not null &&
-        _sideToSidePairStatusText is not null;
-    internal Vector SideToSidePreviewOffsetForTests => new(_sideToSidePlannedHorizontalOffsetDip, 0);
-    internal Control? WorkspaceContentForTests => _workspace.Child as Control;
-    internal bool IsWorkspaceShowingLiveEditor => ReferenceEquals(_workspace.Child, _liveWorkspaceContent);
-    internal bool IsSideToSideEditorEditableForTests => _sideToSideUsesLiveEditor;
-    internal bool IsMultiplePagesEditorEditableForTests => _multiplePagesUsesLiveEditor;
-    internal bool IsOutlineModeActiveForTests => _outlineMode;
-    internal bool IsPagedEditModeActiveForTests => _pagedEditMode;
-    internal void TogglePagedEditViewForTests() => TogglePagedEditView();
-    internal bool IsWorkspaceShowingOutline => ReferenceEquals(_workspace.Child, _outlineView);
-    internal OutlineView OutlineViewForTests => _outlineView;
-    internal void ToggleOutlineViewForTests() => ToggleOutlineView();
 
     /// <summary>
     /// Show or hide the navigation pane and refresh its heading list when making it visible.
@@ -625,21 +600,13 @@ public sealed partial class MainWindow : Window
     private Task OpenSortDialogAsync() =>
         SortDialog.ShowAndApplyAsync(this, _editor);
 
-    private async Task OpenImageCropDialogAsync()
-    {
-        if (_editor.SelectedFloatingImage() is not { } image)
-            return;
-
-        var result = await ImageCropDialog.ShowAsync(
+    private ValueTask<ImageCropDialogResult?> ShowImageCropDialogAsync(InlineImage image) =>
+        new(ImageCropDialog.ShowAsync(
             this,
             image.CropLeft,
             image.CropRight,
             image.CropTop,
-            image.CropBottom);
-        if (result is not null)
-            _editor.SetSelectedImageCrop(result.Left, result.Right, result.Top, result.Bottom);
-        _editor.Focus();
-    }
+            image.CropBottom));
 
     private async Task OpenImageSizeDialogAsync()
     {
@@ -712,35 +679,14 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task OpenChartTitleDialogAsync()
-    {
-        if (_editor.SelectedFloatingChart() is not { } chart)
-            return;
-        var result = await ChartTitleDialog.ShowAsync(this, chart.Title);
-        if (result is not null)
-            _editor.SetChartTitle(result.NewTitle);
-        _editor.Focus();
-    }
+    private ValueTask<ChartTitleDialogResult?> ShowChartTitleDialogAsync(Chart chart) =>
+        new(ChartTitleDialog.ShowAsync(this, chart.Title));
 
-    private async Task OpenChartAxisTitlesDialogAsync()
-    {
-        if (_editor.SelectedFloatingChart() is not { } chart)
-            return;
-        var result = await ChartAxisTitlesDialog.ShowAsync(this, chart.CategoryAxisTitle, chart.ValueAxisTitle);
-        if (result is not null)
-            _editor.SetChartAxisTitles(result.CategoryTitle, result.ValueTitle);
-        _editor.Focus();
-    }
+    private ValueTask<ChartAxisTitlesDialogResult?> ShowChartAxisTitlesDialogAsync(Chart chart) =>
+        new(ChartAxisTitlesDialog.ShowAsync(this, chart.CategoryAxisTitle, chart.ValueAxisTitle));
 
-    private async Task OpenChartSizeDialogAsync()
-    {
-        if (_editor.SelectedFloatingChart() is not { } chart)
-            return;
-        var result = await ChartSizeDialog.ShowAsync(this, chart.WidthPt, chart.HeightPt);
-        if (result is not null)
-            _editor.SetSelectedChartSize(result.WidthPt, result.HeightPt);
-        _editor.Focus();
-    }
+    private ValueTask<ChartSizeDialogResult?> ShowChartSizeDialogAsync(Chart chart) =>
+        new(ChartSizeDialog.ShowAsync(this, chart.WidthPt, chart.HeightPt));
 
     private async Task OpenInsertSmartArtDialogAsync()
     {
@@ -757,13 +703,16 @@ public sealed partial class MainWindow : Window
             var selection = await IconPickerDialog.ShowAsync(this);
             if (selection is null)
                 return;
-            var image = PictureInsertionPlanner.FitIcon(CreatePictureInlineImage(selection.Path));
-            _editor.InsertInlineImage(image);
+            var bytes = SvgIconRasterizer.RasterizeFileToPng(selection.Path);
+            _editor.InsertInlineImage(bytes, 72, 72, ImageFormat.Png);
             _editor.Focus();
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Insert Icon", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                UiText.Get("Operation_InsertIcon"),
+                ex.Message);
         }
     }
 
@@ -796,20 +745,16 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task OpenTableToTextDialogAsync()
-    {
-        if (!_editor.CanConvertTableToText)
-            return;
-
-        var delimiter = await TableTextConversionDialog.ShowAsync(this, "Convert Table to Text");
-        if (delimiter is { } value)
-            _editor.ConvertTableToText(value);
-        _editor.Focus();
-    }
+    private ValueTask<char?> ShowTableToTextDialogAsync() =>
+        new(TableTextConversionDialog.ShowAsync(
+            this,
+            TableTextConversionDialogPlanner.ResolveText(UiText.Get).TableToTextTitle));
 
     private async Task OpenTextToTableDialogAsync()
     {
-        var delimiter = await TableTextConversionDialog.ShowAsync(this, "Convert Text to Table");
+        var delimiter = await TableTextConversionDialog.ShowAsync(
+            this,
+            TableTextConversionDialogPlanner.ResolveText(UiText.Get).TextToTableTitle);
         if (delimiter is { } value)
             _editor.ConvertSelectedParagraphsToTable(value);
         _editor.Focus();
@@ -849,37 +794,32 @@ public sealed partial class MainWindow : Window
             this,
             _editor.Document.FootnoteNumbering,
             _editor.Document.EndnoteNumbering);
-        if (result is not null)
-            _editor.ApplyFootnoteEndnoteOptions(result);
+        var commit = FootnoteEndnoteOptionsDialogPlanner.PlanCommit(result);
+        if (commit.ShouldApply)
+            _editor.ApplyFootnoteEndnoteOptions(commit.Result!);
         _editor.Focus();
     }
 
     private async Task OpenMultilevelListDialogAsync()
     {
         var result = await MultilevelListDialog.ShowAsync(this, _editor.Document.MultiLevelList.NumberFormats);
-        if (result is not null)
-            _editor.ApplyMultiLevelListDefinition(result);
+        var commit = MultilevelListDialogPlanner.PlanCommit(result);
+        if (commit.ShouldApply)
+            _editor.ApplyMultiLevelListDefinition(commit.Definition!);
         _editor.Focus();
     }
 
     private async Task OpenTableOfAuthoritiesDialogAsync()
     {
         var options = await TableOfAuthoritiesDialog.ShowAsync(this);
-        if (options is not null)
-            _editor.InsertTableOfAuthorities(options);
+        var commit = TableOfAuthoritiesDialogPlanner.PlanCommit(options);
+        if (commit.ShouldInsert)
+            _editor.InsertTableOfAuthorities(commit.Options!);
         _editor.Focus();
     }
 
-    private async Task OpenSmartArtEditDialogAsync()
-    {
-        if (_editor.SelectedFloatingSmartArt() is not { } smartArt)
-            return;
-
-        var replacement = await SmartArtEditDialog.ShowAsync(this, smartArt);
-        if (replacement is not null)
-            _editor.ReplaceSelectedSmartArt(replacement);
-        _editor.Focus();
-    }
+    private ValueTask<SmartArt?> ShowSmartArtEditDialogAsync(SmartArt smartArt) =>
+        new(SmartArtEditDialog.ShowAsync(this, smartArt));
 
     /// <summary>
     /// Opens the Page Setup dialog (modal). Pre-populates from the document's current page
@@ -975,7 +915,7 @@ public sealed partial class MainWindow : Window
             position.VerticalOffsetPt,
             position.HorizontalAnchor,
             position.VerticalAnchor,
-            position.IsGroupLocal ? "Shape Position in Group" : "Shape Position",
+            ObjectFormatCommandPlanner.ShapePositionDialogTitle(position.IsGroupLocal),
             position.IsGroupLocal);
         if (result is not null)
             _editor.SetSelectedShapePosition(
@@ -1009,15 +949,8 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task OpenChartEditDataDialogAsync()
-    {
-        if (_editor.SelectedFloatingChart() is not { } chart)
-            return;
-        var replacement = await InsertChartDialog.ShowAsync(this, chart);
-        if (replacement is not null)
-            _editor.ReplaceSelectedChartData(replacement);
-        _editor.Focus();
-    }
+    private ValueTask<Chart?> ShowChartDataDialogAsync(Chart chart) =>
+        new(InsertChartDialog.ShowAsync(this, chart));
 
     private async Task OpenCaptionDialogAsync()
     {
@@ -1136,7 +1069,9 @@ public sealed partial class MainWindow : Window
     private void ToggleSpellCheck()
     {
         var enabled = _editor.ToggleSpellCheck();
-        _status.Text = enabled ? "Spelling proofing is on." : "Spelling proofing is off.";
+        _status.Text = enabled
+            ? UiText.Get("Proofing_SpellCheckOn_Status")
+            : UiText.Get("Proofing_SpellCheckOff_Status");
     }
 
     private void AddCurrentWordToDictionary()
@@ -1144,14 +1079,14 @@ public sealed partial class MainWindow : Window
         var word = _editor.CurrentProofingWord;
         if (word is null)
         {
-            _status.Text = "Select a word, or place the caret inside one, then choose Add to Dictionary.";
+            _status.Text = UiText.Get("Proofing_SelectWord_Status");
             _editor.Focus();
             return;
         }
 
         _status.Text = _editor.AddCurrentWordToDictionary()
-            ? $"Added '{word}' to the custom dictionary."
-            : $"'{word}' is already in the custom dictionary.";
+            ? UiText.Format("Proofing_AddedToDictionary_Status_Format", word)
+            : UiText.Format("Proofing_AlreadyInDictionary_Status_Format", word);
         _editor.Focus();
     }
 
@@ -1167,14 +1102,15 @@ public sealed partial class MainWindow : Window
         _editor.SetProofingLanguage(chosen);
         var normalized = ProofingLanguageCatalog.NormalizeTag(chosen);
         _status.Text = normalized is null
-            ? "Proofing language cleared."
-            : $"Proofing language set to {normalized}.";
+            ? UiText.Get("Proofing_LanguageCleared_Status")
+            : UiText.Format("Proofing_LanguageSet_Status_Format", normalized);
         _editor.Focus();
     }
 
     private async Task CompareDocumentsAsync()
     {
-        var originalPath = await PromptReviewDocumentPathAsync("Compare: pick the ORIGINAL document");
+        var originalPath = await PromptReviewDocumentPathAsync(
+            UiText.Get("Review_Compare_OriginalPickerTitle"));
         if (originalPath is null)
             return;
 
@@ -1188,7 +1124,9 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var original = OpenReviewDocument(picked.OriginalFilePath, "Compare documents");
+            var original = OpenReviewDocument(
+                picked.OriginalFilePath,
+                UiText.Get("Review_CompareDocuments_Action"));
             var compared = ReviewCompareCombineWorkflow.ExecuteCompare(
                 new CompareDocumentsExecutionInput(
                     original,
@@ -1196,11 +1134,13 @@ public sealed partial class MainWindow : Window
                     picked.Author,
                     ReviewCompareCombineWorkflow.CreateRevisionDateXml(DateTimeOffset.UtcNow),
                     picked.Settings));
-            LoadReviewResult(compared, $"Compared with {Path.GetFileName(picked.OriginalFilePath)}.");
+            LoadReviewResult(
+                compared,
+                UiText.Format("Review_ComparedWith_Status_Format", Path.GetFileName(picked.OriginalFilePath)));
         }
         catch (Exception ex)
         {
-            _status.Text = $"Could not compare the documents: {ex.Message}";
+            _status.Text = UiText.Format("Review_CompareFailed_Status_Format", ex.Message);
         }
 
         _editor.Focus();
@@ -1208,11 +1148,13 @@ public sealed partial class MainWindow : Window
 
     private async Task CombineDocumentsAsync()
     {
-        var originalPath = await PromptReviewDocumentPathAsync("Combine: pick the ORIGINAL document");
+        var originalPath = await PromptReviewDocumentPathAsync(
+            UiText.Get("Review_Combine_OriginalPickerTitle"));
         if (originalPath is null)
             return;
 
-        var reviewerBPath = await PromptReviewDocumentPathAsync("Combine: pick Reviewer B's revised document");
+        var reviewerBPath = await PromptReviewDocumentPathAsync(
+            UiText.Get("Review_Combine_ReviewerBPickerTitle"));
         if (reviewerBPath is null)
             return;
 
@@ -1227,8 +1169,9 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var original = OpenReviewDocument(picked.OriginalFilePath, "Combine documents");
-            var reviewerB = OpenReviewDocument(picked.ReviewerBFilePath, "Combine documents");
+            var combineAction = UiText.Get("Review_CombineDocuments_Action");
+            var original = OpenReviewDocument(picked.OriginalFilePath, combineAction);
+            var reviewerB = OpenReviewDocument(picked.ReviewerBFilePath, combineAction);
             var combined = ReviewCompareCombineWorkflow.ExecuteCombine(
                 new CombineDocumentsExecutionInput(
                     original,
@@ -1237,11 +1180,13 @@ public sealed partial class MainWindow : Window
                     reviewerB,
                     picked.AuthorB,
                     ReviewCompareCombineWorkflow.CreateRevisionDateXml(DateTimeOffset.UtcNow)));
-            LoadReviewResult(combined, $"Combined with {Path.GetFileName(picked.ReviewerBFilePath)}.");
+            LoadReviewResult(
+                combined,
+                UiText.Format("Review_CombinedWith_Status_Format", Path.GetFileName(picked.ReviewerBFilePath)));
         }
         catch (Exception ex)
         {
-            _status.Text = $"Could not combine the documents: {ex.Message}";
+            _status.Text = UiText.Format("Review_CombineFailed_Status_Format", ex.Message);
         }
 
         _editor.Focus();
@@ -1253,7 +1198,10 @@ public sealed partial class MainWindow : Window
             StorageProvider,
             AvaloniaFilePickerOpenRequest.FromFileTypes(
                 title,
-                DocumentFilePickerTypes.BuildOpenTypes(_documentPersistence.Adapters)));
+                AvaloniaFilePickerTypeAdapter.ToFileTypes(
+                    DocumentFileDialogRequestPlanner
+                        .BuildOpenPickerPlan(_documentPersistence.Adapters)
+                        .FileTypes)));
         return file?.LocalPath;
     }
 
@@ -1262,6 +1210,7 @@ public sealed partial class MainWindow : Window
         if (!_documentPersistence.CanOpenPath(path))
         {
             throw new InvalidOperationException(SisterAppFileTextPlanner.FormatUnsupportedFileType(
+                FileText,
                 commandName,
                 Path.GetExtension(path)));
         }
@@ -1280,14 +1229,14 @@ public sealed partial class MainWindow : Window
     {
         if (_editor.CommentsAtCaret.Count == 0)
         {
-            _status.Text = "Place the caret in a comment to reply.";
+            _status.Text = CommentDialogPresentationPlanner.Text.MissingReplyTargetMessage;
             _editor.Focus();
             return;
         }
 
         var text = await CommentReplyDialog.AskAsync(this);
         if (!string.IsNullOrWhiteSpace(text) && !_editor.ReplyToCommentAtCaret(text))
-            _status.Text = "Place the caret in a comment to reply.";
+            _status.Text = CommentDialogPresentationPlanner.Text.MissingReplyTargetMessage;
         _editor.Focus();
     }
 
@@ -1305,7 +1254,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var snapshot = CloneDocument(_editor.Document);
+            var snapshot = FreeWDocumentSnapshot.Clone(_editor.Document);
             return new PrintPreviewDialog(
                 snapshot,
                 _fileWorkflow.DisplayName,
@@ -1315,7 +1264,10 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Print Preview", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                UiText.Get("Operation_PrintPreview"),
+                ex.Message);
             return Task.CompletedTask;
         }
     }
@@ -1337,8 +1289,10 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// AV-VIEW: Window → New Window. The shared planner snapshots the live model and owns numbering/file
-    /// state; Avalonia only constructs a native window and loads the resulting plan.
+    /// AV-VIEW: Window → New Window. Opens a second top-level window showing the same document content.
+    /// The document is round-tripped through the in-memory docx serializer so the second window edits an
+    /// independent copy (TextDocument has no deep-clone), matching the spirit of Word's "new window on the
+    /// same document". Wired to <c>freew.new-window</c>.
     /// </summary>
     private void OpenNewWindow()
     {
@@ -1355,12 +1309,15 @@ public sealed partial class MainWindow : Window
                 documentWindowPlanner: _documentWindowPlanner,
                 documentWindowNumber: plan.WindowNumber);
             second.LoadDocumentContent(plan.Document);
-            second._fileWorkflow.ApplyDocumentState(plan.CurrentPath, plan.IsDirty);
+            second._fileWorkflow.Workflow.ApplyDocumentState(plan.CurrentPath, plan.IsDirty);
             second.Show();
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("New window", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                FreeWFileTextResources.NewWindowCommand,
+                ex.Message);
         }
     }
 
@@ -1397,7 +1354,7 @@ public sealed partial class MainWindow : Window
     {
         var reportWindow = new MainWindow
         {
-            Title = "FreeW - Mail Merge Error Report"
+            Title = FreeWUiTextCatalog.MailMergeErrorReportWindowTitle
         };
         reportWindow.LoadDocumentContent(report);
         reportWindow.Show();
@@ -1450,7 +1407,7 @@ public sealed partial class MainWindow : Window
     /// read-only paginated snapshot, so the command is backed without pretending to offer dual live editing.
     /// </summary>
     internal void ToggleSplit() =>
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSplit));
+        ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleSplit));
 
     private void ZoomToOnePage()
     {
@@ -1467,23 +1424,17 @@ public sealed partial class MainWindow : Window
     }
 
     internal void ToggleMultiplePages() =>
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleMultiplePages));
+        ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleMultiplePages));
 
     internal void ToggleSideToSide() =>
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSideToSide));
+        ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleSideToSide));
 
-    internal void NavigateSideToSideNextPairForTests() =>
-        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair);
-
-    internal void NavigateSideToSidePreviousPairForTests() =>
-        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair);
-
-    private FreeWViewDepthState CurrentViewDepthState() => new(_viewDepthPlan.Mode);
-
-    private void ApplyViewDepthPlan(FreeWViewDepthPlan plan, bool updateStatus = true)
+    private void ApplyViewDepthTransition(FreeWViewDepthTransition transition, bool updateStatus = true)
     {
         if (_outlineMode)
             LeaveOutlineView(restorePriorView: false);
+
+        var plan = transition.Current;
 
         switch (plan.SurfaceKind)
         {
@@ -1501,11 +1452,10 @@ public sealed partial class MainWindow : Window
                 break;
         }
 
-        _viewDepthPlan = plan;
         _editor.ApplyViewDepthLayout(plan.Layout);
         if (updateStatus)
             _status.Text = plan.IsSideToSideActive
-                ? _sideToSideNavigation.StatusText
+                ? _viewSession.PagePairNavigation.StatusText
                 : plan.StatusText;
     }
 
@@ -1581,18 +1531,21 @@ public sealed partial class MainWindow : Window
             return;
 
         _scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
-        _multiplePagesUsesLiveEditor = plan.IsMultiplePagesActive;
         if (plan.IsMultiplePagesActive)
         {
             _editor.Focus();
             return;
         }
 
-        _sideToSideUsesLiveEditor = true;
-        _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-            plan,
-            requestedFirstVisiblePageNumber: 1,
-            totalPages: Math.Max(1, _editor.PageCount));
+        _viewSession.StartPagePairNavigation(totalPages: Math.Max(1, _editor.PageCount));
+        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(_editor.Document.Page);
+        var (viewportWidth, viewportHeight) = GetWorkspaceViewportSize(compact: false);
+        var viewport = DocumentViewDepthLayoutPlanner.BuildViewportPlan(
+            plan.Layout,
+            viewportWidth,
+            viewportHeight,
+            pageWidthDip,
+            pageHeightDip);
         _sideToSidePreviewScrollViewer = _scroller;
         UpdateSideToSidePairScrollStride(plan);
         _workspace.Child = null;
@@ -1615,10 +1568,10 @@ public sealed partial class MainWindow : Window
 
     private void RefreshSplitPreviewSnapshot()
     {
-        if (!_viewDepthPlan.IsSplitActive || _splitPreviewGrid is null || _splitPreviewSnapshot is null)
+        if (!_viewSession.CurrentDepth.IsSplitActive || _splitPreviewGrid is null || _splitPreviewSnapshot is null)
             return;
 
-        var replacement = BuildReadOnlyPagePreviewSurface(_viewDepthPlan, compact: true);
+        var replacement = BuildReadOnlyPagePreviewSurface(_viewSession.CurrentDepth, compact: true);
         var index = _splitPreviewGrid.Children.IndexOf(_splitPreviewSnapshot);
         if (index < 0)
             return;
@@ -1640,7 +1593,7 @@ public sealed partial class MainWindow : Window
             ViewTableGridlines = _editor.ViewTableGridlines,
             ShowRuler = _editor.ShowRuler && !compact,
         };
-        snapshot.LoadDocument(CloneDocument(_editor.Document));
+        snapshot.LoadDocument(FreeWDocumentSnapshot.Clone(_editor.Document));
         snapshot.ApplyViewDepthLayout(plan.Layout);
 
         var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(_editor.Document.Page);
@@ -1666,10 +1619,7 @@ public sealed partial class MainWindow : Window
 
         if (!compact && plan.IsSideToSideActive)
         {
-            _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-                plan,
-                requestedFirstVisiblePageNumber: 1,
-                totalPages: snapshot.PageCount);
+            _viewSession.StartPagePairNavigation(totalPages: snapshot.PageCount);
             _sideToSidePreviewScrollViewer = scroller;
             _sideToSidePairScrollStrideDip = 2 * (pageWidthDip + plan.Layout.InterPageGapDip) * viewport.Scale;
             return BuildSideToSideNavigationHost(scroller);
@@ -1690,15 +1640,20 @@ public sealed partial class MainWindow : Window
         };
 
         _sideToSidePreviousPairButton = MakeSideToSideNavigationButton(
-            "Previous pair",
+            FreeWApplicationFrameTextCatalog.PreviousPagePairLabel,
+            FreeWApplicationFrameTextCatalog.PreviousPagePairSemantic,
             () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair));
         _sideToSidePairStatusText = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(12, 0, 12, 0)
         };
+        AutomationProperties.SetAutomationId(
+            _sideToSidePairStatusText,
+            FreeWApplicationFrameTextCatalog.PagePairStatusAutomationId);
         _sideToSideNextPairButton = MakeSideToSideNavigationButton(
-            "Next pair",
+            FreeWApplicationFrameTextCatalog.NextPagePairLabel,
+            FreeWApplicationFrameTextCatalog.NextPagePairSemantic,
             () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair));
 
         toolbar.Children.Add(_sideToSidePreviousPairButton);
@@ -1712,7 +1667,10 @@ public sealed partial class MainWindow : Window
         return host;
     }
 
-    private static Button MakeSideToSideNavigationButton(string text, Action action)
+    private static Button MakeSideToSideNavigationButton(
+        string text,
+        FreeWSemanticIdentity semantic,
+        Action action)
     {
         var button = new Button
         {
@@ -1721,22 +1679,21 @@ public sealed partial class MainWindow : Window
             MinWidth = 96
         };
         ToolTip.SetTip(button, text);
+        AutomationProperties.SetAutomationId(button, semantic.AutomationId);
+        AutomationProperties.SetName(button, semantic.AutomationName);
         button.Click += (_, _) => action();
         return button;
     }
 
     private void NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand command)
     {
-        if (!_viewDepthPlan.IsSideToSideActive || _sideToSidePreviewScrollViewer is null)
+        if (!_viewSession.CurrentDepth.IsSideToSideActive || _sideToSidePreviewScrollViewer is null)
             return;
 
-        _sideToSideNavigation = FreeWViewDepthPlanner.NavigatePagePair(
-            _viewDepthPlan,
-            _sideToSideNavigation,
-            command);
-        ApplySideToSideNavigationToScrollViewer(_viewDepthPlan);
+        _viewSession.NavigatePagePair(command);
+        ApplySideToSideNavigationToScrollViewer(_viewSession.CurrentDepth);
         SyncSideToSideNavigationControls();
-        _status.Text = _sideToSideNavigation.StatusText;
+        _status.Text = _viewSession.PagePairNavigation.StatusText;
     }
 
     private void ApplySideToSideNavigationToScrollViewer(FreeWViewDepthPlan plan)
@@ -1744,8 +1701,8 @@ public sealed partial class MainWindow : Window
         if (!plan.IsSideToSideActive || _sideToSidePreviewScrollViewer is null)
             return;
 
-        var pairIndex = (_sideToSideNavigation.FirstVisiblePageNumber - 1) /
-            Math.Max(1, _sideToSideNavigation.PagesPerPair);
+        var pairIndex = (_viewSession.PagePairNavigation.FirstVisiblePageNumber - 1) /
+            Math.Max(1, _viewSession.PagePairNavigation.PagesPerPair);
         var horizontalOffset = Math.Max(0, pairIndex * _sideToSidePairScrollStrideDip);
         _sideToSidePlannedHorizontalOffsetDip = horizontalOffset;
         _sideToSidePreviewScrollViewer.Offset = new Vector(horizontalOffset, 0);
@@ -1754,27 +1711,22 @@ public sealed partial class MainWindow : Window
     private void SyncSideToSideNavigationControls()
     {
         if (_sideToSidePreviousPairButton is not null)
-            _sideToSidePreviousPairButton.IsEnabled = _sideToSideNavigation.CanGoToPreviousPair;
+            _sideToSidePreviousPairButton.IsEnabled = _viewSession.PagePairNavigation.CanGoToPreviousPair;
         if (_sideToSideNextPairButton is not null)
-            _sideToSideNextPairButton.IsEnabled = _sideToSideNavigation.CanGoToNextPair;
+            _sideToSideNextPairButton.IsEnabled = _viewSession.PagePairNavigation.CanGoToNextPair;
         if (_sideToSidePairStatusText is not null)
-            _sideToSidePairStatusText.Text = _sideToSideNavigation.StatusText;
+            _sideToSidePairStatusText.Text = _viewSession.PagePairNavigation.StatusText;
     }
 
     private void ResetSideToSideNavigation()
     {
-        _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
-            requestedFirstVisiblePageNumber: 1,
-            totalPages: 1);
+        _viewSession.ResetPagePairNavigation();
         _sideToSidePreviewScrollViewer = null;
         _sideToSidePreviousPairButton = null;
         _sideToSideNextPairButton = null;
         _sideToSidePairStatusText = null;
         _sideToSidePairScrollStrideDip = 0;
         _sideToSidePlannedHorizontalOffsetDip = 0;
-        _sideToSideUsesLiveEditor = false;
-        _multiplePagesUsesLiveEditor = false;
     }
 
     private (double Width, double Height) GetWorkspaceViewportSize(bool compact)
@@ -1790,6 +1742,8 @@ public sealed partial class MainWindow : Window
 
     private ZoomDialogFitFactors ComputeZoomFitFactors()
     {
+        var page = _editor.Document.Page;
+
         var viewportWidth = 0.0;
         var viewportHeight = 0.0;
         if (_scroller is not null)
@@ -1798,7 +1752,7 @@ public sealed partial class MainWindow : Window
             viewportHeight = Math.Max(0, _scroller.Bounds.Height - _scroller.Padding.Top - _scroller.Padding.Bottom);
         }
 
-        return ZoomDialogPlanner.BuildFitFactors(_editor.Document.Page, viewportWidth, viewportHeight);
+        return ZoomDialogPlanner.BuildFitFactors(page, viewportWidth, viewportHeight);
     }
 
     /// <summary>
@@ -1832,37 +1786,22 @@ public sealed partial class MainWindow : Window
             _editor.ApplyPageSettings(page => PageLayoutCommandPlanner.ApplyPaperSize(page, parsed));
     }
 
-    private DocumentOpenResult? LoadStartupDocument(IReadOnlyList<string> startupArguments)
-    {
-        var path = startupArguments.FirstOrDefault(a => File.Exists(a) && _documentPersistence.CanOpenPath(a));
-        if (path is null)
-            return null;
-        try
-        {
-            return _documentPersistence.Open(path);
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
-
     private Control BuildRibbon()
     {
-        var callbacks = new RibbonHostCallbacks(
-            Open: () => _ = OpenAsync(),
-            Save: () => _ = SaveAsync(),
+        var callbacks = new FreeWRibbonHostExecutionPorts(
+            Open: () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument),
+            Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
             ImportPdfText: () => _ = ImportPdfTextAsync(),
-            Cut: () => _ = CutAsync(),
-            Copy: () => _ = CopyAsync(),
-            Paste: () => _ = PasteAsync(),
-            PastePlainText: () => _ = PastePlainTextAsync(),
+            Cut: () => _applicationCommands.Execute(FreeWKeyboardCommand.Cut),
+            Copy: () => _applicationCommands.Execute(FreeWKeyboardCommand.Copy),
+            Paste: () => _applicationCommands.Execute(FreeWKeyboardCommand.Paste),
+            PastePlainText: () => _applicationCommands.Execute(FreeWKeyboardCommand.PasteTextOnly),
             PasteMergeFormatting: () => _ = PasteMergeFormattingAsync(),
             OpenPasteSpecial: () => _ = OpenPasteSpecialAsync(),
             OpenNewStyleDialog: () => _ = StyleDialog.ShowNewAndApplyAsync(this, _editor),
             OpenManageStylesDialog: () => _ = ManageStylesDialog.ShowAndApplyAsync(this, _editor),
             Backstage: () => _ = ShowBackstageAsync(),
-            NewDocument: NewDocument,
+            NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
             ToggleNavigationPane: ToggleNavigationPane,
             ToggleReviewingPane: ToggleReviewingPane,
             AcceptThisChange: AcceptSelectedRevision,
@@ -1899,7 +1838,7 @@ public sealed partial class MainWindow : Window
             OpenPageNumberFormatDialog: () => _ = OpenPageNumberFormatDialogAsync(),
             AskHeaderFooterText: _askHeaderFooterText ??
                 ((footer, initial) => HeaderFooterTextDialog.ShowAsync(this, footer, initial)),
-            OpenImageCropDialog: () => _ = OpenImageCropDialogAsync(),
+            ShowImageCropDialogAsync: ShowImageCropDialogAsync,
             OpenImageSizeDialog: () => _ = OpenImageSizeDialogAsync(),
             OpenImageAltTextDialog: () => _ = OpenImageAltTextDialogAsync(),
             OpenImageBorderDialog: () => _ = OpenImageBorderDialogAsync(),
@@ -1909,15 +1848,15 @@ public sealed partial class MainWindow : Window
             OpenShapeSizeDialog: () => _ = OpenShapeSizeDialogAsync(),
             OpenShapeAltTextDialog: () => _ = OpenShapeAltTextDialogAsync(),
             OpenInsertChartDialog: () => _ = OpenInsertChartDialogAsync(),
-            OpenChartEditDataDialog: () => _ = OpenChartEditDataDialogAsync(),
-            OpenChartTitleDialog: () => _ = OpenChartTitleDialogAsync(),
-            OpenChartAxisTitlesDialog: () => _ = OpenChartAxisTitlesDialogAsync(),
-            OpenChartSizeDialog: () => _ = OpenChartSizeDialogAsync(),
+            ShowChartDataDialogAsync: ShowChartDataDialogAsync,
+            ShowChartTitleDialogAsync: ShowChartTitleDialogAsync,
+            ShowChartAxisTitlesDialogAsync: ShowChartAxisTitlesDialogAsync,
+            ShowChartSizeDialogAsync: ShowChartSizeDialogAsync,
             OpenInsertSmartArtDialog: () => _ = OpenInsertSmartArtDialogAsync(),
             OpenIconPickerDialog: () => _ = OpenIconPickerDialogAsync(),
             OpenTextToTableDialog: () => _ = OpenTextToTableDialogAsync(),
-            OpenTableToTextDialog: () => _ = OpenTableToTextDialogAsync(),
-            OpenSmartArtEditDialog: () => _ = OpenSmartArtEditDialogAsync(),
+            ShowTableToTextDialogAsync: ShowTableToTextDialogAsync,
+            ShowSmartArtEditDialogAsync: ShowSmartArtEditDialogAsync,
             OpenDateTimeDialog: () => _ = OpenDateTimeDialogAsync(),
             OpenMultilevelListDialog: () => _ = OpenMultilevelListDialogAsync(),
             ToggleOrientation:   ToggleOrientation,
@@ -1927,8 +1866,8 @@ public sealed partial class MainWindow : Window
             InsertObject:        () => _ = InsertEmbeddedObjectAsync(),
             OpenSymbolPickerDialog: () => _ = OpenSymbolPickerAsync(),
             CaptureScreenClip: () => _ = InsertScreenClipAsync(),
-            OpenTablePropertiesDialog: context => _ = OpenTablePropertiesDialogAsync(context),
-            OpenTableFormulaDialog: state => _ = OpenTableFormulaDialogAsync(state),
+            ShowTablePropertiesDialogAsync: ShowTablePropertiesDialogAsync,
+            ShowTableFormulaDialogAsync: ShowTableFormulaDialogAsync,
             OpenWordCountDialog: () => _ = OpenWordCountDialogAsync(),
             OpenCaptionDialog: () => _ = OpenCaptionDialogAsync(),
             OpenCrossReferenceDialog: () => _ = OpenCrossReferenceDialogAsync(),
@@ -1960,13 +1899,13 @@ public sealed partial class MainWindow : Window
             NewWindow:       OpenNewWindow,
             ArrangeAll:      ArrangeAllWindows,
             ToggleSplit:     ToggleSplit,
-            IsSplitActive:   () => _viewDepthPlan.IsSplitActive,
+            IsSplitActive:   () => _viewSession.CurrentDepth.IsSplitActive,
             ZoomOnePage:     ZoomToOnePage,
             ZoomPageWidth:   ZoomToPageWidth,
             ToggleMultiplePages: ToggleMultiplePages,
-            IsMultiplePagesActive: () => _viewDepthPlan.IsMultiplePagesActive,
+            IsMultiplePagesActive: () => _viewSession.CurrentDepth.IsMultiplePagesActive,
             ToggleSideToSide: ToggleSideToSide,
-            IsSideToSideActive: () => _viewDepthPlan.IsSideToSideActive,
+            IsSideToSideActive: () => _viewSession.CurrentDepth.IsSideToSideActive,
             TogglePagedEditView: TogglePagedEditView,
             IsPagedEditViewActive: () => _pagedEditMode,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
@@ -2008,14 +1947,20 @@ public sealed partial class MainWindow : Window
             IsReadAloudActive: IsReadAloudActive,
             CompareDocuments: () => _ = CompareDocumentsAsync(),
             CombineDocuments: () => _ = CombineDocumentsAsync(),
-            OpenHelpOnline: () => _ = OpenExternalHelpLinkAsync(FreeWProductInfo.HelpUrl, "Help Online"),
-            OpenFeedback: () => _ = OpenExternalHelpLinkAsync(FreeWProductInfo.FeedbackUrl, "Feedback"),
+            OpenHelpOnline: () => _ = OpenExternalHelpLinkAsync(
+                FreeWProductInfo.HelpUrl,
+                FreeWApplicationFrameTextCatalog.HelpOnlineCommandName),
+            OpenFeedback: () => _ = OpenExternalHelpLinkAsync(
+                FreeWProductInfo.FeedbackUrl,
+                FreeWApplicationFrameTextCatalog.FeedbackCommandName),
             CopyDiagnostics: () => _ = CopyDiagnosticsAsync(),
-            CheckForUpdates: () => _ = OpenExternalHelpLinkAsync(FreeWProductInfo.LatestReleaseUrl, "Check for Updates"),
+            CheckForUpdates: () => _ = OpenExternalHelpLinkAsync(
+                FreeWProductInfo.LatestReleaseUrl,
+                FreeWApplicationFrameTextCatalog.CheckForUpdatesCommandName),
             OpenAbout: () => _ = OpenAboutAsync(),
             OpenLegalNotices: () => _ = OpenLegalNoticesAsync(),
             ToggleReadMode: ToggleReadMode,
-            IsReadModeActive: () => _readMode,
+            IsReadModeActive: () => _editorInteraction.IsReadModeActive,
             ApplyReadModeColumnWidth: ApplyReadModeColumnWidth,
             ApplyReadModePageColor: ApplyReadModePageColor,
             ToggleReviewBalloons: ToggleReviewBalloons,
@@ -2023,7 +1968,7 @@ public sealed partial class MainWindow : Window
 
         // AV-MAIL: capture the Mailings engine so the shell can drive dialog-bound commands with async
         // Avalonia dialogs over the same session the ribbon commands share.
-        var registry = FreeWRibbon.BuildRegistry(_editor, callbacks, out var mailMerge);
+        var registry = FreeWAvaloniaRibbonCommands.Build(_editor, callbacks, out var mailMerge);
         _ribbonRegistry = registry;
         _mailMerge = mailMerge;
         registry.Register(new RibbonCommandId("freew.start-mail-merge"),
@@ -2057,23 +2002,22 @@ public sealed partial class MainWindow : Window
         registry.Register(new RibbonCommandId("freew.merge-email"),
             new ActionRibbonCommand(() => _ = PlanEmailMergeAsync()));
         registry.Register(new RibbonCommandId("freew.merge-rule-if"),
-            new ActionRibbonCommand(() => _ = InsertMergeRuleIfAsync()));
+            RuleCommand(MailMergeRuleKind.IfThenElse));
         registry.Register(new RibbonCommandId("freew.merge-rule-skip-record-if"),
-            new ActionRibbonCommand(() => _ = InsertMergeRuleConditionAsync(skipRecord: true)));
+            RuleCommand(MailMergeRuleKind.SkipRecordIf));
         registry.Register(new RibbonCommandId("freew.merge-rule-next-record-if"),
-            new ActionRibbonCommand(() => _ = InsertMergeRuleConditionAsync(skipRecord: false)));
+            RuleCommand(MailMergeRuleKind.NextRecordIf));
         registry.Register(new RibbonCommandId("freew.merge-rule-fill-in"),
-            new ActionRibbonCommand(() => _ = InsertMergeRulePromptAsync("Fill-in", "Enter the prompt text for this Fill-in field:",
-                prompt => _mailMerge?.InsertFillInRule(prompt))));
+            RuleCommand(MailMergeRuleKind.FillIn));
         registry.Register(new RibbonCommandId("freew.merge-rule-ask"),
-            new ActionRibbonCommand(() => _ = InsertMergeRuleNameValueAsync("Ask", "Prompt text:",
-                result => _mailMerge?.InsertAskRule(result.Name, result.Value))));
+            RuleCommand(MailMergeRuleKind.Ask));
         registry.Register(new RibbonCommandId("freew.merge-rule-set"),
-            new ActionRibbonCommand(() => _ = InsertMergeRuleNameValueAsync("Set Bookmark", "Value:",
-                result => _mailMerge?.InsertSetRule(result.Name, result.Value))));
+            RuleCommand(MailMergeRuleKind.Set));
         registry.Register(new RibbonCommandId("freew.merge-rule-ref"),
-            new ActionRibbonCommand(() => _ = InsertMergeRulePromptAsync("Ref Bookmark", "Enter the bookmark name to reference:",
-                prompt => _mailMerge?.InsertRefRule(prompt))));
+            RuleCommand(MailMergeRuleKind.Ref));
+
+        IRibbonCommand RuleCommand(MailMergeRuleKind kind) =>
+            new ActionRibbonCommand(() => _ = InsertMergeRuleAsync(kind));
         // AV-PICTAB: merge the Table (caret-in-cell) and Floating (picture/drawing selected)
         // contextual triggers so both sets of contextual tabs can surface from one source.
         var contextSource = new CompositeRibbonContextSource(
@@ -2084,7 +2028,7 @@ public sealed partial class MainWindow : Window
         // through the same Backstage callback as FreeP. FreeW's canonical definition keeps
         // its Avalonia-only File command group for the portable catalog, but it must not be
         // rendered a second time beside the shell tab.
-        var canonicalDefinition = FreeWRibbon.BuildDefinition();
+        var canonicalDefinition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
         var definition = canonicalDefinition with
         {
             Tabs = canonicalDefinition.Tabs
@@ -2121,14 +2065,17 @@ public sealed partial class MainWindow : Window
         if (_mailMerge is null)
             return;
         var fields = FreeW.Core.Model.MailMerge.FieldNames(_editor.Document);
-        var seed = fields.Count > 0 ? string.Join(",", fields) : string.Empty;
-        var csv = await MailMergeDialogs.AskRecipientCsvAsync(this, seed);
+        var dialogPlan = MailMergeRecipientDialogPlanner.CreatePlan(
+            fields,
+            _mailMerge.Session.Data);
+        var csv = await MailMergeDialogs.AskRecipientCsvAsync(
+            this,
+            dialogPlan.SeedHeader,
+            dialogPlan.InitialCsv);
         if (string.IsNullOrWhiteSpace(csv))
             return;
-        var data = _mailMerge.LoadRecipientsCsv(csv);
-        _status.Text = data.Count > 0
-            ? $"Loaded {data.Count} recipient(s): {string.Join(", ", data.Header)}"
-            : "Recipient list is empty.";
+        var transition = _mailMerge.LoadRecipientsCsvWithTransition(csv);
+        _status.Text = transition.Message;
         _editor.Focus();
     }
 
@@ -2173,15 +2120,25 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
+    private async Task<bool> ValidateMailMergeOperationAsync(MailMergeOperation operation)
+    {
+        if (_mailMerge is null)
+            return false;
+
+        var validation = _mailMerge.ValidateOperation(operation);
+        if (validation.IsValid)
+            return true;
+
+        await FreeWInfoDialog.ShowAsync(this, validation.Message);
+        return false;
+    }
+
     private async Task OpenMatchFieldsAsync()
     {
-        if (_mailMerge?.Session.Data is not { } data)
-        {
-            await FreeWInfoDialog.ShowAsync(
-                this,
-                "Select recipients first (Mailings > Select Recipients), then match fields.");
+        if (!await ValidateMailMergeOperationAsync(MailMergeOperation.MatchFields))
             return;
-        }
+
+        var data = _mailMerge!.Session.Data!;
         var mapping = await MailMergeDialogs.AskMatchFieldsAsync(
             this, data.Header, _mailMerge.Session.Mapping ?? new FieldMapping());
         if (mapping is not null)
@@ -2191,20 +2148,13 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenFilterSortAsync()
     {
-        if (_mailMerge?.Session.Data is not { Count: > 0 } data)
-        {
-            await FreeWInfoDialog.ShowAsync(
-                this,
-                "Select recipients first (Mailings > Select Recipients), then filter and sort.");
+        if (!await ValidateMailMergeOperationAsync(MailMergeOperation.FilterSortRecipients))
             return;
-        }
+
+        var data = _mailMerge!.Session.Data!;
         var filtered = await MailMergeDialogs.AskFilterSortRecipientsAsync(this, data);
         if (filtered is not null)
-        {
-            _mailMerge.Session.Data = filtered;
-            _mailMerge.Session.Template = null;
-            _mailMerge.Session.CurrentIndex = 0;
-        }
+            _mailMerge.ApplyRecipientFilter(filtered);
         _editor.Focus();
     }
 
@@ -2212,13 +2162,8 @@ public sealed partial class MainWindow : Window
     {
         if (_mailMerge is null)
             return;
-        if (_mailMerge.Session.Data is not { Count: > 0 })
-        {
-            await FreeWInfoDialog.ShowAsync(
-                this,
-                "Select recipients first (Mailings > Select Recipients), then preview a record.");
+        if (!await ValidateMailMergeOperationAsync(MailMergeOperation.PreviewRecord))
             return;
-        }
         if (!_mailMerge.EnsurePreviewingForNavigation())
             return;
         var data = _mailMerge.Session.Data!;
@@ -2235,11 +2180,8 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenFindRecipientAsync()
     {
-        if (_mailMerge?.Session.Data is not { Count: > 0 } data)
+        if (!await ValidateMailMergeOperationAsync(MailMergeOperation.FindRecipient))
         {
-            await FreeWInfoDialog.ShowAsync(
-                this,
-                "Select recipients first (Mailings > Select Recipients), then find a recipient.");
             _editor.Focus();
             return;
         }
@@ -2250,47 +2192,34 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var result = MailMergeFindRecipientPlanner.Find(data, query, _mailMerge.Session.CurrentIndex);
-        _mailMerge.Session.CurrentIndex = result.Index;
+        var result = _mailMerge!.FindRecipient(query);
         await FreeWInfoDialog.ShowAsync(this, result.Message);
         _editor.Focus();
     }
 
     private async Task OpenCheckForErrorsAsync()
     {
-        if (_mailMerge?.Session.Data is not { Count: > 0 })
-        {
-            await FreeWInfoDialog.ShowAsync(
-                this,
-                "Select recipients first (Mailings > Select Recipients), then check for errors.");
+        if (!await ValidateMailMergeOperationAsync(MailMergeOperation.CheckForErrors))
             return;
-        }
         var mode = await MailMergeDialogs.AskCheckForErrorsAsync(this);
         if (mode is not { } selected)
             return;
 
-        var result = _mailMerge.CheckForErrors(selected, completeMerge: false);
-        if (result is not null)
+        var execution = _mailMerge!.CheckForErrorsPlan(selected);
+        if (execution.Success && execution.Result is { } result)
         {
-            if (result.ShouldPauseForErrors)
-            {
-                foreach (var issue in result.Issues)
-                    await FreeWInfoDialog.ShowAsync(this, issue.Message);
-            }
-            else if (!result.ShouldOpenReportDocument)
-            {
-                await FreeWInfoDialog.ShowAsync(this, result.Message);
-            }
+            foreach (var message in execution.Messages)
+                await FreeWInfoDialog.ShowAsync(this, message);
 
             if (result.ShouldCompleteMerge)
             {
-                var finishPlan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(
+                var plan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(
                     _mailMerge.Session.Data!.Count);
-                await ExecuteFinishMergePlanAsync(finishPlan);
+                await ExecuteFinishMergePlanAsync(plan);
             }
 
-            if (result.ShouldOpenReportDocument)
-                OpenMailMergeErrorReport(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));
+            if (execution.ReportDocument is { } report)
+                OpenMailMergeErrorReport(report);
         }
         _editor.Focus();
     }
@@ -2299,13 +2228,10 @@ public sealed partial class MainWindow : Window
     {
         if (_mailMerge is null)
             return;
-        if (_mailMerge.Session.Data is not { Count: > 0 } data)
-        {
-            await FreeWInfoDialog.ShowAsync(
-                this,
-                "Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
+        if (!await ValidateMailMergeOperationAsync(MailMergeOperation.FinishMerge))
             return;
-        }
+
+        var data = _mailMerge.Session.Data!;
         var plan = await MailMergeDialogs.AskFinishMergeAsync(
             this, data.Count, _mailMerge.Session.CurrentIndex);
         if (plan is not null)
@@ -2318,9 +2244,15 @@ public sealed partial class MainWindow : Window
         if (_mailMerge is null || !plan.Success)
             return;
 
-        if (plan.Destination == MailMergeFinishDestination.Email)
+        var route = _mailMerge.RouteFinish(
+            plan,
+            printingAvailable: true,
+            emailAvailable: true);
+        if (!route.Success)
+            return;
+        if (route.Route == MailMergeFinishRoute.Email)
         {
-            await PlanEmailMergeAsync(plan.RowIndexes);
+            await PlanEmailMergeAsync(route.EmailRecordIndexes);
             return;
         }
 
@@ -2335,18 +2267,20 @@ public sealed partial class MainWindow : Window
         // the editor stays fully typeable — a keystroke that splits a paragraph mid-merge throws
         // "collection was modified" on the background thread. Running the merge inline is not an
         // option: its per-record prompts post to the UI thread and wait, so that would deadlock.
-        var templateSnapshot = _mailMerge.Session.IsPreviewing ? null : CloneDocument(_editor.Document);
+        var templateSnapshot = _mailMerge.Session.IsPreviewing
+            ? null
+            : FreeWDocumentSnapshot.Clone(_editor.Document);
         var result = await Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState, templateSnapshot));
         if (result is null)
             return;
 
-        if (plan.Destination == MailMergeFinishDestination.NewDocument)
+        if (route.Route == MailMergeFinishRoute.NewDocument)
         {
             _mailMerge.ApplyFinishedMerge(result);
             return;
         }
 
-        if (plan.Destination == MailMergeFinishDestination.Printer)
+        if (route.Route == MailMergeFinishRoute.Printer)
             await PrintAsync(result.Document);
     }
 
@@ -2360,7 +2294,7 @@ public sealed partial class MainWindow : Window
         {
             try
             {
-                var title = prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask";
+                var title = MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(prompt.Kind, UiText.Get);
                 completion.SetResult(await MailMergeDialogs.AskMergeRulePromptAsync(
                     this,
                     title,
@@ -2383,16 +2317,13 @@ public sealed partial class MainWindow : Window
         var state = new MergeState();
         foreach (var prompt in _mailMerge.GetInteractiveFinishPrompts())
         {
-            var title = prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask";
+            var title = MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(prompt.Kind, UiText.Get);
             var answer = await MailMergeDialogs.AskMergeRulePromptAsync(
                 this, title, prompt.Prompt, prompt.DefaultAnswer);
             if (answer is null)
                 return null;
 
-            if (prompt.Kind == MailMergeInteractivePromptKind.FillIn)
-                state.FillInAnswers[prompt.Key] = answer;
-            else
-                state.AskAnswers[prompt.Key] = answer;
+            MailMergeInteractivePromptPlanner.ApplyResponse(state, prompt, answer);
         }
 
         return state;
@@ -2433,56 +2364,14 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task InsertMergeRuleIfAsync()
+    private async Task InsertMergeRuleAsync(MailMergeRuleKind kind)
     {
         if (_mailMerge is null)
             return;
 
-        var result = await MailMergeDialogs.AskMergeRuleIfAsync(this, _mailMerge.AvailableFieldNames);
-        if (result is null)
-            return;
-
-        _mailMerge.InsertIfRule(result);
-        _editor.Focus();
-    }
-
-    private async Task InsertMergeRuleConditionAsync(bool skipRecord)
-    {
-        if (_mailMerge is null)
-            return;
-
-        var title = skipRecord ? "Skip Record If" : "Next Record If";
-        var result = await MailMergeDialogs.AskMergeRuleConditionAsync(this, _mailMerge.AvailableFieldNames, title);
-        if (result is null)
-            return;
-
-        if (skipRecord)
-            _mailMerge.InsertSkipRecordIfRule(result);
-        else
-            _mailMerge.InsertNextRecordIfRule(result);
-        _editor.Focus();
-    }
-
-    private async Task InsertMergeRulePromptAsync(string title, string prompt, Action<string> apply)
-    {
-        var result = await MailMergeDialogs.AskMergeRulePromptAsync(this, title, prompt);
-        if (result is null)
-            return;
-
-        apply(result);
-        _editor.Focus();
-    }
-
-    private async Task InsertMergeRuleNameValueAsync(
-        string title,
-        string valueLabel,
-        Action<MailMergeRuleNameValueDialogResult> apply)
-    {
-        var result = await MailMergeDialogs.AskMergeRuleNameValueAsync(this, title, valueLabel);
-        if (result is null)
-            return;
-
-        apply(result.Value);
+        await _mailMerge.AuthorRuleAsync(
+            kind,
+            (request, _) => MailMergeDialogs.AskMergeRuleAsync(this, request));
         _editor.Focus();
     }
 
@@ -2490,7 +2379,7 @@ public sealed partial class MainWindow : Window
     // TopLevel.Clipboard with SetTextAsync / TryGetTextAsync.
     private Control BuildFindBar()
     {
-        var next = new Button { Content = "Find Next", Padding = new Thickness(10, 4), Margin = new Thickness(6, 0, 0, 0) };
+        var next = new Button { Content = UiText.Get("Find_Inline_FindNext_Label"), Padding = new Thickness(10, 4), Margin = new Thickness(6, 0, 0, 0) };
         next.Click += (_, _) => DoFind();
         _findBox.KeyDown += (_, e) =>
         {
@@ -2506,9 +2395,9 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        var replace = new Button { Content = "Replace", Padding = new Thickness(10, 4), Margin = new Thickness(6, 0, 0, 0) };
+        var replace = new Button { Content = UiText.Get("Find_Inline_Replace_Label"), Padding = new Thickness(10, 4), Margin = new Thickness(6, 0, 0, 0) };
         replace.Click += (_, _) => DoReplace();
-        var replaceAll = new Button { Content = "Replace All", Padding = new Thickness(6, 4), Margin = new Thickness(4, 0, 0, 0) };
+        var replaceAll = new Button { Content = UiText.Get("Find_Inline_ReplaceAll_Label"), Padding = new Thickness(6, 4), Margin = new Thickness(4, 0, 0, 0) };
         replaceAll.Click += (_, _) => DoReplaceAll();
 
         var row = new StackPanel
@@ -2517,10 +2406,10 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(8, 4),
             Children =
             {
-                new TextBlock { Text = "Find:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) },
+                new TextBlock { Text = UiText.Get("Find_Inline_Find_Label"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) },
                 _findBox,
                 next,
-                new TextBlock { Text = "Replace:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 6, 0) },
+                new TextBlock { Text = UiText.Get("Find_Inline_Replace_FieldLabel"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 6, 0) },
                 _replaceBox,
                 replace,
                 replaceAll,
@@ -2539,12 +2428,13 @@ public sealed partial class MainWindow : Window
 
     private Border BuildStatusBar()
     {
-        var white = ResolveThemeBrush("FreeWWhiteBrush", Brushes.White);
+        var white = AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White);
         _pageStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
         _sectionStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
         _status = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
         _dataFolderStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
-        _dataFolderStatus.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(ResolveDataFolderLabel());
+        _dataFolderStatus.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(
+            FreeWApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath));
         ToolTip.SetTip(_dataFolderStatus, _dataFolderStatus.Text);
 
         _dataFolderItemControl = new StackPanel
@@ -2579,8 +2469,8 @@ public sealed partial class MainWindow : Window
         _statusViewSwitchControl = viewSwitch;
         _statusZoomControl = zoom;
         _statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
-            Background: ResolveThemeBrush(
-                "FreeWStatusSurfaceBrush",
+            Background: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.StatusSurfaceBrush,
                 new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))),
             LeftContent: left,
             RightItems: [viewSwitch, zoom])).Root;
@@ -2597,32 +2487,32 @@ public sealed partial class MainWindow : Window
         };
 
         _readModeSwitch = BuildStatusButton(
-            "Read Mode",
-            "Toggle distraction-free Read Mode",
+            FreeWApplicationFrameTextCatalog.ReadMode.Label,
+            FreeWApplicationFrameTextCatalog.ReadMode.HelpText,
             RibbonCommandIconKind.ReadMode,
             foreground,
             ToggleReadMode);
         _printLayoutSwitch = BuildStatusToggle(
-            "Print Layout",
-            "Print Layout page view",
+            FreeWApplicationFrameTextCatalog.PrintLayout.Label,
+            FreeWApplicationFrameTextCatalog.PrintLayout.HelpText,
             RibbonCommandIconKind.PrintLayout,
             foreground,
             () => SetViewMode(DocumentViewMode.PrintLayout));
         _webLayoutSwitch = BuildStatusToggle(
-            "Web Layout",
-            "Web Layout: continuous, full-width view",
+            FreeWApplicationFrameTextCatalog.WebLayoutLabel,
+            UiText.Get("View_WebLayout_HelpText"),
             RibbonCommandIconKind.WebLayout,
             foreground,
             () => SetViewMode(DocumentViewMode.WebLayout));
         _draftSwitch = BuildStatusToggle(
-            "Draft",
-            "Draft: simplified continuous view for fast editing",
+            FreeWApplicationFrameTextCatalog.Draft.Label,
+            FreeWApplicationFrameTextCatalog.Draft.HelpText,
             RibbonCommandIconKind.Draft,
             foreground,
             () => SetViewMode(DocumentViewMode.Draft));
         _pagedEditSwitch = BuildStatusToggle(
-            "Page Edit",
-            "Page Edit: editable paginated page boxes",
+            FreeWApplicationFrameTextCatalog.PageEditLabel,
+            UiText.Get("View_PageEdit_HelpText"),
             RibbonCommandIconKind.PrintLayout,
             foreground,
             TogglePagedEditView);
@@ -2704,8 +2594,8 @@ public sealed partial class MainWindow : Window
             IsSnapToTickEnabled = true,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        AutomationProperties.SetName(_zoomSlider, "Zoom");
-        ToolTip.SetTip(_zoomSlider, "Zoom");
+        AutomationProperties.SetName(_zoomSlider, FreeWUiTextCatalog.Zoom);
+        ToolTip.SetTip(_zoomSlider, FreeWUiTextCatalog.Zoom);
         _zoomSlider.PropertyChanged += (_, e) =>
         {
             if (!_updatingZoomSlider && e.Property == RangeBase.ValueProperty)
@@ -2719,9 +2609,9 @@ public sealed partial class MainWindow : Window
         _zoomLabel.MinWidth = 38;
         _zoomLabel.TextAlignment = global::Avalonia.Media.TextAlignment.Right;
 
-        panel.Children.Add(BuildZoomButton("\u2212", "Zoom out", foreground, () => ApplyZoom(ZoomLevels.StepDown(_zoomScale))));
+        panel.Children.Add(BuildZoomButton("\u2212", FreeWUiTextCatalog.ZoomOut, foreground, () => ApplyZoom(ZoomLevels.StepDown(_zoomScale))));
         panel.Children.Add(_zoomSlider);
-        panel.Children.Add(BuildZoomButton("+", "Zoom in", foreground, () => ApplyZoom(ZoomLevels.StepUp(_zoomScale))));
+        panel.Children.Add(BuildZoomButton("+", FreeWUiTextCatalog.ZoomIn, foreground, () => ApplyZoom(ZoomLevels.StepUp(_zoomScale))));
 
         var percentage = new Button
         {
@@ -2731,8 +2621,8 @@ public sealed partial class MainWindow : Window
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(1),
         };
-        AutomationProperties.SetName(percentage, "Zoom");
-        ToolTip.SetTip(percentage, "Zoom");
+        AutomationProperties.SetName(percentage, FreeWUiTextCatalog.Zoom);
+        ToolTip.SetTip(percentage, FreeWUiTextCatalog.Zoom);
         percentage.Click += (_, _) => _ = OpenZoomDialogAsync();
         panel.Children.Add(percentage);
         return panel;
@@ -2768,8 +2658,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (_viewDepthPlan.Mode != FreeWViewDepthMode.LiveEditor)
-            ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
+        if (_viewSession.CurrentDepth.Mode != FreeWViewDepthMode.LiveEditor)
+            ApplyViewDepthTransition(_viewSession.RestoreLiveEditor(), updateStatus: false);
 
         _pagedEditModeBeforeOutline = _pagedEditMode;
         _pagedEditMode = false;
@@ -2798,15 +2688,22 @@ public sealed partial class MainWindow : Window
 
     private void SetViewMode(DocumentViewMode mode)
     {
-        if (_outlineMode)
+        var plan = _viewSession.PlanDocumentViewChange(
+            _editor.ViewMode,
+            _outlineMode,
+            _pagedEditMode,
+            mode);
+
+        if (plan.ExitOutlineMode)
             LeaveOutlineView(restorePriorView: false);
 
-        if (_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive)
-            ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
+        if (plan.ExitPaginatedView)
+            ApplyViewDepthTransition(_viewSession.RestoreLiveEditor(), updateStatus: false);
 
-        _pagedEditMode = false;
-        _editor.ViewMode = mode;
-        if (_viewDepthPlan.IsSplitActive)
+        if (plan.ExitPagedEditMode)
+            _pagedEditMode = false;
+        _editor.ViewMode = plan.TargetMode;
+        if (_viewSession.CurrentDepth.IsSplitActive)
             RefreshSplitPreviewSnapshot();
         UpdateViewModeButtons();
         RefreshRibbonCommandStates();
@@ -2815,11 +2712,14 @@ public sealed partial class MainWindow : Window
 
     private void UpdateViewModeButtons()
     {
-        var mode = _editor.ViewMode;
-        ApplyStatusToggleState(_printLayoutSwitch, !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.PrintLayout);
-        ApplyStatusToggleState(_webLayoutSwitch, !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.WebLayout);
-        ApplyStatusToggleState(_draftSwitch, !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.Draft);
-        ApplyStatusToggleState(_pagedEditSwitch, _pagedEditMode);
+        var plan = _viewSession.BuildDocumentViewChecks(
+            _editor.ViewMode,
+            _outlineMode,
+            _pagedEditMode);
+        ApplyStatusToggleState(_printLayoutSwitch, plan.PrintLayout);
+        ApplyStatusToggleState(_webLayoutSwitch, plan.WebLayout);
+        ApplyStatusToggleState(_draftSwitch, plan.Draft);
+        ApplyStatusToggleState(_pagedEditSwitch, plan.PagedEdit);
     }
 
     private static void ApplyStatusToggleState(ToggleButton toggle, bool isChecked)
@@ -2845,8 +2745,8 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            if (_viewDepthPlan.Mode != FreeWViewDepthMode.LiveEditor)
-                ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
+            if (_viewSession.CurrentDepth.Mode != FreeWViewDepthMode.LiveEditor)
+                ApplyViewDepthTransition(_viewSession.RestoreLiveEditor(), updateStatus: false);
             _viewModeBeforePagedEdit = _editor.ViewMode;
             _editor.ViewMode = DocumentViewMode.PrintLayout;
             _pagedEditMode = true;
@@ -2860,59 +2760,47 @@ public sealed partial class MainWindow : Window
 
     private void ToggleReadMode()
     {
-        _readMode = !_readMode;
-        if (_readMode)
-        {
-            _titleBarVisibleBeforeReadMode = _titleBar.IsVisible;
-            _ribbonVisibleBeforeReadMode = _ribbonHost?.IsVisible == true;
-            _dataFolderVisibleBeforeReadMode = _dataFolderItemControl?.IsVisible == true;
-            _statusViewSwitchVisibleBeforeReadMode = _statusViewSwitchControl?.IsVisible == true;
-            _statusZoomVisibleBeforeReadMode = _statusZoomControl?.IsVisible == true;
-            _navPaneVisibleBeforeReadMode = _navPane.IsVisible;
-            _reviewingPaneVisibleBeforeReadMode = _reviewingPane.IsVisible;
-            _revealPaneVisibleBeforeReadMode = _revealPane.IsVisible;
-            _workspaceBackgroundBeforeReadMode = _workspace.Background ?? Brushes.Transparent;
+        var plan = _editorInteraction.ToggleReadMode(new FreeWEditorChromeVisibility(
+            TitleBar: ToChromeVisibility(_titleBar.IsVisible),
+            Ribbon: ToChromeVisibility(_ribbonHost?.IsVisible == true),
+            DataFolder: ToChromeVisibility(_dataFolderItemControl?.IsVisible == true),
+            ViewSwitch: ToChromeVisibility(_statusViewSwitchControl?.IsVisible == true),
+            Zoom: ToChromeVisibility(_statusZoomControl?.IsVisible == true),
+            NavigationPane: ToChromeVisibility(_navPane.IsVisible),
+            RevealPane: ToChromeVisibility(_revealPane.IsVisible),
+            ReviewingPane: ToChromeVisibility(_reviewingPane.IsVisible)));
 
+        if (plan.IsActive)
+        {
+            _workspaceBackgroundBeforeReadMode = _workspace.Background ?? Brushes.Transparent;
             _editorMaxWidthBeforeReadMode = _editor.MaxWidth;
             _editorAlignmentBeforeReadMode = _editor.HorizontalAlignment;
             _editorMarginBeforeReadMode = _editor.Margin;
-            _titleBar.IsVisible = false;
-            if (_ribbonHost is not null)
-                _ribbonHost.IsVisible = false;
-            if (_dataFolderItemControl is not null)
-                _dataFolderItemControl.IsVisible = false;
-            if (_statusViewSwitchControl is not null)
-                _statusViewSwitchControl.IsVisible = false;
-            if (_statusZoomControl is not null)
-                _statusZoomControl.IsVisible = false;
+        }
 
-            _navPane.IsVisible = false;
-            _reviewingPane.IsVisible = false;
-            _revealPane.IsVisible = false;
+        _titleBar.IsVisible = IsChromeVisible(plan.Chrome.TitleBar);
+        if (_ribbonHost is not null)
+            _ribbonHost.IsVisible = IsChromeVisible(plan.Chrome.Ribbon);
+        if (_dataFolderItemControl is not null)
+            _dataFolderItemControl.IsVisible = IsChromeVisible(plan.Chrome.DataFolder);
+        if (_statusViewSwitchControl is not null)
+            _statusViewSwitchControl.IsVisible = IsChromeVisible(plan.Chrome.ViewSwitch);
+        if (_statusZoomControl is not null)
+            _statusZoomControl.IsVisible = IsChromeVisible(plan.Chrome.Zoom);
+        _navPane.IsVisible = IsChromeVisible(plan.Chrome.NavigationPane);
+        _revealPane.IsVisible = IsChromeVisible(plan.Chrome.RevealPane);
+        _reviewingPane.IsVisible = IsChromeVisible(plan.Chrome.ReviewingPane);
 
-            _editor.MaxWidth = FreeWReadModePlanner.ColumnWidth(_readModeColumnWidth);
+        if (plan.IsActive)
+        {
+            _editor.MaxWidth = plan.ColumnWidth;
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
             _editor.Margin = new Thickness(40);
-            var backgroundHex = FreeWReadModePlanner.PageColorHex(_readModePageColor);
-            _editor.ViewBackgroundColorHex = backgroundHex;
-            _workspace.Background = new SolidColorBrush(ParseColor(backgroundHex));
+            _editor.ViewBackgroundColorHex = plan.PageColorHex;
+            _workspace.Background = new SolidColorBrush(ParseColor(plan.PageColorHex));
         }
         else
         {
-            _titleBar.IsVisible = _titleBarVisibleBeforeReadMode;
-            if (_ribbonHost is not null)
-                _ribbonHost.IsVisible = _ribbonVisibleBeforeReadMode;
-            if (_dataFolderItemControl is not null)
-                _dataFolderItemControl.IsVisible = _dataFolderVisibleBeforeReadMode;
-            if (_statusViewSwitchControl is not null)
-                _statusViewSwitchControl.IsVisible = _statusViewSwitchVisibleBeforeReadMode;
-            if (_statusZoomControl is not null)
-                _statusZoomControl.IsVisible = _statusZoomVisibleBeforeReadMode;
-
-            _navPane.IsVisible = _navPaneVisibleBeforeReadMode;
-            _reviewingPane.IsVisible = _reviewingPaneVisibleBeforeReadMode;
-            _revealPane.IsVisible = _revealPaneVisibleBeforeReadMode;
-
             _editor.MaxWidth = _editorMaxWidthBeforeReadMode;
             _editor.HorizontalAlignment = _editorAlignmentBeforeReadMode;
             _editor.Margin = _editorMarginBeforeReadMode;
@@ -2926,45 +2814,33 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
+    private static FreeWChromeVisibility ToChromeVisibility(bool isVisible) =>
+        isVisible ? FreeWChromeVisibility.Visible : FreeWChromeVisibility.Collapsed;
+
+    private static bool IsChromeVisible(FreeWChromeVisibility visibility) =>
+        visibility == FreeWChromeVisibility.Visible;
+
     private void ApplyReadModeColumnWidth(string token)
     {
-        _readModeColumnWidth = FreeWReadModePlanner.NormalizeColumnWidth(token);
-        if (_readMode)
-            _editor.MaxWidth = FreeWReadModePlanner.ColumnWidth(_readModeColumnWidth);
+        var plan = _editorInteraction.UpdateReadModeColumnWidth(token);
+        if (plan.ApplyImmediately)
+            _editor.MaxWidth = plan.ColumnWidth;
     }
 
     private void ApplyReadModePageColor(string token)
     {
-        _readModePageColor = FreeWReadModePlanner.NormalizePageColor(token);
-        if (_readMode)
+        var plan = _editorInteraction.UpdateReadModePageColor(token);
+        if (plan.ApplyImmediately)
         {
-            var backgroundHex = FreeWReadModePlanner.PageColorHex(_readModePageColor);
-            _editor.ViewBackgroundColorHex = backgroundHex;
-            _workspace.Background = new SolidColorBrush(ParseColor(backgroundHex));
+            _editor.ViewBackgroundColorHex = plan.PageColorHex;
+            _workspace.Background = new SolidColorBrush(ParseColor(plan.PageColorHex));
         }
     }
 
     private static Color ParseColor(string hex) =>
-        Color.Parse(hex);
-
-    internal bool IsReadModeActiveForTests => _readMode;
-    internal double ReadModeMaxWidthForTests => _editor.MaxWidth;
-    internal string? ReadModeBackgroundForTests => _editor.ViewBackgroundColorHex;
-    internal bool IsRibbonVisibleForTests => _ribbonHost?.IsVisible == true;
-    internal bool IsTitleBarVisibleForTests => _titleBar.IsVisible;
-    internal bool IsNavigationPaneVisibleForTests => _navPane.IsVisible;
-    internal bool IsRevealPaneVisibleForTests => _revealPane.IsVisible;
-    internal bool IsReviewingPaneVisibleForTests => _reviewingPane.IsVisible;
-    internal int RibbonStateRefreshCountForTests => _ribbonStateRefreshCount;
-    internal void SetReadModePaneVisibilityForTests(bool navigation, bool reveal, bool reviewing)
-    {
-        _navPane.IsVisible = navigation;
-        _revealPane.IsVisible = reveal;
-        _reviewingPane.IsVisible = reviewing;
-    }
-    internal void ToggleReadModeForTests() => ToggleReadMode();
-    internal void ApplyReadModeColumnWidthForTests(string token) => ApplyReadModeColumnWidth(token);
-    internal void ApplyReadModePageColorForTests(string token) => ApplyReadModePageColor(token);
+        DrawingMlRgbColor.TryParseHexRgb(hex, out var color)
+            ? Color.FromRgb(color.R, color.G, color.B)
+            : Colors.Black;
 
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
@@ -2972,10 +2848,9 @@ public sealed partial class MainWindow : Window
             return;
 
         if (TryMapKeyboardKey(e.Key, out var key) &&
-            FreeWKeyboardShortcutCatalog.TryDispatch(
+            _applicationCommands.TryExecute(
                 key,
-                ToKeyboardModifiers(e.KeyModifiers),
-                ExecuteKeyboardCommand))
+                ToKeyboardModifiers(e.KeyModifiers)))
         {
             e.Handled = true;
             return;
@@ -2996,35 +2871,23 @@ public sealed partial class MainWindow : Window
 
     private bool TryHandleRibbonKeyTips(KeyEventArgs args)
     {
-        if (args.Key is Key.LeftAlt or Key.RightAlt)
+        var transition = AvaloniaRibbonKeyTipInputPlanner.ResolveModeTransition(
+            args.Key,
+            args.KeyModifiers,
+            _ribbonKeyTipsVisible);
+        if (transition.ModeVisible is { } modeVisible)
+            SetRibbonKeyTipsVisible(modeVisible);
+        if (!transition.ShouldRouteToken)
         {
-            SetRibbonKeyTipsVisible(!_ribbonKeyTipsVisible);
-            args.Handled = true;
-            return true;
+            if (transition.Handled)
+                args.Handled = true;
+            return transition.Handled;
         }
 
-        if (args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None)
-        {
-            SetRibbonKeyTipsVisible(!_ribbonKeyTipsVisible);
-            args.Handled = true;
-            return true;
-        }
-
-        if (!_ribbonKeyTipsVisible)
+        if (_ribbonControl is null)
             return false;
 
-        if (args.Key == Key.Escape)
-        {
-            SetRibbonKeyTipsVisible(false);
-            args.Handled = true;
-            return true;
-        }
-
-        var token = ToRibbonKeyTipToken(args.Key);
-        if (token is null || _ribbonControl is null)
-            return false;
-
-        if (!AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, token))
+        if (!AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, transition.Token!))
             return false;
 
         SetRibbonKeyTipsVisible(false);
@@ -3037,46 +2900,6 @@ public sealed partial class MainWindow : Window
         _ribbonKeyTipsVisible = visible;
         if (_ribbonControl is not null)
             AvaloniaRibbonRenderer.SetTopLevelKeyTipsVisible(_ribbonControl, visible);
-    }
-
-    private static string? ToRibbonKeyTipToken(Key key)
-    {
-        var name = key.ToString();
-        if (name.Length == 1 && char.IsAsciiLetterOrDigit(name[0]))
-            return name.ToUpperInvariant();
-        if (name.Length == 2 && name[0] == 'D' && char.IsAsciiDigit(name[1]))
-            return name[1].ToString();
-        return null;
-    }
-
-    private void ExecuteKeyboardCommand(FreeWKeyboardCommand command)
-    {
-        switch (command)
-        {
-            case FreeWKeyboardCommand.NewDocument: NewDocument(); break;
-            case FreeWKeyboardCommand.OpenDocument: _ = OpenAsync(); break;
-            case FreeWKeyboardCommand.SaveDocument: _ = SaveAsync(); break;
-            case FreeWKeyboardCommand.SaveDocumentAs: _ = SaveAsAsync(); break;
-            case FreeWKeyboardCommand.PrintDocument: _ = PrintAsync(); break;
-            case FreeWKeyboardCommand.Find: OpenFindReplaceDialog(FindReplaceDialogOpenMode.Find); break;
-            case FreeWKeyboardCommand.Replace: OpenFindReplaceDialog(FindReplaceDialogOpenMode.Replace); break;
-            case FreeWKeyboardCommand.Cut: _ = CutAsync(); break;
-            case FreeWKeyboardCommand.Copy: _ = CopyAsync(); break;
-            case FreeWKeyboardCommand.Paste: _ = PasteAsync(); break;
-            case FreeWKeyboardCommand.PasteTextOnly: _ = PastePlainTextAsync(); break;
-            case FreeWKeyboardCommand.SelectAll: _editor.SelectAll(); break;
-            case FreeWKeyboardCommand.Undo: _editor.Undo(); break;
-            case FreeWKeyboardCommand.Redo: _editor.Redo(); break;
-            case FreeWKeyboardCommand.RevealFormatting: ToggleRevealFormatting(); break;
-            case FreeWKeyboardCommand.Thesaurus: ToggleThesaurusPane(); break;
-            case FreeWKeyboardCommand.LockCurrentField: _editor.SetFieldLockAtCaret(true); break;
-            case FreeWKeyboardCommand.UnlockCurrentField: _editor.SetFieldLockAtCaret(false); break;
-            case FreeWKeyboardCommand.UnlinkCurrentField: _editor.UnlinkFieldAtCaret(); break;
-            case FreeWKeyboardCommand.ToggleCurrentFieldCode: _editor.ToggleFieldCodeAtCaret(); break;
-            case FreeWKeyboardCommand.ToggleFieldCodes: _editor.ToggleFieldCodes(); break;
-            case FreeWKeyboardCommand.UpdateCurrentField: _editor.UpdateFieldAtCaret(); break;
-            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
-        }
     }
 
     private static FreeWKeyboardModifiers ToKeyboardModifiers(KeyModifiers modifiers)
@@ -3150,7 +2973,7 @@ public sealed partial class MainWindow : Window
         _zoomScale = ZoomLevels.Clamp(Math.Round(scale, 2));
         _zoom.ScaleX = _zoomScale;
         _zoom.ScaleY = _zoomScale;
-        _zoomLabel.Text = $"{ZoomLevels.ToPercent(_zoomScale)}%";
+        _zoomLabel.Text = ZoomLevels.FormatPercent(_zoomScale);
 
         if (Math.Abs(_zoomSlider.Value - _zoomScale) > 0.0001)
         {
@@ -3165,25 +2988,17 @@ public sealed partial class MainWindow : Window
             }
         }
 
-        if (_viewDepthPlan.IsSideToSideActive && _sideToSidePreviewScrollViewer is not null)
+        var viewDepthPlan = _viewSession.CurrentDepth;
+        if (viewDepthPlan.IsSideToSideActive && _sideToSidePreviewScrollViewer is not null)
         {
-            UpdateSideToSidePairScrollStride(_viewDepthPlan);
-            ApplySideToSideNavigationToScrollViewer(_viewDepthPlan);
+            UpdateSideToSidePairScrollStride(viewDepthPlan);
+            ApplySideToSideNavigationToScrollViewer(viewDepthPlan);
         }
     }
 
     private void NewDocument() => _ = NewDocumentAsync();
 
-    internal Task<bool> NewDocumentAsyncForTests() => NewDocumentAsync();
-
-    private Task<bool> NewDocumentAsync() =>
-        _fileWorkflow.NewAsync(
-            FileText.NewAction,
-            () =>
-            {
-                LoadDocumentContent(TextDocument.CreateEmpty());
-                return Task.CompletedTask;
-            });
+    private Task<bool> NewDocumentAsync() => _fileCommands.NewAsync();
 
     private void ToggleFindBar(bool show)
     {
@@ -3195,51 +3010,43 @@ public sealed partial class MainWindow : Window
     }
 
     private void DoFind()
-    {
-        var query = _findBox.Text;
-        if (string.IsNullOrEmpty(query))
-            return;
-        if (!_editor.FindNext(query))
-            _status.Text = $"No match for \"{query}\".";
-    }
+        => ExecuteInlineFindReplace(FindReplaceDialogActionKind.FindNext);
 
     private void DoReplace()
-    {
-        var query = _findBox.Text;
-        if (string.IsNullOrEmpty(query))
-            return;
-        if (!_editor.ReplaceNext(query, _replaceBox.Text ?? string.Empty))
-            _status.Text = $"No match for \"{query}\".";
-    }
+        => ExecuteInlineFindReplace(FindReplaceDialogActionKind.Replace);
 
     private void DoReplaceAll()
-    {
-        var query = _findBox.Text;
-        if (string.IsNullOrEmpty(query))
-            return;
-        var n = _editor.ReplaceAll(query, _replaceBox.Text ?? string.Empty);
-        _status.Text = $"Replaced {n} occurrence{(n == 1 ? "" : "s")} of \"{query}\".";
-        UpdateStatus();
-    }
+        => ExecuteInlineFindReplace(FindReplaceDialogActionKind.ReplaceAll);
+
+    private void ExecuteInlineFindReplace(FindReplaceDialogActionKind action) =>
+        _status.Text = _inlineFindReplaceSession.Execute(
+            action,
+            new FindReplaceDialogInput(
+                _findBox.Text,
+                _replaceBox.Text,
+                MatchCase: false,
+                WholeWord: false,
+                UseWildcards: false)).StatusText;
 
     private void ScrollCaretIntoView()
     {
         if (_scroller is null)
             return;
         var target = Math.Max(0, _editor.CaretTop - 40);
-        var horizontal = _viewDepthPlan.IsSideToSideActive
+        var horizontal = _viewSession.CurrentDepth.IsSideToSideActive
             ? Math.Max(0, _editor.CaretLeft - 40)
             : _scroller.Offset.X;
         _scroller.Offset = new Vector(horizontal, target);
     }
 
-    private async Task CopyAsync()
+    private async Task<FreeWClipboardTransferResult> CopyAsync()
     {
-        var text = _editor.SelectedText;
-        if (text.Length == 0)
-            return;
-        if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
-            await clipboard.SetTextAsync(text);
+        var result = await FreeWClipboardApplicationWorkflow.WriteSelectionAsync(
+            _platformClipboard,
+            _editor.SelectedText);
+        if (result.Status is FreeWClipboardTransferStatus.Unsupported or FreeWClipboardTransferStatus.Failed)
+            ApplyClipboardFeedback(result);
+        return result;
     }
 
     // Guarded: this is an `async void` handler wired to the editor's right-click menu, and its
@@ -3258,7 +3065,10 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Editor", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                UiText.Get("Operation_Editor"),
+                ex.Message);
         }
     }
 
@@ -3292,40 +3102,35 @@ public sealed partial class MainWindow : Window
 
     private async Task CutAsync()
     {
-        await CopyAsync();
-        _editor.TryDeleteSelection();
+        var copy = await CopyAsync();
+        if (copy.CanCommitCut)
+            _editor.TryDeleteSelection();
     }
 
     private async Task PasteAsync()
     {
-        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
-            return;
-        var text = await clipboard.TryGetTextAsync();
-        if (!_editor.PastePlainText(text))
-            _status.Text = "Clipboard does not contain text.";
+        var transfer = await FreeWClipboardApplicationWorkflow.ReadTextAsync(_platformClipboard);
+        ApplyClipboardText(transfer, DocumentPasteTextKind.TextOnly);
     }
 
     private async Task PastePlainTextAsync()
     {
-        var text = await TryGetClipboardTextAsync();
-        if (!_editor.PastePlainText(text))
-            _status.Text = "Clipboard does not contain text.";
+        var transfer = await FreeWClipboardApplicationWorkflow.ReadTextAsync(_platformClipboard);
+        ApplyClipboardText(transfer, DocumentPasteTextKind.TextOnly);
     }
 
     private async Task PasteMergeFormattingAsync()
     {
-        var text = await TryGetClipboardTextAsync();
-        if (!_editor.PasteMergeFormatting(text))
-            _status.Text = "Clipboard does not contain text.";
+        var transfer = await FreeWClipboardApplicationWorkflow.ReadTextAsync(_platformClipboard);
+        ApplyClipboardText(transfer, DocumentPasteTextKind.MergeFormatting);
     }
 
     private async Task OpenPasteSpecialAsync()
     {
-        var text = await TryGetClipboardTextAsync();
-        var source = await TryGetClipboardRtfDocumentAsync();
-        if (PasteText.Normalize(text).Length == 0 && source is null)
+        var transfer = await FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(_platformClipboard);
+        if (!transfer.IsSuccess || transfer.Payload is null)
         {
-            _status.Text = "Clipboard does not contain text.";
+            ApplyClipboardFeedback(transfer);
             return;
         }
 
@@ -3333,59 +3138,44 @@ public sealed partial class MainWindow : Window
         if (option is null)
             return;
 
-        var pasted = option.Value switch
-        {
-            PasteSpecialOption.KeepTextOnly => _editor.PastePlainText(text),
-            PasteSpecialOption.KeepSourceFormatting when source is not null =>
-                _editor.PasteKeepSourceFormatting(source) || _editor.PasteMergeFormatting(text),
-            _ => _editor.PasteMergeFormatting(text),
-        };
+        var plan = FreeWClipboardApplicationWorkflow.PlanPaste(transfer.Payload, option.Value);
+        var pasted = plan.RichDocument is not null
+            ? _editor.PasteKeepSourceFormatting(plan.RichDocument) || _editor.PasteMergeFormatting(plan.Text)
+            : plan.TextKind == DocumentPasteTextKind.TextOnly
+                ? _editor.PastePlainText(plan.Text)
+                : _editor.PasteMergeFormatting(plan.Text);
         if (!pasted)
-            _status.Text = "Clipboard does not contain text.";
+            _status.Text = FreeWClipboardApplicationWorkflow.EmptyClipboardMessage;
     }
 
-    private async Task<string?> TryGetClipboardTextAsync()
+    private bool ApplyClipboardText(
+        FreeWClipboardTransferResult transfer,
+        DocumentPasteTextKind kind)
     {
-        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
-            return null;
-        return await clipboard.TryGetTextAsync();
+        if (!transfer.IsSuccess || transfer.Payload is null)
+        {
+            ApplyClipboardFeedback(transfer);
+            return false;
+        }
+
+        var pasted = kind == DocumentPasteTextKind.TextOnly
+            ? _editor.PastePlainText(transfer.Payload.Text)
+            : _editor.PasteMergeFormatting(transfer.Payload.Text);
+        if (!pasted)
+            _status.Text = FreeWClipboardApplicationWorkflow.EmptyClipboardMessage;
+        return pasted;
     }
 
-    private async Task<TextDocument?> TryGetClipboardRtfDocumentAsync()
+    private void ApplyClipboardFeedback(FreeWClipboardTransferResult result)
     {
-        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
-            return null;
-
-        try
-        {
-            using var data = await clipboard.TryGetDataAsync();
-            var rtf = data is null
-                ? null
-                : await data.TryGetValueAsync(DataFormat.CreateStringPlatformFormat("Rich Text Format"));
-            return RichClipboardDocumentPlanner.TryReadRtf(rtf, out var document) ? document : null;
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-        catch (NotSupportedException)
-        {
-            return null;
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            return null;
-        }
+        if (!string.IsNullOrWhiteSpace(result.FeedbackMessage))
+            _status.Text = result.FeedbackMessage;
     }
 
-    private async Task OpenAsync()
-    {
-        await _fileWorkflow.OpenAsync(
-            FileText.OpenAction,
-            PromptOpenPathAsync,
-            OpenPathAsync);
-    }
+    private async Task OpenAsync() => await _fileCommands.OpenAsync();
 
+    private Task<bool> OpenRecentPathAsync(string path) =>
+/*
     /// <summary>
     /// Backstage "Open Recent". Must run the dirty-gate through the async workflow: the shared
     /// workflow's synchronous Open overload prompts for unsaved changes via a helper that blocks
@@ -3394,142 +3184,59 @@ public sealed partial class MainWindow : Window
     /// dirty.
     /// </summary>
     private Task<bool> OpenRecentAsync(string path) =>
-        _fileWorkflow.OpenAsync(
-            FileText.OpenAction,
-            () => Task.FromResult<string?>(path),
-            OpenPathAsync);
+*/
+        _fileCommands.OpenSelectedPathAsync(path);
 
-    private async Task<string?> PromptOpenPathAsync()
+    private async Task<string?> PromptOpenPathAsync(FreeWDocumentOpenPickerRequest request)
     {
         using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
             StorageProvider,
             AvaloniaFilePickerOpenRequest.FromFileTypes(
                 FileText.OpenPickerTitle,
-                DocumentFilePickerTypes.BuildOpenTypes(_documentPersistence.Adapters)));
+                AvaloniaFilePickerTypeAdapter.ToFileTypes(
+                    DocumentFileDialogRequestPlanner
+                        .BuildOpenPickerPlan(_documentPersistence.Adapters)
+                        .FileTypes)));
         return file?.LocalPath;
     }
 
-    private Task<bool> OpenPathAsync(string path)
-    {
-        if (!_documentPersistence.CanOpenPath(path))
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
-                SisterAppFileTextPlanner.OpenCommand,
-                Path.GetExtension(path));
-            return Task.FromResult(false);
-        }
+    private Task<bool> ImportPdfTextAsync() =>
+        _fileCommands.ImportPdfTextAsync();
 
-        try
-        {
-            ApplyOpenResult(_documentPersistence.Open(path));
-
-            return Task.FromResult(true);
-        }
-        catch (Exception ex)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.OpenCommand, ex.Message);
-            return Task.FromResult(false);
-        }
-    }
-
-    private async Task ImportPdfTextAsync()
+    private async Task<string?> PromptPdfImportPathAsync()
     {
         using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
             StorageProvider,
             AvaloniaFilePickerOpenRequest.FromFileTypes(
-                "Import PDF (text only)",
-                DocumentFilePickerTypes.BuildPdfImportTypes()));
-        var path = file?.LocalPath;
-        if (path is null)
-            return;
-
-        if (DocumentFileFormatResolver.FindOpenAdapter(
-                DocumentFileAdapterCatalog.CreatePdfImportAdapters(),
-                Path.GetExtension(path),
-                out _) is not { } adapter)
-        {
-            _status.Text = $"PDF import failed: unsupported file type \"{Path.GetExtension(path)}\".";
-            return;
-        }
-
-        try
-        {
-            using var stream = File.OpenRead(path);
-            LoadDocumentContent(adapter.Load(stream));
-            _fileWorkflow.MarkDirtyWithPath(null);
-            _status.Text = $"Imported PDF text from {Path.GetFileName(path)}";
-        }
-        catch (Exception ex)
-        {
-            _status.Text = $"PDF import failed: {ex.Message}";
-        }
+                FreeWDocumentFileFeedbackPlanner.ImportPdfPickerTitle,
+                AvaloniaFilePickerTypeAdapter.ToFileTypes(
+                    _documentPersistence.BuildPdfImportPickerPlan().FileTypes)));
+        return file?.LocalPath;
     }
 
-    private Task<bool> SaveAsync() =>
-        _fileWorkflow.SaveAsync(SaveToCurrentPathAsync, SaveAsAsync);
+    private Task<bool> SaveAsync() => _fileCommands.SaveAsync();
 
-    internal Task<bool> SaveForTests() => SaveAsync();
+    private Task<bool> SaveAsAsync() => _fileCommands.SaveAsAsync();
 
-    private Task<bool> SaveToCurrentPathAsync(string path) =>
-        _documentPersistence.TryResolveCurrentSaveTarget(path, out var target)
-            ? SaveToTargetAsync(target)
-            : SaveAsAsync();
-
-    private async Task<bool> SaveAsAsync()
+    private async Task<FreeWDocumentSavePickerResult?> PromptSavePathAsync(
+        FreeWDocumentSavePickerRequest request)
     {
         var savePlan = _documentPersistence.BuildSavePickerPlan(
-            _fileWorkflow.CurrentPath,
-            _fileWorkflow.CurrentFileName,
-            FileText.FallbackDisplayName);
+            request.CurrentPath,
+            request.SuggestedFileName ?? request.CurrentFileName,
+            FileText.FallbackDisplayName,
+            request.PreferredExtension);
         using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
             StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromSavePlan(FileText.SavePickerTitle, savePlan));
+            AvaloniaFilePickerSaveRequest.FromSavePlan(request.Title, savePlan));
         var path = file?.LocalPath;
-        return path is not null && await SaveToPathAsync(path);
+        return path is null ? null : new FreeWDocumentSavePickerResult(path);
     }
 
-    private Task<bool> SaveToPathAsync(string path) =>
-        SaveToPathAsync(path, filterIndex: 0);
-
-    private Task<bool> SaveToPathAsync(string path, int filterIndex)
+    private bool ApplyFileFeedback(FreeWDocumentFileFeedback feedback)
     {
-        if (!_documentPersistence.TryResolveSaveTarget(path, filterIndex, out var target))
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
-                SisterAppFileTextPlanner.SaveCommand,
-                Path.GetExtension(path));
-            return Task.FromResult(false);
-        }
-
-        return SaveToTargetAsync(target);
-    }
-
-    private async Task<bool> SaveToTargetAsync(DocumentSaveTarget target)
-    {
-        try
-        {
-            if (!await ConfirmSaveCompatibilityAsync(target))
-            {
-                _status.Text = "Save canceled.";
-                return false;
-            }
-
-            _documentPersistence.Save(_editor.Document, target);
-            MarkDocumentSavedWithPath(target.Path);
-            _status.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(target.Path));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.SaveCommand, ex.Message);
-            return false;
-        }
-    }
-
-    private async Task<bool> ConfirmSaveCompatibilityAsync(DocumentSaveTarget target)
-    {
-        var plan = _documentPersistence.BuildSaveCompatibilityPlan(_editor.Document, target);
-        return !plan.RequiresConfirmation || await SaveCompatibilityWarningDialog.ShowAsync(this, plan);
+        _status.Text = feedback.Message;
+        return feedback.Succeeded;
     }
 
     /// <summary>
@@ -3540,27 +3247,32 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task ExportPdfAsync()
     {
+        var plan = FreeWExportWorkflow.CreatePlan(
+            FreeWExportFormat.Pdf,
+            _fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName));
         using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
             StorageProvider,
             AvaloniaFilePickerSaveRequest.FromFileTypes(
-                FreeWFileTextResources.ExportPdfPickerTitle,
-                [PdfFileType],
-                _fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName) + ".pdf",
-                "pdf"));
+                plan.PickerTitle,
+                [AvaloniaFilePickerTypeAdapter.ToFileType(plan.FileType)],
+                plan.SuggestedFileName,
+                plan.DefaultExtensionWithoutDot));
         var path = file?.LocalPath;
         if (path is null)
             return;
 
-        try
-        {
-            var result = FreeWAvaloniaPdfExport.Save(_editor, path);
-            _status.Text = FreeWFileTextResources.FormatPdfExported(
-                result.PageCount, result.Backend, Path.GetFileName(path), result.ImageDiagnostics.Count);
-        }
-        catch (Exception ex)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(FreeWFileTextResources.PdfExportCommand, ex.Message);
-        }
+        var execution = await FreeWExportWorkflow.ExecuteAsync(
+            plan,
+            path,
+            (stream, _) =>
+            {
+                var result = FreeWAvaloniaPdfExport.Save(_editor, stream);
+                return ValueTask.FromResult(new FreeWExportArtifact(
+                    result.PageCount,
+                    result.Backend.ToString(),
+                    result.ImageDiagnostics.Count));
+            });
+        _status.Text = execution.Message;
     }
 
     internal Task PrintAsync() => PrintAsync(document: null);
@@ -3572,63 +3284,29 @@ public sealed partial class MainWindow : Window
         _printCancellation = cancellation;
         try
         {
-            var discovery = await _printService.DiscoverAsync(cancellation.Token);
-            _latestPrinterDiscovery = discovery;
-            if (discovery.Status == PrinterDiscoveryStatus.Cancelled)
-                throw new OperationCanceledException(cancellation.Token);
-            if (!discovery.IsAvailable)
-            {
-                _status.Text = FormatPrintDiscoveryStatus(discovery);
-                return;
-            }
-
-            var selection = await _showPrintSelectionDialog(this, discovery, cancellation.Token);
-            if (selection is null)
-            {
-                _status.Text = "Print canceled.";
-                return;
-            }
-
-            var tempPath = Path.Combine(Path.GetTempPath(), $"FreeW-print-{Guid.NewGuid():N}.pdf");
-            try
-            {
-                var printView = _editor;
-                if (document is not null)
+            FreeWAvaloniaPdfExportResult? printPdfResult = null;
+            var execution = await _portablePrintWorkflow.ExecuteAsync(
+                (discovery, token) => _showPrintSelectionDialog(this, discovery, token),
+                (stream, selection, _) =>
                 {
-                    printView = new DocumentView();
-                    printView.LoadDocument(document);
-                }
+                    var printView = _editor;
+                    if (document is not null)
+                    {
+                        printView = new DocumentView();
+                        printView.LoadDocument(document);
+                    }
 
-                var handoffPlan = PrintSelectionHandoffPlanner.Build(
-                    selection,
-                    _printService.RangeAndOrientationHandling);
-                // Populated by the shared writer when an embedded picture's bytes cannot be decoded
-                // (corrupt or an unrecognized format); the print PDF still spools with that image
-                // omitted, so this must reach the status bar instead of being silently dropped.
-                var printPdfResult = _savePrintPdf(
-                    printView,
-                    tempPath,
-                    handoffPlan.PdfSelection);
-                var submission = await _printService.SubmitAsync(
-                    tempPath,
-                    handoffPlan.SubmissionSelection,
-                    cancellation.Token);
-                _status.Text = printPdfResult.ImageDiagnostics.Count == 0
-                    ? FormatPrintSubmissionStatus(submission)
-                    : $"{FormatPrintSubmissionStatus(submission)} ({printPdfResult.ImageDiagnostics.Count} image warning(s))";
-            }
-            finally
-            {
-                try { File.Delete(tempPath); } catch { }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            _status.Text = "Print canceled.";
-        }
-        catch (Exception ex)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Print", ex.Message);
+                    printPdfResult = _savePrintPdf(printView, stream, selection);
+                    return ValueTask.CompletedTask;
+                },
+                cancellation.Token);
+            _latestPrinterDiscovery = execution.Discovery ?? _latestPrinterDiscovery;
+            _status.Text = printPdfResult is { ImageDiagnostics.Count: > 0 }
+                ? UiText.Format(
+                    "Print_ImageWarnings_Status_Format",
+                    execution.Message,
+                    printPdfResult.ImageDiagnostics.Count)
+                : execution.Message;
         }
         finally
         {
@@ -3645,13 +3323,16 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task ExportXpsAsync()
     {
+        var plan = FreeWExportWorkflow.CreatePlan(
+            FreeWExportFormat.Xps,
+            _fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName));
         var selection = await _pickExportPath(
             StorageProvider,
             AvaloniaFilePickerSaveRequest.FromFileTypes(
-                FreeWFileTextResources.ExportXpsPickerTitle,
-                [XpsFileType],
-                _fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName) + ".xps",
-                "xps",
+                plan.PickerTitle,
+                [AvaloniaFilePickerTypeAdapter.ToFileType(plan.FileType)],
+                plan.SuggestedFileName,
+                plan.DefaultExtensionWithoutDot,
                 showOverwritePrompt: true,
                 suggestFirstFileType: true));
         if (selection.Canceled)
@@ -3666,35 +3347,15 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        try
-        {
-            var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-            if (!string.IsNullOrWhiteSpace(directory))
-                Directory.CreateDirectory(directory);
-
-            var temporaryPath = ExportAtomicWriter.CreateTempPath(path);
-            try
+        var execution = await FreeWExportWorkflow.ExecuteAsync(
+            plan,
+            path,
+            (stream, _) =>
             {
-                using (var stream = File.Create(temporaryPath))
-                    FreeWAvaloniaXpsExport.Save(_editor, stream);
-                ExportAtomicWriter.ReplaceTarget(temporaryPath, path);
-            }
-            finally
-            {
-                if (File.Exists(temporaryPath))
-                {
-                    try { File.Delete(temporaryPath); } catch { }
-                }
-            }
-
-            _status.Text = FreeWFileTextResources.FormatXpsExported(path);
-        }
-        catch (Exception ex)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FreeWFileTextResources.XpsExportCommand,
-                ex.Message);
-        }
+                FreeWAvaloniaXpsExport.Save(_editor, stream);
+                return ValueTask.FromResult(new FreeWExportArtifact());
+            });
+        _status.Text = execution.Message;
     }
 
     private static async Task<(bool Canceled, string? LocalPath)> PickExportPathAsync(
@@ -3705,80 +3366,15 @@ public sealed partial class MainWindow : Window
         return file is null ? (true, null) : (false, file.LocalPath);
     }
 
-    internal Task ExportXpsForTests() => ExportXpsAsync();
-
     private async Task RefreshPrinterDiscoveryAsync()
     {
-        try
-        {
-            _latestPrinterDiscovery = await _printService.DiscoverAsync();
-        }
-        catch (Exception ex)
-        {
-            _latestPrinterDiscovery = new PrinterDiscoveryResult(
-                PrinterDiscoveryStatus.Failed,
-                [],
-                null,
-                $"Printer discovery failed: {ex.Message}");
-        }
+        _latestPrinterDiscovery = await _portablePrintWorkflow.DiscoverAsync();
     }
-
-    private static string FormatPrintDiscoveryStatus(PrinterDiscoveryResult discovery) =>
-        discovery.Status switch
-        {
-            PrinterDiscoveryStatus.NoPrinters =>
-                "No printers are installed or available. Use Print Preview or Create PDF.",
-            PrinterDiscoveryStatus.Unavailable =>
-                string.IsNullOrWhiteSpace(discovery.Message)
-                    ? "Direct printing is unavailable on this host. Use Print Preview or Create PDF."
-                    : $"{discovery.Message} Use Print Preview or Create PDF.",
-            PrinterDiscoveryStatus.Failed =>
-                string.IsNullOrWhiteSpace(discovery.Message)
-                    ? "Printer discovery failed. Use Print Preview or Create PDF."
-                    : $"{discovery.Message} Use Print Preview or Create PDF.",
-            PrinterDiscoveryStatus.Cancelled => "Print canceled.",
-            _ => "Direct printing is unavailable. Use Print Preview or Create PDF.",
-        };
-
-    private static string FormatPrintSubmissionStatus(PrintSubmissionResult submission) =>
-        submission.Status switch
-        {
-            PrintSubmissionStatus.Submitted => $"Sent to printer {submission.PrinterName}.",
-            PrintSubmissionStatus.Cancelled => "Print canceled.",
-            PrintSubmissionStatus.NoPrinters =>
-                "No printers are installed or available. Use Print Preview or Create PDF.",
-            PrintSubmissionStatus.Unavailable =>
-                string.IsNullOrWhiteSpace(submission.Message)
-                    ? "Direct printing is unavailable on this host. Use Print Preview or Create PDF."
-                    : $"{submission.Message} Use Print Preview or Create PDF.",
-            _ => submission.Message ?? "Print submission failed. Use Print Preview or Create PDF.",
-        };
 
     private BackstageDirectPrintCapability DirectPrintCapability =>
-        _latestPrinterDiscovery?.IsAvailable == true
-            ? BackstageDirectPrintCapability.PlatformPrinterAvailable(
-                "Platform printer discovery and foreground PDF submission are available on this Avalonia host; no native system print dialog is used.")
-            : BackstageDirectPrintCapability.Deferred(
-                DirectPrintDeferredReason());
-
-    private string DirectPrintDeferredReason()
-    {
-        if (!_printService.IsSupported)
-            return "This Avalonia host has no supported native printer service; use Print Preview or Create PDF.";
-
-        return _latestPrinterDiscovery?.Status switch
-        {
-            PrinterDiscoveryStatus.NoPrinters =>
-                "No usable printer was discovered on this Avalonia host; use Print Preview or Create PDF.",
-            PrinterDiscoveryStatus.Unavailable =>
-                "The platform printer backend is unavailable on this Avalonia host; use Print Preview or Create PDF.",
-            PrinterDiscoveryStatus.Failed =>
-                "Platform printer discovery failed on this Avalonia host; use Print Preview or Create PDF.",
-            PrinterDiscoveryStatus.Cancelled =>
-                "Printer discovery was canceled; use Print Preview or Create PDF.",
-            _ => "Printer discovery is still in progress; use Print Preview or Create PDF until a printer is available.",
-        };
-    }
+        FreeWPrintMessagePlanner.PlanCapability(
+            _printService.IsSupported,
+            _latestPrinterDiscovery);
 
     private void RestorePrintOwnerFocus(IInputElement? priorFocus)
     {
@@ -3792,93 +3388,30 @@ public sealed partial class MainWindow : Window
         }, DispatcherPriority.Input);
     }
 
-    private static readonly FilePickerFileType ImageFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            FreeWFileTextResources.PictureFileTypeName,
-            PictureInsertionPlanner.SupportedFilePatterns,
-            PictureInsertionPlanner.SupportedMimeTypes);
-    private static readonly FilePickerFileType EmbeddedObjectFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType("All files", ["*.*"]);
-
     /// <summary>
-    /// Insert &gt; Picture (AV-INSERT): open a file picker, read the chosen image, and insert it at the
-    /// caret as an inline image. The host decodes or rasterizes to PNG while the shared insertion planner
-    /// owns display sizing, width capping, aspect ratio and reset-size metadata for both renderers.
+    /// Insert &gt; Picture (AV-INSERT): realize the portable import workflow through Avalonia-native ports.
     /// </summary>
     private async Task InsertPictureAsync()
     {
-        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                SisterAppFileTextPlanner.InsertPicturePickerTitle,
-                [ImageFileType]));
-        var path = file?.LocalPath;
-        if (path is null)
-            return;
-
-        try
-        {
-            _editor.InsertInlineImage(CreatePictureInlineImage(path));
-            _editor.Focus();
-        }
-        catch (Exception ex)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.InsertPictureCommand, ex.Message);
-        }
+        var workflow = new FreeWPictureImportWorkflow(
+            new AvaloniaPictureImportPickerPort(StorageProvider),
+            new AvaloniaPictureImportSourceReaderPort(),
+            new AvaloniaPictureDecoderPort(),
+            new AvaloniaPictureRasterizerPort(),
+            new AvaloniaPictureInsertionPort(_editor));
+        var result = await workflow.ImportAsync();
+        var presentation = FreeWPictureImportOutcomePlanner.Plan(
+            result,
+            FileText,
+            FreeWPictureImportFailureSurface.Status);
+        if (presentation.StatusText is { } statusText)
+            _status.Text = statusText;
     }
 
     /// <summary>Pick a file and insert it as a Word-compatible generic OLE Package.</summary>
-    private async Task InsertEmbeddedObjectAsync()
-    {
-        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                "Insert Object",
-                [EmbeddedObjectFileType]));
-        var path = file?.LocalPath;
-        if (path is null)
-            return;
-
-        try
-        {
-            var payload = OlePackagePayloadBuilder.Create(
-                Path.GetFileName(path),
-                path,
-                await File.ReadAllBytesAsync(path));
-            _editor.InsertEmbeddedObject(EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId));
-            _editor.Focus();
-        }
-        catch (Exception ex)
-        {
-            _status.Text = $"Could not insert the object: {ex.Message}";
-        }
-    }
-
-    /// <summary>
-    /// Toolkit adapter for a selected picture. It only decodes/rasterizes to PNG; shared code owns the
-    /// document size, width cap, aspect ratio, format and reset-size metadata.
-    /// </summary>
-    private static InlineImage CreatePictureInlineImage(string path)
-    {
-        if (path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
-        {
-            var drawing = SvgIconRasterizer.LoadFile(path);
-            var drawingModel = drawing.Drawing
-                ?? throw new InvalidDataException($"The selected SVG has no drawing content: {path}");
-            var bounds = drawingModel.GetBounds();
-            var surface = PictureInsertionPlanner.BuildVectorRasterSurface(bounds.Width, bounds.Height);
-            var pngBytes = SvgIconRasterizer.RasterizeToPng(drawing, surface.PixelWidth, surface.PixelHeight);
-            return PictureInsertionPlanner.CreatePngImage(pngBytes, surface.PixelWidth, surface.PixelHeight);
-        }
-
-        using var bitmap = new Bitmap(path);
-        using var stream = new MemoryStream();
-        bitmap.Save(stream);
-        return PictureInsertionPlanner.CreatePngImage(
-            stream.ToArray(),
-            bitmap.PixelSize.Width,
-            bitmap.PixelSize.Height);
-    }
+    private Task InsertEmbeddedObjectAsync() => ExecuteDocumentFragmentImportAsync(
+        FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest(
+            FreeWDocumentFragmentHostProfile.Avalonia));
 
     private async Task OpenSymbolPickerAsync()
     {
@@ -3909,12 +3442,12 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task OpenTableFormulaDialogAsync(TableFormulaDialogInitialState initialState)
+    private async ValueTask<TableFormulaField?> ShowTableFormulaDialogAsync(
+        TableFormulaDialogInitialState initialState)
     {
         var dialog = new TableFormulaDialog(initialState);
         await dialog.ShowDialog(this);
-        ApplyTableFormulaResult(_editor, dialog.Result);
-        _editor.Focus();
+        return dialog.Result;
     }
 
     internal static void ApplyTableFormulaResult(DocumentView editor, TableFormulaField? formula)
@@ -3924,58 +3457,11 @@ public sealed partial class MainWindow : Window
             editor.InsertTableFormula(formula);
     }
 
-    private async Task OpenTablePropertiesDialogAsync(ModelTableContext context)
+    private async ValueTask<TablePropertiesValues?> ShowTablePropertiesDialogAsync(ModelTableContext context)
     {
         var dialog = new TablePropertiesDialog(context);
         await dialog.ShowDialog(this);
-        ApplyTablePropertiesResult(_editor, dialog.Result);
-        WriteTablePropertiesX11ValidationResult(context, dialog);
-        _editor.Focus();
-    }
-
-    private async Task RunTablePropertiesX11ValidationSeedAsync()
-    {
-        if (!string.Equals(Environment.GetEnvironmentVariable("FREEW_TABLE_PROPERTIES_X11_SEED"), "1", StringComparison.Ordinal))
-            return;
-
-        _editor.InsertTable(2, 2);
-        var tableBlock = -1;
-        for (var index = 0; index < _editor.Document.Blocks.Count; index++)
-        {
-            if (_editor.Document.Blocks[index] is Table table
-                && table.Rows.Count == 2
-                && table.Rows.All(row => row.Cells.Count == 2))
-                tableBlock = index;
-        }
-
-        if (tableBlock < 0)
-            throw new InvalidOperationException("Table Properties X11 validation seed did not create a table.");
-
-        _editor.PlaceCaretInCell(tableBlock, 0, 0, 0, 0);
-        var context = _editor.CaretTableContext()
-            ?? throw new InvalidOperationException("Table Properties X11 validation seed did not select cell A1.");
-        await OpenTablePropertiesDialogAsync(context);
-    }
-
-    private static void WriteTablePropertiesX11ValidationResult(
-        ModelTableContext context,
-        TablePropertiesDialog dialog)
-    {
-        var path = Environment.GetEnvironmentVariable("FREEW_TABLE_PROPERTIES_X11_RESULT");
-        if (string.IsNullOrWhiteSpace(path))
-            return;
-
-        var result = new
-        {
-            schema = "freew.table-properties.x11-result.v1",
-            status = dialog.Result is null ? "cancelled" : "applied",
-            tableRows = context.Table.Rows.Count,
-            tableColumns = context.Table.Rows.Count == 0 ? 0 : context.Table.Rows[0].Cells.Count,
-            values = dialog.Result,
-            focusTrace = dialog.FocusTraceForValidation,
-        };
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        File.WriteAllText(path, JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+        return dialog.Result;
     }
 
     internal static void ApplyTablePropertiesResult(DocumentView editor, TablePropertiesValues? values)
@@ -3994,11 +3480,14 @@ public sealed partial class MainWindow : Window
                 return;
 
             ApplyScreenClipCapture(_editor, capture);
-            _status.Text = $"Inserted screen clipping ({capture.PixelWidth} x {capture.PixelHeight}).";
+            _status.Text = UiText.Format(
+                "ScreenClip_Inserted_Status_Format",
+                capture.PixelWidth,
+                capture.PixelHeight);
         }
         catch (Exception ex)
         {
-            _status.Text = $"Could not capture the screen clip: {ex.Message}";
+            _status.Text = UiText.Format("ScreenClip_Failed_Status_Format", ex.Message);
         }
         finally
         {
@@ -4006,25 +3495,22 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal Task InsertScreenClipForTestAsync() => InsertScreenClipAsync();
-
     internal static void ApplyScreenClipCapture(DocumentView editor, ScreenClipCapture capture)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(capture);
-        if (capture.PngBytes.Length == 0)
-            throw new ArgumentException("Screenshot bytes are empty.", nameof(capture));
 
-        var display = ScreenClipPlanner.BuildDisplaySize(
+        var image = ScreenClipImageFactory.Create(
+            capture.PngBytes,
             capture.PixelWidth,
             capture.PixelHeight);
         editor.InsertInlineImage(
-            capture.PngBytes,
-            display.WidthPt,
-            display.HeightPt,
-            ImageFormat.Png,
-            display.OriginalPixelWidth,
-            display.OriginalPixelHeight);
+            image.Bytes,
+            image.WidthPt,
+            image.HeightPt,
+            image.Format,
+            image.OriginalPixelWidth,
+            image.OriginalPixelHeight);
     }
 
     // ── AV-INSERT2: Insert depth 2 dialog launchers ─────────────────────────────
@@ -4143,7 +3629,9 @@ public sealed partial class MainWindow : Window
         var selectedText = _editor.SelectedText;
         if (string.IsNullOrEmpty(selectedText))
         {
-            await FreeWInfoDialog.ShowAsync(this, QuickPartCommandPlanner.EmptySelectionMessage);
+            await FreeWInfoDialog.ShowAsync(
+                this,
+                QuickPartCommandPlanner.ResolveText(UiText.Get).EmptySelectionMessage);
             _editor.Focus();
             return;
         }
@@ -4158,9 +3646,8 @@ public sealed partial class MainWindow : Window
     private async Task OpenBuildingBlocksOrganizerAsync()
     {
         var action = await BuildingBlocksOrganizerDialog.ShowAsync(this, _quickParts);
-        if (action is { Kind: BuildingBlockActionKind.Insert }
-            && _quickParts.Get(action.Name) is { } part)
-            _editor.InsertQuickPartText(part.Text);
+        if (action is { Kind: BuildingBlocksOrganizerActionKind.Insert })
+            _editor.InsertQuickPartText(action.Text);
         _editor.Focus();
     }
 
@@ -4189,71 +3676,44 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// AV-INSERT2: Insert Text from File opens a file picker for a .docx/.txt. DOCX files are loaded through
-    /// the open adapters and inserted as cloned document blocks; .txt files retain the plain-text quick-part
-    /// insertion path. Wired to <c>freew.text-from-file</c> (Insert -> Text).
+    /// AV-INSERT2: Insert Text from File realizes the portable DOCX/TXT policy through Avalonia-native ports.
+    /// Wired to <c>freew.text-from-file</c> (Insert -> Text).
     /// </summary>
-    private async Task InsertTextFromFileAsync()
+    private Task InsertTextFromFileAsync() => ExecuteDocumentFragmentImportAsync(
+        FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
+            FreeWDocumentFragmentHostProfile.Avalonia));
+
+    private async Task ExecuteDocumentFragmentImportAsync(FreeWDocumentFragmentImportRequest request)
     {
-        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                InsertDialogTextResources.TextFromFilePickerTitle,
-                [TextFromFileType]));
-        var path = file?.LocalPath;
-        if (path is null)
-            return;
-
-        try
-        {
-            var ext = Path.GetExtension(path);
-            if (string.Equals(ext, ".txt", StringComparison.OrdinalIgnoreCase))
-            {
-                var text = await File.ReadAllTextAsync(path);
-                _editor.InsertQuickPartText(text);
-            }
-            else
-            {
-                var adapter = DocumentFileFormatResolver.FindOpenAdapter(_documentPersistence.Adapters, ext, out _);
-                if (adapter is null)
-                {
-                    _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType("Insert text", ext);
-                    return;
-                }
-                using var stream = File.OpenRead(path);
-                var document = adapter.Load(stream);
-                _editor.InsertDocument(document);
-            }
-
-            _editor.Focus();
-        }
-        catch (Exception ex)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Insert text", ex.Message);
-        }
+        var workflow = new FreeWDocumentFragmentImportWorkflow(
+            _documentPersistence.Adapters,
+            new AvaloniaDocumentFragmentPickerPort(StorageProvider),
+            new AvaloniaDocumentFragmentSourceReaderPort(),
+            new AvaloniaDocumentFragmentInsertionPort(_editor));
+        var result = await workflow.ImportAsync(request);
+        var presentation = FreeWDocumentFragmentImportOutcomePlanner.Plan(
+            result,
+            FileText,
+            FreeWDocumentFragmentImportFailureSurface.AvaloniaStatus);
+        if (presentation.StatusText is { } statusText)
+            _status.Text = statusText;
     }
 
-    private static readonly FilePickerFileType TextFromFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            FreeWFileTextResources.TextFromFileTypeName,
-            ["*.docx", "*.txt"],
-            ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]);
-
-    private void ApplyOpenResult(DocumentOpenResult result) =>
-        LoadDocumentAsSaved(result.Document, result.SavedPath);
+    private void ApplyOpenResult(DocumentOpenResult result)
+    {
+        var execution = _documentFileWorkflow.ApplyOpenResultAsync(result).GetAwaiter().GetResult();
+        if (!execution.Succeeded)
+            throw execution.Exception ?? new InvalidOperationException("The startup document could not be opened.");
+    }
 
     private void LoadDocumentAsSaved(TextDocument document, string? path)
     {
         LoadDocumentContent(document);
 
         if (path is null)
-        {
             _fileWorkflow.MarkSavedWithoutPath();
-        }
         else
-        {
             MarkDocumentSavedWithPath(path);
-        }
 
         if (document.UpdateFieldsOnOpen)
         {
@@ -4272,7 +3732,7 @@ public sealed partial class MainWindow : Window
     private void LoadDocumentContent(TextDocument document)
     {
         StopReadAloud();
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
+        ApplyViewDepthTransition(_viewSession.RestoreLiveEditor(), updateStatus: false);
         _suppressEditorDirty = true;
         try
         {
@@ -4286,30 +3746,23 @@ public sealed partial class MainWindow : Window
 
     private void ToggleReadAloud()
     {
-        var controller = EnsureReadAloudController();
-        if (controller.IsActive)
-        {
-            controller.Stop();
-        }
-        else
-        {
-            controller.Start(_editor.Document, _editor.ReadAloudStartSegmentIndex());
-        }
-
+        EnsureReadAloudSession().ToggleStartStop();
         RefreshRibbonCommandStates();
     }
 
-    private bool IsReadAloudActive() => _readAloudController?.IsActive == true;
+    private bool IsReadAloudActive() => _readAloudSession?.IsActive == true;
 
-    private ReadAloudController EnsureReadAloudController()
+    private ReadAloudSession EnsureReadAloudSession()
     {
-        if (_readAloudController is not null)
-            return _readAloudController;
+        if (_readAloudSession is not null)
+            return _readAloudSession;
 
-        _readAloudEngine = new AvaloniaSpeechEngine();
-        _readAloudController = new ReadAloudController(_readAloudEngine);
-        _readAloudController.StateChanged += OnReadAloudStateChanged;
-        return _readAloudController;
+        _readAloudSession = new ReadAloudSession(new ReadAloudSessionPorts(
+            GetDocument: () => _editor.Document,
+            GetStartSegmentIndex: _editor.ReadAloudStartSegmentIndex,
+            CreateEngine: _ => new AvaloniaSpeechEngine()));
+        _readAloudSession.StateChanged += OnReadAloudStateChanged;
+        return _readAloudSession;
     }
 
     private void OnReadAloudStateChanged()
@@ -4345,28 +3798,25 @@ public sealed partial class MainWindow : Window
 
     private void StopReadAloudAfterDocumentChange()
     {
-        if (_readAloudController?.IsActive == true)
-            StopReadAloud();
+        if (_readAloudSession?.HandleDocumentChanged() == true)
+            RefreshRibbonCommandStates();
     }
 
     private void StopReadAloud()
     {
-        _readAloudController?.Stop();
+        _readAloudSession?.Stop();
         RefreshRibbonCommandStates();
     }
 
     private void DisposeReadAloud()
     {
-        var controller = _readAloudController;
-        _readAloudController = null;
-        if (controller is not null)
-        {
-            controller.StateChanged -= OnReadAloudStateChanged;
-            controller.Stop();
-        }
+        var session = _readAloudSession;
+        _readAloudSession = null;
+        if (session is null)
+            return;
 
-        _readAloudEngine?.Dispose();
-        _readAloudEngine = null;
+        session.StateChanged -= OnReadAloudStateChanged;
+        session.Dispose();
     }
 
     private void OnEditorDocumentChanged()
@@ -4378,25 +3828,31 @@ public sealed partial class MainWindow : Window
         UpdateStatus();
     }
 
-    private void MarkDocumentSavedWithPath(string path)
-    {
+    private void MarkDocumentSavedWithPath(string path) =>
         _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
-    }
 
     private void OnFileWorkflowChanged()
     {
+        RefreshDocumentWindowTitle();
         _editor.CurrentFileName = _fileWorkflow.CurrentFileName;
         UpdateStatus();
     }
 
+    private void RefreshDocumentWindowTitle()
+    {
+        Title = ApplicationWindowTitlePolicy.Compose(
+            FreeWApplicationFrameDescriptor.Title,
+            _fileWorkflow.CurrentFileName ?? FreeWApplicationFrameDescriptor.Title.DefaultDocumentDisplayName,
+            _fileWorkflow.IsDirty,
+            FreeWDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber),
+            isDefaultDocument: _fileWorkflow.CurrentPath is null);
+    }
+
     private void UpdateStatus()
     {
-        var stats = _editor.ComputeStatistics();
         var (currentSection, totalSections) = _editor.SectionInfo();
-        var plan = FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
-            stats.Words,
-            stats.CharactersWithSpaces,
-            stats.Paragraphs,
+        var plan = _editorInteraction.BuildStatus(new FreeWEditorStatusContext(
+            _editor.Document,
             CurrentPage: _editor.CaretPageIndex + 1,
             TotalPages: _editor.PageCount,
             CurrentSection: currentSection,
@@ -4431,18 +3887,18 @@ public sealed partial class MainWindow : Window
             GetFileFormats: () => _documentPersistence.Adapters.SelectMany(a => a.Formats),
             GetPageSettings: () => _editor.Document.Page,
             GetCurrentOptions: () => _options,
-            GetDataFolder: ResolveDataFolderLabel,
+            GetDataFolder: () => FreeWApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath),
             GetDocument: () => _editor.Document,
             GetIsDirty: () => _fileWorkflow.IsDirty,
 
-            NewDocument: NewDocument,
-            OpenRecent: path => _ = OpenRecentAsync(path),
+            NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
+            OpenRecent: path => _ = OpenRecentPathAsync(path),
             OpenFolder: OpenFolderInShell,
-            Browse: () => _ = OpenAsync(),
+            Browse: () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument),
             RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),
             ImportPdfText: () => _ = ImportPdfTextAsync(),
-            Save: () => _ = SaveAsync(),
-            SaveAs: () => _ = SaveAsAsync(),
+            Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
+            SaveAs: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocumentAs),
             SaveAsFormat: (ext, filterIndex) => _ = SaveAsWithFormatAsync(ext, filterIndex),
             SaveCopy: () => _ = SaveCopyAsync(),
             OpenContainingFolder: path =>
@@ -4461,58 +3917,15 @@ public sealed partial class MainWindow : Window
             OpenOptions: () => _ = OpenOptionsAsync(),
             CloseDocument: Close,
             DirectPrintCapability: DirectPrintCapability,
-            Print: DirectPrintCapability.IsAvailable ? () => _ = PrintAsync() : null,
+            Print: DirectPrintCapability.IsAvailable
+                ? () => _applicationCommands.Execute(FreeWKeyboardCommand.PrintDocument)
+                : null,
             PrintPreview: () => _ = OpenPrintPreviewAsync());
 
-    private async Task SaveCopyAsync()
-    {
-        var savePlan = _documentPersistence.BuildSavePickerPlan(
-            _fileWorkflow.CurrentPath,
-            _fileWorkflow.CurrentFileName,
-            FileText.FallbackDisplayName);
-        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromSavePlan("Save a Copy", savePlan));
-        var path = file?.LocalPath;
-        if (path is null)
-            return;
-
-        await SaveCopyToPathAsync(path);
-    }
+    private async Task SaveCopyAsync() => await _fileCommands.SaveCopyAsync();
 
     internal Task<bool> SaveCopyToPathAsync(string path, int filterIndex = 0)
-    {
-        if (!_documentPersistence.TryResolveSaveTarget(path, filterIndex, out var target))
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
-                SisterAppFileTextPlanner.SaveCommand,
-                Path.GetExtension(path));
-            return Task.FromResult(false);
-        }
-
-        return SaveCopyToTargetAsync(target);
-    }
-
-    private async Task<bool> SaveCopyToTargetAsync(DocumentSaveTarget target)
-    {
-        try
-        {
-            if (!await ConfirmSaveCompatibilityAsync(target))
-            {
-                _status.Text = "Save a Copy canceled.";
-                return false;
-            }
-
-            _documentPersistence.Save(_editor.Document, target);
-            _status.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(target.Path)) + " (copy)";
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _status.Text = $"Could not save a copy: {ex.Message}";
-            return false;
-        }
-    }
+        => _fileCommands.SavePathAsync(path, filterIndex, DocumentSaveExecutionKind.SaveCopy);
 
     private async Task OpenPropertiesAsync()
     {
@@ -4522,24 +3935,17 @@ public sealed partial class MainWindow : Window
             return;
 
         _editor.ApplyDocumentProperties(result);
-        _status.Text = "Document properties updated.";
+        _status.Text = UiText.Get("DocumentProperties_Updated_Status");
         _editor.Focus();
-    }
-
-    private static TextDocument CloneDocument(TextDocument document)
-    {
-        using var buffer = new MemoryStream();
-        DocxWriter.Write(document, buffer);
-        buffer.Position = 0;
-        return DocxReader.Read(buffer);
     }
 
     private void ToggleMarkAsFinal()
     {
+        var text = BackstageInfoSafetyPanePlanner.ResolveText(UiText.Get);
         _editor.SetMarkedAsFinal(!_editor.IsMarkedAsFinal);
         _status.Text = _editor.IsMarkedAsFinal
-            ? "Document marked as final."
-            : "Document is no longer marked as final.";
+            ? text.MarkedAsFinalStatus
+            : text.NotMarkedAsFinalStatus;
         _editor.Focus();
     }
 
@@ -4551,9 +3957,13 @@ public sealed partial class MainWindow : Window
             return;
 
         _editor.SetProtection(settings);
+        var text = BackstageInfoSafetyPanePlanner.ResolveText(UiText.Get);
         _status.Text = settings.Mode == ProtectionMode.None
-            ? "Editing restrictions removed."
-            : $"Editing restricted: {settings.Mode}.";
+            ? text.RestrictionsRemovedStatus
+            : string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                text.RestrictionsAppliedFormat,
+                settings.Mode);
         _editor.Focus();
     }
 
@@ -4566,11 +3976,12 @@ public sealed partial class MainWindow : Window
             return;
 
         if (choice.Any)
-            _editor.ApplyInspectorRemovals(choice.Comments, choice.Revisions, choice.Properties, choice.Bookmarks);
+            _editor.ApplyInspectorRemovals(choice);
 
+        var text = BackstageInfoSafetyPanePlanner.ResolveText(UiText.Get);
         _status.Text = choice.Any
-            ? "Selected document data removed."
-            : "Document Inspector completed.";
+            ? text.SelectedDataRemovedStatus
+            : text.InspectorCompletedStatus;
         _editor.Focus();
     }
 
@@ -4579,9 +3990,13 @@ public sealed partial class MainWindow : Window
         var report = AccessibilityChecker.Check(_editor.Document);
         var dialog = new AccessibilityReportDialog(report);
         await dialog.ShowDialog(this);
+        var text = BackstageInfoSafetyPanePlanner.ResolveText(UiText.Get);
         _status.Text = report.IsClean
-            ? "No accessibility issues found."
-            : $"{report.Issues.Count} accessibility issue(s) found.";
+            ? text.NoAccessibilityIssuesStatus
+            : string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                text.AccessibilityIssueCountStatusFormat,
+                report.Issues.Count);
         _editor.Focus();
     }
 
@@ -4592,54 +4007,25 @@ public sealed partial class MainWindow : Window
         if (dialog.Result is not { } edited)
             return;
 
-        ApplyOptions(edited);
+        ApplyEditorTypingOptions(_optionsRuntime.Apply(edited));
         if (!_optionsStore.Save(_options))
-            _status.Text = _optionsStore.LastError ?? "FreeW Options could not be saved.";
+            _status.Text = _optionsStore.LastError ?? UiText.Get("Options_SaveFailed_Status");
         else
-            _status.Text = "FreeW Options saved.";
+            _status.Text = UiText.Get("Options_Saved_Status");
     }
 
-    private void ApplyOptions(FreeWOptions edited)
+    private void ApplyEditorTypingOptions(FreeWEditorTypingOptionsPlan plan)
     {
-        _options.RecentFilesCap = edited.RecentFilesCap;
-        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
-        _options.UiLanguage = edited.UiLanguage;
-        _options.AutoCorrectEnabled = edited.AutoCorrectEnabled;
-        _options.AutoFormat = edited.AutoFormat;
-        _options.AutoCorrect = edited.AutoCorrect;
-        _options.Normalize();
-        _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
-        _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
-        _editor.AutoCorrectOptions = _options.AutoCorrect ?? AutoCorrectOptions.Default;
-    }
-
-    private string ResolveDataFolderLabel()
-    {
-        try
-        {
-            return Path.GetDirectoryName(_optionsStore.StorePath) ?? _optionsStore.StorePath;
-        }
-        catch
-        {
-            return AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
-        }
+        _editor.AutoCorrectEnabled = plan.AutoCorrectEnabled;
+        _editor.AutoFormatOptions = plan.AutoFormat;
+        _editor.AutoCorrectOptions = plan.AutoCorrect;
     }
 
     private void OpenFolderInShell(string folder)
     {
-        try
-        {
-            if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = folder,
-                    UseShellExecute = true,
-                });
-        }
-        catch (Exception ex)
-        {
-            _status.Text = $"Could not open folder: {ex.Message}";
-        }
+        var result = DesktopPathLauncher.OpenDirectory(folder);
+        if (result.Error is not null)
+            _status.Text = UiText.Format("Shell_OpenFolderFailed_Status_Format", result.Error.Message);
     }
 
     /// <summary>
@@ -4653,7 +4039,7 @@ public sealed partial class MainWindow : Window
         if (!_documentPersistence.TryGetSaveFormat(filterIndex, out var format) &&
             !_documentPersistence.TryGetSaveFormat(normalizedExt, out format))
         {
-            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedExtension(extension);
+            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedExtension(FileText, extension);
             return;
         }
 
@@ -4666,7 +4052,7 @@ public sealed partial class MainWindow : Window
         using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
             StorageProvider,
             AvaloniaFilePickerSaveRequest.FromFileTypes(
-                SisterAppFileTextPlanner.FormatSaveAsTitle(format?.FormatName ?? extension),
+                SisterAppFileTextPlanner.FormatSaveAsTitle(FileText, format?.FormatName ?? extension),
                 [
                     AvaloniaFilePickerTypeAdapter.CreateFileType(
                         format?.FormatName ?? extension,
@@ -4676,7 +4062,7 @@ public sealed partial class MainWindow : Window
                 savePlan.DefaultExtensionWithoutDot));
         var path = file?.LocalPath;
         if (path is not null)
-            await SaveToPathAsync(path, filterIndex);
+            await _fileCommands.SavePathAsync(path, filterIndex);
     }
 
     // Opens an external URL raised by DocumentView.HyperlinkActivated through the shared scheme allowlist.
@@ -4685,8 +4071,5 @@ public sealed partial class MainWindow : Window
     private static void OpenExternalUri(string url) => _ = TryOpenExternalUri(url);
 
     private static ExternalUriLaunchResult TryOpenExternalUri(string url) =>
-        ExternalUriLauncher.Open(
-            url,
-            uri => System.Diagnostics.Process.Start(
-                new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }));
+        DesktopExternalUriLauncher.Open(url);
 }

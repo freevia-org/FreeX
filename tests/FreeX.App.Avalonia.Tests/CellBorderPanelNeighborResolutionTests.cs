@@ -17,7 +17,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// touching neighbor cell's border on the same shared physical edge, so a bordered cell next to
 /// another bordered cell double-drew that edge with a paint-order-dependent winner instead of
 /// Excel's deterministic "heavier style wins" rule (already implemented, but uncalled, in
-/// <see cref="CellBorderGeometry.ResolveBorderEdgeWinner"/>).
+/// <see cref="FreeX.App.Presentation.Rendering.CellBorderVisualPlanner.ResolveEdgeWinner"/>).
 /// </summary>
 [Collection("AvaloniaHeadless")]
 public sealed class CellBorderPanelNeighborResolutionTests

@@ -5,9 +5,9 @@ using FreeX.Core.Model;
 namespace FreeX.App.Presentation.QuickAnalysis;
 
 /// <summary>
-/// Host execution plan for a Quick Analysis menu item. Renderers still own the native command calls,
-/// dialogs, and async surfaces; this keeps the action payload and stable command titles out of WPF and
-/// platform switch statements.
+/// Host execution plan for a Quick Analysis menu item. Renderers retain native dialogs and async
+/// surfaces; the portable operation executor owns dispatch, and WorkbookSession owns portable mutations.
+/// This keeps action payloads and stable command titles out of platform switch statements.
 /// </summary>
 public enum QuickAnalysisHostOperationKind
 {
@@ -28,9 +28,8 @@ public enum QuickAnalysisHostOperationKind
 public sealed record QuickAnalysisHostOperation(
     QuickAnalysisHostOperationKind Kind,
     QuickAnalysisCommandRoute Route,
-    QuickAnalysisConditionalFormatCommand? ConditionalFormat = null,
     ConditionalFormatPreset? ConditionalFormatPreset = null,
-    string? ConditionalFormatDialogTitle = null,
+    QuickAnalysisConditionalFormatDialogPlan? ConditionalFormatDialog = null,
     ChartType? ChartType = null,
     string? TotalFunction = null,
     QuickAnalysisTotalFormulaKind? TotalFormulaKind = null,
@@ -50,35 +49,19 @@ public sealed record QuickAnalysisConditionalFormatDialogSeed(
     bool TopBottomPercent = false,
     bool IsTop = true);
 
+public sealed record QuickAnalysisConditionalFormatDialogPlan(
+    QuickAnalysisConditionalFormatCommand Command,
+    string Title,
+    QuickAnalysisConditionalFormatDialogSeed Seed);
+
 public static class QuickAnalysisConditionalFormatDialogPlanner
 {
-    public static QuickAnalysisConditionalFormatDialogSeed Plan(
-        QuickAnalysisConditionalFormatCommand command) =>
-        command switch
-        {
-            QuickAnalysisConditionalFormatCommand.DataBar => new(CfRuleType.DataBar),
-            QuickAnalysisConditionalFormatCommand.ColorScale => new(CfRuleType.ColorScale),
-            QuickAnalysisConditionalFormatCommand.IconSet => new(CfRuleType.IconSet),
-            QuickAnalysisConditionalFormatCommand.GreaterThan => new(CfRuleType.CellValue, CfOperator.GreaterThan),
-            QuickAnalysisConditionalFormatCommand.LessThan => new(CfRuleType.CellValue, CfOperator.LessThan),
-            QuickAnalysisConditionalFormatCommand.Between => new(CfRuleType.CellValue, CfOperator.Between),
-            QuickAnalysisConditionalFormatCommand.EqualTo => new(CfRuleType.CellValue, CfOperator.Equal),
-            QuickAnalysisConditionalFormatCommand.TextContains => new(CfRuleType.ContainsText, Text: string.Empty),
-            QuickAnalysisConditionalFormatCommand.DateOccurring => new(
-                CfRuleType.DateOccurring,
-                DateOccurringPeriod: "Today"),
-            QuickAnalysisConditionalFormatCommand.DuplicateValues => new(CfRuleType.DuplicateValues),
-            QuickAnalysisConditionalFormatCommand.Top10Items => new(CfRuleType.Top10),
-            QuickAnalysisConditionalFormatCommand.Top10Percent => new(CfRuleType.Top10, TopBottomPercent: true),
-            QuickAnalysisConditionalFormatCommand.Bottom10Items => new(CfRuleType.Top10, IsTop: false),
-            QuickAnalysisConditionalFormatCommand.Bottom10Percent => new(
-                CfRuleType.Top10,
-                TopBottomPercent: true,
-                IsTop: false),
-            QuickAnalysisConditionalFormatCommand.AboveAverage => new(CfRuleType.AboveAverage),
-            QuickAnalysisConditionalFormatCommand.BelowAverage => new(CfRuleType.AboveAverage, IsTop: false),
-            _ => throw new ArgumentOutOfRangeException(nameof(command), command, "Unsupported conditional-format command.")
-        };
+    public static QuickAnalysisConditionalFormatDialogPlan PlanDialog(
+        QuickAnalysisConditionalFormatCommand command)
+    {
+        var descriptor = QuickAnalysisConditionalFormatCatalog.ForCommand(command);
+        return new(command, descriptor.DialogTitle, descriptor.DialogSeed);
+    }
 }
 
 public static class QuickAnalysisHostOperationPlanner
@@ -94,8 +77,7 @@ public static class QuickAnalysisHostOperationPlanner
                 new QuickAnalysisHostOperation(
                     QuickAnalysisHostOperationKind.OpenConditionalFormatDialog,
                     action.Route,
-                    ConditionalFormat: action.ConditionalFormat,
-                    ConditionalFormatDialogTitle: action.ConditionalFormatDialogTitle),
+                    ConditionalFormatDialog: action.ConditionalFormatDialog),
 
             QuickAnalysisShellActionKind.ApplyConditionalFormat =>
                 new QuickAnalysisHostOperation(

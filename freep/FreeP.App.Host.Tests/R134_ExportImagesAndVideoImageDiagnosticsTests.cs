@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
@@ -10,12 +9,9 @@ namespace FreeP.App.Host.Tests;
 /// R134 remediation (tracked as task #150, an r133 residual): r133 wired
 /// <see cref="SlideImageRenderDiagnostics"/> into File &gt; Export to PDF
 /// (<see cref="PresentationRasterPdfImageDiagnosticsTests"/>) but left File &gt; Export &gt; Images
-/// (<see cref="FileCommands.ExportImagesToFolder"/>) and File &gt; Export &gt; Video
-/// (<see cref="FileCommands.BuildVideoFramePackage"/>) unwired -- an undecodable embedded picture
-/// silently disappeared from those two exports with zero surfacing. This test drives the exact
-/// production composition each command uses -- <see cref="FileCommands.ExportImagesToFolderCore"/>
-/// and <see cref="FileCommands.BuildVideoFramePackageCore"/>, not a re-implementation -- to prove
-/// the loss is now surfaced.
+/// images and video unwired -- an undecodable embedded picture silently disappeared from those
+/// exports with zero surfacing. These tests drive the shared production executors with the real WPF
+/// renderer delegate, proving the loss is surfaced without host-local export implementations.
 /// </summary>
 public class R134_ExportImagesAndVideoImageDiagnosticsTests
 {
@@ -58,21 +54,20 @@ public class R134_ExportImagesAndVideoImageDiagnosticsTests
     // ---- Export > Images -------------------------------------------------
 
     [StaFact]
-    public void ExportImagesToFolderCore_SurfacesImageDiagnostics_WhenSlidePictureBytesAreUndecodable()
+    public void ExportImages_SurfacesImageDiagnostics_WhenSlidePictureBytesAreUndecodable()
     {
         var deck = DeckWithPicture([0x00, 0x01, 0x02, 0x03, 0x04]);
         var outputDirectory = Path.Combine(Path.GetTempPath(), "FreeP-R134-Images-" + Guid.NewGuid().ToString("N"));
-        var imageDiagnostics = new List<string>();
 
         try
         {
-            var result = FileCommands.ExportImagesToFolderCore(
+            var artifact = PresentationImageExportExecutor.ExportWithDiagnostics(
                 deck,
                 new PresentationImageExportRequest(outputDirectory, BaseFileName: "Deck"),
-                imageDiagnostics);
+                WpfPresentationSlideImageRenderer.RenderSlideToPng);
 
-            result.ExportedSlides.Should().HaveCount(1);
-            imageDiagnostics.Should().NotBeEmpty(
+            artifact.Result.ExportedSlides.Should().HaveCount(1);
+            artifact.ImageDiagnostics.Should().NotBeEmpty(
                 "the undecodable slide picture must be surfaced through the image export path (File > Export > Images), not silently dropped");
         }
         finally
@@ -83,21 +78,20 @@ public class R134_ExportImagesAndVideoImageDiagnosticsTests
     }
 
     [StaFact]
-    public void ExportImagesToFolderCore_NoImageDiagnostics_WhenSlidePictureIsDecodable()
+    public void ExportImages_NoImageDiagnostics_WhenSlidePictureIsDecodable()
     {
         // Sibling no-regression: a valid embedded picture must not spuriously report an image warning.
         var deck = DeckWithPicture(MinimalPngBytes());
         var outputDirectory = Path.Combine(Path.GetTempPath(), "FreeP-R134-Images-" + Guid.NewGuid().ToString("N"));
-        var imageDiagnostics = new List<string>();
 
         try
         {
-            FileCommands.ExportImagesToFolderCore(
+            var artifact = PresentationImageExportExecutor.ExportWithDiagnostics(
                 deck,
                 new PresentationImageExportRequest(outputDirectory, BaseFileName: "Deck"),
-                imageDiagnostics);
+                WpfPresentationSlideImageRenderer.RenderSlideToPng);
 
-            imageDiagnostics.Should().BeEmpty();
+            artifact.ImageDiagnostics.Should().BeEmpty();
         }
         finally
         {
@@ -109,30 +103,32 @@ public class R134_ExportImagesAndVideoImageDiagnosticsTests
     // ---- Export > Video ----------------------------------------------------
 
     [StaFact]
-    public void BuildVideoFramePackageCore_SurfacesImageDiagnostics_WhenSlidePictureBytesAreUndecodable()
+    public void BuildVideoFramePackage_SurfacesImageDiagnostics_WhenSlidePictureBytesAreUndecodable()
     {
         var deck = DeckWithPicture([0x00, 0x01, 0x02, 0x03, 0x04]);
-        var imageDiagnostics = new List<string>();
+        var artifact = PresentationVideoFramePackageExecutor.BuildPackageWithDiagnostics(
+            deck,
+            request: null,
+            WpfPresentationSlideImageRenderer.RenderSlideToPng,
+            EncodableHostCapabilities());
 
-        var package = FileCommands.BuildVideoFramePackageCore(
-            deck, request: null, EncodableHostCapabilities(), imageDiagnostics);
-
-        package.Frames.Should().NotBeEmpty();
-        imageDiagnostics.Should().NotBeEmpty(
+        artifact.Package.Frames.Should().NotBeEmpty();
+        artifact.ImageDiagnostics.Should().NotBeEmpty(
             "the undecodable slide picture must be surfaced through the video frame export path (File > Export > Video), not silently dropped");
     }
 
     [StaFact]
-    public void BuildVideoFramePackageCore_NoImageDiagnostics_WhenSlidePictureIsDecodable()
+    public void BuildVideoFramePackage_NoImageDiagnostics_WhenSlidePictureIsDecodable()
     {
         // Sibling no-regression: a valid embedded picture must not spuriously report an image warning.
         var deck = DeckWithPicture(MinimalPngBytes());
-        var imageDiagnostics = new List<string>();
+        var artifact = PresentationVideoFramePackageExecutor.BuildPackageWithDiagnostics(
+            deck,
+            request: null,
+            WpfPresentationSlideImageRenderer.RenderSlideToPng,
+            EncodableHostCapabilities());
 
-        FileCommands.BuildVideoFramePackageCore(
-            deck, request: null, EncodableHostCapabilities(), imageDiagnostics);
-
-        imageDiagnostics.Should().BeEmpty();
+        artifact.ImageDiagnostics.Should().BeEmpty();
     }
 
     // ---- Ambient-sink scoping: must not leak across sequential/concurrent exports --------
@@ -152,29 +148,27 @@ public class R134_ExportImagesAndVideoImageDiagnosticsTests
 
         try
         {
-            var firstDiagnostics = new List<string>();
-            FileCommands.ExportImagesToFolderCore(
+            var firstArtifact = PresentationImageExportExecutor.ExportWithDiagnostics(
                 badDeck,
                 new PresentationImageExportRequest(badDir, BaseFileName: "Bad"),
-                firstDiagnostics);
-            firstDiagnostics.Should().NotBeEmpty();
+                WpfPresentationSlideImageRenderer.RenderSlideToPng);
+            firstArtifact.ImageDiagnostics.Should().NotBeEmpty();
 
             // A later, unrelated export against a clean deck must get a clean diagnostics list --
             // reusing a fresh List<string> (as every real call site does), so this catches the sink
             // itself leaking (e.g. via a static list, or Capture failing to restore the ambient value).
-            var secondDiagnostics = new List<string>();
-            FileCommands.ExportImagesToFolderCore(
+            var secondArtifact = PresentationImageExportExecutor.ExportWithDiagnostics(
                 goodDeck,
                 new PresentationImageExportRequest(goodDir, BaseFileName: "Good"),
-                secondDiagnostics);
+                WpfPresentationSlideImageRenderer.RenderSlideToPng);
 
-            secondDiagnostics.Should().BeEmpty(
+            secondArtifact.ImageDiagnostics.Should().BeEmpty(
                 "diagnostics from an earlier, already-completed export must not leak into a later export's own list");
 
             // Reporting outside of any installed Capture scope (post-dispose) must be a no-op, not a
             // write into whichever list happened to be installed most recently.
             SlideImageRenderDiagnostics.ReportUndecodableImage(1, "post-scope report");
-            secondDiagnostics.Should().BeEmpty();
+            secondArtifact.ImageDiagnostics.Should().BeEmpty();
         }
         finally
         {

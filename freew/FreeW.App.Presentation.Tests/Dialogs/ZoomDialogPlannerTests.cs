@@ -6,6 +6,35 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class ZoomDialogPlannerTests
 {
     [Fact]
+    public void Text_surface_owns_renderer_neutral_zoom_labels()
+    {
+        ZoomDialogPlanner.Text.Should().Be(new ZoomDialogTextSpec(
+            "Zoom",
+            "Zoom to",
+            "Page width",
+            "Text width",
+            "Whole page",
+            "Percent:",
+            "Custom zoom percent",
+            "%"));
+        ZoomDialogPlanner.FormatPresetLabel(125).Should().Be("125%");
+    }
+
+    [Fact]
+    public void BuildFitFactors_UsesSharedPageAndContentGeometry()
+    {
+        var page = new PageSettings();
+        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
+        var (contentWidth, _) = PageLayout.ContentAreaDip(page);
+
+        ZoomDialogPlanner.BuildFitFactors(page, 640, 480).Should().Be(
+            new ZoomDialogFitFactors(
+                ZoomFit.PageWidth(pageWidth, 640),
+                ZoomFit.TextWidth(contentWidth, 640),
+                ZoomFit.WholePage(pageWidth, pageHeight, 640, 480)));
+    }
+
+    [Fact]
     public void Presets_ExposeWordZoomDialogChoicesInDisplayOrder()
     {
         ZoomDialogPlanner.Presets.Should().Equal(200, 100, 75);
@@ -62,33 +91,20 @@ public sealed class ZoomDialogPlannerTests
     [Fact]
     public void BothHosts_DelegateFitPolicyAndAvaloniaDialogReceivesLiveFactors()
     {
-        var repoRoot = FindRepositoryRoot();
-        string Read(params string[] segments) =>
-            File.ReadAllText(Path.Combine(new[] { repoRoot }.Concat(segments).ToArray()));
+        string Read(params string[] segments) => TestWorkspaceFileLocator.ReadAllText(segments);
 
         var avaloniaMain = Read("freew", "FreeW.App.Avalonia", "MainWindow.cs");
         var avaloniaDialog = Read("freew", "FreeW.App.Avalonia", "ZoomDialog.cs");
         var wpfMain = Read("freew", "FreeW.App.Host", "MainWindow.cs");
 
         avaloniaMain.Should().Contain("new ZoomDialog(_zoomScale, ComputeZoomFitFactors())");
-        avaloniaMain.Should().Contain("ZoomDialogPlanner.BuildFitFactors(_editor.Document.Page");
+        avaloniaMain.Should().Contain("var page = _editor.Document.Page;");
+        avaloniaMain.Should().Contain("ZoomDialogPlanner.BuildFitFactors(page, viewportWidth, viewportHeight)");
         avaloniaDialog.Should().Contain("ZoomDialogFitFactors fitFactors");
-        avaloniaDialog.Should().Contain("TryCreateResult(BuildSelectionRequest(), _fitFactors");
+        avaloniaDialog.Should().Contain("_session.PlanAcceptance(_fitFactors)");
         avaloniaDialog.Should().NotContain("DefaultFitFactors");
-        wpfMain.Should().Contain("ZoomDialogPlanner.BuildFitFactors(_editor.Model.Page");
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not resolve repository root.");
+        wpfMain.Should().Contain("var page = _editor.Model.Page;");
+        wpfMain.Should().Contain("ZoomDialogPlanner.BuildFitFactors(page, viewportWidth, viewportHeight)");
     }
 
     [Theory]
@@ -159,5 +175,72 @@ public sealed class ZoomDialogPlannerTests
         ZoomDialogPlanner.ValidationMessageFor(ZoomDialogValidationError.WholePercentRequired)
             .Should()
             .Be("Enter a whole zoom percentage.");
+    }
+
+    [Fact]
+    public void Session_ProjectsInitialPresetAndCustomSelections()
+    {
+        var preset = new ZoomDialogSession(1.0);
+        var custom = new ZoomDialogSession(1.25);
+
+        preset.ControlState.PresetPercent.Should().Be(100);
+        preset.ControlState.IsCustomSelected.Should().BeFalse();
+        custom.ControlState.PresetPercent.Should().BeNull();
+        custom.ControlState.IsCustomSelected.Should().BeTrue();
+        custom.ControlState.CustomPercentText.Should().Be(125.ToString(CultureInfo.CurrentCulture));
+    }
+
+    [Fact]
+    public void Session_ChoiceTransitionsClearOtherSelectionKinds()
+    {
+        var session = new ZoomDialogSession(1.0);
+
+        session.SelectFit(ZoomDialogFitOption.PageWidth);
+        session.ControlState.Should().Be(new ZoomDialogControlState(
+            ZoomDialogFitOption.PageWidth,
+            PresetPercent: null,
+            CustomPercentText: "100"));
+
+        session.SelectPreset(75);
+        session.ControlState.Should().Be(new ZoomDialogControlState(
+            FitOption: null,
+            PresetPercent: 75,
+            CustomPercentText: "100"));
+
+        session.UpdateCustomPercentText("130");
+        session.ControlState.Should().Be(new ZoomDialogControlState(
+            FitOption: null,
+            PresetPercent: null,
+            CustomPercentText: "130"));
+    }
+
+    [Fact]
+    public void Session_AcceptsSelectedFitWithoutRendererProjection()
+    {
+        var session = new ZoomDialogSession(1.0);
+        session.SelectFit(ZoomDialogFitOption.TextWidth);
+
+        var acceptance = session.PlanAcceptance(new ZoomDialogFitFactors(1.1, 1.42, 0.7));
+
+        acceptance.IsAccepted.Should().BeTrue();
+        acceptance.Result.Should().Be(1.42);
+        acceptance.Validation.Should().BeNull();
+    }
+
+    [Fact]
+    public void Session_InvalidCustomValueReturnsRecoveryStateAndFocusTarget()
+    {
+        var session = new ZoomDialogSession(1.0);
+        session.UpdateCustomPercentText("invalid");
+
+        var acceptance = session.PlanAcceptance(new ZoomDialogFitFactors(1.1, 1.2, 0.7));
+
+        acceptance.IsAccepted.Should().BeFalse();
+        acceptance.Result.Should().BeNull();
+        acceptance.ControlState.IsCustomSelected.Should().BeTrue();
+        acceptance.Validation.Should().Be(new ZoomDialogValidation(
+            ZoomDialogValidationError.WholePercentRequired,
+            "Enter a whole zoom percentage.",
+            ZoomDialogFocusTarget.CustomPercent));
     }
 }

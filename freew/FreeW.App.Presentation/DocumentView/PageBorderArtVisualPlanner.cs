@@ -38,7 +38,8 @@ public sealed record PageBorderArtFillRectangle(
     double HeightDip,
     byte Red,
     byte Green,
-    byte Blue);
+    byte Blue,
+    bool Antialias = false);
 
 public sealed record PageBorderArtCubicStroke(
     double StartXDip,
@@ -59,6 +60,37 @@ public sealed record PageBorderArtPolygon(
     byte Red,
     byte Green,
     byte Blue);
+
+public sealed record PageBorderArtColor(
+    byte Red,
+    byte Green,
+    byte Blue);
+
+public sealed record PageBorderArtStrokeLine(
+    PageBorderArtLineSegment Segment,
+    double WidthDip,
+    PageBorderArtColor Color,
+    bool RoundCaps = false);
+
+public sealed record PageBorderArtCubicSegment(
+    PageBorderArtPoint Control1,
+    PageBorderArtPoint Control2,
+    PageBorderArtPoint End);
+
+public sealed record PageBorderArtCubicFigure(
+    PageBorderArtPoint Start,
+    IReadOnlyList<PageBorderArtCubicSegment> Segments,
+    bool IsClosed,
+    PageBorderArtColor? Fill,
+    PageBorderArtColor? Stroke,
+    double StrokeWidthDip = 0,
+    bool RoundCaps = false);
+
+public sealed record PageBorderArtFramePlan(
+    IReadOnlyList<PageBorderArtFillRectangle> Fills,
+    IReadOnlyList<PageBorderArtPolygon> Polygons,
+    IReadOnlyList<PageBorderArtStrokeLine> Lines,
+    IReadOnlyList<PageBorderArtCubicFigure> CubicFigures);
 
 public sealed record PageBorderDecorativeArchPlan(
     IReadOnlyList<PageBorderArtFillRectangle> Fills,
@@ -324,6 +356,224 @@ public static class PageBorderArtVisualPlanner
     private const double ArtSizeUnitsPerModelPoint = 8.0;
     private const double MinimumMotifSizeDip = 8.0;
     private const double MaximumMotifSizeDip = 64.0;
+
+    /// <summary>
+    /// Builds a complete renderer-neutral scene for a supported page-border art style.
+    /// Coordinates are local to the supplied frame; native hosts only translate the primitives.
+    /// </summary>
+    public static bool TryBuildFramePlan(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderArtFramePlan plan)
+    {
+        plan = EmptyFramePlan();
+        switch (artId)
+        {
+            case ApplesArtId:
+                TryBuildApplesFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var apples);
+                plan = BuildAppleFramePlan(apples);
+                return true;
+            case ShadowedSquaresArtId:
+                TryBuildShadowedSquaresFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var squares);
+                plan = BuildShadowedSquaresFramePlan(squares);
+                return true;
+            case ShorebirdTracksArtId:
+                TryBuildShorebirdTracksFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var tracks);
+                plan = BuildShorebirdTracksFramePlan(tracks);
+                return true;
+            case BatsArtId:
+                TryBuildBatsFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var bats);
+                plan = new PageBorderArtFramePlan(
+                    [],
+                    bats.Select(motif => new PageBorderArtPolygon(BuildBatPolygon(motif), 0, 0, 0)).ToArray(),
+                    [],
+                    []);
+                return true;
+            case MapleMuffinsArtId:
+                TryBuildMapleMuffinsFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var muffins);
+                plan = FromFilledShapePlan(muffins);
+                return true;
+            case CakeSliceArtId:
+                TryBuildCakeSliceFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var cake);
+                plan = FromFilledShapePlan(cake);
+                return true;
+            case BirdsFlightArtId:
+                TryBuildBirdsFlightFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var birds);
+                plan = FromFilledShapePlan(birds);
+                return true;
+            case PaintedEggsArtId:
+                TryBuildPaintedEggsFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var eggs);
+                plan = FromFilledShapePlan(eggs);
+                return true;
+            case CandyCornArtId:
+                TryBuildCandyCornFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var candy);
+                plan = FromFilledShapePlan(candy);
+                return true;
+            case IceCreamConesArtId:
+                TryBuildIceCreamConesFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var cones);
+                plan = FromFilledShapePlan(cones);
+                return true;
+            case PeopleArtId:
+                TryBuildPeopleFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var people);
+                plan = FromFilledShapePlan(people);
+                return true;
+            case FlowersRosesArtId:
+                TryBuildFlowersRosesFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var roses);
+                plan = FromFilledShapePlan(roses);
+                return true;
+            case VineArtId:
+                TryBuildVineFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var vine);
+                plan = FromFilledShapePlan(vine);
+                return true;
+            case PapyrusArtId:
+                TryBuildPapyrusFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var papyrus);
+                plan = FromFilledShapePlan(papyrus);
+                return true;
+            case WeavingRibbonArtId:
+                TryBuildWeavingRibbonFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var ribbon);
+                plan = FromFilledShapePlan(ribbon);
+                return true;
+            case DecorativeArchArtId:
+                TryBuildDecorativeArchFrame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var arch);
+                plan = FromDecorativePlan(arch);
+                return true;
+            case Handmade2ArtId:
+                TryBuildHandmade2Frame(
+                    artId, modelWidthPt, frameWidthDip, frameHeightDip, edgeInsetDip, out var handmade);
+                plan = FromDecorativePlan(handmade);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static PageBorderArtFramePlan BuildAppleFramePlan(
+        IReadOnlyList<PageBorderAppleMotif> motifs)
+    {
+        var figures = new List<PageBorderArtCubicFigure>(motifs.Count * 3);
+        foreach (var motif in motifs)
+        {
+            PageBorderArtPoint Point(double x, double y) =>
+                new(motif.Xdip + motif.SizeDip * x, motif.Ydip + motif.SizeDip * y);
+
+            figures.Add(new PageBorderArtCubicFigure(
+                Point(0.50, 0.22),
+                [
+                    new(Point(0.35, 0.04), Point(0.04, 0.10), Point(0.03, 0.51)),
+                    new(Point(0.02, 0.82), Point(0.24, 1.00), Point(0.50, 0.91)),
+                    new(Point(0.76, 1.00), Point(0.98, 0.82), Point(0.97, 0.51)),
+                    new(Point(0.96, 0.10), Point(0.65, 0.04), Point(0.50, 0.22)),
+                ],
+                true,
+                new PageBorderArtColor(AppleFillRed, 0, 0),
+                null));
+            figures.Add(new PageBorderArtCubicFigure(
+                Point(0.50, 0.30),
+                [new(Point(0.56, 0.24), Point(0.61, 0.10), Point(0.62, 0.03))],
+                false,
+                null,
+                new PageBorderArtColor(AppleStemRed, 0, 0),
+                1.35 * motif.SizeDip / 32.0,
+                true));
+            figures.Add(new PageBorderArtCubicFigure(
+                Point(0.25, 0.34),
+                [new(Point(0.15, 0.47), Point(0.15, 0.70), Point(0.22, 0.78))],
+                false,
+                null,
+                new PageBorderArtColor(AppleHighlightRed, AppleHighlightGreen, AppleHighlightBlue),
+                2.0 * motif.SizeDip / 32.0,
+                true));
+        }
+
+        return new PageBorderArtFramePlan([], [], [], figures);
+    }
+
+    private static PageBorderArtFramePlan BuildShadowedSquaresFramePlan(
+        IReadOnlyList<PageBorderShadowedSquareMotif> motifs)
+    {
+        var fills = new List<PageBorderArtFillRectangle>(motifs.Count * 6);
+        foreach (var motif in motifs)
+        {
+            var shadowSize = Math.Max(0, motif.SizeDip - 4.0);
+            fills.Add(new PageBorderArtFillRectangle(
+                motif.Xdip, motif.Ydip, shadowSize, shadowSize, 0, 0, ShadowedSquareBlue, Antialias: true));
+
+            var faceSize = Math.Max(0, motif.SizeDip - 6.0);
+            var faceX = motif.Xdip + ShadowedSquareFaceInsetDip;
+            var faceY = motif.Ydip + ShadowedSquareFaceInsetDip;
+            fills.Add(new PageBorderArtFillRectangle(
+                faceX, faceY, faceSize, faceSize, 0xFF, 0xFF, 0xFF, Antialias: true));
+
+            var outlineSize = Math.Max(0, motif.SizeDip - 4.0);
+            var outlineX = motif.Xdip + ShadowedSquareOutlineInsetDip;
+            var outlineY = motif.Ydip + ShadowedSquareOutlineInsetDip;
+            fills.Add(new PageBorderArtFillRectangle(
+                outlineX, outlineY, outlineSize, 1, 0, 0, ShadowedSquareBlue, Antialias: true));
+            fills.Add(new PageBorderArtFillRectangle(
+                outlineX, outlineY + outlineSize - 1, outlineSize, 1, 0, 0, ShadowedSquareBlue, Antialias: true));
+            fills.Add(new PageBorderArtFillRectangle(
+                outlineX, outlineY, 1, outlineSize, 0, 0, ShadowedSquareBlue, Antialias: true));
+            fills.Add(new PageBorderArtFillRectangle(
+                outlineX + outlineSize - 1, outlineY, 1, outlineSize, 0, 0, ShadowedSquareBlue, Antialias: true));
+        }
+
+        return new PageBorderArtFramePlan(fills, [], [], []);
+    }
+
+    private static PageBorderArtFramePlan BuildShorebirdTracksFramePlan(
+        IReadOnlyList<PageBorderShorebirdTrackMotif> motifs)
+    {
+        var black = new PageBorderArtColor(0, 0, 0);
+        var lines = motifs
+            .SelectMany(BuildShorebirdTrackSegments)
+            .Select(segment => new PageBorderArtStrokeLine(
+                segment,
+                ShorebirdTrackStrokeWidthDip,
+                black))
+            .ToArray();
+        return new PageBorderArtFramePlan([], [], lines, []);
+    }
+
+    private static PageBorderArtFramePlan FromFilledShapePlan(PageBorderArtFilledShapePlan plan) =>
+        new(plan.Fills, plan.Polygons, [], []);
+
+    private static PageBorderArtFramePlan FromDecorativePlan(PageBorderDecorativeArchPlan plan)
+    {
+        var figures = plan.Strokes
+            .Select(stroke => new PageBorderArtCubicFigure(
+                new PageBorderArtPoint(stroke.StartXDip, stroke.StartYDip),
+                [new PageBorderArtCubicSegment(
+                    new PageBorderArtPoint(stroke.Control1XDip, stroke.Control1YDip),
+                    new PageBorderArtPoint(stroke.Control2XDip, stroke.Control2YDip),
+                    new PageBorderArtPoint(stroke.EndXDip, stroke.EndYDip))],
+                false,
+                null,
+                new PageBorderArtColor(stroke.Red, stroke.Green, stroke.Blue),
+                stroke.WidthDip))
+            .ToArray();
+        return new PageBorderArtFramePlan(plan.Fills, [], [], figures);
+    }
+
+    private static PageBorderArtFramePlan EmptyFramePlan() => new([], [], [], []);
 
     public static bool TryBuildApplesFrame(
         int artId,
@@ -1327,14 +1577,6 @@ public static class PageBorderArtVisualPlanner
             }
         }
     }
-
-    private static void AddWhitePolygon(
-        List<PageBorderArtPolygon> polygons,
-        Func<double, double, PageBorderArtPoint> point,
-        params (double X, double Y)[] coordinates) =>
-        polygons.Add(new PageBorderArtPolygon(
-            coordinates.Select(coordinate => point(coordinate.X, coordinate.Y)).ToList(),
-            0xFF, 0xFF, 0xFF));
 
     private static void AddWeavingRibbonRail(
         List<PageBorderArtFillRectangle> fills,

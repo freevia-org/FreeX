@@ -1,9 +1,12 @@
 using System.Linq;
 using System.Windows;
+using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FileDialogFilterBuilder = Free.Shared.IO.FileDialogFilterBuilder;
+using FileFormatDialogDescriptorAdapter = Free.Shared.IO.FileFormatDialogDescriptorAdapter;
 
 namespace FreeX.App.Host;
 
@@ -92,7 +95,7 @@ public partial class MainWindow
         }
 
         var name = string.IsNullOrWhiteSpace(scenarioName)
-            ? (_workbook.Scenarios.Count == 0 ? "Scenario 1" : $"Scenario {_workbook.Scenarios.Count + 1}")
+            ? ScenarioManagerPlanner.GetDefaultScenarioName(_workbook.Scenarios.Select(scenario => scenario.Name))
             : scenarioName;
         if (name is null)
             return;
@@ -112,10 +115,11 @@ public partial class MainWindow
             }
         }
 
-        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName), "Scenario Manager"))
+        var scenarioManagerTitle = ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format);
+        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName), scenarioManagerTitle))
             return;
 
-        _messageService.ShowInfo(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count), "Scenario Manager");
+        _messageService.ShowInfo(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count), scenarioManagerTitle);
     }
 
     private bool TryParseScenarioChangingCells(string? changingCellsText, out IReadOnlyList<GridRange> ranges)
@@ -140,20 +144,17 @@ public partial class MainWindow
         if (name is null)
             return;
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, () => new ApplyScenarioCommand(name));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Scenario Manager");
+        if (!TryExecuteRepeatableCommand(
+                () => new ApplyScenarioCommand(name),
+                ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format),
+                out var outcome))
             return;
-        }
-
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
 
         // Scenario "Show" writes the changing cells' values directly (Sheet.SetCell), and Excel
         // always reflects a value change immediately regardless of calculation mode -- only
         // formula recalculation is deferred by Manual mode. RecalculateIfAutomatic above is a
         // no-op outside Automatic/AutomaticExceptDataTables mode, so it never bumps the
-        // navigation-cache revision that SparklineValueCache/StatusBarStatsCache are keyed on;
+        // navigation-cache revision that SparklineValueCache/WorkbookSelectionStatsCache are keyed on;
         // force that invalidation here so sparklines and status-bar stats over the changed cells
         // refresh immediately instead of showing pre-scenario data until an unrelated edit
         // happens to bump the revision. Mirrors the Goal Seek fix in MainWindow.DataCommands.cs.
@@ -187,13 +188,13 @@ public partial class MainWindow
         if (string.IsNullOrWhiteSpace(scenarioName))
             return;
 
-        if (!TryExecuteCommand(new DeleteScenarioCommand(scenarioName), "Scenario Manager", out var outcome))
+        var scenarioManagerTitle = ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format);
+        if (!TryExecuteCommand(new DeleteScenarioCommand(scenarioName), scenarioManagerTitle, out var outcome))
         {
-            ShowCommandError(outcome, "Scenario Manager");
+            ShowCommandError(outcome, scenarioManagerTitle);
             return;
         }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         RefreshStatusBar();
     }
@@ -207,7 +208,9 @@ public partial class MainWindow
         }
 
         var message = ScenarioManagerPlanner.FormatScenarioList(_workbook.Scenarios);
-        _messageService.ShowInfo(message, "Scenario Manager");
+        _messageService.ShowInfo(
+            message,
+            ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format));
     }
 
     private IReadOnlyList<CellAddress> ParseScenarioResultCells(string? resultCellsText)
@@ -229,8 +232,8 @@ public partial class MainWindow
                 // result, so Manual mode must not leave every scenario column reading the same
                 // stale pre-report value (Excel's own Scenario Summary always computes fresh
                 // per-scenario results).
-                (workbook, changedCells) => _recalcEngine.Recalculate(workbook, changedCells)),
-            "Scenario Manager"))
+                (_, changedCells) => _session.RecalculateChangedCellsAlways(changedCells)),
+            ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format)))
             return;
 
         var report = _workbook.Sheets.LastOrDefault();
@@ -258,10 +261,13 @@ public partial class MainWindow
     /// </summary>
     private async Task MergeScenariosFromFileAsync()
     {
+        var scenarioManagerTitle = ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format);
         var openDialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = FileDialogFilterBuilder.BuildOpenFilter(_fileAdapters),
-            Title = "Merge Scenarios",
+            Filter = FileDialogFilterBuilder.BuildOpenFilter(
+                FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(
+                    _fileAdapters.SelectMany(adapter => adapter.Formats))),
+            Title = ScenarioManagerDialogPlanner.MergeDialogTitle.Resolve(UiText.Get, UiText.Format),
             CheckFileExists = true
         };
         if (openDialog.ShowDialog(this) != true)
@@ -269,36 +275,39 @@ public partial class MainWindow
 
         if (!WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, openDialog.FileName, out var target, out _))
         {
-            _messageService.ShowInfo("The selected file could not be opened for merging scenarios.", "Scenario Manager");
+            _messageService.ShowInfo(
+                ScenarioManagerDialogPlanner.MergeOpenFailedMessage.Resolve(UiText.Get, UiText.Format),
+                scenarioManagerTitle);
             return;
         }
 
         Workbook sourceWorkbook;
         try
         {
-            var loader = new OpenWorkbookLoader(recalculateAllFormulas: _ => { });
+            var loader = new WorkbookOpenService(recalculateAllFormulas: _ => { });
             var result = await loader.LoadAsync(
                 target!.Path,
                 target.Adapter,
                 FileFormatResolver.NormalizeExtension(target.Extension),
                 target.Format,
-                new Progress<OpenProgressUpdate>(_ => { }));
+                new Progress<WorkbookOpenProgressUpdate>(_ => { }));
             sourceWorkbook = result.Workbook;
         }
         catch (Exception)
         {
-            _messageService.ShowInfo("The selected file could not be opened for merging scenarios.", "Scenario Manager");
+            _messageService.ShowInfo(
+                ScenarioManagerDialogPlanner.MergeOpenFailedMessage.Resolve(UiText.Get, UiText.Format),
+                scenarioManagerTitle);
             return;
         }
 
         var mergeCandidates = RemapScenariosBySheetName(sourceWorkbook, _workbook);
-        if (!TryExecuteCommand(new MergeScenarioCommand(mergeCandidates), "Scenario Manager", out var outcome))
+        if (!TryExecuteCommand(new MergeScenarioCommand(mergeCandidates), scenarioManagerTitle, out var outcome))
         {
-            ShowCommandError(outcome, "Scenario Manager");
+            ShowCommandError(outcome, scenarioManagerTitle);
             return;
         }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         RefreshStatusBar();
     }

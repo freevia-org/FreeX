@@ -20,13 +20,27 @@ public static class SlideCloner
 {
     // ── Public entry points ───────────────────────────────────────────────────────
 
-    /// <summary>Returns a fully independent deep copy of <paramref name="slide"/>.</summary>
-    public static Slide CloneSlide(Slide slide)
+    /// <summary>
+    /// Returns a fully independent deep copy of <paramref name="slide"/> with distinct slide,
+    /// package, modern-comment, and modern-reply identities for duplication or clipboard use.
+    /// </summary>
+    public static Slide CloneSlide(Slide slide) =>
+        CloneSlideCore(slide, createDistinctSlide: true);
+
+    /// <summary>
+    /// Returns a fully independent deep copy of <paramref name="slide"/> for an in-place edit.
+    /// All semantic identities are preserved so slide-targeting and review-thread references
+    /// remain valid while the edited model is swapped into the presentation.
+    /// </summary>
+    public static Slide CloneSlidePreservingIdentity(Slide slide) =>
+        CloneSlideCore(slide, createDistinctSlide: false);
+
+    private static Slide CloneSlideCore(Slide slide, bool createDistinctSlide)
     {
         var copy = new Slide
         {
-            Id      = Guid.NewGuid().ToString("N"), // new identity so it is truly a distinct slide
-            NumericId = null, // a duplicated slide receives a fresh package id when written
+            Id = createDistinctSlide ? Guid.NewGuid().ToString("N") : slide.Id,
+            NumericId = createDistinctSlide ? null : slide.NumericId,
             LayoutId   = slide.LayoutId,
             IsHidden   = slide.IsHidden,
             ShowMasterShapes = slide.ShowMasterShapes,
@@ -35,7 +49,7 @@ public static class SlideCloner
                 ? null
                 : new Dictionary<string, string>(slide.ColorMapOverride, StringComparer.OrdinalIgnoreCase),
             Background = slide.Background,           // ShapeFill is immutable — share reference
-            Notes      = PresentationModelCloneHelper.CloneTextBody(slide.Notes),
+            Notes      = TextBodyModelCloner.CloneTextBody(slide.Notes),
             HfVisibility = slide.HfVisibility is null ? null : new HfFlags
             {
                 ShowFooter   = slide.HfVisibility.ShowFooter,
@@ -54,21 +68,8 @@ public static class SlideCloner
             copy.Animations.Add(CloneAnimation(anim));
 
         foreach (var comment in slide.Comments)
-            copy.Comments.Add(CloneComment(comment, mintFreshModernIds: true));
+            copy.Comments.Add(CloneComment(comment, mintFreshModernIds: createDistinctSlide));
 
-        return copy;
-    }
-
-    /// <summary>
-    /// Returns a fully independent deep copy of <paramref name="slide"/> for an in-place edit.
-    /// Unlike <see cref="CloneSlide"/>, the package identity is preserved so slide-targeting
-    /// references remain valid while the edited model is swapped into the presentation.
-    /// </summary>
-    public static Slide CloneSlidePreservingIdentity(Slide slide)
-    {
-        var copy = CloneSlide(slide);
-        copy.Id = slide.Id;
-        copy.NumericId = slide.NumericId;
         return copy;
     }
 
@@ -102,7 +103,7 @@ public static class SlideCloner
             PictureFrameGeometry = shape.PictureFrameGeometry,  // Wave 26: string is immutable
             Media          = shape.Media,     // MediaInfo bytes are immutable once loaded — share reference
             LegacyFxpKind  = shape.LegacyFxpKind,
-            TextBody       = PresentationModelCloneHelper.CloneTextBody(shape.TextBody),
+            TextBody       = TextBodyModelCloner.CloneTextBody(shape.TextBody),
             Table          = shape.Table is null ? null : PresentationModelCloneHelper.CloneTable(shape.Table),
             Chart          = shape.Chart    is null ? null : CloneChart(shape.Chart),
             SmartArt       = shape.SmartArt is null ? null : CloneSmartArt(shape.SmartArt),

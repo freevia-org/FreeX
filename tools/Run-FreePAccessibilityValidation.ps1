@@ -30,33 +30,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
-
-function Invoke-External {
-    param([Parameter(Mandatory = $true)][string[]]$Arguments)
-    Push-Location $repoRoot
-    try {
-        & powershell.exe @Arguments | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw "powershell.exe exited with code $LASTEXITCODE." }
-    } finally { Pop-Location }
-}
-
-function Read-JsonFile {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    $deadline = (Get-Date).AddSeconds(60)
-    while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        Start-Sleep -Milliseconds 250
-    }
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        throw "Expected validation file was not written: $Path"
-    }
-    Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
-}
+$resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 
 New-Item -ItemType Directory -Path $resolvedOutputRoot -Force | Out-Null
 $containerName = "freex-linux-interactive-freep-$Port"
@@ -64,7 +40,7 @@ $started = $false
 try {
     $startArguments = @(
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-        "-Action", "Start", "-App", "FreeP", "-Port", "$Port",
+        "-Action", "Start", "-App", "FreeP", "-Host", "Validation", "-Port", "$Port",
         "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi",
         "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot,
         "-AppArgument", "--accessibility-validation=/work/accessibility-validation"
@@ -74,7 +50,7 @@ try {
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
 
-    Invoke-External -Arguments $startArguments
+    Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot -OutputToHost
     $started = $true
 
     # Copy the branch-local probe into the running container so a cached app image
@@ -91,12 +67,12 @@ try {
     }
 
     $sessionPath = Join-Path $resolvedOutputRoot "freep/current-session.json"
-    $session = Read-JsonFile -Path $sessionPath
+    $session = Read-VisualEvidenceJson -Path $sessionPath -TimeoutMilliseconds 60000 -PollMilliseconds 250 -MissingMessage "Expected validation file was not written: $sessionPath"
     $sessionDirectory = [IO.Path]::GetFullPath([string]$session.sessionDirectory)
     $livePath = Join-Path $sessionDirectory "accessibility-validation/live-pane-accessibility.json"
     $atSpiPath = Join-Path $sessionDirectory "accessibility-validation/atspi-result.json"
-    $live = Read-JsonFile -Path $livePath
-    $atSpi = Read-JsonFile -Path $atSpiPath
+    $live = Read-VisualEvidenceJson -Path $livePath -TimeoutMilliseconds 60000 -PollMilliseconds 250 -MissingMessage "Expected validation file was not written: $livePath"
+    $atSpi = Read-VisualEvidenceJson -Path $atSpiPath -TimeoutMilliseconds 60000 -PollMilliseconds 250 -MissingMessage "Expected validation file was not written: $atSpiPath"
     if ($live.schemaVersion -ne 1 -or $live.suite -ne "freep-live-pane-accessibility" -or
         $live.platform -ne "linux" -or $live.shell -ne "avalonia" -or $live.app -ne "FreeP") {
         throw "Invalid live FreeP accessibility manifest: $livePath"
@@ -207,10 +183,10 @@ try {
 finally {
     if ($started) {
         try {
-            Invoke-External -Arguments @(
+            Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", "FreeP", "-Port", "$Port",
-                "-OutputDir", $resolvedOutputRoot)
+                "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot -OutputToHost
         } catch { Write-Warning "Could not stop harness-owned FreeP container: $($_.Exception.Message)" }
     }
 }

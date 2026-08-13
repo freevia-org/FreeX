@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Media;
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -10,9 +11,8 @@ namespace FreeX.App.Avalonia;
 /// <c>GridView.Rendering.CellStyles.cs</c>.
 /// </summary>
 /// <remarks>
-/// Degree→StartPoint/EndPoint math is kept in a separate, UI-free static method
-/// (<see cref="LinearGradientPoints"/>) so it can be exercised by unit tests without
-/// a running Avalonia application.
+/// Gradient geometry and stop policy come from <see cref="CellFillMaterializationPlanner"/>;
+/// this type only creates native Avalonia brushes.
 /// </remarks>
 internal static class CellGradientBrush
 {
@@ -22,56 +22,55 @@ internal static class CellGradientBrush
     /// </summary>
     public static IBrush? Build(CellGradientFill gradient)
     {
-        if (gradient.Stops.Count == 0)
-            return null;
-
-        if (gradient.Type == CellGradientFillType.Path)
-            return BuildRadial(gradient);
-
-        return BuildLinear(gradient);
+        var plan = CellFillMaterializationPlanner.PlanGradient(
+            gradient,
+            EmptyCellGradientBehavior.UseFallback);
+        return plan is null ? null : Build(plan);
     }
+
+    public static IBrush Build(CellGradientMaterializationPlan plan) =>
+        plan.Kind == CellFillBackgroundKind.RadialGradient
+            ? BuildRadial(plan)
+            : BuildLinear(plan);
 
     // ── Linear ──────────────────────────────────────────────────────────────────────────────────
 
-    private static IBrush BuildLinear(CellGradientFill gradient)
+    private static IBrush BuildLinear(CellGradientMaterializationPlan gradient)
     {
-        var (start, end) = LinearGradientPoints(gradient.Degree);
-
         var brush = new LinearGradientBrush
         {
-            StartPoint = new RelativePoint(start.X, start.Y, RelativeUnit.Relative),
-            EndPoint   = new RelativePoint(end.X,   end.Y,   RelativeUnit.Relative),
+            StartPoint = new RelativePoint(gradient.Start.X, gradient.Start.Y, RelativeUnit.Relative),
+            EndPoint   = new RelativePoint(gradient.End.X, gradient.End.Y, RelativeUnit.Relative),
+            SpreadMethod = MapSpread(gradient.Spread),
         };
 
-        foreach (var stop in gradient.Stops.OrderBy(s => s.Position))
-            brush.GradientStops.Add(new GradientStop(ToColor(stop.Color), stop.Position));
+        foreach (var stop in gradient.Stops)
+            brush.GradientStops.Add(new GradientStop(ToColor(stop.Color), stop.Offset));
 
         return brush;
     }
 
     // ── Path (radial approximation) ─────────────────────────────────────────────────────────────
 
-    private static IBrush BuildRadial(CellGradientFill gradient)
+    private static IBrush BuildRadial(CellGradientMaterializationPlan gradient)
     {
         // Path gradient: inner rectangle defined by insets → approximate as radial centered on
         // the inset origin (same approximation as WPF reference).
-        var originX = gradient.Left + (1.0 - gradient.Left - gradient.Right) / 2.0;
-        var originY = gradient.Top  + (1.0 - gradient.Top  - gradient.Bottom) / 2.0;
-
         // RadiusX/RadiusY in Avalonia 12 are RelativeScalar (value + unit), analogous to
         // WPF's RadiusX/RadiusY with MappingMode=RelativeToBoundingBox. We set each to the
         // largest half-extent from the computed origin so the gradient spans the full cell —
         // same logic as the WPF reference.
         var brush = new RadialGradientBrush
         {
-            Center         = new RelativePoint(originX, originY, RelativeUnit.Relative),
-            GradientOrigin = new RelativePoint(originX, originY, RelativeUnit.Relative),
-            RadiusX        = new RelativeScalar(Math.Max(originX, 1.0 - originX), RelativeUnit.Relative),
-            RadiusY        = new RelativeScalar(Math.Max(originY, 1.0 - originY), RelativeUnit.Relative),
+            Center         = new RelativePoint(gradient.Center.X, gradient.Center.Y, RelativeUnit.Relative),
+            GradientOrigin = new RelativePoint(gradient.Origin.X, gradient.Origin.Y, RelativeUnit.Relative),
+            RadiusX        = new RelativeScalar(gradient.RadiusX, RelativeUnit.Relative),
+            RadiusY        = new RelativeScalar(gradient.RadiusY, RelativeUnit.Relative),
+            SpreadMethod   = MapSpread(gradient.Spread),
         };
 
-        foreach (var stop in gradient.Stops.OrderBy(s => s.Position))
-            brush.GradientStops.Add(new GradientStop(ToColor(stop.Color), stop.Position));
+        foreach (var stop in gradient.Stops)
+            brush.GradientStops.Add(new GradientStop(ToColor(stop.Color), stop.Offset));
 
         return brush;
     }
@@ -98,14 +97,16 @@ internal static class CellGradientBrush
     /// <returns>(start, end) in relative [0,1] coordinates.</returns>
     public static ((double X, double Y) Start, (double X, double Y) End) LinearGradientPoints(double degree)
     {
-        var radians = degree * Math.PI / 180.0;
-        var dx = Math.Cos(radians);
-        var dy = Math.Sin(radians); // positive = downward in Y-down space
-
-        var start = (X: 0.5 - 0.5 * dx, Y: 0.5 - 0.5 * dy);
-        var end   = (X: 0.5 + 0.5 * dx, Y: 0.5 + 0.5 * dy);
-        return (start, end);
+        var (start, end) = CellFillMaterializationPlanner.PlanLinearGradientAxis(degree);
+        return ((start.X, start.Y), (end.X, end.Y));
     }
+
+    private static GradientSpreadMethod MapSpread(CellGradientSpreadMode spread) =>
+        spread switch
+        {
+            CellGradientSpreadMode.Pad => GradientSpreadMethod.Pad,
+            _ => GradientSpreadMethod.Pad,
+        };
 
     private static Color ToColor(CellColor c) => Color.FromRgb(c.R, c.G, c.B);
 }

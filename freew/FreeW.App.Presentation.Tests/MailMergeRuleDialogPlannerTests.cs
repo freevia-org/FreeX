@@ -88,4 +88,171 @@ public sealed class MailMergeRuleDialogPlannerTests
         result.Name.Should().BeEmpty();
         result.Value.Should().Be("CustomerName");
     }
+
+    [Fact]
+    public void Condition_session_owns_initial_field_operator_state_and_acceptance()
+    {
+        var session = new MailMergeRuleConditionDialogSession(["City", "Region"]);
+
+        session.InitialFieldName.Should().Be("City");
+        session.ConditionOperators.Should().HaveCount(9);
+        session.IsComparisonValueEnabled.Should().BeTrue();
+
+        session.SelectOperator(6);
+
+        session.SelectedOperator.Should().Be(MergeConditionOperator.IsBlank);
+        session.IsComparisonValueEnabled.Should().BeFalse();
+        session.AcceptCondition("Region", "ignored").Should().Be(
+            new MailMergeRuleConditionDialogResult(
+                "Region",
+                MergeConditionOperator.IsBlank,
+                "ignored"));
+    }
+
+    [Fact]
+    public void Condition_session_normalizes_invalid_operator_and_null_acceptance_text()
+    {
+        var session = new MailMergeRuleConditionDialogSession(null);
+
+        session.SelectOperator(99);
+        var result = session.AcceptIf(null, null, "yes", null);
+
+        session.SelectedOperatorIndex.Should().Be(0);
+        result.Should().Be(new MailMergeRuleIfDialogResult(
+            string.Empty,
+            MergeConditionOperator.Equal,
+            string.Empty,
+            "yes",
+            string.Empty));
+    }
+
+    [Fact]
+    public void Name_value_session_rejects_blank_names_and_normalizes_accepted_names()
+    {
+        var session = new MailMergeRuleNameValueDialogSession();
+
+        session.Accept("  ", "value").Should().BeNull();
+        session.Accept("  CustomerCode  ", null).Should().Be(
+            new MailMergeRuleNameValueDialogResult("CustomerCode", string.Empty));
+    }
+
+    [Theory]
+    [InlineData(MailMergeRuleKind.IfThenElse, typeof(MailMergeRuleIfDialogRequest))]
+    [InlineData(MailMergeRuleKind.SkipRecordIf, typeof(MailMergeRuleConditionDialogRequest))]
+    [InlineData(MailMergeRuleKind.NextRecordIf, typeof(MailMergeRuleConditionDialogRequest))]
+    [InlineData(MailMergeRuleKind.FillIn, typeof(MailMergeRulePromptDialogRequest))]
+    [InlineData(MailMergeRuleKind.Ask, typeof(MailMergeRuleNameValueDialogRequest))]
+    [InlineData(MailMergeRuleKind.Set, typeof(MailMergeRuleNameValueDialogRequest))]
+    [InlineData(MailMergeRuleKind.Ref, typeof(MailMergeRulePromptDialogRequest))]
+    public void CreateRequest_ProjectsTypedLocalizedMetadata(MailMergeRuleKind kind, Type requestType)
+    {
+        var request = MailMergeRuleDialogPlanner.CreateRequest(
+            kind,
+            ["City", "Region"],
+            key => $"localized:{key}");
+
+        request.Should().BeOfType(requestType);
+        request.Kind.Should().Be(kind);
+        request.Title.Should().StartWith("localized:MailMerge_Rule_");
+        if (request is MailMergeRuleIfDialogRequest ifRequest)
+            ifRequest.FieldNames.Should().Equal("City", "Region");
+        if (request is MailMergeRuleConditionDialogRequest conditionRequest)
+            conditionRequest.FieldNames.Should().Equal("City", "Region");
+    }
+
+    [Theory]
+    [InlineData(MailMergeInteractivePromptKind.FillIn, "Fill-in", "MailMerge_Rule_FillIn_Title")]
+    [InlineData(MailMergeInteractivePromptKind.Ask, "Ask", "MailMerge_Rule_Ask_Title")]
+    public void ResolveInteractivePromptTitle_UsesExistingLocalizedRuleTitle(
+        MailMergeInteractivePromptKind kind,
+        string fallback,
+        string resourceKey)
+    {
+        MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(kind).Should().Be(fallback);
+        MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(kind, key => $"localized:{key}")
+            .Should().Be($"localized:{resourceKey}");
+    }
+
+    [Fact]
+    public void ResolveInteractivePromptTitle_RejectsUnknownPromptKind()
+    {
+        var act = () => MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(
+            (MailMergeInteractivePromptKind)99);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public async Task AuthoringWorkflow_CancelDoesNotInsert()
+    {
+        var inserted = new List<MailMergeFieldInsertionPlan>();
+        var request = MailMergeRuleDialogPlanner.CreateRequest(MailMergeRuleKind.FillIn);
+
+        var execution = await MailMergeRuleAuthoringWorkflow.RunAsync(
+            request,
+            (_, _) => ValueTask.FromResult<MailMergeRuleDialogResponse?>(null),
+            (plan, _) =>
+            {
+                inserted.Add(plan);
+                return ValueTask.CompletedTask;
+            });
+
+        execution.Should().Be(MailMergeRuleAuthoringExecution.Cancelled);
+        inserted.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(MailMergeRuleKind.IfThenElse, "IF")]
+    [InlineData(MailMergeRuleKind.SkipRecordIf, "SKIPIF")]
+    [InlineData(MailMergeRuleKind.NextRecordIf, "NEXTIF")]
+    [InlineData(MailMergeRuleKind.FillIn, "FILLIN")]
+    [InlineData(MailMergeRuleKind.Ask, "ASK")]
+    [InlineData(MailMergeRuleKind.Set, "SET")]
+    [InlineData(MailMergeRuleKind.Ref, "REF")]
+    public async Task AuthoringWorkflow_AcceptRoutesEveryRuleToOneInsertion(
+        MailMergeRuleKind kind,
+        string expectedKeyword)
+    {
+        var inserted = new List<MailMergeFieldInsertionPlan>();
+        var request = MailMergeRuleDialogPlanner.CreateRequest(kind, ["City"]);
+
+        var execution = await MailMergeRuleAuthoringWorkflow.RunAsync(
+            request,
+            (typedRequest, _) => ValueTask.FromResult<MailMergeRuleDialogResponse?>(ResponseFor(typedRequest)),
+            (plan, _) =>
+            {
+                inserted.Add(plan);
+                return ValueTask.CompletedTask;
+            });
+
+        execution.WasAccepted.Should().BeTrue();
+        execution.InsertionPlan.Should().BeSameAs(inserted.Should().ContainSingle().Subject);
+        execution.InsertionPlan!.Field.Keyword.Should().Be(expectedKeyword);
+    }
+
+    [Fact]
+    public async Task AuthoringWorkflow_RejectsResponseForDifferentRequestShape()
+    {
+        var request = MailMergeRuleDialogPlanner.CreateRequest(MailMergeRuleKind.FillIn);
+        var act = async () => await MailMergeRuleAuthoringWorkflow.RunAsync(
+            request,
+            (_, _) => ValueTask.FromResult<MailMergeRuleDialogResponse?>(
+                new MailMergeRuleConditionDialogResponse(
+                    new MailMergeRuleConditionDialogResult("City", MergeConditionOperator.Equal, "London"))),
+            (_, _) => ValueTask.CompletedTask);
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
+    private static MailMergeRuleDialogResponse ResponseFor(MailMergeRuleDialogRequest request) => request switch
+    {
+        MailMergeRuleIfDialogRequest => new MailMergeRuleIfDialogResponse(
+            new MailMergeRuleIfDialogResult("City", MergeConditionOperator.Equal, "London", "Local", "Remote")),
+        MailMergeRuleConditionDialogRequest => new MailMergeRuleConditionDialogResponse(
+            new MailMergeRuleConditionDialogResult("City", MergeConditionOperator.Equal, "London")),
+        MailMergeRulePromptDialogRequest => new MailMergeRulePromptDialogResponse("CustomerCode"),
+        MailMergeRuleNameValueDialogRequest => new MailMergeRuleNameValueDialogResponse(
+            new MailMergeRuleNameValueDialogResult("CustomerCode", "Enter code")),
+        _ => throw new ArgumentOutOfRangeException(nameof(request)),
+    };
 }

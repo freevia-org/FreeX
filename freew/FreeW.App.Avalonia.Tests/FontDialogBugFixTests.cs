@@ -4,7 +4,9 @@ using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
+using static FreeW.App.Avalonia.Tests.DialogWorkflowResultFactory;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -77,7 +79,7 @@ public sealed class FontDialogBugFixTests
 
         var original = RunFormatting.Default;
         // Simulate the user typing "Cambria" (not in FamilyPresets).
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: "Cambria", SizePt: null,
             Bold: false, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,
@@ -104,7 +106,7 @@ public sealed class FontDialogBugFixTests
 
         var original = RunFormatting.Default;
         // 13pt is not in SizeLadder, but must be applied.
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null, SizePt: 13.0,
             Bold: false, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,
@@ -132,7 +134,7 @@ public sealed class FontDialogBugFixTests
         {
             // 13pt is not in SizeLadder — the dialog must display "13" in the size box.
             var runFmt = new RunFormatting { FontSizePt = 13.0 };
-            var sel = new DocumentView.SelectionFormatting(runFmt, ParagraphFormatting.Default);
+            var sel = new FontDialogSelectionState(runFmt);
             var dlg = new FontDialog(sel);
             dlg.Measure(new Size(500, 500));
 
@@ -228,7 +230,7 @@ public sealed class FontDialogBugFixTests
 
         var original = RunFormatting.Default;
         // Bold = null → indeterminate, user did not change it.
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: null, SizePt: null,
             Bold: null, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,
@@ -285,7 +287,7 @@ public sealed class FontDialogBugFixTests
         view.SelectAll();
 
         var original = RunFormatting.Default; // Bold=false, FontFamily=null, FontSizePt=null
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: "Arial", SizePt: 18.0,
             Bold: true, Italic: false, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,
@@ -329,7 +331,7 @@ public sealed class FontDialogBugFixTests
         view.SelectAll();
 
         var original = RunFormatting.Default;
-        var result = new FontDialog.FontDialogResult(
+        var result = FontResult(
             Family: "Georgia", SizePt: 14.0,
             Bold: false, Italic: true, Underline: false, Strikethrough: false,
             VerticalAlign: VerticalAlign.Baseline,

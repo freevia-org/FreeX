@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.App.Presentation;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -26,7 +27,7 @@ public sealed partial class ColorPickerDialogTests
     [InlineData("33,115,70", 33, 115, 70)]
     public void TryParseColorText_AcceptsHexAndRgbTriples(string text, byte r, byte g, byte b)
     {
-        ColorPickerDialog.TryParseColorText(text, out var color).Should().BeTrue();
+        ColorInputParser.TryParseColorText(text, out var color).Should().BeTrue();
 
         color.Should().Be(new CellColor(r, g, b));
     }
@@ -39,7 +40,7 @@ public sealed partial class ColorPickerDialogTests
     [InlineData("red")]
     public void TryParseColorText_RejectsInvalidColorText(string text)
     {
-        ColorPickerDialog.TryParseColorText(text, out var color).Should().BeFalse();
+        ColorInputParser.TryParseColorText(text, out var color).Should().BeFalse();
 
         color.Should().Be(default(CellColor));
     }
@@ -55,7 +56,7 @@ public sealed partial class ColorPickerDialogTests
         byte green,
         byte blue)
     {
-        ColorPickerDialog.TryParseRgbComponents(redText, greenText, blueText, out var color).Should().BeTrue();
+        ColorInputParser.TryParseRgbComponents(redText, greenText, blueText, out var color).Should().BeTrue();
 
         color.Should().Be(new CellColor(red, green, blue));
     }
@@ -67,7 +68,7 @@ public sealed partial class ColorPickerDialogTests
     [InlineData("", "0", "0")]
     public void TryParseRgbComponents_RejectsInvalidComponents(string redText, string greenText, string blueText)
     {
-        ColorPickerDialog.TryParseRgbComponents(redText, greenText, blueText, out var color).Should().BeFalse();
+        ColorInputParser.TryParseRgbComponents(redText, greenText, blueText, out var color).Should().BeFalse();
 
         color.Should().Be(default(CellColor));
     }

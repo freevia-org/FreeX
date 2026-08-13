@@ -52,12 +52,12 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("UiText.Get(\"FormatPicture_CropUnavailableMessage\")");
         drawingSource.Should().Contain("new FormatPictureDialog(picture)");
         drawingSource.Should().Contain("CreateFormatPictureCommand");
-        drawingSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildPictureFormatCommands(sheetId, picture, pictureResult)");
+        drawingSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildPictureFormatCommand(");
         drawingSource.Should().NotContain("new SetPictureLockAspectRatioCommand");
         drawingSource.Should().NotContain("DrawingObjectCommandPlanner.BuildResizeCommand(sheetId, DrawingObjectTargetKind.Picture");
         drawingSource.Should().NotContain("DrawingObjectCommandPlanner.BuildRotateCommand(sheetId, DrawingObjectTargetKind.Picture");
         drawingSource.Should().NotContain("DrawingObjectCommandPlanner.BuildAltTextCommand(sheetId, DrawingObjectTargetKind.Picture");
-        drawingSource.Should().Contain("new CompositeWorkbookCommand(\"Format Picture\", commands)");
+        drawingSource.Should().NotContain("new CompositeWorkbookCommand(");
     }
 
     [Fact]

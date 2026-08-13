@@ -272,3 +272,60 @@ public sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
         }
     }
 }
+
+/// <summary>Updates footnote and endnote numbering settings as one undoable model edit.</summary>
+public sealed class SetNoteNumberingOptionsCommand(
+    NoteNumberFormat footnoteFormat,
+    int footnoteStartAt,
+    NoteNumberRestart footnoteRestart,
+    NoteNumberFormat endnoteFormat,
+    int endnoteStartAt,
+    NoteNumberRestart endnoteRestart) : IDocumentCommand
+{
+    private (NoteNumberFormat Format, int StartAt, NoteNumberRestart Restart) _previousFootnote;
+    private (NoteNumberFormat Format, int StartAt, NoteNumberRestart Restart) _previousEndnote;
+    private bool _applied;
+
+    public string Label => "Footnote and Endnote Options";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        _previousFootnote = Snapshot(context.Document.FootnoteNumbering);
+        _previousEndnote = Snapshot(context.Document.EndnoteNumbering);
+        Apply(context.Document.FootnoteNumbering, footnoteFormat, footnoteStartAt, footnoteRestart);
+        Apply(context.Document.EndnoteNumbering, endnoteFormat, endnoteStartAt, endnoteRestart);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied)
+            return;
+
+        Apply(
+            context.Document.FootnoteNumbering,
+            _previousFootnote.Format,
+            _previousFootnote.StartAt,
+            _previousFootnote.Restart);
+        Apply(
+            context.Document.EndnoteNumbering,
+            _previousEndnote.Format,
+            _previousEndnote.StartAt,
+            _previousEndnote.Restart);
+        _applied = false;
+    }
+
+    private static (NoteNumberFormat, int, NoteNumberRestart) Snapshot(NoteNumberingOptions options) =>
+        (options.NumberFormat, options.StartAt, options.NumberRestart);
+
+    private static void Apply(
+        NoteNumberingOptions options,
+        NoteNumberFormat format,
+        int startAt,
+        NoteNumberRestart restart)
+    {
+        options.NumberFormat = format;
+        options.StartAt = startAt;
+        options.NumberRestart = restart;
+    }
+}

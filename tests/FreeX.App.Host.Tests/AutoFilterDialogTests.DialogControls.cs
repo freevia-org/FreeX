@@ -168,10 +168,11 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("private readonly CheckBox _selectAllBox");
         source.Should().Contain("Content = UiText.Get(\"AutoFilter_SelectAll\")");
         source.Should().Contain("IsThreeState = true");
-        source.Should().Contain("SetSelectionForVisibleItems");
+        source.Should().Contain("AutoFilterDialogCriteriaPlanner.SetSelectionForSearch");
         source.Should().Contain("UpdateSelectAllBoxState");
         source.Should().Contain("ApplySearchTextChange");
-        source.Should().Contain("_addCurrentSelectionToFilterBox.Visibility = hasSearchText");
+        source.Should().Contain("AutoFilterMenuPlanner.PlanChecklistState(_allItems, _searchBox.Text)");
+        source.Should().Contain("_addCurrentSelectionToFilterBox.Visibility = state.IsAddCurrentSelectionVisible");
         source.Should().NotContain("private readonly RadioButton _sortNone");
         source.Should().NotContain("var selectionRow = new StackPanel");
         source.Should().NotContain("UiText.Get(\"AutoFilter_ClearAll\")");
@@ -219,8 +220,8 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("FindClearFilterEntry(menuPlan)");
         source.Should().Contain("SetSortLabels(menuPlan)");
         source.Should().Contain("ShowFilterFamilyButton(menuPlan.FilterKind)");
-        source.Should().Contain("GetCriteriaSuggestions(menuPlan)");
-        source.Should().Contain("GetCriteriaOptions(menuPlan.FilterKind)");
+        source.Should().Contain("AutoFilterDialogCriteriaPlanner.GetCriteriaSuggestions(menuPlan)");
+        source.Should().Contain("AutoFilterMenuPlanner.CreateCriteriaOptions(menuPlan.FilterKind");
         source.Should().Contain("ConfigureFilterFamilySubmenu(menuPlan)");
         source.Should().Contain("PopulateColorChoices(colorOptions)");
         source.Should().NotContain("AutoFilterMenuEntryPresentation.ForKind");
@@ -312,7 +313,7 @@ public sealed partial class AutoFilterDialogTests
 
         source.Should().Contain("_filterByColorGroup");
         source.Should().Contain("Header = UiText.Get(\"AutoFilter_FilterByColor2\")");
-        source.Should().Contain("colorOptions.Count > 0 && HasFilterByColorEntry(menuPlan)");
+        source.Should().Contain("colorOptions.Count > 0 && AutoFilterDialogCriteriaPlanner.HasFilterByColorEntry(menuPlan)");
         source.Should().Contain("PopulateColorChoices");
         source.Should().Contain("UiText.Get(\"AutoFilter_CellColor\")");
         source.Should().Contain("UiText.Get(\"AutoFilter_FontColor\")");
@@ -340,7 +341,7 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("Keyboard.Focus(button);");
         source.Should().Contain("button.Click += (_, _) => ApplyColorChoice(colorFilter);");
         source.Should().Contain("private void ApplyColorChoice(AutoFilterColorFilter colorFilter)");
-        source.Should().Contain("Result = BuildResult(");
+        source.Should().Contain("CommitResult(AutoFilterDialogCriteriaPlanner.BuildResult(");
         source.Should().Contain("colorFilter,");
         source.Should().Contain("DialogResult = true;");
         source.Should().NotContain("button.Click += (_, _) => _selectedColorFilter = colorFilter;");

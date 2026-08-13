@@ -62,7 +62,8 @@ public sealed record PrintSelection(
     int Copies = 1,
     PrintPageRange? PageRange = null,
     PrintOrientation Orientation = PrintOrientation.Document,
-    bool Collate = true)
+    bool Collate = true,
+    string? JobTitle = null)
 {
     public PrintPageRange EffectivePageRange => PageRange ?? PrintPageRange.All;
 
@@ -109,7 +110,9 @@ public sealed record PrintSubmissionResult(
     PrintSubmissionStatus Status,
     string? PrinterName,
     string? JobDescription = null,
-    string? Message = null)
+    string? Message = null,
+    int? NativeExitCode = null,
+    int? NativeErrorCode = null)
 {
     public bool Succeeded => Status == PrintSubmissionStatus.Submitted;
 }

@@ -2,56 +2,61 @@ using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
-using Avalonia.Media;
-using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
 internal sealed class SummaryZoomDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private readonly SummaryZoomDialogSession _session;
     private readonly ListBox _targetList;
-    private readonly ObservableCollection<TargetOption> _items;
+    private readonly ObservableCollection<ZoomTargetOption> _items;
 
-    internal IReadOnlyList<string> SelectedTargetSectionIds { get; private set; } = Array.Empty<string>();
+    internal IReadOnlyList<string> SelectedTargetSectionIds => _session.SelectedTargetIds;
 
     internal SummaryZoomDialog(
         IReadOnlyList<(string Id, string DisplayName)> options,
         string? title = null,
         IReadOnlyCollection<string>? selectedTargetIds = null)
     {
-        ArgumentNullException.ThrowIfNull(options);
-        Title = title ?? SummaryZoomInsertionPlanner.DialogTitle;
+        _session = new SummaryZoomDialogSession(options, selectedTargetIds, title);
+        var surface = _session.Surface;
+        Title = surface.Title;
         Width = 460;
         Height = 360;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        AvaloniaCompactDialogChrome.ApplyWindow(this, DialogChromeStyle);
+        ZoomDialogChrome.Apply(this, surface);
 
-        _items = new ObservableCollection<TargetOption>(
-            options.Select(option => new TargetOption(option.Id, option.DisplayName)));
+        _items = new ObservableCollection<ZoomTargetOption>(_session.Options);
         _targetList = new ListBox
         {
             ItemsSource = _items,
             SelectionMode = SelectionMode.Multiple,
             Height = 210,
         };
+        ZoomDialogChrome.ApplyField(_targetList, surface.Field(ZoomTargetDialogField.Target));
         foreach (var item in _items)
-            if (selectedTargetIds?.Contains(item.Id, StringComparer.OrdinalIgnoreCase) == true)
+            if (_session.InitialSelectedTargetIds.Contains(item.Id, StringComparer.OrdinalIgnoreCase))
                 _targetList.SelectedItems?.Add(item);
 
-        var moveUp = MakeButton("Move Up", false, () => MoveSelected(_items, -1));
-        var moveDown = MakeButton("Move Down", false, () => MoveSelected(_items, 1));
-        var ok = MakeButton("OK", true, Apply);
-        ok.IsEnabled = _items.Count >= 2;
+        var moveUp = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.MoveUp),
+            () => MoveSelected(_items, -1));
+        var moveDown = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.MoveDown),
+            () => MoveSelected(_items, 1));
+        var ok = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Accept),
+            Apply,
+            _session.CanAccept);
         Content = new StackPanel
         {
             Margin = new Thickness(14),
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "Target sections (select at least two):" },
+                new TextBlock { Text = surface.Field(ZoomTargetDialogField.Target).Label },
                 _targetList,
                 new StackPanel
                 {
@@ -64,7 +69,13 @@ internal sealed class SummaryZoomDialog : Window
                     Orientation = Orientation.Horizontal,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     Spacing = 8,
-                    Children = { ok, MakeButton("Cancel", false, () => Close(false)) },
+                    Children =
+                    {
+                        ok,
+                        ZoomDialogChrome.MakeButton(
+                            surface.Action(ZoomTargetDialogAction.Cancel),
+                            () => Close(false)),
+                    },
                 },
             },
         };
@@ -73,44 +84,23 @@ internal sealed class SummaryZoomDialog : Window
     private void Apply()
     {
         var selectedIds = _targetList.SelectedItems?
-            .OfType<TargetOption>()
+            .OfType<ZoomTargetOption>()
             .Select(option => option.Id)
             .ToArray() ?? Array.Empty<string>();
-        var selected = SummaryZoomTargetPlanner.SelectOrderedTargets(
-            _items.Select(option => option.Id),
-            selectedTargetIds: selectedIds);
-        if (selected.Count >= 2)
-        {
-            SelectedTargetSectionIds = selected;
+        if (_session.TryAccept(selectedIds))
             Close(true);
-        }
     }
 
-    private void MoveSelected(ObservableCollection<TargetOption> items, int delta)
+    private void MoveSelected(ObservableCollection<ZoomTargetOption> items, int delta)
     {
-        var selected = _targetList.SelectedItems?.OfType<TargetOption>().ToArray();
-        if (selected is not { Length: 1 })
+        var selectedIds = _targetList.SelectedItems?
+            .OfType<ZoomTargetOption>()
+            .Select(option => option.Id)
+            .ToArray() ?? Array.Empty<string>();
+        if (!_session.TryMoveSelected(selectedIds, delta, out var plan))
             return;
 
-        var index = items.IndexOf(selected[0]);
-        var targetIndex = index + delta;
-        if (index < 0 || targetIndex < 0 || targetIndex >= items.Count)
-            return;
-
-        items.Move(index, targetIndex);
-        _targetList.SelectedItem = selected[0];
-    }
-
-    private static Button MakeButton(string label, bool isDefault, Action action)
-    {
-        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
-        button.Click += (_, _) => action();
-        return button;
-    }
-
-    private sealed record TargetOption(string Id, string DisplayName)
-    {
-        public override string ToString() => DisplayName;
+        items.Move(plan!.FromIndex, plan.ToIndex);
+        _targetList.SelectedItem = items[plan.ToIndex];
     }
 }

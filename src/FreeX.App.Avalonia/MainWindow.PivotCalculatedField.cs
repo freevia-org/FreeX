@@ -4,9 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 
 using Free.Shared.Shell.Avalonia;
-using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.PivotUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -20,7 +18,7 @@ namespace FreeX.App.Avalonia;
 /// reference list, the name/formula validation, the formula-token insertion, and the add/modify/delete rebuild
 /// of the pivot's calculated-field list come from the portable <see cref="PivotCalculatedFieldPlanner"/> so the
 /// behavior is single-sourced with the WPF host and reusable on macOS. The rebuilt list round-trips through
-/// <see cref="ConfigurePivotTableCalculatedItemsCommand"/> (the same command the desktop host uses), carrying
+/// the shared Pivot application session (the same command policy the desktop host uses), carrying
 /// the row/column/page fields and calculated items untouched. Reached from the Analyze ▸ Fields, Items &amp;
 /// Sets ▸ Calculated Field ribbon command (<c>pivotAnalyze.calculatedField</c>).
 /// </summary>
@@ -40,9 +38,14 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving)
             return;
 
-        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
-        var references = PivotCalculatedFieldPlanner.AvailableFieldReferences(headers);
-        var existingNames = PivotCalculatedFieldPlanner.ExistingFieldNames(pivot);
+        var headers = PivotApplication.ReadSourceHeaders(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot));
+        var workflowText = PivotCalculatedFieldSessionText.Default with
+        {
+            SavedStatusFormat = UiText.Get("PivotCalcField_Saved"),
+            DeletedStatusFormat = UiText.Get("PivotCalcField_Deleted")
+        };
+        var calculatedFieldSession = PivotCalculatedFieldSession.Create(pivot, headers, workflowText);
 
         var nameBox = new TextBox { MinWidth = 260 };
         ApplyPivotTextBoxChrome(nameBox);
@@ -65,7 +68,7 @@ public sealed partial class MainWindow
         var existingBox = new ComboBox { MinWidth = 260 };
         ApplyPivotComboBoxChrome(existingBox);
         existingBox.Items.Add(UiText.Get("PivotCalcField_ExistingNone"));
-        foreach (var name in existingNames)
+        foreach (var name in calculatedFieldSession.ExistingNames)
             existingBox.Items.Add(name);
         existingBox.SelectedIndex = 0;
         AutomationProperties.SetAutomationId(existingBox, "PivotCalcFieldExistingBox");
@@ -73,26 +76,19 @@ public sealed partial class MainWindow
 
         existingBox.SelectionChanged += (_, _) =>
         {
-            if (existingBox.SelectedIndex <= 0)
-            {
-                nameBox.Text = string.Empty;
-                formulaBox.Text = "= ";
-                return;
-            }
-
-            var match = PivotCalculatedFieldPlanner.FindByName(pivot, existingNames[existingBox.SelectedIndex - 1]);
-            if (match is not null)
-            {
-                nameBox.Text = match.Name;
-                formulaBox.Text = match.Formula;
-            }
+            var selectedName = existingBox.SelectedIndex > 0
+                ? calculatedFieldSession.ExistingNames[existingBox.SelectedIndex - 1]
+                : null;
+            var draft = calculatedFieldSession.SelectExisting(selectedName);
+            nameBox.Text = draft.Name;
+            formulaBox.Text = draft.Formula;
         };
 
         var fieldsList = new ListBox { Height = 96 };
         ApplyPivotListBoxChrome(fieldsList);
-        foreach (var reference in references)
+        foreach (var reference in calculatedFieldSession.FieldReferences)
             fieldsList.Items.Add(reference);
-        if (references.Count > 0)
+        if (calculatedFieldSession.FieldReferences.Count > 0)
             fieldsList.SelectedIndex = 0;
         AutomationProperties.SetAutomationId(fieldsList, "PivotCalcFieldReferenceList");
         AutomationProperties.SetName(fieldsList, UiText.Get("PivotCalcField_FieldsAutomation"));
@@ -105,8 +101,11 @@ public sealed partial class MainWindow
             if (fieldsList.SelectedItem is not string reference)
                 return;
 
-            var (text, caret) = PivotCalculatedFieldPlanner.InsertReference(
-                formulaBox.Text, reference, formulaBox.SelectionStart, SelectionLength(formulaBox));
+            calculatedFieldSession.UpdateDraft(nameBox.Text, formulaBox.Text);
+            var (text, caret) = calculatedFieldSession.InsertReference(
+                reference,
+                formulaBox.SelectionStart,
+                SelectionLength(formulaBox));
             formulaBox.Text = text;
             formulaBox.Focus();
             formulaBox.SelectionStart = caret;
@@ -137,31 +136,31 @@ public sealed partial class MainWindow
         ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotCalcFieldCancelButton");
 
-        // Outcome carried out of the dialog: Save (upsert) or Delete; null means cancel.
-        PivotCalcFieldOutcome? outcome = null;
+        PivotCalculatedFieldSubmission? submission = null;
 
         cancel.Click += (_, _) => dialog.Close(false);
         save.Click += (_, _) =>
         {
-            if (!PivotCalculatedFieldPlanner.TryCreateResult(nameBox.Text, formulaBox.Text, out var result, out var error))
+            var plan = calculatedFieldSession.PlanSave(nameBox.Text, formulaBox.Text);
+            if (!plan.Success)
             {
-                ShowEditIssue(error ?? PivotCalculatedFieldPlanner.EmptyNameMessage);
+                ShowEditIssue(plan.Issue!.Message);
                 return;
             }
 
-            outcome = new PivotCalcFieldOutcome(IsDelete: false, result, result!.Name);
+            submission = plan.Submission;
             dialog.Close(true);
         };
         delete.Click += (_, _) =>
         {
-            var name = (nameBox.Text ?? string.Empty).Trim();
-            if (name.Length == 0)
+            var plan = calculatedFieldSession.PlanDelete(nameBox.Text);
+            if (!plan.Success)
             {
-                ShowEditIssue(PivotCalculatedFieldPlanner.NoFieldToDeleteMessage);
+                ShowEditIssue(plan.Issue!.Message);
                 return;
             }
 
-            outcome = new PivotCalcFieldOutcome(IsDelete: true, null, name);
+            submission = plan.Submission;
             dialog.Close(true);
         };
 
@@ -186,23 +185,17 @@ public sealed partial class MainWindow
         ConfigurePivotDialogLifecycle(dialog, nameBox, selectAllText: true);
 
         var confirmed = await dialog.ShowDialog<bool>(this);
-        if (!confirmed || outcome is null)
+        if (!confirmed || submission is null)
             return;
 
-        if (outcome.IsDelete)
+        var commit = calculatedFieldSession.Commit(submission);
+        if (!commit.Success)
         {
-            if (!PivotCalculatedFieldPlanner.TryRemove(pivot, outcome.Name, out var remaining, out var removeError))
-            {
-                ShowEditIssue(removeError ?? PivotCalculatedFieldPlanner.NoFieldToDeleteMessage);
-                return;
-            }
-
-            ApplyPivotCalculatedFields(pivot, remaining, UiText.Format("PivotCalcField_Deleted", outcome.Name));
+            ShowEditIssue(commit.Issue!.Message);
             return;
         }
 
-        var updated = PivotCalculatedFieldPlanner.Upsert(pivot, outcome.Result!);
-        ApplyPivotCalculatedFields(pivot, updated, UiText.Format("PivotCalcField_Saved", outcome.Name));
+        ApplyPivotCalculatedFields(pivot, commit.CalculatedFields, commit.Status ?? string.Empty);
     }
 
     private void ApplyPivotCalculatedFields(
@@ -210,21 +203,16 @@ public sealed partial class MainWindow
         IReadOnlyList<PivotCalculatedFieldModel> calculatedFields,
         string status)
     {
-        var command = new ConfigurePivotTableCalculatedItemsCommand(
-            _session.ActiveSheet.Id,
-            pivot.Name,
-            pivot.RowFields.ToList(),
-            pivot.ColumnFields.ToList(),
-            pivot.PageFields.ToList(),
-            calculatedFields,
-            pivot.CalculatedItems.ToList());
-        ExecutePivotTabCommand(command, status);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanCalculatedConfiguration(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                pivot.RowFields.ToList(),
+                pivot.ColumnFields.ToList(),
+                pivot.PageFields.ToList(),
+                calculatedFields,
+                pivot.CalculatedItems.ToList()),
+            status);
     }
 
     private static int SelectionLength(TextBox box) => Math.Abs(box.SelectionEnd - box.SelectionStart);
-
-    private sealed record PivotCalcFieldOutcome(
-        bool IsDelete,
-        PivotCalculatedFieldPlanner.PivotCalculatedFieldResult? Result,
-        string Name);
 }

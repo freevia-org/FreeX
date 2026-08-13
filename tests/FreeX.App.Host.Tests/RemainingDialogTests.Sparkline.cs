@@ -233,7 +233,7 @@ public sealed partial class RemainingDialogTests
         var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
 
         source.Should().Contain("if (!ValidateInputs())");
-        source.Should().Contain("SparklinePlanner.ValidateDialogInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId)");
+        source.Should().Contain("SparklinePlanner.ValidateInsertGroup(_dataRangeBox.Text, _locationBox.Text, _sheetId, out _)");
         source.Should().NotContain("SparklineDialogPlanner");
         source.Should().Contain("SparklineInputValidation.InvalidDataRange");
         source.Should().Contain("SparklineInputValidation.InvalidLocation");

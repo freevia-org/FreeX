@@ -9,35 +9,136 @@ public static class AtomicFileWriter
 
     public static void WriteAllText(string path, string content)
     {
-        var directory = Path.GetDirectoryName(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(content);
+
+        Write(path, stream =>
+        {
+            using var writer = new StreamWriter(
+                stream,
+                new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                leaveOpen: true);
+            writer.Write(content);
+            writer.Flush();
+        });
+    }
+
+    public static void WriteAllBytes(string path, byte[] bytes)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(bytes);
+
+        Write(path, stream => stream.Write(bytes, 0, bytes.Length));
+    }
+
+    /// <summary>
+    /// Writes bytes through a sibling temporary file and leaves the destination unchanged when
+    /// cancellation or an error occurs before replacement.
+    /// </summary>
+    public static async Task WriteAllBytesAsync(
+        string path,
+        byte[] bytes,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(bytes);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var fullTargetPath = Path.GetFullPath(path);
+        var directory = Path.GetDirectoryName(fullTargetPath);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        var tempPath = "";
-        try
+        using var temporaryFile = CreateTempLease(fullTargetPath);
+        await using (var stream = temporaryFile.OpenWrite(useAsync: true))
         {
-            tempPath = CreateUniqueTempPath(path, directory);
+            await stream.WriteAsync(bytes.AsMemory(), cancellationToken).ConfigureAwait(false);
+            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
 
-            // Write via an explicit FileStream so we can flush to disk before renaming.
-            // File.WriteAllText returns before data is durably on disk; a power loss after
-            // the subsequent File.Move could leave a renamed-but-truncated file at the target
-            // path. Flush(flushToDisk: true) syncs OS buffers to storage before we move.
-            // Use UTF-8 without BOM to match File.WriteAllText(path, content) default behavior.
-            using (var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
-            using (var writer = new StreamWriter(fs, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true))
+            if (stream is FileStream fileStream)
+                fileStream.Flush(flushToDisk: true);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        ReplaceTarget(temporaryFile.Path, fullTargetPath);
+        temporaryFile.Commit();
+    }
+
+    /// <summary>
+    /// Creates a unique, non-existent temporary path alongside <paramref name="targetPath"/>.
+    /// The caller owns cleanup until <see cref="ReplaceTarget"/> succeeds.
+    /// </summary>
+    public static string CreateTempPath(string targetPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+
+        var fullTargetPath = Path.GetFullPath(targetPath);
+        return CreateUniqueTempPath(fullTargetPath, Path.GetDirectoryName(fullTargetPath));
+    }
+
+    /// <summary>
+    /// Reserves and owns a unique temporary file alongside <paramref name="targetPath"/>.
+    /// Committing after <see cref="ReplaceTarget"/> prevents a redundant cleanup attempt.
+    /// </summary>
+    public static TemporaryFileLease CreateTempLease(string targetPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+
+        var fullTargetPath = Path.GetFullPath(targetPath);
+        var directory = Path.GetDirectoryName(fullTargetPath);
+        var tempDirectory = string.IsNullOrEmpty(directory) ? "." : directory;
+        return TemporaryFileLease.Create(
+            $".{Path.GetFileName(fullTargetPath)}.",
+            ".tmp",
+            tempDirectory);
+    }
+
+    /// <summary>
+    /// Replaces <paramref name="destinationPath"/> with a completed sibling temp file.
+    /// </summary>
+    public static void ReplaceTarget(string sourceTempPath, string destinationPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceTempPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
+
+        if (File.Exists(destinationPath))
+        {
+            try
             {
-                writer.Write(content);
-                writer.Flush();
-                fs.Flush(flushToDisk: true);
+                File.Replace(sourceTempPath, destinationPath, null, ignoreMetadataErrors: true);
+                return;
             }
+            catch (Exception ex) when (IsUnsupportedReplaceFailure(ex))
+            {
+                // Some platforms and file systems do not support Replace; Move still keeps the
+                // completed temp payload separate from the destination until the final operation.
+            }
+        }
 
-            File.Move(tempPath, path, overwrite: true);
-        }
-        finally
+        File.Move(sourceTempPath, destinationPath, overwrite: true);
+    }
+
+    private static void Write(string targetPath, Action<Stream> writePayload)
+    {
+        var fullTargetPath = Path.GetFullPath(targetPath);
+        var directory = Path.GetDirectoryName(fullTargetPath);
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(directory);
+
+        using var temporaryFile = CreateTempLease(fullTargetPath);
+        using (var stream = temporaryFile.OpenWrite())
         {
-            if (tempPath.Length > 0 && File.Exists(tempPath))
-                File.Delete(tempPath);
+            writePayload(stream);
+            if (stream is FileStream fileStream)
+                fileStream.Flush(flushToDisk: true);
+            else
+                stream.Flush();
         }
+
+        ReplaceTarget(temporaryFile.Path, fullTargetPath);
+        temporaryFile.Commit();
     }
 
     private static string CreateUniqueTempPath(
@@ -62,4 +163,19 @@ public static class AtomicFileWriter
 
     private static bool TempArtifactExists(string path) =>
         File.Exists(path) || Directory.Exists(path);
+
+    private static bool IsUnsupportedReplaceFailure(Exception exception)
+    {
+        if (exception is PlatformNotSupportedException or NotSupportedException)
+            return true;
+
+        if (exception is IOException ioException)
+        {
+            var errorCode = ioException.HResult & 0xFFFF;
+            return errorCode is 38 or 45 or 50 or 95;
+        }
+
+        return false;
+    }
+
 }

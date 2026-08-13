@@ -29,7 +29,7 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
         // merge keeps rendering instead of leaving a blank hole. See
         // AvaloniaMainWindowGridRenderStage1Tests for full J4 coverage.
         source.Should().Contain(
-            "ResolveVisibleMergeAnchor(merge, rowIndexByRow, colIndexByCol) is { } visibleAnchor",
+            "ViewportGeometryPlanner.ResolveVisibleMergeAnchor(merge, rowMetrics, colMetrics) is { } visibleAnchor",
             "non-anchor member cells of a merge must be detected via the visible-anchor resolver (which falls back past a scrolled-off true anchor), not a plain merge.Start comparison");
         source.Should().Contain(
             "continue;",
@@ -41,13 +41,13 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
     {
         var source = MainWindowSource();
 
-        source.Should().Contain("ResolveVisibleMergeSpan(");
+        source.Should().Contain("ViewportGeometryPlanner.CalculateVisibleMergeSpan(");
         source.Should().Contain("AvaloniaGrid.SetRowSpan(cellControl, rowSpan)");
         source.Should().Contain("AvaloniaGrid.SetColumnSpan(cellControl, colSpan)");
     }
 
     [Fact]
-    public void ResolveVisibleMergeSpan_SumsHeightAndWidthAcrossTheMerge()
+    public void ResolveVisibleMergeSpan_IsOwnedByPortableGeometryPlanner()
     {
         // ResolveVisibleMergeSpan must feed the anchor's own summed dimensions into CreateCell so
         // alignment/ShrinkToFit measurement operates on the FULL merged rectangle, not just the
@@ -58,11 +58,12 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
         // (see AvaloniaMainWindowSplitPaneRtlTests) instead of always the main pane's
         // viewport.RowMetrics/ColMetrics. See AvaloniaMainWindowSplitPaneRtlTests for the split
         // coverage this enables.
-        var method = ExtractMethod("private static (int RowSpan, int ColSpan, double Height, double Width) ResolveVisibleMergeSpan(", "private Canvas BuildDrawingObjectOverlay(");
+        var source = MainWindowSource();
 
-        method.Should().Contain("height += GetDisplayedRowHeight(rowMetrics[nextRowIndex], zoomFactor);");
-        method.Should().Contain("width += GetDisplayedColumnWidth(colMetrics[nextColIndex], zoomFactor);");
-        method.Should().Contain("return (rowSpan, colSpan, height, width);");
+        source.Should().Contain("ViewportGeometryPlanner.CalculateVisibleMergeSpan(");
+        source.Should().Contain("mergeSpan.RowSpan");
+        source.Should().Contain("mergeSpan.ColumnSpan");
+        source.Should().NotContain("private static (int RowSpan, int ColSpan, double Height, double Width) ResolveVisibleMergeSpan(");
     }
 
     // ── H55: selection highlight must expand to the full merge bounds ────────────────────────
@@ -94,7 +95,7 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
         var source = MainWindowSource();
 
         source.Should().Contain(
-            "if (style?.ShrinkToFit == true && textWrapping != TextWrapping.Wrap && !isFillAlign && !CellRichTextInlinesBuilder.HasRuns(richRuns))",
+            "if (style?.ShrinkToFit == true && textWrapping != TextWrapping.Wrap && !isFillAlign && !textMaterialization.HasRichText)",
             "Shrink to fit must be gated the same way Excel gates it: off when WrapText is on, and independent of Fill alignment / rich runs");
         source.Should().Contain("adjustedFontSize = ResolveShrinkToFitFontSize(effectiveText, fontWeight, fontStyle, adjustedFontSize, availableWidth);");
     }
@@ -107,8 +108,9 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
             "private void AddSelectionOverlayToGrid(");
 
         method.Should().Contain("ShrinkToFitMinimumFontSize");
-        method.Should().Contain("MeasureInlineCellTextWidth(text, fontSize, fontWeight, fontStyle) > availableWidth");
-        method.Should().Contain("fontSize = Math.Max(ShrinkToFitMinimumFontSize, fontSize - 1);");
+        method.Should().Contain("CellTextShrinkPlanner.ResolveFontSize(");
+        method.Should().Contain("size => MeasureInlineCellTextWidth(text, size, fontWeight, fontStyle)");
+        method.Should().NotContain("while (fontSize > ShrinkToFitMinimumFontSize");
     }
 
     // ── H31: Freeze Panes divider line must be drawn ──────────────────────────────────────────
@@ -148,17 +150,6 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
         return source[start..end];
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.FindFileFromBaseDirectory(parts);
 }

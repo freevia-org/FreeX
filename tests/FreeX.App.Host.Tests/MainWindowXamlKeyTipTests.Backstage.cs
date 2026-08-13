@@ -104,7 +104,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         {
             ("BackstageBackButton", UiText.Get("MainWindow_TooltipTitle_Back"), "workbook"),
             ("BackstageHomeButton", UiText.Get("MainWindow_Text_Home"), "Home"),
-            ("BackstageNewButton", UiText.Get("MainWindow_Text_New"), "new workbook"),
+            ("BackstageNewButton", UiText.Get("Common_New"), "new workbook"),
             ("BackstageOpenButton", UiText.Get("MainWindow_Text_Open"), "existing workbook"),
             ("BackstageSaveButton", UiText.Get("MainWindow_AutomationName_Save"), "Save the workbook"),
             ("BackstageSaveAsButton", UiText.Get("MainWindow_TooltipTitle_SaveAs"), "new name"),
@@ -260,19 +260,15 @@ public sealed partial class MainWindowXamlKeyTipTests
         });
     }
 
-    // ── Backstage content panes (unchanged XAML) — still asserted on the markup ──────
+    // Backstage content panes and their shared presentation contracts.
 
     [Fact]
-    public void BackstageInfoVersion_MatchesAboutDialogVersion()
+    public void BackstageAccountAndAbout_UseSharedAssemblyVersionPresentation()
     {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        var account = LocalAccountInfoPlanner.Build(typeof(MainWindow).Assembly);
 
-        document
-            .Descendants(presentation + "TextBlock")
-            .Where(element => LocalizedAttribute(element, "Text") == AppInfo.VersionText)
-            .Should()
-            .ContainSingle("Backstage Info and About should show the same FreeX version");
+        account.VersionText.Should().Be(AppInfo.ExactVersionText);
+        AppInfo.AboutText.Should().Contain(AppInfo.VersionText);
     }
 
     [Fact]
@@ -349,7 +345,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace ribbonWpf = "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
 
         var buttons = document
             .Descendants(presentation + "Button")
@@ -516,7 +512,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void ExternalTemplateEntryPoint_DisclosesExcludedStatusBeforeClick()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace ribbonWpf = "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var missing = document
@@ -524,8 +520,8 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Where(element => element.Attribute("Click")?.Value == "SsMoreTemplatesBtn_Click")
             .Where(element =>
                 !ContainsExcludedStatus(LocalizedAttribute(element, "Content")) &&
-                !ContainsExcludedStatus(LocalizedAttribute(element, local + "RibbonTooltip.Title")) &&
-                !ContainsExcludedStatus(LocalizedAttribute(element, local + "RibbonTooltip.Description")))
+                !ContainsExcludedStatus(LocalizedAttribute(element, ribbonWpf + "RibbonTooltip.Title")) &&
+                !ContainsExcludedStatus(LocalizedAttribute(element, ribbonWpf + "RibbonTooltip.Description")))
             .Select(element => LocalizedAttribute(element, "Content") ?? element.Name.LocalName)
             .ToList();
 

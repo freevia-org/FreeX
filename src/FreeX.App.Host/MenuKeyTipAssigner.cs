@@ -8,42 +8,17 @@ public static class MenuKeyTipAssigner
     public static void AssignUniqueKeyTips(IEnumerable<MenuItem> menuItems)
     {
         var items = menuItems.ToList();
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var item in items)
-            PreserveExistingKeyTip(item, used);
-
-        foreach (var item in items)
-            AssignMissingKeyTip(item, used);
+        var assignments = MenuKeyTipAssignmentPlanner.AssignUnique(
+            items
+                .Select(item => new MenuKeyTipAssignmentCandidate(
+                    ExtractHeaderText(item.Header),
+                    RibbonTooltip.GetKeyTip(item)))
+                .ToArray());
+        for (var index = 0; index < items.Count; index++)
+            RibbonTooltip.SetKeyTip(items[index], assignments[index]);
 
         foreach (var item in items)
             AssignUniqueKeyTips(item.Items.OfType<MenuItem>());
-    }
-
-    private static void PreserveExistingKeyTip(MenuItem item, HashSet<string> used)
-    {
-        var existing = RibbonKeyTipText.NormalizeOrEmpty(RibbonTooltip.GetKeyTip(item));
-        if (string.IsNullOrWhiteSpace(existing))
-            return;
-
-        if (RibbonKeyTipText.IsTypeableKeyTip(existing) && RibbonKeyTipText.IsAvailable(existing, used))
-        {
-            RibbonTooltip.SetKeyTip(item, existing);
-            used.Add(existing);
-            return;
-        }
-
-        RibbonTooltip.SetKeyTip(item, "");
-    }
-
-    private static void AssignMissingKeyTip(MenuItem item, HashSet<string> used)
-    {
-        if (!string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item)))
-            return;
-
-        var keyTip = RibbonKeyTipText.CreateUniqueKeyTip(ExtractHeaderText(item.Header), used);
-        RibbonTooltip.SetKeyTip(item, keyTip);
-        used.Add(keyTip);
     }
 
     private static string ExtractHeaderText(object? header) =>
@@ -55,6 +30,5 @@ public static class MenuKeyTipAssigner
             TextBlock textBlock => WpfTextContentExtractor.ExtractText(textBlock),
             ContentControl contentControl => ExtractHeaderText(contentControl.Content),
             _ => header.ToString() ?? ""
-        };
-
+    };
 }

@@ -121,13 +121,16 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
     }
 
     [Fact]
-    public void WpfPrintDocument_uses_the_shared_direct_print_command()
+    public void WpfPrintDocument_uses_the_shared_application_command_router()
     {
         var source = File.ReadAllText(
             Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
                 "freew", "FreeW.App.Host", "MainWindow.cs"));
 
-        source.Should().Contain("case FreeWKeyboardCommand.PrintDocument: Print(); break;");
+        source.Should().Contain("PrintDocument: Print");
+        source.Should().Contain("_applicationCommands.Shortcuts");
+        source.Should().Contain("_applicationCommands.Execute(command)");
+        source.Should().NotContain("FreeWKeyboardShortcutCatalog.All");
     }
 
     [Fact]
@@ -137,9 +140,10 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
             Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
                 "freew", "FreeW.App.Host", "MainWindow.cs"));
 
-        source.Should().Contain("dialog.UserPageRangeEnabled = paginator.PageCount > 1;");
+        source.Should().Contain("var plan = FreeWPrintRequestPlanner.Create(");
+        source.Should().Contain("dialog.UserPageRangeEnabled = plan.TotalPages > 1;");
         source.Should().Contain("dialog.PageRangeSelection == PageRangeSelection.UserPages");
-        source.Should().Contain("PageRangeDocumentPaginator.Create(");
+        source.Should().Contain("WpfPageRangeDocumentPaginator.CreateClampedInclusive(");
     }
 
     private static Key ToWpfKey(FreeWKeyboardKey key) =>

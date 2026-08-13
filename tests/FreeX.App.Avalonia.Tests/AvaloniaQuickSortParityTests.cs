@@ -6,6 +6,8 @@ using FluentAssertions;
 
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.Ribbon;
+using FreeX.Ribbon.Definitions;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -17,8 +19,8 @@ public sealed class AvaloniaQuickSortParityTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
     [Theory]
-    [InlineData("data.sortAsc", true)]
-    [InlineData("data.sortDesc", false)]
+    [InlineData(FreeXRibbonCommandIds.DataSortAscending, true)]
+    [InlineData(FreeXRibbonCommandIds.DataSortDescending, false)]
     public async Task QuickSort_LeavesDetectedHeaderInPlace_AndUndoRestoresData(
         string avaloniaCommandId,
         bool ascending)
@@ -33,7 +35,7 @@ public sealed class AvaloniaQuickSortParityTests
                 var selected = new GridRange(Address(sheet, 1, 1), Address(sheet, 3, 2));
                 window.Session.SelectRange(selected);
 
-                var commandId = new RibbonCommandId(AvaloniaCommandIdAdapter.ToCanonical(avaloniaCommandId));
+                var commandId = FreeXRibbonCommandCatalog.GetRequired(avaloniaCommandId);
                 window.RibbonCommandRegistryForTest!.TryGet(commandId, out var command).Should().BeTrue();
                 command!.Execute(RibbonCommandContext.Empty);
 
@@ -83,7 +85,7 @@ public sealed class AvaloniaQuickSortParityTests
                 sheet.SetCell(Address(sheet, 3, 2), new TextValue("Mango"));
                 window.Session.SelectRange(new GridRange(Address(sheet, 1, 1), Address(sheet, 3, 2)));
 
-                var commandId = new RibbonCommandId(AvaloniaCommandIdAdapter.ToCanonical("data.sortAsc"));
+                var commandId = FreeXRibbonCommandCatalog.GetRequired(FreeXRibbonCommandIds.DataSortAscending);
                 window.RibbonCommandRegistryForTest!.TryGet(commandId, out var command).Should().BeTrue();
                 command!.Execute(RibbonCommandContext.Empty);
 
@@ -118,7 +120,7 @@ public sealed class AvaloniaQuickSortParityTests
                 window.Session.IsWorkbookGrouped.Should().BeTrue();
                 window.Session.SelectRange(new GridRange(Address(first, 1, 1), Address(first, 3, 2)));
 
-                var commandId = new RibbonCommandId(AvaloniaCommandIdAdapter.ToCanonical("data.sortAsc"));
+                var commandId = FreeXRibbonCommandCatalog.GetRequired(FreeXRibbonCommandIds.DataSortAscending);
                 window.RibbonCommandRegistryForTest!.TryGet(commandId, out var command).Should().BeTrue();
                 command!.Execute(RibbonCommandContext.Empty);
 

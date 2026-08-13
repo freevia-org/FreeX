@@ -558,7 +558,8 @@ public class DocumentMergeTests
         table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("A1"));
         table.Rows[0].Cells[0].ShadingColorHex = "#00FF00";
         var nested = Table.Create(1, 1);
-        nested.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("Nested"));
+        nested.Rows[0].Cells[0].Paragraphs[0].Runs.Add(
+            Run.TableFormulaFieldRun(new TableFormulaField("=SUM(ABOVE)"), "42"));
         table.Rows[0].Cells[0].NestedTables.Add(nested);
         source.Blocks.Add(table);
 
@@ -566,13 +567,16 @@ public class DocumentMergeTests
 
         clone.Rows[0].Cells[0].PlainText.Should().Be("A1");
         clone.Rows[0].Cells[0].ShadingColorHex.Should().Be("#00FF00");
-        clone.Rows[0].Cells[0].NestedTables.Single().Rows[0].Cells[0].PlainText.Should().Be("Nested");
+        var clonedNested = clone.Rows[0].Cells[0].NestedTables.Should().ContainSingle().Which;
+        clonedNested.Should().NotBeSameAs(nested);
+        clonedNested.Rows[0].Cells[0].Paragraphs[0].Runs.Single().TableFormula
+            .Should().Be(new TableFormulaField("=SUM(ABOVE)"));
 
         // Independence: editing the cloned cell does not change the source table.
         clone.Rows[0].Cells[0].Paragraphs[0].Runs[0].Text = "Z";
-        clone.Rows[0].Cells[0].NestedTables[0].Rows[0].Cells[0].Paragraphs[0].Runs[0].Text = "Changed";
+        clonedNested.Rows[0].Cells[0].Paragraphs[0].Runs[0].Text = "24";
         table.Rows[0].Cells[0].PlainText.Should().Be("A1");
-        nested.Rows[0].Cells[0].PlainText.Should().Be("Nested");
+        nested.Rows[0].Cells[0].PlainText.Should().Be("42");
         ReferenceEquals(clone.Rows[0].Cells[0], table.Rows[0].Cells[0]).Should().BeFalse();
         ReferenceEquals(clone.Rows[0].Cells[0].NestedTables[0], nested).Should().BeFalse();
     }

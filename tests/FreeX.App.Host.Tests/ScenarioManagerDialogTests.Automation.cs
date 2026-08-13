@@ -100,11 +100,11 @@ public sealed partial class ScenarioManagerDialogTests
 
         var source = ReadScenarioManagerDialogSource();
         source.Should().Contain("AutomationProperties.SetName(button, GetActionAutomationName(action));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(button, $\"ScenarioManager{action}Button\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(button, FreeXAutomationIdCatalog.ScenarioManager.WpfActionButton(action));");
         source.Should().Contain("ScenarioManagerAction.Report => UiText.Get(\"ScenarioManager_ScenarioSummaryAutomationName\")");
         source.Should().Contain("ScenarioManagerAction.Report => UiText.Get(\"ScenarioManager_CreateAScenarioSummaryReport\")");
         source.Should().Contain("AutomationProperties.SetName(closeButton, UiText.Get(\"ScenarioManager_CloseAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(closeButton, \"ScenarioManagerCloseButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(closeButton, FreeXAutomationIdCatalog.ScenarioManager.CloseButton);");
         source.Should().Contain("AutomationProperties.SetHelpText(closeButton, UiText.Get(\"ScenarioManager_CloseTheScenarioManagerDialog\"));");
     }
 

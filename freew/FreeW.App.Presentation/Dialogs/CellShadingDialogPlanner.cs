@@ -4,6 +4,8 @@ public sealed record CellShadingColorChoice(string Label, string Hex);
 
 public sealed record CellShadingDialogResult(bool Accepted, string? Hex);
 
+public sealed record CellShadingCommitPlan(bool ShouldApply, string? Hex);
+
 /// <summary>
 /// Shared logical geometry and chrome values for the WPF and Avalonia palette hosts.
 /// Keeping these values here prevents the two platform dialogs from drifting while leaving
@@ -28,6 +30,7 @@ public static class CellShadingDialogPlanner
 {
     public const string Title = "Cell Shading";
     public const string NoColorLabel = "No Color";
+    public const string NoColorAutomationId = "CellShadingNoColorButton";
 
     public static readonly CellShadingDialogLayout Layout = new(
         PanelMargin: 8,
@@ -63,9 +66,22 @@ public static class CellShadingDialogPlanner
         return new CellShadingDialogResult(Accepted: true, Palette[index].Hex);
     }
 
+    public static string SwatchAutomationId(int index)
+    {
+        if (index < 0 || index >= Palette.Count)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
+        return $"CellShadingSwatch{index}";
+    }
+
     public static CellShadingDialogResult SelectNoColor() =>
         new(Accepted: true, Hex: null);
 
     public static CellShadingDialogResult Cancel() =>
         new(Accepted: false, Hex: null);
+
+    public static CellShadingCommitPlan PlanCommit(CellShadingDialogResult? result) =>
+        result is { Accepted: true }
+            ? new CellShadingCommitPlan(ShouldApply: true, result.Hex)
+            : new CellShadingCommitPlan(ShouldApply: false, Hex: null);
 }

@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 
 using Avalonia;
@@ -23,20 +22,18 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
     public async Task AdvancedFilterEscape_InvokesCancelAfterRawKeyDispatch()
     {
         await AssertProductionEscapeAsync(
-            "ShowAdvancedFilterInputDialogAsync",
-            [],
+            DialogRoute.AdvancedFilter,
             "AdvancedFilterCancelButton");
     }
 
     [Theory]
-    [InlineData("ShowPageSetupDialogAsync")]
-    [InlineData("ShowHeaderFooterDialogAsync")]
-    public async Task PageSetupRoutesEscape_InvokeCancelAfterRawKeyDispatch(string openerName)
+    [InlineData(DialogRoute.PageSetup)]
+    [InlineData(DialogRoute.HeaderFooter)]
+    public async Task PageSetupRoutesEscape_InvokeCancelAfterRawKeyDispatch(DialogRoute route)
     {
         await AssertProductionEscapeAsync(
-            openerName,
-            CreatePageSetupArguments(openerName),
-            openerName == "ShowHeaderFooterDialogAsync"
+            route,
+            route == DialogRoute.HeaderFooter
                 ? "HeaderFooterEditorCancelButton"
                 : "PageSetupCancelButton");
     }
@@ -71,11 +68,7 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
                 RoutingStrategies.Tunnel,
                 handledEventsToo: true);
 
-            typeof(MainWindow)
-                .GetMethod(
-                    "ConfigureDialogCancelOnEscape",
-                    BindingFlags.Static | BindingFlags.NonPublic)!
-                .Invoke(null, [dialog, cancelButton]);
+            MainWindow.ConfigureDialogCancelOnEscapeForTest(dialog, cancelButton);
 
             dialog.Show();
             cancelButton.RaiseEvent(CreateEscapeEvent(InputElement.KeyDownEvent));
@@ -99,7 +92,7 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
             try
             {
                 owner.Show();
-                opener = InvokeOpener(owner, "ShowAdvancedFilterInputDialogAsync", []);
+                opener = OpenDialogAsync(owner, DialogRoute.AdvancedFilter);
                 dialog = await WaitForOwnedDialogAsync(owner);
                 var controls = dialog.GetVisualDescendants().OfType<Control>().ToArray();
                 var picker = controls.OfType<Button>().Single(button =>
@@ -108,11 +101,7 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
                     AutomationProperties.GetAutomationId(textBox) == "AdvancedFilterListRangeBox");
 
                 picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, picker));
-                typeof(MainWindow)
-                    .GetMethod(
-                        "RaiseDialogRangeValidationKey",
-                        BindingFlags.Instance | BindingFlags.NonPublic)!
-                    .Invoke(owner, [Key.Enter]);
+                owner.RaiseDialogRangeValidationKeyForTest(Key.Enter);
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
 
                 dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(target);
@@ -177,11 +166,7 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
                     },
                     DispatcherPriority.Background);
 
-                var settleMethod = typeof(MainWindow).GetMethod(
-                    "SettleDialogRangeInteractionBoundaryAsync",
-                    BindingFlags.Static | BindingFlags.NonPublic)!;
-                var settleTask = (Task)settleMethod.Invoke(null, [dialog])!;
-                await settleTask;
+                await MainWindow.SettleDialogRangeInteractionBoundaryForTestAsync(dialog);
 
                 restorationPosted.Should().BeTrue();
                 IsFocusInside(dialog, dialog.FocusManager?.GetFocusedElement()).Should().BeTrue();
@@ -203,8 +188,7 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
     }
 
     private static async Task AssertProductionEscapeAsync(
-        string openerName,
-        object?[] arguments,
+        DialogRoute route,
         string cancelAutomationId)
     {
         await Session.Dispatch(async () =>
@@ -215,7 +199,7 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
             try
             {
                 owner.Show();
-                opener = InvokeOpener(owner, openerName, arguments);
+                opener = OpenDialogAsync(owner, route);
                 dialog = await WaitForOwnedDialogAsync(owner);
                 var cancelButton = dialog.GetVisualDescendants()
                     .OfType<Button>()
@@ -273,29 +257,21 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
     private static bool IsFocusInside(Window dialog, IInputElement? element) =>
         element is Visual visual && ReferenceEquals(TopLevel.GetTopLevel(visual), dialog);
 
-    private static object?[] CreatePageSetupArguments(string openerName)
+    private static Task OpenDialogAsync(MainWindow owner, DialogRoute route) =>
+        route switch
+        {
+            DialogRoute.AdvancedFilter => owner.ShowAdvancedFilterInputDialogForTestAsync(),
+            DialogRoute.PageSetup => owner.ShowPageSetupDialogForTestAsync(),
+            DialogRoute.HeaderFooter => owner.ShowHeaderFooterDialogForTestAsync(),
+            _ => throw new ArgumentOutOfRangeException(nameof(route)),
+        };
+
+    public enum DialogRoute
     {
-        if (openerName == "ShowHeaderFooterDialogAsync")
-            return [];
-
-        var method = FindOpener(openerName, parameterCount: 2);
-        var source = Enum.GetValues(method.GetParameters()[0].ParameterType).GetValue(0);
-        return [source, false];
+        AdvancedFilter,
+        PageSetup,
+        HeaderFooter,
     }
-
-    private static Task InvokeOpener(MainWindow owner, string methodName, object?[] arguments)
-    {
-        var method = FindOpener(methodName, arguments.Length);
-        return method.Invoke(owner, arguments) as Task
-            ?? throw new InvalidOperationException($"{methodName} did not return Task.");
-    }
-
-    private static MethodInfo FindOpener(string methodName, int parameterCount) =>
-        typeof(MainWindow)
-            .GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
-            .Single(method =>
-                method.Name == methodName &&
-                method.GetParameters().Length == parameterCount);
 
     private static async Task<Window> WaitForOwnedDialogAsync(MainWindow owner)
     {

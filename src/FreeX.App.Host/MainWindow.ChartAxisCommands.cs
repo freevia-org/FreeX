@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using FreeX.App.Presentation.Charts.Editing;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -133,7 +134,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartAxisPlanner.Plan(dialog.Result));
     }
 
     private void ToggleChartAxisTicks(bool useXAxis)
@@ -196,7 +197,7 @@ public partial class MainWindow
             throw new ArgumentException("Axis command descriptor does not have a quick command.", nameof(command));
 
         if (!TryExecuteRepeatableChartLayout(
-                command.Label,
+                UiText.Get(command.TitleResourceKey),
                 UiText.Get(command.HostMissingSelectionMessageResourceKey),
                 null,
                 null,
@@ -221,30 +222,16 @@ public partial class MainWindow
             if (plan.Options is not { } options)
                 return new FailedWorkbookCommand(GetChartAxisCommandIssueMessage(plan.Issue, command.UseXAxis));
 
-            return new SetChartLayoutCommand(_currentSheetId, chart.Id, options);
+            return ChartCommandWorkflowPlanner.BuildLayoutCommand(_currentSheetId, chart, options);
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, command.Label);
+        if (!TryExecuteRepeatableCommand(CreateCommand, UiText.Get(command.TitleResourceKey), out _))
             return;
-        }
-
-        _repeatPostAction = null;
         UpdateViewport();
     }
 
     private static string GetChartAxisCommandIssueMessage(ChartAxisCommandIssue issue, bool useXAxis) =>
-        issue switch
-        {
-            ChartAxisCommandIssue.UnsupportedLogScale => UiText.Get(useXAxis
-                ? "MainWindowMessage_ChartXAxisLogScaleSupportedTypes"
-                : "MainWindowMessage_ChartYAxisLogScaleSupportedTypes"),
-            ChartAxisCommandIssue.UnsupportedBounds => UiText.Get("MainWindowMessage_ChartAxisBoundsSupportedTypes"),
-            ChartAxisCommandIssue.NumericBoundsRequired => UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresNumericData"),
-            _ => UiText.Get("MainWindowMessage_ChartAxisOptionsRequiresChart"),
-        };
+        ChartValidationPresentationPlanner.DescribeAxisCommandIssue(issue, useXAxis).Resolve(UiText.Get, UiText.Format);
 
     private static ChartModel? FindFirstChart(Sheet? sheet)
         => ChartWorkflowTargetPlanner.FindFirstChart(sheet);

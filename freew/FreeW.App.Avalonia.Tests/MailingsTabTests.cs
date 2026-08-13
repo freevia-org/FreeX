@@ -21,7 +21,7 @@ public sealed class MailingsTabTests
 
     // Callbacks that supply the two optional dialog hooks from canned values so the engine's dialog-driven
     // commands run end-to-end without a real UI.
-    private static RibbonHostCallbacks Callbacks(
+    private static FreeWRibbonHostExecutionPorts Callbacks(
         string? recipientCsv = null,
         string? mergeFieldName = null,
         List<string>? infoSink = null,
@@ -41,10 +41,18 @@ public sealed class MailingsTabTests
             AskRecipientCsv: _ => recipientCsv,
             AskMergeFieldName: _ => mergeFieldName,
             ShowMailMergeInfo: m => infoSink?.Add(m),
-            AskMergeRuleIf: _ => ruleIf,
-            AskMergeRuleCondition: (_, _) => ruleCondition,
-            AskMergeRulePrompt: (_, _) => rulePrompt,
-            AskMergeRuleNameValue: (_, _) => ruleNameValue,
+            AskMergeRule: request => request switch
+            {
+                MailMergeRuleIfDialogRequest when ruleIf is not null =>
+                    new MailMergeRuleIfDialogResponse(ruleIf),
+                MailMergeRuleConditionDialogRequest when ruleCondition is not null =>
+                    new MailMergeRuleConditionDialogResponse(ruleCondition),
+                MailMergeRulePromptDialogRequest when rulePrompt is not null =>
+                    new MailMergeRulePromptDialogResponse(rulePrompt),
+                MailMergeRuleNameValueDialogRequest when ruleNameValue is not null =>
+                    new MailMergeRuleNameValueDialogResponse(ruleNameValue.Value),
+                _ => null,
+            },
             OpenMailDraft: target =>
             {
                 mailDraftSink?.Add(target);
@@ -441,12 +449,14 @@ public sealed class MailingsTabTests
         result.Should().NotBeNull();
         result!.MergedRecordCount.Should().Be(2);
         result.SkippedRecordCount.Should().Be(1);
-        var text = PlainText(result.Document);
+        result.Document.Should().NotBeNull();
+        var document = result.Document!;
+        var text = PlainText(document);
         text.Should().Contain("Grace Hopper");
         text.Should().Contain("Dorothy Vaughan");
         text.Should().NotContain("Ada Lovelace", "record 1 is outside the selected range");
         text.Should().NotContain("Katherine Johnson", "the selected record is skipped by its merge rule");
-        result.Document.Sections.Should().HaveCount(expectedSectionCount);
+        document.Sections.Should().HaveCount(expectedSectionCount);
 
         template.Document.Should().BeSameAs(visiblePreview);
         engine.Session.Template.Should().BeSameAs(stashedTemplate);
@@ -473,8 +483,9 @@ public sealed class MailingsTabTests
         var result = engine.BuildFinishedMerge(plan, state);
 
         result.Should().NotBeNull();
-        PlainText(result!.Document).Should().Contain("Engineering | Margaret | Ada");
-        PlainText(result.Document).Should().Contain("Engineering | Margaret | Grace");
+        result!.Document.Should().NotBeNull();
+        PlainText(result.Document!).Should().Contain("Engineering | Margaret | Ada");
+        PlainText(result.Document!).Should().Contain("Engineering | Margaret | Grace");
         state.Bookmarks["Manager"].Should().Be("Margaret");
         engine.GetInteractiveFinishPrompts().Should().Equal(
             new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.FillIn, "Department", "Department"),
@@ -503,8 +514,9 @@ public sealed class MailingsTabTests
         var result = engine.BuildFinishedMerge(plan, state);
 
         result.Should().NotBeNull();
-        PlainText(result!.Document).Should().Contain("Department 1 | Ada");
-        PlainText(result.Document).Should().Contain("Department 2 | Grace");
+        result!.Document.Should().NotBeNull();
+        PlainText(result.Document!).Should().Contain("Department 1 | Ada");
+        PlainText(result.Document!).Should().Contain("Department 2 | Grace");
     }
 
     [Fact]
@@ -740,7 +752,7 @@ public sealed class MailingsTabTests
     [Fact]
     public void Mailings_tab_definition_exposes_groups_and_email_merge_plan_command()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var mailings = definition.FindTab("mailings");
         mailings.Should().NotBeNull();
 
@@ -755,7 +767,7 @@ public sealed class MailingsTabTests
     [Fact]
     public void Mailings_tab_definition_uses_canonical_shared_command_ids()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var mailings = definition.FindTab("mailings");
         mailings.Should().NotBeNull();
         var commandIds = mailings!.Groups
@@ -813,7 +825,7 @@ public sealed class MailingsTabTests
     [Fact]
     public void Mailings_tab_definition_exposes_start_merge_and_rules_dropdown_depth()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var mailings = definition.FindTab("mailings");
         mailings.Should().NotBeNull();
 
@@ -856,7 +868,7 @@ public sealed class MailingsTabTests
     public void Start_mail_merge_commands_set_output_mode_and_clear_session()
     {
         var view = ViewWith(new Paragraph("Dear Â«FirstNameÂ»"));
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks(), out var engine);
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks(), out var engine);
         engine.LoadRecipientsCsv(SampleCsv);
 
         Execute(registry, "freew.start-mail-merge-directory");
@@ -887,7 +899,7 @@ public sealed class MailingsTabTests
         var nameValue = MailMergeRuleDialogPlanner.CreateNameValueResult("CustomerCode", "Enter code");
 
         var view = ViewWith(new Paragraph(""));
-        var registry = FreeWRibbon.BuildRegistry(
+        var registry = FreeWAvaloniaRibbonCommands.Build(
             view,
             Callbacks(
                 ruleIf: ifResult,
@@ -983,7 +995,7 @@ public sealed class MailingsTabTests
     public void Canonical_mailings_commands_execute_via_registry()
     {
         var view = ViewWith(new Paragraph("«FirstName»"));
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks(), out var engine);
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks(), out var engine);
         engine.LoadRecipientsCsv(SampleCsv);
 
         Execute(registry, "freew.merge-preview");
@@ -1014,7 +1026,7 @@ public sealed class MailingsTabTests
     public void MergeData_command_executes_via_registry_callback()
     {
         var view = ViewWith();
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks(recipientCsv: SampleCsv), out var engine);
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks(recipientCsv: SampleCsv), out var engine);
 
         Execute(registry, "freew.merge-data");
 

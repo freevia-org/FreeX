@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -11,6 +10,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
+using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Avalonia;
 
@@ -26,35 +26,21 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
     // measured WPF-equivalent line box so long documents expose the same rows.
     private const double ShortDocumentLineHeightCompensation = 14.6;
     private const double OverflowDocumentLineHeightCompensation = 15.0;
-    private static readonly Regex NonAutomationIdCharacter =
-        new("[^A-Za-z0-9]+", RegexOptions.Compiled);
-
     private readonly TabControl _tabControl = new();
     private readonly List<TextBox> _noticeTextBoxes = [];
     private readonly Button _closeButton = new();
-    private readonly string _readOnlyTextHelpText;
-    private readonly string _sectionHelpText;
     private readonly bool _acceptsTab;
 
     public AvaloniaLegalNoticesDialog(
-        string windowTitle,
-        IReadOnlyList<(string Title, string Text)> notices,
-        string introText,
-        string closeButtonContent,
-        string helpText,
-        string? readOnlyTextHelpText = null,
-        string? sectionHelpText = null,
+        LegalNoticesDialogPresentation presentation,
         bool acceptsTab = true,
         bool enableKeyboardLifecycle = false)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(windowTitle);
-        ArgumentNullException.ThrowIfNull(notices);
+        ArgumentNullException.ThrowIfNull(presentation);
 
-        _readOnlyTextHelpText = readOnlyTextHelpText ?? "Read-only legal notice text. Use Ctrl+C to copy selected text.";
-        _sectionHelpText = sectionHelpText ?? "Choose a legal notice section to read and copy.";
         _acceptsTab = acceptsTab;
 
-        Title = windowTitle;
+        Title = presentation.WindowTitle;
         Width = LegalNoticesDialogMetrics.Width;
         Height = LegalNoticesDialogMetrics.Height;
         MinWidth = LegalNoticesDialogMetrics.MinWidth;
@@ -63,11 +49,11 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         CanResize = true;
         ShowInTaskbar = false;
 
-        AutomationProperties.SetName(this, windowTitle);
-        AutomationProperties.SetAutomationId(this, "LegalNoticesDialog");
-        AutomationProperties.SetHelpText(this, helpText);
+        AutomationProperties.SetName(this, presentation.WindowTitle);
+        AutomationProperties.SetAutomationId(this, LegalNoticesDialogPresentation.DialogAutomationId);
+        AutomationProperties.SetHelpText(this, presentation.HelpText);
 
-        Content = CreateContent(notices, introText, closeButtonContent, helpText);
+        Content = CreateContent(presentation);
         if (enableKeyboardLifecycle)
             ConfigureKeyboardLifecycle(this, _tabControl, _closeButton);
         Opened += (_, _) =>
@@ -85,10 +71,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
     internal TabControl SectionTabsForTest => _tabControl;
 
     private Control CreateContent(
-        IReadOnlyList<(string Title, string Text)> notices,
-        string introText,
-        string closeButtonContent,
-        string helpText)
+        LegalNoticesDialogPresentation presentation)
     {
         // WPF's dialog authority registers the content one pixel higher while
         // keeping the outer bottom margin unchanged. Keep this compensation
@@ -104,7 +87,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
 
         var intro = new TextBlock
         {
-            Text = introText,
+            Text = presentation.SummaryText,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, LegalNoticesDialogMetrics.IntroBottomMargin),
             Foreground = Brushes.Black,
@@ -112,23 +95,23 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         AvaloniaCompactDialogChrome.ApplyAvaloniaDocumentIntroTemplateCompensation(
             intro,
             LegalNoticesDialogMetrics.IntroBottomMargin);
-        AutomationProperties.SetName(intro, "Legal Notices summary");
-        AutomationProperties.SetAutomationId(intro, "LegalNoticesSummaryText");
+        AutomationProperties.SetName(intro, presentation.SummaryAutomationName);
+        AutomationProperties.SetAutomationId(intro, LegalNoticesDialogPresentation.SummaryAutomationId);
         DockPanel.SetDock(intro, Dock.Top);
         root.Children.Add(intro);
 
         var close = _closeButton;
-        close.Content = closeButtonContent;
-        close.IsDefault = true;
-        close.IsCancel = true;
+        close.Content = presentation.CloseButtonContent;
+        close.IsDefault = presentation.CloseIsDefault;
+        close.IsCancel = presentation.CloseIsCancel;
         AvaloniaCompactDialogChrome.ApplyButton(
             close,
             new AvaloniaCompactDialogChromeStyle(FontFamily.Default),
             minWidth: 84,
-            isDefault: true);
+            isDefault: presentation.CloseIsDefault);
         close.Width = 84;
-        AutomationProperties.SetAutomationId(close, "LegalNoticesCloseButton");
-        AutomationProperties.SetHelpText(close, helpText);
+        AutomationProperties.SetAutomationId(close, LegalNoticesDialogPresentation.CloseButtonAutomationId);
+        AutomationProperties.SetHelpText(close, presentation.HelpText);
         close.Click += (_, _) => Close();
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [close],
@@ -136,19 +119,19 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(buttonRow);
 
-        foreach (var notice in notices)
-            _tabControl.Items.Add(CreateTabItem(notice));
-        _tabControl.SelectedIndex = notices.Count > 0 ? 0 : -1;
+        foreach (var section in presentation.Sections)
+            _tabControl.Items.Add(CreateTabItem(section, presentation));
+        _tabControl.SelectedIndex = presentation.Sections.Count > 0 ? 0 : -1;
         // Avalonia's default TabControl template adds a 12px content inset. The WPF
         // authority keeps the tab body aligned with the dialog content edge.
         _tabControl.Padding = new Thickness(0);
         _tabControl.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         _tabControl.VerticalContentAlignment = VerticalAlignment.Stretch;
-        AutomationProperties.SetName(_tabControl, "Legal notice sections");
-        AutomationProperties.SetAutomationId(_tabControl, "LegalNoticesSectionTabs");
+        AutomationProperties.SetName(_tabControl, presentation.SectionsAutomationName);
+        AutomationProperties.SetAutomationId(_tabControl, LegalNoticesDialogPresentation.SectionsAutomationId);
         AutomationProperties.SetHelpText(
             _tabControl,
-            _sectionHelpText);
+            presentation.SectionLinkHelpText);
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             _tabControl,
             AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = LegalNoticesDialogMetrics.TabControlHeight },
@@ -168,12 +151,13 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         return root;
     }
 
-    private TabItem CreateTabItem((string Title, string Text) notice)
+    private TabItem CreateTabItem(
+        LegalNoticeSectionPresentation section,
+        LegalNoticesDialogPresentation presentation)
     {
-        var automationIdSegment = CreateAutomationIdSegment(notice.Title);
         var textBox = new TextBox
         {
-            Text = notice.Text,
+            Text = section.Body,
             IsReadOnly = true,
             AcceptsReturn = true,
             AcceptsTab = _acceptsTab,
@@ -185,13 +169,13 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             Foreground = Brushes.Black,
         };
         ApplyReadOnlyDocumentLayout(textBox);
-        AutomationProperties.SetName(textBox, notice.Title);
+        AutomationProperties.SetName(textBox, section.Heading);
         AutomationProperties.SetAutomationId(
             textBox,
-            $"LegalNotices{automationIdSegment}Text");
+            section.BodyAutomationId);
         AutomationProperties.SetHelpText(
             textBox,
-            _readOnlyTextHelpText);
+            presentation.ReadOnlyBodyHelpText);
 
         textBox.SetValue(
             ScrollViewer.VerticalScrollBarVisibilityProperty,
@@ -200,14 +184,14 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             ScrollViewer.HorizontalScrollBarVisibilityProperty,
             ScrollBarVisibility.Disabled);
         _noticeTextBoxes.Add(textBox);
-        var tabItem = new TabItem { Header = notice.Title, Content = textBox };
-        AutomationProperties.SetName(tabItem, notice.Title);
+        var tabItem = new TabItem { Header = section.Heading, Content = textBox };
+        AutomationProperties.SetName(tabItem, section.Heading);
         AutomationProperties.SetAutomationId(
             tabItem,
-            $"LegalNotices{automationIdSegment}Tab");
+            section.LinkAutomationId);
         AutomationProperties.SetHelpText(
             tabItem,
-            _sectionHelpText);
+            presentation.SectionLinkHelpText);
         return tabItem;
     }
 
@@ -297,6 +281,9 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             textBox,
             LegalNoticesDialogMetrics.TextPadding,
             rightMargin: 2);
+        // Generic dialog chrome supplies the normal product text brush on Opened. Legal-document
+        // surfaces follow the WPF authority's explicit black foreground, so restore it after that pass.
+        textBox.Foreground = Brushes.Black;
         // Avalonia's Consolas metrics are fractionally narrower than WPF's at the shared
         // 12px size. Compensate the glyph width without imposing a line box absent in WPF.
         textBox.FontSize = TextFontSizeCompensation;
@@ -352,12 +339,6 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             }
         };
         textBox.LayoutUpdated += onLayoutUpdated;
-    }
-
-    private static string CreateAutomationIdSegment(string text)
-    {
-        var segment = NonAutomationIdCharacter.Replace(text, string.Empty);
-        return string.IsNullOrWhiteSpace(segment) ? "Document" : segment;
     }
 
     private void FocusInitialKeyboardTarget()

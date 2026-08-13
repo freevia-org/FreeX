@@ -11,45 +11,21 @@ public static partial class PrintRenderer
     private static void DrawHeaderFooter(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
-        double pageW,
-        double pageH,
-        double marginLeft,
-        double marginRight,
-        double marginBottom,
-        double headerMargin,
-        double footerMargin,
-        WorksheetHeaderFooter header,
-        WorksheetHeaderFooter footer,
-        WorksheetHeaderFooterPictureSet headerPictures,
-        WorksheetHeaderFooterPictureSet footerPictures,
+        WorksheetPrintHeaderFooterPlan plan,
         string workbookName,
         string sheetName,
-        bool alignWithMargins,
         int pageNumber,
         int totalPages,
         bool draftQuality,
         double fontScale,
         string workbookDirectory = "")
     {
-        var headerHeight = CalculateHeaderFooterLineHeight(header, headerPictures, draftQuality, fontScale);
-        var footerHeight = CalculateHeaderFooterLineHeight(footer, footerPictures, draftQuality, fontScale);
-        var headerY = Math.Max(4, headerMargin - headerHeight);
-        // R100-app-host-footer-margin-overlap-1: mirrors the header-side fix (R99, this file's
-        // headerY above) and WorkbookPdfContentBuilder's footerY clamp
-        // (footerY = Math.Min(footerEdgePt + 2, contentBottom)) for the PDF tier. The printed grid's
-        // own bottom edge sits at pageH - Math.Max(marginBottom, footerMargin) -- the same
-        // bodyBottomInches the pagination planner already used to size this page's row capacity
-        // (PagePaginationPlanner.CalculatePageCapacityDetail) -- so once FooterMargin exceeds
-        // BottomMargin, the unclamped "pageH - footerMargin - footerHeight" placed the footer text
-        // band entirely inside that same grid span, printing the footer on top of the last row(s).
-        // Clamping footerY to never start above the grid's own bottom edge keeps the footer band
-        // below the grid, matching Excel and the already-fixed PDF export tier.
-        var gridBottomEdge = pageH - PageGeometryRules.ResolveBodyEdge(marginBottom, footerMargin);
-        var footerY = Math.Max(Math.Max(4, pageH - footerMargin - footerHeight), gridBottomEdge);
-        var leftInset = alignWithMargins ? marginLeft : 0.3 * 96.0;
-        var rightInset = alignWithMargins ? marginRight : 0.3 * 96.0;
-        DrawHeaderFooterLine(dc, textOverlays, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality, fontScale, workbookDirectory);
-        DrawHeaderFooterLine(dc, textOverlays, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality, fontScale, workbookDirectory);
+        DrawHeaderFooterLine(
+            dc, textOverlays, plan.Header, plan.HeaderPictures, plan.HeaderBand,
+            pageNumber, totalPages, workbookName, sheetName, draftQuality, fontScale, workbookDirectory);
+        DrawHeaderFooterLine(
+            dc, textOverlays, plan.Footer, plan.FooterPictures, plan.FooterBand,
+            pageNumber, totalPages, workbookName, sheetName, draftQuality, fontScale, workbookDirectory);
     }
 
     /// <summary>
@@ -76,13 +52,9 @@ public static partial class PrintRenderer
         double y,
         double lineHeight)
     {
-        var availableWidth = Math.Max(1, pageW - leftInset - rightInset);
-        var sectionWidth = Math.Max(1, availableWidth / 3);
-
-        var leftRect   = new Rect(leftInset, y, sectionWidth, lineHeight);
-        var centerRect = new Rect(leftInset + sectionWidth, y, sectionWidth, lineHeight);
-        var rightRect  = new Rect(pageW - rightInset - sectionWidth, y, sectionWidth, lineHeight);
-        return (leftRect, centerRect, rightRect);
+        var geometry = WorksheetPrintHeaderFooterGeometryPlanner.ResolveSectionBounds(
+            pageW, leftInset, rightInset, y, lineHeight, textLineHeight: lineHeight);
+        return (ToRect(geometry.Left), ToRect(geometry.Center), ToRect(geometry.Right));
     }
 
     private static void DrawHeaderFooterLine(
@@ -90,11 +62,7 @@ public static partial class PrintRenderer
         ICollection<PdfTextOverlay> textOverlays,
         WorksheetHeaderFooter value,
         WorksheetHeaderFooterPictureSet pictures,
-        double pageW,
-        double leftInset,
-        double rightInset,
-        double y,
-        double lineHeight,
+        WorksheetPrintHeaderFooterBandGeometry geometry,
         int pageNumber,
         int totalPages,
         string workbookName,
@@ -110,19 +78,27 @@ public static partial class PrintRenderer
         var centerRuns = PagePrintTextPlanner.TokenizeSectionText(value.Center, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, DateTime.Now);
         var rightRuns  = PagePrintTextPlanner.TokenizeSectionText(value.Right,  pageNumber, totalPages, workbookName, workbookDirectory, sheetName, DateTime.Now);
 
-        var (leftRect, centerRect, rightRect) = ResolveHeaderFooterSectionRects(pageW, leftInset, rightInset, y, lineHeight);
+        var leftRect = ToRect(geometry.Left);
+        var centerRect = ToRect(geometry.Center);
+        var rightRect = ToRect(geometry.Right);
 
-        var leftPicture   = !draftQuality && HasHeaderFooterPictureToken(value.Left)   ? pictures.Left   : null;
-        var centerPicture = !draftQuality && HasHeaderFooterPictureToken(value.Center) ? pictures.Center : null;
-        var rightPicture  = !draftQuality && HasHeaderFooterPictureToken(value.Right)  ? pictures.Right  : null;
+        var leftPicture = !draftQuality && WorksheetPrintHeaderFooterGeometryPlanner.HasPictureToken(value.Left)
+            ? pictures.Left
+            : null;
+        var centerPicture = !draftQuality && WorksheetPrintHeaderFooterGeometryPlanner.HasPictureToken(value.Center)
+            ? pictures.Center
+            : null;
+        var rightPicture = !draftQuality && WorksheetPrintHeaderFooterGeometryPlanner.HasPictureToken(value.Right)
+            ? pictures.Right
+            : null;
 
         DrawHeaderFooterPicture(dc, leftPicture,   leftRect,   TextAlignment.Left);
         DrawHeaderFooterPicture(dc, centerPicture, centerRect, TextAlignment.Center);
         DrawHeaderFooterPicture(dc, rightPicture,  rightRect,  TextAlignment.Right);
 
-        DrawHeaderFooterFormattedRuns(dc, textOverlays, leftRuns,   CalculateHeaderFooterTextRect(leftRect,   leftPicture,   TextAlignment.Left),   TextAlignment.Left,   fontScale);
-        DrawHeaderFooterFormattedRuns(dc, textOverlays, centerRuns, CalculateHeaderFooterTextRect(centerRect, centerPicture, TextAlignment.Center), TextAlignment.Center, fontScale);
-        DrawHeaderFooterFormattedRuns(dc, textOverlays, rightRuns,  CalculateHeaderFooterTextRect(rightRect,  rightPicture,  TextAlignment.Right),  TextAlignment.Right,  fontScale);
+        DrawHeaderFooterFormattedRuns(dc, textOverlays, leftRuns, CalculateHeaderFooterTextRect(leftRect, leftPicture, TextAlignment.Left), TextAlignment.Left, fontScale, geometry.TextLineHeight);
+        DrawHeaderFooterFormattedRuns(dc, textOverlays, centerRuns, CalculateHeaderFooterTextRect(centerRect, centerPicture, TextAlignment.Center), TextAlignment.Center, fontScale, geometry.TextLineHeight);
+        DrawHeaderFooterFormattedRuns(dc, textOverlays, rightRuns, CalculateHeaderFooterTextRect(rightRect, rightPicture, TextAlignment.Right), TextAlignment.Right, fontScale, geometry.TextLineHeight);
     }
 
     /// <summary>
@@ -144,11 +120,11 @@ public static partial class PrintRenderer
         IReadOnlyList<HeaderFooterFormattedRun> runs,
         Rect rect,
         TextAlignment alignment,
-        double fontScale)
+        double fontScale,
+        double textLineHeight)
     {
         if (runs.Count == 0) return;
 
-        var scaledLineHeight = HeaderFooterSingleLineHeight * fontScale;
         var lines = PagePrintTextPlanner.SplitRunsIntoLines(runs);
         for (var lineIndex = 0; lineIndex < lines.Count; lineIndex++)
         {
@@ -157,9 +133,9 @@ public static partial class PrintRenderer
 
             var lineRect = new Rect(
                 rect.Left,
-                rect.Top + (lineIndex * scaledLineHeight),
+                rect.Top + (lineIndex * textLineHeight),
                 rect.Width,
-                scaledLineHeight);
+                textLineHeight);
             DrawHeaderFooterFormattedRunsLine(dc, textOverlays, lineRuns, lineRect, alignment, fontScale);
         }
     }

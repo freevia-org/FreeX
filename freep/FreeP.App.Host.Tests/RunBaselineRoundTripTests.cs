@@ -9,15 +9,10 @@ namespace FreeP.App.Host.Tests;
 
 public sealed class RunBaselineRoundTripTests : IDisposable
 {
-    private readonly string _tempDir = Path.Combine(
-        Path.GetTempPath(), "FreeP.RunBaselineTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.RunBaselineTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public RunBaselineRoundTripTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public void RoundTrip_RunBaselineOffset_PreservesPositiveAndNegativeTokens()

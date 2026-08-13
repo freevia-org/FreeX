@@ -1,7 +1,7 @@
-using System.Globalization;
 using OxyPlot;
 using OxyPlot.Axes;
 using OxyPlot.Series;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -270,14 +270,5 @@ public static partial class ChartRenderer
     }
 
     private static bool TryParseStockDateCategory(string category, out DateTime value) =>
-        DateTime.TryParse(
-            category,
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AllowWhiteSpaces,
-            out value) ||
-        DateTime.TryParse(
-            category,
-            CultureInfo.CurrentCulture,
-            DateTimeStyles.AllowWhiteSpaces,
-            out value);
+        ChartRenderPolicyPlanner.TryParseDateCategory(category, out value);
 }

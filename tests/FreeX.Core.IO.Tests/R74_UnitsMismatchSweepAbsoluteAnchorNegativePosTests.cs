@@ -80,7 +80,7 @@ public sealed class R74_UnitsMismatchSweepAbsoluteAnchorNegativePosTests
         pos.Attribute("x")!.Value.Should().Be("-95250",
             "a legitimately-negative absoluteAnchor pos x must not be clamped to 0 on an unrelated save");
         pos.Attribute("y")!.Value.Should().Be("0");
-        ext.Attribute("cy")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(200).ToString(),
+        ext.Attribute("cy")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(200).ToString(),
             "the unrelated height edit must still be written to xdr:ext as before");
     }
 
@@ -124,8 +124,8 @@ public sealed class R74_UnitsMismatchSweepAbsoluteAnchorNegativePosTests
         adapter.Save(reloaded, secondSave);
 
         var pos = ReadDrawingXml(secondSave).Descendants(Xdr + "absoluteAnchor").Single().Element(Xdr + "pos")!;
-        pos.Attribute("x")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(50).ToString());
-        pos.Attribute("y")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(25).ToString());
+        pos.Attribute("x")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(50).ToString());
+        pos.Attribute("y")!.Value.Should().Be(DrawingMlCoordinateUnits.PixelsToEmu(25).ToString());
     }
 
     [Fact]

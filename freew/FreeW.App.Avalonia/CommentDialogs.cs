@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Avalonia;
@@ -23,12 +24,12 @@ internal sealed class CommentReplyDialog : FreeWDialogWindow
     {
         Foreground = Brushes.Red,
         IsVisible = false,
-        Text = "Enter reply text.",
+        Text = CommentDialogPresentationPlanner.Text.ReplyRequiredMessage,
     };
 
     public CommentReplyDialog()
     {
-        Title = "Reply to Comment";
+        Title = CommentDialogPresentationPlanner.Text.ReplyTitle;
         Width = 390;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -36,12 +37,16 @@ internal sealed class CommentReplyDialog : FreeWDialogWindow
         ShowInTaskbar = false;
 
         var body = new StackPanel { Margin = new Thickness(16), Spacing = 8 };
-        body.Children.Add(new TextBlock { Text = "Reply:", FontWeight = FontWeight.SemiBold });
+        body.Children.Add(new TextBlock
+        {
+            Text = CommentDialogPresentationPlanner.Text.ReplyFieldLabel,
+            FontWeight = FontWeight.SemiBold,
+        });
         body.Children.Add(_text);
         body.Children.Add(_status);
 
-        var ok = Button("Reply", Accept, isDefault: true);
-        var cancel = Button("Cancel", () => Close(null), isCancel: true);
+        var ok = Button(CommentDialogPresentationPlanner.Text.ReplyActionLabel, Accept, isDefault: true);
+        var cancel = Button(CommentDialogPresentationPlanner.Text.CancelActionLabel, () => Close(null), isCancel: true);
         body.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 6, 0, 0)));
 
         Content = body;
@@ -61,14 +66,15 @@ internal sealed class CommentReplyDialog : FreeWDialogWindow
 
     private void Accept()
     {
-        var value = _text.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(value))
+        var acceptance = CommentDialogPresentationPlanner.PlanReplyAcceptance(_text.Text);
+        if (!acceptance.IsAccepted)
         {
+            _status.Text = acceptance.ValidationMessage;
             _status.IsVisible = true;
             return;
         }
 
-        Close(value);
+        Close(acceptance.Text);
     }
 
     private static Button Button(string label, Action click, bool isDefault = false, bool isCancel = false)
@@ -91,7 +97,8 @@ internal sealed class CommentListDialog : FreeWDialogWindow
 {
     public CommentListDialog(IReadOnlyList<CommentListItem> items)
     {
-        Title = "Comments";
+        var presentation = CommentDialogPresentationPlanner.BuildList(items);
+        Title = presentation.Title;
         Width = 460;
         Height = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -99,18 +106,18 @@ internal sealed class CommentListDialog : FreeWDialogWindow
         ShowInTaskbar = false;
 
         var body = new StackPanel { Margin = new Thickness(16), Spacing = 8 };
-        if (items.Count == 0)
+        if (presentation.Rows.Count == 0)
         {
             body.Children.Add(new TextBlock
             {
-                Text = "No comments in this document.",
+                Text = presentation.EmptyMessage,
                 TextWrapping = TextWrapping.Wrap,
             });
         }
         else
         {
-            foreach (var item in items)
-                body.Children.Add(BuildRow(item));
+            foreach (var row in presentation.Rows)
+                body.Children.Add(BuildRow(row));
         }
 
         var scroll = new ScrollViewer
@@ -121,7 +128,7 @@ internal sealed class CommentListDialog : FreeWDialogWindow
 
         var close = new Button
         {
-            Content = "Close",
+            Content = CommentDialogPresentationPlanner.Text.CloseActionLabel,
             MinWidth = 78,
             IsDefault = true,
             IsCancel = true,
@@ -142,17 +149,17 @@ internal sealed class CommentListDialog : FreeWDialogWindow
     public static Task ShowAsync(Window owner, IReadOnlyList<CommentListItem> items) =>
         new CommentListDialog(items).ShowDialog(owner);
 
-    private static Control BuildRow(CommentListItem item)
+    private static Control BuildRow(CommentListRowPresentation row)
     {
         var title = new TextBlock
         {
-            Text = $"#{item.Id}  {item.Author}  {StateText(item)}",
+            Text = row.HeadingText,
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
         var text = new TextBlock
         {
-            Text = TrimForDisplay(item.Text),
+            Text = row.Body,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 3, 0, 0),
         };
@@ -170,18 +177,4 @@ internal sealed class CommentListDialog : FreeWDialogWindow
         };
     }
 
-    private static string StateText(CommentListItem item)
-    {
-        var state = item.Resolved ? "Resolved" : "Open";
-        var replies = item.ReplyCount == 1 ? "1 reply" : $"{item.ReplyCount} replies";
-        return $"{state} - {replies}";
-    }
-
-    private static string TrimForDisplay(string text)
-    {
-        var normalized = string.IsNullOrWhiteSpace(text)
-            ? "(blank)"
-            : text.Replace('\r', ' ').Replace('\n', ' ').Trim();
-        return normalized.Length <= 180 ? normalized : normalized[..177] + "...";
-    }
 }

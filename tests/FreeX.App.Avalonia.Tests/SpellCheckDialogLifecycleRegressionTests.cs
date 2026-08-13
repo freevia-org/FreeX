@@ -13,12 +13,9 @@ public sealed class SpellCheckDialogLifecycleRegressionTests
     [Fact]
     public async Task SpellCheckDialog_MatchesWpfFocusCycleEscapeAndDefaultAction()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-spell-check-dialog-lifecycle-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-spell-check-dialog-lifecycle-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -68,18 +65,6 @@ public sealed class SpellCheckDialogLifecycleRegressionTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Temp cleanup must not hide the dialog lifecycle regression.
-            }
         }
     }
 }

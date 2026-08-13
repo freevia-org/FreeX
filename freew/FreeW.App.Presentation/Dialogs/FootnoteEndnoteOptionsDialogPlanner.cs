@@ -9,6 +9,53 @@ public enum FootnoteEndnoteOptionsDialogField
     EndnoteStartAt
 }
 
+public enum FootnoteEndnoteNoteKind
+{
+    Footnote,
+    Endnote,
+}
+
+public enum FootnoteEndnoteFieldKind
+{
+    NumberFormat,
+    StartAt,
+    Numbering,
+}
+
+public sealed record FootnoteEndnoteFieldSpec(
+    FootnoteEndnoteFieldKind Kind,
+    string Label,
+    string AutomationId,
+    double MinWidth = 0);
+
+public sealed record FootnoteEndnoteSectionSpec(
+    FootnoteEndnoteNoteKind Kind,
+    string Label,
+    string AutomationId,
+    FootnoteEndnoteOptionsDialogField StartAtValidationField,
+    IReadOnlyList<FootnoteEndnoteFieldSpec> Fields)
+{
+    public FootnoteEndnoteFieldSpec Field(FootnoteEndnoteFieldKind kind) =>
+        Fields.First(field => field.Kind == kind);
+}
+
+public sealed record FootnoteEndnoteSurfaceSpec(
+    string Title,
+    double DialogWidth,
+    double OuterMargin,
+    double SectionHeaderBottomMargin,
+    double FieldVerticalMargin,
+    double LabelFieldGap,
+    double SeparatorTopMargin,
+    double SeparatorBottomMargin,
+    double ActionTopMargin,
+    double ButtonWidth,
+    IReadOnlyList<FootnoteEndnoteSectionSpec> Sections)
+{
+    public FootnoteEndnoteSectionSpec Section(FootnoteEndnoteNoteKind kind) =>
+        Sections.First(section => section.Kind == kind);
+}
+
 public sealed record FootnoteEndnoteOptionsChoice<TValue>(string Label, TValue Value);
 
 public sealed record FootnoteEndnoteOptionsInitialState(
@@ -17,7 +64,29 @@ public sealed record FootnoteEndnoteOptionsInitialState(
     int FootnoteRestartIndex,
     int EndnoteFormatIndex,
     string EndnoteStartAtText,
-    int EndnoteRestartIndex);
+    int EndnoteRestartIndex)
+{
+    public int FormatIndex(FootnoteEndnoteNoteKind kind) => kind switch
+    {
+        FootnoteEndnoteNoteKind.Footnote => FootnoteFormatIndex,
+        FootnoteEndnoteNoteKind.Endnote => EndnoteFormatIndex,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
+    public string StartAtText(FootnoteEndnoteNoteKind kind) => kind switch
+    {
+        FootnoteEndnoteNoteKind.Footnote => FootnoteStartAtText,
+        FootnoteEndnoteNoteKind.Endnote => EndnoteStartAtText,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
+    public int RestartIndex(FootnoteEndnoteNoteKind kind) => kind switch
+    {
+        FootnoteEndnoteNoteKind.Footnote => FootnoteRestartIndex,
+        FootnoteEndnoteNoteKind.Endnote => EndnoteRestartIndex,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+}
 
 public sealed record FootnoteEndnoteOptionsDialogInput(
     int FootnoteFormatIndex,
@@ -61,6 +130,40 @@ public static class FootnoteEndnoteOptionsDialogPlanner
     public const string NumberingLabel = "Numbering:";
     public const string PositiveStartAtMessage = "Enter a positive integer for the start-at values.";
 
+    public static FootnoteEndnoteSurfaceSpec Surface { get; } = new(
+        Title,
+        DialogWidth,
+        OuterMargin,
+        SectionHeaderBottomMargin,
+        FieldVerticalMargin,
+        LabelFieldGap,
+        SeparatorTopMargin,
+        SeparatorBottomMargin,
+        ActionTopMargin,
+        ButtonWidth,
+        [
+            new(
+                FootnoteEndnoteNoteKind.Footnote,
+                FootnotesSectionLabel,
+                "FootnoteOptionsSection",
+                FootnoteEndnoteOptionsDialogField.FootnoteStartAt,
+                [
+                    new(FootnoteEndnoteFieldKind.NumberFormat, NumberFormatLabel, "FootnoteNumberFormatComboBox"),
+                    new(FootnoteEndnoteFieldKind.StartAt, StartAtLabel, "FootnoteStartAtTextBox", StartAtMinWidth),
+                    new(FootnoteEndnoteFieldKind.Numbering, NumberingLabel, "FootnoteNumberingComboBox"),
+                ]),
+            new(
+                FootnoteEndnoteNoteKind.Endnote,
+                EndnotesSectionLabel,
+                "EndnoteOptionsSection",
+                FootnoteEndnoteOptionsDialogField.EndnoteStartAt,
+                [
+                    new(FootnoteEndnoteFieldKind.NumberFormat, NumberFormatLabel, "EndnoteNumberFormatComboBox"),
+                    new(FootnoteEndnoteFieldKind.StartAt, StartAtLabel, "EndnoteStartAtTextBox", StartAtMinWidth),
+                    new(FootnoteEndnoteFieldKind.Numbering, NumberingLabel, "EndnoteNumberingComboBox"),
+                ]),
+        ]);
+
     public static readonly IReadOnlyList<FootnoteEndnoteOptionsChoice<NoteNumberFormat>> FormatItems =
     [
         new("1, 2, 3, \u2026", NoteNumberFormat.Decimal),
@@ -83,6 +186,16 @@ public static class FootnoteEndnoteOptionsDialogPlanner
         new("Continuous", NoteNumberRestart.Continuous),
         new("Restart each section", NoteNumberRestart.EachSection),
     ];
+
+    public static FootnoteEndnoteOptionsDialogSession CreateSession(
+        NoteNumberingOptions footnote,
+        NoteNumberingOptions endnote,
+        CultureInfo culture) =>
+        new(footnote, endnote, culture);
+
+    public static FootnoteEndnoteOptionsCommitPlan PlanCommit(
+        FootnoteEndnoteOptionsDialogResult? result) =>
+        new(result);
 
     public static FootnoteEndnoteOptionsInitialState BuildInitialState(
         NoteNumberingOptions footnote,

@@ -3,7 +3,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using FreeX.App.Presentation.ThemeUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -19,7 +18,7 @@ public sealed partial class MainWindow
         WorkbookTheme? picked = null;
         var dialog = new Window
         {
-            Title = "Themes",
+            Title = UiText.Get("Common_Themes"),
             Width = 280,
             Height = 200,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -31,7 +30,12 @@ public sealed partial class MainWindow
         foreach (var option in WorkbookThemeCatalog.ThemePresets.Where(option => !option.IsCustomizeAction))
         {
             var local = option.CreateTheme();
-            var button = new Button { Content = option.Label, Width = 230, Padding = new Thickness(8, 6) };
+            var button = new Button
+            {
+                Content = UiText.Get(option.LabelResourceKey),
+                Width = 230,
+                Padding = new Thickness(8, 6),
+            };
             button.Click += (_, _) => { picked = local; dialog.Close(); };
             panel.Children.Add(button);
         }
@@ -41,7 +45,8 @@ public sealed partial class MainWindow
         if (picked is not { } chosen)
             return;
 
-        var result = _session.ExecuteReviewCommand(new SetWorkbookThemeCommand(chosen));
+        var plan = WorkbookThemeCommandPlanner.PlanApply(chosen);
+        var result = _session.ExecuteReviewCommand(plan.Command);
         RefreshShell(result.Success
             ? UiText.Format("WTA_Theme_Applied", chosen.Name)
             : result.ErrorMessage ?? UiText.Get("WTA_Theme_ApplyFailed"));
@@ -58,13 +63,15 @@ public sealed partial class MainWindow
         var options = WorkbookThemeCatalog.ColorPresets
             .Where(option => !option.IsCustomizeAction)
             .ToArray();
-        var labels = options.Select(option => option.Label).ToArray();
+        var labels = options.Select(option => UiText.Get(option.LabelResourceKey)).ToArray();
         var index = await ShowThemePartPickerAsync(UiText.Get("WTA_ThemeColors_Title"), labels);
         if (index is not { } chosen)
             return;
 
         var option = options[chosen];
-        ApplyDerivedTheme(option.ApplyColors(_session.Workbook.Theme), UiText.Format("WTA_ThemeColors_Applied", option.Label));
+        ApplyDerivedTheme(
+            option.ApplyColors(_session.Workbook.Theme),
+            UiText.Format("WTA_ThemeColors_Applied", UiText.Get(option.LabelResourceKey)));
     }
 
     private async Task ShowThemeFontsGalleryAsync()
@@ -74,14 +81,14 @@ public sealed partial class MainWindow
             .ToArray();
         var index = await ShowThemePartPickerAsync(
             UiText.Get("WTA_ThemeFonts_Title"),
-            options.Select(option => option.Label).ToArray());
+            options.Select(option => UiText.Get(option.LabelResourceKey)).ToArray());
         if (index is not { } chosen)
             return;
 
         var option = options[chosen];
         ApplyDerivedTheme(
-            _session.Workbook.Theme.WithFonts(option.MajorFontName, option.MinorFontName),
-            UiText.Format("WTA_ThemeFonts_Applied", option.Label));
+            option.ApplyFonts(_session.Workbook.Theme),
+            UiText.Format("WTA_ThemeFonts_Applied", UiText.Get(option.LabelResourceKey)));
     }
 
     private async Task ShowThemeEffectsGalleryAsync()
@@ -91,19 +98,20 @@ public sealed partial class MainWindow
             .ToArray();
         var index = await ShowThemePartPickerAsync(
             UiText.Get("WTA_ThemeEffects_Title"),
-            options.Select(option => option.Label).ToArray());
+            options.Select(option => UiText.Get(option.LabelResourceKey)).ToArray());
         if (index is not { } chosen)
             return;
 
         var option = options[chosen];
         ApplyDerivedTheme(
-            _session.Workbook.Theme.WithEffects(option.EffectsName),
-            UiText.Format("WTA_ThemeEffects_Applied", option.Label));
+            option.ApplyEffects(_session.Workbook.Theme),
+            UiText.Format("WTA_ThemeEffects_Applied", UiText.Get(option.LabelResourceKey)));
     }
 
     private void ApplyDerivedTheme(WorkbookTheme theme, string successMessage)
     {
-        var result = _session.ExecuteReviewCommand(new SetWorkbookThemeCommand(theme));
+        var plan = WorkbookThemeCommandPlanner.PlanApply(theme);
+        var result = _session.ExecuteReviewCommand(plan.Command);
         RefreshShell(result.Success ? successMessage : result.ErrorMessage ?? UiText.Get("WTA_Theme_ApplyFailed"));
     }
 

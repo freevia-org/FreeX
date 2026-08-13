@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using FreeX.App.Services;
 using FreeX.Core.Model;
@@ -44,15 +45,27 @@ public sealed class WorkbookViewportScrollPlannerDedupTests
     }
 
     [Fact]
-    public void ViewportScrollCalculator_IsThinHostAdapter()
+    public void WorkbookViewportScrollPlanner_IsOwnedByServicesAndCalledDirectlyByHost()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("ViewportScrollCalculator.cs");
+        var plannerSource = WorkspaceFileLocator.ReadAllText(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookViewportScrollPlanner.cs");
+        var hostSource = DialogSourceTestSupport.ReadHostSources(
+            "MainWindow.Viewport.cs",
+            "ViewportScrollbarUpdater.cs");
+        var hostFacadePath = Path.Combine(
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            "src",
+            "FreeX.App.Host",
+            "ViewportScrollCalculator.cs");
 
-        source.Should().Contain("WorkbookViewportScrollPlanner.PlanCellReveal");
-        source.Should().Contain("WorkbookViewportScrollPlanner.CalculateScrollValueToRevealCell");
-        source.Should().Contain("WorkbookViewportScrollPlanner.CalculateWheelScroll");
-        source.Should().Contain("WorkbookViewportScrollPlanner.CalculateDragAutoScroll");
-        source.Should().NotContain("targetIndex - (lastVisibleIndex - firstVisibleIndex)");
-        source.Should().NotContain("var desired = currentValue");
+        plannerSource.Should().Contain("public static WorkbookViewportCellRevealPlan PlanCellReveal");
+        plannerSource.Should().Contain("public static uint CalculateScrollValueToRevealCell");
+        plannerSource.Should().Contain("public static (double Maximum, double Value) CalculateWheelScroll");
+        plannerSource.Should().Contain("public static (double Maximum, double Value) CalculateDragAutoScroll");
+        hostSource.Should().Contain("WorkbookViewportScrollPlanner.CalculateViewportOrigin");
+        hostSource.Should().Contain("WorkbookViewportScrollPlanner.CalculateWheelScroll");
+        File.Exists(hostFacadePath).Should().BeFalse();
     }
 }

@@ -20,13 +20,6 @@ public enum HeaderFooterSlotActivationKind
     RequiresDifferentFirstPage
 }
 
-public enum HeaderFooterInsertKind
-{
-    PageNumber,
-    DateTime,
-    DocumentInfo
-}
-
 public sealed record HeaderFooterSlotActivationPlan(
     HeaderFooterSlotKind Slot,
     string SlotName,
@@ -90,6 +83,18 @@ public static class HeaderFooterDialogPlanner
 
         return PlanSlotActivation(
             ParseSlot(slotName),
+            pageSettings.DifferentOddEvenPages,
+            pageSettings.DifferentFirstPage);
+    }
+
+    public static HeaderFooterSlotActivationPlan PlanSlotActivation(
+        HeaderFooterSlotKind slot,
+        PageSettings pageSettings)
+    {
+        ArgumentNullException.ThrowIfNull(pageSettings);
+
+        return PlanSlotActivation(
+            slot,
             pageSettings.DifferentOddEvenPages,
             pageSettings.DifferentFirstPage);
     }
@@ -320,6 +325,22 @@ public static class HeaderFooterDialogPlanner
     public static bool HasComplexField(HeaderFooter? headerFooter) =>
         headerFooter?.Paragraphs.SelectMany(p => p.Runs)
             .Any(r => r.ComplexField is not null) ?? false;
+
+    public static bool IsFooterSlot(HeaderFooterSlotKind slot) =>
+        slot is HeaderFooterSlotKind.Footer
+            or HeaderFooterSlotKind.EvenFooter
+            or HeaderFooterSlotKind.FirstFooter;
+
+    public static int CommandSlotIndexFor(HeaderFooterSlotKind slot) => slot switch
+    {
+        HeaderFooterSlotKind.Header => 0,
+        HeaderFooterSlotKind.Footer => 1,
+        HeaderFooterSlotKind.FirstHeader => 2,
+        HeaderFooterSlotKind.FirstFooter => 3,
+        HeaderFooterSlotKind.EvenHeader => 4,
+        HeaderFooterSlotKind.EvenFooter => 5,
+        _ => throw new ArgumentOutOfRangeException(nameof(slot), slot, null)
+    };
 
     private static Paragraph EnsureDefaultParagraph(HeaderFooter headerFooter)
     {

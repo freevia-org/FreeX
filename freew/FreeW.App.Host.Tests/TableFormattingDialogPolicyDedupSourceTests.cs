@@ -5,13 +5,13 @@ namespace FreeW.App.Host.Tests;
 public sealed class TableFormattingDialogPolicyDedupSourceTests
 {
     [Theory]
-    [InlineData("TablePropertiesDialog.cs", "TablePropertiesDialogPlanner.TryBuildResult(")]
-    [InlineData("BordersAndShadingDialog.cs", "BordersAndShadingDialogPlanner.TryBuildResult(")]
-    public void Dialogs_RouteResultConstructionThroughPresentationPlanners(string fileName, string plannerCall)
+    [InlineData("TablePropertiesDialog.cs", "_session.PlanAcceptance(")]
+    [InlineData("BordersAndShadingDialog.cs", "_session.PlanAcceptance(")]
+    public void Dialogs_RouteResultConstructionThroughPresentationPolicy(string fileName, string policyCall)
     {
         var source = ReadHostSource(fileName);
 
-        source.Should().Contain(plannerCall);
+        source.Should().Contain(policyCall);
         source.Should().Contain("FreeW.App.Presentation.Dialogs");
     }
 
@@ -23,6 +23,8 @@ public sealed class TableFormattingDialogPolicyDedupSourceTests
         source.Should().NotContain("new TablePropertiesValues(");
         source.Should().NotContain("TryReadOptional(");
         source.Should().NotContain("double.TryParse(");
+        source.Should().Contain("TablePropertiesDialogTabKind initialTab");
+        source.Should().NotContain("internal enum Tab");
     }
 
     [Fact]

@@ -1047,7 +1047,7 @@ public sealed class SlideShowWindowHeadlessTests
             "FreeP.App.Avalonia",
             "SlideShowWindow.cs"));
 
-        source.Should().Contain("ExternalUriLauncher.Open(");
+        source.Should().Contain("DesktopExternalUriLauncher.Open(");
         source.Should().NotContain("new Uri(url");
         source.Should().NotContain("uri.Scheme is not");
     }
@@ -1271,20 +1271,21 @@ public sealed class SlideShowWindowHeadlessTests
             presentation.Slides.Add(new Slide { Title = "Intro" });
             presentation.Slides.Add(new Slide { Title = "Deep dive" });
             presentation.Slides.Add(new Slide { Title = "Appendix" });
+            var customShows = new SlideShowCustomShowSession(() => window.Editor);
 
-            var create = window.CreateCustomShow(
+            var create = customShows.Create(
                 "  Executive review  ",
                 new[] { presentation.Slides[2].Id, "missing-slide", presentation.Slides[0].Id });
-            var rename = window.RenameCustomShow(create.CustomShowIndex, "Board review");
-            var updateSlides = window.UpdateCustomShowSlides(
+            var rename = customShows.Rename(create.CustomShowIndex, "Board review");
+            var updateSlides = customShows.UpdateSlides(
                 create.CustomShowIndex,
                 new[] { presentation.Slides[1].Id, presentation.Slides[2].Id });
-            var moveSlide = window.MoveCustomShowSlide(
+            var moveSlide = customShows.MoveSlide(
                 create.CustomShowIndex,
                 sourceSlideIndex: 0,
                 sourceSlideId: presentation.Slides[1].Id,
                 targetSlideIndex: 1);
-            var plan = window.BuildCustomShowAuthoringPlan();
+            var plan = customShows.BuildAuthoringPlan();
 
             create.Succeeded.Should().BeTrue();
             rename.Succeeded.Should().BeTrue();
@@ -1297,7 +1298,7 @@ public sealed class SlideShowWindowHeadlessTests
             plan.CustomShows.Should().ContainSingle().Which.Name.Should().Be("Board review");
             plan.AvailableSlides.Select(slide => slide.Title).Should().Equal("Intro", "Deep dive", "Appendix");
 
-            var delete = window.DeleteCustomShow(create.CustomShowIndex);
+            var delete = customShows.Delete(create.CustomShowIndex);
 
             delete.Succeeded.Should().BeTrue();
             presentation.CustomShows.Should().BeEmpty();
@@ -1319,13 +1320,14 @@ public sealed class SlideShowWindowHeadlessTests
                 presentation.Slides.Clear();
                 presentation.Slides.Add(new Slide { Title = "Intro" });
                 presentation.Slides.Add(new Slide { Title = "Deep dive" });
+                var customShows = new SlideShowCustomShowSession(() => window.Editor);
 
-                var create = window.CreateCustomShow(
+                var create = customShows.Create(
                     "Executive review",
                     new[] { presentation.Slides[0].Id, presentation.Slides[1].Id });
                 create.Succeeded.Should().BeTrue();
 
-                dialog = new CustomShowDialog(window);
+                dialog = new CustomShowDialog(customShows);
 
                 dialog.RenderedCustomShowCount.Should().Be(1);
                 dialog.RenderedSlideOptionCount.Should().Be(2);
@@ -1378,8 +1380,9 @@ public sealed class SlideShowWindowHeadlessTests
                 presentation.Slides.Add(new Slide { Title = "Intro" });
                 presentation.Slides.Add(new Slide { Title = "Deep dive" });
                 presentation.Slides.Add(new Slide { Title = "Appendix" });
+                var customShows = new SlideShowCustomShowSession(() => window.Editor);
 
-                var create = window.CreateCustomShow(
+                var create = customShows.Create(
                     "Executive review",
                     new[]
                     {
@@ -1389,7 +1392,7 @@ public sealed class SlideShowWindowHeadlessTests
                     });
                 create.Succeeded.Should().BeTrue();
 
-                dialog = new CustomShowDialog(window);
+                dialog = new CustomShowDialog(customShows);
 
                 var capturedPointer = dialog.BeginCustomShowSlideDragForTests(sourceSlideIndex: 0);
                 dialog.IsCustomShowSlideDragActiveForTests.Should().BeTrue();
@@ -1444,7 +1447,7 @@ public sealed class SlideShowWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_has_slideshow_group()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var transitions = definition.Tabs.Single(t => t.Id == "transitions");
         transitions.Groups.Should().Contain(g => g.Id == "slideshow-from-transitions",
             "the Slide Show group must match the WPF Transitions placement");
@@ -1453,7 +1456,7 @@ public sealed class SlideShowWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_slideshow_group_has_from_beginning_and_from_current()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var transitions = definition.Tabs.Single(t => t.Id == "transitions");
         var sg = transitions.Groups.Single(g => g.Id == "slideshow-from-transitions");
         var ids   = sg.Controls.Select(i => i.CommandId.Value).ToList();

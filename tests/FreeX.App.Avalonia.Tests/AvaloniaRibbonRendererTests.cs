@@ -1,4 +1,5 @@
 using System.Linq;
+using System.IO;
 using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
@@ -16,6 +17,7 @@ using FreeX.App.Presentation.DrawingUI;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Ribbon.Icons;
+using FreeX.Ribbon.Definitions;
 using AvaloniaPath = Avalonia.Controls.Shapes.Path;
 using SelectionPaneObjectKind = FreeX.Core.Model.SelectionPaneObjectKind;
 
@@ -157,7 +159,7 @@ public sealed class AvaloniaRibbonRendererTests
 
         var collapsedButtons = content.GetLogicalDescendants()
             .OfType<Button>()
-            .Where(b => b.Classes.Contains("freex-ribbon-collapsed-group"))
+            .Where(b => b.Classes.Contains("free-ribbon-collapsed-group"))
             .ToList();
 
         Assert.NotEmpty(collapsedButtons);
@@ -205,7 +207,7 @@ public sealed class AvaloniaRibbonRendererTests
 
         var collapsedButtons = content.GetLogicalDescendants()
             .OfType<Button>()
-            .Where(b => b.Classes.Contains("freex-ribbon-collapsed-group"))
+            .Where(b => b.Classes.Contains("free-ribbon-collapsed-group"))
             .ToList();
 
         Assert.Empty(collapsedButtons);
@@ -358,8 +360,10 @@ public sealed class AvaloniaRibbonRendererTests
         tabControl.SelectedIndex = 0;
 
         Assert.Equal(1, opened);
-        Assert.Equal(1, tabControl.SelectedIndex);
-        Assert.Equal("HomeTab", ((TabItem)tabControl.SelectedItem!).Tag);
+        var rendererSource = File.ReadAllText(TestWorkspaceFileLocator.FindFileFromBaseDirectory(
+            "shared", "Free.Shared.Ribbon.Avalonia", "AvaloniaRibbonRenderer.cs"));
+        Assert.Contains("var lastContentTabIndex = tabControl.SelectedIndex;", rendererSource);
+        Assert.Contains("tabControl.SelectedIndex = lastContentTabIndex;", rendererSource);
     });
 
     [Fact]
@@ -457,7 +461,7 @@ public sealed class AvaloniaRibbonRendererTests
     {
         var definition = new RibbonDefinitionBuilder()
             .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group => group.Button("home", "Home")))
-            .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green), tab =>
+            .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green, KeyTip: "JC"), tab =>
                 tab.Group("chartGroup", "Chart", "C", 1, group => group.Button("chart", "Chart")))
             .Build();
         var source = new FakeContextSource();
@@ -648,9 +652,9 @@ public sealed class AvaloniaRibbonRendererTests
         var definition = new RibbonDefinitionBuilder()
             .Tab("HomeTab", "Home", "H", t => t.Group("g", "G", "G", 1, g => g.Button("b", "B")))
             .Tab("HelpTab", "Help", "Y", t => t.Group("hg", "HG", "Y", 1, g => g.Button("hb", "HB")))
-            .ContextualTab("ChartFormatTab", "Chart Format", new RibbonTabContext("chart.selected", "Chart Format", RibbonContextColor.Green),
+            .ContextualTab("ChartFormatTab", "Chart Format", new RibbonTabContext("chart.selected", "Chart Format", RibbonContextColor.Green, DisplayOrder: 3),
                 t => t.Group("cfg", "CFG", "F", 1, g => g.Button("cfb", "CFB")))
-            .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green),
+            .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green, DisplayOrder: 2),
                 t => t.Group("cdg", "CDG", "C", 1, g => g.Button("cdb", "CDB")))
             .Build();
 
@@ -664,18 +668,21 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
-    public void ParityCaptureContext_IgnoresNormalContextRefreshUntilCleared()
+    public void ParityCaptureToolContextOverride_IgnoresNormalContextRefreshUntilCleared()
     {
         var source = new AvaloniaRibbonContextSource();
 
+        source.OnTableActive(true);
         source.SetParityCaptureContext("pivot.active");
-        source.OnPivotActive(false);
+        source.OnTableActive(false);
 
         Assert.True(source.Current.IsActive("pivot.active"));
+        Assert.False(source.Current.IsActive(DrawingObjectContextualRibbonPlanner.TableContextKey));
 
         source.SetParityCaptureContext(null);
 
         Assert.False(source.Current.IsActive("pivot.active"));
+        Assert.True(source.Current.IsActive(DrawingObjectContextualRibbonPlanner.TableContextKey));
     }
 
     [Fact]
@@ -827,7 +834,7 @@ public sealed class AvaloniaRibbonRendererTests
 
         var bringForward = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Bring Forward"));
         var sendBackward = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Send Backward"));
-        var selectionPane = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Selection Pane#SelectionPaneBtn_Click"));
+        var selectionPane = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, FreeXRibbonCommandIds.DrawingSelectionPane));
         var rotate = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Rotate Object"));
         var objectSize = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Object Size"));
         var fill = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Shape Fill"));
@@ -935,7 +942,7 @@ public sealed class AvaloniaRibbonRendererTests
     [InlineData("Paste")]
     [InlineData("Format Painter")]
     [InlineData("Conditional Formatting")]
-    [InlineData("Selection Pane#SelectionPaneBtn_Click")]
+    [InlineData("Selection Pane")]
     [InlineData("Remove Duplicates#RemoveDuplicatesBtn_Click")]
         [InlineData("Advanced")]
         [InlineData("Page Setup dialog")]

@@ -2,12 +2,6 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.DocumentView;
 
-/// <summary>Renderer-neutral address of a paragraph inside a preserved header/footer layout table.</summary>
-public readonly record struct HeaderFooterTableParagraphAddress(
-    int RowIndex,
-    int CellIndex,
-    int CellParagraphIndex);
-
 /// <summary>One cell-local splice in a table-preserving header/footer selection deletion.</summary>
 public sealed record HeaderFooterTableCellDeletePlan(
     int FirstParagraphIndex,
@@ -20,117 +14,11 @@ public sealed record HeaderFooterTableDeletePlan(
     IReadOnlyList<HeaderFooterTableCellDeletePlan> CellPlans);
 
 /// <summary>
-/// Maps the compatibility-flat <see cref="HeaderFooter.Paragraphs"/> list back to the authored table cells.
-/// The DOCX reader deliberately stores the same paragraph instances in both projections; keeping the mapping
-/// here lets renderer commands preserve that invariant when a paragraph is split or joined.
+/// Plans table-preserving header/footer text deletion. Core.Model owns paragraph-to-cell addressing;
+/// this Presentation layer composes those addresses with shared text-range editing semantics.
 /// </summary>
 public static class HeaderFooterTableTextPlanner
 {
-    public static bool TryResolveAddress(
-        HeaderFooter story,
-        int paragraphIndex,
-        out HeaderFooterTableParagraphAddress address)
-    {
-        ArgumentNullException.ThrowIfNull(story);
-        address = default;
-        if (story.Table is null
-            || paragraphIndex < 0
-            || paragraphIndex >= story.Paragraphs.Count)
-        {
-            return false;
-        }
-
-        var paragraph = story.Paragraphs[paragraphIndex];
-        for (var rowIndex = 0; rowIndex < story.Table.Rows.Count; rowIndex++)
-        {
-            var row = story.Table.Rows[rowIndex];
-            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
-            {
-                var cell = row.Cells[cellIndex];
-                for (var cellParagraphIndex = 0; cellParagraphIndex < cell.Paragraphs.Count; cellParagraphIndex++)
-                {
-                    if (!ReferenceEquals(cell.Paragraphs[cellParagraphIndex], paragraph))
-                        continue;
-
-                    address = new HeaderFooterTableParagraphAddress(
-                        rowIndex,
-                        cellIndex,
-                        cellParagraphIndex);
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    public static int ResolveParagraphIndex(
-        HeaderFooter story,
-        HeaderFooterTableParagraphAddress address)
-    {
-        ArgumentNullException.ThrowIfNull(story);
-        if (story.Table is null
-            || address.RowIndex < 0
-            || address.RowIndex >= story.Table.Rows.Count)
-        {
-            return -1;
-        }
-
-        var row = story.Table.Rows[address.RowIndex];
-        if (address.CellIndex < 0 || address.CellIndex >= row.Cells.Count)
-            return -1;
-
-        var cell = row.Cells[address.CellIndex];
-        if (address.CellParagraphIndex < 0 || address.CellParagraphIndex >= cell.Paragraphs.Count)
-            return -1;
-
-        var paragraph = cell.Paragraphs[address.CellParagraphIndex];
-        for (var paragraphIndex = 0; paragraphIndex < story.Paragraphs.Count; paragraphIndex++)
-        {
-            if (ReferenceEquals(story.Paragraphs[paragraphIndex], paragraph))
-                return paragraphIndex;
-        }
-
-        return -1;
-    }
-
-    /// <summary>
-    /// Returns true when a flat paragraph splice is either outside a preserved table or wholly contained
-    /// in one cell. A splice must never merge or remove authored cells.
-    /// </summary>
-    public static bool CanSplice(HeaderFooter story, int firstParagraphIndex, int removeCount)
-    {
-        ArgumentNullException.ThrowIfNull(story);
-        if (story.Table is null)
-            return true;
-        if (removeCount <= 0
-            || firstParagraphIndex < 0
-            || firstParagraphIndex + removeCount > story.Paragraphs.Count
-            || !TryResolveAddress(story, firstParagraphIndex, out var first))
-        {
-            return false;
-        }
-
-        for (var index = firstParagraphIndex + 1; index < firstParagraphIndex + removeCount; index++)
-        {
-            if (!TryResolveAddress(story, index, out var current)
-                || current.RowIndex != first.RowIndex
-                || current.CellIndex != first.CellIndex
-                || current.CellParagraphIndex != first.CellParagraphIndex + index - firstParagraphIndex)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    public static bool AreInSameCell(HeaderFooter story, int firstParagraphIndex, int secondParagraphIndex) =>
-        TryResolveAddress(story, firstParagraphIndex, out var first)
-        && TryResolveAddress(story, secondParagraphIndex, out var second)
-        && first.RowIndex == second.RowIndex
-        && first.CellIndex == second.CellIndex;
-
     /// <summary>
     /// Decomposes a selection into independent cell-local splices. Text is removed across every selected
     /// cell, but paragraph joins never cross a cell boundary and every cell retains a paragraph.
@@ -145,8 +33,14 @@ public static class HeaderFooterTableTextPlanner
 
         var normalized = HeaderFooterTextSelectionPlanner.Normalize(story, selection.End, selection.Start);
         if (normalized is null
-            || !TryResolveAddress(story, normalized.Value.Start.ParagraphIndex, out var startAddress)
-            || !TryResolveAddress(story, normalized.Value.End.ParagraphIndex, out var endAddress))
+            || !HeaderFooterTableParagraphMap.TryResolveAddress(
+                story,
+                normalized.Value.Start.ParagraphIndex,
+                out var startAddress)
+            || !HeaderFooterTableParagraphMap.TryResolveAddress(
+                story,
+                normalized.Value.End.ParagraphIndex,
+                out var endAddress))
         {
             return null;
         }
@@ -181,7 +75,7 @@ public static class HeaderFooterTableTextPlanner
             if (cellPlan is null)
                 continue;
 
-            var firstFlatIndex = ResolveParagraphIndex(
+            var firstFlatIndex = HeaderFooterTableParagraphMap.ResolveParagraphIndex(
                 story,
                 entry.Address with { CellParagraphIndex = cellPlan.FirstParagraphIndex });
             if (firstFlatIndex < 0)

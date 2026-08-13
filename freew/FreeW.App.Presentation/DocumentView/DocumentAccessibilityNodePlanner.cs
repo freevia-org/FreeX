@@ -187,24 +187,19 @@ public static class DocumentAccessibilityNodePlanner
 
     private static DocumentAccessibilityNode BuildTable(Table table, int blockIndex, int tableNumber, string id)
     {
-        var columnCount = table.Rows.Count == 0
-            ? 0
-            : table.Rows.Max(row => row.Cells.Sum(cell => Math.Max(1, cell.GridSpan)));
+        var columnCount = TableGridProjection.TableWidth(table);
         var rows = new List<DocumentAccessibilityNode>(table.Rows.Count);
         for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
             var row = table.Rows[rowIndex];
             var cells = new List<DocumentAccessibilityNode>(row.Cells.Count);
-            var gridColumn = 0;
-            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
+            foreach (var projected in TableGridProjection.ProjectRow(row))
             {
-                var cell = row.Cells[cellIndex];
-                var span = Math.Max(1, cell.GridSpan);
+                var cell = projected.Cell;
+                var gridColumn = projected.StartColumn;
+                var span = projected.Span;
                 if (cell.VerticalMerge == VerticalMergeState.Continue)
-                {
-                    gridColumn += span;
                     continue;
-                }
 
                 var cellId = $"{id}:row:{rowIndex}:column:{gridColumn}";
                 var content = new List<DocumentAccessibilityNode>(cell.NestedTables.Count + cell.Paragraphs.Count);
@@ -245,7 +240,6 @@ public static class DocumentAccessibilityNodePlanner
                     RowSpan: rowSpan,
                     IsHeader: table.Formatting.HeaderRow && rowIndex == 0,
                     Children: content));
-                gridColumn += span;
             }
 
             rows.Add(new DocumentAccessibilityNode(
@@ -680,18 +674,8 @@ public static class DocumentAccessibilityNodePlanner
         return span;
     }
 
-    private static TableCell? CellAtGridColumn(TableRow row, int targetColumn)
-    {
-        var gridColumn = 0;
-        foreach (var cell in row.Cells)
-        {
-            var span = Math.Max(1, cell.GridSpan);
-            if (targetColumn >= gridColumn && targetColumn < gridColumn + span)
-                return cell;
-            gridColumn += span;
-        }
-        return null;
-    }
+    private static TableCell? CellAtGridColumn(TableRow row, int targetColumn) =>
+        TableGridProjection.At(row, targetColumn)?.Cell;
 
     private static string NameWithPreview(string label, string text)
     {

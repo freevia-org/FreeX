@@ -191,12 +191,13 @@ public sealed class ThreadedCommentDialog : Window
     {
         var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         AutomationProperties.SetName(_replySelector, UiText.Get("ThreadedComment_ReplyToEditOrDeleteAutomationName"));
-        AutomationProperties.SetAutomationId(_replySelector, "ThreadedCommentReplySelector");
+        AutomationProperties.SetAutomationId(_replySelector, ThreadedCommentDialogPlanner.ReplySelectorAutomationId);
         AutomationProperties.SetHelpText(_replySelector, UiText.Get("ThreadedComment_ReplySelectorHelpText"));
         for (var i = 0; i < existing.Replies.Count; i++)
         {
-            var item = new ComboBoxItem { Content = FormatReplyChoice(i, existing.Replies[i]) };
-            AutomationProperties.SetName(item, FormatReplyAutomationName(i, existing.Replies[i]));
+            var descriptor = ThreadedCommentDialogPlanner.DescribeReply(i, existing.Replies[i]);
+            var item = new ComboBoxItem { Content = descriptor.ChoiceText };
+            AutomationProperties.SetName(item, descriptor.AutomationName.Resolve(UiText.Get, UiText.Format));
             _replySelector.Items.Add(item);
         }
 
@@ -206,7 +207,7 @@ public sealed class ThreadedCommentDialog : Window
         panel.Children.Add(_replySelector);
 
         AutomationProperties.SetName(_selectedReplyBox, UiText.Get("ThreadedComment_SelectedReplyTextAutomationName"));
-        AutomationProperties.SetAutomationId(_selectedReplyBox, "ThreadedCommentSelectedReplyBox");
+        AutomationProperties.SetAutomationId(_selectedReplyBox, ThreadedCommentDialogPlanner.SelectedReplyEditorAutomationId);
         AutomationProperties.SetHelpText(_selectedReplyBox, UiText.Get("ThreadedComment_SelectedReplyTextHelpText"));
         _selectedReplyBox.TextChanged += (_, _) => UpdateSelectedReplyActionState(existing);
         _selectedReplyBox.PreviewKeyDown += (_, e) =>
@@ -223,10 +224,10 @@ public sealed class ThreadedCommentDialog : Window
         _updateReplyButton.Content = UiText.Get("ThreadedComment_UpdateReplyButton");
         _deleteReplyButton.Content = UiText.Get("ThreadedComment_DeleteReplyButton");
         AutomationProperties.SetName(_updateReplyButton, UiText.Get("ThreadedComment_UpdateSelectedReplyAutomationName"));
-        AutomationProperties.SetAutomationId(_updateReplyButton, "ThreadedCommentUpdateReplyButton");
+        AutomationProperties.SetAutomationId(_updateReplyButton, ThreadedCommentDialogPlanner.UpdateReplyAutomationId);
         AutomationProperties.SetHelpText(_updateReplyButton, UiText.Get("ThreadedComment_UpdateSelectedReplyHelpText"));
         AutomationProperties.SetName(_deleteReplyButton, UiText.Get("ThreadedComment_DeleteSelectedReplyAutomationName"));
-        AutomationProperties.SetAutomationId(_deleteReplyButton, "ThreadedCommentDeleteReplyButton");
+        AutomationProperties.SetAutomationId(_deleteReplyButton, ThreadedCommentDialogPlanner.DeleteReplyAutomationId);
         AutomationProperties.SetHelpText(_deleteReplyButton, UiText.Get("ThreadedComment_DeleteSelectedReplyHelpText"));
         _updateReplyButton.Click += (_, _) => SubmitThreadedCommentReplyEdit(existing);
         _deleteReplyButton.Click += (_, _) => SubmitThreadedCommentReplyDelete(existing);
@@ -279,16 +280,6 @@ public sealed class ThreadedCommentDialog : Window
         DialogResult = true;
     }
 
-    private static string FormatReplyChoice(int index, CommentReply reply) =>
-        ThreadedCommentDialogPlanner.FormatReplyChoice(index, reply);
-
-    private static string FormatReplyAutomationName(int index, CommentReply reply) =>
-        UiText.Format(
-            "ThreadedComment_ReplyAutomationNameFormat",
-            index + 1,
-            ThreadedCommentDialogPlanner.FormatMessageHeading(reply.Author, reply.CreatedAtUtc),
-            ThreadedCommentDialogPlanner.SummarizeReplyText(reply.Text));
-
     private static Border BuildMessage(string author, string text, DateTimeOffset? createdAtUtc, bool isRoot)
     {
         var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
@@ -321,15 +312,7 @@ public sealed class ThreadedCommentDialog : Window
         => ThreadedCommentDialogPlanner.FormatMessageHeading(author, createdAtUtc);
 
     private static string? GetThreadedCommentDialogErrorMessage(ThreadedCommentDialogValidationError error) =>
-        error switch
-        {
-            ThreadedCommentDialogValidationError.None => null,
-            ThreadedCommentDialogValidationError.EnterComment => UiText.Get("ThreadedComment_EnterCommentMessage"),
-            ThreadedCommentDialogValidationError.NoThreadedCommentAvailable => UiText.Get("ThreadedComment_NoThreadedCommentAvailableMessage"),
-            ThreadedCommentDialogValidationError.SelectReply => UiText.Get("ThreadedComment_SelectReplyMessage"),
-            ThreadedCommentDialogValidationError.EnterReply => UiText.Get("ThreadedComment_EnterReplyMessage"),
-            _ => null
-        };
+        ThreadedCommentDialogPlanner.DescribeValidationError(error)?.Message.Resolve(UiText.Get, UiText.Format);
 
     private void ShowInvalidThreadedCommentWarning(string message, TextBox target)
     {

@@ -3,58 +3,16 @@ using FreeP.Core.Model;
 namespace FreeP.App.Compositor;
 
 /// <summary>
-/// Shared paragraph-metadata contract for in-canvas rich-text paragraph edits.
+/// Maps edited paragraphs back to their source metadata lineage.
 /// A WPF Enter operation can create more FlowDocument paragraphs than existed in
 /// the source model; PowerPoint carries the split paragraph's list metadata forward.
 /// A join keeps the leading paragraph's metadata.
 /// An authored AutoNumStartAt is retained only on the first lineage paragraph;
-/// split continuation paragraphs clear explicit restart intent.
+/// split continuation paragraphs clear explicit restart intent through
+/// <see cref="TextBodyModelCloner.CloneParagraphMetadata"/>.
 /// </summary>
 public static class InCanvasRichTextParagraphEditPlanner
 {
-    public static Paragraph CloneParagraphMetadata(
-        Paragraph source,
-        bool clearAutoNumStartAtSpecified = false)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-
-        var copy = new Paragraph
-        {
-            Align = source.Align,
-            RightToLeft = source.RightToLeft,
-            Level = source.Level,
-            BulletKind = source.BulletKind,
-            BulletSuppressed = source.BulletSuppressed,
-            BulletChar = source.BulletChar,
-            BulletImage = source.BulletImage,
-            AutoNumType = source.AutoNumType,
-            AutoNumStartAt = source.AutoNumStartAt,
-            AutoNumStartAtSpecified = source.AutoNumStartAtSpecified && !clearAutoNumStartAtSpecified,
-            AutoNumTextTemplate = source.AutoNumTextTemplate,
-            MarginLeftEmu = source.MarginLeftEmu,
-            IndentEmu = source.IndentEmu,
-            BulletColor = source.BulletColor,
-            BulletColorFollowsText = source.BulletColorFollowsText,
-            BulletSizePct = source.BulletSizePct,
-            BulletSizePt = source.BulletSizePt,
-            BulletSizeFollowsText = source.BulletSizeFollowsText,
-            BulletFontFamily = source.BulletFontFamily,
-            BulletFontFollowsText = source.BulletFontFollowsText,
-            SpaceBeforePt = source.SpaceBeforePt,
-            SpaceAfterPt = source.SpaceAfterPt,
-        };
-
-        foreach (var tabStop in source.TabStops)
-            copy.TabStops.Add(new TabStop
-            {
-                PositionEmu = tabStop.PositionEmu,
-                Alignment = tabStop.Alignment,
-                Leader = tabStop.Leader,
-            });
-
-        return copy;
-    }
-
     public static IReadOnlyList<int> ResolveSourceParagraphIndices(
         IReadOnlyList<Paragraph> sourceParagraphs,
         IReadOnlyList<string> editedParagraphTexts)

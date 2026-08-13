@@ -34,18 +34,6 @@ public sealed class RibbonShotManifestSourceTests
         source.Should().Contain("capture count");
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var directory = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(directory))
-        {
-            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = Directory.GetParent(directory)?.FullName;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

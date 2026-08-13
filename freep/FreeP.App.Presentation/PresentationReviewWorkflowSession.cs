@@ -6,13 +6,32 @@ public sealed record PresentationReviewWorkflowSessionCallbacks(
     Action MarkDirty,
     Action RefreshCanvas,
     Action RefreshNotesPane,
-    Action RefreshAccessibilitySummaryPlan,
+    Action<PresentationAccessibilityCheckerPanePlan> RenderAccessibilityCheckerPaneIfVisible,
+    Action<PresentationAccessibilityCheckerPanePlan> PresentAccessibilityCheckerPane,
+    Action OpenAltTextPane,
+    Action OpenHyperlinkDialog,
+    Action OpenMediaCaptionPane,
     Action<PresentationCommentPanePlan> RenderCommentPane,
     Action<PresentationAltTextPanePlan> RenderAltTextPaneIfVisible,
+    Action<PresentationReadingOrderPlan> RenderReadingOrderPaneIfVisible,
+    Action<PresentationReadingOrderPlan> PresentReadingOrderPane,
     Action<PresentationProofingPanePlan> RenderProofingPaneIfVisible,
+    Action<PresentationProofingPanePlan> PresentProofingPane,
     Action UpdateAfterCommentMutation,
     Action UpdateAfterCommentNavigation,
     Action UpdateAfterProofingCorrection);
+
+public sealed record PresentationCommentMentionApplicationResult(
+    PresentationCommentMentionInsertionPlan InsertionPlan,
+    PresentationCommentMutationPlan? MutationPlan);
+
+public sealed record PresentationCommentMentionDispatchResult(
+    PresentationCommentMentionPickerPlan PickerPlan,
+    PresentationCommentMentionApplicationResult? ApplicationResult)
+{
+    public bool ShouldShowPicker =>
+        ApplicationResult is null && PickerPlan.HasCandidates;
+}
 
 /// <summary>
 /// Renderer-neutral state and orchestration for the shared FreeP review workflow.
@@ -49,6 +68,24 @@ public sealed class PresentationReviewWorkflowSession
 
     public PresentationCommentMentionInsertionPlan? LastCommentMentionInsertionPlan { get; private set; }
 
+    public PresentationMediaTranscriptPlan? LastMediaTranscriptPlan { get; private set; }
+
+    public PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
+
+    public PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan { get; private set; }
+
+    public PresentationAccessibilityCheckerNavigationPlan? LastAccessibilityCheckerNavigationPlan { get; private set; }
+
+    public PresentationSlideTitleMutationPlan? LastSlideTitleMutationPlan { get; private set; }
+
+    public PresentationChartTitleMutationPlan? LastChartTitleMutationPlan { get; private set; }
+
+    public PresentationTableHeaderRowMutationPlan? LastTableHeaderRowMutationPlan { get; private set; }
+
+    public PresentationTableStructureReviewPlan? LastTableStructureReviewPlan { get; private set; }
+
+    public PresentationTableStructureReviewDisplayPlan? LastTableStructureReviewDisplayPlan { get; private set; }
+
     public PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
 
     public PresentationAltTextPanePlan? LastAltTextPanePlan { get; private set; }
@@ -69,10 +106,10 @@ public sealed class PresentationReviewWorkflowSession
             presentation.Slides,
             editor.CurrentSlideIndex,
             SelectedCommentIndex);
-        _callbacks.RefreshAccessibilitySummaryPlan();
+        RefreshAccessibilityCheckerPlans();
         RefreshAltTextPlansCore(null, null, null);
         _callbacks.RenderAltTextPaneIfVisible(LastAltTextPanePlan!);
-        RefreshReadingOrderPlanCore();
+        RefreshReadingOrderPlan();
         RefreshProofingRequestPlan();
     }
 
@@ -187,7 +224,7 @@ public sealed class PresentationReviewWorkflowSession
             author,
             initials);
 
-    public PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForTests(
+    public PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlan(
         string? query = null,
         string? currentAuthor = null,
         string? currentInitials = null)
@@ -201,7 +238,42 @@ public sealed class PresentationReviewWorkflowSession
         return LastCommentMentionPickerPlan;
     }
 
-    public PresentationCommentMentionInsertionPlan InsertCommentMentionForTests(
+    public PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForInput(
+        string? text,
+        int caretIndex,
+        string? currentAuthor = null,
+        string? currentInitials = null)
+    {
+        var editor = _getEditor();
+        LastCommentMentionPickerPlan =
+            PresentationReviewWorkflowPlanner.BuildCommentMentionPickerPlanForInsertionContext(
+                editor.Presentation.Slides,
+                text,
+                NormalizeCommentInputCaret(text, caretIndex),
+                currentAuthor,
+                currentInitials);
+        return LastCommentMentionPickerPlan;
+    }
+
+    public PresentationCommentMentionDispatchResult DispatchCommentMentionPicker(
+        PresentationReviewWorkflowIntentKind intent,
+        string? text,
+        int caretIndex,
+        string? currentAuthor = null,
+        string? currentInitials = null)
+    {
+        var picker = BuildCommentMentionPickerPlanForInput(
+            text,
+            caretIndex,
+            currentAuthor,
+            currentInitials);
+        var application = picker.ShouldAutoApplyDefaultCandidate
+            ? ApplyCommentMention(intent, text, caretIndex, picker.DefaultCandidate)
+            : null;
+        return new PresentationCommentMentionDispatchResult(picker, application);
+    }
+
+    public PresentationCommentMentionInsertionPlan InsertCommentMention(
         string? text,
         int caretIndex,
         PresentationCommentMentionCandidate? candidate)
@@ -213,13 +285,41 @@ public sealed class PresentationReviewWorkflowSession
         return LastCommentMentionInsertionPlan;
     }
 
-    public PresentationCommentMutationPlan InsertMentionInSelectedCommentForTests(
+    public PresentationCommentMentionApplicationResult ApplyCommentMention(
+        PresentationReviewWorkflowIntentKind intent,
+        string? text,
+        int caretIndex,
+        PresentationCommentMentionCandidate? candidate)
+    {
+        if (intent is not PresentationReviewWorkflowIntentKind.EditComment and
+            not PresentationReviewWorkflowIntentKind.ReplyComment)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(intent),
+                intent,
+                "Comment mention insertion supports edit and reply intents only.");
+        }
+
+        var insertion = InsertCommentMention(
+            text,
+            NormalizeCommentInputCaret(text, caretIndex),
+            candidate);
+        if (!insertion.ShouldApply)
+            return new PresentationCommentMentionApplicationResult(insertion, null);
+
+        var mutation = intent == PresentationReviewWorkflowIntentKind.EditComment
+            ? EditSelectedComment(insertion.UpdatedText)
+            : ReplyToSelectedComment(insertion.UpdatedText);
+        return new PresentationCommentMentionApplicationResult(insertion, mutation);
+    }
+
+    public PresentationCommentMutationPlan InsertMentionInSelectedComment(
         int caretIndex,
         PresentationCommentMentionCandidate? candidate,
         string? author = null,
         string? initials = null)
     {
-        LastCommentMentionInsertionPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
+        LastCommentMentionInsertionPlan = InsertCommentMention(
             GetSelectedCommentText(),
             caretIndex,
             candidate);
@@ -238,8 +338,151 @@ public sealed class PresentationReviewWorkflowSession
         return EditSelectedComment(LastCommentMentionInsertionPlan.UpdatedText, author, initials);
     }
 
+    private static int NormalizeCommentInputCaret(string? text, int caretIndex)
+    {
+        var length = (text ?? string.Empty).Length;
+        return caretIndex == 0 && length > 0
+            ? length
+            : Math.Clamp(caretIndex, 0, length);
+    }
+
     public string? GetSelectedCommentText()
         => SelectedCommentIndex is { } index ? GetCommentText(index) : null;
+
+    public PresentationAccessibilityCheckerPanePlan RefreshAccessibilityCheckerPlans()
+    {
+        var presentation = _getEditor().Presentation;
+        LastMediaTranscriptPlan = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation);
+        LastAccessibilitySummaryPlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        LastAccessibilityCheckerPanePlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+                presentation,
+                LastAccessibilitySummaryPlan,
+                LastAccessibilityCheckerPanePlan?.SelectedRowIndex);
+        _callbacks.RenderAccessibilityCheckerPaneIfVisible(LastAccessibilityCheckerPanePlan);
+        return LastAccessibilityCheckerPanePlan;
+    }
+
+    public PresentationAccessibilityCheckerPanePlan ShowAccessibilityCheckerPane()
+    {
+        var plan = RefreshAccessibilityCheckerPlans();
+        _callbacks.PresentAccessibilityCheckerPane(plan);
+        return plan;
+    }
+
+    public PresentationAccessibilityCheckerPanePlan SelectAccessibilityCheckerRow(int rowIndex)
+    {
+        var current = RefreshAccessibilityCheckerPlans();
+        var normalized = PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(
+            current,
+            rowIndex);
+        LastAccessibilityCheckerPanePlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+                _getEditor().Presentation,
+                LastAccessibilitySummaryPlan!,
+                normalized >= 0 ? normalized : null);
+        LastAccessibilityCheckerNavigationPlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(
+                LastAccessibilityCheckerPanePlan,
+                normalized >= 0 ? normalized : null);
+        ApplyAccessibilityCheckerNavigation(LastAccessibilityCheckerNavigationPlan);
+
+        if (LastAccessibilityCheckerPanePlan.SelectedRow?.CommandHint !=
+            PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId)
+        {
+            ClearTableStructureReview();
+        }
+
+        _callbacks.PresentAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
+        return LastAccessibilityCheckerPanePlan;
+    }
+
+    public PresentationAccessibilityCheckerPanePlan ApplyAccessibilityCheckerRowAction(int rowIndex)
+    {
+        var plan = SelectAccessibilityCheckerRow(rowIndex);
+        var row = plan.SelectedRow;
+        if (row?.CommandHint == PresentationReviewWorkflowPlanner.AltTextCommandId)
+        {
+            _callbacks.OpenAltTextPane();
+        }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.SetSlideTitleCommandId)
+        {
+            LastSlideTitleMutationPlan =
+                PresentationReviewWorkflowPlanner.TryApplySlideTitleMutation(_getEditor(), row.SlideIndex);
+            RefreshAccessibilityCheckerPlans();
+        }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.SetTableHeaderRowCommandId)
+        {
+            LastTableHeaderRowMutationPlan =
+                PresentationReviewWorkflowPlanner.TryApplyTableHeaderRowMutation(
+                    _getEditor(),
+                    row.SlideIndex,
+                    row.ShapeId);
+            RefreshAccessibilityCheckerPlans();
+        }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId)
+        {
+            OpenTableStructureReview(row);
+        }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.InsertLinkCommandId)
+        {
+            _callbacks.OpenHyperlinkDialog();
+        }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.ChartTitleCommandId)
+        {
+            LastChartTitleMutationPlan =
+                PresentationReviewWorkflowPlanner.TryApplyChartTitleMutation(
+                    _getEditor(),
+                    row.SlideIndex,
+                    row.ShapeId);
+            RefreshAccessibilityCheckerPlans();
+        }
+        else if (row?.CommandHint == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId
+            || row?.Category == "Media")
+        {
+            _callbacks.OpenMediaCaptionPane();
+        }
+
+        return LastAccessibilityCheckerPanePlan!;
+    }
+
+    private void OpenTableStructureReview(PresentationAccessibilityCheckerRowPlan row)
+    {
+        var presentation = _getEditor().Presentation;
+        LastTableStructureReviewPlan = PresentationReviewWorkflowPlanner.BuildTableStructureReviewPlan(
+            presentation,
+            row.SlideIndex,
+            row.ShapeId);
+        LastTableStructureReviewDisplayPlan =
+            PresentationReviewWorkflowPlanner.BuildTableStructureReviewDisplayPlan(
+                LastTableStructureReviewPlan);
+        RefreshAccessibilityCheckerPlans();
+        LastAccessibilityCheckerPanePlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+                presentation,
+                LastAccessibilitySummaryPlan!,
+                row.RowIndex);
+        _callbacks.PresentAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
+    }
+
+    private void ApplyAccessibilityCheckerNavigation(
+        PresentationAccessibilityCheckerNavigationPlan plan)
+    {
+        if (!plan.ShouldNavigate)
+            return;
+
+        var editor = _getEditor();
+        editor.SelectSlide(plan.TargetSlideIndex);
+        if (plan.ShouldSelectShape && plan.TargetShapeId is { } shapeId)
+            editor.Select(shapeId);
+    }
+
+    private void ClearTableStructureReview()
+    {
+        LastTableStructureReviewPlan = null;
+        LastTableStructureReviewDisplayPlan = null;
+    }
 
     public void RefreshAltTextPlans(
         string? proposedDescription,
@@ -278,21 +521,32 @@ public sealed class PresentationReviewWorkflowSession
                 plan.Description,
                 plan.Title,
                 plan.IsDecorative);
-            _callbacks.RefreshAccessibilitySummaryPlan();
+            RefreshAccessibilityCheckerPlans();
         }
 
         return plan;
     }
 
     public PresentationReadingOrderPlan RefreshReadingOrderPlan()
-        => RefreshReadingOrderPlanCore();
+    {
+        var plan = RefreshReadingOrderPlanCore();
+        _callbacks.RenderReadingOrderPaneIfVisible(plan);
+        return plan;
+    }
+
+    public PresentationReadingOrderPlan ShowReadingOrderPane()
+    {
+        var plan = RefreshReadingOrderPlanCore();
+        _callbacks.PresentReadingOrderPane(plan);
+        return plan;
+    }
 
     public PresentationReadingOrderMutationPlan ApplyReadingOrderMove(
         PresentationReviewWorkflowIntentKind intent)
     {
         var editor = _getEditor();
         var plan = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(editor, intent);
-        RefreshReadingOrderPlanCore();
+        RefreshReadingOrderPlan();
         return plan;
     }
 
@@ -300,13 +554,14 @@ public sealed class PresentationReviewWorkflowSession
     {
         var editor = _getEditor();
         var plan = PresentationReviewWorkflowPlanner.TryApplyReadingOrderSelection(editor, shapeId);
-        RefreshReadingOrderPlanCore();
+        RefreshReadingOrderPlan();
         return plan;
     }
 
     public PresentationProofingPanePlan ShowProofingPane()
     {
         RefreshProofingRequestPlan();
+        _callbacks.PresentProofingPane(LastProofingPanePlan!);
         return LastProofingPanePlan!;
     }
 
@@ -323,6 +578,7 @@ public sealed class PresentationReviewWorkflowSession
             SelectedProofingIssueRowIndex,
             ProofingIgnoreState,
             ProofingDictionaryState);
+        _callbacks.PresentProofingPane(LastProofingPanePlan);
         return LastProofingPanePlan;
     }
 
@@ -353,6 +609,9 @@ public sealed class PresentationReviewWorkflowSession
 
     public PresentationProofingCorrectionMutationPlan ApplySelectedProofingCorrection()
     {
+        if (LastProofingPanePlan is null)
+            ShowProofingPane();
+
         if (LastProofingPanePlan?.SelectedRow is not { } selectedRow)
             return MissingProofingCorrectionPlan();
 
@@ -387,7 +646,7 @@ public sealed class PresentationReviewWorkflowSession
     public PresentationProofingPanePlan IgnoreSelectedProofingIssue()
     {
         if (LastProofingPanePlan is null)
-            RefreshProofingRequestPlan();
+            ShowProofingPane();
 
         var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
         ProofingIgnoreState = PresentationReviewWorkflowPlanner.AddProofingIgnoredIssue(
@@ -399,7 +658,7 @@ public sealed class PresentationReviewWorkflowSession
     public PresentationProofingPanePlan IgnoreAllSelectedProofingIssues()
     {
         if (LastProofingPanePlan is null)
-            RefreshProofingRequestPlan();
+            ShowProofingPane();
 
         var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
         ProofingIgnoreState = PresentationReviewWorkflowPlanner.AddProofingIgnoredIssueGroup(
@@ -411,7 +670,7 @@ public sealed class PresentationReviewWorkflowSession
     public PresentationProofingPanePlan AddSelectedProofingWordToDictionary()
     {
         if (LastProofingPanePlan is null)
-            RefreshProofingRequestPlan();
+            ShowProofingPane();
 
         var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
         ProofingDictionaryState = PresentationReviewWorkflowPlanner.AddProofingDictionaryWord(

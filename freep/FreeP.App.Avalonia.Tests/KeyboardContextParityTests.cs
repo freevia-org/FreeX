@@ -372,7 +372,7 @@ public sealed class KeyboardContextParityTests
                     .GetVisualDescendants()
                     .OfType<ComboBox>()
                     .First(control => Equals(control.Tag, "freep.font-family"));
-                var definition = FreePRibbonAvalonia.Build();
+                var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
                 var home = definition.Tabs.Single(tab => tab.Id == "home");
                 var font = home.Groups.Single(group => group.Id == "font");
                 var comboDefinition = font.Controls.Single(control => control.CommandId.Value == "freep.font-family");
@@ -407,7 +407,7 @@ public sealed class KeyboardContextParityTests
                 window.Show();
 
                 var ribbon = window.RibbonControlForTests!;
-                var definition = FreePRibbonAvalonia.Build();
+                var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
                 var home = definition.Tabs.Single(tab => tab.Id == "home");
                 Button? collapsedButton = null;
 
@@ -720,6 +720,37 @@ public sealed class KeyboardContextParityTests
                 splitMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Split Cell"))
                     .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
                 table.Table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaChartContextMenuUsesSharedWaterfallStateAndCommands()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var chart = window.Editor.InsertChart(ChartType.Waterfall);
+                var hit = new ChartSubtargetHit(
+                    chart.Id,
+                    ChartSubtargetKind.Point,
+                    SeriesIndex: 0,
+                    PointIndex: 1);
+
+                var menu = window.BuildChartContextMenuForTests(hit);
+                menu.Items.OfType<MenuItem>().First().Header.Should().Be("Set as Total");
+                menu.Items.OfType<MenuItem>().First()
+                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                chart.Chart!.WaterfallTotalPointIndices.Should().Contain(1);
+
+                window.BuildChartContextMenuForTests(hit)
+                    .Items.OfType<MenuItem>().First().Header.Should().Be("Clear Total");
             }
             finally
             {

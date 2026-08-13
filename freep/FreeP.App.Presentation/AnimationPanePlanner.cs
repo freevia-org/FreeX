@@ -142,6 +142,51 @@ public sealed record AnimationPaneTimelineItemPlan(
     public uint? TriggerShapeId { get; init; }
 }
 
+public sealed record AnimationPaneChoiceControlPlan(
+    AnimationPaneControlDescriptor Descriptor,
+    IReadOnlyList<AnimationPaneControlOptionPlan> Options,
+    int SelectedIndex,
+    bool IsVisible,
+    bool IsEnabled,
+    string ToolTip)
+{
+    public string? ResolveOptionId(int selectedIndex) =>
+        selectedIndex >= 0 && selectedIndex < Options.Count
+            ? Options[selectedIndex].Id
+            : null;
+}
+
+public sealed record AnimationPaneTextControlPlan(
+    AnimationPaneControlDescriptor Descriptor,
+    string Text);
+
+public sealed record AnimationPaneToggleControlPlan(
+    AnimationPaneControlDescriptor Descriptor,
+    bool IsChecked);
+
+public sealed record AnimationPaneActionControlPlan(
+    AnimationPaneControlDescriptor Descriptor,
+    bool IsVisible,
+    bool IsEnabled,
+    string ToolTip);
+
+public sealed record AnimationPaneItemControlPlan(
+    AnimationPaneChoiceControlPlan EffectOptions,
+    AnimationPaneChoiceControlPlan WheelSpokes,
+    AnimationPaneChoiceControlPlan Trigger,
+    AnimationPaneTextControlPlan Duration,
+    AnimationPaneTextControlPlan Delay,
+    AnimationPaneChoiceControlPlan Repeat,
+    AnimationPaneToggleControlPlan AutoReverse,
+    AnimationPaneTextControlPlan SmoothStart,
+    AnimationPaneTextControlPlan SmoothEnd,
+    AnimationPaneActionControlPlan MoveEarlier,
+    AnimationPaneActionControlPlan MoveLater,
+    AnimationPaneActionControlPlan Remove,
+    AnimationPaneParagraphBuildMutationPlan ParagraphBuildMutation,
+    AnimationPaneActionControlPlan ParagraphBuild,
+    AnimationPaneActionControlPlan EditMotionPath);
+
 public sealed record AnimationPaneWorkflowViewPlan(
     string Heading,
     string Message,
@@ -159,52 +204,6 @@ public sealed record AnimationPaneWorkflowEvidencePlan(
     bool CanPreview,
     bool CanPlayFromSelected,
     IReadOnlyList<string> EvidenceLines);
-
-public enum AnimationPaneBaselineCaptureHost
-{
-    PowerPoint,
-    Wpf,
-    Avalonia,
-}
-
-public enum AnimationPaneBaselineCaptureKind
-{
-    PaneWorkflow,
-    PlaybackCheckpoint,
-}
-
-public sealed record AnimationPaneVisualBaselineCaptureRequest(
-    string CaptureId,
-    AnimationPaneBaselineCaptureHost Host,
-    AnimationPaneBaselineCaptureKind Kind,
-    int SlideIndex,
-    string ScenarioId,
-    string SurfaceId,
-    string Checkpoint,
-    int ElapsedMs,
-    bool RequiresPowerPointCom,
-    string EvidenceSummary);
-
-public sealed record AnimationPaneVisualBaselineReadinessPlan(
-    string ScenarioId,
-    int SlideIndex,
-    int AnimationRowCount,
-    int PlaybackCheckpointCount,
-    IReadOnlyList<AnimationPaneVisualBaselineCaptureRequest> CaptureRequests,
-    IReadOnlyList<string> EvidenceLines)
-{
-    public int PowerPointRequestCount => CaptureRequests.Count(request =>
-        request.Host == AnimationPaneBaselineCaptureHost.PowerPoint);
-
-    public int SharedHostRequestCount => CaptureRequests.Count(request =>
-        request.Host is AnimationPaneBaselineCaptureHost.Wpf or AnimationPaneBaselineCaptureHost.Avalonia);
-
-    public bool IsPowerPointAuthoritativeReady =>
-        AnimationRowCount > 0
-        && CaptureRequests.Any(request => request.Host == AnimationPaneBaselineCaptureHost.PowerPoint)
-        && CaptureRequests.Any(request => request.Host == AnimationPaneBaselineCaptureHost.Wpf)
-        && CaptureRequests.Any(request => request.Host == AnimationPaneBaselineCaptureHost.Avalonia);
-}
 
 public enum AnimationPanePlaybackIntentKind
 {
@@ -328,29 +327,126 @@ public sealed record AnimationPaneRemoveMutationPlan(
 
 public static class AnimationPanePlanner
 {
-    public const string MissingAnimationMessage = "Select an animation to edit timing.";
-    public const string InvalidTriggerMessage = "Choose a valid animation trigger.";
-    public const string InvalidDurationMessage = "Enter a duration greater than 0 seconds.";
-    public const string InvalidDelayMessage = "Enter a delay of 0 seconds or greater.";
-    public const string MissingEffectOptionMessage = "Select an animation to edit effect options.";
-    public const string UnsupportedEffectOptionMessage = "This effect has no shared effect options yet.";
-    public const string InvalidEffectOptionMessage = "Choose a valid effect option.";
-    public const string ParagraphBuildLabel = "Build text by paragraph";
-    public const string ParagraphBuildDisabledMessage =
-        "Select an animated text shape with at least one paragraph.";
-    public const string ParagraphBuildInvalidXmlMessage =
-        "The slide build list is not valid PowerPoint timing XML.";
-    public const string InvalidReorderMessage = "Select an animation row that can move in that direction.";
-    public const string InvalidRemoveMessage = "Select an animation row to remove.";
+    public static string MissingAnimationMessage => PresentationPaneTextResources.AnimationMissing;
+    public static string InvalidTriggerMessage => PresentationPaneTextResources.AnimationInvalidTrigger;
+    public static string InvalidDurationMessage => PresentationPaneTextResources.AnimationInvalidDuration;
+    public static string InvalidDelayMessage => PresentationPaneTextResources.AnimationInvalidDelay;
+    public static string InvalidRepeatMessage => PresentationPaneTextResources.AnimationInvalidRepeat;
+    public static string InvalidEasingMessage => PresentationPaneTextResources.AnimationInvalidEasing;
+    public static string MissingEffectOptionMessage => PresentationPaneTextResources.AnimationMissingEffectOption;
+    public static string UnsupportedEffectOptionMessage => PresentationPaneTextResources.AnimationUnsupportedEffectOption;
+    public static string InvalidEffectOptionMessage => PresentationPaneTextResources.AnimationInvalidEffectOption;
+    public static string ParagraphBuildLabel => PresentationPaneTextResources.AnimationParagraphBuild;
+    public static string ParagraphBuildDisabledMessage => PresentationPaneTextResources.AnimationParagraphBuildDisabled;
+    public static string ParagraphBuildInvalidXmlMessage => PresentationPaneTextResources.AnimationParagraphBuildInvalidXml;
+    public static string InvalidReorderMessage => PresentationPaneTextResources.AnimationInvalidReorder;
+    public static string InvalidRemoveMessage => PresentationPaneTextResources.AnimationInvalidRemove;
 
-    private static readonly string[] TriggerLabelValues =
-    [
-        "On Click",
-        "With Previous",
-        "After Previous"
-    ];
+    public static IReadOnlyList<string> TriggerLabels =>
+        PresentationPaneTextResources.AnimationTriggerOptions
+            .Select(option => option.Label)
+            .ToArray();
 
-    public static IReadOnlyList<string> TriggerLabels => TriggerLabelValues;
+    public static AnimationPaneControlSchemaPlan BuildControlSchema() =>
+        PresentationPaneTextResources.BuildAnimationPaneControlSchema();
+
+    public static AnimationPaneItemControlPlan BuildItemControlPlan(
+        AnimationPaneTimelineItemPlan item,
+        Slide? slide,
+        bool canEditMotionPath,
+        AnimationPaneControlSchemaPlan? schema = null)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        schema ??= BuildControlSchema();
+        var effectOptions = schema.GetRequired(AnimationPaneControlKind.EffectOptions);
+        var wheelSpokes = schema.GetRequired(AnimationPaneControlKind.WheelSpokes);
+        var trigger = schema.GetRequired(AnimationPaneControlKind.Trigger);
+        var duration = schema.GetRequired(AnimationPaneControlKind.Duration);
+        var delay = schema.GetRequired(AnimationPaneControlKind.Delay);
+        var repeat = schema.GetRequired(AnimationPaneControlKind.Repeat);
+        var autoReverse = schema.GetRequired(AnimationPaneControlKind.AutoReverse);
+        var smoothStart = schema.GetRequired(AnimationPaneControlKind.SmoothStart);
+        var smoothEnd = schema.GetRequired(AnimationPaneControlKind.SmoothEnd);
+        var moveEarlier = schema.GetRequired(AnimationPaneControlKind.MoveEarlier);
+        var moveLater = schema.GetRequired(AnimationPaneControlKind.MoveLater);
+        var remove = schema.GetRequired(AnimationPaneControlKind.RemoveAnimation);
+        var paragraphBuild = schema.GetRequired(AnimationPaneControlKind.ParagraphBuild);
+        var editMotionPath = schema.GetRequired(AnimationPaneControlKind.EditMotionPath);
+
+        var effectOptionPlans = item.EffectOptions.Options
+            .Select(option => new AnimationPaneControlOptionPlan(option.Id, option.DisplayText))
+            .ToArray();
+        var wheelSpokePlans = item.EffectOptions.WheelSpokeOptions
+            .Select(option => new AnimationPaneControlOptionPlan(option.Id, option.DisplayText))
+            .ToArray();
+        var paragraphBuildMutation = BuildParagraphBuildMutationPlan(slide, item.ShapeId);
+        var repeatText = FormatRepeat(item.RepeatCount, item.RepeatIndefinitely);
+        var showMotionPathEditor = item.Kind == AnimationKind.Motion && canEditMotionPath;
+
+        return new AnimationPaneItemControlPlan(
+            BuildChoiceControlPlan(
+                effectOptions,
+                effectOptionPlans,
+                FindSelectedOptionIndex(item.EffectOptions.Options),
+                effectOptionPlans.Length > 0,
+                item.EffectOptions.CanApply,
+                item.EffectOptions.CanApply
+                    ? effectOptions.ToolTip
+                    : item.EffectOptions.DisabledReason ?? effectOptions.ToolTip),
+            BuildChoiceControlPlan(
+                wheelSpokes,
+                wheelSpokePlans,
+                FindSelectedOptionIndex(item.EffectOptions.WheelSpokeOptions),
+                wheelSpokePlans.Length > 0,
+                item.EffectOptions.CanApply,
+                wheelSpokes.ToolTip),
+            BuildChoiceControlPlan(
+                trigger,
+                trigger.Options,
+                item.TriggerIndex,
+                isVisible: true,
+                isEnabled: true,
+                toolTip: trigger.ToolTip),
+            new AnimationPaneTextControlPlan(duration, item.DurationText),
+            new AnimationPaneTextControlPlan(delay, item.DelayText),
+            BuildChoiceControlPlan(
+                repeat,
+                repeat.Options,
+                FindOptionIndex(repeat.Options, repeatText),
+                isVisible: true,
+                isEnabled: true,
+                toolTip: repeat.ToolTip),
+            new AnimationPaneToggleControlPlan(autoReverse, item.AutoReverse),
+            new AnimationPaneTextControlPlan(smoothStart, FormatEasing(item.Acceleration)),
+            new AnimationPaneTextControlPlan(smoothEnd, FormatEasing(item.Deceleration)),
+            new AnimationPaneActionControlPlan(
+                moveEarlier,
+                IsVisible: true,
+                IsEnabled: item.CanMoveEarlier,
+                ToolTip: moveEarlier.ToolTip),
+            new AnimationPaneActionControlPlan(
+                moveLater,
+                IsVisible: true,
+                IsEnabled: item.CanMoveLater,
+                ToolTip: moveLater.ToolTip),
+            new AnimationPaneActionControlPlan(
+                remove,
+                IsVisible: true,
+                IsEnabled: true,
+                ToolTip: remove.ToolTip),
+            paragraphBuildMutation,
+            new AnimationPaneActionControlPlan(
+                paragraphBuild,
+                IsVisible: true,
+                IsEnabled: paragraphBuildMutation.ShouldApply,
+                ToolTip: paragraphBuildMutation.DisabledReason ?? paragraphBuildMutation.DisplayText),
+            new AnimationPaneActionControlPlan(
+                editMotionPath,
+                IsVisible: showMotionPathEditor,
+                IsEnabled: showMotionPathEditor,
+                ToolTip: editMotionPath.ToolTip));
+    }
 
     public static AnimationPaneParagraphBuildMutationPlan BuildParagraphBuildMutationPlan(
         Slide? slide,
@@ -400,7 +496,7 @@ public static class AnimationPanePlanner
             shapeId,
             enable,
             updatedXml,
-            enable ? "Build text all at once" : ParagraphBuildLabel,
+            enable ? PresentationPaneTextResources.AnimationParagraphBuildAllAtOnce : ParagraphBuildLabel,
             null);
     }
 
@@ -436,7 +532,7 @@ public static class AnimationPanePlanner
                     false,
                     null,
                     0,
-                    "No animations to preview"),
+                    PresentationPaneTextResources.AnimationNoAnimationsToPreview),
                 controls);
         }
 
@@ -476,7 +572,7 @@ public static class AnimationPanePlanner
                 animation.Preset,
                 animation.Trigger,
                 triggerIndex,
-                TriggerLabelValues[triggerIndex],
+                TriggerLabels[triggerIndex],
                 animation.DelayMs,
                 FormatDuration(Math.Max(0, animation.DelayMs), displayCulture),
                 animation.DurationMs,
@@ -527,72 +623,75 @@ public static class AnimationPanePlanner
         var hasSelectedAnimation = selectedAnimationIndex >= 0 && selectedAnimationIndex < animationCount;
         var safeDurationMs = Math.Max(0, totalDurationMs);
         var canStartPlayback = hasAnimations && !isPlaybackRunning;
-        const string RunningDisabledReason = "Stop the running animation preview before starting another";
+        var runningDisabledReason = PresentationPaneTextResources.AnimationPreviewAlreadyRunning;
+        var noAnimationsToPreview = PresentationPaneTextResources.AnimationNoAnimationsToPreview;
+        var noAnimationsToPlay = PresentationPaneTextResources.AnimationNoAnimationsToPlay;
+        var selectRowToPlay = PresentationPaneTextResources.AnimationSelectRowToPlay;
 
         return
         [
             new AnimationPanePlaybackControlDescriptor(
                 "freep.anim.pane.preview",
                 AnimationPanePlaybackControlKind.PreviewCurrentSlide,
-                "Preview",
+                PresentationPaneTextResources.AnimationPreview,
                 canStartPlayback,
                 null,
                 safeDurationMs,
                 canStartPlayback
-                    ? "Preview current slide animations"
+                    ? PresentationPaneTextResources.AnimationPreviewCurrentSlideToolTip
                     : isPlaybackRunning
-                        ? RunningDisabledReason
-                        : "No animations to preview",
+                        ? runningDisabledReason
+                        : noAnimationsToPreview,
                 canStartPlayback
                     ? null
                     : isPlaybackRunning
-                        ? RunningDisabledReason
-                        : "No animations to preview"),
+                        ? runningDisabledReason
+                        : noAnimationsToPreview),
             new AnimationPanePlaybackControlDescriptor(
                 "freep.anim.pane.play-selected",
                 AnimationPanePlaybackControlKind.PlayFromSelected,
-                "Play From Selected",
+                PresentationPaneTextResources.AnimationPlayFromSelected,
                 hasSelectedAnimation && !isPlaybackRunning,
                 hasSelectedAnimation ? selectedAnimationIndex : null,
                 safeDurationMs,
                 hasSelectedAnimation && !isPlaybackRunning
-                    ? "Play animation preview from the selected row"
+                    ? PresentationPaneTextResources.AnimationPlayFromSelectedToolTip
                     : isPlaybackRunning
-                        ? RunningDisabledReason
-                        : "Select an animation row to play from it",
+                        ? runningDisabledReason
+                        : selectRowToPlay,
                 hasSelectedAnimation && !isPlaybackRunning
                     ? null
                     : isPlaybackRunning
-                        ? RunningDisabledReason
-                        : "Select an animation row to play from it"),
+                        ? runningDisabledReason
+                        : selectRowToPlay),
             new AnimationPanePlaybackControlDescriptor(
                 "freep.anim.pane.play-slide",
                 AnimationPanePlaybackControlKind.PlayCurrentSlide,
-                "Play All",
+                PresentationPaneTextResources.AnimationPlayAll,
                 canStartPlayback,
                 null,
                 safeDurationMs,
                 canStartPlayback
-                    ? "Play all animations on the current slide"
+                    ? PresentationPaneTextResources.AnimationPlayAllToolTip
                     : isPlaybackRunning
-                        ? RunningDisabledReason
-                        : "No animations to play",
+                        ? runningDisabledReason
+                        : noAnimationsToPlay,
                 canStartPlayback
                     ? null
                     : isPlaybackRunning
-                        ? RunningDisabledReason
-                        : "No animations to play"),
+                        ? runningDisabledReason
+                        : noAnimationsToPlay),
             new AnimationPanePlaybackControlDescriptor(
                 "freep.anim.pane.stop",
                 AnimationPanePlaybackControlKind.Stop,
-                "Stop",
+                PresentationPaneTextResources.AnimationStop,
                 isPlaybackRunning,
                 null,
                 safeDurationMs,
                 isPlaybackRunning
-                    ? "Stop the running animation preview"
-                    : "No animation preview is currently running",
-                isPlaybackRunning ? null : "No animation preview is currently running"),
+                    ? PresentationPaneTextResources.AnimationStopToolTip
+                    : PresentationPaneTextResources.AnimationNoPreviewRunning,
+                isPlaybackRunning ? null : PresentationPaneTextResources.AnimationNoPreviewRunning),
         ];
     }
 
@@ -613,7 +712,7 @@ public static class AnimationPanePlanner
             return BuildIdlePlaybackSessionPlan(
                 timelinePlan,
                 commandKind,
-                "No animations to preview");
+                PresentationPaneTextResources.AnimationNoAnimationsToPreview);
         }
 
         var startIndex = commandKind switch
@@ -629,7 +728,7 @@ public static class AnimationPanePlanner
             return BuildIdlePlaybackSessionPlan(
                 timelinePlan,
                 commandKind,
-                "Select an animation row to play from it");
+                PresentationPaneTextResources.AnimationSelectRowToPlay);
         }
 
         var startItem = timelinePlan.Items[startIndex];
@@ -680,8 +779,8 @@ public static class AnimationPanePlanner
             segments,
             runningControls,
             commandKind == AnimationPanePlaybackControlKind.PlayFromSelected
-                ? $"Playing from animation {startIndex + 1}"
-                : "Playing all current slide animations");
+                ? PresentationPaneTextResources.BuildAnimationPlayingFromMessage(startIndex + 1)
+                : PresentationPaneTextResources.AnimationPlayingAll);
     }
 
     private static AnimationPanePlaybackSegmentPlan[] BuildTriggerPlaybackSegments(
@@ -754,7 +853,7 @@ public static class AnimationPanePlanner
             0,
             Array.Empty<AnimationPanePlaybackSegmentPlan>(),
             BuildPlaybackControls(timelinePlan.SelectedIndex, timelinePlan.Items.Count, sourceTotalDurationMs),
-            "Animation preview stopped");
+            PresentationPaneTextResources.AnimationPreviewStopped);
     }
 
     public static AnimationPaneReorderIntent BuildReorderIntent(
@@ -931,7 +1030,7 @@ public static class AnimationPanePlanner
                 animation.Trigger,
                 animation.DurationMs,
                 animation.DelayMs,
-                TriggerLabelValues[ToTriggerIndex(animation.Trigger)],
+                TriggerLabels[ToTriggerIndex(animation.Trigger)],
                 InvalidTriggerMessage);
         }
 
@@ -942,7 +1041,7 @@ public static class AnimationPanePlanner
             trigger,
             animation.DurationMs,
             animation.DelayMs,
-            TriggerLabelValues[ToTriggerIndex(trigger)],
+            TriggerLabels[ToTriggerIndex(trigger)],
             null);
     }
 
@@ -1276,7 +1375,7 @@ public static class AnimationPanePlanner
                 animation.RepeatIndefinitely,
                 animation.AutoReverse,
                 FormatRepeat(animation.RepeatCount, animation.RepeatIndefinitely),
-                "Repeat must be 1 or greater, or Indefinitely.");
+                InvalidRepeatMessage);
         }
 
         var changed = repeatCount != animation.RepeatCount
@@ -1318,14 +1417,19 @@ public static class AnimationPanePlanner
         out int? repeatCount,
         out bool indefinite)
     {
-        indefinite = string.Equals(text?.Trim(), "indefinitely", StringComparison.OrdinalIgnoreCase);
+        var normalized = text?.Trim();
+        indefinite = string.Equals(
+                normalized,
+                PresentationPaneTextResources.AnimationRepeatIndefinitely,
+                StringComparison.CurrentCultureIgnoreCase)
+            || string.Equals(normalized, "indefinitely", StringComparison.OrdinalIgnoreCase);
         if (indefinite)
         {
             repeatCount = null;
             return true;
         }
 
-        if (int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
+        if (int.TryParse(normalized, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
             && count >= 1)
         {
             repeatCount = count == 1 ? null : count;
@@ -1338,7 +1442,7 @@ public static class AnimationPanePlanner
 
     public static string FormatRepeat(int? repeatCount, bool indefinite)
         => indefinite
-            ? "Indefinitely"
+            ? PresentationPaneTextResources.AnimationRepeatIndefinitely
             : (repeatCount ?? 1).ToString(CultureInfo.InvariantCulture);
 
     public static bool TryApplyReorderMutation(
@@ -1457,7 +1561,7 @@ public static class AnimationPanePlanner
                 animation.Deceleration,
                 FormatEasing(animation.Acceleration),
                 FormatEasing(animation.Deceleration),
-                "Smooth start/end must be between 0% and 100%.");
+                InvalidEasingMessage);
         }
 
         return new AnimationPaneEasingMutationPlan(
@@ -1520,14 +1624,18 @@ public static class AnimationPanePlanner
     {
         ArgumentNullException.ThrowIfNull(timelinePlan);
 
-        const string EmptyMessage = "No animations on this slide.";
+        var emptyMessage = PresentationPaneTextResources.AnimationPaneEmptyMessage;
         var safeSlideNumber = Math.Max(0, slideIndex) + 1;
-        var heading = $"Animation Pane - slide {safeSlideNumber} ({timelinePlan.Items.Count} animations)";
+        var heading = PresentationPaneTextResources.BuildAnimationPaneHeading(
+            safeSlideNumber,
+            timelinePlan.Items.Count);
         var message = timelinePlan.SelectedItem is { } selected
-            ? $"Selected: {selected.ShapeName} - {selected.EffectText}"
+            ? PresentationPaneTextResources.BuildAnimationPaneSelectedMessage(
+                selected.ShapeName,
+                selected.EffectText)
             : timelinePlan.HasAnimations
-                ? "Select an animation row to inspect and reorder it."
-                : EmptyMessage;
+                ? PresentationPaneTextResources.AnimationPaneSelectRowMessage
+                : emptyMessage;
         var rowSummaries = timelinePlan.Items
             .Select(BuildWorkflowRowSummary)
             .ToArray();
@@ -1538,7 +1646,7 @@ public static class AnimationPanePlanner
         return new AnimationPaneWorkflowViewPlan(
             heading,
             message,
-            EmptyMessage,
+            emptyMessage,
             rowSummaries,
             controlSummaries);
     }
@@ -1585,71 +1693,6 @@ public static class AnimationPanePlanner
             timelinePlan.SelectedIndex >= 0,
             canPreview,
             canPlayFromSelected,
-            evidenceLines);
-    }
-
-    public static AnimationPaneVisualBaselineReadinessPlan BuildVisualBaselineReadinessPlan(
-        AnimationPaneTimelinePlan timelinePlan,
-        IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> playbackCheckpoints,
-        int slideIndex,
-        string scenarioId = "animation-pane")
-    {
-        ArgumentNullException.ThrowIfNull(timelinePlan);
-        ArgumentNullException.ThrowIfNull(playbackCheckpoints);
-
-        var safeScenarioId = NormalizeScenarioId(scenarioId);
-        var safeSlideIndex = Math.Max(0, slideIndex);
-        var requests = new List<AnimationPaneVisualBaselineCaptureRequest>();
-        var paneSurfaceId = BuildBaselineSurfaceId(safeScenarioId, safeSlideIndex, "pane", "workflow");
-        var paneSummary = timelinePlan.HasAnimations
-            ? $"Animation pane slide {safeSlideIndex + 1}: {timelinePlan.Items.Count} row(s); selected {FormatSelectedEvidence(timelinePlan.SelectedIndex)}"
-            : $"Animation pane slide {safeSlideIndex + 1}: no animation rows";
-
-        AddBaselineHostRequests(
-            requests,
-            safeScenarioId,
-            safeSlideIndex,
-            AnimationPaneBaselineCaptureKind.PaneWorkflow,
-            paneSurfaceId,
-            "pane",
-            elapsedMs: 0,
-            paneSummary);
-
-        foreach (var checkpoint in playbackCheckpoints)
-        {
-            var checkpointToken = NormalizeScenarioId(checkpoint.Checkpoint);
-            var surfaceId = BuildBaselineSurfaceId(
-                safeScenarioId,
-                safeSlideIndex,
-                "playback",
-                checkpointToken);
-            var summary = $"{checkpoint.EvidenceSummary}; " + string.Join(" | ",
-                checkpoint.Frames.Select(frame => frame.EvidenceSummary));
-
-            AddBaselineHostRequests(
-                requests,
-                safeScenarioId,
-                safeSlideIndex,
-                AnimationPaneBaselineCaptureKind.PlaybackCheckpoint,
-                surfaceId,
-                checkpoint.Checkpoint,
-                checkpoint.ElapsedMs,
-                summary);
-        }
-
-        var evidenceLines = new List<string>
-        {
-            $"Scenario {safeScenarioId}: slide {safeSlideIndex + 1}; rows {timelinePlan.Items.Count}; playback checkpoints {playbackCheckpoints.Count}",
-            $"Capture requests: {requests.Count}; PowerPoint {requests.Count(request => request.Host == AnimationPaneBaselineCaptureHost.PowerPoint)}; WPF {requests.Count(request => request.Host == AnimationPaneBaselineCaptureHost.Wpf)}; Avalonia {requests.Count(request => request.Host == AnimationPaneBaselineCaptureHost.Avalonia)}",
-            "PowerPoint requests are readiness contracts and require desktop PowerPoint COM on the baseline machine",
-        };
-
-        return new AnimationPaneVisualBaselineReadinessPlan(
-            safeScenarioId,
-            safeSlideIndex,
-            timelinePlan.Items.Count,
-            playbackCheckpoints.Count,
-            requests,
             evidenceLines);
     }
 
@@ -1726,6 +1769,40 @@ public static class AnimationPanePlanner
         ArgumentNullException.ThrowIfNull(control);
 
         return $"{control.Label}: {FormatAvailability(control.IsEnabled)}";
+    }
+
+    private static AnimationPaneChoiceControlPlan BuildChoiceControlPlan(
+        AnimationPaneControlDescriptor descriptor,
+        IReadOnlyList<AnimationPaneControlOptionPlan> options,
+        int selectedIndex,
+        bool isVisible,
+        bool isEnabled,
+        string toolTip) =>
+        new(descriptor, options, selectedIndex, isVisible, isEnabled, toolTip);
+
+    private static int FindSelectedOptionIndex(
+        IReadOnlyList<AnimationPaneEffectOptionDescriptor> options)
+    {
+        for (var index = 0; index < options.Count; index++)
+        {
+            if (options[index].IsSelected)
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static int FindOptionIndex(
+        IReadOnlyList<AnimationPaneControlOptionPlan> options,
+        string label)
+    {
+        for (var index = 0; index < options.Count; index++)
+        {
+            if (string.Equals(options[index].Label, label, StringComparison.CurrentCulture))
+                return index;
+        }
+
+        return -1;
     }
 
     private static int NormalizeSelectedIndex(
@@ -1826,47 +1903,6 @@ public static class AnimationPanePlanner
         => selectedIndex >= 0
             ? (selectedIndex + 1).ToString(CultureInfo.InvariantCulture)
             : "none";
-
-    private static void AddBaselineHostRequests(
-        List<AnimationPaneVisualBaselineCaptureRequest> requests,
-        string scenarioId,
-        int slideIndex,
-        AnimationPaneBaselineCaptureKind kind,
-        string surfaceId,
-        string checkpoint,
-        int elapsedMs,
-        string evidenceSummary)
-    {
-        foreach (var host in new[]
-        {
-            AnimationPaneBaselineCaptureHost.PowerPoint,
-            AnimationPaneBaselineCaptureHost.Wpf,
-            AnimationPaneBaselineCaptureHost.Avalonia,
-        })
-        {
-            var hostToken = host.ToString().ToLowerInvariant();
-            requests.Add(new AnimationPaneVisualBaselineCaptureRequest(
-                $"{surfaceId}.{hostToken}",
-                host,
-                kind,
-                slideIndex,
-                scenarioId,
-                surfaceId,
-                checkpoint,
-                Math.Max(0, elapsedMs),
-                host == AnimationPaneBaselineCaptureHost.PowerPoint,
-                evidenceSummary));
-        }
-    }
-
-    private static string BuildBaselineSurfaceId(
-        string scenarioId,
-        int slideIndex,
-        string surfaceKind,
-        string checkpoint)
-        => string.Create(
-            CultureInfo.InvariantCulture,
-            $"freep.{scenarioId}.slide-{slideIndex + 1}.{surfaceKind}.{checkpoint}");
 
     private static string NormalizeScenarioId(string value)
     {

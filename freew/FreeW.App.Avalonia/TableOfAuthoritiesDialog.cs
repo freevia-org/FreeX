@@ -8,7 +8,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
+internal sealed partial class TableOfAuthoritiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome =
         AvaloniaCompactDialogChrome.WindowsStyle with
@@ -18,8 +18,7 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
             ActionSpacing = TableOfAuthoritiesDialogPlanner.VisualMetrics.ActionSpacing,
             DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush,
         };
-    private readonly IReadOnlyList<TableOfAuthoritiesCategoryChoice> _categories;
-    private readonly IReadOnlyList<TableOfAuthoritiesTabLeaderChoice> _leaders;
+    private readonly TableOfAuthoritiesDialogSession _session;
     private readonly ComboBox _category;
     private readonly CheckBox _passim;
     private readonly CheckBox _keepFormatting;
@@ -28,9 +27,8 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
     internal TableOfAuthoritiesDialog(ToaOptions options)
     {
         var metrics = TableOfAuthoritiesDialogPlanner.VisualMetrics;
-        var state = TableOfAuthoritiesDialogPlanner.BuildInitialState(options);
-        _categories = TableOfAuthoritiesDialogPlanner.BuildCategoryChoices();
-        _leaders = TableOfAuthoritiesDialogPlanner.BuildTabLeaderChoices();
+        _session = TableOfAuthoritiesDialogPlanner.CreateSession(options);
+        var state = _session.State;
         Title = TableOfAuthoritiesDialogPlanner.Title;
         Width = metrics.DialogWidth;
         SizeToContent = SizeToContent.Height;
@@ -38,8 +36,7 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
-        _category = Combo(_categories,
-            TableOfAuthoritiesDialogPlanner.SelectCategoryIndex(_categories, state.CategoryFilter));
+        _category = Combo(_session.Categories, state.CategoryIndex);
         _category.Margin = new Thickness(0, 0, 0, metrics.ComboBottomMargin);
         _passim = CheckBox(
             TableOfAuthoritiesDialogPlanner.UsePassimLabel,
@@ -49,9 +46,13 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
             TableOfAuthoritiesDialogPlanner.KeepOriginalFormattingLabel,
             state.KeepOriginalFormatting,
             new Thickness(0, 0, 0, metrics.KeepFormattingBottomMargin));
-        _leader = Combo(_leaders,
-            TableOfAuthoritiesDialogPlanner.SelectTabLeaderIndex(_leaders, state.TabLeader));
+        _leader = Combo(_session.TabLeaders, state.TabLeaderIndex);
         _leader.Margin = new Thickness(0, 0, 0, metrics.ComboBottomMargin);
+        _category.SelectionChanged += (_, _) => _session.UpdateCategory(_category.SelectedIndex);
+        _passim.IsCheckedChanged += (_, _) => _session.UpdateUsePassim(_passim.IsChecked is true);
+        _keepFormatting.IsCheckedChanged += (_, _) =>
+            _session.UpdateKeepOriginalFormatting(_keepFormatting.IsChecked is true);
+        _leader.SelectionChanged += (_, _) => _session.UpdateTabLeader(_leader.SelectedIndex);
 
         var ok = Button("OK", true, false, Accept);
         var cancel = Button("Cancel", false, true, () => Close(null));
@@ -106,14 +107,28 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
     public static Task<ToaOptions?> ShowAsync(Window owner, ToaOptions? options = null) =>
         new TableOfAuthoritiesDialog(options ?? ToaOptions.Default).ShowDialog<ToaOptions?>(owner);
 
-    internal ToaOptions BuildResultForTest() => TableOfAuthoritiesDialogPlanner.BuildOptions(
-        new TableOfAuthoritiesDialogState(
-            _passim.IsChecked == true,
-            _keepFormatting.IsChecked == true,
-            _category.SelectedIndex >= 0 ? _categories[_category.SelectedIndex].Category : null,
-            _leader.SelectedIndex >= 0 ? _leaders[_leader.SelectedIndex].Leader : ToaTabLeader.Dots));
+    private void Accept()
+    {
+        SynchronizeSession();
+        var acceptance = _session.PlanAcceptance();
+        if (!acceptance.IsAccepted)
+        {
+            (acceptance.Validation?.Field == TableOfAuthoritiesDialogField.TabLeader
+                ? _leader
+                : _category).Focus();
+            return;
+        }
 
-    private void Accept() => Close(BuildResultForTest());
+        Close(acceptance.Options);
+    }
+
+    private void SynchronizeSession()
+    {
+        _session.UpdateCategory(_category.SelectedIndex);
+        _session.UpdateUsePassim(_passim.IsChecked is true);
+        _session.UpdateKeepOriginalFormatting(_keepFormatting.IsChecked is true);
+        _session.UpdateTabLeader(_leader.SelectedIndex);
+    }
 
     private static ComboBox Combo(IEnumerable<object> items, int selectedIndex)
     {

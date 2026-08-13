@@ -4,9 +4,9 @@ namespace FreeW.App.Presentation.Dialogs;
 
 public sealed record SortDialogChoice<TValue>(TValue Value, string Label);
 
-public sealed record SortDialogKey(SortKind Kind, bool Ascending);
+public readonly record struct SortDialogKey(SortKind Kind, bool Ascending);
 
-public sealed record SortDialogResult(
+public readonly record struct SortDialogResult(
     SortDialogKey Key1,
     SortDialogKey? Key2,
     SortDialogKey? Key3,
@@ -18,8 +18,74 @@ public sealed record SortDialogResult(
     public bool Ascending => Key1.Ascending;
 }
 
+public sealed record SortDialogInput(
+    int Key1TypeIndex,
+    bool Key1Ascending,
+    bool UseKey2,
+    int Key2TypeIndex,
+    bool Key2Ascending,
+    bool UseKey3,
+    int Key3TypeIndex,
+    bool Key3Ascending,
+    bool CaseSensitive,
+    bool HasHeaderRow);
+
+public sealed record SortDialogEnabledState(bool Key2Enabled, bool Key3Enabled);
+
+public sealed class SortDialogSession
+{
+    public SortDialogSession(bool forTable)
+    {
+        Prompt = SortDialogPlanner.PromptLabel(forTable);
+    }
+
+    public string Prompt { get; }
+
+    public IReadOnlyList<SortDialogChoice<SortKind>> TypeChoices => SortDialogPlanner.TypeChoices;
+
+    public SortDialogEnabledState PlanEnabledState(bool useKey2, bool useKey3) =>
+        new(useKey2, useKey3);
+
+    public SortDialogResult PlanAcceptance(SortDialogInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        return SortDialogPlanner.BuildResult(
+            input.Key1TypeIndex,
+            input.Key1Ascending,
+            input.UseKey2,
+            input.Key2TypeIndex,
+            input.Key2Ascending,
+            input.UseKey3,
+            input.Key3TypeIndex,
+            input.Key3Ascending,
+            input.CaseSensitive,
+            input.HasHeaderRow);
+    }
+}
+
 public static class SortDialogPlanner
 {
+    public const string Title = "Sort";
+    public const string SortByLabel = "Sort by";
+    public const string ThenByLabel = "Then by";
+    public const string ThenBySecondLabel = "Then by (2nd)";
+    public const string TypeLabel = "Type:";
+    public const string AscendingLabel = "Ascending";
+    public const string DescendingLabel = "Descending";
+    public const string CaseSensitiveLabel = "Case sensitive";
+    public const string HeaderRowLabel = "My list has a header row";
+    public const string AcceptButtonLabel = "OK";
+    public const string CancelButtonLabel = "Cancel";
+    public const string AutomationId = "SortDialog";
+    public const string Key1TypeAutomationId = "SortKey1TypeComboBox";
+    public const string Key2TypeAutomationId = "SortKey2TypeComboBox";
+    public const string Key3TypeAutomationId = "SortKey3TypeComboBox";
+
+    public static IReadOnlyList<DialogActionButtonPlan> ActionButtons { get; } =
+    [
+        new(AcceptButtonLabel, IsDefault: true),
+        new(CancelButtonLabel, IsCancel: true),
+    ];
     public static readonly IReadOnlyList<SortDialogChoice<SortKind>> TypeChoices =
     [
         new(SortKind.Text, "Text"),

@@ -58,7 +58,322 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
-    <value>Utiliser la langue du systeme</value>
-  </data>
+  <data name="DrawTable_Dialog_Title" xml:space="preserve"><value>Dessiner un tableau</value></data>
+  <data name="SplitCells_Dialog_Title" xml:space="preserve"><value>Fractionner les cellules</value></data>
+  <data name="TableDimensions_Rows_Label" xml:space="preserve"><value>Nombre de lignes :</value></data>
+  <data name="TableDimensions_Columns_Label" xml:space="preserve"><value>Nombre de colonnes :</value></data>
+  <data name="ProofingLanguage_Dialog_Title" xml:space="preserve"><value>Définir la langue de vérification</value></data>
+  <data name="ProofingLanguage_Language_Label" xml:space="preserve"><value>Langue :</value></data>
+  <data name="ProofingLanguage_Instruction" xml:space="preserve"><value>Sélectionnez la langue de vérification du texte sélectionné :</value></data>
+  <data name="ProofingLanguage_Clear_Label" xml:space="preserve"><value>(Aucune - effacer la langue)</value></data>
+  <data name="Common_AltText" xml:space="preserve"><value>Texte de remplacement</value></data>
+  <data name="AltText_Description_Label" xml:space="preserve"><value>Description :</value></data>
+  <data name="AltText_ImageSelectionRequired_Message" xml:space="preserve"><value>Sélectionnez d'abord une image, puis choisissez Texte de remplacement.</value></data>
+  <data name="AltText_ShapeSelectionRequired_Message" xml:space="preserve"><value>Sélectionnez d'abord une forme ou un objet WordArt, puis choisissez Texte de remplacement.</value></data>
+  <data name="Shell_ZoomIn_Label" xml:space="preserve"><value>Zoom avant</value></data>
+  <data name="Shell_ZoomOut_Label" xml:space="preserve"><value>Zoom arri&#232;re</value></data>
+  <data name="Common_Themes" xml:space="preserve"><value>Th&#232;mes</value></data>
+  <data name="Design_Colors_Title" xml:space="preserve"><value>Couleurs</value></data>
+  <data name="Design_Fonts_Title" xml:space="preserve"><value>Polices</value></data>
+  <data name="Design_ParagraphSpacing_Title" xml:space="preserve"><value>Espacement des paragraphes</value></data>
+  <data name="Design_ParagraphSpacing_CompactLabel" xml:space="preserve"><value>Espacement&#xA;paragraphes</value></data>
+  <data name="Design_FontSample_Heading" xml:space="preserve"><value>Titre</value></data>
+  <data name="Design_FontSample_Body" xml:space="preserve"><value>Corps</value></data>
+  <data name="Design_ThemeColors_AutomationNameFormat" xml:space="preserve"><value>Couleurs {0}</value></data>
+  <data name="Design_StyleSet_AutomationNameFormat" xml:space="preserve"><value>Jeu de styles {0}</value></data>
+  <data name="Design_FontSet_AutomationNameFormat" xml:space="preserve"><value>Polices {0}</value></data>
+  <data name="Design_ParagraphSpacing_AutomationNameFormat" xml:space="preserve"><value>Espacement {0}</value></data>
+  <data name="Design_EffectSet_AutomationNameFormat" xml:space="preserve"><value>Effets {0}</value></data>
+  <data name="Design_TableStyles_Title" xml:space="preserve"><value>Styles de tableau</value></data>
+  <data name="Design_TableStyles_CompactLabel" xml:space="preserve"><value>Styles&#xA;tableau</value></data>
+  <data name="Design_TableStyle_AutomationNameFormat" xml:space="preserve"><value>Style de tableau {0}</value></data>
+  <data name="Design_Styles_MoreToolTip" xml:space="preserve"><value>Autres styles</value></data>
+  <data name="Dialog_DateTime_Title" xml:space="preserve"><value>Date et heure</value></data>
+  <data name="Dialog_DateTime_FormatsLabel" xml:space="preserve"><value>Formats disponibles :</value></data>
+  <data name="Dialog_DateTime_UpdateAutomatically" xml:space="preserve"><value>Mettre &#224; jour automatiquement</value></data>
+  <data name="Dialog_DateTime_UpdateAutomaticallyToolTip" xml:space="preserve"><value>Ins&#233;rer un champ DATE ou TIME actif mis &#224; jour avec F9 au lieu d'un texte statique.</value></data>
+  <data name="Dialog_MultilevelList_Title" xml:space="preserve"><value>D&#233;finir une nouvelle liste &#224; plusieurs niveaux</value></data>
+  <data name="Dialog_MultilevelList_Description" xml:space="preserve"><value>Configurer les niveaux de la liste.</value></data>
+  <data name="Dialog_MultilevelList_LevelsLabel" xml:space="preserve"><value>Nombre de niveaux (1-9) :</value></data>
+  <data name="Dialog_MultilevelList_Level1StartAtLabel" xml:space="preserve"><value>Niveau 1 commence &#224; :</value></data>
+  <data name="Dialog_MultilevelList_Level2StartAtLabel" xml:space="preserve"><value>Niveau 2 commence &#224; :</value></data>
+  <data name="Dialog_MultilevelList_Level1NumberStyleLabel" xml:space="preserve"><value>Style de num&#233;ro du niveau 1 :</value></data>
+  <data name="Dialog_MultilevelList_Level2NumberStyleLabel" xml:space="preserve"><value>Style de num&#233;ro du niveau 2 :</value></data>
+  <data name="Dialog_MultilevelList_Level3NumberStyleLabel" xml:space="preserve"><value>Style de num&#233;ro du niveau 3 :</value></data>
+  <data name="Dialog_MultilevelList_Level1StartAtToolTip" xml:space="preserve"><value>D&#233;but du niveau 1 (base 1)</value></data>
+  <data name="Dialog_MultilevelList_Level2StartAtToolTip" xml:space="preserve"><value>D&#233;but du niveau 2 (base 1)</value></data>
+  <data name="Dialog_MultilevelList_PositiveStartAtMessage" xml:space="preserve"><value>Les valeurs initiales doivent &#234;tre des entiers positifs ou vides.</value></data>
+  <data name="Pane_Thesaurus_Heading" xml:space="preserve"><value>Dictionnaire des synonymes</value></data>
+  <data name="Pane_Thesaurus_EmptyWordStatus" xml:space="preserve"><value>Placez le curseur sur un mot et appuyez sur Maj+F7.</value></data>
+  <data name="Pane_Thesaurus_NoSynonymsStatus" xml:space="preserve"><value>Aucun synonyme trouv&#233; pour ce mot.</value></data>
+  <data name="Pane_Thesaurus_InsertToolTipFormat" xml:space="preserve"><value>Ins&#233;rer &quot;{0}&quot; &#224; la place de &quot;{1}&quot;</value></data>
+  <data name="Pane_Thesaurus_CopyToolTipFormat" xml:space="preserve"><value>Copier &quot;{0}&quot; dans le presse-papiers</value></data>
+  <data name="Pane_Thesaurus_CopyButton" xml:space="preserve"><value>Copier</value></data>
+  <data name="Pane_Thesaurus_Adjective" xml:space="preserve"><value>adjectif</value></data>
+  <data name="Pane_Thesaurus_Adverb" xml:space="preserve"><value>adverbe</value></data>
+  <data name="Pane_Thesaurus_Noun" xml:space="preserve"><value>nom</value></data>
+  <data name="Pane_Thesaurus_Verb" xml:space="preserve"><value>verbe</value></data>
+  <data name="Pane_Thesaurus_Preposition" xml:space="preserve"><value>pr&#233;position</value></data>
+  <data name="Pane_Thesaurus_Pronoun" xml:space="preserve"><value>pronom</value></data>
+  <data name="Pane_Notes_Heading" xml:space="preserve"><value>Notes</value></data>
+  <data name="Common_Apply" xml:space="preserve"><value>Appliquer</value></data>
+  <data name="Pane_Notes_Delete" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="Pane_Notes_ApplyToolTip" xml:space="preserve"><value>Appliquer les modifications &#224; cette note</value></data>
+  <data name="Pane_Notes_DeleteToolTip" xml:space="preserve"><value>Supprimer cette note et son rep&#232;re</value></data>
+  <data name="Pane_Notes_FootnoteFormat" xml:space="preserve"><value>Note de bas de page {0}</value></data>
+  <data name="Pane_Notes_EndnoteFormat" xml:space="preserve"><value>Note de fin {0}</value></data>
+  <data name="Dialog_Note_InsertFootnoteTitle" xml:space="preserve"><value>Ins&#233;rer une note de bas de page</value></data>
+  <data name="Dialog_Note_InsertEndnoteTitle" xml:space="preserve"><value>Ins&#233;rer une note de fin</value></data>
+  <data name="Dialog_Note_FootnoteTextLabel" xml:space="preserve"><value>Texte de la note de bas de page :</value></data>
+  <data name="Dialog_Note_EndnoteTextLabel" xml:space="preserve"><value>Texte de la note de fin :</value></data>
+  <data name="Dialog_Note_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="Dialog_Note_Cancel" xml:space="preserve"><value>Annuler</value></data>
+  <data name="FreeW_ProductName" xml:space="preserve"><value>FreeW</value></data>
+  <data name="Autosave_Recovery_Title" xml:space="preserve"><value>FreeW - Récupération</value></data>
+  <data name="Autosave_Recovery_Recover_Button" xml:space="preserve"><value>Récupérer</value></data>
+  <data name="Autosave_Recovery_Skip_Button" xml:space="preserve"><value>Ignorer</value></data>
+  <data name="Autosave_Recovery_None_Message" xml:space="preserve"><value>Aucun document non enregistré n'a été trouvé.</value></data>
+  <data name="Autosave_Recovery_Failure_Message_Format" xml:space="preserve"><value>Impossible de récupérer le document.&#xA;&#xA;{0}</value></data>
+  <data name="QuickParts_Save_Title" xml:space="preserve"><value>Enregistrer dans les composants QuickPart</value></data>
+  <data name="QuickParts_Name_Label" xml:space="preserve"><value>Nom :</value></data>
+  <data name="QuickParts_EmptySelection_Message" xml:space="preserve"><value>Sélectionnez d'abord du texte, puis choisissez Enregistrer la sélection dans les composants QuickPart.</value></data>
+  <data name="QuickParts_EmptyLibrary_Message" xml:space="preserve"><value>Aucun composant QuickPart n'est enregistré. Sélectionnez du texte, puis enregistrez la sélection dans les composants QuickPart.</value></data>
+  <data name="QuickParts_Insert_Title" xml:space="preserve"><value>Insérer un composant QuickPart</value></data>
+  <data name="QuickParts_Item_Label" xml:space="preserve"><value>Composant QuickPart :</value></data>
+  <data name="QuickParts_Insert_Button" xml:space="preserve"><value>Insérer</value></data>
+  <data name="InsertChart_Dialog_Title" xml:space="preserve"><value>Insérer un graphique</value></data>
+  <data name="InsertChart_ChartType_Label" xml:space="preserve"><value>Type de graphique :</value></data>
+  <data name="InsertChart_Title_Label" xml:space="preserve"><value>Titre (facultatif) :</value></data>
+  <data name="InsertChart_Data_Label" xml:space="preserve"><value>Données du graphique (première colonne = catégories, autres colonnes = valeurs des séries) :</value></data>
+  <data name="InsertChart_Category_Header" xml:space="preserve"><value>Catégorie</value></data>
+  <data name="InsertChart_AddRow_Label" xml:space="preserve"><value>Ajouter une ligne</value></data>
+  <data name="InsertChart_RemoveRow_Label" xml:space="preserve"><value>Supprimer la ligne</value></data>
+  <data name="InsertChart_EmptyRows_Validation" xml:space="preserve"><value>Saisissez au moins une ligne de données.</value></data>
+  <data name="ChartTitle_Dialog_Title" xml:space="preserve"><value>Titre du graphique</value></data>
+  <data name="ChartTitle_Title_Label" xml:space="preserve"><value>Titre :</value></data>
+  <data name="ChartAxisTitles_Dialog_Title" xml:space="preserve"><value>Titres des axes</value></data>
+  <data name="ChartAxisTitles_Category_Label" xml:space="preserve"><value>Axe des catégories :</value></data>
+  <data name="ChartAxisTitles_Value_Label" xml:space="preserve"><value>Axe des valeurs :</value></data>
+  <data name="ChartSize_Dialog_Title" xml:space="preserve"><value>Taille du graphique</value></data>
+  <data name="ChartSize_Width_Label" xml:space="preserve"><value>Largeur (pt) :</value></data>
+  <data name="ChartSize_Height_Label" xml:space="preserve"><value>Hauteur (pt) :</value></data>
+  <data name="ChartSize_Width_Validation" xml:space="preserve"><value>Saisissez une largeur positive en points.</value></data>
+  <data name="ChartSize_Height_Validation" xml:space="preserve"><value>Saisissez une hauteur positive en points.</value></data>
+  <data name="Dialog_Close_Label" xml:space="preserve"><value>Fermer</value></data>
+  <data name="Editor_Document_AutomationName" xml:space="preserve"><value>Éditeur de document</value></data>
+  <data name="Editor_Endnotes_Heading" xml:space="preserve"><value>Notes de fin</value></data>
+  <data name="Editor_CrossReference_ToolTip_Format" xml:space="preserve"><value>Renvoi : {0}</value></data>
+  <data name="Editor_Formula_ToolTip_Format" xml:space="preserve"><value>Formule : {0}</value></data>
+  <data name="Editor_DragEditPoint_ToolTip" xml:space="preserve"><value>Faire glisser le point de modification</value></data>
+  <data name="ImageCrop_Instruction" xml:space="preserve"><value>Saisissez le pourcentage de largeur/hauteur à rogner sur chaque bord (0-99).</value></data>
+  <data name="Operation_InsertIcon" xml:space="preserve"><value>Insérer une icône</value></data>
+  <data name="Operation_PrintPreview" xml:space="preserve"><value>Aperçu avant impression</value></data>
+  <data name="Operation_Editor" xml:space="preserve"><value>Éditeur</value></data>
+  <data name="Proofing_SpellCheckOn_Status" xml:space="preserve"><value>La vérification orthographique est activée.</value></data>
+  <data name="Proofing_SpellCheckOff_Status" xml:space="preserve"><value>La vérification orthographique est désactivée.</value></data>
+  <data name="Proofing_SelectWord_Status" xml:space="preserve"><value>Sélectionnez un mot ou placez le curseur dedans, puis choisissez Ajouter au dictionnaire.</value></data>
+  <data name="Proofing_AddedToDictionary_Status_Format" xml:space="preserve"><value>« {0} » a été ajouté au dictionnaire personnalisé.</value></data>
+  <data name="Proofing_AlreadyInDictionary_Status_Format" xml:space="preserve"><value>« {0} » figure déjà dans le dictionnaire personnalisé.</value></data>
+  <data name="Proofing_LanguageCleared_Status" xml:space="preserve"><value>La langue de vérification a été effacée.</value></data>
+  <data name="Proofing_LanguageSet_Status_Format" xml:space="preserve"><value>Langue de vérification définie sur {0}.</value></data>
+  <data name="Proofing_AddToDictionary_MissingWord_Message" xml:space="preserve"><value>Placez le curseur dans un mot mal orthographié (souligné en rouge), puis choisissez Ajouter au dictionnaire.</value></data>
+  <data name="ChangeCase_SelectText_Message" xml:space="preserve"><value>Sélectionnez d'abord du texte, puis choisissez Modifier la casse.</value></data>
+  <data name="Hyphenation_Title" xml:space="preserve"><value>Césure</value></data>
+  <data name="Hyphenation_NoWords_Message" xml:space="preserve"><value>La césure manuelle n'a trouvé aucun mot à examiner.</value></data>
+  <data name="Thesaurus_Replace_Label" xml:space="preserve"><value>Remplacer</value></data>
+  <data name="Thesaurus_Unavailable_Message" xml:space="preserve"><value>Le volet des synonymes n'est pas disponible dans cet hôte.</value></data>
+  <data name="Review_Compare_OriginalPickerTitle" xml:space="preserve"><value>Comparer : choisir le document d'origine</value></data>
+  <data name="Review_Combine_OriginalPickerTitle" xml:space="preserve"><value>Combiner : choisir le document d'origine</value></data>
+  <data name="Review_Combine_ReviewerBPickerTitle" xml:space="preserve"><value>Combiner : choisir le document révisé du réviseur B</value></data>
+  <data name="Review_CompareDocuments_Action" xml:space="preserve"><value>Comparer les documents</value></data>
+  <data name="Review_CombineDocuments_Action" xml:space="preserve"><value>Combiner les documents</value></data>
+  <data name="Review_ComparedWith_Status_Format" xml:space="preserve"><value>Comparé avec {0}.</value></data>
+  <data name="Review_CombinedWith_Status_Format" xml:space="preserve"><value>Combiné avec {0}.</value></data>
+  <data name="Review_CompareFailed_Status_Format" xml:space="preserve"><value>Impossible de comparer les documents : {0}</value></data>
+  <data name="Review_CombineFailed_Status_Format" xml:space="preserve"><value>Impossible de combiner les documents : {0}</value></data>
+  <data name="Review_CompareFailed_Message_Format" xml:space="preserve"><value>Impossible de comparer les documents :&#xA;{0}</value></data>
+  <data name="Review_CombineFailed_Message_Format" xml:space="preserve"><value>Impossible de combiner les documents :&#xA;{0}</value></data>
+  <data name="MailMerge_ErrorReport_WindowTitle" xml:space="preserve"><value>FreeW - Rapport d'erreurs de publipostage</value></data>
+  <data name="Find_Inline_FindNext_Label" xml:space="preserve"><value>Rechercher suivant</value></data>
+  <data name="Find_Inline_Replace_Label" xml:space="preserve"><value>Remplacer</value></data>
+  <data name="Find_Inline_ReplaceAll_Label" xml:space="preserve"><value>Remplacer tout</value></data>
+  <data name="Find_Inline_Find_Label" xml:space="preserve"><value>Rechercher :</value></data>
+  <data name="Find_Inline_Replace_FieldLabel" xml:space="preserve"><value>Remplacer :</value></data>
+  <data name="View_WebLayout_HelpText" xml:space="preserve"><value>Mode Web : affichage continu sur toute la largeur</value></data>
+  <data name="View_WebLayout_WpfHelpText" xml:space="preserve"><value>Mode Web : affichage continu sur toute la largeur (sans cadre de page)</value></data>
+  <data name="View_PageEdit_HelpText" xml:space="preserve"><value>Édition de page : pages paginées modifiables</value></data>
+  <data name="View_PageEdit_WpfHelpText" xml:space="preserve"><value>Édition de page : pages paginées modifiables (pagination WYSIWYG)</value></data>
+  <data name="Ruler_TabStopSelector_AutomationName" xml:space="preserve"><value>Sélecteur de taquet de tabulation</value></data>
+  <data name="Ruler_CenterTab_ToolTip" xml:space="preserve"><value>Tabulation centrée</value></data>
+  <data name="Ruler_RightTab_ToolTip" xml:space="preserve"><value>Tabulation droite</value></data>
+  <data name="Ruler_DecimalTab_ToolTip" xml:space="preserve"><value>Tabulation décimale</value></data>
+  <data name="Ruler_LeftTab_ToolTip" xml:space="preserve"><value>Tabulation gauche</value></data>
+  <data name="Pane_RevealFormatting_Heading" xml:space="preserve"><value>Afficher la mise en forme</value></data>
+  <data name="HeaderFooter_Close_Label" xml:space="preserve"><value>Fermer l'en-tête et le pied de page</value></data>
+  <data name="HeaderFooter_Header_Label" xml:space="preserve"><value>En-tête</value></data>
+  <data name="HeaderFooter_Footer_Label" xml:space="preserve"><value>Pied de page</value></data>
+  <data name="HeaderFooter_Editing_Status_Format" xml:space="preserve"><value>Modification : {0}</value></data>
+  <data name="HeaderFooter_Edit_Title_Format" xml:space="preserve"><value>Modifier {0}</value></data>
+  <data name="HeaderFooter_Text_Label_Format" xml:space="preserve"><value>Texte de {0} :</value></data>
+  <data name="Window_SecondView_Title_Format" xml:space="preserve"><value>FreeW - {0} (deuxième vue)</value></data>
+  <data name="Window_SecondView_EmptyTitle" xml:space="preserve"><value>FreeW - (deuxième vue)</value></data>
+  <data name="PrintPreview_Settings_Heading" xml:space="preserve"><value>Paramètres d'impression</value></data>
+  <data name="Print_Title" xml:space="preserve"><value>Imprimer</value></data>
+  <data name="Print_Failed_Message_Format" xml:space="preserve"><value>Le document n'a pas pu être imprimé.&#xA;&#xA;{0}</value></data>
+  <data name="Print_ImageWarnings_Status_Format" xml:space="preserve"><value>{0} ({1} avertissement(s) d'image)</value></data>
+  <data name="ScreenClip_Inserted_Status_Format" xml:space="preserve"><value>Capture d'écran insérée ({0} x {1}).</value></data>
+  <data name="ScreenClip_Failed_Status_Format" xml:space="preserve"><value>Impossible de capturer l'écran : {0}</value></data>
+  <data name="ScreenClip_Failed_Message_Format" xml:space="preserve"><value>Impossible de capturer l'écran :&#xA;{0}</value></data>
+  <data name="DocumentProperties_Updated_Status" xml:space="preserve"><value>Propriétés du document mises à jour.</value></data>
+  <data name="Options_Dialog_Title" xml:space="preserve"><value>Options FreeW</value></data>
+  <data name="Options_SaveFailed_Status" xml:space="preserve"><value>Les options FreeW n'ont pas pu être enregistrées.</value></data>
+  <data name="Options_Saved_Status" xml:space="preserve"><value>Options FreeW enregistrées.</value></data>
+  <data name="Shell_OpenFolderFailed_Status_Format" xml:space="preserve"><value>Impossible d'ouvrir le dossier : {0}</value></data>
+  <data name="DocumentInspector_Title" xml:space="preserve"><value>Inspecteur de document</value></data>
+  <data name="DocumentInspector_Clean_Message" xml:space="preserve"><value>Aucun commentaire, suivi des modifications, propriété de document ou signet n'a été trouvé.</value></data>
+  <data name="DocumentInspector_Review_Message" xml:space="preserve"><value>Examinez les éléments trouvés ci-dessous, puis choisissez ceux à supprimer.</value></data>
+  <data name="DocumentInspector_Comments_Label" xml:space="preserve"><value>Commentaires</value></data>
+  <data name="DocumentInspector_Revisions_Label" xml:space="preserve"><value>Modifications suivies</value></data>
+  <data name="DocumentInspector_Properties_Label" xml:space="preserve"><value>Propriétés du document</value></data>
+  <data name="DocumentInspector_Bookmarks_Label" xml:space="preserve"><value>Signets</value></data>
+  <data name="DocumentInspector_Comments_HelpText" xml:space="preserve"><value>Supprime les commentaires de révision et leurs marques.</value></data>
+  <data name="DocumentInspector_Revisions_HelpText" xml:space="preserve"><value>Accepte toutes les insertions et suppressions suivies.</value></data>
+  <data name="DocumentInspector_Properties_HelpText" xml:space="preserve"><value>Efface le titre, l'auteur et les autres propriétés principales.</value></data>
+  <data name="DocumentInspector_Bookmarks_HelpText" xml:space="preserve"><value>Supprime les signets nommés et les liens internes associés.</value></data>
+  <data name="DocumentInspector_CategoryCount_Format" xml:space="preserve"><value>{0} : {1}</value></data>
+  <data name="DocumentInspector_FoundCount_Format" xml:space="preserve"><value>  -  {0} trouvé(s)</value></data>
+  <data name="DocumentInspector_NoneFound" xml:space="preserve"><value>  -  aucun élément</value></data>
+  <data name="ParagraphShading_Title" xml:space="preserve"><value>Trame de fond du paragraphe</value></data>
+  <data name="CellBorders_Title" xml:space="preserve"><value>Bordures de cellule</value></data>
+  <data name="Border_Preset_Label" xml:space="preserve"><value>Préréglage :</value></data>
+  <data name="Border_Style_Label" xml:space="preserve"><value>Style :</value></data>
+  <data name="Notes_Show_Title" xml:space="preserve"><value>Afficher les notes</value></data>
+  <data name="Notes_Footnotes_Title" xml:space="preserve"><value>Notes de bas de page</value></data>
+  <data name="Notes_Endnotes_Title" xml:space="preserve"><value>Notes de fin</value></data>
+  <data name="Notes_NoFootnotes_Message" xml:space="preserve"><value>Ce document ne contient aucune note de bas de page.</value></data>
+  <data name="Notes_NoEndnotes_Message" xml:space="preserve"><value>Ce document ne contient aucune note de fin.</value></data>
+  <data name="Notes_None_Message" xml:space="preserve"><value>Ce document ne contient aucune note de bas de page ni note de fin.</value></data>
+  <data name="Notes_Count_Singular_Format" xml:space="preserve"><value>{0} note</value></data>
+  <data name="Notes_Count_Plural_Format" xml:space="preserve"><value>{0} notes</value></data>
+  <data name="Caption_Insert_Title" xml:space="preserve"><value>Insérer une légende</value></data>
+  <data name="Caption_Text_FieldLabel" xml:space="preserve"><value>Texte de la légende (facultatif) :</value></data>
+  <data name="Caption_NewLabel_Title" xml:space="preserve"><value>Nouvelle étiquette</value></data>
+  <data name="Caption_NewLabel_Button" xml:space="preserve"><value>Nouvelle étiquette...</value></data>
+  <data name="Caption_Label_FieldLabel" xml:space="preserve"><value>Étiquette :</value></data>
+  <data name="Bookmark_Title" xml:space="preserve"><value>Signet</value></data>
+  <data name="Bookmark_NameOrRemove_Prompt" xml:space="preserve"><value>Nom du signet (laisser vide pour supprimer) :</value></data>
+  <data name="Bookmark_NoneForLink_Message" xml:space="preserve"><value>Aucun signet n'existe. Ajoutez d'abord un signet (Insertion &gt; Signet), puis créez le lien.</value></data>
+  <data name="LinkBookmark_Title" xml:space="preserve"><value>Lier à un signet</value></data>
+  <data name="LinkBookmark_Bookmark_Label" xml:space="preserve"><value>Signet :</value></data>
+  <data name="Field_InsertPageNumber_Title" xml:space="preserve"><value>Insérer le numéro de page</value></data>
+  <data name="Field_InsertDateTime_Title" xml:space="preserve"><value>Insérer la date et l'heure</value></data>
+  <data name="Field_Insert_Title" xml:space="preserve"><value>Insérer un champ</value></data>
+  <data name="Field_Insert_Prompt" xml:space="preserve"><value>Choisissez un champ à insérer :</value></data>
+  <data name="Image_SelectPictureFirst_Message" xml:space="preserve"><value>Sélectionnez d'abord une image.</value></data>
+  <data name="Image_PictureBorder_Title" xml:space="preserve"><value>Bordure de l'image</value></data>
+  <data name="Image_Corrections_Title" xml:space="preserve"><value>Corrections</value></data>
+  <data name="Image_PictureCorrections_Title" xml:space="preserve"><value>Corrections de l'image</value></data>
+  <data name="Image_Color_Title" xml:space="preserve"><value>Couleur</value></data>
+  <data name="Image_Transparency_Title" xml:space="preserve"><value>Transparence</value></data>
+  <data name="Image_Recolor_Title" xml:space="preserve"><value>Recolorer</value></data>
+  <data name="Image_ColorTone_Title" xml:space="preserve"><value>Température de couleur</value></data>
+  <data name="Image_Shadow_Title" xml:space="preserve"><value>Ombre</value></data>
+  <data name="Image_Reflection_Title" xml:space="preserve"><value>Réflexion</value></data>
+  <data name="Image_Glow_Title" xml:space="preserve"><value>Lueur</value></data>
+  <data name="Image_SoftEdges_Title" xml:space="preserve"><value>Contours adoucis</value></data>
+  <data name="Image_Bevel_Title" xml:space="preserve"><value>Biseau</value></data>
+  <data name="Image_ArtisticEffects_Title" xml:space="preserve"><value>Effets artistiques</value></data>
+  <data name="Image_ArtisticEffects_Choose_Message" xml:space="preserve"><value>Choisissez un effet artistique dans le menu déroulant.</value></data>
+  <data name="WordArt_Style_Title" xml:space="preserve"><value>Style WordArt</value></data>
+  <data name="WordArt_Style_Choose_Message" xml:space="preserve"><value>Choisissez un style WordArt dans le menu déroulant.</value></data>
+  <data name="WordArt_SelectFirst_Message" xml:space="preserve"><value>Sélectionnez d'abord un objet WordArt.</value></data>
+  <data name="WordArt_Transform_Title" xml:space="preserve"><value>Effets de texte : transformation</value></data>
+  <data name="WordArt_Transform_Choose_Message" xml:space="preserve"><value>Choisissez une transformation de texte dans le menu déroulant.</value></data>
+  <data name="SmartArt_Kind_List_Label" xml:space="preserve"><value>Liste</value></data>
+  <data name="SmartArt_Kind_Process_Label" xml:space="preserve"><value>Processus</value></data>
+  <data name="SmartArt_Kind_Hierarchy_Label" xml:space="preserve"><value>Hiérarchie</value></data>
+  <data name="MailMerge_Dialog_Title" xml:space="preserve"><value>Publipostage</value></data>
+  <data name="MailMerge_Start_Title" xml:space="preserve"><value>Démarrer le publipostage</value></data>
+  <data name="MailMerge_SelectRecipients_Title" xml:space="preserve"><value>Sélectionner les destinataires</value></data>
+  <data name="MailMerge_RecipientCsv_Hint" xml:space="preserve"><value>Saisissez ou collez une liste de destinataires au format CSV. La première ligne contient les en-têtes de colonnes.</value></data>
+  <data name="MailMerge_RecipientCsv_Placeholder" xml:space="preserve"><value>Prénom,Nom,Ville...</value></data>
+  <data name="MailMerge_InsertField_Title" xml:space="preserve"><value>Insérer un champ de fusion</value></data>
+  <data name="MailMerge_Field_Placeholder" xml:space="preserve"><value>...ou saisissez un nom de champ</value></data>
+  <data name="MailMerge_DocumentType_Label" xml:space="preserve"><value>Type de document :</value></data>
+  <data name="MailMerge_MatchFields_Title" xml:space="preserve"><value>Faire correspondre les champs</value></data>
+  <data name="MailMerge_FilterSort_Title" xml:space="preserve"><value>Filtrer et trier les destinataires</value></data>
+  <data name="MailMerge_SortBy_Label" xml:space="preserve"><value>Trier par :</value></data>
+  <data name="MailMerge_Ascending_Label" xml:space="preserve"><value>Croissant</value></data>
+  <data name="MailMerge_Descending_Label" xml:space="preserve"><value>Décroissant</value></data>
+  <data name="MailMerge_Filter_Instruction" xml:space="preserve"><value>Cochez les destinataires à inclure, puis choisissez un ordre de tri.</value></data>
+  <data name="MailMerge_Envelopes_Title" xml:space="preserve"><value>Enveloppes</value></data>
+  <data name="MailMerge_EnvelopeSize_Label" xml:space="preserve"><value>Format d'enveloppe :</value></data>
+  <data name="MailMerge_Note_Label" xml:space="preserve"><value>Remarque :</value></data>
+  <data name="MailMerge_InvalidLabelGrid_Message" xml:space="preserve"><value>Saisissez des nombres entiers positifs valides pour les lignes et les colonnes.</value></data>
+  <data name="MailMerge_Labels_Title" xml:space="preserve"><value>Étiquettes</value></data>
+  <data name="MailMerge_LabelProduct_Label" xml:space="preserve"><value>Produit d'étiquettes :</value></data>
+  <data name="MailMerge_Rows_Label" xml:space="preserve"><value>Lignes :</value></data>
+  <data name="MailMerge_Columns_Label" xml:space="preserve"><value>Colonnes :</value></data>
+  <data name="MailMerge_PreviewResults_Title" xml:space="preserve"><value>Aperçu des résultats</value></data>
+  <data name="MailMerge_Previous_Label" xml:space="preserve"><value>Précédent</value></data>
+  <data name="MailMerge_Next_Label" xml:space="preserve"><value>Suivant</value></data>
+  <data name="MailMerge_Done_Label" xml:space="preserve"><value>Terminé</value></data>
+  <data name="MailMerge_FindRecipient_Title" xml:space="preserve"><value>Rechercher un destinataire</value></data>
+  <data name="MailMerge_Find_Label" xml:space="preserve"><value>Rechercher :</value></data>
+  <data name="MailMerge_Find_Placeholder" xml:space="preserve"><value>Nom, société ou autre valeur</value></data>
+  <data name="MailMerge_Finish_Title" xml:space="preserve"><value>Terminer et fusionner</value></data>
+  <data name="MailMerge_Destination_Label" xml:space="preserve"><value>Destination :</value></data>
+  <data name="MailMerge_MergeTo_Label" xml:space="preserve"><value>Fusionner vers</value></data>
+  <data name="MailMerge_Records_Label" xml:space="preserve"><value>Enregistrements :</value></data>
+  <data name="MailMerge_RecordsToMerge_Label" xml:space="preserve"><value>Enregistrements à fusionner</value></data>
+  <data name="MailMerge_Range_Label" xml:space="preserve"><value>Plage :</value></data>
+  <data name="MailMerge_Validation_Label" xml:space="preserve"><value>Validation :</value></data>
+  <data name="MailMerge_From_Label" xml:space="preserve"><value>De :</value></data>
+  <data name="MailMerge_To_Label" xml:space="preserve"><value>À :</value></data>
+  <data name="MailMerge_ReadyToFinish_Message" xml:space="preserve"><value>Prêt à terminer le publipostage.</value></data>
+  <data name="MailMerge_CheckErrors_Title" xml:space="preserve"><value>Rechercher les erreurs</value></data>
+  <data name="MailMerge_CheckErrors_Label" xml:space="preserve"><value>Comment les erreurs doivent-elles être vérifiées ?</value></data>
+  <data name="MailMerge_SendEmail_Title" xml:space="preserve"><value>Envoyer des messages électroniques</value></data>
+  <data name="MailMerge_ToField_Label" xml:space="preserve"><value>Champ À :</value></data>
+  <data name="MailMerge_Subject_Label" xml:space="preserve"><value>Objet :</value></data>
+  <data name="MailMerge_Output_Label" xml:space="preserve"><value>Sortie :</value></data>
+  <data name="MailMerge_BodyFormat_Label" xml:space="preserve"><value>Format du corps :</value></data>
+  <data name="MailMerge_SendRecords_Label" xml:space="preserve"><value>Enregistrements à envoyer :</value></data>
+  <data name="MailMerge_ReadyEmail_Message" xml:space="preserve"><value>Prêt à préparer un plan de publipostage électronique. Aucun message ne sera envoyé.</value></data>
+  <data name="MailMerge_IfThenElse_Title" xml:space="preserve"><value>Si...Alors...Sinon</value></data>
+  <data name="MailMerge_FieldName_Label" xml:space="preserve"><value>Nom du champ :</value></data>
+  <data name="MailMerge_Comparison_Label" xml:space="preserve"><value>Comparaison :</value></data>
+  <data name="MailMerge_CompareTo_Label" xml:space="preserve"><value>Comparer à :</value></data>
+  <data name="MailMerge_ThenInsert_Label" xml:space="preserve"><value>Insérer ce texte (vrai) :</value></data>
+  <data name="MailMerge_OtherwiseInsert_Label" xml:space="preserve"><value>Sinon insérer (faux) :</value></data>
+  <data name="MailMerge_BookmarkName_Label" xml:space="preserve"><value>Nom du signet :</value></data>
+  <data name="MailMerge_Data_Title" xml:space="preserve"><value>Données de publipostage</value></data>
+  <data name="MailMerge_Data_Prompt" xml:space="preserve"><value>Collez ou saisissez du CSV (première ligne = noms de champs) :</value></data>
+  <data name="MailMerge_DataHeader_Hint" xml:space="preserve"><value>Conseil : la première ligne contient les noms de champs.</value></data>
+  <data name="MailMerge_FinishIssue_Format" xml:space="preserve"><value>Terminer et fusionner : {0}.</value></data>
+  <data name="MailMerge_FieldsHint_Format" xml:space="preserve"><value>Champs de ce document : {0}</value></data>
+  <data name="MailMerge_MatchedFields_Status" xml:space="preserve"><value>Les champs de destinataires ont été mis en correspondance automatiquement.</value></data>
+  <data name="MailMerge_DocumentOrder_Status" xml:space="preserve"><value>La liste des destinataires conserve l'ordre du document.</value></data>
+  <data name="MailMerge_SortedBy_Status_Format" xml:space="preserve"><value>Liste des destinataires triée par {0}.</value></data>
+  <data name="MailMerge_EnvelopeSetupApplied_Status" xml:space="preserve"><value>Mise en page d'enveloppe par défaut appliquée.</value></data>
+  <data name="MailMerge_LabelGridInserted_Status_Format" xml:space="preserve"><value>Grille d'étiquettes {0} x {1} insérée.</value></data>
+  <data name="InsertTextFromFile_PickerTitle" xml:space="preserve"><value>Insérer du texte à partir d'un fichier</value></data>
+  <data name="Hyperlink_Insert_Title" xml:space="preserve"><value>Insérer un lien hypertexte</value></data>
+  <data name="Hyperlink_Edit_Title" xml:space="preserve"><value>Modifier le lien hypertexte</value></data>
+  <data name="Hyperlink_Display_Placeholder" xml:space="preserve"><value>Texte à afficher</value></data>
+  <data name="Hyperlink_Address_Placeholder" xml:space="preserve"><value>https://…  ou  #NomDuSignet pour un lien interne</value></data>
+  <data name="Hyperlink_Display_Label" xml:space="preserve"><value>Texte :</value></data>
+  <data name="Hyperlink_Address_Label" xml:space="preserve"><value>Adresse :</value></data>
+  <data name="Hyperlink_ScreenTip_Title" xml:space="preserve"><value>Définir l'info-bulle</value></data>
+  <data name="Hyperlink_ScreenTip_Placeholder" xml:space="preserve"><value>Info-bulle</value></data>
+  <data name="Hyperlink_ScreenTip_Label" xml:space="preserve"><value>Info-bulle :</value></data>
+  <data name="Bookmark_Name_Placeholder" xml:space="preserve"><value>Nom du signet</value></data>
+  <data name="Bookmark_Name_Label" xml:space="preserve"><value>Nom :</value></data>
+  <data name="Bookmark_GoTo_Label" xml:space="preserve"><value>Atteindre :</value></data>
+  <data name="Bookmark_Add_Button" xml:space="preserve"><value>Ajouter</value></data>
+  <data name="Bookmark_GoTo_Button" xml:space="preserve"><value>Atteindre</value></data>
+  <data name="Bookmark_Close_Button" xml:space="preserve"><value>Fermer</value></data>
+  <data name="LinkBookmark_Link_Button" xml:space="preserve"><value>Lier</value></data>
+  <data name="QuickParts_Snippet_Placeholder" xml:space="preserve"><value>Texte du bloc (un paragraphe par ligne)</value></data>
+  <data name="QuickParts_Text_Label" xml:space="preserve"><value>Texte :</value></data>
 </root>

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Services;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -102,5 +103,36 @@ public sealed class TranslateDialogPlannerTests
         plan.Writes[1].Text.Should().Be("two\nthree\nfour");
         // Never writes outside the chosen 2-cell range.
         plan.Writes.Should().OnlyContain(w => plan.TargetRange.Contains(w.Address));
+    }
+
+    [Fact]
+    public void BuildCommand_AppliesAndRevertsMultiCellTranslationAtomically()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(b1, new TextValue("old one"));
+        sheet.SetCell(b2, new TextValue("old two"));
+        TranslateDialogPlanner.TryPlan(
+            sheet.Id,
+            source,
+            "new one\nnew two",
+            "B1:B2",
+            "en",
+            "fr",
+            out var plan,
+            out _).Should().BeTrue();
+        var command = TranslateDialogPlanner.BuildCommand(plan);
+        var context = new WorkbookCommandContext(workbook);
+
+        command.Apply(context).Success.Should().BeTrue();
+        ((TextValue)sheet.GetCell(b1)!.Value!).Value.Should().Be("new one");
+        ((TextValue)sheet.GetCell(b2)!.Value!).Value.Should().Be("new two");
+
+        command.Revert(context);
+        ((TextValue)sheet.GetCell(b1)!.Value!).Value.Should().Be("old one");
+        ((TextValue)sheet.GetCell(b2)!.Value!).Value.Should().Be("old two");
     }
 }

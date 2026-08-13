@@ -1295,6 +1295,30 @@ public sealed class DocumentViewRoundTripTests
         run.EmbeddedObject.Payload.Should().Equal(payload);
     }
 
+    [StaFact]
+    public void EmbeddedObject_RealizesSharedVisualAndAccessibilityPlan()
+    {
+        var view = new DocumentView();
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph());
+        view.LoadModel(doc);
+        var embedded = EmbeddedObject.CreateLinked("book.xlsx", " ");
+        embedded.WidthPt = 0;
+        embedded.HeightPt = double.NaN;
+
+        view.InsertEmbeddedObject(embedded);
+
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        var container = paragraph.Inlines.OfType<InlineUIContainer>().Single();
+        var border = container.Child.Should().BeOfType<Border>().Subject;
+        border.Width.Should().Be(EmbeddedObjectVisualPlanner.DefaultSizePt * 96.0 / 72.0);
+        border.Height.Should().Be(EmbeddedObjectVisualPlanner.DefaultSizePt * 96.0 / 72.0);
+        border.Child.Should().BeOfType<TextBlock>().Which.Text.Should().Be("Embedded object");
+        System.Windows.Automation.AutomationProperties.GetName(border).Should().Be("Embedded object");
+        System.Windows.Automation.AutomationProperties.GetHelpText(border).Should().Be("Linked embedded object");
+    }
+
     // ── SectionBreak round-trip ───────────────────────────────────────────────────────────────────
 
     [StaFact]

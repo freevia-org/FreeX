@@ -17,9 +17,6 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private static AvaloniaCompactDialogChromeStyle EvaluateFormulaDialogChromeStyle =>
-        EvaluateFormulaDialogChromeStyleForTest;
-
-    internal static AvaloniaCompactDialogChromeStyle EvaluateFormulaDialogChromeStyleForTest =>
         new(FormulaBarFontFamily)
         {
             ControlHeight = EvaluateFormulaDialogPlanner.ButtonHeight,

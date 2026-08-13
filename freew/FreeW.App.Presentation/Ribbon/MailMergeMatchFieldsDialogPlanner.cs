@@ -30,9 +30,7 @@ public static class MailMergeMatchFieldsDialogPlanner
             [FieldRole.Country] = "Country or Region",
         };
 
-    public static IReadOnlyList<FieldRole> GetRoles() => Roles;
-
-    public static string GetRoleLabel(FieldRole role) =>
+    private static string GetRoleLabel(FieldRole role) =>
         RoleLabels.TryGetValue(role, out var label) ? label : role.ToString();
 
     public static IReadOnlyList<string> GetColumnChoices(IReadOnlyList<string> header)

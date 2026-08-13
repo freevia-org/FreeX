@@ -13,7 +13,7 @@ namespace FreeX.App.Host.Tests;
 /// Before the fix: Paste (Ctrl+V) applied the pasted cell values via _commandBus.ExecuteRepeatable
 /// directly and then only called RecalculateIfAutomatic, which is a no-op outside Automatic/
 /// AutomaticExceptDataTables calculation mode -- so in Manual mode, _navigationCacheRevision (which
-/// SparklineValueCache/StatusBarStatsCache are keyed on) never advanced even though the pasted
+/// SparklineValueCache/WorkbookSelectionStatsCache are keyed on) never advanced even though the pasted
 /// values were written to the grid immediately (matching real Excel, which always applies a plain
 /// value paste right away regardless of calculation mode).
 ///

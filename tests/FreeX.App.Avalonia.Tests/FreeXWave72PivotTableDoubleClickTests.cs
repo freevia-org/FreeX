@@ -64,9 +64,10 @@ public sealed class FreeXWave72PivotTableDoubleClickTests
 
         wpfSelectionSource.Should().Contain("if (!TryShowPivotTableDetails(showMessage: false))");
         avaloniaPivotSource.Should().Contain(
-            "PivotUiPlanner.ResolveShowDetailsTarget(_session.ActiveSheet, _session.SelectedRange)");
+            "PivotApplication.PlanShowDetails(");
         avaloniaPivotSource.Should().Contain(
-            "new DrillDownPivotTableCommand(_session.ActiveSheet.Id, target.PivotTableName, target.PivotCell)");
+            "var outcome = PivotApplication.Execute(plan)");
+        avaloniaPivotSource.Should().NotContain("new DrillDownPivotTableCommand(");
         avaloniaGridSource.Should().Contain("if (!TryShowPivotTableDetailsFromDoubleClick(address))");
         avaloniaGridSource.Should().Contain("ConsumePivotDetailsDoubleClickSuppression(address)");
 
@@ -74,7 +75,7 @@ public sealed class FreeXWave72PivotTableDoubleClickTests
             "if (point.Properties.IsLeftButtonPressed && IsCellDoubleClick(address, args.ClickCount))",
             StringComparison.Ordinal);
         var pointerDoubleClickEnd = avaloniaGridSource.IndexOf(
-            "var additionalSelectionAnchor = SelectClickedCell(address, args.KeyModifiers);",
+            "SelectClickedCell(address, args.KeyModifiers);",
             pointerDoubleClickStart,
             StringComparison.Ordinal);
         avaloniaGridSource[pointerDoubleClickStart..pointerDoubleClickEnd]
@@ -140,15 +141,6 @@ public sealed class FreeXWave72PivotTableDoubleClickTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

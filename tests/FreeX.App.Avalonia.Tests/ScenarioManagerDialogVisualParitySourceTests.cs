@@ -44,15 +44,17 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
 
         source.Should().Contain("target?.Parent is not Panel field");
         source.Should().Contain("if (field is Grid parentGrid)");
-        source.Should().Contain("ScenarioManagerChangingCellsPickerButton");
-        source.Should().Contain("ScenarioManagerResultCellsPickerButton");
+        source.Should().Contain("FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsPickerButton");
+        source.Should().Contain("FreeXAutomationIdCatalog.ScenarioManager.ResultCellsPickerButton");
+        source.Should().NotContain("\"ScenarioManagerChangingCellsPickerButton\"");
+        source.Should().NotContain("\"ScenarioManagerResultCellsPickerButton\"");
         source.Should().Contain("owner.AttachDialogRangePicker(dialog, picker, target, targetId);");
     }
 
     [Fact]
     public void ParityCapture_FinalizerDrainDoesNotBlockTheAvaloniaUiThread()
     {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var source = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var methodStart = source.IndexOf(
             "private static Task ReleaseCompletedDialogCaptureResourcesAsync()",
             StringComparison.Ordinal);
@@ -219,15 +221,6 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
             .Select(term => term.StartsWith(prefix, StringComparison.Ordinal) ? term[prefix.Length..] : term)
             .ToArray();
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

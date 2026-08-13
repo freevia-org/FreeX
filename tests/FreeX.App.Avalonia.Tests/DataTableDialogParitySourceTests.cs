@@ -27,6 +27,14 @@ public sealed class DataTableDialogParitySourceTests
         avalonia.Should().Contain("StripDisplayMnemonic(UiText.Get(\"DataTable_ColumnInputLabel\"))");
         avalonia.Should().Contain("DataTablePlanner.CreatePlan(");
         planner.Should().Contain("public static DataTablePlanResult CreatePlan(");
+
+        var wpfCommands = ReadSource("src", "FreeX.App.Host", "MainWindow.DataCommands.cs");
+        wpfCommands.Should().Contain("DataTablePlanner.CreatePlan(range, dialog.Result)");
+        wpfCommands.Should().Contain("plan.CreateCommand");
+        wpfCommands.Should().NotContain("new OneVariableDataTableCommand");
+        wpfCommands.Should().NotContain("new TwoVariableDataTableCommand");
+        planner.Should().Contain("public IWorkbookCommand CreateCommand(GridRange tableRange)");
+        planner.Should().Contain("public IWorkbookCommand CreateCommand() => CreateCommand(TableRange)");
     }
 
     [Fact]
@@ -52,7 +60,7 @@ public sealed class DataTableDialogParitySourceTests
         dataTableMethod.Should().NotContain("DockPanel.SetDock(buttonRow, Dock.Bottom)");
         dataTableMethod.Should().NotContain("CreateDataTableField(\"Row input cell\"");
 
-        var parityCapture = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+        var parityCapture = ReadSource("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
         parityCapture.Should().Contain("ShowDataTableInputDialogAsync()");
         dataTableMethod.Should().Contain("ApplyDataTableInputChrome(rowInputBox)");
         dataTableMethod.Should().Contain("ApplyDataTableInputChrome(columnInputBox)");
@@ -72,17 +80,6 @@ public sealed class DataTableDialogParitySourceTests
         return source[start..end];
     }
 
-    private static string ReadSource(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return File.ReadAllText(candidate);
-        }
-
-        throw new FileNotFoundException("Could not locate repository source.", Path.Combine(parts));
-    }
+    private static string ReadSource(params string[] parts) =>
+        File.ReadAllText(TestWorkspaceFileLocator.FindFileFromBaseDirectory(parts));
 }

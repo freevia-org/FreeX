@@ -1,4 +1,4 @@
-using FreeX.Core.Model;
+using FreeX.App.Presentation.Accessibility;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -26,7 +26,7 @@ public sealed class R114_CellAccessibleNameCuesTests
         // No-regression sibling: a plain cell with no metadata still gets the original bare
         // "<address>: <value>" name -- adding cue support must not add stray text when there is
         // nothing to announce.
-        var name = MainWindow.FormatCellAccessibleNameForTest("A", 1, "42");
+        var name = CellAnnouncementPlanner.BuildName("A1", "42", default);
 
         name.Should().Be("A1: 42");
     }
@@ -34,7 +34,7 @@ public sealed class R114_CellAccessibleNameCuesTests
     [Fact]
     public void FormatCellAccessibleName_EmptyCell_NoRegression()
     {
-        var name = MainWindow.FormatCellAccessibleNameForTest("B", 2, "");
+        var name = CellAnnouncementPlanner.BuildName("B2", "", default);
 
         name.Should().Be("B2");
     }
@@ -44,7 +44,7 @@ public sealed class R114_CellAccessibleNameCuesTests
     {
         // This is the case that FAILS before the fix: FormatCellAccessibleName previously had no
         // isFormula parameter at all and could never emit this cue.
-        var name = MainWindow.FormatCellAccessibleNameForTest("C", 3, "10", isFormula: true);
+        var name = CellAnnouncementPlanner.BuildName("C3", "10", new CellAnnouncementMetadata(IsFormula: true));
 
         name.Should().Be("C3: 10, is a formula");
     }
@@ -52,7 +52,7 @@ public sealed class R114_CellAccessibleNameCuesTests
     [Fact]
     public void FormatCellAccessibleName_MergedCell_AppendsIsMergedCue()
     {
-        var name = MainWindow.FormatCellAccessibleNameForTest("D", 4, "Title", isMerged: true);
+        var name = CellAnnouncementPlanner.BuildName("D4", "Title", new CellAnnouncementMetadata(IsMerged: true));
 
         name.Should().Be("D4: Title, is merged");
     }
@@ -60,7 +60,7 @@ public sealed class R114_CellAccessibleNameCuesTests
     [Fact]
     public void FormatCellAccessibleName_HyperlinkCell_AppendsHasAHyperlinkCue()
     {
-        var name = MainWindow.FormatCellAccessibleNameForTest("E", 5, "Visit", hasHyperlink: true);
+        var name = CellAnnouncementPlanner.BuildName("E5", "Visit", new CellAnnouncementMetadata(HasHyperlink: true));
 
         name.Should().Be("E5: Visit, has a hyperlink");
     }
@@ -68,9 +68,10 @@ public sealed class R114_CellAccessibleNameCuesTests
     [Fact]
     public void FormatCellAccessibleName_CommentedCell_AppendsHasNoteCue_LowerCasingTheTitle()
     {
-        var comment = new CellCommentDisplay(CellCommentDisplayKind.Note, "Note", "Remember to check this");
-
-        var name = MainWindow.FormatCellAccessibleNameForTest("F", 6, "7", comment: comment);
+        var name = CellAnnouncementPlanner.BuildName(
+            "F6",
+            "7",
+            new CellAnnouncementMetadata(HasComment: true, CommentTitle: "Note"));
 
         name.Should().Be("F6: 7, has note");
     }
@@ -80,16 +81,15 @@ public sealed class R114_CellAccessibleNameCuesTests
     {
         // Mirrors GridView.BuildCellAnnouncementName's cue order: comment, formula, merged,
         // hyperlink (data validation/locked are deliberately excluded on both shells).
-        var comment = new CellCommentDisplay(CellCommentDisplayKind.ThreadedComment, "Threaded Comment", "body");
-
-        var name = MainWindow.FormatCellAccessibleNameForTest(
-            "G",
-            7,
+        var name = CellAnnouncementPlanner.BuildName(
+            "G7",
             "100",
-            comment: comment,
-            isFormula: true,
-            isMerged: true,
-            hasHyperlink: true);
+            new CellAnnouncementMetadata(
+                HasComment: true,
+                CommentTitle: "Threaded Comment",
+                IsFormula: true,
+                IsMerged: true,
+                HasHyperlink: true));
 
         name.Should().Be("G7: 100, has threaded comment, is a formula, is merged, has a hyperlink");
     }

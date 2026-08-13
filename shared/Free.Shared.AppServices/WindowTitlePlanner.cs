@@ -1,4 +1,4 @@
-using System.IO;
+using Free.Shared.IO;
 
 namespace Free.Shared.AppServices;
 
@@ -6,6 +6,49 @@ public enum WindowTitleApplicationPlacement
 {
     DocumentThenApplication,
     ApplicationThenDocument
+}
+
+public sealed record ApplicationWindowTitleSpec(
+    string ApplicationName,
+    string DefaultDocumentDisplayName,
+    string DirtyMarker,
+    string Separator,
+    WindowTitleApplicationPlacement ApplicationPlacement = WindowTitleApplicationPlacement.DocumentThenApplication,
+    bool CollapseCleanDefaultDocumentTitle = false);
+
+/// <summary>App-neutral product and document-title policy shared by native window binders.</summary>
+public static class ApplicationWindowTitlePolicy
+{
+    public static string Compose(
+        ApplicationWindowTitleSpec spec,
+        string? displayName,
+        bool isDirty,
+        string windowSuffix = "",
+        string groupSuffix = "",
+        bool isDefaultDocument = false)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+
+        var resolvedDisplayName = displayName ?? spec.DefaultDocumentDisplayName;
+        if (spec.CollapseCleanDefaultDocumentTitle
+            && isDefaultDocument
+            && !isDirty
+            && string.IsNullOrEmpty(windowSuffix)
+            && string.IsNullOrEmpty(groupSuffix))
+        {
+            return spec.ApplicationName;
+        }
+
+        return WindowTitlePlanner.Compose(
+            resolvedDisplayName,
+            spec.ApplicationName,
+            isDirty,
+            spec.DirtyMarker,
+            spec.Separator,
+            windowSuffix,
+            groupSuffix,
+            spec.ApplicationPlacement);
+    }
 }
 
 /// <summary>
@@ -67,5 +110,5 @@ public static class WindowTitlePlanner
     /// its extension.
     /// </summary>
     public static string DisplayNameFromPath(string path) =>
-        Path.GetFileNameWithoutExtension(path);
+        FilePathPolicy.FileNameWithoutExtensionOr(path, string.Empty);
 }

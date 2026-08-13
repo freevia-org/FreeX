@@ -16,6 +16,11 @@ public sealed record MarkCitationValidation(string Message);
 
 public static class MarkCitationDialogPlanner
 {
+    public const string AutomationId = "MarkCitationDialog";
+    public const string CategoryAutomationId = "MarkCitationCategoryComboBox";
+    public const string LongCitationAutomationId = "MarkCitationLongTextBox";
+    public const string ShortCitationAutomationId = "MarkCitationShortTextBox";
+    public const string StatusAutomationId = "MarkCitationValidationText";
     public const double DialogWidth = 380;
     public const double ContentHorizontalMargin = 16;
     public const double ContentTopMargin = 16;

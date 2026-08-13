@@ -21,6 +21,18 @@ public sealed record InCanvasRichTextVisualRun(
     InlineOleObjectInfo? InlineOleObject = null,
     InlineTableInfo? InlineTable = null);
 
+public sealed record InCanvasInheritedRunStylePlan(
+    bool IsPresent,
+    double? FontSizePt,
+    bool? Bold,
+    bool? Italic,
+    string? FontFamily,
+    ThemeAwareColor? Color)
+{
+    public static InCanvasInheritedRunStylePlan Empty { get; } =
+        new(false, null, null, null, null, null);
+}
+
 public sealed record InCanvasRichTextVisualParagraph(
     int ParagraphIndex,
     int GlobalStart,
@@ -41,6 +53,15 @@ public sealed record InCanvasRichTextVisualParagraph(
     IReadOnlyList<ResolvedTabStop>? TabStops = null)
 {
     public int GlobalEnd => GlobalStart + Text.Length;
+
+    /// <summary>Resolved paragraph left margin, including list-style inheritance.</summary>
+    public double MarginLeftDip { get; init; }
+
+    /// <summary>Resolved first-line indent, including list-style inheritance.</summary>
+    public double TextIndentDip { get; init; }
+
+    public InCanvasInheritedRunStylePlan InheritedRunStyle { get; init; } =
+        InCanvasInheritedRunStylePlan.Empty;
 }
 
 public sealed record InCanvasRichTextVisualPlan(
@@ -49,8 +70,8 @@ public sealed record InCanvasRichTextVisualPlan(
     bool Wrap);
 
 /// <summary>
-/// Framework-neutral visual contract for in-canvas rich editors. It keeps paragraph alignment,
-/// spacing, run styling, and model text offsets identical across hosts without changing WPF policy.
+/// Framework-neutral visual contract for rich editors. It keeps paragraph and marker resolution,
+/// run styling, and model text offsets identical across WPF and Avalonia hosts.
 /// </summary>
 public static class InCanvasRichTextVisualPlanner
 {
@@ -75,6 +96,7 @@ public static class InCanvasRichTextVisualPlanner
         for (int paragraphIndex = 0; paragraphIndex < body.Paragraphs.Count; paragraphIndex++)
         {
             var paragraph = body.Paragraphs[paragraphIndex];
+            var inheritedStyle = body.LstStyle?.Resolve(paragraph.Level);
             string text = string.Concat(paragraph.Runs.Select(run => run.Text));
             var runs = new List<InCanvasRichTextVisualRun>(paragraph.Runs.Count);
             int runStart = 0;
@@ -103,43 +125,23 @@ public static class InCanvasRichTextVisualPlanner
 
             var seedRun = paragraph.Runs.FirstOrDefault(run => run.Text.Length > 0)
                 ?? paragraph.Runs.FirstOrDefault();
-            string bulletText = string.Empty;
-            if (!paragraph.BulletSuppressed)
-            {
-                switch (paragraph.BulletKind)
-                {
-                    case BulletKind.Char:
-                        bulletText = paragraph.BulletChar ?? "•";
-                        break;
-                    case BulletKind.Auto:
-                    {
-                        int value = markerState.Next(
-                            paragraph.Level,
-                            paragraph.AutoNumType,
-                            paragraph.AutoNumStartAt,
-                            paragraph.AutoNumStartAtSpecified);
-                        bulletText = markerState.FormatTemplate(
-                            paragraph.Level,
-                            paragraph.AutoNumType,
-                            value,
-                            paragraph.AutoNumTextTemplate);
-                        break;
-                    }
-                    default:
-                        markerState.Break();
-                        break;
-                }
-            }
-
-            if (paragraph.BulletKind is BulletKind.Char or BulletKind.Image
-                || paragraph.BulletSuppressed)
-                markerState.Break();
-
-            double indentDip = paragraph.MarginLeftEmu is { } marginLeft
-                ? Math.Max(0, marginLeft / EmuPerDip)
+            var marker = PresentationListMarkerPlanner.Resolve(
+                paragraph,
+                inheritedStyle,
+                markerState);
+            long effectiveMarginLeftEmu = paragraph.MarginLeftEmu
+                ?? inheritedStyle?.MarginLeftEmu
+                ?? 0;
+            long effectiveIndentEmu = paragraph.IndentEmu
+                ?? inheritedStyle?.IndentEmu
+                ?? 0;
+            double marginLeftDip = effectiveMarginLeftEmu / EmuPerDip;
+            double textIndentDip = effectiveIndentEmu / EmuPerDip;
+            double indentDip = effectiveMarginLeftEmu > 0
+                ? marginLeftDip
                 : 0;
-            double hangingDip = paragraph.IndentEmu is { } indent && indent < 0
-                ? -indent / EmuPerDip
+            double hangingDip = effectiveIndentEmu < 0
+                ? -textIndentDip
                 : 0;
             var tabStops = paragraph.TabStops
                 .Where(tabStop => tabStop.PositionEmu > 0)
@@ -156,22 +158,27 @@ public static class InCanvasRichTextVisualPlanner
                 paragraphIndex,
                 globalStart,
                 text,
-                paragraph.Align ?? body.DefaultParaAlign ?? TextAlign.Left,
-                Math.Max(0, paragraph.SpaceBeforePt ?? 0) * PtToDip,
-                Math.Max(0, paragraph.SpaceAfterPt ?? 0) * PtToDip,
+                paragraph.Align ?? inheritedStyle?.Align ?? body.DefaultParaAlign ?? TextAlign.Left,
+                (paragraph.SpaceBeforePt ?? 0) * PtToDip,
+                (paragraph.SpaceAfterPt ?? 0) * PtToDip,
                 runs,
-                paragraph.BulletKind,
-                bulletText,
-                paragraph.BulletImage,
-                paragraph.BulletFontFamily ?? seedRun?.FontFamily,
-                paragraph.BulletSizePt ?? ResolveBulletSize(seedRun, paragraph.BulletSizePct),
-                paragraph.BulletColor ?? seedRun?.Color,
+                marker.Kind,
+                marker.Text,
+                marker.Image,
+                marker.FontFamily ?? seedRun?.FontFamily,
+                marker.ResolveFontSizePt(seedRun?.FontSizePt),
+                marker.Color ?? seedRun?.Color,
                 indentDip,
                 hangingDip,
-                paragraph.RightToLeft ?? body.LstStyle?.Resolve(paragraph.Level)?.RightToLeft
+                paragraph.RightToLeft ?? inheritedStyle?.RightToLeft
                     ?? body.DefaultParaRightToLeft
                     ?? false,
-                tabStops));
+                tabStops)
+            {
+                MarginLeftDip = marginLeftDip,
+                TextIndentDip = textIndentDip,
+                InheritedRunStyle = BuildInheritedRunStyle(inheritedStyle),
+            });
 
             globalStart += text.Length + (paragraphIndex + 1 < body.Paragraphs.Count ? 1 : 0);
         }
@@ -188,12 +195,23 @@ public static class InCanvasRichTextVisualPlanner
         0,
         []);
 
-    private const double EmuPerDip = 9525.0;
-
-    private static double? ResolveBulletSize(Run? seedRun, int? sizePct)
+    private static InCanvasInheritedRunStylePlan BuildInheritedRunStyle(TextStyleLevel? style)
     {
-        if (sizePct is > 0 && seedRun?.FontSizePt is > 0)
-            return seedRun.FontSizePt.Value * sizePct.Value / 100000.0;
-        return seedRun?.FontSizePt;
+        if (style is null)
+            return InCanvasInheritedRunStylePlan.Empty;
+
+        var fontFamily = !string.IsNullOrWhiteSpace(style.LatinFont)
+            && !style.LatinFont.StartsWith("+", StringComparison.Ordinal)
+                ? style.LatinFont
+                : null;
+        return new InCanvasInheritedRunStylePlan(
+            true,
+            style.FontSizePt,
+            style.Bold,
+            style.Italic,
+            fontFamily,
+            style.Color);
     }
+
+    private const double EmuPerDip = 9525.0;
 }

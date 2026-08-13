@@ -141,6 +141,83 @@ declarative_home_handler_overrides = {
     "Top 10%": "CfTop10PercentMenuItem_Click",
 }
 
+# Static menu leaves are route identities, not display text. Keep this mapping beside the archived
+# XAML importer so regeneration cannot turn localized labels back into command ids. Dynamic
+# galleries (cell styles, conditional-format icon sets, colors, fonts, and similar preset payloads)
+# intentionally retain their payload ids and are not listed here.
+semantic_static_menu_command_ids = {
+    "Crop": "drawing.crop",
+    "Reset Crop": "drawing.crop.reset",
+    "No Effect": "drawing.shapeEffect.none",
+    "Shadow": "drawing.shapeEffect.shadow",
+    "Inner Shadow": "drawing.shapeEffect.innerShadow",
+    "Reflection": "drawing.shapeEffect.reflection",
+    "Glow": "drawing.shapeEffect.glow",
+    "Soft Edges": "drawing.shapeEffect.softEdges",
+    "Bevel": "drawing.shapeEffect.bevel",
+    "3-D Rotation": "drawing.shapeEffect.threeDRotation",
+    "Customize": "pageLayout.theme.customize",
+    "Customize Colors": "pageLayout.themeColors.customize",
+    "Arial": "pageLayout.themeFonts.arial",
+    "Times New Roman": "pageLayout.themeFonts.timesNewRoman",
+    "Customize Fonts": "pageLayout.themeFonts.customize",
+    "Subtle": "pageLayout.themeEffects.subtle",
+    "Refined": "pageLayout.themeEffects.refined",
+    "Customize Effects": "pageLayout.themeEffects.customize",
+    "Wide": "pageLayout.margins.wide",
+    "Narrow": "pageLayout.margins.narrow",
+    "Custom Margins": "pageLayout.margins.custom",
+    "Portrait": "pageLayout.orientation.portrait",
+    "Landscape": "pageLayout.orientation.landscape",
+    "Letter": "pageLayout.paperSize.letter",
+    "Legal": "pageLayout.paperSize.legal",
+    "Executive": "pageLayout.paperSize.executive",
+    "Statement": "pageLayout.paperSize.statement",
+    "Tabloid": "pageLayout.paperSize.tabloid",
+    "A4": "pageLayout.paperSize.a4",
+    "A3": "pageLayout.paperSize.a3",
+    "A5": "pageLayout.paperSize.a5",
+    "B4 (JIS)": "pageLayout.paperSize.b4Jis",
+    "B5 (JIS)": "pageLayout.paperSize.b5Jis",
+    "Set Print Area": "pageLayout.printArea.set",
+    "Clear Print Area": "pageLayout.printArea.clear",
+    "Insert Page Break": "pageLayout.break.insert",
+    "Remove Page Break": "pageLayout.break.remove",
+    "Reset All Page Breaks": "pageLayout.break.resetAll",
+    "Choose Background": "pageLayout.background.choose",
+    "Delete Background": "pageLayout.background.delete",
+    "Sum": "formulas.autoSum.sum",
+    "Average": "formulas.autoSum.average",
+    "Count Numbers": "formulas.autoSum.countNumbers",
+    "Count All": "formulas.autoSum.countAll",
+    "Max": "formulas.autoSum.max",
+    "Min": "formulas.autoSum.min",
+    "Remove Precedent Arrows": "formulas.removeArrows.precedent",
+    "Remove Dependent Arrows": "formulas.removeArrows.dependent",
+    "Error Checking": "formulas.errorChecking.run",
+    "Error Checking Options": "formulas.errorChecking.options",
+    "Automatic": "formulas.calculation.automatic",
+    "Automatic Except Data Tables": "formulas.calculation.automaticExceptDataTables",
+    "Manual": "formulas.calculation.manual",
+    "Circle Invalid Data": "data.validation.circleInvalid",
+    "Clear Validation Circles": "data.validation.clearCircles",
+    "Goal Seek": "data.whatIf.goalSeek",
+    "Scenario Manager": "data.whatIf.scenarioManager",
+    "Data Table": "data.whatIf.dataTable",
+    "Clear Outline": "data.outline.clear",
+    "200%": "view.zoom.preset.200",
+    "75%": "view.zoom.preset.75",
+    "50%": "view.zoom.preset.50",
+    "25%": "view.zoom.preset.25",
+    "More": "view.zoom.custom",
+    "Tiled": "view.arrange.tiled",
+    "Vertical": "view.arrange.vertical",
+    "Cascade": "view.arrange.cascade",
+    "Freeze Top Row": "view.freezePanes.topRow",
+    "Freeze First Column": "view.freezePanes.firstColumn",
+    "Unfreeze Panes": "view.freezePanes.unfreeze",
+}
+
 def record(tab, name, handler, is_control):
     if not handler:
         return
@@ -223,6 +300,9 @@ for name, handlers in name_handlers.items():
 for name, handler in home_handlers.items():
     handler_map.setdefault(name, handler)
 handler_map.update(declarative_home_handler_overrides)
+for name, semantic_id in semantic_static_menu_command_ids.items():
+    for handler in name_handlers.get(name, ()):
+        handler_map[semantic_id] = handler
 
 ctxkey = {
     "ShapeFormatTab": "shape.selected",
@@ -420,7 +500,7 @@ def menu_expr(menu):
             break
         mkt, mg, mhandler = esc(m[2]), esc(m[3]), m[4]
         mlabel = esc(m[5] if len(m) > 5 else m[1])
-        mid = esc(command_id(m[1], mhandler))
+        mid = esc(semantic_static_menu_command_ids.get(m[1], command_id(m[1], mhandler)))
         args = f'"{mid}", "{mlabel}"'
         if mkt or mg:
             args += f', "{mkt}"'

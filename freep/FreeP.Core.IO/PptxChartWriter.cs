@@ -1802,13 +1802,13 @@ internal static class PptxChartWriter
             null => null,
             ShapeOutline.None => new XElement(A + "ln", new XElement(A + "noFill")),
             ShapeOutline.Visible v => new XElement(A + "ln",
-                new XAttribute("w", DrawingMlUnits.PointsToEmu(v.WidthPt)),
+                new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(v.WidthPt)),
                 new XElement(A + "solidFill", BuildColorEl(v.Color)),
                 v.Dash != OutlineDash.Solid
                     ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(v.Dash)))
                     : null),
             ShapeOutline.GradientVisible gv => new XElement(A + "ln",
-                new XAttribute("w", DrawingMlUnits.PointsToEmu(gv.WidthPt)),
+                new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(gv.WidthPt)),
                 BuildGradFillEl(gv.Gradient),
                 gv.Dash != OutlineDash.Solid
                     ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(gv.Dash)))
@@ -1836,7 +1836,7 @@ internal static class PptxChartWriter
             null => null,
             ShapeOutline.None => new XElement(A + "ln", new XElement(A + "noFill")),
             ShapeOutline.Visible v => new XElement(A + "ln",
-                new XAttribute("w", DrawingMlUnits.PointsToEmu(v.WidthPt)),
+                new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(v.WidthPt)),
                 new XElement(A + "solidFill", BuildColorEl(v.Color)),
                 v.Dash != OutlineDash.Solid
                     ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(v.Dash)))
@@ -1844,7 +1844,7 @@ internal static class PptxChartWriter
             // Wave: gradient outline — mirrors PptxPackageWriter.BuildOutlineEl so a gradient
             // data-table border round-trips instead of being dropped in favor of default gray.
             ShapeOutline.GradientVisible gv => new XElement(A + "ln",
-                new XAttribute("w", DrawingMlUnits.PointsToEmu(gv.WidthPt)),
+                new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(gv.WidthPt)),
                 BuildGradFillEl(gv.Gradient),
                 gv.Dash != OutlineDash.Solid
                     ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(gv.Dash)))
@@ -2339,7 +2339,7 @@ internal static class PptxChartWriter
 
         var line = new XElement(A + "ln");
         if (style.WidthPt.HasValue)
-            line.Add(new XAttribute("w", DrawingMlUnits.PointsToEmu(style.WidthPt.Value)));
+            line.Add(new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(style.WidthPt.Value)));
 
         if (style.NoFill)
             line.Add(new XElement(A + "noFill"));

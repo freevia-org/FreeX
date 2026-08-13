@@ -14,7 +14,7 @@ public sealed class MailMergePrintDocumentsTests
         var preview = DocumentWith("Dear Grace");
         var editor = new DocumentView();
         editor.LoadModel(preview);
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("FirstName\nAda\nGrace\nLinus"),
             Template = template,
@@ -52,7 +52,7 @@ public sealed class MailMergePrintDocumentsTests
         var preview = DocumentWith("Dear Ada");
         var editor = new DocumentView();
         editor.LoadModel(preview);
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("FirstName\nAda"),
             Template = template,
@@ -80,7 +80,7 @@ public sealed class MailMergePrintDocumentsTests
         var preview = DocumentWith("Dear Grace");
         var editor = new DocumentView();
         editor.LoadModel(preview);
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("FirstName,Email\nAda,ada@example.test\nGrace,grace@example.test\nLinus,linus@example.test"),
             Template = DocumentWith($"Dear {MailMerge.FieldOpen}FirstName{MailMerge.FieldClose}"),
@@ -132,7 +132,7 @@ public sealed class MailMergePrintDocumentsTests
         var preview = DocumentWith("preview");
         var editor = new DocumentView();
         editor.LoadModel(preview);
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("FirstName\nAda"),
             Template = template
@@ -182,7 +182,7 @@ public sealed class MailMergePrintDocumentsTests
         });
         var editor = new DocumentView();
         editor.LoadModel(DocumentWith("preview"));
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("FirstName\nAda"),
             Template = template
@@ -225,7 +225,7 @@ public sealed class MailMergePrintDocumentsTests
         });
         var editor = new DocumentView();
         editor.LoadModel(DocumentWith("preview"));
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("FirstName\nAda\nGrace"),
             Template = template,
@@ -275,7 +275,7 @@ public sealed class MailMergePrintDocumentsTests
         var preview = DocumentWith("preview");
         var editor = new DocumentView();
         editor.LoadModel(preview);
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("FirstName\nAda\nGrace\nLinus"),
             Template = template
@@ -328,7 +328,7 @@ public sealed class MailMergePrintDocumentsTests
         mapping[FieldRole.City] = "Town";
         mapping[FieldRole.State] = "Province";
         mapping[FieldRole.PostalCode] = "Post";
-        var session = new FreeWRibbonCommands.MailMergeSession
+        var session = new MailMergeSession
         {
             Data = MergeData.FromCsv("Given,Surname,Street,Town,Province,Post\nAda,Lovelace,1 Algorithm Way,London,CA,12345"),
             Template = template,
@@ -356,7 +356,7 @@ public sealed class MailMergePrintDocumentsTests
     [Fact]
     public void CompositeRowAugmentation_PreservesExplicitSourceValues()
     {
-        var session = new FreeWRibbonCommands.MailMergeSession();
+        var session = new MailMergeSession();
         var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["AddressBlock"] = "Explicit address",

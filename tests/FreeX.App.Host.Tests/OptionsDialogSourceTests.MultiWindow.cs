@@ -7,7 +7,7 @@ namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// R123-app-options-multiwindow-lastwriter: each MainWindow loads its own independent
-/// <see cref="FreeXOptions"/> snapshot at construction (MainWindow.xaml.cs), and View &gt; New
+/// <see cref="AppOptions"/> snapshot at construction (MainWindow.xaml.cs), and View &gt; New
 /// Window (MainWindow.MultiWindow.cs ViewNewWindowBtn_Click) creates a second MainWindow over the
 /// SAME live workbook without sharing that snapshot -- it loads its own copy independently. Before
 /// the fix, OptionsDialog.OkBtn_Click built the saved record purely from the dialog's own
@@ -19,22 +19,39 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class OptionsDialogSourceTests
 {
     [Fact]
+    public void WpfOptionsCommit_UsesSharedValidationProjectionAndIndexMappings()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
+
+        source.Should().Contain("OptionsDialogPlanner.TryBuildInput(");
+        source.Should().Contain("var saveResult = _dialogSession.Commit(");
+        source.Should().Contain("enableAutoCompleteForCellValues: OptAdvancedAutoComplete.IsChecked == true");
+        source.Should().Contain("OptionsDialogPlanner.AfterEnterDirectionToIndex(_opts.AfterEnterDirection)");
+        source.Should().Contain("OptionsDialogPlanner.IndexToAfterEnterDirection(OptAfterEnterDirection.SelectedIndex)");
+        source.Should().Contain("OptionsDialogPlanner.ObjectDisplayToIndex(_opts.ObjectsDisplay)");
+        source.Should().Contain("OptionsDialogPlanner.IndexToObjectDisplay(OptObjectsDisplay.SelectedIndex)");
+        source.Should().Contain("OptionsDialogPlanner.DefaultFormatToIndex(_opts.DefaultFormat)");
+        source.Should().Contain("OptionsDialogPlanner.IndexToDefaultFormat(OptDefaultFormat.SelectedIndex)");
+        source.Should().NotContain("OptionsDialogPlanner.Project(");
+    }
+
+    [Fact]
     public void R123_SecondWindowsStaleOptionsSnapshotDoesNotRevertFirstWindowsSavedOption()
     {
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "options.json");
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, path);
 
         // Seed on-disk options at their defaults (ShowGridlines = true, AutoCalculate = true).
-        new FreeXOptions().Save();
+        AppOptionsStore.SaveToPath(new AppOptions(), path).Should().BeTrue();
 
         StaTestRunner.Run(() =>
         {
             // Simulate two MainWindow instances sharing one workbook (View > New Window): each
-            // independently calls FreeXOptions.Load() at construction time, before either one has
+            // independently calls AppOptionsStore.Load() at construction time, before either one has
             // saved anything, so both start from the identical on-disk defaults.
-            var windowASnapshot = FreeXOptions.Load();
-            var windowBSnapshot = FreeXOptions.Load();
+            var windowASnapshot = AppOptionsStore.Load();
+            var windowBSnapshot = AppOptionsStore.Load();
 
             // Window A opens Options, turns gridlines off, and saves.
             var dialogA = new OptionsDialog(windowASnapshot);
@@ -69,7 +86,7 @@ public sealed partial class OptionsDialogSourceTests
             }
         });
 
-        var reloaded = FreeXOptions.LoadFromPath(path);
+        var reloaded = AppOptionsStore.LoadFromPath(path);
         reloaded.ShowGridlines.Should().BeFalse(
             "window A's saved ShowGridlines change must survive window B's later, unrelated save " +
             "-- matching Excel, where every window of a process shares one Application.Options object");
@@ -88,14 +105,14 @@ public sealed partial class OptionsDialogSourceTests
     {
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "options.json");
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, path);
 
         // Seed the disk with a non-default value for a field OptionsDialog has no control for.
-        new FreeXOptions { StatusBarShowMinimum = true }.Save();
+        AppOptionsStore.SaveToPath(new AppOptions { StatusBarShowMinimum = true }, path).Should().BeTrue();
 
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(FreeXOptions.Load());
+            var dialog = new OptionsDialog(AppOptionsStore.Load());
             dialog.Show();
             try
             {
@@ -114,7 +131,7 @@ public sealed partial class OptionsDialogSourceTests
             }
         });
 
-        var reloaded = FreeXOptions.LoadFromPath(path);
+        var reloaded = AppOptionsStore.LoadFromPath(path);
         reloaded.ShowGridlines.Should().BeFalse("the dialog-edited field must persist");
         reloaded.StatusBarShowMinimum.Should().BeTrue(
             "StatusBarShowMinimum has no control on this dialog, so it must not be reset to its default (false) on save");

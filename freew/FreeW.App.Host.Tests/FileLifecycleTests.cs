@@ -29,22 +29,17 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class FileLifecycleTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeW.FileLifecycleTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.FileLifecycleTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public FileLifecycleTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private (
         Window window,
         DocumentView editor,
         FileCommands file,
         Func<int> changeCount,
-        RecordingUserMessageService messages) CreateHarness()
+        RecordingUserMessageService messages) CreateHarness(Func<string?>? promptPdfImportPath = null)
     {
         var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
         var editor = new DocumentView();
@@ -57,7 +52,8 @@ public sealed class FileLifecycleTests : IDisposable
             editor,
             () => changes++,
             loadRecentFilesStore: () => RecentFilesStore.Load(recentStorePath),
-            messageService: messages);
+            messageService: messages,
+            promptPdfImportPath: promptPdfImportPath);
         return (window, editor, file, () => changes, messages);
     }
 
@@ -174,6 +170,51 @@ public sealed class FileLifecycleTests : IDisposable
     }
 
     [StaFact]
+    public void ImportPdfText_OnDirtyDocument_CancelStopsBeforePicker()
+    {
+        var pickerCalls = 0;
+        var (_, editor, file, _, messages) = CreateHarness(() =>
+        {
+            pickerCalls++;
+            return WritePdf("ShouldNotOpen.pdf", "replacement");
+        });
+        messages.NextResult = UserMessageResult.Cancel;
+        var before = editor.Model.PlainText;
+        file.MarkDirty();
+
+        var imported = file.ImportPdfText();
+
+        Assert.False(imported);
+        Assert.Equal(0, pickerCalls);
+        Assert.Equal(before, editor.Model.PlainText);
+        Assert.True(file.IsDirty);
+        Assert.Single(messages.Messages);
+    }
+
+    [StaFact]
+    public void ImportPdfText_OnDirtyDocument_DiscardThenImportsThroughSharedWorkflow()
+    {
+        var path = WritePdf("Replacement.pdf", "Replacement PDF text");
+        var pickerCalls = 0;
+        var (_, editor, file, _, messages) = CreateHarness(() =>
+        {
+            pickerCalls++;
+            return path;
+        });
+        messages.NextResult = UserMessageResult.No;
+        file.MarkDirty();
+
+        var imported = file.ImportPdfText();
+
+        Assert.True(imported);
+        Assert.Equal(1, pickerCalls);
+        Assert.Contains("Replacement PDF text", editor.Model.PlainText);
+        Assert.True(file.IsDirty);
+        Assert.Null(file.CurrentPath);
+        Assert.Single(messages.Messages);
+    }
+
+    [StaFact]
     public void Save_AfterEdit_WritesToExistingPathAndClearsDirty()
     {
         var (_, _, file, _, _) = CreateHarness();
@@ -230,28 +271,36 @@ public sealed class FileLifecycleTests : IDisposable
     }
 
     [Fact]
-    public void WpfFileCommands_ConfirmSharedSaveCompatibilityPlanBeforeWriting()
+    public void WpfFileCommands_DelegateSaveOrderingToSharedDocumentWorkflow()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            root,
             "freew",
             "FreeW.App.Host",
             "FileCommands.cs"));
+        var coordinator = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Presentation",
+            "Shell",
+            "DocumentFileExecutionCoordinator.cs"));
 
         Assert.Contains("private readonly DocumentPersistenceWorkflow _persistence;", source);
-        Assert.Contains("_persistence.BuildSaveCompatibilityPlan(_editor.Model, target)", source);
-        Assert.Contains("SaveCompatibilityWarningDialog.Show(_window, plan)", source);
+        Assert.Contains("private readonly FreeWDocumentFileWorkflow _documentWorkflow;", source);
+        Assert.Contains("private readonly FreeWDocumentFileCommandSession _fileCommands;", source);
+        Assert.Contains("_fileCommands", source);
+        Assert.Contains("ConfirmSaveCompatibilityAsync:", source);
         Assert.DoesNotContain("DocumentSaveCompatibilityPlanner.Build", source);
+        Assert.DoesNotContain("_persistence.Save(_editor.Model, target)", source);
+        Assert.DoesNotContain("new DocumentSaveExecutionRequest(", source);
 
-        var confirmations = source.Split("if (!ConfirmSaveCompatibility(target))").Length - 1;
-        Assert.Equal(2, confirmations);
-
-        var saveToIndex = source.IndexOf("private bool SaveTo(DocumentSaveTarget target)", StringComparison.Ordinal);
-        Assert.True(saveToIndex >= 0);
-        var confirmationIndex = source.IndexOf("if (!ConfirmSaveCompatibility(target))", saveToIndex, StringComparison.Ordinal);
-        Assert.True(confirmationIndex > saveToIndex);
-        var saveIndex = source.IndexOf("_persistence.Save(_editor.Model, target);", confirmationIndex, StringComparison.Ordinal);
+        var confirmationIndex = coordinator.IndexOf("await request.ConfirmCompatibilityAsync", StringComparison.Ordinal);
+        var saveIndex = coordinator.IndexOf("_persistence.Save(request.Document, request.Target);", StringComparison.Ordinal);
+        var completionIndex = coordinator.IndexOf("await request.CompleteSaveAsync!", StringComparison.Ordinal);
+        Assert.True(confirmationIndex >= 0);
         Assert.True(saveIndex > confirmationIndex);
+        Assert.True(completionIndex > saveIndex);
     }
 
     [StaFact]

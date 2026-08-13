@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.Shell;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Compositor.Tests;
@@ -53,6 +54,10 @@ public sealed class OptionsDialogPlannerTests
         surface.UiLanguage.Should().Be("fr-FR");
         surface.FormatChoices.Should().ContainSingle(choice => choice.Extension == FreePOptions.FxpDefaultFormat);
         surface.UiLanguageHint.Should().Contain("en-US");
+        surface.AcceptLabel.Should().Be(ShellStrings.Current.Ok);
+        surface.CancelLabel.Should().Be(ShellStrings.Current.Cancel);
+        ShellStringText.NormalizeAccessText(surface.AcceptLabel).Should().Be("OK");
+        ShellStringText.NormalizeAccessText(surface.CancelLabel).Should().Be("Cancel");
     }
 
     [Fact]

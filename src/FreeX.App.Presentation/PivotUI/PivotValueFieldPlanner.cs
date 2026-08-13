@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PivotUI;
@@ -29,6 +30,13 @@ public sealed record PivotValueNumberFormatPreset(
 {
     public string Label => FallbackLabel;
 }
+
+public sealed record PivotValueFieldDisplayOption<TValue>(string Label, TValue Value);
+
+public sealed record PivotValueNumberFormatDisplayPreset(
+    string Label,
+    int? NumberFormatId,
+    string FormatCode);
 
 public enum PivotShowValuesAsValidationError
 {
@@ -139,6 +147,30 @@ public static class PivotValueFieldPlanner
         NumberFormatPreset("PivotValueFieldSettings_NumberFormatScientificCompact", "Scientific compact", 48),
         NumberFormatPreset("PivotValueFieldSettings_NumberFormatText", "Text", 49),
     ];
+
+    public static string GetAutomaticBaseFieldLabel(ResourceKeyTextResolver text) =>
+        text.Get(AutomaticBaseField.ResourceKey);
+
+    public static IReadOnlyList<PivotValueFieldDisplayOption<string>> GetSummaryFunctions(
+        ResourceKeyTextResolver text) =>
+        SummaryFunctions
+            .Select(option => new PivotValueFieldDisplayOption<string>(text.Get(option.ResourceKey), option.Value))
+            .ToArray();
+
+    public static IReadOnlyList<PivotValueFieldDisplayOption<PivotShowValuesAs>> GetShowValuesAsOptions(
+        ResourceKeyTextResolver text) =>
+        ShowValuesAsOptions
+            .Select(option => new PivotValueFieldDisplayOption<PivotShowValuesAs>(text.Get(option.ResourceKey), option.Value))
+            .ToArray();
+
+    public static IReadOnlyList<PivotValueNumberFormatDisplayPreset> GetNumberFormatPresets(
+        ResourceKeyTextResolver text) =>
+        NumberFormatPresets
+            .Select(preset => new PivotValueNumberFormatDisplayPreset(
+                text.Get(preset.ResourceKey),
+                preset.NumberFormatId,
+                preset.FormatCode))
+            .ToArray();
 
     public static int FindSummaryFunctionIndex(string? summaryFunction)
     {
@@ -280,6 +312,18 @@ public static class PivotValueFieldPlanner
         return false;
     }
 
+    public static bool TryValidateShowValuesAs(
+        PivotShowValuesAs showValuesAs,
+        int? baseFieldIndex,
+        string? baseItem,
+        ResourceKeyTextResolver text,
+        out string? error)
+    {
+        var errorPlan = DescribeValidationError(ValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem));
+        error = errorPlan is null ? null : text.Get(errorPlan.ResourceKey);
+        return errorPlan is null;
+    }
+
     public static bool TryParseOptionalNumberFormatId(string input, out int? numberFormatId)
     {
         numberFormatId = null;
@@ -323,12 +367,14 @@ public static class PivotValueFieldPlanner
         // OOXML catalog retains its optional alignment padding and negative section. Treat those
         // spellings as the same built-in preset before falling back to a custom format.
         var normalized = NormalizeNumberFormatCode(trimmed);
+        var inputSections = NumberFormatSectionTokenizer.Split(trimmed);
         foreach (var preset in NumberFormatPresets)
         {
             var presetCode = NormalizeNumberFormatCode(preset.FormatCode);
+            var presetSections = NumberFormatSectionTokenizer.Split(presetCode);
             if (string.Equals(presetCode, normalized, StringComparison.OrdinalIgnoreCase) ||
-                (!trimmed.Contains(';', StringComparison.Ordinal) &&
-                 string.Equals(presetCode.Split(';')[0], normalized, StringComparison.OrdinalIgnoreCase)))
+                (inputSections.Length == 1 &&
+                 string.Equals(presetSections[0], normalized, StringComparison.OrdinalIgnoreCase)))
             {
                 return (preset.NumberFormatId, null);
             }
@@ -346,6 +392,16 @@ public static class PivotValueFieldPlanner
         string.IsNullOrWhiteSpace(label)
             ? null
             : FindNumberFormatPreset(label.Trim())?.FormatCode;
+
+    public static int? ResolvePresetNumberFormatId(string? label, ResourceKeyTextResolver text) =>
+        string.IsNullOrWhiteSpace(label)
+            ? null
+            : FindNumberFormatDisplayPreset(label.Trim(), text)?.NumberFormatId;
+
+    public static string? ResolvePresetNumberFormatCode(string? label, ResourceKeyTextResolver text) =>
+        string.IsNullOrWhiteSpace(label)
+            ? null
+            : FindNumberFormatDisplayPreset(label.Trim(), text)?.FormatCode;
 
     public static int? ResolveBuiltInNumberFormatIdForCode(string? formatCode) =>
         TryResolveBuiltInNumberFormatIdForCode(formatCode, out var numberFormatId)
@@ -486,6 +542,19 @@ public static class PivotValueFieldPlanner
     private static PivotValueNumberFormatPreset? FindNumberFormatPreset(string label)
     {
         foreach (var preset in NumberFormatPresets)
+        {
+            if (string.Equals(preset.Label, label, StringComparison.OrdinalIgnoreCase))
+                return preset;
+        }
+
+        return null;
+    }
+
+    private static PivotValueNumberFormatDisplayPreset? FindNumberFormatDisplayPreset(
+        string label,
+        ResourceKeyTextResolver text)
+    {
+        foreach (var preset in GetNumberFormatPresets(text))
         {
             if (string.Equals(preset.Label, label, StringComparison.OrdinalIgnoreCase))
                 return preset;

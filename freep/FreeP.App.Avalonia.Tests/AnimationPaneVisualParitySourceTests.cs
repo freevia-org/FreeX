@@ -8,10 +8,10 @@ public sealed class AnimationPaneVisualParitySourceTests
         var avalonia = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
         var wpf = File.ReadAllText(RepoFile("freep", "FreeP.App.Host", "AnimationPane.cs"));
 
-        wpf.Should().Contain("Text              = \"Animation Pane\"");
+        wpf.Should().Contain("Text              = _session.ControlSchema.Heading");
         wpf.Should().Contain("DockPanel.SetDock(_playbackControlsPanel, Dock.Right);");
         wpf.Should().Contain("VerticalScrollBarVisibility   = ScrollBarVisibility.Auto");
-        avalonia.Should().Contain("Text = \"Animation Pane\"");
+        avalonia.Should().Contain("Text = _animationPaneSession.ControlSchema.Heading");
         avalonia.Should().Contain("DockPanel.SetDock(_animationPanePlaybackControlsPanel, Dock.Right);");
         avalonia.Should().Contain("VerticalScrollBarVisibility = ScrollBarVisibility.Auto");
         avalonia.Should().Contain("_animationPanePlaybackControlsPanel,");
@@ -26,11 +26,11 @@ public sealed class AnimationPaneVisualParitySourceTests
 
         foreach (var token in new[]
         {
-            "Color.FromRgb(0x22, 0x22, 0x22)",
-            "Color.FromRgb(0x66, 0x66, 0x66)",
-            "Color.FromRgb(0xFF, 0xE0, 0xD6)",
-            "Color.FromRgb(0xFA, 0xFA, 0xFA)",
-            "Color.FromRgb(0xDD, 0xDD, 0xDD)",
+            "FreePBrushes.AnimationText",
+            "FreePBrushes.PaneMutedText",
+            "FreePBrushes.AnimationSelectedSurface",
+            "FreePBrushes.PaneSurface",
+            "FreePBrushes.GridBorder",
             "Width",
             "Height",
             "Margin",
@@ -48,22 +48,11 @@ public sealed class AnimationPaneVisualParitySourceTests
         avalonia.Should().Contain("Margin = new Thickness(1)");
 
         avalonia.Should().Contain("MaxWidth = 70");
-        avalonia.Should().Contain("Background = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0))");
-        avalonia.Should().Contain("BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0))");
+        avalonia.Should().Contain("Background = FreePBrushes.CardBorder");
+        avalonia.Should().Contain("BorderBrush = FreePBrushes.PaneBorder");
         avalonia.Should().Contain("VerticalAlignment = VerticalAlignment.Center");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var path = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(path))
-                return path;
-        }
-
-        throw new FileNotFoundException($"Could not find repository file: {Path.Combine(parts)}");
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

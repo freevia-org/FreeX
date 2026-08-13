@@ -111,17 +111,47 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
-    public void AddSlideCommand_Apply_AppendsSlide()
+    public void InsertSlideCommand_AtSectionBoundary_UsesPreviousSectionAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(4);
+        var slideIds = p.Slides.Select(slide => slide.Id).ToArray();
+        var intro = new PresentationSection { Id = "section-intro", Name = "Intro" };
+        intro.SlideIds.AddRange(slideIds[..2]);
+        var main = new PresentationSection { Id = "section-main", Name = "Main" };
+        main.SlideIds.AddRange(slideIds[2..]);
+        p.Sections.AddRange(new[] { intro, main });
+        var inserted = new Slide { Id = "inserted-slide" };
+
+        bus.Execute(new InsertSlideCommand(2, inserted));
+
+        p.Sections[0].SlideIds.Should().Equal(slideIds[0], slideIds[1], inserted.Id);
+        p.Sections[1].SlideIds.Should().Equal(slideIds[2], slideIds[3]);
+
+        bus.Undo();
+
+        p.Sections.Select(section => section.Id).Should().Equal("section-intro", "section-main");
+        p.Sections.Select(section => section.Name).Should().Equal("Intro", "Main");
+        p.Sections[0].SlideIds.Should().Equal(slideIds[0], slideIds[1]);
+        p.Sections[1].SlideIds.Should().Equal(slideIds[2], slideIds[3]);
+
+        bus.Redo();
+
+        p.Sections[0].SlideIds.Should().Equal(slideIds[0], slideIds[1], inserted.Id);
+        p.Sections[1].SlideIds.Should().Equal(slideIds[2], slideIds[3]);
+    }
+
+    [Fact]
+    public void InsertSlideCommand_AtEnd_AppendsSlide()
     {
         var (p, bus) = Make();
         var s = new Slide { Title = "Appended" };
-        bus.Execute(new AddSlideCommand(s));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, s));
         p.Slides.Should().HaveCount(2);
         p.Slides[1].Should().BeSameAs(s);
     }
 
     [Fact]
-    public void AddSlideCommand_PreservesSectionMembershipAcrossUndoAndRedo()
+    public void InsertSlideCommand_AtEnd_PreservesSectionMembershipAcrossUndoAndRedo()
     {
         var (p, bus) = Make(2);
         var lastSlideId = p.Slides[^1].Id;
@@ -130,7 +160,7 @@ public sealed class PresentationCommandTests
         p.Sections.Add(section);
         var added = new Slide { Id = "new-slide" };
 
-        bus.Execute(new AddSlideCommand(added));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, added));
 
         p.Slides[^1].Should().BeSameAs(added);
         p.Sections[0].SlideIds.Should().Equal(lastSlideId, added.Id);
@@ -143,11 +173,11 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
-    public void AddSlideCommand_Revert_RemovesSlide()
+    public void InsertSlideCommand_AtEnd_Revert_RemovesSlide()
     {
         var (p, bus) = Make();
         var s = new Slide { Title = "Appended" };
-        bus.Execute(new AddSlideCommand(s));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, s));
         bus.Undo();
         p.Slides.Should().HaveCount(1);
     }
@@ -175,6 +205,36 @@ public sealed class PresentationCommandTests
 
         bus.Redo();
         p.Sections[0].SlideIds.Should().Equal(firstId, pasted.Id, secondId, thirdId);
+    }
+
+    [Fact]
+    public void PasteSlideCommand_AtPresentationStart_UsesNextSlideSectionAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(4);
+        var slideIds = p.Slides.Select(slide => slide.Id).ToArray();
+        var first = new PresentationSection { Id = "section-first", Name = "First" };
+        first.SlideIds.AddRange(slideIds[..2]);
+        var second = new PresentationSection { Id = "section-second", Name = "Second" };
+        second.SlideIds.AddRange(slideIds[2..]);
+        p.Sections.AddRange(new[] { first, second });
+        var pasted = new Slide { Id = "pasted-boundary-slide" };
+
+        bus.Execute(new PasteSlideCommand(0, pasted));
+
+        p.Sections[0].SlideIds.Should().Equal(pasted.Id, slideIds[0], slideIds[1]);
+        p.Sections[1].SlideIds.Should().Equal(slideIds[2], slideIds[3]);
+
+        bus.Undo();
+
+        p.Sections.Select(section => section.Id).Should().Equal("section-first", "section-second");
+        p.Sections.Select(section => section.Name).Should().Equal("First", "Second");
+        p.Sections[0].SlideIds.Should().Equal(slideIds[0], slideIds[1]);
+        p.Sections[1].SlideIds.Should().Equal(slideIds[2], slideIds[3]);
+
+        bus.Redo();
+
+        p.Sections[0].SlideIds.Should().Equal(pasted.Id, slideIds[0], slideIds[1]);
+        p.Sections[1].SlideIds.Should().Equal(slideIds[2], slideIds[3]);
     }
 
     [Fact]
@@ -229,6 +289,35 @@ public sealed class PresentationCommandTests
 
         p.Sections[0].SlideIds.Should().Equal(firstId, lastId);
         p.CustomShows[0].SlideIds.Should().Equal(firstId, lastId);
+    }
+
+    [Fact]
+    public void DeleteSlideCommand_AtSectionBoundary_RestoresEverySectionAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(4);
+        var slideIds = p.Slides.Select(slide => slide.Id).ToArray();
+        var first = new PresentationSection { Id = "section-first", Name = "First" };
+        first.SlideIds.AddRange(slideIds[..2]);
+        var second = new PresentationSection { Id = "section-second", Name = "Second" };
+        second.SlideIds.AddRange(slideIds[2..]);
+        p.Sections.AddRange(new[] { first, second });
+
+        bus.Execute(new DeleteSlideCommand(1));
+
+        p.Sections[0].SlideIds.Should().Equal(slideIds[0]);
+        p.Sections[1].SlideIds.Should().Equal(slideIds[2], slideIds[3]);
+
+        bus.Undo();
+
+        p.Sections.Select(section => section.Id).Should().Equal("section-first", "section-second");
+        p.Sections.Select(section => section.Name).Should().Equal("First", "Second");
+        p.Sections[0].SlideIds.Should().Equal(slideIds[0], slideIds[1]);
+        p.Sections[1].SlideIds.Should().Equal(slideIds[2], slideIds[3]);
+
+        bus.Redo();
+
+        p.Sections[0].SlideIds.Should().Equal(slideIds[0]);
+        p.Sections[1].SlideIds.Should().Equal(slideIds[2], slideIds[3]);
     }
 
     [Fact]
@@ -929,6 +1018,134 @@ public sealed class PresentationCommandTests
         p.Slides[0].Shapes.Should().ContainSingle().Which.Should().BeSameAs(shape);
         anchoredComment.ModernAnchorKind.Should().Be("deMkLst");
         anchoredComment.ModernAnchorXml.Should().Contain("id=\"7\"");
+
+        bus.Redo();
+
+        anchoredComment.ModernAnchorKind.Should().BeEmpty();
+        anchoredComment.ModernAnchorXml.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_UndoRestoresAnchorToEditedAndReorderedLogicalComment()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(7);
+        p.Slides[0].Shapes.Add(shape);
+
+        var anchoredComment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "  {AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}  ",
+            Text = "Original text",
+            ModernAnchorKind = "deMkLst",
+            ModernAnchorXml =
+                "<p188:deMkLst xmlns:p188=\"http://schemas.microsoft.com/office/powerpoint/2018/8/main\">" +
+                "<p188:sp id=\"7\"/></p188:deMkLst>",
+        };
+        var unrelatedComment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}",
+            Text = "Unrelated",
+            ModernAnchorKind = "deMkLst",
+            ModernAnchorXml =
+                "<p188:deMkLst xmlns:p188=\"http://schemas.microsoft.com/office/powerpoint/2018/8/main\">" +
+                "<p188:sp id=\"8\"/></p188:deMkLst>",
+        };
+        p.Slides[0].Comments.Add(anchoredComment);
+        p.Slides[0].Comments.Add(unrelatedComment);
+
+        bus.Execute(new DeleteShapeCommand(0, shape.Id));
+
+        var editedComment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa}",
+            Text = "Edited after shape deletion",
+        };
+        p.Slides[0].Comments.Clear();
+        p.Slides[0].Comments.Add(unrelatedComment);
+        p.Slides[0].Comments.Add(editedComment);
+
+        bus.Undo();
+
+        editedComment.Text.Should().Be("Edited after shape deletion");
+        editedComment.ModernAnchorKind.Should().Be("deMkLst");
+        editedComment.ModernAnchorXml.Should().Contain("id=\"7\"");
+        unrelatedComment.ModernAnchorXml.Should().Contain("id=\"8\"");
+
+        bus.Redo();
+
+        editedComment.ModernAnchorKind.Should().BeEmpty();
+        editedComment.ModernAnchorXml.Should().BeEmpty();
+        unrelatedComment.ModernAnchorXml.Should().Contain("id=\"8\"");
+
+        bus.Undo();
+
+        editedComment.ModernAnchorKind.Should().Be("deMkLst");
+        editedComment.ModernAnchorXml.Should().Contain("id=\"7\"");
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_UndoUsesOriginalIndexForIdentitylessReplacement()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(7);
+        p.Slides[0].Shapes.Add(shape);
+        p.Slides[0].Comments.Add(new SlideComment
+        {
+            ModernCommentId = "{CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC}",
+            Text = "Indexed before target",
+        });
+        p.Slides[0].Comments.Add(new SlideComment
+        {
+            ModernCommentId = "   ",
+            Text = "Identityless target",
+            ModernAnchorKind = "txMkLst",
+            ModernAnchorXml =
+                "<p188:txMkLst xmlns:p188=\"http://schemas.microsoft.com/office/powerpoint/2018/8/main\">" +
+                "<p188:sp id=\"7\"/></p188:txMkLst>",
+        });
+
+        bus.Execute(new DeleteShapeCommand(0, shape.Id));
+
+        var editedIdentitylessComment = new SlideComment { Text = "Edited identityless target" };
+        p.Slides[0].Comments[1] = editedIdentitylessComment;
+
+        bus.Undo();
+
+        editedIdentitylessComment.ModernAnchorKind.Should().Be("txMkLst");
+        editedIdentitylessComment.ModernAnchorXml.Should().Contain("id=\"7\"");
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_UndoDoesNotUseIdentitylessIndexForIdentifiedReplacement()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(7);
+        p.Slides[0].Shapes.Add(shape);
+        p.Slides[0].Comments.Add(new SlideComment
+        {
+            Text = "Identityless target",
+            ModernAnchorKind = "deMkLst",
+            ModernAnchorXml =
+                "<p188:deMkLst xmlns:p188=\"http://schemas.microsoft.com/office/powerpoint/2018/8/main\">" +
+                "<p188:sp id=\"7\"/></p188:deMkLst>",
+        });
+
+        bus.Execute(new DeleteShapeCommand(0, shape.Id));
+
+        var identifiedReplacement = new SlideComment
+        {
+            ModernCommentId = "{DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD}",
+            Text = "Different logical comment",
+        };
+        p.Slides[0].Comments[0] = identifiedReplacement;
+
+        bus.Undo();
+
+        identifiedReplacement.ModernAnchorKind.Should().BeEmpty();
+        identifiedReplacement.ModernAnchorXml.Should().BeEmpty();
     }
 
     [Fact]
@@ -1480,7 +1697,7 @@ public sealed class PresentationCommandTests
         p.Slides[0].Shapes.Add(shape);
         var newBody = new TextBody();
         bus.Execute(new SetShapeTextCommand(0, 1, newBody));
-        shape.TextBody.Should().BeSameAs(newBody);
+        shape.TextBody.Should().NotBeSameAs(newBody);
     }
 
     [Fact]
@@ -1493,7 +1710,7 @@ public sealed class PresentationCommandTests
         p.Slides[0].Shapes.Add(shape);
         bus.Execute(new SetShapeTextCommand(0, 1, new TextBody()));
         bus.Undo();
-        shape.TextBody.Should().BeSameAs(oldBody);
+        shape.TextBody.Should().NotBeSameAs(oldBody);
     }
 
     [Fact]
@@ -1854,7 +2071,7 @@ public sealed class PresentationCommandTests
     public void Bus_CanUndo_IsTrueAfterExecute()
     {
         var (p, bus) = Make();
-        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, new Slide()));
         bus.CanUndo.Should().BeTrue();
     }
 
@@ -1862,7 +2079,7 @@ public sealed class PresentationCommandTests
     public void Bus_CanRedo_IsTrueAfterUndo()
     {
         var (p, bus) = Make();
-        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, new Slide()));
         bus.Undo();
         bus.CanRedo.Should().BeTrue();
     }
@@ -1871,9 +2088,9 @@ public sealed class PresentationCommandTests
     public void Bus_CanRedo_IsFalseAfterNewExecute()
     {
         var (p, bus) = Make();
-        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, new Slide()));
         bus.Undo();
-        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, new Slide()));
         bus.CanRedo.Should().BeFalse();
     }
 
@@ -1883,7 +2100,7 @@ public sealed class PresentationCommandTests
         var (p, bus) = Make();
         int fired = 0;
         bus.Changed += () => fired++;
-        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, new Slide()));
         fired.Should().Be(1);
     }
 
@@ -1893,7 +2110,7 @@ public sealed class PresentationCommandTests
         var (p, bus) = Make();
         int fired = 0;
         bus.Changed += () => fired++;
-        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, new Slide()));
         bus.Undo();
         bus.Redo();
         fired.Should().Be(3);
@@ -1909,6 +2126,44 @@ public sealed class PresentationCommandTests
         var slide = new Slide { Title = "Orig" };
         var clone = SlideCloner.CloneSlide(slide);
         clone.Id.Should().NotBe(slide.Id);
+    }
+
+    [Fact]
+    public void SlideCloner_CloneModes_PreserveOrMintSemanticIdentities()
+    {
+        var slide = new Slide
+        {
+            Id = "slide-identity",
+            NumericId = 42,
+        };
+        var comment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}",
+        };
+        comment.Replies.Add(new SlideCommentReply
+        {
+            ModernReplyId = "{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}",
+        });
+        slide.Comments.Add(comment);
+
+        var identityPreservingClone = SlideCloner.CloneSlidePreservingIdentity(slide);
+        var distinctClone = SlideCloner.CloneSlide(slide);
+
+        identityPreservingClone.Should().NotBeSameAs(slide);
+        identityPreservingClone.Id.Should().Be(slide.Id);
+        identityPreservingClone.NumericId.Should().Be(slide.NumericId);
+        identityPreservingClone.Comments.Single().Should().NotBeSameAs(comment);
+        identityPreservingClone.Comments.Single().ModernCommentId.Should().Be(comment.ModernCommentId);
+        identityPreservingClone.Comments.Single().Replies.Single().Should().NotBeSameAs(comment.Replies.Single());
+        identityPreservingClone.Comments.Single().Replies.Single().ModernReplyId
+            .Should().Be(comment.Replies.Single().ModernReplyId);
+
+        distinctClone.Id.Should().NotBe(slide.Id);
+        distinctClone.NumericId.Should().BeNull();
+        distinctClone.Comments.Single().ModernCommentId.Should().NotBe(comment.ModernCommentId);
+        distinctClone.Comments.Single().Replies.Single().ModernReplyId
+            .Should().NotBe(comment.Replies.Single().ModernReplyId);
     }
 
     [Fact]

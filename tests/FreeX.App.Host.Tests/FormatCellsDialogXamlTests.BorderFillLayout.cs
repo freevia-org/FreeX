@@ -1,6 +1,7 @@
 using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Globalization;
@@ -147,12 +148,14 @@ public sealed partial class FormatCellsDialogXamlTests
         foreach (var expected in new[]
         {
             "Text=\"Background Color:\"",
-            "x:Name=\"DlgBorderLineColorPreview\"",
-            "ToolTip=\"Black border\"",
-            "ToolTip=\"Red border\"",
-            "ToolTip=\"Blue border\""
+            "x:Name=\"DlgBorderLineColorPreview\""
         })
             xaml.Should().Contain(expected);
+
+        FormatCellsBorderPalettePlanner.ColorEntries
+            .Select(entry => entry.ResourceKey)
+            .Should()
+            .Contain(["FormatCells_BlackBorder", "FormatCells_RedBorder", "FormatCells_BlueBorder"]);
     }
 
     [Fact]
@@ -176,6 +179,7 @@ public sealed partial class FormatCellsDialogXamlTests
     public void FormatCellsDialog_BorderTab_UsesExcelLikeLineListPaletteAndUnclippedPreview()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
+        var source = ReadFormatCellsDialogSource();
 
         foreach (var expected in new[]
         {
@@ -188,11 +192,34 @@ public sealed partial class FormatCellsDialogXamlTests
             "ToolTip=\"Apply top border\"",
             "ToolTip=\"Apply right border\"",
             "ToolTip=\"Apply bottom border\"",
-            "ToolTip=\"Apply left border\"",
-            "ToolTip=\"Gold border\"",
-            "ToolTip=\"Purple border\""
+            "ToolTip=\"Apply left border\""
         })
             xaml.Should().Contain(expected);
+
+        source.Should().Contain("FormatCellsBorderPalettePlanner.StyleChoices");
+        source.Should().Contain("FormatCellsBorderPalettePlanner.ColorEntries");
+        source.Should().NotContain("Tag = color.ToString");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_BorderPalette_RendersCanonicalTypedEntries()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new FormatCellsDialog(CellStyle.Default, FormatCellsDialogTab.Border);
+            dialog.Show();
+            try
+            {
+                var panel = DialogSourceTestSupport.GetPrivateField<UniformGrid>(dialog, "DlgBorderLinePalettePanel");
+                panel.Children.Cast<Button>()
+                    .Select(button => button.Tag)
+                    .Should().Equal(FormatCellsBorderPalettePlanner.ColorEntries);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]

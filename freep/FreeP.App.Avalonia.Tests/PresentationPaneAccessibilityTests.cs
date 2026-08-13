@@ -84,7 +84,7 @@ public sealed class PresentationPaneAccessibilityTests
             selection.SelectedIndex.Should().Be(0);
             window.SelectionPaneItemsForAccessibilityTests.Should().ContainSingle();
             var selectionItem = window.SelectionPaneItemsForAccessibilityTests.Single();
-            AutomationProperties.GetAutomationId(selectionItem).Should().Be("FreePSelectionPaneItem1");
+            AutomationProperties.GetAutomationId(selectionItem).Should().Be("FreePSelectionPaneItemShape1");
             AutomationProperties.GetName(selectionItem).Should().Be(shape.Name);
             AutomationProperties.GetItemStatus(selectionItem).Should().Be("Selected; Order 1");
 
@@ -102,7 +102,7 @@ public sealed class PresentationPaneAccessibilityTests
             window.ShowAnimationPane();
             window.AnimationPaneItemsForAccessibilityTests.Should().ContainSingle();
             var animationItem = window.AnimationPaneItemsForAccessibilityTests.Single();
-            AutomationProperties.GetAutomationId(animationItem).Should().Be("FreePAnimationPaneItem1");
+            AutomationProperties.GetAutomationId(animationItem).Should().Be("FreePAnimationPaneItemAnimation1-1");
             AutomationProperties.GetName(animationItem).Should().Be(shape.Name);
             AutomationProperties.GetItemStatus(animationItem).Should().Be("Selected; Order 1");
 
@@ -111,7 +111,7 @@ public sealed class PresentationPaneAccessibilityTests
             window.SetSelectedReviewCommentIndexForTests(0);
             window.CommentsPaneItemsForAccessibilityTests.Should().ContainSingle();
             var commentItem = window.CommentsPaneItemsForAccessibilityTests.Single();
-            AutomationProperties.GetAutomationId(commentItem).Should().Be("FreePCommentsPaneItem1");
+            AutomationProperties.GetAutomationId(commentItem).Should().Be("FreePCommentsPaneItemSlide1Comment1");
             AutomationProperties.GetName(commentItem).Should().Be("Accessible comment");
             AutomationProperties.GetItemStatus(commentItem).Should().Be("Selected; Order 1");
 
@@ -143,13 +143,13 @@ public sealed class PresentationPaneAccessibilityTests
             var slideItems = window.SlidePaneItemsForAccessibilityTests;
             AutomationProperties.GetItemStatus(slideItems[0]).Should().Be("Not selected; Order 1");
             AutomationProperties.GetItemStatus(slideItems[1]).Should().Be("Not selected; Order 2");
-            AutomationProperties.GetItemStatus(slideItems[2]).Should().Be("Selected; Order 3");
+            AutomationProperties.GetItemStatus(slideItems[2]).Should().Be("Active and selected; Order 3");
 
             window.Editor.SelectSlide(0);
             var reorderedSlideItems = window.SlidePaneItemsForAccessibilityTests;
             reorderedSlideItems.Select(AutomationProperties.GetAutomationId).Should().Equal(slideItemIds);
             AutomationProperties.GetItemStatus(reorderedSlideItems[0]).Should().Be("Not selected; Order 1");
-            AutomationProperties.GetItemStatus(reorderedSlideItems[1]).Should().Be("Selected; Order 2");
+            AutomationProperties.GetItemStatus(reorderedSlideItems[1]).Should().Be("Active and selected; Order 2");
             AutomationProperties.GetItemStatus(reorderedSlideItems[2]).Should().Be("Not selected; Order 3");
         }, CancellationToken.None);
     }
@@ -162,10 +162,11 @@ public sealed class PresentationPaneAccessibilityTests
             var item = new Border();
             PresentationPaneAccessibilityAdapter.ApplyItem(
                 item,
-                PresentationPaneAccessibilityPlanner.SelectionPaneId,
-                0,
-                "Title",
-                "Selected");
+                PresentationPaneAccessibilityPlanner.PlanItem(
+                    PresentationPaneAccessibilityPlanner.SelectionPaneId,
+                    0,
+                    "Title",
+                    isSelected: true));
 
             AutomationProperties.GetAutomationId(item).Should().Be("FreePSelectionPaneItem1");
             AutomationProperties.GetName(item).Should().Be("Title");

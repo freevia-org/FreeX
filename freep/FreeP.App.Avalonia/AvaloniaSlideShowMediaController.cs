@@ -16,18 +16,14 @@ namespace FreeP.App.Avalonia;
 /// Avalonia slideshow adapter for the shared LibVLC playback engine.
 /// Poster/click behavior remains deterministic when native LibVLC is unavailable.
 /// </summary>
-internal sealed class AvaloniaSlideShowMediaController
+internal sealed partial class AvaloniaSlideShowMediaController
 {
     private sealed class MediaSlot
     {
         public required uint ShapeId { get; init; }
         public required IMediaPlaybackSession Session { get; init; }
-        public required MediaInfo Media { get; init; }
-        public required bool ShowWhenStopped { get; init; }
+        public required SlideShowMediaPlaybackHandle Playback { get; init; }
         public required LayoutRect AuthoredBounds { get; init; }
-        public required bool PlayFullScreen { get; init; }
-        public required int BaseVolumePercent { get; set; }
-        public required int RemainingSlides { get; set; }
         public VideoView? VideoView { get; init; }
         public PresentationMediaTranscriptTrackDescriptor? CaptionTrack { get; set; }
         public Border? CaptionHost { get; set; }
@@ -37,12 +33,12 @@ internal sealed class AvaloniaSlideShowMediaController
     private readonly Panel _overlay;
     private readonly IMediaPlaybackBackendFactory _backendFactory;
     private readonly List<MediaSlot> _slots = new();
+    private readonly SlideShowMediaPlaybackSession _playbackSession = new();
     private readonly DispatcherTimer _captionTimer;
     private IMediaPlaybackBackend? _backend;
     private IMediaPlaybackSession? _transitionSoundSession;
     private IReadOnlyList<SlideShowMediaShapePlan> _active = Array.Empty<SlideShowMediaShapePlan>();
     private Slide? _activeSlide;
-    private int? _activeSlideIndex;
     private bool _showMediaControls = true;
     private bool _showNarration = true;
     private double _slideDipW;
@@ -62,7 +58,7 @@ internal sealed class AvaloniaSlideShowMediaController
         };
         _captionTimer.Tick += (_, _) =>
         {
-            EnforceTrimWindows();
+            EnforcePlaybackState();
             UpdateCaptions();
         };
     }
@@ -71,11 +67,6 @@ internal sealed class AvaloniaSlideShowMediaController
     public MediaPlaybackBackendAvailability? Availability { get; private set; }
     public MediaPlaybackFailure? LastFailure { get; private set; }
     public SlideShowMediaClickPlan LastClick { get; private set; } = SlideShowMediaClickPlan.NotMedia;
-
-    internal string? CaptionTextForTest(uint shapeId) =>
-        _slots.FirstOrDefault(slot => slot.ShapeId == shapeId)?.CaptionText?.Text;
-
-    internal void RefreshCaptionsForTest() => UpdateCaptions();
 
     public void SetCanvasBounds(double canvasW, double canvasH)
     {
@@ -110,7 +101,7 @@ internal sealed class AvaloniaSlideShowMediaController
 
         foreach (var slot in _slots)
         {
-            var shape = ShapeTreeLookup.Find(slide, slot.ShapeId);
+            var shape = SlideShapeTraversal.FindById(slide, slot.ShapeId);
             if (shape?.Media is null || shape.Kind != SlideShapeKind.Media)
                 continue;
 
@@ -120,23 +111,23 @@ internal sealed class AvaloniaSlideShowMediaController
                 slideDipH,
                 canvasW,
                 canvasH);
-            if (slot.PlayFullScreen && slot.Session.State == MediaPlaybackState.Playing)
-                bounds = FullScreenBounds();
+            var useFullScreen = _playbackSession.Snapshot(slot.Playback).UseFullScreen;
+            var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
+                slot.CaptionTrack,
+                slot.Session.Position);
+            var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                new PresentationMediaOverlayPlacementRequest(
+                    bounds,
+                    canvasW,
+                    canvasH,
+                    useFullScreen,
+                    cue,
+                    slot.CaptionTrack?.Regions));
             if (slot.VideoView is not null)
-            {
-                slot.VideoView.Width = Math.Max(1, bounds.Width);
-                slot.VideoView.Height = Math.Max(1, bounds.Height);
-                Canvas.SetLeft(slot.VideoView, bounds.X);
-                Canvas.SetTop(slot.VideoView, bounds.Y);
-            }
+                ApplyVideoViewBounds(slot.VideoView, placement.MediaBounds);
 
             if (slot.CaptionHost is not null && slot.CaptionText is not null)
-            {
-                var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
-                    slot.CaptionTrack,
-                    slot.Session.Position);
-                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue, slot.CaptionTrack?.Regions);
-            }
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, placement);
         }
     }
 
@@ -159,55 +150,60 @@ internal sealed class AvaloniaSlideShowMediaController
         SetCanvasBounds(canvasW, canvasH);
         _slideDipW = slideDipW;
         _slideDipH = slideDipH;
-        var continues = _activeSlideIndex is int previous
-            && presentationSlideIndex is int current
-            && current == previous + 1;
-        if (continues)
-            RetainAcrossSlide();
-        else
-            TeardownPlayback();
+        var enterResult = _playbackSession.EnterSlide(presentationSlideIndex);
+        ApplyEnterResult(enterResult);
+        if (!enterResult.IsContiguous)
+            ReleaseBackend();
         _activeSlide = slide;
-        _activeSlideIndex = presentationSlideIndex;
         _showMediaControls = showMediaControls;
         _showNarration = showNarration;
-        _active = SlideShowMediaInteractionPlanner.BuildSlidePlan(
-            slide, slideDipW, slideDipH, canvasW, canvasH, showMediaControls, showNarration);
+        var entryPlan = SlideShowMediaInteractionPlanner.PlanSlideEntry(
+            slide,
+            slideDipW,
+            slideDipH,
+            canvasW,
+            canvasH,
+            captionTracks,
+            preferredCaptionShapeId,
+            preferredCaptionTrackIndex,
+            captionSlideIndex,
+            preferredCaptionSlideIndex,
+            showMediaControls,
+            showNarration);
+        _active = entryPlan.Active;
 
-        if (!_active.Any(plan => plan.HasSource) || !EnsureBackend())
-            return;
-
-        foreach (var shape in ShapeTreeLookup.Enumerate(slide).Where(shape =>
-                     shape.Kind == SlideShapeKind.Media
-                     && shape.Media is not null
-                     && (_showNarration || shape.Media.IsVideo)))
+        if (!entryPlan.HasPlayableSource || !EnsureBackend())
         {
-            var plan = _active.First(media => media.ShapeId == shape.Id);
+            RefreshPlaybackTimer();
+            return;
+        }
+
+        foreach (var entry in entryPlan.Items)
+        {
+            var shape = entry.Shape;
+            var plan = entry.Surface;
             if (!plan.HasSource || !MediaPlaybackSourceFactory.TryCreate(
-                    shape.Media!.Bytes,
-                    shape.Media.LinkUrl,
-                    shape.Media.ContentType,
-                    shape.Media.IsVideo,
+                    entry.Media.Bytes,
+                    entry.Media.LinkUrl,
+                    entry.Media.ContentType,
+                    entry.Media.IsVideo,
                     out var source,
-                    loop: shape.Media.Loop))
+                    loop: false))
                 continue;
 
             try
             {
                 var session = _backend!.CreateSession();
-                var baseVolumePercent = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(shape.Media.VolumePercent);
                 session.Failed += OnSessionFailed;
                 session.Open(source!);
-                SeekToTrimStart(session, shape.Media);
-                ApplyFade(session, shape.Media, baseVolumePercent);
+                var port = new AvaloniaMediaPlaybackPort(session);
+                SlideShowMediaPlaybackHandle? playback = null;
                 VideoView? view = null;
-                if (shape.Media.IsVideo && session is LibVlcMediaPlaybackSession)
+                if (entry.Media.IsVideo && session is LibVlcMediaPlaybackSession)
                 {
                     view = CreateVideoView(
                         (LibVlcMediaPlaybackSession)session,
-                        shape.Media.PlayFullScreen &&
-                        shape.Media.PlaybackStartMode == MediaPlaybackStartMode.Automatically
-                            ? FullScreenBounds()
-                            : plan.Bounds);
+                        plan.Bounds);
                 }
                 // LibVLC raises EndReached on its own native worker thread, so this handler does not
                 // arrive on the UI thread the way the WPF player's events do. Touching the VideoView
@@ -216,69 +212,31 @@ internal sealed class AvaloniaSlideShowMediaController
                 // whole body onto the UI thread instead.
                 session.Ended += (_, _) => Dispatcher.UIThread.Post(() =>
                 {
-                    var endAction = SlideShowMediaInteractionPlanner.ResolveEndAction(shape.Media!);
-                    if (endAction == SlideShowMediaEndAction.Rewind)
-                    {
-                        SeekToTrimStart(session, shape.Media!);
-                        ApplyFade(session, shape.Media!, baseVolumePercent);
-                        session.Pause();
-                        if (view is not null)
-                        {
-                            ApplyVideoViewBounds(view, plan.Bounds);
-                            view.IsVisible = shape.Media.ShowWhenStopped;
-                        }
-                    }
-                    else if (endAction == SlideShowMediaEndAction.Stop &&
-                             view is not null && !shape.Media!.ShowWhenStopped)
-                    {
-                        ApplyVideoViewBounds(view, plan.Bounds);
-                        view.IsVisible = false;
-                    }
+                    if (playback is not null)
+                        ApplyPlaybackSnapshot(_playbackSession.HandleEnded(playback));
                 });
 
-                var captionTrack = captionSlideIndex is int currentSlideIndex
-                    ? PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
-                        captionTracks,
-                        currentSlideIndex,
-                        shape.Id,
-                        preferredCaptionSlideIndex,
-                        preferredCaptionShapeId == shape.Id ? preferredCaptionTrackIndex : null)
-                    : PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
-                        captionTracks,
-                        shape.Id,
-                        preferredCaptionShapeId == shape.Id ? preferredCaptionTrackIndex : null);
                 Border? captionHost = null;
                 TextBlock? captionText = null;
-                if (captionTrack is not null)
+                if (entry.CaptionTrack is not null)
                 {
                     (captionHost, captionText) = CreateCaptionView(plan.Bounds);
                 }
 
-                _slots.Add(new MediaSlot
+                playback = _playbackSession.Register(shape.Id, entry.Media, port);
+                var slot = new MediaSlot
                 {
                     ShapeId = shape.Id,
                     Session = session,
-                    Media = shape.Media,
-                    ShowWhenStopped = shape.Media.ShowWhenStopped,
-                    BaseVolumePercent = baseVolumePercent,
-                    RemainingSlides = Math.Max(1, shape.Media.StopAfterSlides),
+                    Playback = playback,
                     AuthoredBounds = plan.Bounds,
-                    PlayFullScreen = shape.Media.PlayFullScreen,
                     VideoView = view,
-                    CaptionTrack = captionTrack,
+                    CaptionTrack = entry.CaptionTrack,
                     CaptionHost = captionHost,
                     CaptionText = captionText,
-                });
-                if (shape.Media.PlaybackStartMode == MediaPlaybackStartMode.Automatically)
-                {
-                    StartPlayback(session, shape.Media, baseVolumePercent);
-                    if (view is not null)
-                        view.IsVisible = true;
-                }
-                else if (view is not null && !shape.Media.ShowWhenStopped)
-                {
-                    view.IsVisible = false;
-                }
+                };
+                _slots.Add(slot);
+                ApplyPlaybackSnapshot(slot, _playbackSession.Snapshot(playback));
             }
             catch (Exception ex)
             {
@@ -289,9 +247,7 @@ internal sealed class AvaloniaSlideShowMediaController
             }
         }
 
-        _captionTimer.IsEnabled = _slots.Any(slot =>
-            slot.CaptionTrack is not null || HasPlaybackEnvelope(slot.Media));
-        UpdateCaptions();
+        RefreshPlaybackTimer();
     }
 
     public bool TryHandleClick(
@@ -316,72 +272,35 @@ internal sealed class AvaloniaSlideShowMediaController
         if (!LastClick.IsHandled)
             return false;
 
-        var slot = _slots.FirstOrDefault(candidate =>
-            candidate.ShapeId == LastClick.Media!.ShapeId);
-        if (slot is null)
-            return true;
-
-        if (slot.Session.State == MediaPlaybackState.Playing)
-        {
-            slot.Session.Pause();
-            if (slot.VideoView is not null)
-                ApplyVideoViewBounds(slot.VideoView, slot.AuthoredBounds);
-            if (slot.VideoView is not null && !slot.ShowWhenStopped)
-                slot.VideoView.IsVisible = false;
-        }
-        else
-        {
-            if (slot.PlayFullScreen && slot.VideoView is not null)
-                ApplyVideoViewBounds(slot.VideoView, FullScreenBounds());
-            StartPlayback(slot.Session, slot.Media, slot.BaseVolumePercent);
-            if (slot.VideoView is not null)
-                slot.VideoView.IsVisible = true;
-        }
+        if (_playbackSession.TryHandleClick(LastClick.Media!.ShapeId, out var snapshot) &&
+            snapshot is not null)
+            ApplyPlaybackSnapshot(snapshot);
         return true;
     }
 
     public bool TrySeek(uint shapeId, TimeSpan position)
     {
-        if (position < TimeSpan.Zero)
-            return false;
-
-        var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
-        if (slot is null)
-            return false;
-
-        var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
-            slot.Media,
-            slot.Session.Duration);
-        var bounded = window.End != TimeSpan.MaxValue && position > window.End
-            ? window.End
-            : SlideShowMediaInteractionPlanner.ClampToTrimStart(slot.Media, position);
-        var didSeek = slot.Session.Seek(bounded);
-        if (didSeek)
-            ApplyFade(slot.Session, slot.Media, slot.BaseVolumePercent);
+        var didSeek = _playbackSession.TrySeek(shapeId, position, out var snapshot);
+        if (snapshot is not null)
+            ApplyPlaybackSnapshot(snapshot);
         return didSeek;
     }
 
     /// <summary>Seeks an active media session to a named authored bookmark.</summary>
     public bool TrySeekToBookmark(uint shapeId, string bookmarkName)
     {
-        var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
-        if (slot is null || !SlideShowMediaInteractionPlanner.TryResolveMediaBookmarkPosition(
-                slot.Media, bookmarkName, slot.Session.Duration, out var position))
-            return false;
-
-        var didSeek = slot.Session.Seek(position);
-        if (didSeek)
-            ApplyFade(slot.Session, slot.Media, slot.BaseVolumePercent);
+        var didSeek = _playbackSession.TrySeekToBookmark(shapeId, bookmarkName, out var snapshot);
+        if (snapshot is not null)
+            ApplyPlaybackSnapshot(snapshot);
         return didSeek;
     }
 
     public bool TrySetVolume(uint shapeId, int volume)
     {
-        var slot = _slots.FirstOrDefault(candidate => candidate.ShapeId == shapeId);
-        if (slot is null) return false;
-        slot.BaseVolumePercent = SlideShowMediaInteractionPlanner.NormalizeVolumePercent(volume);
-        ApplyFade(slot.Session, slot.Media, slot.BaseVolumePercent);
-        return true;
+        var didSet = _playbackSession.TrySetVolume(shapeId, volume, out var snapshot);
+        if (snapshot is not null)
+            ApplyPlaybackSnapshot(snapshot);
+        return didSet;
     }
 
     public bool PlayTransitionSound(TransitionSound sound)
@@ -463,19 +382,24 @@ internal sealed class AvaloniaSlideShowMediaController
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(10, 4),
         };
-        var height = Math.Clamp(bounds.Height * 0.2, 36, 86);
         var host = new Border
         {
             Background = Brushes.Black,
             Opacity = 0.82,
-            Width = Math.Max(1, bounds.Width),
-            Height = height,
             Child = text,
             IsVisible = false,
             IsHitTestVisible = false,
             ZIndex = 10,
         };
-        ApplyCaptionPlacement(host, text, bounds, cue: null);
+        ApplyCaptionPlacement(
+            host,
+            text,
+            PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                new PresentationMediaOverlayPlacementRequest(
+                    bounds,
+                    _canvasW,
+                    _canvasH,
+                    UseFullScreen: false)));
         _overlay.Children.Add(host);
         return (host, text);
     }
@@ -483,28 +407,18 @@ internal sealed class AvaloniaSlideShowMediaController
     private static void ApplyCaptionPlacement(
         Border host,
         TextBlock text,
-        LayoutRect bounds,
-        PresentationMediaTranscriptCueDescriptor? cue,
-        IReadOnlyList<PresentationMediaTranscriptRegionDescriptor>? regions = null)
+        PresentationMediaOverlayPlacement placement)
     {
-        var defaultHeight = Math.Clamp(bounds.Height * 0.2, 36, 86);
-        var placement = PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(
-            cue,
-            bounds.Width,
-            bounds.Height,
-            defaultHeight,
-            regions);
-        host.Width = placement.Width;
-        host.Height = placement.Height;
-        var isVertical = placement.RotationDegrees != 0;
-        text.Width = isVertical ? placement.Height : double.NaN;
-        text.Height = isVertical ? placement.Width : double.NaN;
+        host.Width = placement.CaptionBounds.Width;
+        host.Height = placement.CaptionBounds.Height;
+        text.Width = placement.CaptionTextWidth ?? double.NaN;
+        text.Height = placement.CaptionTextHeight ?? double.NaN;
         text.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-        text.RenderTransform = isVertical
-            ? new RotateTransform(placement.RotationDegrees)
+        text.RenderTransform = placement.IsCaptionVertical
+            ? new RotateTransform(placement.CaptionRotationDegrees)
             : null;
-        Canvas.SetLeft(host, bounds.X + placement.X);
-        Canvas.SetTop(host, bounds.Y + placement.Y);
+        Canvas.SetLeft(host, placement.CaptionBounds.X);
+        Canvas.SetTop(host, placement.CaptionBounds.Y);
     }
 
     private void UpdateCaptions()
@@ -516,11 +430,11 @@ internal sealed class AvaloniaSlideShowMediaController
 
             var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
                 slot.CaptionTrack,
-                slot.Session.Position);
+                slot.Playback.Port.Position);
             ApplyCaptionText(slot.CaptionText, cue);
             if (cue is not null
                 && _activeSlide is { } activeSlide
-                && ShapeTreeLookup.Find(activeSlide, slot.ShapeId) is { Media: not null } shape)
+                && SlideShapeTraversal.FindById(activeSlide, slot.ShapeId) is { Media: not null } shape)
             {
                 var bounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
                     shape,
@@ -528,9 +442,17 @@ internal sealed class AvaloniaSlideShowMediaController
                     _slideDipH,
                     _canvasW,
                     _canvasH);
-                if (slot.PlayFullScreen && slot.Session.State == MediaPlaybackState.Playing)
-                    bounds = FullScreenBounds();
-                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue, slot.CaptionTrack?.Regions);
+                ApplyCaptionPlacement(
+                    slot.CaptionHost,
+                    slot.CaptionText,
+                    PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                        new PresentationMediaOverlayPlacementRequest(
+                            bounds,
+                            _canvasW,
+                            _canvasH,
+                            _playbackSession.Snapshot(slot.Playback).UseFullScreen,
+                            cue,
+                            slot.CaptionTrack?.Regions)));
             }
             slot.CaptionHost.IsVisible = cue is not null;
         }
@@ -579,42 +501,41 @@ internal sealed class AvaloniaSlideShowMediaController
 
     private static IBrush? CaptionBrush(string? colorHex)
     {
-        if (string.IsNullOrWhiteSpace(colorHex))
-        {
+        if (!RgbColorTextCodec.TryParse(
+                colorHex,
+                RgbColorTextProfile.CaptionPayload,
+                out var color))
             return null;
-        }
 
-        try
-        {
-            return new SolidColorBrush(Color.Parse("#" + colorHex));
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
+        return new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
     }
 
     private void TeardownPlayback()
     {
+        _playbackSession.Teardown();
         foreach (var slot in _slots)
             DisposeSlot(slot);
         _slots.Clear();
         _activeSlide = null;
-        _activeSlideIndex = null;
         _captionTimer.Stop();
 
+        ReleaseBackend();
+    }
+
+    private void ReleaseBackend()
+    {
         _transitionSoundSession?.Dispose();
         _transitionSoundSession = null;
         _backend?.Dispose();
         _backend = null;
     }
 
-    private void RetainAcrossSlide()
+    private void ApplyEnterResult(SlideShowMediaEnterResult result)
     {
         for (var i = _slots.Count - 1; i >= 0; i--)
         {
             var slot = _slots[i];
-            if (slot.Media.IsVideo || slot.RemainingSlides <= 1)
+            if (result.Released.Contains(slot.Playback))
             {
                 DisposeSlot(slot);
                 _slots.RemoveAt(i);
@@ -623,7 +544,6 @@ internal sealed class AvaloniaSlideShowMediaController
 
             if (slot.CaptionHost is not null)
                 _overlay.Children.Remove(slot.CaptionHost);
-            slot.RemainingSlides--;
             slot.CaptionTrack = null;
             slot.CaptionHost = null;
             slot.CaptionText = null;
@@ -632,7 +552,6 @@ internal sealed class AvaloniaSlideShowMediaController
 
     private void DisposeSlot(MediaSlot slot)
     {
-        try { slot.Session.Stop(); } catch { }
         slot.Session.Failed -= OnSessionFailed;
         slot.Session.Dispose();
         if (slot.VideoView is not null)
@@ -643,54 +562,51 @@ internal sealed class AvaloniaSlideShowMediaController
 
     private void OnSessionFailed(object? sender, MediaPlaybackFailure failure) => LastFailure = failure;
 
-    private void EnforceTrimWindows()
+    private void RefreshPlaybackTimer()
     {
-        foreach (var slot in _slots)
-        {
-            if (slot.Session.State != MediaPlaybackState.Playing)
-                continue;
-
-            ApplyFade(slot.Session, slot.Media, slot.BaseVolumePercent);
-            if (!SlideShowMediaInteractionPlanner.IsAtOrPastTrimEnd(
-                    slot.Media, slot.Session.Position, slot.Session.Duration))
-                continue;
-
-            switch (SlideShowMediaInteractionPlanner.ResolveEndAction(slot.Media))
-            {
-                case SlideShowMediaEndAction.Loop:
-                    StartPlayback(slot.Session, slot.Media, slot.BaseVolumePercent);
-                    break;
-                case SlideShowMediaEndAction.Rewind:
-                    SeekToTrimStart(slot.Session, slot.Media);
-                    ApplyFade(slot.Session, slot.Media, slot.BaseVolumePercent);
-                    slot.Session.Pause();
-                    if (slot.VideoView is not null)
-                    {
-                        ApplyVideoViewBounds(slot.VideoView, slot.AuthoredBounds);
-                        slot.VideoView.IsVisible = slot.ShowWhenStopped;
-                    }
-                    break;
-                default:
-                    slot.Session.Pause();
-                    if (slot.VideoView is not null)
-                        ApplyVideoViewBounds(slot.VideoView, slot.AuthoredBounds);
-                    if (slot.VideoView is not null && !slot.ShowWhenStopped)
-                        slot.VideoView.IsVisible = false;
-                    break;
-            }
-        }
+        _captionTimer.IsEnabled = SlideShowMediaInteractionPlanner.ShouldRunPeriodicUpdates(
+            _slots.Select(slot => new SlideShowMediaActiveSlotMonitorPlan(
+                slot.CaptionTrack,
+                slot.Playback)),
+            _playbackSession);
+        UpdateCaptions();
     }
 
-    private static bool HasPlaybackEnvelope(MediaInfo media) =>
-        HasPositiveTiming(media.TrimStartMilliseconds) ||
-        HasPositiveTiming(media.TrimEndMilliseconds) ||
-        HasPositiveTiming(media.FadeInMilliseconds) ||
-        HasPositiveTiming(media.FadeOutMilliseconds);
+    private void EnforcePlaybackState()
+    {
+        foreach (var snapshot in _playbackSession.EnforcePlaybackState())
+            ApplyPlaybackSnapshot(snapshot);
+    }
 
-    private static bool HasPositiveTiming(double value) => value > 0 && double.IsFinite(value);
+    private void ApplyPlaybackSnapshot(SlideShowMediaPlaybackSnapshot snapshot)
+    {
+        var slot = _slots.FirstOrDefault(candidate => candidate.Playback.ShapeId == snapshot.ShapeId);
+        if (slot is not null)
+            ApplyPlaybackSnapshot(slot, snapshot);
+    }
 
-    private LayoutRect FullScreenBounds() =>
-        new(0, 0, Math.Max(1, _canvasW), Math.Max(1, _canvasH));
+    private void ApplyPlaybackSnapshot(MediaSlot slot, SlideShowMediaPlaybackSnapshot snapshot)
+    {
+        if (slot.VideoView is null)
+            return;
+
+        var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+            new PresentationMediaOverlayPlacementRequest(
+                slot.AuthoredBounds,
+                _canvasW,
+                _canvasH,
+                snapshot.UseFullScreen,
+                PresentationMediaTranscriptPlanner.FindActiveCue(
+                    slot.CaptionTrack,
+                    slot.Playback.Port.Position),
+                slot.CaptionTrack?.Regions));
+        ApplyVideoViewBounds(
+            slot.VideoView,
+            placement.MediaBounds);
+        if (slot.CaptionHost is not null && slot.CaptionText is not null)
+            ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, placement);
+        slot.VideoView.IsVisible = snapshot.ShowVisual;
+    }
 
     private static void ApplyVideoViewBounds(VideoView view, LayoutRect bounds)
     {
@@ -700,30 +616,19 @@ internal sealed class AvaloniaSlideShowMediaController
         Canvas.SetTop(view, bounds.Y);
     }
 
-    private static void StartPlayback(IMediaPlaybackSession session, MediaInfo media, int baseVolumePercent)
+    private sealed class AvaloniaMediaPlaybackPort : IMediaPlaybackPort
     {
-        SeekToTrimStart(session, media);
-        ApplyFade(session, media, baseVolumePercent);
-        session.Play();
-    }
+        private readonly IMediaPlaybackSession _session;
 
-    private static void ApplyFade(IMediaPlaybackSession session, MediaInfo media, int baseVolumePercent)
-    {
-        session.Volume = SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent(
-            media,
-            baseVolumePercent,
-            session.Position,
-            session.Duration);
-    }
+        public AvaloniaMediaPlaybackPort(IMediaPlaybackSession session) => _session = session;
 
-    private static void SeekToTrimStart(IMediaPlaybackSession session, MediaInfo media)
-    {
-        var position = session.Position;
-        var window = SlideShowMediaInteractionPlanner.ResolveTrimWindow(
-            media, session.Duration);
-        if (window.End != TimeSpan.MaxValue && position >= window.End)
-            session.Seek(window.Start);
-        else if (position < window.Start)
-            session.Seek(window.Start);
+        public bool IsPlaying => _session.State == MediaPlaybackState.Playing;
+        public TimeSpan Position => _session.Position;
+        public TimeSpan Duration => _session.Duration;
+        public int VolumePercent { set => _session.Volume = value; }
+        public void Play() => _session.Play();
+        public void Pause() => _session.Pause();
+        public void Stop() => _session.Stop();
+        public bool Seek(TimeSpan position) => _session.Seek(position);
     }
 }

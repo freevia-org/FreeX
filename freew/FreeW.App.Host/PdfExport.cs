@@ -51,7 +51,7 @@ internal static class PdfExport
     /// <summary>
     /// Renders the supplied paginator to PDF bytes in memory. Must be called on the UI / STA thread
     /// because it walks the WPF visual tree (the caller can then flush the bytes to disk off-thread via
-    /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>).
+    /// <see cref="Free.Shared.AppServices.AtomicFileWriter"/>).
     /// </summary>
     /// <param name="paginator">A laid-out paginator, e.g. from <see cref="PrintLayout.BuildPaginator"/>.</param>
     /// <param name="title">Optional document title written into the PDF metadata.</param>
@@ -64,21 +64,6 @@ internal static class PdfExport
     {
         ArgumentNullException.ThrowIfNull(paginator);
         return WpfRasterPdfWriter.WriteToBytes(BuildDocument(paginator, title), imageDiagnostics);
-    }
-
-    /// <summary>Renders the paginator to PDF and writes it directly to <paramref name="path"/>.</summary>
-    /// <param name="imageDiagnostics">See <see cref="RenderToBytes"/>.</param>
-    public static void Save(DocumentPaginator paginator, string path, string? title = null, ICollection<string>? imageDiagnostics = null)
-    {
-        ArgumentNullException.ThrowIfNull(paginator);
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (!string.IsNullOrEmpty(directory))
-            Directory.CreateDirectory(directory);
-
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-        WpfRasterPdfWriter.Write(BuildDocument(paginator, title), stream, imageDiagnostics: imageDiagnostics);
     }
 
     private static PdfRasterDocument BuildDocument(DocumentPaginator paginator, string? title)

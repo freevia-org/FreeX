@@ -6,6 +6,16 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class TablePropertiesDialogPlannerTests
 {
     [Fact]
+    public void TabKinds_AreInRendererOrder()
+    {
+        Enum.GetValues<TablePropertiesDialogTabKind>().Should().Equal(
+            TablePropertiesDialogTabKind.Table,
+            TablePropertiesDialogTabKind.Row,
+            TablePropertiesDialogTabKind.Column,
+            TablePropertiesDialogTabKind.Cell);
+    }
+
+    [Fact]
     public void BuildInitialState_SeedsAllTabsFromCaretTableContext()
     {
         var table = Table.Create(1, 1);
@@ -214,6 +224,78 @@ public sealed class TablePropertiesDialogPlannerTests
     }
 
     [Fact]
+    public void Session_OwnsCatalogsEnabledStateValidationAndAcceptance()
+    {
+        var table = Table.Create(1, 1);
+        var session = new TablePropertiesDialogSession(
+            new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]),
+            CultureInfo.InvariantCulture);
+
+        session.AlignmentNames.Should().Equal("Left", "Center", "Right");
+        session.WrappingNames.Should().Equal("None", "Around");
+        session.PlanEnabledState(wrappingIndex: 0, horizontalModeIndex: 0, verticalModeIndex: 0)
+            .Should().Be(new TablePropertiesDialogEnabledState(false, false, false));
+        session.PlanEnabledState(wrappingIndex: 1, horizontalModeIndex: 0, verticalModeIndex: 2)
+            .Should().Be(new TablePropertiesDialogEnabledState(true, true, false));
+
+        session.PlanAcceptance(ValidInput() with { DefaultCellMarginLeftText = "-1" })
+            .ValidationMessage.Should().Be(TablePropertiesDialogPlanner.ValidationMessage);
+        session.PlanAcceptance(ValidInput()).Result.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void CaptureInput_UsesTheSharedSemanticFieldProtocol()
+    {
+        var requested = new List<string>();
+        var input = TablePropertiesDialogInput.Capture(
+            id =>
+            {
+                requested.Add(id);
+                return id == TablePropertiesDialogPlanner.AllowOverlapAutomationId ? null : true;
+            },
+            id =>
+            {
+                requested.Add(id);
+                return id;
+            },
+            id =>
+            {
+                requested.Add(id);
+                return id == TablePropertiesDialogPlanner.WrappingAutomationId ? 1 : 0;
+            });
+
+        requested.Should().OnlyHaveUniqueItems();
+        input.PreferredWidthText.Should().Be(TablePropertiesDialogPlanner.PreferredWidthAutomationId);
+        input.WrappingIndex.Should().Be(1);
+        input.CellWrapText.Should().BeTrue();
+        input.FloatingTableAllowsOverlap.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(TablePropertiesDialogTabKind.Table, TablePropertiesDialogTabKind.Table, TablePropertiesDialogPlanner.PreferredWidthAutomationId)]
+    [InlineData(TablePropertiesDialogTabKind.Row, TablePropertiesDialogTabKind.Row, TablePropertiesDialogPlanner.RowHeightAutomationId)]
+    [InlineData(TablePropertiesDialogTabKind.Column, TablePropertiesDialogTabKind.Column, TablePropertiesDialogPlanner.ColumnWidthAutomationId)]
+    [InlineData(TablePropertiesDialogTabKind.Cell, TablePropertiesDialogTabKind.Cell, TablePropertiesDialogPlanner.CellWidthAutomationId)]
+    [InlineData((TablePropertiesDialogTabKind)99, TablePropertiesDialogTabKind.Table, TablePropertiesDialogPlanner.PreferredWidthAutomationId)]
+    public void Session_OwnsTabDefaultingAndFocusAutomationTarget(
+        TablePropertiesDialogTabKind requestedTab,
+        TablePropertiesDialogTabKind expectedTab,
+        string expectedAutomationId)
+    {
+        var table = Table.Create(1, 1);
+        var session = new TablePropertiesDialogSession(
+            new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]),
+            CultureInfo.InvariantCulture,
+            requestedTab);
+
+        session.InitialFocusPlan.Should().Be(new TablePropertiesDialogFocusPlan(
+            expectedTab,
+            expectedAutomationId,
+            SelectAllOnFocus: true));
+        session.PlanFocus(requestedTab).Should().Be(session.InitialFocusPlan);
+    }
+
+    [Fact]
     public void ApplyValues_AppliesTableRowColumnAndCellFields()
     {
         var table = Table.Create(2, 2);
@@ -366,4 +448,33 @@ public sealed class TablePropertiesDialogPlannerTests
         CellMarginRightText: "8",
         CellWrapText: true,
         CellFitText: false);
+}
+
+public sealed class TablePropertiesDialogSessionOwnershipTests
+{
+    [Theory]
+    [InlineData("FreeW.App.Host", "TablePropertiesDialog.cs")]
+    [InlineData("FreeW.App.Avalonia", "TableDialogs.cs")]
+    public void RenderersDelegateTablePropertiesLifetimeToSession(string project, string fileName)
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "freew", project, fileName));
+
+        source.Should().Contain("TablePropertiesDialogSession");
+        source.Should().Contain("_session.InitialState");
+        source.Should().Contain("_session.PlanEnabledState(");
+        source.Should().Contain("_session.PlanAcceptance(");
+        source.Should().Contain("_session.CaptureInput(");
+        source.Should().NotContain("new TablePropertiesDialogInput(");
+        source.Should().Contain("_session.InitialFocusPlan");
+        source.Should().Contain("ResolveFocusTarget(");
+        source.Should().NotContain("TablePropertiesDialogPlanner.BuildInitialState(");
+        source.Should().NotContain("TablePropertiesDialogPlanner.TryBuildResult(");
+        source.Should().NotContain("Title = \"Table Properties\"");
+        source.Should().NotContain("Content = \"Allow overlap\"");
+        source.Should().NotContain("\"TablePropertiesAllowOverlapCheckBox\"");
+        source.Should().Contain("TablePropertiesDialogTabKind initialTab");
+        source.Should().NotContain("enum TablePropertiesDialogTab");
+        source.Should().NotContain("internal enum Tab");
+    }
 }

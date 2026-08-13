@@ -1,6 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-using System.Globalization;
+using FreeX.App.Presentation;
 
 namespace FreeX.App.Services;
 
@@ -9,6 +9,17 @@ public enum MergeCellContentResolution
     KeepFirstCell,
     ConcatenateAllCells
 }
+
+public enum MergeCellContentChoice
+{
+    Cancel,
+    KeepFirstCell,
+    ConcatenateAllCells
+}
+
+public readonly record struct MergeCellContentDecision(
+    bool ShouldProceed,
+    MergeCellContentResolution Resolution);
 
 public sealed record MergeCellContentEntry(CellAddress Address, string DisplayText, bool IsTopLeft);
 
@@ -19,6 +30,13 @@ public sealed record MergeCellContentPlan(
 
 public static class CellMergePlanner
 {
+    public static MergeCellContentDecision ResolveContentChoice(MergeCellContentChoice choice) => choice switch
+    {
+        MergeCellContentChoice.KeepFirstCell => new(true, MergeCellContentResolution.KeepFirstCell),
+        MergeCellContentChoice.ConcatenateAllCells => new(true, MergeCellContentResolution.ConcatenateAllCells),
+        _ => new(false, MergeCellContentResolution.KeepFirstCell)
+    };
+
     public static bool IsSelectionMerged(Sheet sheet, GridRange range) =>
         sheet.MergedRegions.Any(region => region.Overlaps(range));
 
@@ -108,6 +126,70 @@ public static class CellMergePlanner
 
         return CreateUnmergeCommands(sheet, sheetId, range);
     }
+
+    public static IWorkbookCommand WrapCommands(
+        string label,
+        IReadOnlyList<IWorkbookCommand> commands) =>
+        commands.Count switch
+        {
+            0 => NoOpWorkbookCommand.Instance,
+            1 => commands[0],
+            _ => new CompositeWorkbookCommand(label, commands)
+        };
+
+    public static IWorkbookCommand CreateMergeCellsCommand(
+        Sheet? sheet,
+        SheetId sheetId,
+        GridRange range,
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell,
+        bool allowUnmergeToggle = true)
+    {
+        if (sheet is null)
+            return new MergeCellsCommand(sheetId, range);
+
+        return WrapCommands(
+            "Merge Cells",
+            CreateFormatCellsMergeCommands(
+                sheet,
+                sheetId,
+                range,
+                mergeCells: true,
+                contentResolution,
+                allowUnmergeToggle));
+    }
+
+    public static IWorkbookCommand CreateMergeAcrossCommand(
+        Sheet? sheet,
+        SheetId sheetId,
+        GridRange range,
+        MergeCellContentResolution contentResolution)
+    {
+        if (range.ColCount <= 1)
+            return NoOpWorkbookCommand.Instance;
+
+        var commands = new List<IWorkbookCommand>();
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            commands.Add(CreateMergeCellsCommand(
+                sheet,
+                sheetId,
+                new GridRange(
+                    new CellAddress(sheetId, row, range.Start.Col),
+                    new CellAddress(sheetId, row, range.End.Col)),
+                contentResolution,
+                allowUnmergeToggle: false));
+        }
+
+        return WrapCommands("Merge Across", commands);
+    }
+
+    public static IWorkbookCommand CreateUnmergeCellsCommand(
+        Sheet? sheet,
+        SheetId sheetId,
+        GridRange range) =>
+        sheet is null
+            ? new UnmergeCellsCommand(sheetId, range)
+            : WrapCommands("Unmerge Cells", CreateUnmergeCommands(sheet, sheetId, range));
 
     /// <summary>
     /// Finds the existing merged region (if any) that fully covers <paramref name="range"/> -- i.e. the
@@ -216,6 +298,28 @@ public static class CellMergePlanner
             string.Join(" ", entries.Select(entry => entry.DisplayText).Where(text => !string.IsNullOrWhiteSpace(text))));
     }
 
+    public static MergeCellContentPlan AnalyzeGroupedContent(
+        Workbook workbook,
+        IEnumerable<SheetId> targetSheetIds,
+        IReadOnlyList<GridRange> ranges,
+        bool perRow = false)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(targetSheetIds);
+        ArgumentNullException.ThrowIfNull(ranges);
+
+        var sheetRanges = targetSheetIds
+            .Select(workbook.GetSheet)
+            .Where(sheet => sheet is not null)
+            .Select(sheet => (
+                Sheet: sheet!,
+                Ranges: (IReadOnlyList<GridRange>)ranges
+                    .Select(range => GroupedSheetRangePlanner.RemapRangeToSheet(range, sheet!.Id))
+                    .ToList()));
+
+        return AnalyzeContent(sheetRanges, perRow);
+    }
+
     /// <summary>
     /// Analyzes the given range for the "merging cells can discard cell contents" warning.
     /// </summary>
@@ -255,7 +359,9 @@ public static class CellMergePlanner
             {
                 entries.Add(new MergeCellContentEntry(
                     address,
-                    FormatScalarValue(sheet.GetValue(address)),
+                    SpreadsheetDisplayFormatter.FormatScalarValue(
+                        sheet.GetValue(address),
+                        SpreadsheetScalarFormatProfile.InvariantContent),
                     isTopLeft));
             }
         }
@@ -273,23 +379,15 @@ public static class CellMergePlanner
     private static string FormatDisplayText(Cell cell)
     {
         if (cell.Value is not BlankValue)
-            return FormatScalarValue(cell.Value);
+            return SpreadsheetDisplayFormatter.FormatScalarValue(
+                cell.Value,
+                SpreadsheetScalarFormatProfile.InvariantContent);
 
         return cell.FormulaText is { Length: > 0 } formula
             ? "=" + formula
             : "";
     }
 
-    private static string FormatScalarValue(ScalarValue value) => value switch
-    {
-        BlankValue => "",
-        TextValue text => text.Value,
-        NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
-        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-        DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.InvariantCulture),
-        ErrorValue error => error.Code,
-        _ => value.ToString() ?? ""
-    };
 }
 
 /// <summary>

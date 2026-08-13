@@ -8,13 +8,13 @@ public sealed partial class SymbolPickerDialogSourceTests
     [Fact]
     public void Dialog_RebuildsSymbolsForSelectedSubset()
     {
-        SymbolPickerDialog.GetSymbolsForSubset("Currency Symbols").Should().Contain("\u20ac");
-        SymbolPickerDialog.GetSymbolsForSubset("Greek and Coptic").Should().Contain("\u03c0");
-        SymbolPickerDialog.GetSymbolsForSubset("Arrows").Should().Contain("\u2192");
+        SymbolPickerCatalogPlanner.GetSymbolsForSubset("Currency Symbols").Should().Contain("\u20ac");
+        SymbolPickerCatalogPlanner.GetSymbolsForSubset("Greek and Coptic").Should().Contain("\u03c0");
+        SymbolPickerCatalogPlanner.GetSymbolsForSubset("Arrows").Should().Contain("\u2192");
 
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("SymbolPickerCatalogPlanner.GetSymbolEntriesForSubset(subset)");
+        source.Should().Contain("SymbolPickerCatalogPlanner.PlanSymbolList(");
         source.Should().Contain("subsetBox.SelectionChanged");
         source.Should().Contain("RefreshSymbols()");
     }
@@ -22,7 +22,7 @@ public sealed partial class SymbolPickerDialogSourceTests
     [Fact]
     public void Dialog_OffersBroaderExcelLikeUnicodeSubsets()
     {
-        SymbolPickerDialog.GetSubsetNames().Should().Contain([
+        SymbolPickerCatalogPlanner.GetSubsetNames().Should().Contain([
             "Latin-1 Supplement",
             "Latin Extended-A",
             "Greek and Coptic",
@@ -42,28 +42,28 @@ public sealed partial class SymbolPickerDialogSourceTests
             "Dingbats",
             "Supplemental Arrows"]);
 
-        SymbolPickerDialog.GetSymbolsForSubset("Latin-1 Supplement").Should().Contain("\u00f1");
-        SymbolPickerDialog.GetSymbolsForSubset("Cyrillic").Should().Contain("\u0416");
-        SymbolPickerDialog.GetSymbolsForSubset("Box Drawing").Should().Contain("\u250c");
-        SymbolPickerDialog.GetSymbolsForSubset("Geometric Shapes").Should().Contain("\u25c6");
-        SymbolPickerDialog.GetSymbolsForSubset("Arrows").Should().HaveCountGreaterThan(100);
-        SymbolPickerDialog.GetSymbolsForSubset("Mathematical Operators").Should().HaveCountGreaterThan(150);
+        SymbolPickerCatalogPlanner.GetSymbolsForSubset("Latin-1 Supplement").Should().Contain("\u00f1");
+        SymbolPickerCatalogPlanner.GetSymbolsForSubset("Cyrillic").Should().Contain("\u0416");
+        SymbolPickerCatalogPlanner.GetSymbolsForSubset("Box Drawing").Should().Contain("\u250c");
+        SymbolPickerCatalogPlanner.GetSymbolsForSubset("Geometric Shapes").Should().Contain("\u25c6");
+        SymbolPickerCatalogPlanner.GetSymbolsForSubset("Arrows").Should().HaveCountGreaterThan(100);
+        SymbolPickerCatalogPlanner.GetSymbolsForSubset("Mathematical Operators").Should().HaveCountGreaterThan(150);
     }
 
     [Fact]
     public void Dialog_SearchesAcrossBroaderSymbolCatalog()
     {
-        SymbolPickerDialog.SearchSymbolEntries("pi")
+        SymbolPickerCatalogPlanner.SearchSymbolEntries("pi")
             .Select(entry => entry.Symbol)
             .Should()
             .Contain("\u03c0");
 
-        SymbolPickerDialog.SearchSymbolEntries("arrow")
+        SymbolPickerCatalogPlanner.SearchSymbolEntries("arrow")
             .Select(entry => entry.Symbol)
             .Should()
             .Contain("\u2192");
 
-        SymbolPickerDialog.SearchSymbolEntries("U+20AC")
+        SymbolPickerCatalogPlanner.SearchSymbolEntries("U+20AC")
             .Select(entry => entry.Symbol)
             .Should()
             .Contain("\u20ac");
@@ -79,8 +79,12 @@ public sealed partial class SymbolPickerDialogSourceTests
         source.Should().Contain("SymbolPickerCatalogPlanner.GetSubsetNames()");
         source.Should().Contain("SymbolPickerCatalogPlanner.PlanSymbolList(");
         source.Should().Contain("SymbolPickerCatalogPlanner.DefaultRecentSymbols");
-        source.Should().Contain("SymbolCatalogEntry.FromPresentation");
-        source.Should().Contain("SpecialCharacter.FromPresentation");
+        source.Should().Contain("ObservableCollection<SymbolPickerCatalogEntry>");
+        source.Should().Contain("ItemsSource = SymbolPickerCatalogPlanner.GetSpecialCharacters()");
+        source.Should().NotContain("public static IReadOnlyList<SymbolPickerSpecialCharacter>");
+        source.Should().NotContain("record struct SymbolCatalogEntry");
+        source.Should().NotContain("record struct SpecialCharacter");
+        source.Should().NotContain("FromPresentation");
         source.Should().NotContain("FriendlySymbolNames");
         source.Should().NotContain("BuildSymbolsBySubset");
         source.Should().NotContain("UnicodeSubsetDefinition");
@@ -90,17 +94,17 @@ public sealed partial class SymbolPickerDialogSourceTests
     [Fact]
     public void Dialog_OffersSpecialCharactersSurface()
     {
-        SymbolPickerDialog.GetSpecialCharacters().Should().Contain([
-            new SymbolPickerDialog.SpecialCharacter("Em Dash", "\u2014"),
-            new SymbolPickerDialog.SpecialCharacter("Nonbreaking Space", "\u00a0"),
-            new SymbolPickerDialog.SpecialCharacter("Copyright", "\u00a9"),
-            new SymbolPickerDialog.SpecialCharacter("Registered", "\u00ae"),
-            new SymbolPickerDialog.SpecialCharacter("Trademark", "\u2122")]);
-        SymbolPickerDialog.GetSpecialCharacters().Should().Contain([
-            new SymbolPickerDialog.SpecialCharacter("Nonbreaking Hyphen", "\u2011"),
-            new SymbolPickerDialog.SpecialCharacter("Less-Than Or Equal", "\u2264"),
-            new SymbolPickerDialog.SpecialCharacter("Check Mark", "\u2713")]);
-        SymbolPickerDialog.GetSpecialCharacters().Should().HaveCountGreaterThan(35);
+        SymbolPickerCatalogPlanner.GetSpecialCharacters().Should().Contain([
+            new SymbolPickerSpecialCharacter("Em Dash", "\u2014"),
+            new SymbolPickerSpecialCharacter("Nonbreaking Space", "\u00a0"),
+            new SymbolPickerSpecialCharacter("Copyright", "\u00a9"),
+            new SymbolPickerSpecialCharacter("Registered", "\u00ae"),
+            new SymbolPickerSpecialCharacter("Trademark", "\u2122")]);
+        SymbolPickerCatalogPlanner.GetSpecialCharacters().Should().Contain([
+            new SymbolPickerSpecialCharacter("Nonbreaking Hyphen", "\u2011"),
+            new SymbolPickerSpecialCharacter("Less-Than Or Equal", "\u2264"),
+            new SymbolPickerSpecialCharacter("Check Mark", "\u2713")]);
+        SymbolPickerCatalogPlanner.GetSpecialCharacters().Should().HaveCountGreaterThan(35);
 
         var source = ReadSymbolPickerDialogSources();
 
@@ -114,7 +118,7 @@ public sealed partial class SymbolPickerDialogSourceTests
     [InlineData("1F600", "\ud83d\ude00")]
     public void Dialog_ParsesUnicodeCharacterCodeEntries(string text, string expected)
     {
-        SymbolPickerDialog.TryParseCharacterCode(text, out var symbol).Should().BeTrue();
+        SymbolPickerCatalogPlanner.TryParseCharacterCode(text, out var symbol).Should().BeTrue();
         symbol.Should().Be(expected);
     }
 
@@ -125,21 +129,21 @@ public sealed partial class SymbolPickerDialogSourceTests
     [InlineData("110000")]
     public void Dialog_RejectsInvalidUnicodeCharacterCodeEntries(string text)
     {
-        SymbolPickerDialog.TryParseCharacterCode(text, out var symbol).Should().BeFalse();
+        SymbolPickerCatalogPlanner.TryParseCharacterCode(text, out var symbol).Should().BeFalse();
         symbol.Should().BeEmpty();
     }
 
     [Fact]
     public void Dialog_PromotesSelectedSymbolsIntoRecentList()
     {
-        var recent = SymbolPickerDialog.PromoteRecentSymbol(
+        var recent = SymbolPickerCatalogPlanner.PromoteRecentSymbol(
             ["\u20ac", "\u00a3", "\u00a5"],
             "\u03c0",
             capacity: 3);
 
         recent.Should().Equal(["\u03c0", "\u20ac", "\u00a3"]);
 
-        SymbolPickerDialog.PromoteRecentSymbol(recent, "\u20ac", capacity: 3)
+        SymbolPickerCatalogPlanner.PromoteRecentSymbol(recent, "\u20ac", capacity: 3)
             .Should().Equal(["\u20ac", "\u03c0", "\u00a3"]);
     }
 

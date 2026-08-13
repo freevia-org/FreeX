@@ -29,31 +29,11 @@ internal static class DataValidationCopySupport
         RewriteOperation? pasteOp,
         bool includeAdditionalRanges = true)
     {
-        var clone = new DataValidation
-        {
-            AppliesTo = range,
-            Type = source.Type,
-            Operator = source.Operator,
-            Formula1 = RewriteValidationFormula(source.Formula1, source.Type, hostSheetName, pasteOp),
-            Formula2 = RewriteValidationFormula(source.Formula2, source.Type, hostSheetName, pasteOp),
-            AllowBlank = source.AllowBlank,
-            ShowDropdown = source.ShowDropdown,
-            AlertStyle = source.AlertStyle,
-            ShowInputMessage = source.ShowInputMessage,
-            ShowErrorMessage = source.ShowErrorMessage,
-            ErrorTitle = source.ErrorTitle,
-            ErrorMessage = source.ErrorMessage,
-            PromptTitle = source.PromptTitle,
-            PromptMessage = source.PromptMessage,
-            IsX14 = source.IsX14,
-            NativeAttributes = source.NativeAttributes,
-            NativeChildXmls = source.NativeChildXmls,
-            NativeContainerAttributes = source.NativeContainerAttributes,
-            NativeContainerChildXmls = source.NativeContainerChildXmls
-        };
-
-        if (includeAdditionalRanges)
-            clone.AdditionalRanges.AddRange(source.AdditionalRanges);
+        var clone = source.CloneWithNewIdentity(
+            range,
+            includeAdditionalRanges ? source.AdditionalRanges : []);
+        clone.Formula1 = RewriteValidationFormula(source.Formula1, source.Type, hostSheetName, pasteOp);
+        clone.Formula2 = RewriteValidationFormula(source.Formula2, source.Type, hostSheetName, pasteOp);
 
         return clone;
     }

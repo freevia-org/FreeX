@@ -21,6 +21,7 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class HyphenationOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly HyphenationOptionsDialogSession _session;
     private readonly CheckBox _autoBox;
     private readonly TextBox _zoneBox;
     private readonly TextBox _limitBox;
@@ -29,19 +30,26 @@ internal sealed class HyphenationOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWi
 
     private HyphenationOptionsDialog(Window? owner, PageSettings page)
     {
+        var surface = HyphenationOptionsDialogPlanner.Surface;
+        _session = new HyphenationOptionsDialogSession(page, CultureInfo.CurrentCulture);
         Owner = owner;
-        Title = "Hyphenation";
+        Title = surface.Title;
         Width = 340;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var state = HyphenationOptionsDialogPlanner.BuildInitialState(page, CultureInfo.CurrentCulture);
-        _autoBox = new CheckBox { Content = "Automatically hyphenate document", IsChecked = state.AutoHyphenation };
-        _hyphenateCapsBox = new CheckBox { Content = "Hyphenate words in CAPS", IsChecked = state.HyphenateCaps, Margin = new Thickness(0, 6, 0, 0) };
+        var state = _session.InitialState;
+        _autoBox = new CheckBox { Content = surface.Field(HyphenationOptionsDialogField.Automatic).Label, IsChecked = state.AutoHyphenation };
+        _hyphenateCapsBox = new CheckBox { Content = surface.Field(HyphenationOptionsDialogField.HyphenateCaps).Label, IsChecked = state.HyphenateCaps, Margin = new Thickness(0, 6, 0, 0) };
         _zoneBox = NumberBox(state.ZoneText);
         _limitBox = NumberBox(state.ConsecutiveLimitText);
+        WpfDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(_autoBox, surface.Field(HyphenationOptionsDialogField.Automatic));
+        WpfDialogSurfaceSemantics.Apply(_zoneBox, surface.Field(HyphenationOptionsDialogField.Zone));
+        WpfDialogSurfaceSemantics.Apply(_limitBox, surface.Field(HyphenationOptionsDialogField.ConsecutiveLimit));
+        WpfDialogSurfaceSemantics.Apply(_hyphenateCapsBox, surface.Field(HyphenationOptionsDialogField.HyphenateCaps));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -54,8 +62,8 @@ internal sealed class HyphenationOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWi
         Grid.SetColumnSpan(_autoBox, 2);
         grid.Children.Add(_autoBox);
 
-        AddRow(grid, 1, "Hyphenation zone (pt):", _zoneBox);
-        AddRow(grid, 2, "Limit consecutive hyphens to (0 = no limit):", _limitBox);
+        AddRow(grid, 1, surface.Field(HyphenationOptionsDialogField.Zone).Label, _zoneBox);
+        AddRow(grid, 2, surface.Field(HyphenationOptionsDialogField.ConsecutiveLimit).Label, _limitBox);
 
         Grid.SetRow(_hyphenateCapsBox, 3);
         Grid.SetColumn(_hyphenateCapsBox, 0);
@@ -106,17 +114,14 @@ internal sealed class HyphenationOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWi
             _limitBox.Text,
             _hyphenateCapsBox.IsChecked == true);
 
-        if (!HyphenationOptionsDialogPlanner.TryBuildResult(
-                input,
-                CultureInfo.CurrentCulture,
-                out var result,
-                out var errorMessage))
+        var acceptance = _session.PlanAcceptance(input);
+        if (!acceptance.IsAccepted)
         {
-            DialogMessageHelper.ShowWarning(this, errorMessage ?? HyphenationOptionsDialogPlanner.ValidationMessage);
+            DialogMessageHelper.ShowWarning(this, acceptance.ValidationMessage);
             return;
         }
 
-        _result = result;
+        _result = acceptance.Result;
         Close();
     }
 

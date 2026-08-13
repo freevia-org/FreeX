@@ -1,4 +1,5 @@
 using System.Windows;
+using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -45,7 +46,7 @@ public sealed class WpfClipboardCommandTests
         fixture.Slide.Shapes.Add(second);
         fixture.Editor.Select(second.Id, addToSelection: true);
 
-        WpfClipboardCommands.Cut(fixture.Editor, fixture.Service);
+        fixture.Service.Cut(fixture.Editor);
 
         fixture.Slide.Shapes.Should().BeEmpty();
         PresentationClipboardSelectionCodec.Deserialize(
@@ -64,7 +65,7 @@ public sealed class WpfClipboardCommandTests
         var fixture = CreateFixture();
         fixture.Clipboard.ThrowOnWrite = true;
 
-        WpfClipboardCommands.Cut(fixture.Editor, fixture.Service);
+        fixture.Service.Cut(fixture.Editor);
 
         fixture.Slide.Shapes.Should().BeEmpty();
         fixture.Editor.CanPaste.Should().BeTrue();
@@ -97,7 +98,7 @@ public sealed class WpfClipboardCommandTests
         var keyboard = CreateFixture();
 
         ExecuteRibbonCut(ribbon.Editor, ribbon.Service);
-        WpfClipboardCommands.Cut(keyboard.Editor, keyboard.Service);
+        keyboard.Service.Cut(keyboard.Editor);
 
         ribbon.Clipboard.WriteCount.Should().Be(keyboard.Clipboard.WriteCount);
         ribbon.Clipboard.LastContent!.Text
@@ -110,10 +111,15 @@ public sealed class WpfClipboardCommandTests
 
     private static void ExecuteRibbonCut(EditingSession editor, OsClipboardService service)
     {
-        var registry = FreePRibbonCommands.Build(
-            new Free.Shared.Ribbon.RibbonStateStore(),
+        var registry = FreePRibbonTestRegistry.Compose(
             editor,
-            osClipboard: service);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    Cut = () => service.Cut(editor),
+                },
+            });
 
         registry.TryGet("freep.cut", out var command).Should().BeTrue();
         command!.Execute(Free.Shared.Ribbon.RibbonCommandContext.Empty);
@@ -159,7 +165,7 @@ public sealed class WpfClipboardCommandTests
         RecordingClipboard Clipboard,
         RecordingRenderer Renderer);
 
-    private sealed class RecordingClipboard : IOsClipboard
+    private sealed class RecordingClipboard : IPlatformClipboard
     {
         public int WriteCount { get; private set; }
         public PresentationClipboardContent? LastContent { get; private set; }
@@ -182,6 +188,30 @@ public sealed class WpfClipboardCommandTests
             LastContent = content;
             SequenceNumber++;
         }
+
+        public ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
+            PlatformClipboardReadRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(
+                PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                    PresentationClipboardPlatformMapper.ToPlatformContent(Read())));
+
+        public ValueTask<PlatformClipboardWriteResult> WriteAsync(
+            PlatformClipboardContent content,
+            CancellationToken cancellationToken = default)
+        {
+            if (ThrowOnWrite)
+                return ValueTask.FromResult(PlatformClipboardWriteResult.Failed("clipboard locked"));
+            Write(PresentationClipboardPlatformMapper.FromPlatformContent(content));
+            return ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+        }
+
+        public ValueTask<PlatformClipboardWriteResult> ClearAsync(
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+
+        public string? TryGetChangeIdentity() =>
+            SequenceNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private sealed class RecordingRenderer : IShapeRenderer

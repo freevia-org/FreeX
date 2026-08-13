@@ -14,9 +14,13 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <!-- Hardened XML reader settings (DTD prohibit, char cap, no resolver) shared with FreeX/FreeW. -->
     <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
     <!-- Portable (no-WPF) PDF emitter shared with FreeX/FreeW for selectable-text PDF export. -->
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Free.Shared.Drawing" />
   </ItemGroup>
 </Project>

@@ -217,34 +217,31 @@ public static class WpfRasterPdfWriter
 
     private static void AddLinkAnnotations(PdfPage page, IReadOnlyList<PdfLinkOverlay> overlays)
     {
-        foreach (var overlay in overlays)
+        foreach (var link in PdfAnnotationPlanner.BuildLinkAnnotations(
+                     page.Width.Point,
+                     page.Height.Point,
+                     overlays))
         {
-            if (overlay.Width <= 0 || overlay.Height <= 0)
+            if (string.IsNullOrEmpty(link.Uri))
                 continue;
 
-            var uri = overlay.Uri?.Trim();
-            if (string.IsNullOrEmpty(uri))
-                continue;
-
-            var left = Math.Clamp(overlay.X, 0, page.Width.Point);
-            var right = Math.Clamp(overlay.X + overlay.Width, 0, page.Width.Point);
-            var top = Math.Clamp(page.Height.Point - overlay.Y, 0, page.Height.Point);
-            var bottom = Math.Clamp(page.Height.Point - (overlay.Y + overlay.Height), 0, page.Height.Point);
-            if (right <= left || top <= bottom)
-                continue;
+            var top = page.Height.Point - link.Top;
+            var bottom = page.Height.Point - link.Bottom;
 
             var action = new PdfDictionary(page.Owner);
             action.Elements.SetName("/S", "/URI");
-            action.Elements.SetString("/URI", uri);
+            action.Elements.SetString("/URI", link.Uri);
 
             var annotation = new PdfDictionary(page.Owner);
             annotation.Elements.SetName("/Type", "/Annot");
             annotation.Elements.SetName("/Subtype", "/Link");
-            annotation.Elements.SetRectangle("/Rect", new PdfRectangle(new XRect(left, bottom, right - left, top - bottom)));
+            annotation.Elements.SetRectangle(
+                "/Rect",
+                new PdfRectangle(new XRect(link.Left, bottom, link.Right - link.Left, top - bottom)));
             annotation.Elements.SetName("/H", "/I");
             annotation.Elements.SetInteger("/F", 4);
             annotation.Elements["/Border"] = CreateInvisibleBorder(page.Owner);
-            annotation.Elements.SetString("/Contents", overlay.Tooltip ?? uri);
+            annotation.Elements.SetString("/Contents", link.Tooltip ?? link.Uri);
             annotation.Elements["/A"] = action;
 
             var annots = page.Elements.GetArray("/Annots");
@@ -269,7 +266,8 @@ public static class WpfRasterPdfWriter
 
     private static void ApplyProperties(PdfDocument pdf, PdfDocumentProperties? properties)
     {
-        pdf.Info.Creator = string.IsNullOrWhiteSpace(properties?.Creator) ? "FreeX" : properties!.Creator;
+        if (Normalize(properties?.Creator) is { } creator)
+            pdf.Info.Creator = creator;
         if (properties is null)
             return;
 

@@ -9,7 +9,7 @@ public sealed class ShapeGradientParitySourceTests
     public void ParityCapture_UsesSharedFixtureAndWpfMeasuredLayoutMetrics()
     {
         var paritySource = File.ReadAllText(Path.Combine(
-            RepoRoot(), "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+            RepoRoot(), "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var dialogSource = File.ReadAllText(Path.Combine(
             RepoRoot(), "src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
 
@@ -24,12 +24,6 @@ public sealed class ShapeGradientParitySourceTests
         dialogSource.Should().Contain("ButtonHeight = 22");
     }
 
-    private static string RepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new DirectoryNotFoundException("FreeX repository root was not found.");
-    }
+    private static string RepoRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

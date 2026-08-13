@@ -24,7 +24,7 @@ public sealed class InsertTabDepthTests
         0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
     ];
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },
@@ -74,7 +74,7 @@ public sealed class InsertTabDepthTests
     {
         var view = ViewWith();
         var before = view.Document.Blocks.Count;
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Exec(registry, "freew.blank-page");
 
@@ -94,7 +94,7 @@ public sealed class InsertTabDepthTests
     public void Horizontal_rule_command_inserts_bottom_border_paragraph()
     {
         var view = ViewWith();
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Exec(registry, "freew.horizontal-rule");
 
@@ -241,7 +241,7 @@ public sealed class InsertTabDepthTests
     [Fact]
     public void Insert_tab_definition_exposes_new_groups_and_controls()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var insert = definition.FindTab("insert");
         insert.Should().NotBeNull();
 
@@ -254,7 +254,7 @@ public sealed class InsertTabDepthTests
     {
         var view = ViewWith("X");
 
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.symbol.copyright"), out var cmd)
             .Should().BeTrue();
         cmd!.Execute(RibbonCommandContext.Empty);
@@ -266,7 +266,7 @@ public sealed class InsertTabDepthTests
     public void Date_time_command_inserts_date_field_run()
     {
         var view = ViewWith("");
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Exec(registry, "freew.datetime");
 

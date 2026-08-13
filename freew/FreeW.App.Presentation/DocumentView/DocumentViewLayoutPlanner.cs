@@ -1,4 +1,5 @@
 using FreeW.Core.Model;
+using FreeW.App.Presentation.Editing;
 
 namespace FreeW.App.Presentation.DocumentView;
 
@@ -713,11 +714,7 @@ public static class DocumentViewLayoutPlanner
         ArgumentNullException.ThrowIfNull(table);
 
         var rowCount = table.Rows.Count;
-        var gridColumnCount = Math.Max(
-            table.ColumnWidthsPt.Count,
-            table.Rows.Count == 0
-                ? 0
-                : table.Rows.Max(row => row.Cells.Sum(cell => Math.Max(1, cell.GridSpan))));
+        var gridColumnCount = Math.Max(table.ColumnWidthsPt.Count, TableGridProjection.TableWidth(table));
         var cells = new List<DocumentTableCellLayoutPlan>();
         var hasMergedCells = false;
         var hasVerticalMerges = false;
@@ -731,11 +728,12 @@ public static class DocumentViewLayoutPlanner
         for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
             var row = table.Rows[rowIndex];
-            var gridColumnIndex = 0;
-            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
+            foreach (var projected in TableGridProjection.ProjectRow(row))
             {
-                var cell = row.Cells[cellIndex];
-                var gridSpan = Math.Max(1, cell.GridSpan);
+                var cell = projected.Cell;
+                var cellIndex = projected.CellIndex;
+                var gridColumnIndex = projected.StartColumn;
+                var gridSpan = projected.Span;
                 var rowSpan = cell.VerticalMerge == VerticalMergeState.Restart
                     ? CountVerticalMergeSpan(table, rowIndex, gridColumnIndex)
                     : 1;
@@ -772,8 +770,6 @@ public static class DocumentViewLayoutPlanner
                         gridSpan,
                         gridColumnCount)
                 });
-
-                gridColumnIndex += gridSpan;
             }
         }
 
@@ -944,7 +940,7 @@ public static class DocumentViewLayoutPlanner
             cell.RowIndex,
             Math.Max(0, table.RowCount),
             cell.GridColumnIndex,
-            Math.Max(1, cell.GridSpan),
+            TableGridProjection.NormalizeSpan(cell.GridSpan),
             Math.Max(0, table.GridColumnCount));
     }
 
@@ -2799,7 +2795,7 @@ public static class DocumentViewLayoutPlanner
         var span = 1;
         for (var rowIndex = restartRow + 1; rowIndex < table.Rows.Count; rowIndex++)
         {
-            var continuation = CellAtGridColumn(table.Rows[rowIndex], gridColumn);
+            var continuation = TableGridProjection.At(table.Rows[rowIndex], gridColumn)?.Cell;
             if (continuation?.VerticalMerge == VerticalMergeState.Continue)
                 span++;
             else
@@ -2807,21 +2803,6 @@ public static class DocumentViewLayoutPlanner
         }
 
         return span;
-    }
-
-    private static TableCell? CellAtGridColumn(TableRow row, int targetGridColumn)
-    {
-        var gridColumn = 0;
-        foreach (var cell in row.Cells)
-        {
-            var span = Math.Max(1, cell.GridSpan);
-            if (targetGridColumn >= gridColumn && targetGridColumn < gridColumn + span)
-                return cell;
-
-            gridColumn += span;
-        }
-
-        return null;
     }
 
     private static string? NormalizeHexColorOrNull(string? hex) =>

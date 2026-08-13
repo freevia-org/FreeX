@@ -18,6 +18,8 @@ public sealed class ContentControlInteractionPlannerTests
     public void ListItemsOrDefault_ReturnsSharedDefaultItems()
     {
         var items = ContentControlInteractionPlanner.ListItemsOrDefault(null);
+        var emptyItems = ContentControlInteractionPlanner.ListItemsOrDefault([]);
+        var customItems = new[] { new ContentControlListItem("Custom", "C") };
 
         items.Select(item => item.DisplayText).Should().Equal(
             "Choose an item",
@@ -29,6 +31,21 @@ public sealed class ContentControlInteractionPlannerTests
             "Item 1",
             "Item 2",
             "Item 3");
+        emptyItems.Should().BeSameAs(ContentControlInteractionPlanner.DefaultListItems);
+        ContentControlInteractionPlanner.ListItemsOrDefault(customItems).Should().BeSameAs(customItems);
+    }
+
+    [Fact]
+    public void DateFormatting_UsesSharedDefaultOrRequestedFormat()
+    {
+        var date = new DateTime(2026, 8, 11);
+
+        ContentControlInteractionPlanner.DateFormatOrDefault(null)
+            .Should().Be(ContentControl.DefaultDateFormat);
+        ContentControlInteractionPlanner.DateFormatOrDefault(string.Empty)
+            .Should().Be(ContentControl.DefaultDateFormat);
+        ContentControlInteractionPlanner.FormatDate("yyyy-MM-dd", date, CultureInfo.InvariantCulture)
+            .Should().Be("2026-08-11");
     }
 
     [Fact]

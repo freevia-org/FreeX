@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Documents;
 using System.Printing;
@@ -8,6 +9,20 @@ namespace FreeP.App.Host.Tests;
 
 public sealed class WpfPresentationPrintServiceTests
 {
+    [Fact]
+    public void CapabilityDetection_ReturnsCanonicalPresentationContract()
+    {
+        var capability = WpfPresentationPrintService.DetectCapabilities();
+
+        capability.HostName.Should().Be("WPF print host");
+        if (!capability.CanOpenNativePrintDialog)
+            capability.UnavailableReason.Should().NotBeNullOrWhiteSpace();
+
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "WpfPresentationPrintService.cs"))
+            .Should().NotContain("WpfNativePrintCapability");
+    }
+
     [StaFact]
     public void BuildPageSource_FullPageSlides_ProducesRasterPages()
     {

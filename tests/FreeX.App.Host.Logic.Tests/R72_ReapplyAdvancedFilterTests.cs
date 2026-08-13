@@ -93,6 +93,8 @@ public sealed class R72_ReapplyAdvancedFilterTests
                 sheet.SetCell(new CellAddress(sheetId, 3, 1), new TextValue("East"));
 
                 var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 1)); // A1:A3
+                window.SheetGrid.SelectedRange = range;
+                sheet.AutoFilter = new WorksheetAutoFilterModel(range.ToString(), null);
                 var regionFilter = new AutoFilterDialogResult(
                     AutoFilterSortDirection.None,
                     SelectedValues: ["West"],

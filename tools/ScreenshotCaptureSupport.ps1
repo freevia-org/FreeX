@@ -165,10 +165,179 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operati
 }
 
 function Clear-ScreenshotEvidenceArtifacts {
-    Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue |
+    param([string]$OutputDirectory = $outDir)
+
+    Get-ChildItem $OutputDirectory -Filter "*.png" -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath (Join-Path $outDir "screenshot_manifest.json") -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath (Join-Path $outDir "screenshot_blocker_manifest.json") -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $OutputDirectory "screenshot_manifest.json") -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $OutputDirectory "screenshot_blocker_manifest.json") -Force -ErrorAction SilentlyContinue
+}
+
+function Clear-ScreenshotTourEvidenceArtifacts {
+    param(
+        [Parameter(Mandatory = $true)][string]$OutputDirectory,
+        [Parameter(Mandatory = $true)][string]$ManifestFileName
+    )
+
+    if (-not (Test-Path -LiteralPath $OutputDirectory -PathType Container)) {
+        return
+    }
+
+    Get-ChildItem $OutputDirectory -Filter "*.png" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $OutputDirectory $ManifestFileName) -Force -ErrorAction SilentlyContinue
+}
+
+function Assert-ForegroundProcessOwnership {
+    param(
+        [Parameter(Mandatory = $true)][int]$ExpectedProcessId,
+        [Parameter(Mandatory = $true)][string]$Operation,
+        [Parameter(Mandatory = $true)][string]$ExpectedProcessName
+    )
+
+    $foreground = [ScreenshotWin32]::GetForegroundWindow()
+    if ($foreground -eq [IntPtr]::Zero) {
+        throw "Blocked: no foreground window before $Operation."
+    }
+
+    $actualProcessId = 0
+    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualProcessId) | Out-Null
+    if ($actualProcessId -ne $ExpectedProcessId) {
+        $title = New-Object System.Text.StringBuilder 512
+        [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+        throw "Blocked: foreground window '$($title.ToString())' (PID $actualProcessId) does not belong to expected $ExpectedProcessName PID $ExpectedProcessId before $Operation."
+    }
+}
+
+function Set-ScreenshotCaptureWindowWidth {
+    param(
+        [Parameter(Mandatory = $true)]$WindowHandle,
+        [Parameter(Mandatory = $true)]$WidthSpec,
+        [Parameter(Mandatory = $true)][double]$Scale,
+        [Parameter(Mandatory = $true)][double]$WindowLogicalHeight,
+        [Parameter(Mandatory = $true)][scriptblock]$ActivateWindow
+    )
+
+    if ($null -eq $WidthSpec.WindowLogicalWidth) {
+        [ScreenshotWin32]::ShowWindow($WindowHandle, 3) | Out-Null
+        & $ActivateWindow $WindowHandle
+        return
+    }
+
+    $physicalWidth = [int]([Math]::Ceiling([double]$WidthSpec.WindowLogicalWidth * $Scale))
+    $physicalHeight = [int]([Math]::Ceiling($WindowLogicalHeight * $Scale))
+    [ScreenshotWin32]::ShowWindow($WindowHandle, 1) | Out-Null
+    Start-Sleep -Milliseconds 200
+    [ScreenshotWin32]::SetWindowPos($WindowHandle, [IntPtr]::Zero, 0, 0, $physicalWidth, $physicalHeight, 0) | Out-Null
+    & $ActivateWindow $WindowHandle
+}
+
+function Write-RibbonScreenshotEvidenceManifest {
+    param(
+        [Parameter(Mandatory = $true)][string]$ToolName,
+        [Parameter(Mandatory = $true)][string]$OutputDirectory,
+        [Parameter(Mandatory = $true)]$WindowRect,
+        [Parameter(Mandatory = $true)][int]$CaptureLogicalHeight,
+        [Parameter(Mandatory = $true)][int]$CapturePhysicalHeight,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Widths,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Captures,
+        [Parameter(Mandatory = $true)][int]$ExpectedProcessId,
+        [Parameter(Mandatory = $true)][string]$ExpectedWindowTitle,
+        [Parameter(Mandatory = $true)][string]$EvidenceSubject,
+        [Parameter(Mandatory = $true)][string]$EvidenceApp,
+        [Parameter(Mandatory = $true)][string]$OutputNaming,
+        [Parameter(Mandatory = $true)][string]$CounterpartSubject,
+        [Parameter(Mandatory = $true)][string]$CounterpartTool,
+        [Parameter(Mandatory = $true)][string]$CounterpartOutputNaming,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Tabs,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Limitations,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$InteractiveCapturePlan,
+        [AllowEmptyCollection()][string[]]$RequestedTabs,
+        [AllowEmptyCollection()][string[]]$SkippedTabs,
+        [string]$SkippedCaptureStatus,
+        [string]$SkippedCaptureReason
+    )
+
+    $manifestPath = Join-Path $OutputDirectory "screenshot_manifest.json"
+    $plannedCaptureCount = $Tabs.Count * $Widths.Count
+    if ($Captures.Count -ne $plannedCaptureCount) {
+        Clear-ScreenshotEvidenceArtifacts -OutputDirectory $OutputDirectory
+        throw "Blocked: captured $($Captures.Count) screenshot(s), expected $plannedCaptureCount. Discarded incomplete evidence matrix."
+    }
+
+    $skippedCaptures = @()
+    foreach ($widthSpec in $Widths) {
+        foreach ($tabName in @($SkippedTabs)) {
+            $safe = $tabName -replace '[^a-zA-Z0-9_]','_'
+            $skippedCaptures += [pscustomobject]@{
+                CaptureKey = "ribbon:$($widthSpec.Label):$safe"
+                PairKey = "ribbon:$($widthSpec.Label):$safe"
+                EvidenceSubject = $EvidenceSubject
+                CounterpartSubject = $CounterpartSubject
+                CounterpartFileName = $CounterpartOutputNaming.Replace("<WidthLabel>", [string]$widthSpec.Label).Replace("<RibbonTab>", $safe)
+                Tab = $tabName
+                TabFileName = $safe
+                WidthLabel = $widthSpec.Label
+                WindowLogicalWidth = $widthSpec.WindowLogicalWidth
+                EvidencePurpose = $widthSpec.EvidencePurpose
+                CaptureStatus = $SkippedCaptureStatus
+                SkipReason = $SkippedCaptureReason
+            }
+        }
+    }
+
+    $captureStatus = if (@($SkippedTabs).Count -gt 0) { "complete-with-skipped-unavailable-tabs" } else { "complete" }
+    $manifest = [ordered]@{
+        Tool = $ToolName
+        EvidenceFamily = "ribbon"
+        EvidenceSubject = $EvidenceSubject
+        EvidenceApp = $EvidenceApp
+        OutputDirectory = $OutputDirectory
+        OutputNaming = $OutputNaming
+        CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
+        WidthSource = "RibbonScreenshotTourPlanner.DefaultWidths"
+        PlannedCaptureCount = $plannedCaptureCount
+        ActualCaptureCount = $Captures.Count
+        CaptureStatus = $captureStatus
+        CaptureMethod = "CopyFromScreen-window-rectangle-top-band"
+        ForegroundGuard = [pscustomobject]@{
+            Required = $true
+            ExpectedProcessId = $ExpectedProcessId
+            ExpectedWindowTitle = $ExpectedWindowTitle
+            Policy = "Abort and clear current PNG/manifest evidence unless the expected process and window title own the foreground window immediately before global input and screen capture."
+        }
+        Pairing = [pscustomobject]@{
+            PairKeyPattern = "ribbon:<WidthLabel>:<TabFileName>"
+            CounterpartSubject = $CounterpartSubject
+            CounterpartTool = $CounterpartTool
+            CounterpartOutputNaming = $CounterpartOutputNaming
+        }
+        WindowBounds = [pscustomobject]@{
+            Left = $WindowRect.Left
+            Top = $WindowRect.Top
+            Right = $WindowRect.Right
+            Bottom = $WindowRect.Bottom
+            Width = $WindowRect.Right - $WindowRect.Left
+            Height = $WindowRect.Bottom - $WindowRect.Top
+        }
+        CaptureLogicalHeight = $CaptureLogicalHeight
+        CapturePhysicalHeight = $CapturePhysicalHeight
+        Widths = $Widths
+    }
+    if ($null -ne $RequestedTabs) {
+        $manifest["RequestedTabs"] = $RequestedTabs
+    }
+    $manifest["Tabs"] = $Tabs
+    if ($null -ne $SkippedTabs) {
+        $manifest["SkippedTabs"] = $SkippedTabs
+        $manifest["SkippedCaptures"] = $skippedCaptures
+    }
+    $manifest["Limitations"] = $Limitations
+    $manifest["InteractiveCapturePlan"] = $InteractiveCapturePlan
+    $manifest["Captures"] = $Captures
+
+    [pscustomobject]$manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+    Write-Host "Saved $manifestPath"
 }
 
 function Get-RibbonWidthEvidencePurpose($windowLogicalWidth) {

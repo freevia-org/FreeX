@@ -183,12 +183,60 @@ public sealed class AvaloniaRibbonComboTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task TypedCombo_DisplaysLabels_DispatchesValues_AndMatchesStateByValue()
+    {
+        await Session.Dispatch(() =>
+        {
+            var command = new RecordingStatefulCommand("theme.slate");
+            var registry = new RibbonCommandRegistry();
+            registry.Register("theme", command);
+            var content = AvaloniaRibbonRenderer.BuildTabContent(BuildTypedComboTab(), registry);
+            var window = Show(content);
+            try
+            {
+                var combo = FindCombo(content);
+                combo.SelectedIndex.Should().Be(1);
+                combo.Text.Should().Be("Slate");
+                combo.Items.Cast<RibbonComboBoxChoice>().Select(choice => choice.Label)
+                    .Should().Equal("Office", "Slate");
+
+                combo.SelectedIndex = 0;
+                command.ExecutedValues.Should().Equal("theme.office");
+
+                command.State = new RibbonCommandState(Value: "theme.slate");
+                AvaloniaRibbonRenderer.SyncToggleStates(content, registry);
+                combo.SelectedIndex.Should().Be(1);
+                combo.Text.Should().Be("Slate");
+                command.ExecutedValues.Should().Equal("theme.office");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static RibbonTab BuildComboTab(string commandId, params string[] items) =>
         new RibbonDefinitionBuilder()
             .Tab("home", "Home", "H", tab => tab.Group("font", "Font", "F", 1, group =>
                 group.ComboBox(commandId, "Font", combo => combo with { Items = items })))
             .Build()
             .FindTab("home")!;
+
+    private static RibbonTab BuildTypedComboTab() =>
+        new RibbonDefinitionBuilder()
+            .Tab("design", "Design", "D", tab => tab.Group("themes", "Themes", "T", 1, group =>
+                group.ComboBox("theme", "Theme", combo => combo with
+                {
+                    Choices =
+                    [
+                        new RibbonComboBoxChoice("theme.office", "Office"),
+                        new RibbonComboBoxChoice("theme.slate", "Slate"),
+                    ],
+                })))
+            .Build()
+            .FindTab("design")!;
 
     private static ComboBox FindCombo(Control content) =>
         content.GetLogicalDescendants().OfType<ComboBox>().Single();

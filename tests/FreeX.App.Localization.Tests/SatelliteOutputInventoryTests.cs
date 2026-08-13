@@ -18,32 +18,20 @@ public sealed class SatelliteOutputInventoryTests
     ];
 
     [Fact]
-    public void NormalBuild_ContainsMatchingAppAndSharedSatelliteCultures()
-    {
-        var outputDirectory = AppContext.BaseDirectory;
-        var appCultures = ResxResourceTestSupport.FindSatelliteCultures(
-            outputDirectory,
-            "FreeX.App.Localization.resources.dll");
-        var sharedCultures = ResxResourceTestSupport.FindSatelliteCultures(
-            outputDirectory,
-            "Free.Shared.Localization.resources.dll");
-
-        appCultures.Should().BeEquivalentTo(SupportedCultures);
-        sharedCultures.Should().BeEquivalentTo(SupportedCultures);
-    }
+    public void NormalBuild_ContainsMatchingAppAndSharedSatelliteCultures() =>
+        AppLocalizationContractTestSupport.AssertSatelliteOutputInventory(
+            AppContext.BaseDirectory,
+            "FreeX.App.Localization.resources.dll",
+            SupportedCultures);
 
     [Fact]
     public void EnglishOnlyBuild_ContainsNoAppOrSharedSatelliteAssemblies()
     {
         var projectPath = TestWorkspaceFileLocator.Find(
             "src", "FreeX.App.Localization", "FreeX.App.Localization.csproj");
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "FreeXEnglishOnlyLocalization",
-            Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("FreeXEnglishOnlyLocalization-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             var startInfo = new ProcessStartInfo("dotnet")
             {
                 WorkingDirectory = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"),
@@ -68,11 +56,6 @@ public sealed class SatelliteOutputInventoryTests
             Directory.EnumerateFiles(outputDirectory, "*.resources.dll", SearchOption.AllDirectories)
                 .Should()
                 .BeEmpty();
-        }
-        finally
-        {
-            if (Directory.Exists(outputDirectory))
-                Directory.Delete(outputDirectory, recursive: true);
         }
     }
 }

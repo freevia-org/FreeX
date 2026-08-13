@@ -13,7 +13,7 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class ChartDialogTests
 {
     [Fact]
-    public void ChartTrendlineOptionsDialogResult_BuildsLayoutOptions()
+    public void ChartTrendlineOptionsDialog_ReturnsCanonicalInputThatBuildsLayoutOptions()
     {
         var result = ChartTrendlineOptionsDialog.CreateResult(
             showTrendline: true,
@@ -26,7 +26,7 @@ public sealed partial class ChartDialogTests
             thickness: 2.25,
             dashStyle: ChartLineDashStyle.Dot);
 
-        result.ToOptions().Should().Be(new ChartLayoutOptions(
+        ChartTrendlinePlanner.Plan(result).Should().Be(new ChartLayoutOptions(
             ShowLinearTrendline: true,
             TrendlineType: ChartTrendlineType.Polynomial,
             TrendlinePeriod: 4,
@@ -39,12 +39,13 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void ChartTrendlineOptionsDialogResult_DelegatesOptionsToSharedPlanner()
+    public void ChartTrendlineOptionsDialog_UsesCanonicalInputWithoutRendererResultFacade()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartTrendlineOptionsDialog.cs");
+        var commands = DialogSourceTestSupport.ReadHostSources("MainWindow.ChartCommands.cs");
 
-        source.Should().Contain("public ChartTrendlineInput ToInput()");
-        source.Should().Contain("ChartTrendlinePlanner.Plan(ToInput())");
+        source.Should().Contain("public ChartTrendlineInput Result");
+        source.Should().NotContain("ChartTrendlineOptionsDialogResult");
         source.Should().Contain("ChartTrendlinePlanner.Read(chart)");
         source.Should().Contain("ChartTrendlinePlanner.Normalize(new ChartTrendlineInput(");
         source.Should().Contain("ChartTrendlinePlanner.GetTypeChoices()");
@@ -58,6 +59,7 @@ public sealed partial class ChartDialogTests
         source.Should().NotContain("TryReadOptionalColor(");
         source.Should().NotContain("TryReadClampedDouble(");
         source.Should().NotContain("int.TryParse(");
+        commands.Should().Contain("ChartTrendlinePlanner.Plan(dialog.Result)");
     }
 
     [Fact]
@@ -76,17 +78,18 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartTrendlineOptionsDialog.cs");
 
-        source.Should().Contain("ChartTrendlineDialogParseIssue.Order => (UiText.Get(\"ChartTrendline_InvalidOrderMessage\"), _orderBox)");
-        source.Should().Contain("ChartTrendlineDialogParseIssue.Color => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _colorBox)");
-        source.Should().Contain("ChartTrendlineDialogParseIssue.Thickness => (UiText.Get(\"ChartTrendline_InvalidWidthMessage\"), _thicknessBox)");
-        source.Should().Contain("_ => (UiText.Get(\"ChartTrendline_InvalidPeriodMessage\"), _periodBox)");
+        source.Should().Contain("ChartValidationPresentationPlanner.Describe(issue)");
+        source.Should().Contain("ChartTrendlineDialogFieldId.Order => _orderBox");
+        source.Should().Contain("ChartTrendlineDialogFieldId.LineColor => _colorBox");
+        source.Should().Contain("ChartTrendlineDialogFieldId.LineThickness => _thicknessBox");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartTrendlineDialogParseIssue issue)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowInvalidInputWarning(string message, TextBox target)");
     }
 
     [Fact]
-    public void ChartErrorBarsDialogResult_BuildsLayoutOptions()
+    public void ChartErrorBarsDialog_ReturnsCanonicalInputThatBuildsLayoutOptions()
     {
         var result = ChartErrorBarsDialog.CreateResult(
             showErrorBars: true,
@@ -95,7 +98,7 @@ public sealed partial class ChartDialogTests
             value: 7.5,
             endCaps: false);
 
-        result.ToOptions().Should().Be(new ChartLayoutOptions(
+        ChartErrorBarsPlanner.Plan(result).Should().Be(new ChartLayoutOptions(
             ShowErrorBars: true,
             ErrorBarKind: ChartErrorBarKind.FixedValue,
             ErrorBarDirection: ChartErrorBarDirection.Minus,
@@ -104,12 +107,13 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void ChartErrorBarsDialogResult_DelegatesOptionsAndDefaultsToSharedPlanner()
+    public void ChartErrorBarsDialog_UsesCanonicalInputWithoutRendererResultFacade()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartErrorBarsDialog.cs");
+        var commands = DialogSourceTestSupport.ReadHostSources("MainWindow.ChartCommands.cs");
 
-        source.Should().Contain("public ChartErrorBarsInput ToInput()");
-        source.Should().Contain("ChartErrorBarsPlanner.Plan(ToInput())");
+        source.Should().Contain("public ChartErrorBarsInput Result");
+        source.Should().NotContain("ChartErrorBarsDialogResult");
         source.Should().Contain("ChartErrorBarsPlanner.Read(chart)");
         source.Should().Contain("ChartErrorBarsPlanner.Normalize(new ChartErrorBarsInput(");
         source.Should().Contain("ChartErrorBarsPlanner.GetKindChoices()");
@@ -120,6 +124,7 @@ public sealed partial class ChartDialogTests
         source.Should().NotContain("Enum.IsDefined");
         source.Should().NotContain("Math.Clamp");
         source.Should().NotContain("TryReadClampedDouble(");
+        commands.Should().Contain("ChartErrorBarsPlanner.Plan(dialog.Result)");
     }
 
     [Fact]
@@ -136,7 +141,7 @@ public sealed partial class ChartDialogTests
 
         ChartErrorBarsDialog.FromChart(chart)
             .Should()
-            .Be(new ChartErrorBarsDialogResult(
+            .Be(new ChartErrorBarsInput(
                 true,
                 ChartErrorBarKind.Percentage,
                 ChartErrorBarDirection.Plus,
@@ -169,38 +174,39 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartErrorBarsDialog.cs");
 
-        source.Should().Contain("ChartErrorBarsParseIssue.Value => (UiText.Get(\"ChartErrorBars_InvalidValueMessage\"), _valueBox)");
+        source.Should().Contain("ChartValidationPresentationPlanner.Describe(issue)");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartErrorBarsParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
     }
 
     [Fact]
-    public void ChartAxisFormatDialogResult_BuildsAxisSpecificLayoutOptions()
+    public void ChartAxisFormatDialog_ReturnsSharedInputThatBuildsAxisSpecificLayoutOptions()
     {
-        var yAxis = ChartAxisFormatDialog.CreateResult(
-            useXAxis: false,
-            minimum: 0,
-            maximum: 100,
-            majorUnit: 10,
-            minorUnit: 5,
-            logScale: true,
-            numberFormat: ChartDataLabelNumberFormat.Number,
-            showMajorGridlines: true,
-            showMinorGridlines: false,
-            majorGridlineColor: new CellColor(200, 200, 200),
-            minorGridlineColor: new CellColor(220, 220, 220),
-            gridlineThickness: 1.25,
-            majorTickStyle: ChartAxisTickStyle.Cross,
-            minorTickStyle: ChartAxisTickStyle.Inside,
-            showLabels: true,
-            labelTextColor: new CellColor(1, 2, 3),
-            labelFontSize: 13,
-            labelAngle: 30,
-            lineColor: new CellColor(4, 5, 6),
-            lineThickness: 2);
+        var yAxis = ChartAxisPlanner.Normalize(new ChartAxisInput(
+            UseXAxis: false,
+            Minimum: 0,
+            Maximum: 100,
+            MajorUnit: 10,
+            MinorUnit: 5,
+            LogScale: true,
+            NumberFormat: ChartDataLabelNumberFormat.Number,
+            ShowMajorGridlines: true,
+            ShowMinorGridlines: false,
+            MajorGridlineColor: new CellColor(200, 200, 200),
+            MinorGridlineColor: new CellColor(220, 220, 220),
+            GridlineThickness: 1.25,
+            MajorTickStyle: ChartAxisTickStyle.Cross,
+            MinorTickStyle: ChartAxisTickStyle.Inside,
+            ShowLabels: true,
+            LabelTextColor: new CellColor(1, 2, 3),
+            LabelFontSize: 13,
+            LabelAngle: 30,
+            LineColor: new CellColor(4, 5, 6),
+            LineThickness: 2));
 
-        yAxis.ToOptions().Should().Be(new ChartLayoutOptions(
+        ChartAxisPlanner.Plan(yAxis).Should().Be(new ChartLayoutOptions(
             YAxisMinimum: 0,
             YAxisMaximum: 100,
             YAxisMajorUnit: 10,
@@ -223,14 +229,14 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void ChartAxisFormatDialogResult_DelegatesOptionsDefaultsAndValidationToSharedPlanner()
+    public void ChartAxisFormatDialog_UsesSharedContractDefaultsAndValidation()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartAxisFormatDialog.cs");
 
-        source.Should().Contain("public ChartAxisInput ToInput()");
-        source.Should().Contain("ChartAxisPlanner.Plan(ToInput())");
+        source.Should().Contain("public ChartAxisInput Result { get; private set; }");
         source.Should().Contain("ChartAxisPlanner.Read(chart, useXAxis)");
-        source.Should().Contain("ChartAxisPlanner.Normalize(new ChartAxisInput(");
+        source.Should().NotContain("public static ChartAxisInput CreateResult(");
+        source.Should().NotContain("public static ChartAxisInput FromChart(");
         source.Should().Contain("ChartAxisPlanner.GetNumberFormatChoices()");
         source.Should().Contain("ChartAxisPlanner.GetTickStyleChoices()");
         source.Should().Contain("ChartAxisPlanner.GetDialogField(id)");
@@ -244,6 +250,7 @@ public sealed partial class ChartDialogTests
         source.Should().NotContain("TryReadClampedDouble(");
         source.Should().NotContain("ShowPlannerValidationWarning");
         source.Should().NotContain("ClearYAxisBounds: Minimum is null && Maximum is null");
+        source.Should().NotContain("ChartAxisFormatDialogResult");
     }
 
     [Fact]
@@ -258,7 +265,7 @@ public sealed partial class ChartDialogTests
             YAxisLineThickness = 0.1,
         };
 
-        var result = ChartAxisFormatDialog.FromChart(chart, useXAxis: false);
+        var result = ChartAxisPlanner.Read(chart, useXAxis: false);
 
         result.MinorUnit.Should().BeNull();
         result.GridlineThickness.Should().Be(ChartAxisPlanner.MaxGridlineThickness);
@@ -284,25 +291,26 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartAxisFormatDialog.cs");
 
-        source.Should().Contain("_ => (UiText.Get(\"ChartAxisFormat_InvalidMinimumMessage\"), _minimumBox)");
-        source.Should().Contain("ChartAxisFormatParseIssue.Maximum => (UiText.Get(\"ChartAxisFormat_InvalidMaximumMessage\"), _maximumBox)");
-        source.Should().Contain("ChartAxisFormatParseIssue.MajorUnit => (UiText.Get(\"ChartAxisFormat_InvalidMajorUnitMessage\"), _majorUnitBox)");
-        source.Should().Contain("ChartAxisFormatParseIssue.MinorUnit => (UiText.Get(\"ChartAxisFormat_InvalidMinorUnitMessage\"), _minorUnitBox)");
-        source.Should().Contain("ChartAxisFormatParseIssue.MajorGridlineColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _majorGridColorBox)");
-        source.Should().Contain("ChartAxisFormatParseIssue.MinorGridlineColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _minorGridColorBox)");
-        source.Should().Contain("ChartAxisFormatParseIssue.GridlineThickness => (UiText.Get(\"ChartAxisFormat_InvalidGridlineWidthMessage\"), _gridlineThicknessBox)");
-        source.Should().Contain("ChartAxisFormatParseIssue.LabelTextColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _labelColorBox)");
-        source.Should().Contain("ChartAxisFormatParseIssue.LabelFontSize => (UiText.Get(\"ChartAxisFormat_InvalidLabelFontSizeMessage\"), _labelFontSizeBox)");
-        source.Should().Contain("ChartAxisFormatParseIssue.LabelAngle => (UiText.Get(\"ChartAxisFormat_InvalidLabelAngleMessage\"), _labelAngleBox)");
-        source.Should().Contain("ChartAxisFormatParseIssue.LineColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _lineColorBox)");
-        source.Should().Contain("ChartAxisFormatParseIssue.LineThickness => (UiText.Get(\"ChartAxisFormat_InvalidAxisLineWidthMessage\"), _lineThicknessBox)");
+        source.Should().Contain("var presentation = ChartValidationPresentationPlanner.Describe(issue);");
+        source.Should().Contain("ChartAxisDialogFieldId.Maximum => _maximumBox");
+        source.Should().Contain("ChartAxisDialogFieldId.MajorUnit => _majorUnitBox");
+        source.Should().Contain("ChartAxisDialogFieldId.MinorUnit => _minorUnitBox");
+        source.Should().Contain("ChartAxisDialogFieldId.MajorGridlineColor => _majorGridColorBox");
+        source.Should().Contain("ChartAxisDialogFieldId.MinorGridlineColor => _minorGridColorBox");
+        source.Should().Contain("ChartAxisDialogFieldId.GridlineThickness => _gridlineThicknessBox");
+        source.Should().Contain("ChartAxisDialogFieldId.LabelTextColor => _labelColorBox");
+        source.Should().Contain("ChartAxisDialogFieldId.LabelFontSize => _labelFontSizeBox");
+        source.Should().Contain("ChartAxisDialogFieldId.LabelAngle => _labelAngleBox");
+        source.Should().Contain("ChartAxisDialogFieldId.LineColor => _lineColorBox");
+        source.Should().Contain("ChartAxisDialogFieldId.LineThickness => _lineThicknessBox");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartAxisFormatParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
     }
 
     [Fact]
-    public void ChartSeriesFormatDialogResult_ReplacesSelectedSeriesFormat()
+    public void ChartSeriesFormatDialog_ReturnsSharedInputThatReplacesSelectedSeriesFormat()
     {
         var chart = new ChartModel { Type = ChartType.Line };
         chart.SeriesFormats.Add(new ChartSeriesFormat(0, FillColor: new CellColor(1, 1, 1)));
@@ -311,16 +319,16 @@ public sealed partial class ChartDialogTests
             FillColor: new CellColor(2, 2, 2),
             StrokeThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
             NoLine: true));
-        var result = ChartSeriesFormatDialog.CreateResult(
-            seriesIndex: 2,
-            fillColor: new CellColor(10, 20, 30),
-            strokeColor: new CellColor(40, 50, 60),
-            strokeThickness: 2.5,
-            dashStyle: ChartLineDashStyle.Dash,
-            markerStyle: ChartMarkerStyle.Diamond,
-            markerSize: 9);
+        var result = ChartSeriesFormatPlanner.Normalize(new ChartSeriesFormatInput(
+            SeriesIndex: 2,
+            FillColor: new CellColor(10, 20, 30),
+            StrokeColor: new CellColor(40, 50, 60),
+            StrokeThickness: 2.5,
+            MarkerStyle: ChartMarkerStyle.Diamond,
+            MarkerSize: 9,
+            DashStyle: ChartLineDashStyle.Dash));
 
-        var options = result.ToOptions(chart);
+        var options = ChartSeriesFormatPlanner.Plan(chart, result);
 
         options.SeriesFormats.Should().NotBeNull();
         options.SeriesFormats!.Should().ContainSingle(format => format.SeriesIndex == 2)
@@ -337,33 +345,33 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void ChartSeriesFormatDialogResult_NullDashStyleClearsDashThroughSharedPlanner()
+    public void ChartSeriesFormatDialog_NullDashStyleClearsDashThroughSharedPlanner()
     {
         var chart = new ChartModel { Type = ChartType.Line };
         chart.SeriesFormats.Add(new ChartSeriesFormat(0, DashStyle: ChartLineDashStyle.Dash));
 
-        var result = ChartSeriesFormatDialog.CreateResult(
-            seriesIndex: 0,
-            fillColor: null,
-            strokeColor: null,
-            strokeThickness: null,
-            dashStyle: null,
-            markerStyle: null,
-            markerSize: null);
+        var result = ChartSeriesFormatPlanner.Normalize(new ChartSeriesFormatInput(
+            SeriesIndex: 0,
+            FillColor: null,
+            StrokeColor: null,
+            StrokeThickness: null,
+            MarkerStyle: null,
+            MarkerSize: null,
+            DashStyle: null));
 
-        result.ToOptions(chart).SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 0)
+        ChartSeriesFormatPlanner.Plan(chart, result).SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 0)
             .Which.DashStyle.Should().BeNull();
     }
 
     [Fact]
-    public void ChartSeriesFormatDialogResult_DelegatesOptionsToSharedPlanner()
+    public void ChartSeriesFormatDialog_UsesSharedContractAndPlanner()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartSeriesFormatDialog.cs");
 
-        source.Should().Contain("public ChartSeriesFormatInput ToInput()");
-        source.Should().Contain("ChartSeriesFormatPlanner.Plan(chart, ToInput())");
+        source.Should().Contain("public ChartSeriesFormatInput Result { get; private set; }");
         source.Should().Contain("ChartSeriesFormatPlanner.ReadDefault(chart)");
-        source.Should().Contain("ChartSeriesFormatPlanner.Normalize(new ChartSeriesFormatInput(");
+        source.Should().NotContain("public static ChartSeriesFormatInput CreateResult(");
+        source.Should().NotContain("public static ChartSeriesFormatInput FromChart(");
         source.Should().Contain("ChartSeriesFormatPlanner.GetDashStyleChoices()");
         source.Should().Contain("ChartSeriesFormatPlanner.GetMarkerStyleChoices()");
         source.Should().Contain("ChartSeriesFormatPlanner.GetDialogField(id)");
@@ -373,6 +381,7 @@ public sealed partial class ChartDialogTests
         source.Should().NotContain("IndexOfSeriesFormat");
         source.Should().NotContain("TryReadOptionalColor(");
         source.Should().NotContain("TryReadNullablePositiveDouble(");
+        source.Should().NotContain("ChartSeriesFormatDialogResult");
     }
 
     [Fact]
@@ -404,10 +413,11 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartSeriesFormatDialog.cs");
 
-        source.Should().Contain("_ => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _fillBox)");
-        source.Should().Contain("ChartSeriesFormatParseIssue.StrokeColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _strokeBox)");
-        source.Should().Contain("ChartSeriesFormatParseIssue.StrokeThickness => (UiText.Get(\"ChartSeriesFormat_InvalidLineWidthMessage\"), _strokeThicknessBox)");
-        source.Should().Contain("ChartSeriesFormatParseIssue.MarkerSize => (UiText.Get(\"ChartSeriesFormat_InvalidMarkerSizeMessage\"), _markerSizeBox)");
+        source.Should().Contain("var presentation = ChartValidationPresentationPlanner.Describe(issue);");
+        source.Should().Contain("ChartSeriesFormatDialogFieldId.StrokeColor => _strokeBox");
+        source.Should().Contain("ChartSeriesFormatDialogFieldId.StrokeThickness => _strokeThicknessBox");
+        source.Should().Contain("ChartSeriesFormatDialogFieldId.MarkerSize => _markerSizeBox");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartSeriesFormatParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");

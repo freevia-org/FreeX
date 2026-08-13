@@ -30,7 +30,7 @@ public sealed class AppServicesPortabilityGuardTests
     {
         var projectPath = RepositoryFileLocator.Find("src", "FreeX.App.Services", "FreeX.App.Services.csproj");
         var servicesRoot = Path.GetDirectoryName(projectPath)!;
-        var repositoryRoot = Path.GetFullPath(Path.Combine(servicesRoot, "..", ".."));
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         var violations = PortableBoundaryGuard.FindSourceViolations(
                 servicesRoot,
@@ -48,6 +48,20 @@ public sealed class AppServicesPortabilityGuardTests
 public sealed class SharedPortableProjectPortabilityGuardTests
 {
     private const RegexOptions Options = RegexOptions.Compiled | RegexOptions.CultureInvariant;
+
+    private static readonly IReadOnlyDictionary<string, string> RendererProjectExceptions =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Free.Shared.AppServices.Windows"] = "Windows file-association adapter",
+            ["Free.Shared.Pdf.Skia"] = "Skia PDF renderer",
+            ["Free.Shared.Pdf.Wpf"] = "WPF PDF renderer",
+            ["Free.Shared.Ribbon.Avalonia"] = "Avalonia ribbon renderer",
+            ["Free.Shared.Ribbon.Wpf"] = "WPF ribbon renderer",
+            ["Free.Shared.Shell.Avalonia"] = "Avalonia shell adapter",
+            ["Free.Shared.Shell.Wpf"] = "WPF shell adapter",
+            ["Free.Shared.Theme.Avalonia"] = "Avalonia theme adapter",
+            ["Free.Shared.Theme.Wpf"] = "WPF theme adapter"
+        };
 
     private static readonly PortableBoundaryPattern[] ForbiddenSourcePatterns =
     [
@@ -79,19 +93,33 @@ public sealed class SharedPortableProjectPortabilityGuardTests
         new("FreeX.App.Host dependency", new(@"(?<![\w.])FreeX\.App\.Host(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
         new("FreeX.App.UI dependency", new(@"(?<![\w.])FreeX\.App\.UI(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
         new("FreeX.App.Avalonia dependency", new(@"(?<![\w.])FreeX\.App\.Avalonia(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("FreeX/FreeW/FreeP product project reference", new(@"\bProjectReference Include=[^\r\n]*[\\/](?:FreeX|FreeW|FreeP)\.[^\\/;\s""]+\.csproj(?:$|[\s""])", Options | RegexOptions.IgnoreCase)),
         new("Platform-specific shared project reference", new(@"(?<![\w.])Free\.Shared\.[^\\/;\s""]+\.(?:Wpf|Avalonia|Windows)(?:[\\/]|\.csproj|$)", Options | RegexOptions.IgnoreCase))
     ];
 
     [Fact]
     public void PortableSharedProjects_StayFreeOfUiAndPlatformDependencies()
     {
-        var repositoryRoot = Path.GetDirectoryName(TestWorkspaceFileLocator.FindFromWorkspaceRoot("FreeX.slnx"))
-            ?? throw new DirectoryNotFoundException("Could not locate workspace root.");
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var sharedRoot = Path.Combine(repositoryRoot, "shared");
 
-        var portableProjectRoots = Directory.EnumerateDirectories(sharedRoot, "Free.Shared.*")
-            .Where(IsPortableSharedProjectDirectory)
+        var sharedProjectRoots = Directory.EnumerateDirectories(sharedRoot, "Free.Shared.*")
             .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var missingRendererExceptions = RendererProjectExceptions
+            .Where(exception => string.IsNullOrWhiteSpace(exception.Value)
+                || !sharedProjectRoots.Any(path => Path.GetFileName(path).Equals(
+                    exception.Key,
+                    StringComparison.OrdinalIgnoreCase)))
+            .Select(exception => $"{exception.Key}: {exception.Value}")
+            .ToArray();
+
+        missingRendererExceptions.Should().BeEmpty(
+            "every renderer-specific shared-project exception must name an existing project and document why it is renderer-bound");
+
+        var portableProjectRoots = sharedProjectRoots
+            .Where(IsPortableSharedProjectDirectory)
             .ToArray();
 
         portableProjectRoots.Should().NotBeEmpty(
@@ -127,9 +155,7 @@ public sealed class SharedPortableProjectPortabilityGuardTests
     private static bool IsPortableSharedProjectDirectory(string path)
     {
         var name = Path.GetFileName(path);
-        return !name.EndsWith(".Wpf", StringComparison.OrdinalIgnoreCase)
-            && !name.EndsWith(".Avalonia", StringComparison.OrdinalIgnoreCase)
-            && !name.EndsWith(".Windows", StringComparison.OrdinalIgnoreCase);
+        return !RendererProjectExceptions.ContainsKey(name);
     }
 
     private static bool IsPortableSharedSourceFile(string path) =>

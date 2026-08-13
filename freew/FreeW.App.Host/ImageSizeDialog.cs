@@ -21,13 +21,15 @@ internal sealed class ImageSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private ImageSizeDialog(Window? owner, double currentWidthPt, double currentHeightPt)
     {
+        var surface = ImageSizeDialogPlanner.Surface;
         Owner = owner;
-        Title = "Image Size";
+        Title = surface.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageSizeDialogPlanner.BuildInitialState(
             currentWidthPt,
@@ -38,7 +40,10 @@ internal sealed class ImageSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _widthBox = new TextBox { Text = state.WidthText, MinWidth = 120 };
         _heightBox = new TextBox { Text = state.HeightText, MinWidth = 120 };
-        _lockCheck = new CheckBox { Content = "Lock aspect ratio", IsChecked = state.LockAspectRatio, Margin = new Thickness(0, 6, 0, 0) };
+        _lockCheck = new CheckBox { Content = surface.Field(ImageSizeDialogField.LockAspectRatio).Label, IsChecked = state.LockAspectRatio, Margin = new Thickness(0, 6, 0, 0) };
+        WpfDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ImageSizeDialogField.Width));
+        WpfDialogSurfaceSemantics.Apply(_heightBox, surface.Field(ImageSizeDialogField.Height));
+        WpfDialogSurfaceSemantics.Apply(_lockCheck, surface.Field(ImageSizeDialogField.LockAspectRatio));
 
         _widthBox.TextChanged  += OnWidthChanged;
         _heightBox.TextChanged += OnHeightChanged;
@@ -54,9 +59,9 @@ internal sealed class ImageSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Grid.SetRow(el, row); Grid.SetColumn(el, col); g.Children.Add(el);
         }
 
-        Place(grid, new TextBlock { Text = "Width (pt):",  VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }, 0, 0);
+        Place(grid, new TextBlock { Text = surface.Field(ImageSizeDialogField.Width).Label,  VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }, 0, 0);
         Place(grid, _widthBox,  0, 1);
-        Place(grid, new TextBlock { Text = "Height (pt):", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 0) }, 1, 0);
+        Place(grid, new TextBlock { Text = surface.Field(ImageSizeDialogField.Height).Label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 0) }, 1, 0);
         Place(grid, _heightBox, 1, 1);
         Place(grid, _lockCheck, 2, 1);
 

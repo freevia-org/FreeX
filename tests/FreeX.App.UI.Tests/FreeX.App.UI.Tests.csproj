@@ -20,6 +20,7 @@
     <Using Include="Xunit" />
     <Using Include="Free.Shared.Drawing" />
     <Using Include="Free.Shared.AppServices" />
+    <Using Include="FreeX.App.Presentation.FormulaAuditing" />
   </ItemGroup>
 
   <ItemGroup>

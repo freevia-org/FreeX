@@ -1,3 +1,4 @@
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.QuickParts;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
@@ -21,6 +22,33 @@ public sealed class FinalCommandParityPlannerTests
     }
 
     [Fact]
+    public void DrawTableDialogs_ShareLocalizedMetadataAndDefaults()
+    {
+        string? Localize(string key) => $"localized:{key}";
+
+        var draw = DrawTableCommandPlanner.BuildDialog(DrawTableDimensionDialogKind.DrawTable, Localize);
+        var split = DrawTableCommandPlanner.BuildDialog(DrawTableDimensionDialogKind.SplitCells, Localize);
+
+        draw.Title.Should().Be("localized:DrawTable_Dialog_Title");
+        draw.DefaultRows.Should().Be(DrawTableCommandPlanner.DefaultRows);
+        draw.DefaultColumns.Should().Be(DrawTableCommandPlanner.DefaultColumns);
+        split.Title.Should().Be("localized:SplitCells_Dialog_Title");
+        split.DefaultRows.Should().Be(DrawTableCommandPlanner.SplitDefaultRows);
+        split.DefaultColumns.Should().Be(DrawTableCommandPlanner.SplitDefaultColumns);
+    }
+
+    [Fact]
+    public void AltTextDialog_ResolvesSharedLocalizedPrompts()
+    {
+        var text = AltTextDialogPlanner.ResolveText(key => $"localized:{key}");
+
+        text.Title.Should().Be("localized:Common_AltText");
+        text.DescriptionLabel.Should().Be("localized:AltText_Description_Label");
+        text.ImageSelectionRequiredMessage.Should().Be("localized:AltText_ImageSelectionRequired_Message");
+        text.ShapeSelectionRequiredMessage.Should().Be("localized:AltText_ShapeSelectionRequired_Message");
+    }
+
+    [Fact]
     public void QuickPartSelection_PreservesParagraphStructureAndNormalizesName()
     {
         var part = QuickPartCommandPlanner.CreateSelection("First\r\nSecond", "  Greeting  ");
@@ -28,6 +56,18 @@ public sealed class FinalCommandParityPlannerTests
         part.Should().NotBeNull();
         part!.Name.Should().Be("Greeting");
         part.Lines.Should().Equal("First", "Second");
+    }
+
+    [Fact]
+    public void QuickPartPromptsResolveThroughSharedResources()
+    {
+        var text = QuickPartCommandPlanner.ResolveText(key => $"localized:{key}");
+
+        text.SaveTitle.Should().Be("localized:QuickParts_Save_Title");
+        text.NameLabel.Should().Be("localized:QuickParts_Name_Label");
+        text.EmptySelectionMessage.Should().Be("localized:QuickParts_EmptySelection_Message");
+        text.EmptyLibraryMessage.Should().Be("localized:QuickParts_EmptyLibrary_Message");
+        text.InsertButton.Should().Be("localized:QuickParts_Insert_Button");
     }
 
     [Fact]
@@ -47,9 +87,8 @@ public sealed class FinalCommandParityPlannerTests
     [Fact]
     public void QuickPartLibrary_RoundTripsSharedJsonAcrossShellInstances()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freew-quickparts-" + Guid.NewGuid().ToString("N"));
-        var path = Path.Combine(root, "quickparts.json");
-        try
+        using var temporaryDirectory = new TestTemporaryDirectory("freew-quickparts-");
+        var path = Path.Combine(temporaryDirectory.Path, "quickparts.json");
         {
             var writer = QuickPartLibrary.LoadFromPath(path);
             writer.Save(new QuickPart("Signature", ["Regards,", "Ada"], "AutoText", "General", "Closing"));
@@ -63,11 +102,6 @@ public sealed class FinalCommandParityPlannerTests
 
             reader.Remove("SIGNATURE");
             QuickPartLibrary.LoadFromPath(path).IsEmpty.Should().BeTrue();
-        }
-        finally
-        {
-            if (Directory.Exists(root))
-                Directory.Delete(root, recursive: true);
         }
     }
 }

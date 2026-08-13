@@ -25,12 +25,22 @@ public sealed partial class PrintPreviewDialog
 
     private void ShowInvalidCopiesWarning(TextBox copiesBox)
     {
-        DialogFocus.ShowWarningAndFocus(this, UiText.Get("PrintPreview_InvalidCopiesMessage"), Title, copiesBox);
+        var presentation = PrintPreviewDialogPlanner.DescribeInvalidCopies();
+        DialogFocus.ShowWarningAndFocus(
+            this,
+            presentation.Message.Resolve(UiText.Get, UiText.Format),
+            Title,
+            copiesBox);
     }
 
     private void ShowInvalidPageNumberWarning(TextBox pageNumberBox, int totalPages)
     {
-        DialogFocus.ShowWarningAndFocus(this, UiText.Format("PrintPreview_InvalidPageNumberMessage", totalPages), Title, pageNumberBox);
+        var presentation = PrintPreviewDialogPlanner.DescribeInvalidPageNumber(totalPages);
+        DialogFocus.ShowWarningAndFocus(
+            this,
+            presentation.Message.Resolve(UiText.Get, UiText.Format),
+            Title,
+            pageNumberBox);
     }
 
     internal static DocumentPaginator ResolvePrintPaginator(
@@ -51,10 +61,21 @@ public sealed partial class PrintPreviewDialog
 
     private void ShowInvalidPageRangeWarning(TextBox fromPageBox, TextBox toPageBox, string? error)
     {
-        var target = string.Equals(error, UiText.Get("Export_PageRangeFromLessThanToError"), StringComparison.OrdinalIgnoreCase)
+        var focusTarget = ExportOptionsDialogSurfacePlanner.ResolveInvalidPageRangeFocusTarget(
+            error,
+            fromPageBox.Text,
+            UiText.Get("Export_PageRangeFromLessThanToError")) == ExportOptionsDialogFocusTarget.ToPage
+                ? PrintPreviewValidationFocusTarget.ToPage
+                : PrintPreviewValidationFocusTarget.FromPage;
+        var presentation = PrintPreviewDialogPlanner.DescribeInvalidPageRange(error, focusTarget);
+        var target = presentation.FocusTarget == PrintPreviewValidationFocusTarget.ToPage
             ? toPageBox
             : fromPageBox;
-        DialogFocus.ShowWarningAndFocus(this, error ?? UiText.Get("PrintPreview_InvalidPageRangeMessage"), Title, target);
+        DialogFocus.ShowWarningAndFocus(
+            this,
+            presentation.Message.Resolve(UiText.Get, UiText.Format),
+            Title,
+            target);
     }
 
     private void ShowNativePrintDialog(
@@ -91,8 +112,11 @@ public sealed partial class PrintPreviewDialog
         pageStatusText.Text = CreateNavigationState(pageNumber, totalPages).StatusText;
     }
 
-    private static void FocusInitialKeyboardTarget(Button printButton)
+    private static void FocusInitialKeyboardTarget(PrintPreviewToolbarCommand focusCommand, Button printButton)
     {
+        if (focusCommand != PrintPreviewToolbarCommand.Print)
+            return;
+
         printButton.Focus();
         Keyboard.Focus(printButton);
     }

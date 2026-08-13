@@ -1,3 +1,4 @@
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Protection;
@@ -25,6 +26,11 @@ public sealed record AllowEditRangeButtonState(
     bool CanModifySelectedRange,
     bool CanDeleteSelectedRange,
     bool CanUsePermissions);
+
+public sealed record AllowEditRangeCommandPlan(
+    AllowEditRangeAction Action,
+    GridRange? Range,
+    IWorkbookCommand Command);
 
 /// <summary>
 /// Portable (no UI) backing logic for the Allow Users to Edit Ranges dialog (Review ▸ Protect). It parses a
@@ -78,4 +84,71 @@ public static class AllowEditRangePlanner
 
     public static AllowEditRangeResult CreateClearResult() =>
         new(AllowEditRangeAction.Clear, null);
+
+    public static AllowEditRangeCommandPlan? CreateCommandPlan(
+        SheetId sheetId,
+        AllowEditRangeResult result,
+        string? password,
+        bool passwordChanged,
+        IReadOnlyDictionary<GridRange, string?>? existingPasswords = null)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        existingPasswords ??= new Dictionary<GridRange, string?>();
+
+        switch (result)
+        {
+            case { Action: AllowEditRangeAction.Add, Range: { } range }:
+                return new AllowEditRangeCommandPlan(
+                    result.Action,
+                    range,
+                    new CompositeWorkbookCommand(
+                        "Allow Edit Range",
+                        [
+                            new AllowEditRangeCommand(sheetId, range),
+                            new SetAllowEditRangePasswordCommand(sheetId, range, password)
+                        ]));
+
+            case { Action: AllowEditRangeAction.Modify, PreviousRange: { } previousRange, Range: { } range }:
+                var modifyCommands = new List<IWorkbookCommand>
+                {
+                    new RemoveAllowEditRangeCommand(sheetId, previousRange)
+                };
+                if (range != previousRange)
+                    modifyCommands.Add(new SetAllowEditRangePasswordCommand(sheetId, previousRange, null));
+                modifyCommands.Add(new AllowEditRangeCommand(sheetId, range));
+                if (passwordChanged)
+                {
+                    modifyCommands.Add(new SetAllowEditRangePasswordCommand(sheetId, range, password));
+                }
+                else if (range != previousRange && existingPasswords.TryGetValue(previousRange, out var carriedPassword))
+                {
+                    modifyCommands.Add(new SetAllowEditRangePasswordCommand(sheetId, range, carriedPassword));
+                }
+
+                return new AllowEditRangeCommandPlan(
+                    result.Action,
+                    range,
+                    new CompositeWorkbookCommand("Modify Allow Edit Range", modifyCommands));
+
+            case { Action: AllowEditRangeAction.Remove, Range: { } range }:
+                return new AllowEditRangeCommandPlan(
+                    result.Action,
+                    range,
+                    new CompositeWorkbookCommand(
+                        "Remove Allow Edit Range",
+                        [
+                            new RemoveAllowEditRangeCommand(sheetId, range),
+                            new SetAllowEditRangePasswordCommand(sheetId, range, null)
+                        ]));
+
+            case { Action: AllowEditRangeAction.Clear }:
+                return new AllowEditRangeCommandPlan(
+                    result.Action,
+                    null,
+                    new ClearAllowEditRangesCommand(sheetId));
+
+            default:
+                return null;
+        }
+    }
 }

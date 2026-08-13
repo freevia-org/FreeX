@@ -37,7 +37,7 @@ public sealed class FreeXCleanupB3Tests
             var navigated = new List<CellAddress>();
             var dialog = new FindReplaceDialog(
                 () => workbook,
-                commandBus,
+                command => commandBus.Execute(workbook.Id, command),
                 navigated.Add,
                 replaceMode: true,
                 getCurrentSheetId: () => sheet.Id);
@@ -90,7 +90,7 @@ public sealed class FreeXCleanupB3Tests
             var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
             var dialog = new FindReplaceDialog(
                 () => workbook,
-                commandBus,
+                command => commandBus.Execute(workbook.Id, command),
                 _ => { },
                 replaceMode: true,
                 getCurrentSheetId: () => sheet.Id);

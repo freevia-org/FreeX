@@ -1,5 +1,6 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
@@ -10,19 +11,16 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class ChartDataDialog : Window
+internal sealed partial class ChartDataDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
-    private readonly EditingSession _editor;
-    private readonly ChartDataDialogPlanner _planner;
-    private readonly ChartDataDialogSurfacePlan _surface;
+    private readonly ChartDataDialogSession _session;
+    private readonly ChartDataDialogPlan _plan;
     private readonly CultureInfo _culture;
     private readonly Grid _tableGrid = new();
     private readonly List<IndexedTextBox> _seriesNameBoxes = new();
     private readonly List<IndexedTextBox> _categoryBoxes = new();
     private readonly List<ValueTextBox> _valueBoxes = new();
-    private int _activeSeriesIndex = -1;
-    private int _activeCategoryIndex = -1;
     private readonly ComboBox _chartTypeCombo;
     private readonly TextBlock _validationText = new();
 
@@ -33,41 +31,27 @@ internal sealed class ChartDataDialog : Window
 
     internal ChartDataDialog(EditingSession editor, CultureInfo culture)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _culture = culture ?? throw new ArgumentNullException(nameof(culture));
-
-        var chart = editor.SelectedChart
-            ?? throw new InvalidOperationException("No chart is currently selected.");
-
-        _planner = ChartDataDialogPlanner.FromChart(chart);
-        _surface = ChartDataDialogPlanner.BuildSurfacePlan();
-        var chartTypeOptions = ChartDataDialogPlanner.ChartTypeOptions;
-        var selectedChartTypeIndex = chartTypeOptions
-            .ToList()
-            .FindIndex(option => option.Value == _planner.SelectedChartType);
+        _session = new ChartDataDialogSession(editor);
+        _plan = _session.BuildDialogPlan();
         _chartTypeCombo = new ComboBox
         {
-            ItemsSource = chartTypeOptions.Select(option => option.Label).ToArray(),
-            SelectedIndex = selectedChartTypeIndex >= 0 ? selectedChartTypeIndex : 0,
+            ItemsSource = _plan.ChartType.Choices,
+            SelectedIndex = _plan.ChartType.SelectedIndex,
             MinWidth = 170,
         };
+        SetAutomation(_chartTypeCombo, _plan.ChartType.AccessibleName, _plan.ChartType.AutomationId);
         _chartTypeCombo.SelectionChanged += (_, _) =>
-        {
-            if (_chartTypeCombo.SelectedIndex >= 0 &&
-                _chartTypeCombo.SelectedIndex < chartTypeOptions.Count)
-            {
-                _planner.SetChartType(chartTypeOptions[_chartTypeCombo.SelectedIndex].Value);
-            }
-        };
+            _session.SelectChartType(_chartTypeCombo.SelectedIndex);
 
-        Title = _surface.Title;
-        Width = 625.3333333333334;
-        Height = 402.6666666666667;
-        MinWidth = 520;
-        MinHeight = 320;
-        CanResize = true;
+        Title = _plan.Title;
+        Width = _plan.Width;
+        Height = _plan.Height;
+        MinWidth = _plan.MinimumWidth;
+        MinHeight = _plan.MinimumHeight;
+        CanResize = _plan.IsResizable;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Background = FreePBrushes.SheetSurface;
         _tableGrid.MinWidth = 616;
         _tableGrid.HorizontalAlignment = HorizontalAlignment.Stretch;
 
@@ -80,56 +64,6 @@ internal sealed class ChartDataDialog : Window
     internal int RenderedCategoryRowCount => _categoryBoxes.Count;
 
     internal int RenderedValueCellCount => _valueBoxes.Count;
-
-    internal ChartDataDialogCommitPlan BuildCommitPlanForTests()
-    {
-        FlushTextBoxEdits();
-        return _planner.BuildCommitPlan();
-    }
-
-    internal void SwitchRowsAndColumnsForTests()
-    {
-        FlushTextBoxEdits();
-        _planner.SwitchRowsAndColumns();
-        RebuildTable();
-    }
-
-    internal void SetChartTypeForTests(ChartType chartType)
-    {
-        _planner.SetChartType(chartType);
-        var options = ChartDataDialogPlanner.ChartTypeOptions;
-        var index = options.ToList().FindIndex(option => option.Value == chartType);
-        if (index >= 0)
-            _chartTypeCombo.SelectedIndex = index;
-    }
-
-    internal void MoveSeriesForTests(int seriesIndex, bool down)
-    {
-        FlushTextBoxEdits();
-        _activeSeriesIndex = seriesIndex;
-        MoveActiveSeries(down ? 1 : -1);
-    }
-
-    internal void RemoveSeriesForTests(int seriesIndex)
-    {
-        FlushTextBoxEdits();
-        _activeSeriesIndex = seriesIndex;
-        OnRemoveSeries();
-    }
-
-    internal void RemoveCategoryForTests(int categoryIndex)
-    {
-        FlushTextBoxEdits();
-        _activeCategoryIndex = categoryIndex;
-        OnRemoveCategory();
-    }
-
-    internal void MoveCategoryForTests(int categoryIndex, bool right)
-    {
-        FlushTextBoxEdits();
-        _activeCategoryIndex = categoryIndex;
-        MoveActiveCategory(right ? 1 : -1);
-    }
 
     private Control BuildContent()
     {
@@ -144,27 +78,22 @@ internal sealed class ChartDataDialog : Window
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(4, 4, 4, 2),
             Spacing = 4,
-            Children =
-            {
-                MakeToolbarButton(_surface.AddSeriesLabel, OnAddSeries),
-                MakeToolbarButton(_surface.RemoveSeriesLabel, OnRemoveSeries),
-                MakeToolbarButton(_surface.MoveSeriesUpLabel, OnMoveSeriesUp),
-                MakeToolbarButton(_surface.MoveSeriesDownLabel, OnMoveSeriesDown),
-                new Border { Width = 12 },
-                MakeToolbarButton(_surface.AddCategoryLabel, OnAddCategory),
-                MakeToolbarButton(_surface.RemoveCategoryLabel, OnRemoveCategory),
-                MakeToolbarButton(_surface.MoveCategoryLeftLabel, OnMoveCategoryLeft),
-                MakeToolbarButton(_surface.MoveCategoryRightLabel, OnMoveCategoryRight),
-                MakeToolbarButton(_surface.SwitchRowsAndColumnsLabel, OnSwitchRowsAndColumns),
-                new TextBlock
-                {
-                    Text = _surface.ChartTypeLabel,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(8, 0, 0, 0),
-                },
-                _chartTypeCombo,
-            },
         };
+        var actionHandlers = BuildActionHandlers();
+        for (var groupIndex = 0; groupIndex < _plan.ToolbarGroups.Count; groupIndex++)
+        {
+            if (groupIndex > 0)
+                toolbar.Children.Add(new Border { Width = 12 });
+            foreach (var action in _plan.ToolbarGroups[groupIndex].Actions)
+                toolbar.Children.Add(MakeToolbarButton(action, actionHandlers[action.Id]));
+        }
+        toolbar.Children.Add(new TextBlock
+        {
+            Text = _plan.ChartType.Label,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0),
+        });
+        toolbar.Children.Add(_chartTypeCombo);
 
         var scroller = new ScrollViewer
         {
@@ -177,7 +106,7 @@ internal sealed class ChartDataDialog : Window
             Margin = new Thickness(4, 2, 4, 4),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x77, 0x77, 0x77)),
             BorderThickness = new Thickness(1),
-            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3)),
+            Background = FreePBrushes.SheetSurface,
             Child = scroller,
         };
 
@@ -189,13 +118,15 @@ internal sealed class ChartDataDialog : Window
             Spacing = 8,
             Children =
             {
-                MakeDialogButton(_surface.OkLabel, isDefault: true, OnOk),
-                MakeDialogButton(_surface.CancelLabel, isDefault: false, () => Close(false)),
+                MakeDialogButton(_plan.AcceptAction, isDefault: true, OnOk),
+                MakeDialogButton(_plan.CancelAction, isDefault: false, () => Close(false)),
             },
         };
-        _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
+        _validationText.Foreground = FreePBrushes.Accent;
         _validationText.Margin = new Thickness(12, 2, 12, 2);
         _validationText.TextWrapping = TextWrapping.Wrap;
+        SetAutomation(_tableGrid, _plan.Table.AccessibleName, _plan.Table.AutomationId);
+        SetAutomation(_validationText, _plan.Table.ValidationAccessibleName, _plan.Table.ValidationAutomationId);
 
         Grid.SetRow(toolbar, 0);
         Grid.SetRow(tableBorder, 1);
@@ -210,16 +141,6 @@ internal sealed class ChartDataDialog : Window
 
     internal string ValidationText => _validationText.Text ?? string.Empty;
 
-    internal bool PrepareValidationForVisualEvidence()
-    {
-        var first = _valueBoxes.FirstOrDefault();
-        if (first is null)
-            return false;
-        first.TextBox.Text = "not-a-number";
-        first.TextBox.Focus();
-        return !TryFlushTextBoxEdits();
-    }
-
     private void RebuildTable()
     {
         _tableGrid.Children.Clear();
@@ -229,7 +150,7 @@ internal sealed class ChartDataDialog : Window
         _categoryBoxes.Clear();
         _valueBoxes.Clear();
 
-        var table = _planner.BuildTableProjection();
+        var table = _session.BuildTableProjection();
         _tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
 
@@ -300,23 +221,15 @@ internal sealed class ChartDataDialog : Window
     private void OnAddSeries()
     {
         FlushTextBoxEdits();
-        _planner.AddSeries();
+        _session.AddSeries();
         RebuildTable();
     }
 
     private void OnRemoveSeries()
     {
         FlushTextBoxEdits();
-        var seriesIndex = _activeSeriesIndex >= 0
-            ? _activeSeriesIndex
-            : _planner.SeriesCount - 1;
-        if (_planner.RemoveSeriesAt(seriesIndex))
-        {
-            _activeSeriesIndex = _planner.SeriesCount == 0
-                ? -1
-                : Math.Min(_activeSeriesIndex, _planner.SeriesCount - 1);
+        if (_session.RemoveActiveSeries())
             RebuildTable();
-        }
     }
 
     private void OnMoveSeriesUp() => MoveActiveSeries(-1);
@@ -328,33 +241,22 @@ internal sealed class ChartDataDialog : Window
         if (!TryFlushTextBoxEdits())
             return;
 
-        if (_planner.MoveSeries(_activeSeriesIndex, _activeSeriesIndex + delta))
-        {
-            _activeSeriesIndex = Math.Clamp(_activeSeriesIndex + delta, 0, _planner.SeriesCount - 1);
+        if (_session.MoveActiveSeries(delta))
             RebuildTable();
-        }
     }
 
     private void OnAddCategory()
     {
         FlushTextBoxEdits();
-        _planner.AddCategory();
+        _session.AddCategory();
         RebuildTable();
     }
 
     private void OnRemoveCategory()
     {
         FlushTextBoxEdits();
-        var categoryIndex = _activeCategoryIndex >= 0
-            ? _activeCategoryIndex
-            : _planner.CategoryCount - 1;
-        if (_planner.RemoveCategoryAt(categoryIndex))
-        {
-            _activeCategoryIndex = _planner.CategoryCount == 0
-                ? -1
-                : Math.Min(_activeCategoryIndex, _planner.CategoryCount - 1);
+        if (_session.RemoveActiveCategory())
             RebuildTable();
-        }
     }
 
     private void OnMoveCategoryLeft() => MoveActiveCategory(-1);
@@ -366,11 +268,8 @@ internal sealed class ChartDataDialog : Window
         if (!TryFlushTextBoxEdits())
             return;
 
-        if (_planner.MoveCategory(_activeCategoryIndex, _activeCategoryIndex + delta))
-        {
-            _activeCategoryIndex = Math.Clamp(_activeCategoryIndex + delta, 0, _planner.CategoryCount - 1);
+        if (_session.MoveActiveCategory(delta))
             RebuildTable();
-        }
     }
 
     private void OnSwitchRowsAndColumns()
@@ -378,22 +277,17 @@ internal sealed class ChartDataDialog : Window
         if (!TryFlushTextBoxEdits())
             return;
 
-        _planner.SwitchRowsAndColumns();
+        _session.SwitchRowsAndColumns();
         RebuildTable();
     }
 
     private void OnOk()
     {
-        if (!TryFlushTextBoxEdits())
+        if (!_session.TryCommit(ReadEdits(), _culture, out var validation))
+        {
+            ShowValidation(validation);
             return;
-        var commit = _planner.BuildCommitPlan();
-        _editor.ReplaceChartData(
-            commit.Categories,
-            commit.SeriesNames,
-            commit.ValuesForCommand(),
-            commit.ChartType,
-            commit.XValuesForCommand(),
-            commit.BubbleSizesForCommand());
+        }
         Close(true);
     }
 
@@ -404,27 +298,36 @@ internal sealed class ChartDataDialog : Window
 
     private bool TryFlushTextBoxEdits()
     {
-        var invalid = _valueBoxes.FirstOrDefault(box =>
-            !string.IsNullOrWhiteSpace(box.TextBox.Text) &&
-            !double.TryParse(box.TextBox.Text, NumberStyles.Float | NumberStyles.AllowThousands, _culture, out _));
-        if (invalid is not null)
+        if (!_session.TryApplyEdits(ReadEdits(), _culture, out var validation))
         {
-            _validationText.Text = ChartDataDialogPlanner.InvalidNumericValueMessage;
-            invalid.TextBox.Focus();
+            ShowValidation(validation);
             return false;
         }
         _validationText.Text = string.Empty;
-        _planner.ApplySeriesNameEdits(_seriesNameBoxes.Select(box =>
-            new ChartDataDialogSeriesNameEdit(box.Index, box.TextBox.Text)));
-        _planner.ApplyCategoryEdits(_categoryBoxes.Select(box =>
-            new ChartDataDialogCategoryEdit(box.Index, box.TextBox.Text)));
-        _planner.ApplyValueEdits(_valueBoxes.Select(box =>
-            new ChartDataDialogValueEdit(
-                box.SeriesIndex,
-                box.CategoryIndex,
-                box.TextBox.Text,
-                box.Kind)), _culture);
         return true;
+    }
+
+    private ChartDataDialogEdits ReadEdits() =>
+        new(
+            _seriesNameBoxes.Select(box =>
+                new ChartDataDialogSeriesNameEdit(box.Index, box.TextBox.Text)).ToArray(),
+            _categoryBoxes.Select(box =>
+                new ChartDataDialogCategoryEdit(box.Index, box.TextBox.Text)).ToArray(),
+            _valueBoxes.Select(box =>
+                new ChartDataDialogValueEdit(
+                    box.SeriesIndex,
+                    box.CategoryIndex,
+                    box.TextBox.Text,
+                    box.Kind)).ToArray());
+
+    private void ShowValidation(ChartDataDialogValidationDecision validation)
+    {
+        _validationText.Text = validation.Message;
+        if (validation.InvalidValueEditIndex >= 0 &&
+            validation.InvalidValueEditIndex < _valueBoxes.Count)
+        {
+            _valueBoxes[validation.InvalidValueEditIndex].TextBox.Focus();
+        }
     }
 
     private static TextBlock MakeHeader(string text)
@@ -455,34 +358,56 @@ internal sealed class ChartDataDialog : Window
     }
 
     private void TrackSeriesFocus(TextBox textBox, int seriesIndex) =>
-        textBox.GotFocus += (_, _) => _activeSeriesIndex = seriesIndex;
+        textBox.GotFocus += (_, _) => _session.SelectSeries(seriesIndex);
 
     private void TrackCategoryFocus(TextBox textBox, int categoryIndex) =>
-        textBox.GotFocus += (_, _) => _activeCategoryIndex = categoryIndex;
+        textBox.GotFocus += (_, _) => _session.SelectCategory(categoryIndex);
 
-    private static Button MakeToolbarButton(string label, Action onClick)
+    private IReadOnlyDictionary<ChartDataDialogActionId, Action> BuildActionHandlers() =>
+        new Dictionary<ChartDataDialogActionId, Action>
+        {
+            [ChartDataDialogActionId.AddSeries] = OnAddSeries,
+            [ChartDataDialogActionId.RemoveSeries] = OnRemoveSeries,
+            [ChartDataDialogActionId.MoveSeriesUp] = OnMoveSeriesUp,
+            [ChartDataDialogActionId.MoveSeriesDown] = OnMoveSeriesDown,
+            [ChartDataDialogActionId.AddCategory] = OnAddCategory,
+            [ChartDataDialogActionId.RemoveCategory] = OnRemoveCategory,
+            [ChartDataDialogActionId.MoveCategoryLeft] = OnMoveCategoryLeft,
+            [ChartDataDialogActionId.MoveCategoryRight] = OnMoveCategoryRight,
+            [ChartDataDialogActionId.SwitchRowsAndColumns] = OnSwitchRowsAndColumns,
+        };
+
+    private static Button MakeToolbarButton(ChartDataDialogActionPlan action, Action onClick)
     {
         var button = new Button
         {
-            Content = label,
+            Content = action.Label,
             Padding = new Thickness(8, 3),
         };
+        SetAutomation(button, action.AccessibleName, action.AutomationId);
         AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 0);
         button.Click += (_, _) => onClick();
         return button;
     }
 
-    private static Button MakeDialogButton(string label, bool isDefault, Action onClick)
+    private static Button MakeDialogButton(ChartDataDialogActionPlan action, bool isDefault, Action onClick)
     {
         var button = new Button
         {
-            Content = label,
+            Content = action.Label,
             IsDefault = isDefault,
             IsCancel = !isDefault,
         };
+        SetAutomation(button, action.AccessibleName, action.AutomationId);
         AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
         button.Click += (_, _) => onClick();
         return button;
+    }
+
+    private static void SetAutomation(Control control, string name, string automationId)
+    {
+        AutomationProperties.SetName(control, name);
+        AutomationProperties.SetAutomationId(control, automationId);
     }
 
     private sealed record IndexedTextBox(int Index, TextBox TextBox);

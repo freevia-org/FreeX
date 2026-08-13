@@ -21,6 +21,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CFBundleName");
         script.Should().Contain("Name = ApplicationTitle;");
         script.Should().Contain("NativeDock.SetMenu(app, menu);");
+        script.Should().Contain("Path = \"tools\\FreeX.Validation.Avalonia\\RendererHost\\MainWindow.RendererValidationAccess.cs\"");
+        script.Should().Contain("internal NativeMenu? NativeDockMenu =>");
         script.Should().Contain("NativeDock.GetMenu(app)");
         script.Should().Contain("CFBundleIconFile");
         script.Should().Contain("FreeX.icns");
@@ -67,7 +69,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests");
-        script.Should().Contain("new(LocalAppDiagnostics.Create(");
+        script.Should().Contain("LocalAppDiagnostics.Create(");
         script.Should().Contain("Path = \"shared\\Free.Shared.AppServices\\LocalAppDiagnostics.cs\"");
         script.Should().Contain("string.IsNullOrWhiteSpace(diagnosticsDirectory)");
         script.Should().Contain("? defaults.DiagnosticsDirectory");
@@ -114,6 +116,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
         script.Should().Contain("launchservices_smoke_timeout_seconds=60");
+        script.Should().Contain("Run-PackagedProductLaunchProbe.sh");
+        script.Should().Contain("--executable \"$unzip_root/FreeX.app/Contents/MacOS/FreeX\"");
+        script.Should().Contain("macOS workflow must exercise the executable inside the extracted app bundle before recording smoke_status=passed.");
         script.Should().Contain("launchservices_cleanup_timeout_seconds=10");
         script.Should().Contain("run_bounded_launchservices_smoke \"bundle_id\" \"$launch_smoke_report\"");
         script.Should().Contain("run_bounded_launchservices_smoke \"open_with\" \"$open_with_report\"");
@@ -128,7 +133,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("open_with_report=\"$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt\"");
         script.Should().Contain("open_with_smoke_file=\"$RUNNER_TEMP/freex-$runtime-open-with.csv\"");
         script.Should().Contain("app_path=\"$unzip_root/FreeX.app\"");
-        script.Should().Contain("open -W -n -a \"$app_path\" \"$open_with_smoke_file\" --args --macos-launch-smoke \"$open_with_report\"");
+        script.Should().Contain("run_launchservices_with_validation \"$open_with_report\" \"$open_with_smoke_file\"");
+        script.Should().Contain("open -W -n -a \"$app_path\" \"$open_with_smoke_file\"");
         script.Should().Contain("--macos-launch-smoke-diagnostics-dir \"$app_diagnostics_dir\"");
         script.Should().Contain("app_diagnostics_directory_configured=true");
         script.Should().Contain("app_diagnostics_events_path=\"$app_diagnostics_dir/events.jsonl\"");
@@ -141,7 +147,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("default_open_report=\"$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt\"");
         script.Should().Contain("default_open_smoke_file=\"$RUNNER_TEMP/freex-$runtime-default-open.fxl\"");
         script.Should().Contain("\"FileFormat\": \"FreeX.NativeJsonWorkbook\"");
-        script.Should().Contain("open -W -n \"$default_open_smoke_file\" --args --macos-launch-smoke \"$default_open_report\"");
+        script.Should().Contain("run_launchservices_with_validation \"$default_open_report\" \"$default_open_smoke_file\"");
+        script.Should().Contain("open -W -n \"$default_open_smoke_file\"");
         script.Should().Contain("opened_source_path=.*freex-$runtime-default-open.fxl");
         script.Should().Contain("launchservices_default_open_app_override=false");
         script.Should().Contain("launchservices_default_open_document_extension=fxl");
@@ -166,12 +173,13 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("EncodeWinAnsiHexText(normalized)");
         script.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
         script.Should().Contain("built-in Helvetica/WinAnsi set");
-        script.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists)");
-        script.Should().Contain("private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)");
+        script.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
+        script.Should().Contain("private async Task<bool> ConfirmNormalizedOverwriteAsync(");
+        script.Should().Contain("NormalizedOverwriteTargetKind.Pdf");
         script.Should().Contain("IsCancel = true,");
         script.Should().Contain("dialog.Opened += (_, _) => cancelButton.Focus();");
-        script.Should().Contain("PdfExportOverwriteReplaceButton");
-        script.Should().Contain("PdfExportOverwriteCancelButton");
+        script.Should().Contain("prompt.ReplaceButtonAutomationId");
+        script.Should().Contain("prompt.CancelButtonAutomationId");
         script.Should().Contain("launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click");
         script.Should().Contain("freex-${{ matrix.runtime }}-macos-default-open-launch-smoke.txt");
         script.Should().Contain("cmd_find_direct_route_source_guard=true");
@@ -360,15 +368,15 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("var dataMenu = CreateNativeMenu(NativeMenuTopLevelId.Data);");
         script.Should().Contain("[NativeMenuTopLevelId.Data] = dataMenu,");
         script.Should().Contain("[NativeMenuTopLevelId.Review] = reviewMenu,");
-        script.Should().Contain("var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);");
-        script.Should().Contain("var hasNativeReviewMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Review);");
+        script.Should().Contain("var hasNativeDataMenu = HasNativeTopLevelMenu(nativeMenu, NativeMenuTopLevelId.Data);");
+        script.Should().Contain("var hasNativeReviewMenu = HasNativeTopLevelMenu(nativeMenu, NativeMenuTopLevelId.Review);");
         script.Should().Contain("HasNativeDataMenu: hasNativeDataMenu");
         script.Should().Contain("HasNativeReviewMenu: hasNativeReviewMenu");
         script.Should().Contain("private readonly NativeMenuItem _flashFillMenuItem = new();");
         script.Should().Contain("NativeMenuItemId.FlashFill => _flashFillMenuItem,");
         script.Should().Contain("_flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();");
         script.Should().Contain("NativeMenuCatalog.PlanMenuAvailability(");
-        script.Should().Contain("case WorkbookShortcutRoute.FlashFill:");
+        script.Should().Contain("WorkbookApplicationCommandIntent.FlashFill =>");
         script.Should().Contain("private void FlashFillSelectedRange()");
         script.Should().Contain("_session.FlashFillSelectedRange()");
         script.Should().Contain("HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, NativeMenuItemId.FlashFill)");
@@ -387,11 +395,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("NativeMenuItemId.Subtotal => _subtotalMenuItem,");
         script.Should().Contain("_subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();");
         script.Should().Contain("private async Task ShowSubtotalDialogAsync()");
-        script.Should().Contain("private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(");
-        script.Should().Contain("_session.ExecuteSubtotalOptions(selection.Options!)");
+        script.Should().Contain("private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(");
+        script.Should().Contain("_session.ExecuteSubtotalOptions(selection.ToInputOptions())");
         script.Should().Contain("_session.RemoveSelectedRangeSubtotals()");
         script.Should().Contain("SubtotalDialogPlanner.TryCreateResult(");
-        script.Should().Contain("plan.ToInputOptions()");
         script.Should().Contain("AutomationProperties.SetAutomationId(dialog, `\"SubtotalCompactDialog`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(groupColumnBox, `\"SubtotalGroupColumnBox`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(functionBox, `\"SubtotalFunctionBox`\");");
@@ -414,7 +421,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeNextCommentMenuItem: HasNativeMenuItem(_nextCommentMenuItem, NativeMenuItemId.NextComment)");
         script.Should().Contain("HasNativePreviousCommentMenuItem: HasNativeMenuItem(_previousCommentMenuItem, NativeMenuItemId.PreviousComment)");
         script.Should().Contain("public WorkbookCellEditResult SortSelectedRange(bool ascending)");
-        script.Should().Contain("new SortCommand(sheetId, sheetRange, sortByColOffset: 0, ascending)");
+        script.Should().Contain("QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell)");
+        script.Should().Contain("sortPlan.SortByColOffset");
         script.Should().Contain("public WorkbookCellEditResult FlashFillSelectedRange()");
         script.Should().Contain("var plan = FlashFillRangePlanner.Plan(sheet, sheetRange);");
         script.Should().Contain("FlashFillRangePlanner.HasFillTargets(sheet, plan)");
@@ -488,16 +496,14 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("new(NativeMenuTopLevelId.Help, `\"Help`\")");
         script.Should().Contain("FileItem(NativeFileMenuItemId.WorkbookStatistics)");
         script.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.WorkbookStatistics)");
-        script.Should().Contain("case WorkbookShortcutRoute.WorkbookStatistics:");
+        script.Should().Contain("WorkbookApplicationCommandIntent.WorkbookStatistics =>");
         script.Should().Contain("private async Task ShowWorkbookStatisticsDialogAsync()");
         script.Should().Contain("WorkbookStatisticsService.GetStatistics(_session.Workbook)");
         script.Should().Contain("AutomationProperties.SetAutomationId(dialog, `\"WorkbookStatisticsDialog`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(okButton, `\"WorkbookStatisticsOkButton`\");");
-        script.Should().Contain("AutomationProperties.SetAutomationId(statisticsBlock, `\"WorkbookStatisticsSummary`\");");
+        script.Should().Contain("FreeXAutomationIdCatalog.WorkbookStatisticsSummary");
         script.Should().Contain("private static string FormatWorkbookStatistics(WorkbookStatistics statistics)");
-        script.Should().Contain("Cells with data: {statistics.CellCount}");
-        script.Should().Contain("Shapes and text boxes: {statistics.ShapeCount}");
-        script.Should().Contain("Named ranges: {statistics.NamedRangeCount}");
+        script.Should().Contain("WorkbookStatisticsFormatter.Format(statistics)");
         script.Should().Contain("toolbar_format_painter_button=");
         script.Should().Contain("toolbar_fill_cells_button=");
         script.Should().Contain("toolbar_fill_down_menu_item=");
@@ -613,10 +619,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_freeze_top_row_menu_item=true");
         script.Should().Contain("native_freeze_first_column_menu_item=true");
         script.Should().Contain("native_unfreeze_panes_menu_item=true");
-        script.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)");
+        script.Should().Contain("PackagingSmokeCommand.TryRun");
+        script.Should().Contain("ValidationHostCommandRouteExecutor.Run(");
         script.Should().Contain("PortPreviewWorkbookFactory.PreviewShapeName");
         script.Should().Contain("_sessionFactory.Create(source, SmokeViewportHeight, SmokeViewportWidth, includeObjects: true)");
-        script.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
+        script.Should().Contain("StartWithClassicDesktopLifetime(arguments)");
         script.Should().Contain("IActivatableLifetime");
         script.Should().Contain("OpenActivatedFilesAsync");
         script.Should().Contain("using FreeX.Core.Calc;");
@@ -642,9 +649,13 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("new(`\"Justify`\", CellVAlign.Justify)");
         script.Should().Contain("new(`\"Distributed`\", CellVAlign.Distributed)");
         script.Should().Contain("`\"FormatCellsMergeCellsBox`\"");
-        script.Should().Contain("MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)");
+        script.Should().Contain("new FormatCellsCompactDialogInput(");
+        script.Should().Contain("FormatCellsDialogPlanner.TryCreateCompactPlan(plannerInput");
+        script.Should().Contain("public static bool TryCreateCompactPlan(");
+        script.Should().Contain("FormatCellsInputParser.TryParseFontSize(input.FontSizeText");
+        script.Should().Contain("MergeCells: Changed(input.InitialMergeCells, input.MergeCells)");
         script.Should().Contain("bool? mergeCells = null");
-        script.Should().Contain("CreateFormatCellsMergeCommands(range, shouldMerge, mergeContentResolution)");
+        script.Should().Contain("CreateFormatCellsMergeCommands(area, shouldMerge, mergeContentResolution)");
         script.Should().Contain("CellMergePlanner.CreateMergeCommands(");
         script.Should().Contain("bool? MergeCells = null");
         script.Should().Contain("`\"FormatCellsFillPatternStyleBox`\"");
@@ -654,13 +665,12 @@ public sealed class MacOsAppReadinessPreflightTests
         // The protection explanation was localized; the preflight now declares the contract via the
         // UiText resource key rather than the inline English string.
         script.Should().Contain("FormatCells_ProtectionExplanation");
-        script.Should().Contain("var normalStyle = CellStyle.Default;");
-        script.Should().Contain("Bold: normalFont ? normalStyle.Bold : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox)");
-        script.Should().Contain("FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox)");
-        script.Should().Contain("FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
+        script.Should().Contain("UseNormalFont: normalFont");
+        script.Should().Contain("FontNameText: fontNameBox.Text");
+        script.Should().Contain("FontColor: (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
         script.Should().Contain("SelectFormatCellsColor(fontColorBox, normal.FontColor)");
-        script.Should().Contain("FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox)");
-        script.Should().Contain("FillPatternColor: clearFill ? null : fillEditor.PatternColor");
+        script.Should().Contain("FillPatternStyle: SelectedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox)");
+        script.Should().Contain("FillPatternColorText: fillEditor.PatternColorTextBox.Text");
         script.Should().Contain("CellFillPatternStyle? FillPatternStyle = null");
         script.Should().Contain("CellColor? FillPatternColor = null");
         script.Should().Contain("FillPatternStyle: request.ClearFill ? null : request.FillPatternStyle");
@@ -682,32 +692,31 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private sealed record ReplaceDialogResult(");
         script.Should().Contain("ReplaceDialogAction Action,");
         script.Should().Contain("StyleDiff? ReplacementFormat);");
-        script.Should().Contain("private sealed record FindOptionsControls(");
+        script.Should().Contain("internal sealed record FindOptionsControls(");
         script.Should().Contain("`\"ReplaceButton`\"");
         script.Should().Contain("CreateFindOptionsControls(`\"Replace`\", defaultLookInIndex: 1)");
-        script.Should().Contain("CreateFindReplaceFormatButton(`\"FindChooseFormatFromCellButton`\", `\"Choose From Cell`\")");
-        script.Should().Contain("CreateFindReplaceFormatButton(`\"FindClearFormatButton`\", `\"Clear Format`\")");
-        script.Should().Contain("CreateFindReplaceFormatButton(`\"ReplaceFindChooseFormatFromCellButton`\", `\"Choose From Cell`\")");
-        script.Should().Contain("CreateFindReplaceFormatButton(`\"ReplaceFindClearFormatButton`\", `\"Clear Format`\")");
-        script.Should().Contain("CreateFindReplaceFormatButton(`\"ReplaceWithChooseFormatFromCellButton`\", `\"Choose From Cell`\")");
-        script.Should().Contain("CreateFindReplaceFormatButton(`\"ReplaceWithClearFormatButton`\", `\"Clear Format`\")");
-        script.Should().Contain("CreateFindReplaceFormatRow(`\"Find format`\",");
-        script.Should().Contain("CreateFindReplaceFormatRow(`\"Replace format`\",");
+        script.Should().Contain("`\"FindChooseFormatFromCellButton`\",");
+        script.Should().Contain("`\"FindClearFormatButton`\",");
+        script.Should().Contain("`\"ReplaceFindChooseFormatFromCellButton`\",");
+        script.Should().Contain("`\"ReplaceFindClearFormatButton`\",");
+        script.Should().Contain("`\"ReplaceWithChooseFormatFromCellButton`\",");
+        script.Should().Contain("`\"ReplaceWithClearFormatButton`\",");
+        script.Should().Contain("FindReplaceText(FindReplaceDialogText.ChooseFromCell));");
+        script.Should().Contain("UiText.Get(`\"FindReplace_ClearFormat`\"));");
+        script.Should().Contain("UiText.Get(`\"FindReplace_FindFormat`\"),");
+        script.Should().Contain("UiText.Get(`\"FindReplace_ReplaceFormat`\"),");
         script.Should().Contain("CreateFindOptions(optionsControls, findFormat, selectionScopeAtOpen)");
-        script.Should().Contain("RequiredFormat: requiredFormat,");
-        script.Should().Contain("SelectionScope: selectionScope);");
+        script.Should().Contain("FindReplaceDialogPlanner.CreateFindOptions(");
+        script.Should().Contain("requiredFormat: requiredFormat,");
+        script.Should().Contain("selectionScope: selectionScope);");
         script.Should().Contain("ShowFindReplaceTabbedDialogAsync(replaceMode: true)");
         script.Should().Contain("_session.ReplaceNextValue(");
         script.Should().Contain("public WorkbookReplaceResult ReplaceNextValue(");
         script.Should().Contain("public StyleDiff? CreateFormatDiffFromActiveCell()");
         script.Should().Contain("public StyleDiff? CreateFormatDiffFromCell(CellAddress address)");
         script.Should().Contain("StyleDiff? replacementFormat = null");
-        script.Should().Contain("FindReplaceService.TryCreateReplacementCommand(");
-        script.Should().Contain("workbook: Workbook))");
+        script.Should().Contain("FindReplaceDialogPlanner.CreateFindOptions(");
         script.Should().Contain("new GridRange(match.Address, match.Address)");
-        script.Should().Contain("GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch)");
-        script.Should().Contain("new SetCommentCommand(");
-        script.Should().Contain("new UpdateThreadedCommentTextCommand(");
         script.Should().Contain("public enum FindResultTarget");
         script.Should().Contain("ThreadedCommentReply");
         script.Should().Contain("FindResultTarget Target = FindResultTarget.Cell,");
@@ -729,7 +738,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private static bool IsShellFocusCycleKey(KeyEventArgs args)");
         script.Should().Contain("CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);");
         script.Should().Contain("private void CycleShellFocus(bool reverse)");
-        script.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
+        script.Should().Contain("ShellFocusCyclePlanner.TryFocusNextAvailable(");
         script.Should().Contain("private bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
         script.Should().Contain("private ShellFocusTarget GetCurrentShellFocusTarget()");
         script.Should().Contain("private bool FocusShellRegion(ShellFocusTarget target)");
@@ -741,18 +750,18 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("SheetTabFocusPlanner.AdjacentTab(_session.SheetTabs, sheetId, direction, static tab => tab.Id)");
         script.Should().Contain("SheetTabFocusPlanner.EdgeTab(_session.SheetTabs, first, static tab => tab.Id)");
         script.Should().Contain("_session.ShouldPreferExternalClipboardImage(text)");
-        script.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)");
-        script.Should().Contain("await clipboard.TryGetBitmapAsync()");
-        script.Should().Contain("bitmap.Save(stream)");
+        script.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync()");
+        script.Should().Contain("await _platformClipboard.ReadImageAsync()");
+        script.Should().Contain("image.PngBytes");
         script.Should().Contain("_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)");
-        script.Should().Contain("internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()");
-        script.Should().Contain("return await TryPasteClipboardImageAsync(clipboard);");
-        script.Should().Contain("ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length");
-        script.Should().Contain("ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length)");
+        script.Should().Contain("internal async Task<bool> TryPasteExternalClipboardImageAsync()");
+        script.Should().Contain("return await TryPasteClipboardImageAsync();");
+        script.Should().Contain("ExternalImageClipboardPictureCount: shell.ExternalImageClipboardPictureCount");
+        script.Should().Contain("ExternalImageClipboardPicturePngByteCount: shell.ExternalImageClipboardPicturePngByteCount");
         script.Should().Contain("VerifyImageClipboardPasteArgument");
         script.Should().Contain("VerifyLiveCommandKeysArgument");
-        script.Should().Contain("await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();");
-        script.Should().Contain("BeginLaunchSmokeLiveCommandKeyProbe");
+        script.Should().Contain("await access.TryPasteExternalClipboardImageAsync();");
+        script.Should().Contain("access.BeginCommandObservation(observation =>");
         script.Should().Contain("live_command_key_smoke_required=");
         script.Should().Contain("external_image_clipboard_paste_required=");
         script.Should().Contain("external_image_clipboard_picture_png_bytes=");
@@ -766,7 +775,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor);");
         script.Should().Contain("DrawingObjectRenderPlanner.Plan(viewport)");
         script.Should().Contain("CreateSelectableDrawingObjectVisual(renderPlan, width, height)");
-        script.Should().Contain("AutomationProperties.SetItemStatus(container, selected ? `\"Selected`\" : `\"Not selected`\")");
+        script.Should().Contain("UiText.Get(selected ? `\"Automation_Selected`\" : `\"Automation_NotSelected`\"));");
         script.Should().Contain("CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme)");
         script.Should().Contain("CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme)");
         script.Should().Contain("CreateDrawingImageSourceRect(crop)");
@@ -776,7 +785,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);");
         script.Should().Contain("ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);");
         script.Should().Contain("NativeMenuItemId.SelectAll => _selectAllMenuItem,");
-        script.Should().Contain("_fillCellsButton.Content = `\"Fill Cells`\";");
+        script.Should().Contain("_fillCellsButton.Content = UiText.Get(`\"Toolbar_FillCells`\");");
         script.Should().Contain("NativeMenuItemId.FillDown => _fillDownMenuItem,");
         script.Should().Contain("NativeMenuItemId.FillRight => _fillRightMenuItem,");
         script.Should().Contain("private void FillSelectedRange(FillCellsDirection direction)");
@@ -868,9 +877,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("new RemoveSheetCommand(sheetId)");
         script.Should().Contain("public GridRange SelectCurrentRegionOrAll()");
         script.Should().Contain("OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl");
-        script.Should().Contain("AppHelpInfo.BuildAboutText(");
-        script.Should().Contain("AppHelpInfo.AvaloniaPlatformSummary");
-        script.Should().Contain("var documents = LegalNoticeProvider.GetDocuments();");
+        script.Should().Contain("FreeXAboutDialogPresentation.Create(typeof(AboutDialog).Assembly, `\"Avalonia`\")");
+        script.Should().Contain("FreeXLegalNoticesPresentation.Create(LegalNoticeProvider.GetDocuments(), UiText.Get)");
+        script.Should().Contain(
+            "AutomationProperties.SetAutomationId(_tabControl, LegalNoticesDialogPresentation.SectionsAutomationId);");
         script.Should().Contain("public sealed class RecentFilesStore");
         script.Should().Contain("public static class AtomicFileWriter");
         script.Should().Contain("Portable macOS source contains forbidden token");
@@ -1315,6 +1325,8 @@ public sealed class MacOsAppReadinessPreflightTests
                       open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
                       default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
                       app_diagnostics_dir="$artifact_root/freex-$runtime-macos-app-diagnostics"
+                      validation_published="$RUNNER_TEMP/freex-$runtime-validation-publish"
+                      validation_host="$validation_published/FreeX.Validation.Avalonia"
                       distribution_candidate="$FREEX_DISTRIBUTION_CANDIDATE"
                       artifact_channel="internal-preview"
                       distribution_contract="internal_preview_not_for_distribution_notarization_optional"
@@ -1355,6 +1367,11 @@ public sealed class MacOsAppReadinessPreflightTests
                         -p:PublishReadyToRun=false \
                         -p:PublishSingleFile=false \
                         --output "$app/Contents/MacOS"
+                      dotnet publish tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj \
+                        --configuration Release --framework net10.0 --runtime "$runtime" \
+                        --self-contained true -p:UseAppHost=true -p:PublishReadyToRun=false \
+                        -p:PublishSingleFile=false --output "$validation_published"
+                      test -x "$validation_host"
                       cp src/FreeX.App.Avalonia/Packaging/macos/Info.plist "$app/Contents/Info.plist"
                       cp src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns "$app/Contents/Resources/FreeX.icns"
                       plutil -lint "$app/Contents/Info.plist"
@@ -1413,6 +1430,15 @@ public sealed class MacOsAppReadinessPreflightTests
                       test "$format_cells_style_roundtrip_count" -ge 2
                       echo "format_cells_style_roundtrip=true"
                       echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"
+                      packaged_product_probe_home="$RUNNER_TEMP/freex-$runtime-packaged-product-home"
+                      packaged_product_launch_report="$RUNNER_TEMP/freex-$runtime-packaged-product-launch.txt"
+                      bash tools/Run-PackagedProductLaunchProbe.sh \
+                        --executable "$unzip_root/FreeX.app/Contents/MacOS/FreeX" \
+                        --readiness-root "$packaged_product_probe_home" \
+                        --report "$packaged_product_launch_report"
+                      grep -Fqx "packaged_product_launch_status=passed" "$packaged_product_launch_report"
+                      grep -Fqx "packaged_product_executable=$unzip_root/FreeX.app/Contents/MacOS/FreeX" "$packaged_product_launch_report"
+                      cat "$packaged_product_launch_report" >> "$evidence_path"
                       launchservices_smoke_timeout_seconds=60
                       launchservices_cleanup_timeout_seconds=10
                       append_launchservices_failure_diagnostics() {"{"}
@@ -1432,13 +1458,22 @@ public sealed class MacOsAppReadinessPreflightTests
                         echo "launchservices_smoke_name=$smoke_name"
                         cat "$report_path" >> "$evidence_path"
                       {"}"}
+                      run_launchservices_with_validation() {"{"}
+                        local report_path="$1"
+                        local source_path="$2"
+                        shift 2
+                        "$@" &
+                        "$validation_host" --macos-launch-smoke "$report_path" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir" "$source_path"
+                      {"}"}
                       /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
                       run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report" \
-                        open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+                        run_launchservices_with_validation "$launch_smoke_report" "$RUNNER_TEMP/launch.csv" \
+                          open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv"
                       osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
                       open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"
                       run_bounded_launchservices_smoke "open_with" "$open_with_report" \
-                        open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+                        run_launchservices_with_validation "$open_with_report" "$open_with_smoke_file" \
+                          open -W -n -a "$app_path" "$open_with_smoke_file"
                       grep -q "macos_launch_smoke=passed" "$open_with_report"
                       grep -q "app_diagnostics_directory_configured=true" "$open_with_report"
                       grep -q "window_shown=true" "$open_with_report"
@@ -1452,7 +1487,8 @@ public sealed class MacOsAppReadinessPreflightTests
                       {"{"} "FileFormat": "FreeX.NativeJsonWorkbook" {"}"}
                       JSON
                       run_bounded_launchservices_smoke "default_open" "$default_open_report" \
-                        open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+                        run_launchservices_with_validation "$default_open_report" "$default_open_smoke_file" \
+                          open -W -n "$default_open_smoke_file"
                       grep -q "app_diagnostics_directory_configured=true" "$default_open_report"
                       launchservices_default_open_app_override=false
                       launchservices_default_open_document_extension=fxl
@@ -1838,29 +1874,127 @@ public sealed class MacOsAppReadinessPreflightTests
             """
             namespace FreeX.App.Avalonia;
 
-            internal static class Program
+            internal static partial class Program
             {
-                public static int Main(string[] args)
-                {
-                    if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode))
-                        return smokeExitCode;
+                public static int Main(string[] args) =>
+                    RunApplication(args, diagnosticsDirectory: null, externalStartupCoordinator: null);
 
-                    MacOsLaunchSmokeOptions.TryParse(args, out var launchSmokeOptions, out var startupArguments, out var launchSmokeError);
-                    var diagnostics = AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory);
-                    diagnostics.RegisterUnhandledExceptionHandlers();
-                    diagnostics.RecordEvent("app_start");
-                    App.StartupArguments = startupArguments;
-                    App.LaunchSmokeOptions = launchSmokeOptions;
-                    App.Diagnostics = diagnostics;
+                private static int RunApplication(
+                    string[] startupArguments,
+                    string? diagnosticsDirectory,
+                    Action<MainWindow, LocalAppDiagnostics?>? externalStartupCoordinator)
+                {
+                    LocalAppDiagnostics? diagnostics = null;
+                    return SisterAvaloniaProgramRunner.Run(
+                        startupArguments,
+                        new SisterAvaloniaProgramSpec(
+                            FreeXApplicationStartupDescriptor.ProductIdentity,
+                            SisterAvaloniaLaunchPreparation.Continue,
+                            arguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(arguments))
+                    {
+                        CreateDiagnostics = () =>
+                        {
+                            diagnostics = LocalAppDiagnostics.Create(
+                                AppHelpInfo.GetVersionText(typeof(Program).Assembly),
+                                diagnosticsDirectory);
+                            return new SisterAvaloniaProgramDiagnostics(
+                                () => diagnostics.RegisterCrashHandlers(),
+                                (exception, source) => diagnostics.RecordCrash(exception, source));
+                        },
+                        BeforeRun = () =>
+                        {
+                            var activeDiagnostics = diagnostics!;
+                            activeDiagnostics.RecordEvent("app_start");
+                            App.StartupArguments = startupArguments;
+                            App.ExternalStartupCoordinator = externalStartupCoordinator;
+                            App.Diagnostics = activeDiagnostics;
+                        },
+                        AfterRun = _ => diagnostics!.RecordEvent("app_exit"),
+                        CompletedExitCode = 0
+                    });
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "tools/FreeX.Validation.Avalonia/RendererHost/Program.ValidationHost.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            internal static partial class Program
+            {
+                internal static int RunValidationToolHost(
+                    IReadOnlyList<string> startupArguments,
+                    string? diagnosticsDirectory,
+                    Action<MainWindow.RendererValidationAccess, LocalAppDiagnostics?> externalStartupCoordinator) =>
+                    RunApplication(
+                        startupArguments.ToArray(),
+                        diagnosticsDirectory,
+                        (window, diagnostics) =>
+                            externalStartupCoordinator(window.CreateRendererValidationAccess(), diagnostics));
+            }
+            """);
+
+        WriteFile(
+            root,
+            "tools/FreeX.Validation.Avalonia/RendererHost/MainWindow.RendererValidationAccess.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            public sealed partial class MainWindow
+            {
+                internal sealed class RendererValidationAccess
+                {
+                    internal NativeMenu? NativeDockMenu =>
+                        global::Avalonia.Application.Current is { } app ? NativeDock.GetMenu(app) : null;
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "tools/FreeX.Validation.Avalonia/RendererHost/MainWindow.DialogInspectionAccess.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            public sealed partial class MainWindow
+            {
+                private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogInspection> inspectionCallback) =>
+                    await ShowFindInputDialogAsync();
+
+                private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogInspection> inspectionCallback) =>
+                    await ShowReplaceInputDialogAsync();
+
+                private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(
+                    Action<GoToSpecialDialogInspection> inspectionCallback) =>
+                    await ShowGoToSpecialInputDialogAsync();
+            }
+            """);
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.Shell.Avalonia/SisterAvaloniaApplicationStartupRunner.cs",
+            """
+            namespace Free.Shared.Shell.Avalonia;
+
+            internal static class SisterAvaloniaApplicationStartupRunner
+            {
+                internal static int Run(string[] startupArguments, dynamic spec)
+                {
+                    spec.RegisterUnhandledExceptionHandlers();
+                    spec.RegisterRibbonCommandFaultHandler((Exception exception, string commandId) =>
+                        spec.RecordCrash(exception, RibbonCommandCrashSourcePrefix + commandId));
+                    spec.BeforeRun?.Invoke();
                     try
                     {
-                        BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
-                        diagnostics.RecordEvent("app_exit");
-                        return 0;
+                        var lifetimeExitCode = spec.StartApplication(startupArguments);
+                        spec.AfterRun?.Invoke(lifetimeExitCode);
+                        return lifetimeExitCode;
                     }
                     catch (Exception ex)
                     {
-                        diagnostics.RecordCrash(ex, "avalonia_startup");
+                        spec.RecordCrash(ex, spec.StartupCrashSource);
                         throw;
                     }
                 }
@@ -1877,7 +2011,7 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 private const string ApplicationTitle = "FreeX";
 
-                internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }
+                internal static LocalAppDiagnostics? Diagnostics { get; set; }
 
                 private static async Task ActivatedAsync(MainWindow mainWindow, ActivatedEventArgs args)
                 {
@@ -1888,30 +2022,37 @@ public sealed class MacOsAppReadinessPreflightTests
                         return;
 
                     await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);
-                    MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);
+                    ExternalStartupCoordinator?.Invoke(mainWindow, Diagnostics);
                 }
             }
             """);
 
         WriteFile(
             root,
-            "src/FreeX.App.Avalonia/AvaloniaAppDiagnostics.cs",
+            "tools/FreeX.Validation.Avalonia/Program.cs",
             """
-            using Free.Shared.AppServices;
+            namespace FreeX.Validation.Avalonia;
 
-            namespace FreeX.App.Avalonia;
-
-            internal sealed class AvaloniaAppDiagnostics : LocalAppDiagnostics
+            internal static class Program
             {
-                private AvaloniaAppDiagnostics(LocalAppDiagnostics local)
-                    : base(local) { }
-
-                public static AvaloniaAppDiagnostics Create(string? diagnosticsDirectory = null) =>
-                    new(LocalAppDiagnostics.Create(
-                        AppHelpInfo.GetVersionText(typeof(AvaloniaAppDiagnostics).Assembly),
-                        diagnosticsDirectory));
-
-                public void RegisterUnhandledExceptionHandlers() => RegisterCrashHandlers();
+                public static int Main(string[] args)
+                {
+                    return ValidationHostCommandRouteExecutor.Run(
+                        args,
+                        Console.Error,
+                        $"Expected {MacOsLaunchSmokeOptions.Argument}.",
+                        ValidationHostCommandRouteExecutor.Immediate(
+                            PackagingSmokeCommand.TryRun,
+                            Console.Out,
+                            Console.Error),
+                        ValidationHostCommandRouteExecutor.Parsed<MacOsLaunchSmokeOptions>(
+                            MacOsLaunchSmokeOptions.TryParse,
+                            (options, startupArguments) =>
+                                FreeX.App.Avalonia.Program.RunValidationToolHost(
+                                    startupArguments,
+                                    options.DiagnosticsDirectory,
+                                    (window, diagnostics) => MacOsLaunchSmokeCoordinator.Start(window, options, diagnostics))));
+                }
             }
             """);
 
@@ -2007,7 +2148,7 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal static class WorkbookFileAccessServiceFactory
             {
-                public static IWorkbookFileAccessService Create(AvaloniaAppDiagnostics? diagnostics = null) =>
+                public static IWorkbookFileAccessService Create(LocalAppDiagnostics? diagnostics = null) =>
                     new AvaloniaWorkbookFileAccessService(diagnostics);
             }
 
@@ -2015,7 +2156,7 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 internal const string MacOsSecurityScopedBookmarkKind = "macos-security-scoped-bookmark";
 
-                public AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null) { }
+                public AvaloniaWorkbookFileAccessService(LocalAppDiagnostics? diagnostics = null) { }
 
                 private async Task BeginAsync(IStorageItem storageItem, IStorageProvider storageProvider, WorkbookFileAccessIdentity identity, string path)
                 {
@@ -2090,7 +2231,6 @@ public sealed class MacOsAppReadinessPreflightTests
                 private IWorkbookFileAccessService _fileAccess = WorkbookFileAccessServiceFactory.Create(App.Diagnostics);
                 private void InstallNativeMenu(NativeMenu menu)
                 NativeDock.SetMenu(app, menu);
-                NativeDock.GetMenu(app);
                 NativeMenu.SetMenu(this, menu);
                 InstallNativeMenu(_nativeMenu);
                 ConfigureNativeCatalogMenuItems();
@@ -2194,18 +2334,20 @@ public sealed class MacOsAppReadinessPreflightTests
                 private static void RenderCell(CellStyle? style)
                 {
                     CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
-                    _formatPainterButton.Content = "Format Painter";
+                    _formatPainterButton.Content = UiText.Get("MainWindow_TooltipTitle_FormatPainter");
                     AutomationProperties.SetAutomationId(_formatPainterButton, "HomeFormatPainterButton");
-                    AutomationProperties.SetHelpText(_formatPainterButton, "Copy formatting from the selection and apply it to another range.");
+                    AutomationProperties.SetHelpText(
+                        _formatPainterButton,
+                        UiText.Get("MainWindow_TooltipDescription_CopyFormattingFromOnePlaceAndApplyItToAnother"));
                     _formatPainterMenuItem.Header = "Format Painter";
                     _formatPainterMenuItem.Click += (_, _) => CaptureFormatPainterSource(persistent: false);
                     homeMenu.Items.Add(_formatPainterMenuItem);
                     _formatPainterButton.IsEnabled = isIdle;
                     _formatPainterMenuItem.IsEnabled = _formatPainterButton.IsEnabled;
-                    _autoSumButton.Content = "AutoSum";
+                    _autoSumButton.Content = UiText.Get("MainWindow_Content_AutoSum");
                     _autoSumButton.Flyout = CreateAutoSumFlyout();
                     AutomationProperties.SetAutomationId(_autoSumButton, "HomeAutoSumButton");
-                    AutomationProperties.SetHelpText(_autoSumButton, "Insert a formula using nearby numeric cells.");
+                    AutomationProperties.SetHelpText(_autoSumButton, UiText.Get("Toolbar_AutoSumHelpText"));
                     _autoSumSumFlyoutItem.Click += (_, _) => InsertAutoSumFormula("SUM");
                     _autoSumAverageFlyoutItem.Click += (_, _) => InsertAutoSumFormula("AVERAGE");
                     _autoSumCountNumbersFlyoutItem.Click += (_, _) => InsertAutoSumFormula("COUNT");
@@ -2223,17 +2365,17 @@ public sealed class MacOsAppReadinessPreflightTests
                     private static bool IsAutoSumShortcut(KeyEventArgs args)
                     HasAutoSumButton: _autoSumButton.Content?.ToString() == "AutoSum"
                     HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, NativeMenuItemId.AutoSum)
-                    _fillCellsButton.Content = "Fill Cells";
+                    _fillCellsButton.Content = UiText.Get("Toolbar_FillCells");
                     _fillCellsButton.Flyout = CreateFillCellsFlyout();
                     AutomationProperties.SetAutomationId(_fillCellsButton, "HomeFillCellsButton");
-                    AutomationProperties.SetHelpText(_fillCellsButton, "Copy the edge cells across the selected range.");
-                    _fillDownFlyoutItem.Header = "Down";
+                    AutomationProperties.SetHelpText(_fillCellsButton, UiText.Get("Toolbar_FillCellsHelpText"));
+                    _fillDownFlyoutItem.Header = UiText.Get("MainWindow_Header_Down");
                     _fillDownFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Down);
-                    _fillRightFlyoutItem.Header = "Right";
+                    _fillRightFlyoutItem.Header = UiText.Get("MainWindow_Header_Right");
                     _fillRightFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Right);
-                    _fillUpFlyoutItem.Header = "Up";
+                    _fillUpFlyoutItem.Header = UiText.Get("MainWindow_Header_Up");
                     _fillUpFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Up);
-                    _fillLeftFlyoutItem.Header = "Left";
+                    _fillLeftFlyoutItem.Header = UiText.Get("MainWindow_Header_Left");
                     _fillLeftFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);
                     _fillCellsMenuItem.Header = "Fill";
                     _fillCellsMenuItem.Menu = CreateNativeFillCellsMenu();
@@ -2245,15 +2387,16 @@ public sealed class MacOsAppReadinessPreflightTests
                     _fillUpFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Up);
                     _fillLeftFlyoutItem.IsEnabled = isIdle && _session.CanFillSelectedRange(FillCellsDirection.Left);
                     _fillCellsMenuItem.IsEnabled = _fillCellsButton.IsEnabled;
-                    _clearButton.Content = "Clear";
+                    WorksheetCommandPresentationCatalog.FormatFillStatus(direction, rangeReference)
+                    _clearButton.Content = UiText.Get("Common_Clear");
                     AutomationProperties.SetAutomationId(_clearButton, "HomeClearButton");
-                    AutomationProperties.SetHelpText(_clearButton, "Clear contents, formatting, comments, hyperlinks, or all cell state from the selected range.");
+                    AutomationProperties.SetHelpText(_clearButton, UiText.Get("Toolbar_ClearHelpText"));
                     _clearButton.Flyout = CreateClearFlyout();
-                    _clearAllFlyoutItem.Header = "Clear All";
-                    _clearFormatsFlyoutItem.Header = "Clear Formats";
-                    _clearContentsFlyoutItem.Header = "Clear Contents";
-                    _clearCommentsFlyoutItem.Header = "Clear Comments and Notes";
-                    _clearHyperlinksFlyoutItem.Header = "Clear Hyperlinks";
+                    _clearAllFlyoutItem.Header = UiText.Get("MainWindow_Header_ClearAll");
+                    _clearFormatsFlyoutItem.Header = UiText.Get("MainWindow_Header_ClearFormats");
+                    _clearContentsFlyoutItem.Header = UiText.Get("MainWindow_Header_ClearContents");
+                    _clearCommentsFlyoutItem.Header = UiText.Get("MainWindow_Header_ClearCommentsAndNotes");
+                    _clearHyperlinksFlyoutItem.Header = UiText.Get("MainWindow_Header_ClearHyperlinks");
                     _clearMenuItem.Header = "Clear";
                     _clearMenuItem.Menu = CreateNativeClearMenu();
                     _clearAllMenuItem.Header = "Clear All";
@@ -2271,7 +2414,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _clearMenuItem.IsEnabled = _clearButton.IsEnabled;
                     _bordersButton.Flyout = CreateBorderPresetFlyout();
                     AutomationProperties.SetAutomationId(_bordersButton, "HomeBordersButton");
-                    AutomationProperties.SetHelpText(_bordersButton, "Apply or change borders on the selected cells.");
+                    AutomationProperties.SetHelpText(_bordersButton, UiText.Get("MainWindow_TooltipDescription_ApplyOrChangeBordersOnTheSelectedCells"));
                     _bordersMenuItem.Header = "Borders";
                     _bordersMenuItem.Menu = CreateNativeBorderPresetMenu();
                     homeMenu.Items.Add(_bordersMenuItem);
@@ -2331,12 +2474,13 @@ public sealed class MacOsAppReadinessPreflightTests
                     CreateNativePastePictureMenuItem("Linked Picture", linkedPicture: true);
                     _session.PasteClipboardTextAtActiveCell(text, preserveText: true);
                     _session.ShouldPreferExternalClipboardImage(text);
-                    private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)
-                    await clipboard.TryGetBitmapAsync()
-                    bitmap.Save(stream)
+                    private async Task<bool> TryPasteClipboardImageAsync()
+                    await _platformClipboard.ReadImageAsync()
+                    read.Value is not { PngBytes.Length: > 0 } image
+                    var pngBytes = image.PngBytes;
                     _session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight);
-                    internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()
-                    return await TryPasteClipboardImageAsync(clipboard);
+                    internal async Task<bool> TryPasteExternalClipboardImageAsync()
+                    return await TryPasteClipboardImageAsync();
                     private async Task PastePictureFromClipboardAsync(string label, bool linkedPicture)
                     _session.PastePictureFromClipboardAtActiveCell(text, linkedPicture);
                     HasNativePasteSpecialTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Text");
@@ -2347,8 +2491,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     DrawingObjectRenderPlanner.Plan(viewport);
                     CreateSelectableDrawingObjectVisual(renderPlan, width, height);
                     AutomationProperties.SetAutomationId(container, $"DrawingObject{drawingObject.Kind}{drawingObject.Id:N}");
-                    AutomationProperties.SetHelpText(container, "Selects this drawing object preview in the workbook viewport.");
-                    AutomationProperties.SetItemStatus(container, selected ? "Selected" : "Not selected");
+                    AutomationProperties.SetHelpText(container, UiText.Get("DrawingObject_PreviewHelpText"));
+                    AutomationProperties.SetItemStatus(
+                        container,
+                        UiText.Get(selected ? "Automation_Selected" : "Automation_NotSelected"));
                     container.PointerPressed += (_, args) => { };
                     if (args.Key is Key.Enter or Key.Space) { }
                     CreateDrawingObjectSelectionAdorner();
@@ -2366,7 +2512,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     menu.Items.Add(GetNativeFileMenuItem(entry.Item!.Id));
                     RefreshNativeOpenRecentMenu(isIdle);
                     WorkbookOpenIngressPlanner.SelectOpenableExistingLocalFile(
-                    _session.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)
+                    _fileWorkflow.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)
                     WorkbookOpenIngressResolution.Resolved(target!.Path)
                     path = plan.Path;
                     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
@@ -2375,18 +2521,20 @@ public sealed class MacOsAppReadinessPreflightTests
                     _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
                     NativeFileMenuItemId.ExportPdf => _exportPdfMenuItem,
                     HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf)
-                    private async Task ExportActiveSheetPdfAsync()
-                    var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
-                    exportTargetPlan.ShouldConfirmNormalizedOverwrite
-                    !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path)
-                    path = exportTargetPlan.Path;
-                    private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)
+                    private Task ExportActiveSheetPdfAsync() =>
+                    ExportWorkbookPdfAsync(
+                    var requestPlan = WorkbookExportInteractionPlanner.CreateRequestPlan(
+                    requestPlan.ShouldConfirmNormalizedOverwrite
+                    !await ConfirmNormalizedOverwriteAsync(
+                    NormalizedOverwriteTargetKind.Pdf
+                    WorkbookExportInteractionPlanner.CreateResultPlan(
+                    private async Task<bool> ConfirmNormalizedOverwriteAsync(
                     IsCancel = true,
                     dialog.Opened += (_, _) => cancelButton.Focus();
-                    AutomationProperties.SetAutomationId(replaceButton, "PdfExportOverwriteReplaceButton");
-                    AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
-                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+                    AutomationProperties.SetAutomationId(replaceButton, prompt.ReplaceButtonAutomationId)
+                    AutomationProperties.SetAutomationId(cancelButton, prompt.CancelButtonAutomationId)
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(
+                    await File.WriteAllBytesAsync(
                     ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);
                     _workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);
                     ApplyNativeFileMenuAvailability(isIdle);
@@ -2417,16 +2565,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     ConfigureNativeFileMenuItem(_printPreviewMenuItem, NativeFileMenuItemId.PrintPreview);
                     _printPreviewMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PrintPreview);
                     HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics)
-                    case WorkbookShortcutRoute.WorkbookStatistics:
+                    case WorkbookApplicationCommandIntent.WorkbookStatistics:
                     private async Task ShowWorkbookStatisticsDialogAsync()
                     WorkbookStatisticsService.GetStatistics(_session.Workbook)
                     AutomationProperties.SetAutomationId(dialog, "WorkbookStatisticsDialog");
                     AutomationProperties.SetAutomationId(okButton, "WorkbookStatisticsOkButton");
-                    AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
+                    AutomationProperties.SetAutomationId(statisticsBlock, FreeXAutomationIdCatalog.WorkbookStatisticsSummary);
                     private static string FormatWorkbookStatistics(WorkbookStatistics statistics)
-                    Cells with data: {statistics.CellCount}
-                    Shapes and text boxes: {statistics.ShapeCount}
-                    Named ranges: {statistics.NamedRangeCount}
+                    WorkbookStatisticsFormatter.Format(statistics)
                     _selectAllMenuItem.Header = "Select All";
                     _selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);
                     _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
@@ -2456,7 +2602,7 @@ public sealed class MacOsAppReadinessPreflightTests
                         bool MatchCase,
                         bool MatchEntireCell,
                         StyleDiff? ReplacementFormat);
-                    private sealed record FindOptionsControls(
+                    internal sealed record FindOptionsControls(
                         ComboBox WithinBox,
                         ComboBox SearchBox,
                         ComboBox LookInBox,
@@ -2507,16 +2653,15 @@ public sealed class MacOsAppReadinessPreflightTests
                     _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
                     _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
                     _flashFillMenuItem.IsEnabled = isIdle;
-                    case WorkbookShortcutRoute.FlashFill:
+                    case WorkbookApplicationCommandIntent.FlashFill:
                     private void SortSelectedRange(bool ascending)
                     _session.SortSelectedRange(ascending)
-                    QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range).HasHeaderRow
-                    new CoreSortKey(0, ascending)
-                    new SortOptions(CaseSensitive: false, LeftToRight: false)
                     private void FlashFillSelectedRange()
                     _session.FlashFillSelectedRange()
-                    var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);
+                    var hasNativeDataMenu = HasNativeTopLevelMenu(nativeMenu, NativeMenuTopLevelId.Data);
+                    var hasNativeReviewMenu = HasNativeTopLevelMenu(nativeMenu, NativeMenuTopLevelId.Review);
                     HasNativeDataMenu: hasNativeDataMenu
+                    HasNativeReviewMenu: hasNativeReviewMenu
                     HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, "Find...");
                     HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, "Find Next");
                     HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, "Replace...");
@@ -2594,11 +2739,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     private NativeMenu CreateNativeWhatIfAnalysisMenu()
                         => CreateNativeMenu(NativeMenuCatalog.WhatIfAnalysisMenuEntries);
                     private async Task ShowSubtotalDialogAsync()
-                    private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()
-                    _session.ExecuteSubtotalOptions(selection.Options!)
+                    private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync()
+                    _session.ExecuteSubtotalOptions(selection.ToInputOptions())
                     _session.RemoveSelectedRangeSubtotals()
                     SubtotalDialogPlanner.TryCreateResult(
-                    plan.ToInputOptions()
                     AutomationProperties.SetAutomationId(dialog, "SubtotalCompactDialog");
                     AutomationProperties.SetAutomationId(groupColumnBox, "SubtotalGroupColumnBox");
                     AutomationProperties.SetAutomationId(functionBox, "SubtotalFunctionBox");
@@ -2621,17 +2765,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeNextCommentMenuItem: HasNativeMenuItem(_nextCommentMenuItem, "Next Comment", requireGesture: false)
                     HasNativePreviousCommentMenuItem: HasNativeMenuItem(_previousCommentMenuItem, "Previous Comment", requireGesture: false)
                     private async Task ShowFindDialogAsync()
-                    private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)
                     private void NavigateToFindAllMatch(WorkbookFindAllMatch match)
                     FindOptions? options = null,
                     private Task ShowReplaceDialogAsync()
                     {
                         return ShowFindReplaceTabbedDialogAsync(replaceMode: true);
                     }
-                    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)
                     private async Task ShowGoToDialogAsync()
                     private async Task ShowGoToSpecialDialogAsync()
-                    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogSmokeProbe>? launchSmokeProbe = null)
                     private static AvaloniaGrid CreateGoToSpecialChoiceGrid(
                     private static GoToSpecialChoice[] CreateGoToSpecialChoices()
                     private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
@@ -2641,10 +2782,17 @@ public sealed class MacOsAppReadinessPreflightTests
                     "FindAllButton"
                     CreateFindOptionsControls("Find", defaultLookInIndex: 0)
                     StyleDiff? findFormat = null;
-                    CreateFindReplaceFormatButton("FindChooseFormatFromCellButton", "Choose From Cell")
-                    CreateFindReplaceFormatButton("FindClearFormatButton", "Clear Format")
+                    CreateFindReplaceFormatButton(
+                        "FindChooseFormatFromCellButton",
+                        FindReplaceText(FindReplaceDialogText.ChooseFromCell));
+                    CreateFindReplaceFormatButton(
+                        "FindClearFormatButton",
+                        UiText.Get("FindReplace_ClearFormat"));
                     _session.CreateFormatDiffFromActiveCell()
-                    CreateFindReplaceFormatRow("Find format", chooseFormatButton, clearFormatButton)
+                    CreateFindReplaceFormatRow(
+                        UiText.Get("FindReplace_FindFormat"),
+                        chooseFormatButton,
+                        clearFormatButton)
                     {automationPrefix}WithinBox
                     {automationPrefix}SearchBox
                     {automationPrefix}LookInBox
@@ -2657,11 +2805,22 @@ public sealed class MacOsAppReadinessPreflightTests
                     "ReplaceAllButton"
                     CreateFindOptionsControls("Replace", defaultLookInIndex: 1)
                     StyleDiff? replacementFormat = null;
-                    CreateFindReplaceFormatButton("ReplaceFindChooseFormatFromCellButton", "Choose From Cell")
-                    CreateFindReplaceFormatButton("ReplaceFindClearFormatButton", "Clear Format")
-                    CreateFindReplaceFormatButton("ReplaceWithChooseFormatFromCellButton", "Choose From Cell")
-                    CreateFindReplaceFormatButton("ReplaceWithClearFormatButton", "Clear Format")
-                    CreateFindReplaceFormatRow("Replace format", chooseReplaceFormatButton, clearReplaceFormatButton)
+                    CreateFindReplaceFormatButton(
+                        "ReplaceFindChooseFormatFromCellButton",
+                        FindReplaceText(FindReplaceDialogText.ChooseFromCell));
+                    CreateFindReplaceFormatButton(
+                        "ReplaceFindClearFormatButton",
+                        UiText.Get("FindReplace_ClearFormat"));
+                    CreateFindReplaceFormatButton(
+                        "ReplaceWithChooseFormatFromCellButton",
+                        FindReplaceText(FindReplaceDialogText.ChooseFromCell));
+                    CreateFindReplaceFormatButton(
+                        "ReplaceWithClearFormatButton",
+                        UiText.Get("FindReplace_ClearFormat"));
+                    CreateFindReplaceFormatRow(
+                        UiText.Get("FindReplace_ReplaceFormat"),
+                        chooseReplaceFormatButton,
+                        clearReplaceFormatButton)
                     "GoToReferenceBox"
                     "GoToSpecialKindBox"
                     "GoToSpecialNumbersBox"
@@ -2672,8 +2831,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     private FindOptions CreateFindOptions(
                     IReadOnlyList<GridRange>? selectionScope = null)
                     CreateFindOptions(optionsControls, findFormat, selectionScopeAtOpen)
-                    RequiredFormat: requiredFormat,
-                    SelectionScope: selectionScope);
+                    FindReplaceDialogPlanner.CreateFindOptions(
+                    requiredFormat: requiredFormat,
+                    selectionScope: selectionScope);
                     private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)
                     private static Button CreateFindReplaceFormatButton(string automationId, string content)
                     private static StackPanel CreateFindReplaceFormatRow(string label, Button chooseButton, Button clearButton)
@@ -2693,30 +2853,28 @@ public sealed class MacOsAppReadinessPreflightTests
                     e.Key == Key.F5;
                     args.Key == Key.Oem1 && args.KeyModifiers == KeyModifiers.Alt;
                     SelectGoToSpecial(GoToSpecialKind.VisibleCellsOnly);
-                    case WorkbookShortcutRoute.Find:
+                    case WorkbookApplicationCommandIntent.Find:
                     e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta;
-                    case WorkbookShortcutRoute.Replace:
-                    case WorkbookShortcutRoute.GoTo:
+                    case WorkbookApplicationCommandIntent.Replace:
+                    case WorkbookApplicationCommandIntent.GoTo:
                     e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U;
                     else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers)) { }
-                    case WorkbookShortcutRoute.FillDown:
-                    case WorkbookShortcutRoute.FillRight:
-                    Header = "(No Recent Workbooks)";
+                    case WorkbookApplicationCommandIntent.FillDown:
+                    case WorkbookApplicationCommandIntent.FillRight:
+                    Header = UiText.Get("Backstage_Home_NoRecentWorkbooks"),
                     OpenRecentWorkbookMenuPlanner.Create(
                     _recentFiles.Snapshot()
                     File.Exists
-                    path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null
+                    path => _fileWorkflow.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null
                     plan.ItemCount == 0
                     foreach (var entry in plan.Items)
                     var fileAccessIdentity = entry.FileAccessIdentity;
                     Header = entry.Header
-                    if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)
+                    if (!_fileWorkflow.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)
                     await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);
-                    RecentFileRegistrationService.RegisterIfNeeded(
+                    _fileWorkflow.RegisterRecentFile(
                     new RecentFileRegistrationRequest(
                     FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity
-                    RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
-                    RecordRecentWorkbook(target.Path, fileAccessIdentity);
                     _closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);
                     var fileMenu = CreateNativeFileMenu();
                     NativeFileMenuItemId.NewWorkbook => _newWorkbookMenuItem,
@@ -2724,11 +2882,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
                     RefreshViewportSizeForZoom();
                     Closing += MainWindow_Closing;
-                    ConfirmBeforeDestructiveWorkbookActionAsync("Close Workbook", "Discard and Close").ToString();
+                    UiText.Get("DirtyWorkbook_CloseWorkbookTitle"),
+                    UiText.Get("DirtyWorkbook_DiscardAndClose")))
                     ResetToNewWorkbook("Closed workbook.");
-                    ConfirmBeforeDestructiveWorkbookActionAsync("Close FreeX", "Discard and Close").ToString();
+                    UiText.Get("DirtyWorkbook_CloseFreeXTitle"),
+                    UiText.Get("DirtyWorkbook_DiscardAndClose")))
                     TryQuitApplicationAsync().ToString();
-                    ConfirmBeforeDestructiveWorkbookActionAsync("Quit FreeX", "Discard and Quit").ToString();
+                    UiText.Get("DirtyWorkbook_QuitFreeXTitle"),
+                    UiText.Get("DirtyWorkbook_DiscardAndQuit")))
                     _allowCloseWithoutDirtyPrompt = true;
                     SaveCurrentWorkbookAsync().ToString();
                     AutomationProperties.SetAutomationId(saveButton, "DirtyWorkbookSaveButton");
@@ -2760,7 +2921,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     Title = FormatWindowWorkbookTitle();
                     var isGroupedTab = tab.IsGrouped && _session.IsWorkbookGrouped;
                     tab.TabColor is { } tabColor ? Brush(tabColor) : Brushes.Transparent;
-                    var clearColorItem = new NativeMenuItem { Header = "No Color" };
+                    var clearColorItem = new NativeMenuItem { Header = UiText.Get("RibbonWire_TabColorNone") };
                     clearColorItem.Click += (_, _) => ApplyActiveSheetTabColor(null);
                     ApplyActiveSheetTabColor(swatch.Color);
                     var result = _session.SetActiveSheetTabColor(color);
@@ -2807,29 +2968,24 @@ public sealed class MacOsAppReadinessPreflightTests
                     ShowRenameSheetDialogAsync(currentName).ToString();
                     AutomationProperties.SetAutomationId(nameBox, "RenameSheetNameBox");
                     var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);
-                    private const string SheetTabContextHelpText = "Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
                     _sheetGridHost.Focusable = true;
-                    AutomationProperties.SetName(_sheetGridHost, "Worksheet");
+                    AutomationProperties.SetName(_sheetGridHost, UiText.Get("MainWindow_AutomationName_Worksheet"));
                     _zoomText.Focusable = true;
-                    AutomationProperties.SetName(_zoomText, "Zoom");
+                    AutomationProperties.SetName(_zoomText, UiText.CreateAutomationName(UiText.Get("Common_Zoom")));
                     Focusable = true,
                     Tag = tab.Id,
                     button.ContextMenu = CreateSheetTabContextMenu(tab);
                     button.DoubleTapped += async (_, args) => await RenameSheetFromTabAsync(tab.Id, args);
                     button.KeyDown += (_, args) => HandleSheetTabKeyDown(tab.Id, button, args);
                     AutomationProperties.SetName(button, tab.Name);
-                    AutomationProperties.SetHelpText(button, SheetTabContextHelpText);
+                    AutomationProperties.SetHelpText(button, UiText.Get("SheetTabs_ContextHelpText"));
                     ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle, sheetTabIndex).ToArray();
-                    CreateSheetTabContextMenuItem(tab, "Rename...", async () => await RenameActiveSheetAsync(), isIdle);
-                    CreateSheetTabContextMenuItem(tab, "Insert Sheet", AddNewSheet, isIdle);
-                    CreateSheetTabContextMenuItem(tab, "Duplicate", DuplicateActiveSheet, isIdle);
-                    CreateSheetTabContextMenuItem(tab, "Delete Sheet", DeleteActiveSheet, isIdle);
-                    CreateSheetTabContextMenuItem(tab, "Hide", HideActiveSheet, isIdle && _session.SheetTabs.Count > 1);
-                    CreateSheetTabContextMenuItem(tab, "Unhide...", async () => await UnhideSheetAsync(), isIdle && _session.HiddenSheets.Count > 0);
-                    CreateSheetTabColorContextMenuItem(tab, isIdle);
-                    CreateSheetTabContextMenuItem(tab, "Select All Sheets", SelectAllVisibleSheets, isIdle && _session.SheetTabs.Count > 1);
-                    CreateSheetTabContextMenuItem(tab, "Ungroup Sheets", UngroupSheets, isIdle && _session.IsWorkbookGrouped);
-                    CreateSheetTabContextMenuItem(tab, "Move Left", MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
+                    SheetTabContextMenuPlanner.BuildSheetTabCommands(
+                    string Header(SheetTabContextMenuAction action) => UiText.Get(Common(action).ResourceKey);
+                    bool Enabled(SheetTabContextMenuAction action) => isIdle && Common(action).IsEnabled;
+                    CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename));
+                    CreateSheetTabColorContextMenuItem(tab, Header(SheetTabContextMenuAction.TabColor), Enabled(SheetTabContextMenuAction.TabColor));
+                    CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_MoveLeft"), MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
                     button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);
                     args.Key == Key.Apps;
                     args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.Shift;
@@ -2914,17 +3070,17 @@ public sealed class MacOsAppReadinessPreflightTests
                     CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);
                     args.Key == Key.F6 && args.KeyModifiers == KeyModifiers.None;
                     if (IsPivotFieldPaneFocused())
-                    case WorkbookShortcutRoute.SelectPreviousSheetGroup:
-                        SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true);
-                    case WorkbookShortcutRoute.SelectNextSheetGroup:
-                        SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true);
-                    case WorkbookShortcutRoute.ActivatePreviousSheet:
-                        SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false);
-                    case WorkbookShortcutRoute.ActivateNextSheet:
-                        SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false);
-                    _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
-                    _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback");
-                    _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates");
+                    case WorkbookApplicationCommandIntent.SelectPreviousSheetGroup:
+                        SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true);
+                    case WorkbookApplicationCommandIntent.SelectNextSheetGroup:
+                        SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true);
+                    case WorkbookApplicationCommandIntent.ActivatePreviousSheet:
+                        SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false);
+                    case WorkbookApplicationCommandIntent.ActivateNextSheet:
+                        SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false);
+                    _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"));
+                    _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"));
+                    _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"));
                     _aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();
                     _legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();
                     _minimizeWindowMenuItem.Gesture = new KeyGesture(Key.M, KeyModifiers.Meta);
@@ -2939,9 +3095,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     documents.Select(document => document.Title);
                     ItemsSource = documents.Select(CreateLegalNoticeTabItem).ToList(),
                     AutomationProperties.SetAutomationId(tabControl, "LegalNoticesSectionTabs");
-                    HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable);
-                    HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true;
-                    HasShellFocusCycleTargets: _sheetGridHost.Focusable &&;
+                    HasFocusableSheetTab: access.HasSheetTab(button => button.Focusable)
+                    HasFocusableActiveSheetTab: access.ActiveSheetTab?.Focusable == true
+                    HasShellFocusCycleTargets: _sheetGridHost.Focusable &&
+                    access.ToolbarFocusTargets.Any(control => control.Focusable) &&
                     HasNativeWindowMenu: hasNativeWindowMenu;
                     HasNativeMinimizeWindowMenuItem: HasNativeMenuItem(_minimizeWindowMenuItem, "Minimize");
                     HasNativeZoomWindowMenuItem: HasNativeMenuItem(_zoomWindowMenuItem, "Zoom", requireGesture: false);
@@ -2949,7 +3106,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     GetToolbarFocusTargets().Any(control => control.Focusable) &&;
                     _formulaBox.Focusable &&;
                     _zoomText.Focusable;
-                    HasFormatPainterButton: _formatPainterButton.Content?.ToString() == "Format Painter";
+                    HasFormatPainterButton: _formatPainterButton.Content?.ToString() == UiText.Get("MainWindow_TooltipTitle_FormatPainter");
                     HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, "Format Painter", requireGesture: false);
                     private readonly NativeMenuItem _formatCellsMenuItem = new();
                     _formatCellsMenuItem.Header = "Format Cells...";
@@ -2999,14 +3156,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     "FormatCellsProtectionExplanationText"
                     Locking cells or hiding formulas has no effect until you protect the worksheet.
                     var currentMergeCells = _session.IsSelectedRangeMerged;
-                    MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)
-                    var normalStyle = CellStyle.Default;
-                    Bold: normalFont ? normalStyle.Bold : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox)
-                    FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox)
-                    FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color
+                    new FormatCellsCompactDialogInput(
+                    FormatCellsDialogPlanner.TryCreateCompactPlan(plannerInput
+                    UseNormalFont: normalFont
+                    FontNameText: fontNameBox.Text
+                    FontColor: (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color
                     SelectFormatCellsColor(fontColorBox, normal.FontColor)
-                    FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)
-                    FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color
+                    FillPatternStyle: SelectedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox)
+                    FillPatternColorText: fillEditor.PatternColorTextBox.Text
                     CreateFormatCellsField("Pattern style", fillPatternStyleBox)
                     CreateFormatCellsField("Pattern color", fillPatternColorBox)
                     private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices()
@@ -3028,9 +3185,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasBordersButton: _bordersButton.Content?.ToString() == "Borders";
                     HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, "Borders", requireGesture: false);
                     NativeBordersPresetCount: nativeBordersPresetCount;
-                    _mergeAndCenterButton.Content = "Merge & Center";
+                    _mergeAndCenterButton.Content = UiText.Get("MainWindow_Text_MergeCenter");
                     AutomationProperties.SetAutomationId(_mergeAndCenterButton, "HomeMergeAndCenterButton");
-                    AutomationProperties.SetHelpText(_mergeAndCenterButton, "Merge and center the selected cells.");
+                    AutomationProperties.SetHelpText(_mergeAndCenterButton, UiText.Get("Toolbar_MergeCenterHelpText"));
                     _mergeAndCenterMenuItem.Header = "Merge & Center";
                     _mergeAndCenterMenuItem.Click += async (_, _) => await MergeAndCenterSelectedRangeAsync();
                     _unmergeCellsMenuItem.Header = "Unmerge Cells";
@@ -3047,24 +3204,24 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetName(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey));
                     AutomationProperties.SetHelpText(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey));
                     AutomationProperties.SetAutomationId(_statusText, "StatusText");
-                    AutomationProperties.SetName(_statusText, "Status");
-                    AutomationProperties.SetHelpText(_statusText, "Shows the current workbook status.");
+                    AutomationProperties.SetName(_statusText, UiText.Get("Toolbar_StatusAutomationName"));
+                    AutomationProperties.SetHelpText(_statusText, UiText.Get("Toolbar_StatusHelpText"));
                     AutomationProperties.SetAutomationId(_cellAddressText, "CellAddressText");
-                    AutomationProperties.SetName(_cellAddressText, "Cell address");
-                    AutomationProperties.SetHelpText(_cellAddressText, "Shows the active cell address.");
+                    AutomationProperties.SetName(_cellAddressText, UiText.Get("Toolbar_CellAddressAutomationName"));
+                    AutomationProperties.SetHelpText(_cellAddressText, UiText.Get("Toolbar_CellAddressHelpText"));
                     AutomationProperties.SetAutomationId(_selectionStatsText, "SelectionStatsText");
-                    AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
-                    AutomationProperties.SetHelpText(_selectionStatsText, "Shows statistics for the current selection.");
+                    AutomationProperties.SetName(_selectionStatsText, UiText.Get("Toolbar_SelectionStatisticsAutomationName"));
+                    AutomationProperties.SetHelpText(_selectionStatsText, UiText.Get("Toolbar_SelectionStatisticsHelpText"));
                     HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey), StringComparison.Ordinal)
                     HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey), StringComparison.Ordinal)
                     HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), "FormulaBox", StringComparison.Ordinal)
                     HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), "Status", StringComparison.Ordinal)
                     HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal)
                     HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal)
-                    HasStatusTextValue: HasStatusBarAccessibleValue()
-                    private bool HasStatusBarAccessibleValue() =>
-                        !string.IsNullOrWhiteSpace(_statusText.Text) ||
-                        !string.IsNullOrWhiteSpace(_selectionStatsText.Text);
+                    HasStatusTextValue: HasStatusBarAccessibleValue(_statusText, _selectionStatsText)
+                    private static bool HasStatusBarAccessibleValue(TextBlock statusText, TextBlock selectionStatsText) =>
+                        !string.IsNullOrWhiteSpace(statusText.Text) ||
+                        !string.IsNullOrWhiteSpace(selectionStatsText.Text);
                     HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal)
                     HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal)
                     HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal)
@@ -3073,13 +3230,18 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), "SelectionStatsText", StringComparison.Ordinal)
                     HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, "Merge & Center", requireGesture: false);
                     HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, "Unmerge Cells", requireGesture: false);
-                    HasSheetTabContextKeyboardHelp: HasSheetTabButton(button =>;
-                    string.Equals(AutomationProperties.GetHelpText(button), SheetTabContextHelpText, StringComparison.Ordinal));
-                    HasSheetTabContextRenameMenuItem: HasSheetTabContextMenuItem("Rename...");
-                    HasSheetTabContextTabColorMenuItem: HasSheetTabContextMenuItem("Tab Color");
-                    HasSheetTabContextNoColorMenuItem: HasSheetTabContextSubmenuItem("Tab Color", "No Color");
-                    HasSheetTabContextSelectAllSheetsMenuItem: HasSheetTabContextMenuItem("Select All Sheets");
-                    HasSheetTabContextUngroupSheetsMenuItem: HasSheetTabContextMenuItem("Ungroup Sheets");
+                    HasSheetTabContextKeyboardHelp: access.HasSheetTab(button =>
+                    string.Equals(
+                        AutomationProperties.GetHelpText(button),
+                        UiText.Get("SheetTabs_ContextHelpText"),
+                        StringComparison.Ordinal));
+                    HasSheetTabContextRenameMenuItem: access.HasSheetTabContextMenuItem(UiText.Get("MainWindow_Header_Rename"))
+                    HasSheetTabContextTabColorMenuItem: access.HasSheetTabContextMenuItem(UiText.Get("MainWindow_Header_TabColor"))
+                    HasSheetTabContextNoColorMenuItem: access.HasSheetTabContextSubmenuItem(
+                        UiText.Get("MainWindow_Header_TabColor"),
+                        UiText.Get("RibbonWire_TabColorNone"))
+                    HasSheetTabContextSelectAllSheetsMenuItem: access.HasSheetTabContextMenuItem(UiText.Get("MainWindow_Header_SelectAllSheets"))
+                    HasSheetTabContextUngroupSheetsMenuItem: access.HasSheetTabContextMenuItem(UiText.Get("MainWindow_Header_UngroupSheets"))
                 }
                 private MenuFlyout CreateBorderPresetFlyout() => new();
                 private MenuItem CreateBorderPresetMenuItem(CellBorderPreset preset)
@@ -3159,7 +3321,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 private async Task TryQuitApplicationAsync() => await Task.CompletedTask;
                 private async Task<bool> ConfirmBeforeDestructiveWorkbookActionAsync(string title, string discardButtonText) => await Task.FromResult(true);
                 private async Task<DirtyWorkbookCloseChoice> ShowDirtyWorkbookCloseDialogAsync(string title, string discardButtonText) => await Task.FromResult(DirtyWorkbookCloseChoice.Cancel);
-                private async Task SaveDirtyWorkbookBeforeCloseAsync() => await SaveCurrentWorkbookAsync();
+                _fileWorkflow.CanProceedAfterDirtyGateWithCleanSaveAsync(
+                SaveCurrentWorkbookAsync,
                 private async Task SaveCurrentWorkbookAsync() => await Task.CompletedTask;
                 private async Task RenameActiveSheetAsync() => await Task.CompletedTask;
                 private async Task<string?> ShowRenameSheetDialogAsync(string currentName) => await Task.FromResult<string?>(currentName);
@@ -3218,9 +3381,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 private static bool IsShellFocusCycleKey(KeyEventArgs args) => true;
                 private void CycleShellFocus(bool reverse)
                 {
-                    var current = GetCurrentShellFocusTarget();
-                    current = ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable);
-                    FocusShellRegion(current);
+                    ShellFocusCyclePlanner.TryFocusNextAvailable(
+                        GetCurrentShellFocusTarget(),
+                        reverse,
+                        IsShellFocusTargetAvailable,
+                        FocusShellRegion);
                 }
                 private bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
                     target != ShellFocusTarget.TaskPane ||
@@ -3244,10 +3409,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool IsAnyToolbarControlFocused() => true;
                 private bool IsAnySheetTabFocused() => true;
                 private static bool FocusControl(Control control) => true;
-                internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()
+                private static MacOsLaunchSmokeSnapshot CaptureSnapshot(
                 {
-                    ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length;
-                    ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length);
+                    ExternalImageClipboardPictureCount: shell.ExternalImageClipboardPictureCount;
+                    ExternalImageClipboardPicturePngByteCount: shell.ExternalImageClipboardPicturePngByteCount;
                     return new();
                 }
             }
@@ -3261,9 +3426,23 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class AboutDialog
             {
-                private readonly string _aboutText = AppHelpInfo.BuildAboutText(
-                    AppHelpInfo.GetVersionText(typeof(AboutDialog).Assembly),
-                    AppHelpInfo.AvaloniaPlatformSummary);
+                private readonly object _presentation =
+                    FreeXAboutDialogPresentation.Create(typeof(AboutDialog).Assembly, "Avalonia");
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Avalonia/LegalNoticesDialog.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            internal sealed class LegalNoticesDialog : AvaloniaLegalNoticesDialog
+            {
+                private void PreserveSourceContract()
+                {
+                    FreeXLegalNoticesPresentation.Create(LegalNoticeProvider.GetDocuments(), UiText.Get);
+                }
             }
             """);
 
@@ -3277,12 +3456,83 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 private static void PreserveSourceContract()
                 {
-                    FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox);
-                    FillPatternColor: clearFill ? null : fillEditor.PatternColor;
                     getText("FormatCells_PatternStyle"),
                     getText("FormatCells_PatternColor2"),
                     private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices();
                     CellFillPatternStyle.DarkTrellis;
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/FormatCellsDialogPlanner.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public static class FormatCellsDialogPlanner
+            {
+                public static bool TryCreateCompactPlan(
+                    FormatCellsCompactDialogInput input,
+                    out object? plan,
+                    out object? validation)
+                {
+                    FormatCellsInputParser.TryParseFontSize(input.FontSizeText);
+                    MergeCells: Changed(input.InitialMergeCells, input.MergeCells);
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Presentation/Shell/WorkbookApplicationCommandRouter.cs",
+            """
+            namespace FreeX.App.Presentation.Shell;
+
+            public static class WorkbookApplicationCommandBindingFactory
+            {
+                public static void PreserveSourceContract()
+                {
+                    WorkbookApplicationCommandBindingFactory.Create(
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Presentation/Shell/WorkbookApplicationWorkareaCommandEndpoint.cs",
+            """
+            namespace FreeX.App.Presentation.Shell;
+
+            public static class WorkbookApplicationWorkareaCommandDispatcher
+            {
+                private static void PreserveSourceContract()
+                {
+                    new WorkbookApplicationWorkareaCommandEndpointProfile
+                    WorkbookApplicationCommandIntent.WorkbookStatistics =>
+                    WorkbookApplicationCommandIntent.FlashFill =>
+                    WorkbookApplicationCommandIntent.Find =>
+                    WorkbookApplicationCommandIntent.Replace =>
+                    WorkbookApplicationCommandIntent.GoTo =>
+                    WorkbookApplicationCommandIntent.FillDown =>
+                    WorkbookApplicationCommandIntent.FillRight =>
+                    SelectAdjacentVisibleSheetFromKeyboard(direction, selectRange: true)
+                    SelectAdjacentVisibleSheetFromKeyboard(direction, selectRange: false)
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.Shell.Avalonia/AvaloniaLegalNoticesDialog.cs",
+            """
+            namespace Free.Shared.Shell.Avalonia;
+
+            public class AvaloniaLegalNoticesDialog
+            {
+                private void PreserveSourceContract()
+                {
+                    AutomationProperties.SetAutomationId(_tabControl, LegalNoticesDialogPresentation.SectionsAutomationId);
                 }
             }
             """);
@@ -3401,7 +3651,7 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
-            "src/FreeX.App.Avalonia/MacOsLaunchSmoke.cs",
+            "tools/FreeX.Validation.Avalonia/MacOsLaunchSmoke.cs",
             """
             namespace FreeX.App.Avalonia;
 
@@ -3428,12 +3678,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     startupArguments = filteredArguments.ToArray();
                 }
 
-                public static void Start(MainWindow mainWindow, MacOsLaunchSmokeOptions options, AvaloniaAppDiagnostics? diagnostics = null)
+                public static void Start(MainWindow.RendererValidationAccess access, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics = null)
                 {
-                    RunAsync(mainWindow, options, diagnostics);
+                    RunAsync(access, options, diagnostics);
                 }
 
-                private static void RunAsync(MainWindow mainWindow, MacOsLaunchSmokeOptions options, AvaloniaAppDiagnostics? diagnostics)
+                private static void RunAsync(MainWindow.RendererValidationAccess access, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics)
                 {
                     diagnostics?.RecordEvent("macos_launch_smoke");
                     diagnostics?.RecordCrash(ex, "macos_launch_smoke");
@@ -3807,18 +4057,24 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class MacOsLaunchSmokeCoordinator
             {
-                private static async Task RunAsync(MainWindow mainWindow, MacOsLaunchSmokeOptions options)
+                private static async Task RunAsync(MainWindow.RendererValidationAccess access, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics)
                 {
-                    var snapshot = mainWindow.CreateLaunchSmokeSnapshot();
+                    var snapshot = access.CreateSnapshot();
                     var initialExternalImageClipboardPictureCount = snapshot.ExternalImageClipboardPictureCount;
-                    var liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();
+                    var commandKeyEvidence = CaptureCommandKeyEvidence(access);
+                    var liveCommandKeyEvidence = access.BeginCommandObservation(observation =>
                     liveCommandKeyEvidence.IsPassed.ToString();
-                    await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();
+                    await access.TryPasteExternalClipboardImageAsync();
                     IsPassed(snapshot, options, initialExternalImageClipboardPictureCount).ToString();
                     HasExternalImageClipboardPasteEvidence(snapshot, initialExternalImageClipboardPictureCount).ToString();
                 }
 
-                private static bool HasMainWindowDirectCommandRouteSourceSupport(params string[] requiredMarkers) => true;
+                private static MacOsLaunchSmokeCommandKeySnapshot CaptureCommandKeyEvidence(MainWindow.RendererValidationAccess access) => new()
+                {
+                    HasFindDirectRouteSourceGuard = MainWindow.RendererValidationAccess.HasMethods("MainWindow_KeyDown"),
+                    HasPageUpDirectRouteSourceGuard = MainWindow.RendererValidationAccess.HasMethods("SelectAdjacentVisibleSheetFromKeyboard"),
+                    HasPageDownDirectRouteSourceGuard = MainWindow.RendererValidationAccess.HasMethods("SelectAdjacentVisibleSheetFromKeyboard")
+                };
             }
             """);
 
@@ -3941,8 +4197,8 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 public static void WriteAllText(string path, string content)
                 {
-                    fs.Flush(flushToDisk: true);
-                    File.Move(tempPath, path, overwrite: true);
+                    fileStream.Flush(flushToDisk: true);
+                    File.Move(sourceTempPath, destinationPath, overwrite: true);
                 }
             }
             """);
@@ -4043,14 +4299,12 @@ public sealed class MacOsAppReadinessPreflightTests
                 public WorkbookCellEditResult RemoveSelectedRangeSubtotals()
                 new SubtotalCommand(
                 new RemoveSubtotalRowsCommand(sheetId, sheetRange)
-                private static string GetFillCellsTitle(FillCellsDirection direction)
-                FillCellsDirection.Down => "Fill Down"
-                FillCellsDirection.Right => "Fill Right"
-                FillCellsDirection.Up => "Fill Up"
-                FillCellsDirection.Left => "Fill Left"
+                WorksheetCommandPresentationCatalog.DescribeFill(direction).CommandTitle
                 public bool CanSortSelectedRange => SelectedRange.RowCount > 1;
                 public WorkbookCellEditResult SortSelectedRange(bool ascending)
-                new SortCommand(sheetId, sheetRange, sortByColOffset: 0, ascending)
+                QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell)
+                sortPlan.Range
+                sortPlan.SortByColOffset
                 "Select at least two rows to sort."
                 public WorkbookCellEditResult SetSelectedRangeBorderPreset(CellBorderPreset preset)
                 CreateBorderPresetCommand(range, preset)
@@ -4061,13 +4315,13 @@ public sealed class MacOsAppReadinessPreflightTests
                 public WorkbookCellEditResult ApplySelectedRangeCompactFormat(
                     bool? mergeCells = null,
                     MergeCellContentResolution mergeContentResolution = MergeCellContentResolution.KeepFirstCell)
-                CreateFormatCellsMergeCommands(range, shouldMerge, mergeContentResolution)
+                CreateFormatCellsMergeCommands(area, shouldMerge, mergeContentResolution)
                 public bool IsSelectedRangeMerged => CellMergePlanner.IsSelectionMerged(ActiveSheet, SelectedRange);
                 public WorkbookCellEditResult MergeAndCenterSelectedRange(
                     MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
-                CreateMergeAndCenterCommand(range, contentResolution)
+                CreateMergeAndCenterCommand(area, contentResolution)
                 public WorkbookCellEditResult UnmergeSelectedRange()
-                CreateUnmergeCommands(range)
+                areas.SelectMany(CreateUnmergeCommands)
                 private IWorkbookCommand CreateMergeAndCenterCommand(
                     GridRange range,
                     MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
@@ -4126,29 +4380,24 @@ public sealed class MacOsAppReadinessPreflightTests
                 Func<SheetId, IWorkbookCommand> createCommand
                 bool keepSourceColumnWidths = false
                 if (keepSourceColumnWidths)
-                public string LastFindText => _lastFindText ??
+                private readonly FindReplaceWorkflowSession _findReplaceWorkflow;
+                _findReplaceWorkflow = new FindReplaceWorkflowSession(
+                public string LastFindText => _findReplaceWorkflow.LastFindText;
                 public StyleDiff? CreateFormatDiffFromActiveCell()
                 public StyleDiff? CreateFormatDiffFromCell(CellAddress address)
                 public IReadOnlyList<GridRange> SelectedRanges { get; private set; } = [];
                 public WorkbookFindAllResult FindAll(
-                return WorkbookFindAllResult.Found(results.Select(CreateFindAllMatch).ToList());
+                _findReplaceWorkflow.FindAll(
+                result.Matches.Select(CreateFindAllMatch).ToList()
                 private WorkbookFindAllMatch CreateFindAllMatch(FindResult result)
                 private string FindNameForAddress(CellAddress address)
                 public WorkbookReplaceResult ReplaceAllValues(
                 public WorkbookReplaceResult ReplaceNextValue(
                 FindOptions? options,
                 StyleDiff? replacementFormat = null
-                FindReplaceService.TryCreateReplacementCommand(
-                workbook: Workbook))
-                new CompositeWorkbookCommand(
-                new ApplyStyleCommand(
+                _findReplaceWorkflow.ReplaceAll(
+                _findReplaceWorkflow.ReplaceNext(
                 new GridRange(match.Address, match.Address)
-                var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
-                GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch)
-                effectiveOptions.LookIn,
-                new SetCommentCommand(
-                new UpdateThreadedCommentTextCommand(
-                return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);
                 public WorkbookNavigationResult GoToReference(string reference)
                 public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
                 var searchRange = kind is GoToSpecialKind.CurrentRegion or GoToSpecialKind.Precedents or GoToSpecialKind.Dependents
@@ -4158,19 +4407,17 @@ public sealed class MacOsAppReadinessPreflightTests
                 SelectRanges(selectedRange, ranges);
                 WorkbookReferenceNavigator.TryParseReferenceRange(
                 public WorkbookNavigationResult FindNext(
-                FindReplaceService.Find(Workbook, text, effectiveOptions, matchCase, matchEntireCell)
+                _findReplaceWorkflow.FindNext(
                 return WorkbookNavigationResult.Found(
                 private WorkbookNavigationResult NavigateToRange(GridRange range)
                 SelectSheet(range.Start.Sheet);
-                private int GetNextFindResultIndex(
-                private int CompareFindOrder(CellAddress left, CellAddress right, FindSearchOrder searchOrder)
                 private SheetId? ResolveSheetIdByName(string sheetName)
                 */
                 public WorkbookCellEditResult AddSheet()
                 {
                     var result = _cellEditService.ExecuteEditCommand(
                         Workbook,
-                        new AddSheetCommand(WorkbookSheetNameGenerator.GenerateUniqueSheetName(Workbook)));
+                        new AddSheetCommand(SheetTabListPlanner.GenerateUniqueSheetName(Workbook)));
                     ApplySuccessfulNewWorksheetResult(Workbook.Sheets[^1].Id);
                     return result;
                 }
@@ -4263,8 +4510,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 public static bool TryParseReference(
                 public static bool TryParseReferenceRange(
                 Func<string, SheetId?> resolveSheetId
-                private static bool TryResolveReferenceSheet(
-                private static string? NormalizeAbsoluteA1Reference(string input)
+                WorkbookRangeTextCodec.TryResolveReferenceSheet(
+                WorkbookRangeTextCodec.TryParse(defaultSheetId, text, resolveSheetId, out range)
+                WorkbookRangeTextCodec.SplitReferences(text)
                 private static bool TryParseAbsoluteR1C1CellReference(string input, SheetId sheetId, out CellAddress address)
                 */
             }
@@ -4356,6 +4604,8 @@ public sealed class MacOsAppReadinessPreflightTests
             root,
             "shared/Free.Shared.AppServices/LocalFilePath.cs",
             """
+            using Free.Shared.IO;
+
             namespace FreeX.App.Services;
 
             public static class LocalFilePath
@@ -4374,8 +4624,7 @@ public sealed class MacOsAppReadinessPreflightTests
 
                     path.Contains('\0', StringComparison.Ordinal);
                     IsUnixAbsolutePath(path);
-                    Path.GetFullPath(path);
-                    return true;
+                    return FilePathPolicy.TryGetFullPath(path, out normalizedPath);
                 }
 
                 private static bool TryCreateExplicitUri(string candidate, out Uri uri)
@@ -4597,9 +4846,9 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
-            "src/FreeX.App.Services/WorkbookStartupSmokeService.cs",
+            "tools/FreeX.Validation.Avalonia/PackagingSmokeValidation.cs",
             """
-            namespace FreeX.App.Services;
+            namespace FreeX.Validation.Avalonia;
 
             internal sealed class WorkbookStartupSmokeService
             {
@@ -4623,9 +4872,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 }
             }
 
-            public static class PackagingSmokeCommand
+            internal static class PackagingSmokeCommand
             {
-                public const string Argument = "--packaging-smoke";
+                public const string Argument = SisterAppPackagingSmoke.Argument;
             }
             """);
 
@@ -4657,7 +4906,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public static object Build(object workbook, object exportPlan, object options)
                 {
                     PortablePdfPageContentPlanner.CreatePlan(workbook, request);
-                    PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength);
+                    PdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength);
                     return new object();
                 }
             }
@@ -4707,16 +4956,10 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 public static PdfExportOutcome Save(object workbook, object exportPlan, Stream stream)
                 {
-                    try
-                    {
-                        var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options, workbookDirectory);
-                        return result;
-                    }
-                    catch (Exception ex) when (IsSkiaUnavailable(ex))
-                    {
-                        var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream, options);
-                        return result;
-                    }
+                    return PdfBackendFallbackExecutor.Execute(
+                        stream,
+                        target => SkiaPdfDocumentExporter.Save(workbook, exportPlan, target, options, workbookDirectory),
+                        target => PortablePdfDocumentExporter.Save(workbook, exportPlan, target, options));
                 }
             }
             """);
@@ -4792,7 +5035,8 @@ public sealed class MacOsAppReadinessPreflightTests
             "shared/Free.Shared.Pdf",
             "shared/Free.Shared.Pdf.Skia",
             "shared/Free.Shared.Ribbon",
-            "shared/Free.Shared.Shell.Avalonia"
+            "shared/Free.Shared.Shell.Avalonia",
+            "tools/FreeX.ParityCapture.Support"
         })
         {
             Directory.CreateDirectory(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));

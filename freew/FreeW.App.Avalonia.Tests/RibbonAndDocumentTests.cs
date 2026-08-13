@@ -18,14 +18,14 @@ public class RibbonAndDocumentTests
     [Fact]
     public void Ribbon_definition_has_file_and_home_tabs()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         definition.Tabs.Select(t => t.Id).Should().Contain(new[] { "file", "home" });
     }
 
     [Fact]
     public void Ribbon_home_tab_has_the_expected_groups()
     {
-        var home = FreeWRibbon.BuildDefinition().FindTab("home");
+        var home = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("home");
         home.Should().NotBeNull();
         home!.Groups.Select(g => g.Id)
             .Should().Contain(new[] { "clipboard", "font", "paragraph", "editing" });
@@ -34,7 +34,7 @@ public class RibbonAndDocumentTests
     [Fact]
     public void Ribbon_file_tab_exposes_explicit_pdf_text_import()
     {
-        var file = FreeWRibbon.BuildDefinition().FindTab("file");
+        var file = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("file");
 
         file.Should().NotBeNull();
         file!.Groups
@@ -48,8 +48,8 @@ public class RibbonAndDocumentTests
     [Fact]
     public void Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed()
     {
-        var definition = FreeWRibbon.BuildDefinition();
-        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), NoopCallbacks());
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), NoopCallbacks());
         var commandIds = CommandIds(definition).Select(id => id.Value).ToArray();
 
         commandIds.Should().Contain(new[]
@@ -104,7 +104,7 @@ public class RibbonAndDocumentTests
             ImportPdfText = () => calls.Add("import-pdf-text"),
             Save = () => calls.Add("save"),
         };
-        var routedRegistry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), routedCallbacks);
+        var routedRegistry = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), routedCallbacks);
         foreach (var id in new[]
                  {
                      "freew.backstage",
@@ -123,7 +123,7 @@ public class RibbonAndDocumentTests
         mainWindow.Should().Contain("NewDocument: NewDocument");
         mainWindow.Should().Contain("ImportPdfText: () => _ = ImportPdfTextAsync()");
         mainWindow.Should().Contain("Backstage: () => _ = ShowBackstageAsync()");
-        mainWindow.Should().Contain("Save: () => _ = SaveAsync()");
+        mainWindow.Should().Contain("Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument)");
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public class RibbonAndDocumentTests
             CopyDiagnostics = () => calls.Add("copy-diagnostics"),
             CheckForUpdates = () => calls.Add("check-updates"),
         };
-        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), callbacks);
 
         foreach (var id in new[]
                  {
@@ -153,7 +153,7 @@ public class RibbonAndDocumentTests
 
         calls.Should().Equal("help-online", "feedback", "copy-diagnostics", "check-updates");
 
-        var unavailable = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), NoopCallbacks());
+        var unavailable = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), NoopCallbacks());
         foreach (var id in new[]
                  {
                      "freew.help-online",
@@ -171,9 +171,9 @@ public class RibbonAndDocumentTests
     [Fact]
     public void Every_ribbon_command_id_is_registered()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var callbacks = NoopCallbacks();
-        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), callbacks);
 
         foreach (var id in CommandIds(definition))
             registry.TryGet(id, out _).Should().BeTrue($"command '{id.Value}' should be wired");
@@ -216,16 +216,15 @@ public class RibbonAndDocumentTests
         mainWindow.Should().Contain("_fileWorkflow.ConfirmCloseAllowedAsync(");
         mainWindow.Should().Contain("new SisterAvaloniaAsyncWindowCloseCoordinator(");
         mainWindow.Should().Contain("saveAsync: SaveAsync");
-        mainWindow.Should().Contain("_documentPersistence.Open(path)");
-        mainWindow.Should().Contain("_documentPersistence.Save(_editor.Document, target)");
-        mainWindow.Should().Contain("_documentPersistence.BuildSaveCompatibilityPlan(_editor.Document, target)");
+        mainWindow.Should().Contain("FreeWDocumentFileWorkflow _documentFileWorkflow");
+        mainWindow.Should().Contain("_documentFileWorkflow.OpenPathAsync(");
+        mainWindow.Should().Contain("_documentFileWorkflow.SavePathAsync(");
         mainWindow.Should().Contain("SaveCompatibilityWarningDialog.ShowAsync(this, plan)");
         mainWindow.Should().Contain("_documentPersistence.BuildSavePickerPlan(");
         mainWindow.Should().Contain("_fileWorkflow.MarkDirty();");
-        // suppressRecentFiles was true (stub) and is now false so files register in the store.
-        mainWindow.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles:");
+        mainWindow.Should().Contain("_documentFileWorkflow.ApplyOpenResultAsync(result)");
         sharedShellWorkflow.Should().Contain("new FileCommandWorkflow(");
-        sharedShellWorkflow.Should().Contain("WindowTitlePlanner.Compose(");
+        sharedShellWorkflow.Should().Contain("ApplicationWindowTitlePolicy.Compose(");
         sharedShellWorkflow.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
         sharedShellWorkflow.Should().Contain("RecentEntries => _workflow.RecentEntries");
         mainWindow.Should().NotContain("PromptSaveChangesSync");
@@ -238,6 +237,12 @@ public class RibbonAndDocumentTests
         mainWindow.Should().NotContain("private string? _currentPath");
         mainWindow.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter(");
         mainWindow.Should().NotContain("DocumentSaveCompatibilityPlanner.Build(");
+        mainWindow.Should().NotContain("new DocumentOpenExecutionRequest(");
+        mainWindow.Should().NotContain("new DocumentSaveExecutionRequest(");
+        mainWindow.Split("_documentPersistence.Open(path)").Should().HaveCount(2,
+            "only the review-document loader bypasses the shell open coordinator");
+        mainWindow.Should().Contain("return _documentPersistence.Open(path).Document;");
+        mainWindow.Should().NotContain("_documentPersistence.Save(_editor.Document, target)");
         mainWindow.Should().NotContain("File.Create(path)");
     }
 
@@ -245,16 +250,24 @@ public class RibbonAndDocumentTests
     public void Avalonia_shell_confirms_shared_save_compatibility_plan_before_writing()
     {
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        var coordinator = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Presentation",
+            "Shell",
+            "DocumentFileExecutionCoordinator.cs"));
         var dialogSource = File.ReadAllText(FindRepoFile(
             "freew",
             "FreeW.App.Avalonia",
             "SaveCompatibilityWarningDialog.cs"));
 
-        var confirmationIndex = mainWindow.IndexOf("if (!await ConfirmSaveCompatibilityAsync(target))");
-        var saveIndex = mainWindow.IndexOf("_documentPersistence.Save(_editor.Document, target)");
+        var confirmationIndex = coordinator.IndexOf("await request.ConfirmCompatibilityAsync");
+        var saveIndex = coordinator.IndexOf("_persistence.Save(request.Document, request.Target)");
+        var completionIndex = coordinator.IndexOf("await request.CompleteSaveAsync!");
 
         confirmationIndex.Should().BeGreaterThanOrEqualTo(0);
         saveIndex.Should().BeGreaterThan(confirmationIndex);
+        completionIndex.Should().BeGreaterThan(saveIndex);
+        mainWindow.Should().Contain("SaveCompatibilityWarningDialog.ShowAsync(this, plan)");
         dialogSource.Should().Contain("DocumentSaveCompatibilityPlan");
         dialogSource.Should().Contain("plan.Message");
         dialogSource.Should().Contain("plan.ContinueButtonText");
@@ -268,12 +281,31 @@ public class RibbonAndDocumentTests
     {
         var invoked = 0;
         var callbacks = NoopCallbacks() with { ImportPdfText = () => invoked++ };
-        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), callbacks);
 
         registry.TryGet(new RibbonCommandId("freew.import-pdf-text"), out var command).Should().BeTrue();
         command!.Execute(RibbonCommandContext.Empty);
 
         invoked.Should().Be(1);
+    }
+
+    [Fact]
+    public void Avalonia_pdf_import_uses_shared_dirty_gate_persistence_and_picker_plan()
+    {
+        var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        var importStart = mainWindow.IndexOf("private Task<bool> ImportPdfTextAsync()", StringComparison.Ordinal);
+        var saveStart = mainWindow.IndexOf("private Task<bool> SaveAsync()", importStart, StringComparison.Ordinal);
+
+        importStart.Should().BeGreaterThanOrEqualTo(0);
+        saveStart.Should().BeGreaterThan(importStart);
+        var importSource = mainWindow[importStart..saveStart];
+        importSource.Should().Contain("_fileCommands.ImportPdfTextAsync()");
+        importSource.Should().Contain("_documentPersistence.BuildPdfImportPickerPlan().FileTypes");
+        mainWindow.Should().Contain("new FreeWDocumentFileCommandSession(");
+        mainWindow.Should().Contain("PickPdfImportPathAsync: _pickPdfImportPathAsync");
+        importSource.Should().NotContain("_documentPersistence.ImportPdfText(path)");
+        importSource.Should().NotContain("DocumentFileAdapterCatalog.CreatePdfImportAdapters()");
+        importSource.Should().NotContain("File.OpenRead(path)");
     }
 
     [Fact]
@@ -292,7 +324,7 @@ public class RibbonAndDocumentTests
     public void Avalonia_protect_toggles_read_state_from_shared_protection_state_planner()
     {
         var editor = new Editing.DocumentView();
-        var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.mark-as-final"), out var markAsFinal).Should().BeTrue();
         registry.TryGet(new RibbonCommandId("freew.restrict-editing"), out var restrictEditing).Should().BeTrue();
@@ -322,7 +354,7 @@ public class RibbonAndDocumentTests
     {
         var source = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "ProofingDialogs.cs"));
 
-        source.Should().Contain("ProofingLanguageDialogPlanner.Build(currentTag)");
+        source.Should().Contain("ProofingLanguageDialogPlanner.Build(currentTag, UiText.Get)");
         source.Should().Contain("choice.DisplayText");
         source.Should().NotContain("ProofingLanguageCatalog.CommonLanguages.Select");
     }
@@ -378,6 +410,6 @@ public class RibbonAndDocumentTests
         Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), Path.Combine(parts));
 
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(() => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, _ => { }, _ => { }, () => { }, () => { }, (_, _) => { });
 }

@@ -29,7 +29,7 @@ public sealed class R15_formula_audit_Tests
     [InlineData("private void InsertColumns(uint beforeCol)", "private void DeleteSelectedRows()")]
     [InlineData("private void DeleteSelectedRows()", "private void DeleteSelectedColumns()")]
     [InlineData("private void DeleteSelectedColumns()", "private void ApplyNumberFormatShortcut")]
-    public void CellsCommands_DedicatedInsertDeleteRowColumnMethods_ClearFormulaTraceArrows(
+    public void CellsCommands_DedicatedInsertDeleteRowColumnMethods_ApplyPortableStructureOutcome(
         string startMarker, string endMarker)
     {
         // Pre-fix, ClearFormulaTraceArrowsAfterStructuralEdit() was never called from
@@ -38,45 +38,40 @@ public sealed class R15_formula_audit_Tests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
         var body = SourceTextTestSupport.ExtractBetweenMarkers(source, startMarker, endMarker);
 
-        body.Should().Contain("ClearFormulaTraceArrowsAfterStructuralEdit();");
+        body.Should().Contain("CompleteWorksheetStructureEdit(result");
     }
 
     [Fact]
-    public void CellsCommands_InsertCellsMenuItemClick_ClearsTraceArrowsForEntireRowOrColumnChoice()
+    public void CellsCommands_InsertCellsMenuItemClick_AppliesPortableStructureOutcome()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
         var body = SourceTextTestSupport.ExtractBetweenMarkers(
             source, "private void InsertCellsMenuItem_Click", "private void InsertSheetMenuItem_Click");
 
-        body.Should().Contain(
-            "if (choice is KeyboardInsertDeleteDialogChoice.EntireRow or KeyboardInsertDeleteDialogChoice.EntireColumn)");
-        body.Should().Contain("ClearFormulaTraceArrowsAfterStructuralEdit();");
+        body.Should().Contain("CompleteWorksheetStructureEdit(result);");
     }
 
     [Fact]
-    public void CellsCommands_DeleteCellsMenuItemClick_ClearsTraceArrowsForEntireRowOrColumnChoice()
+    public void CellsCommands_DeleteCellsMenuItemClick_AppliesPortableStructureOutcome()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
         var body = SourceTextTestSupport.ExtractBetweenMarkers(
             source, "private void DeleteCellsMenuItem_Click", "private void DeleteSheetMenuItem_Click");
 
-        body.Should().Contain(
-            "if (choice is KeyboardInsertDeleteDialogChoice.EntireRow or KeyboardInsertDeleteDialogChoice.EntireColumn)");
-        body.Should().Contain("ClearFormulaTraceArrowsAfterStructuralEdit();");
+        body.Should().Contain("CompleteWorksheetStructureEdit(result);");
     }
 
     [Theory]
     [InlineData("private bool ExecuteKeyboardInsertCellsWithPrompt", "private bool ExecuteKeyboardDeleteCellsWithPrompt")]
     [InlineData("private bool ExecuteKeyboardDeleteCellsWithPrompt", "private bool TryShowCellShiftDialog")]
-    public void CellsCommands_KeyboardEntireRowColumnPromptMethods_ClearFormulaTraceArrows(
+    public void CellsCommands_KeyboardEntireRowColumnPromptMethods_RouteThroughWorkbookSession(
         string startMarker, string endMarker)
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
         var body = SourceTextTestSupport.ExtractBetweenMarkers(source, startMarker, endMarker);
 
-        body.Should().Contain(
-            "if (success && choice is KeyboardInsertDeleteDialogChoice.EntireRow or KeyboardInsertDeleteDialogChoice.EntireColumn)");
-        body.Should().Contain("ClearFormulaTraceArrowsAfterStructuralEdit();");
+        body.Should().Contain("TryExecuteWorksheetStructure(");
+        body.Should().Contain("_session.");
     }
 
     [Theory]
@@ -84,7 +79,7 @@ public sealed class R15_formula_audit_Tests
     [InlineData("private void InsertSheetColumns()", "private void DeleteSheetRows()")]
     [InlineData("private void DeleteSheetRows()", "private void DeleteSheetColumns()")]
     [InlineData("private void DeleteSheetColumns()", "private void ToggleSelectedRangeLock()")]
-    public void AvaloniaRibbonMenuWires_InsertDeleteSheetRowColumnMethods_ClearFormulaTraceArrows(
+    public void AvaloniaRibbonMenuWires_InsertDeleteSheetRowColumnMethods_ApplyPortableStructureOutcome(
         string startMarker, string endMarker)
     {
         // The Avalonia shell reproduces the identical stale-trace-arrow bug on its own structural
@@ -94,7 +89,7 @@ public sealed class R15_formula_audit_Tests
         var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuWires.cs");
         var body = SourceTextTestSupport.ExtractBetweenMarkers(source, startMarker, endMarker);
 
-        body.Should().Contain("ClearFormulaTraceArrowsAfterStructuralEdit();");
+        body.Should().Contain("ApplyWorksheetStructureResult(");
     }
 
     [Fact]

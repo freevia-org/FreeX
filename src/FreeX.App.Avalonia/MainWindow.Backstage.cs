@@ -52,7 +52,7 @@ public sealed partial class MainWindow
         var display = WorkbookInfoDisplayPlanner.Build(
             plan,
             WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog,
-            CreateWorkbookInfoDisplayStrings(),
+            AvaloniaPlannerTextResources.Text,
             CultureInfo.CurrentCulture);
 
         var dialog = new Window
@@ -100,14 +100,11 @@ public sealed partial class MainWindow
             ResolveActiveSheetIndex(),
             hasUnsavedChanges: _session.IsDirty,
             // R129-model-avalonia-info-formula-issues-1: same cyclic-cell source the WPF host's
-            // UpdateInfoView feeds BackstageInfoPlanner.Build (_recalcEngine.CyclicCells) -- without
+            // UpdateInfoView feeds BackstageInfoPlanner.Build from the shared cyclic-cell state -- without
             // this, a Linux/macOS user with a circular reference got no indication from File > Info
             // while a Windows user did.
             cyclicCells: _session.CyclicCells);
     }
-
-    private static WorkbookInfoDisplayStrings CreateWorkbookInfoDisplayStrings() =>
-        new(UiText.Get, (key, args) => UiText.Format(key, args));
 
     private static FreeXBackstageInfoPaneRequest CreateBackstageInfoPaneRequest(
         WorkbookInfoDisplayPlan display) =>
@@ -164,11 +161,13 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var hasSelection = HasPrintSelection(_session.SelectedRange);
-        var scopePlan = WorkbookExportScopePlanner.Build(
+        var commandPlan = WorkbookExportInteractionPlanner.CreateCommandPlan(
             _session.Workbook,
-            hasSelection,
-            WorkbookExportPrintSurface.MacOs);
+            _session.SelectedRange,
+            WorkbookExportPrintSurface.MacOs,
+            isBusy: _isSaving,
+            canChooseDestination: true);
+        var scopePlan = commandPlan.ScopePlan;
         var exportPane = FreeXBackstageExportPanePlanner.Build(
             FreeXBackstageExportPanePlanner.CreateRequest(
                 scopePlan.Scopes
@@ -336,16 +335,11 @@ public sealed partial class MainWindow
 
     private FreeXBackstageAccountPanePlan BuildBackstageAccountPanePlan(
         LocalAccountInfoPlan plan) =>
-        FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
-            plan.UserName,
-            plan.DeviceName,
-            plan.VersionText,
-            plan.OptionsAvailable,
-            _session.CurrentFilePath,
-            _session.Workbook.Name,
-            plan.TrademarkNotice,
-            plan.LicenseNotice,
-            plan.PrivacyNotice));
+        FreeXBackstageAccountPanePlanner.Build(
+            LocalAccountInfoPlanner.CreateBackstageAccountPaneRequest(
+                plan,
+                _session.CurrentFilePath,
+                _session.Workbook.Name));
 
     private IReadOnlyList<AvaloniaBackstageActionButtonSpec> BuildBackstageAccountActionButtons(
         IReadOnlyList<FreeXBackstageAccountActionDefinition> actions,
@@ -432,9 +426,7 @@ public sealed partial class MainWindow
         };
 
     private static string ResolveBackstageTextValue(FreeXBackstageTextValue value) =>
-        value.TextKey is { } key
-            ? UiText.Get(key)
-            : value.Text ?? string.Empty;
+        value.Resolve(UiText.Get);
 
     private Action ResolveBackstageAccountAction(FreeXBackstageAccountActionId id) =>
         id switch

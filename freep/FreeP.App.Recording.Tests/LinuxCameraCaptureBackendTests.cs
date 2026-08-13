@@ -8,7 +8,7 @@ public sealed class LinuxCameraCaptureBackendTests
     [Fact]
     public void Discovery_WithFfmpegAndVideoDevice_ExposesCameraAndBuildsV4l2Command()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-camera-tests-");
         var devicePath = Path.Combine(temp.Path, "video0");
         File.WriteAllText(devicePath, string.Empty);
         var probe = new FakeProbeRunner();
@@ -41,7 +41,7 @@ public sealed class LinuxCameraCaptureBackendTests
     [Fact]
     public void CompleteCapture_StopsRecorderAndReturnsPersistableMp4Payload()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-camera-tests-");
         var devicePath = Path.Combine(temp.Path, "video0");
         File.WriteAllText(devicePath, string.Empty);
         var processAdapter = new FakeProcessAdapter { PayloadOnStop = Mp4Payload() };
@@ -76,7 +76,7 @@ public sealed class LinuxCameraCaptureBackendTests
     [Fact]
     public void CompositeBackend_ExposesNarrationAndCameraStreamsTogether()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-camera-tests-");
         var devicePath = Path.Combine(temp.Path, "video0");
         File.WriteAllText(devicePath, string.Empty);
         using var narration = new LinuxNarrationCaptureBackend(
@@ -240,22 +240,4 @@ public sealed class LinuxCameraCaptureBackendTests
         public void Dispose() { }
     }
 
-    private sealed class TemporaryDirectory : IDisposable
-    {
-        public TemporaryDirectory()
-        {
-            Path = System.IO.Path.Combine(
-                System.IO.Path.GetTempPath(),
-                "freep-linux-camera-tests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
 }

@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FluentAssertions;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -14,25 +15,25 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotChartOptionsDialog_CreateResult_ParsesAndClampsStyle()
     {
-        PivotChartOptionsDialog.CreateResult(
+        PivotChartOptionsPlanner.CreateResult(
                 " 99 ",
                 showFieldButtons: false,
                 showReportFilterButtons: true,
                 showAxisFieldButtons: false,
                 showValueFieldButtons: true)
             .Should()
-            .Be(new PivotChartOptionsDialogResult(48, false, true, false, true));
+            .Be(new PivotChartOptionsInput(48, false, true, false, true));
 
-        PivotChartOptionsDialog.CreateResult(
+        PivotChartOptionsPlanner.CreateResult(
                 "not-a-style",
                 showFieldButtons: true,
                 showReportFilterButtons: false,
                 showAxisFieldButtons: true,
                 showValueFieldButtons: false)
             .Should()
-            .Be(new PivotChartOptionsDialogResult(null, true, false, true, false));
+            .Be(new PivotChartOptionsInput(null, true, false, true, false));
 
-        PivotChartOptionsDialog.CreateResult(
+        PivotChartOptionsPlanner.CreateResult(
                 99,
                 showFieldButtons: true,
                 showReportFilterButtons: true,
@@ -42,7 +43,7 @@ public sealed partial class PivotWorkflowDialogTests
                 showHiddenData: true,
                 blankDisplayMode: ChartBlankDisplayMode.Zero)
             .Should()
-            .Be(new PivotChartOptionsDialogResult(48, true, true, true, true, false, false, true, true, ChartBlankDisplayMode.Zero));
+            .Be(new PivotChartOptionsInput(48, true, true, true, true, false, false, true, true, ChartBlankDisplayMode.Zero));
     }
 
     [Fact]
@@ -61,9 +62,9 @@ public sealed partial class PivotWorkflowDialogTests
             BlankDisplayMode = ChartBlankDisplayMode.Span
         };
 
-        PivotChartOptionsDialog.FromChart(chart)
+        PivotChartOptionsPlanner.Read(chart)
             .Should()
-            .Be(new PivotChartOptionsDialogResult(12, false, true, false, true, true, true, true, true, ChartBlankDisplayMode.Span));
+            .Be(new PivotChartOptionsInput(12, false, true, false, true, true, true, true, true, ChartBlankDisplayMode.Span));
     }
 
     [Fact]
@@ -76,7 +77,7 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("ApplyFieldAutomation(_styleGallery, PivotChartOptionsDialogFieldId.ChartStyle)");
         source.Should().Contain("ChartStyleDialog.GetStyleOptions()");
         source.Should().Contain("PivotChartOptionsPlanner.Read(chart)");
-        source.Should().Contain("PivotChartOptionsPlanner.CreateResult(");
+        source.Should().Contain("Result = PivotChartOptionsPlanner.CreateResult(");
         source.Should().NotContain("Chart _style ID");
         source.Should().NotContain("Math.Clamp(value.Value, 1, 48)");
         source.Should().Contain("PivotChartOptionsPlanner.GetFieldButtonsSection().HeaderResourceKey");
@@ -91,6 +92,11 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("PivotChartOptionsDialogFieldId.BlankDisplayMode");
         source.Should().NotContain("Style IDs match the built-in Excel chart style gallery");
         source.Should().NotContain("Field buttons let you filter and rearrange PivotChart data directly on the chart");
+        source.Should().Contain("public PivotChartOptionsInput Result { get; private set; }");
+        source.Should().NotContain("PivotChartOptionsDialogResult");
+        source.Should().NotContain("FromInput(");
+        source.Should().NotContain("public static PivotChartOptionsInput CreateResult(");
+        source.Should().NotContain("public static PivotChartOptionsInput FromChart(");
     }
 
     [Fact]

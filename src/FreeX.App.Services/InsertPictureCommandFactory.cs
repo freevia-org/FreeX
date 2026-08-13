@@ -1,4 +1,5 @@
 using System.IO;
+using Free.Shared.IO;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -17,7 +18,7 @@ public static class InsertPictureCommandFactory
     /// <summary>The image MIME content type for a file path's extension, or <c>null</c> when unsupported.</summary>
     public static string? ContentTypeForPath(string path)
     {
-        var extension = Path.GetExtension(path);
+        var extension = FilePathPolicy.GetExtensionOrEmpty(path);
         return extension.ToLowerInvariant() switch
         {
             ".png" => "image/png",

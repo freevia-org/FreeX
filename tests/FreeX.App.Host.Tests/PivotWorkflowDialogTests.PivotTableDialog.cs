@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FluentAssertions;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -16,12 +17,12 @@ public sealed partial class PivotWorkflowDialogTests
     {
         var result = PivotTableDialog.CreateResult(
             "  Sales!A1:D20  ",
-            PivotTableDestinationKind.ExistingWorksheet,
+            PivotDestinationKind.ExistingWorksheet,
             "  Report!F3  ",
             openFieldList: true);
 
         result.SourceRangeText.Should().Be("Sales!A1:D20");
-        result.DestinationKind.Should().Be(PivotTableDestinationKind.ExistingWorksheet);
+        result.DestinationKind.Should().Be(PivotDestinationKind.ExistingWorksheet);
         result.DestinationRangeText.Should().Be("Report!F3");
         result.OpenFieldList.Should().BeTrue();
     }
@@ -38,7 +39,7 @@ public sealed partial class PivotWorkflowDialogTests
             var dialog = new PivotTableDialog(workbook, sheet.Id, range);
 
             dialog.Result.SourceRangeText.Should().Be("Sales!A1:D20");
-            dialog.Result.DestinationKind.Should().Be(PivotTableDestinationKind.NewWorksheet);
+            dialog.Result.DestinationKind.Should().Be(PivotDestinationKind.NewWorksheet);
             dialog.Result.DestinationRangeText.Should().BeEmpty();
             dialog.Result.OpenFieldList.Should().BeTrue();
         });

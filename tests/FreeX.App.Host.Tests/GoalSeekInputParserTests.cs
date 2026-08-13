@@ -1,25 +1,27 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed class GoalSeekInputParserTests
+public sealed class GoalSeekRequestParserTests
 {
     private static readonly SheetId SheetId = SheetId.New();
 
     [Fact]
     public void TryParse_AcceptsTrimmedCellsAndCurrentCultureOrInvariantNumber()
     {
-        GoalSeekInputParser.TryParse(
+        GoalSeekRequestParser.TryParse(
                 SheetId,
                 " B2 ",
                 "12.5",
                 " A1 ",
                 out var input,
-                out var error)
+                out var result)
             .Should().BeTrue();
 
-        error.Should().BeEmpty();
+        result.Error.Should().Be(GoalSeekRequestParseError.None);
         input.SetCell.Should().Be(new CellAddress(SheetId, 2, 2));
         input.TargetValue.Should().Be(12.5);
         input.ChangingCell.Should().Be(new CellAddress(SheetId, 1, 1));
@@ -40,15 +42,18 @@ public sealed class GoalSeekInputParserTests
         string changingCellText,
         string expectedError)
     {
-        GoalSeekInputParser.TryParse(
+        GoalSeekRequestParser.TryParse(
                 SheetId,
                 setCellText,
                 targetValueText,
                 changingCellText,
                 out _,
-                out var error)
+                out var result)
             .Should().BeFalse();
 
-        error.Should().Be(expectedError);
+        GoalSeekStatusDialogPlanner
+            .DescribeValidationError(result, GoalSeekPresentationProfile.Wpf)
+            .Message.Resolve(UiText.Get, UiText.Format)
+            .Should().Be(expectedError);
     }
 }

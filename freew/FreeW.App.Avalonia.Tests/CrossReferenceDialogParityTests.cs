@@ -95,13 +95,15 @@ public sealed class CrossReferenceDialogParityTests
         var avaloniaSource = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "ReferencesDialogs.cs"));
         var avalonia = avaloniaSource[..avaloniaSource.IndexOf("internal sealed class SourceConflictResolutionDialog", StringComparison.Ordinal)];
 
-        wpf.Should().Contain("new ListBox { MinWidth = 150, Height = 170 }")
-            .And.Contain("new ListBox { MinWidth = 180, Height = 170 }")
-            .And.Contain("new ListBox { MinWidth = 300, Height = 200 }")
+        wpf.Should().Contain("CrossReferenceDialogSession")
+            .And.Contain("MinWidth = 150")
+            .And.Contain("MinWidth = 180")
+            .And.Contain("MinWidth = 300")
             .And.Contain("DialogMessageHelper.ShowWarning(");
         avalonia.Should().Contain("private readonly ListBox _typeList")
             .And.Contain("private readonly ListBox _insertAsList")
             .And.Contain("private readonly ListBox _targetList")
+            .And.Contain("CrossReferenceDialogSession")
             .And.Contain("AvaloniaUserMessageDialog.ShowWarningAsync(")
             .And.NotContain("private readonly ComboBox _typeBox")
             .And.NotContain("private readonly TextBlock _status");

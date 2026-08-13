@@ -110,29 +110,24 @@ public sealed partial class MainWindow
     // Reuses the portable Free.Shared.Shell.WindowResetPositionPlanner to compute a centered rect.
     private void ResetWindowPosition()
     {
-        var workArea = GetPrimaryWorkArea();
+        var (workArea, scaling) = GetPrimaryWorkAreaMetrics();
         // The planner returns a rect relative to a (0,0) work-area origin; offset by the real origin.
         var reset = FreeShellShell.WindowResetPositionPlanner.Compute(
-            workArea.Width, workArea.Height, windowIndex: 0);
+            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Width, scaling),
+            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Height, scaling),
+            windowIndex: 0);
+        var tile = AvaloniaWindowBoundsTranslator.Translate(workArea, scaling, reset);
 
         WindowState = WindowState.Normal;
-        Width = reset.Width;
-        Height = reset.Height;
-        Position = new PixelPoint(
-            workArea.X + (int)reset.X,
-            workArea.Y + (int)reset.Y);
+        Width = tile.Width;
+        Height = tile.Height;
+        Position = tile.Position;
         RefreshShell(UiText.Get("RibbonWire_WindowPositionReset"));
     }
 
     // ── Formulas ▸ Calculation ▸ Calculate Sheet ─────────────────────────────────
-    // The shared session exposes only a whole-workbook recalc (no per-sheet engine entry point), so
-    // Calculate Sheet recalculates the workbook — functionally a superset of recalculating the active
-    // sheet. Reported honestly via the status text.
-    private void CalculateSheet()
-    {
-        _session.RecalculateWorkbook();
-        RefreshShell(UiText.Get("RibbonWire_CalculateSheetDone"));
-    }
+    // Keep the native ribbon alias on the same shared action path as Shift+F9.
+    private void CalculateSheet() => CalculateActiveSheet();
 
     // ── Formulas ▸ Formula Auditing ▸ Remove Arrows submenu ──────────────────────
     private void RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind kind)
@@ -152,129 +147,36 @@ public sealed partial class MainWindow
     }
 
     // ── Home ▸ Cells ▸ Insert / Delete sheet rows & columns ──────────────────────
-
-    /// <summary>
-    /// R124-ribbonwires-multiarea-insertdelete-1: mirrors the WPF host's R123 fix
-    /// (ResolveInsertAreas/TryExecuteRepeatableCurrentSelectionAreasInsertCommand and its Delete-side
-    /// counterpart, MainWindow.CellsCommands.cs) for the Avalonia ribbon's Home ▸ Cells ▸ Insert/Delete
-    /// Sheet Rows/Columns handlers below. Ctrl+click on row/column headers
-    /// (AddAdditionalRowSelection/AddAdditionalColumnSelection, MainWindow.RowColumnVisibility.cs) is a
-    /// first-class Excel gesture that builds a genuine multi-area selection -- every clicked whole
-    /// row/column lands in _session.SelectedRanges, while _session.SelectedRange is only the
-    /// last-clicked (active) one. Reading only SelectedRange (as this file did before) silently
-    /// dropped every area but the active one from the insert/delete, unlike real Excel, which acts on
-    /// every disjoint area of a multi-area selection. Routes through the same
-    /// SelectionStyleCommandPlanner.ResolveRanges choke point MainWindow.Outline.cs's Group/Ungroup
-    /// multi-area fix already uses. Areas are ordered DESCENDING by row/column so acting on one area
-    /// never renumbers the still-pending index of another queued area (whether inserting -- which
-    /// shifts everything below/right of the insert point down/over -- or deleting -- which shifts
-    /// everything below/right of the deleted band up/left).
-    /// </summary>
-    private IReadOnlyList<GridRange> ResolveSheetEditAreas(bool orderByRow)
-    {
-        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
-        if (ranges.Count == 0)
-            ranges = [_session.SelectedRange];
-
-        return orderByRow
-            ? ranges.OrderByDescending(static r => r.Start.Row).ToList()
-            : ranges.OrderByDescending(static r => r.Start.Col).ToList();
-    }
-
     private void InsertSheetRows()
     {
-        var range = _session.SelectedRange;
-        var areas = ResolveSheetEditAreas(orderByRow: true);
-        var sheetId = _session.ActiveSheet.Id;
-        var commands = areas
-            .Select(area => (IWorkbookCommand)new InsertRowsCommand(sheetId, area.Start.Row, area.RowCount))
-            .ToList();
-        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand("Insert Sheet Rows", commands);
-        var result = _session.ExecuteReviewCommand(command);
-        if (result.Success)
-        {
-            // R127C-avalonia-clipboard-marquee-ribbon-multi-area-1: ExecuteReviewCommand already
-            // retires the SESSION-level pending Copy/Cut for this structural edit (WorkbookSession.
-            // IsStructuralCellShiftCommand), but this shell's own marching-ants overlay
-            // (_clipboardMarqueeRange in MainWindow.cs) is separate UI-only state RefreshShell does
-            // not touch -- clear it here too, matching MainWindow.InsertDeleteCells.cs's whole-row/
-            // whole-column paths and the WPF host's ClearClipboardMarqueeAfterStructuralEdit.
-            SetClipboardMarquee(null, isCut: false);
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-            ShiftScrollOriginForRowEdit(range.Start.Row, (int)range.RowCount);
-        }
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_InsertedSheetRows")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_InsertSheetRowsFailed"));
+        ApplyWorksheetStructureResult(
+            _session.InsertSelectedRows(),
+            UiText.Get("RibbonWire_InsertedSheetRows"),
+            UiText.Get("RibbonWire_InsertSheetRowsFailed"));
     }
 
     private void InsertSheetColumns()
     {
-        var range = _session.SelectedRange;
-        var areas = ResolveSheetEditAreas(orderByRow: false);
-        var sheetId = _session.ActiveSheet.Id;
-        var commands = areas
-            .Select(area => (IWorkbookCommand)new InsertColumnsCommand(sheetId, area.Start.Col, area.ColCount))
-            .ToList();
-        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand("Insert Sheet Columns", commands);
-        var result = _session.ExecuteReviewCommand(command);
-        if (result.Success)
-        {
-            // R127C-avalonia-clipboard-marquee-ribbon-multi-area-1: see the matching comment in
-            // InsertSheetRows() above.
-            SetClipboardMarquee(null, isCut: false);
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-            ShiftScrollOriginForColEdit(range.Start.Col, (int)range.ColCount);
-        }
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_InsertedSheetColumns")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_InsertSheetColumnsFailed"));
+        ApplyWorksheetStructureResult(
+            _session.InsertSelectedColumns(),
+            UiText.Get("RibbonWire_InsertedSheetColumns"),
+            UiText.Get("RibbonWire_InsertSheetColumnsFailed"));
     }
 
     private void DeleteSheetRows()
     {
-        var range = _session.SelectedRange;
-        var areas = ResolveSheetEditAreas(orderByRow: true);
-        var sheetId = _session.ActiveSheet.Id;
-        var commands = areas
-            .Select(area => (IWorkbookCommand)new DeleteRowsCommand(sheetId, area.Start.Row, area.RowCount))
-            .ToList();
-        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand("Delete Sheet Rows", commands);
-        var result = _session.ExecuteReviewCommand(command);
-        if (result.Success)
-        {
-            // R127C-avalonia-clipboard-marquee-ribbon-multi-area-1: see the matching comment in
-            // InsertSheetRows() above.
-            SetClipboardMarquee(null, isCut: false);
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-            ShiftScrollOriginForRowEdit(range.Start.Row, -(int)range.RowCount);
-        }
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_DeletedSheetRows")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_DeleteSheetRowsFailed"));
+        ApplyWorksheetStructureResult(
+            _session.DeleteSelectedRows(),
+            UiText.Get("RibbonWire_DeletedSheetRows"),
+            UiText.Get("RibbonWire_DeleteSheetRowsFailed"));
     }
 
     private void DeleteSheetColumns()
     {
-        var range = _session.SelectedRange;
-        var areas = ResolveSheetEditAreas(orderByRow: false);
-        var sheetId = _session.ActiveSheet.Id;
-        var commands = areas
-            .Select(area => (IWorkbookCommand)new DeleteColumnsCommand(sheetId, area.Start.Col, area.ColCount))
-            .ToList();
-        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand("Delete Sheet Columns", commands);
-        var result = _session.ExecuteReviewCommand(command);
-        if (result.Success)
-        {
-            // R127C-avalonia-clipboard-marquee-ribbon-multi-area-1: see the matching comment in
-            // InsertSheetRows() above.
-            SetClipboardMarquee(null, isCut: false);
-            ClearFormulaTraceArrowsAfterStructuralEdit();
-            ShiftScrollOriginForColEdit(range.Start.Col, -(int)range.ColCount);
-        }
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_DeletedSheetColumns")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_DeleteSheetColumnsFailed"));
+        ApplyWorksheetStructureResult(
+            _session.DeleteSelectedColumns(),
+            UiText.Get("RibbonWire_DeletedSheetColumns"),
+            UiText.Get("RibbonWire_DeleteSheetColumnsFailed"));
     }
 
     // Mirrors the WPF host's ClearFormulaTraceArrowsAfterStructuralEdit invalidation:
@@ -303,13 +205,15 @@ public sealed partial class MainWindow
     /// </summary>
     private void ShiftScrollOriginForRowEdit(uint editRow, int rowDelta)
     {
-        if (rowDelta == 0) return;
-
         var sheet = _session.ActiveSheet;
         var currentTopRow = sheet.ViewTopRow ?? Math.Max(1, sheet.FrozenRows + 1);
-        if (editRow > currentTopRow) return;
-
-        sheet.ViewTopRow = (uint)Math.Clamp((long)currentTopRow + rowDelta, 1, CellAddress.MaxRow);
+        var newTopRow = WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
+            currentTopRow,
+            editRow,
+            rowDelta,
+            CellAddress.MaxRow);
+        if (newTopRow is not null)
+            sheet.ViewTopRow = newTopRow.Value;
     }
 
     /// <summary>
@@ -317,13 +221,15 @@ public sealed partial class MainWindow
     /// </summary>
     private void ShiftScrollOriginForColEdit(uint editCol, int colDelta)
     {
-        if (colDelta == 0) return;
-
         var sheet = _session.ActiveSheet;
         var currentLeftCol = sheet.ViewLeftCol ?? Math.Max(1, sheet.FrozenCols + 1);
-        if (editCol > currentLeftCol) return;
-
-        sheet.ViewLeftCol = (uint)Math.Clamp((long)currentLeftCol + colDelta, 1, CellAddress.MaxCol);
+        var newLeftCol = WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
+            currentLeftCol,
+            editCol,
+            colDelta,
+            CellAddress.MaxCol);
+        if (newLeftCol is not null)
+            sheet.ViewLeftCol = newLeftCol.Value;
     }
 
     // ── Home ▸ Cells ▸ Format ▸ Lock Cell ────────────────────────────────────────
@@ -354,12 +260,7 @@ public sealed partial class MainWindow
     // undo-aware session command path.
     private void ShowOutlineDetail()
     {
-        var range = _session.SelectedRange;
-        var axis = OutlineGroupingService.GetGroupingAxis(range);
-        var result = axis == OutlineGroupingAxis.Columns
-            ? _session.ExecuteReviewCommand(new ExpandColGroupCommand(
-                _session.ActiveSheet.Id, 1, range.Start.Col, range.End.Col))
-            : _session.ExecuteReviewCommand(new ExpandRowGroupCommand(_session.ActiveSheet.Id, 1, range.Start.Row, range.End.Row));
+        var result = _session.SetSelectedOutlineGroupsCollapsed(collapse: false);
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_ShownDetail")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_ShowDetailFailed"));
@@ -367,12 +268,7 @@ public sealed partial class MainWindow
 
     private void HideOutlineDetail()
     {
-        var range = _session.SelectedRange;
-        var axis = OutlineGroupingService.GetGroupingAxis(range);
-        var result = axis == OutlineGroupingAxis.Columns
-            ? _session.ExecuteReviewCommand(new CollapseColGroupCommand(
-                _session.ActiveSheet.Id, 1, range.Start.Col, range.End.Col))
-            : _session.ExecuteReviewCommand(new CollapseRowGroupCommand(_session.ActiveSheet.Id, 1, range.Start.Row, range.End.Row));
+        var result = _session.SetSelectedOutlineGroupsCollapsed(collapse: true);
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_HidDetail")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_HideDetailFailed"));
@@ -404,62 +300,24 @@ public sealed partial class MainWindow
         };
 
     private void ApplyPageMarginsPreset(PageLayoutMarginPreset preset)
-    {
-        var plan = PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset);
-        var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildMarginsCommand(_session.ActiveSheet.Id, plan.Value));
-        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
-            PageLayoutStatusPlanner.ForPreset(plan),
-            result.Success,
-            result.ErrorMessage,
-            UiText.Get));
-    }
+        => ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanMarginsPreset(preset));
 
     private void ApplyPageOrientationPreset(PageLayoutOrientationPreset preset)
-    {
-        var plan = PageLayoutRibbonActionPlanner.PlanOrientationPreset(preset);
-        var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildOrientationCommand(_session.ActiveSheet.Id, plan.Value));
-        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
-            PageLayoutStatusPlanner.ForPreset(plan),
-            result.Success,
-            result.ErrorMessage,
-            UiText.Get));
-    }
+        => ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanOrientationPreset(preset));
 
     private void ApplyPaperSizePreset(PageLayoutPaperSizePreset preset)
-    {
-        var plan = PageLayoutRibbonActionPlanner.PlanPaperSizePreset(preset);
-        var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(_session.ActiveSheet.Id, plan.Value));
-        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
-            PageLayoutStatusPlanner.ForPreset(plan),
-            result.Success,
-            result.ErrorMessage,
-            UiText.Get));
-    }
+        => ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanPaperSizePreset(preset));
 
     private void SetPrintAreaFromSelection()
-    {
-        var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildSetPrintAreaCommand(_session.ActiveSheet.Id, _session.SelectedRange));
-        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
-            PageLayoutStatusPlanner.PrintAreaSet,
-            result.Success,
-            result.ErrorMessage,
-            UiText.Get));
-    }
+        => ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanSetPrintArea(_session.SelectedRange));
 
     private void ClearPrintArea()
-    {
-        var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildClearPrintAreaCommand(_session.ActiveSheet.Id));
-        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
-            PageLayoutStatusPlanner.PrintAreaClear,
-            result.Success,
-            result.ErrorMessage,
-            UiText.Get));
-    }
+        => ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanClearPrintArea());
 
     // ── Page Layout ▸ Page Setup ▸ Background (Choose / Delete) ──────────────────
     private void ChooseSheetBackground() => _ = ChooseSheetBackgroundAsync();
@@ -518,19 +376,13 @@ public sealed partial class MainWindow
             return;
         }
 
-        var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildSetBackgroundCommand(_session.ActiveSheet.Id, background));
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_BackgroundSet")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_BackgroundSet"));
+        ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanSetBackground(background));
     }
 
     private void DeleteSheetBackground()
     {
-        var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand(_session.ActiveSheet.Id));
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_BackgroundDeleted")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_BackgroundDeleted"));
+        ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanClearBackground());
     }
 }

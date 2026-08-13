@@ -24,7 +24,7 @@ New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 & (Join-Path $repoRoot "tools/LinuxInteractiveDocker/New-FreeXWave93TextBoxFixture.ps1") -OutputPath $fixturePath
 
 $startArguments = @{
-    Action = "Start"; App = "FreeX"; Port = $Port; Width = $Width; Height = $Height; Dpi = $Dpi
+    Action = "Start"; App = "FreeX"; Host = "Validation"; Port = $Port; Width = $Width; Height = $Height; Dpi = $Dpi
     MemoryLimit = $MemoryLimit; OutputDir = $resolvedOutput; SessionMetadataPath = $sessionMetadata
     DocumentPath = $fixturePath
     AppEnvironment = @("FREEX_TEXTBOX_INLINE_PHYSICAL_RESULT=/work/freex-textbox-inline-physical.json")
@@ -71,6 +71,6 @@ try {
 }
 finally {
     if ($null -ne $container) {
-        & $runnerPath -Action Stop -App FreeX -Port $Port -OutputDir $resolvedOutput
+        & $runnerPath -Action Stop -App FreeX -Host Validation -Port $Port -OutputDir $resolvedOutput
     }
 }

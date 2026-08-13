@@ -40,7 +40,10 @@ public sealed class TA11yFindReplaceStatusLiveRegionTests
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
             var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
-            var dialog = new FindReplaceDialog(() => workbook, commandBus, _ => { });
+            var dialog = new FindReplaceDialog(
+                () => workbook,
+                command => commandBus.Execute(workbook.Id, command),
+                _ => { });
             dialog.Show();
             try
             {
@@ -75,7 +78,7 @@ public sealed class TA11yFindReplaceStatusLiveRegionTests
             var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
             var dialog = new FindReplaceDialog(
                 () => workbook,
-                commandBus,
+                command => commandBus.Execute(workbook.Id, command),
                 _ => { },
                 replaceMode: true,
                 getCurrentSheetId: () => sheet.Id);

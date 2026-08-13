@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>FreeX.Validation.Avalonia</AssemblyName>
+    <DefineConstants>$(DefineConstants);FREEX_VALIDATION_HOST</DefineConstants>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>FreeX.Validation.Avalonia</RootNamespace>
+    <RuntimeIdentifiers>osx-arm64;osx-x64</RuntimeIdentifiers>
+    <StartupObject>FreeX.Validation.Avalonia.Program</StartupObject>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <Import Project="..\ToolProjects.props" />
+
+  <ItemGroup>
+    <!-- These partials belong to the isolated renderer variant, not the tool assembly itself. -->
+    <Compile Remove="RendererHost\**\*.cs" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj"
+                      AdditionalProperties="FreeXValidationHost=true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.Tests" />
+  </ItemGroup>
+</Project>

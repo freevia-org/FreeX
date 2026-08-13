@@ -12,16 +12,28 @@ internal static class XlsxWorkbookMetadataPreserver
         Workbook workbook,
         IReadOnlyList<SheetId> sourceSheetIdsByLocalId)
     {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var context = XlsxSourcePackagePreservationContext.TryCreate(
+            sourceArchive,
+            targetArchive,
+            workbook,
+            sourceSheetIdsByLocalId);
+        Preserve(context, workbook, sourceSheetIdsByLocalId);
+    }
 
-        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
-        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
-        if (sourceWorkbookEntry is null || targetWorkbookEntry is null)
+    public static void Preserve(
+        XlsxSourcePackagePreservationContext? context,
+        Workbook workbook,
+        IReadOnlyList<SheetId> sourceSheetIdsByLocalId)
+    {
+        if (context is null)
             return;
 
-        var sourceWorkbookXml = XlsxPackageXmlEditor.LoadXml(sourceWorkbookEntry);
+        var sourceArchive = context.SourceArchive;
+        var targetArchive = context.TargetArchive;
+        var workbookNs = context.WorkbookNs;
+        var sourceWorkbookXml = context.SourceWorkbookXml;
         var sourceRevisionPointer = sourceWorkbookXml.Root?.Element(workbookNs + "revisionPtr");
-        if (sourceRevisionPointer is not null && !HasCompleteRevisionHistorySidecarGraph(sourceArchive))
+        if (sourceRevisionPointer is not null && !HasCompleteRevisionHistorySidecarGraph(context))
             sourceRevisionPointer = null;
         var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
         var sourceFileVersion = sourceWorkbookXml.Root?.Element(workbookNs + "fileVersion");
@@ -60,7 +72,7 @@ internal static class XlsxWorkbookMetadataPreserver
             return;
         }
 
-        var targetWorkbookXml = XlsxPackageXmlEditor.LoadXml(targetWorkbookEntry);
+        var targetWorkbookXml = context.LoadCurrentTargetWorkbookXml();
         var targetRoot = targetWorkbookXml.Root;
         if (targetRoot is null)
             return;
@@ -112,7 +124,7 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
 
         if (changed)
-            XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
+            context.ReplaceTargetWorkbookXml(targetWorkbookXml);
     }
 
     private static bool MergeChildBlock(XElement? sourceBlock, XElement targetRoot, XName blockName)
@@ -124,7 +136,7 @@ internal static class XlsxWorkbookMetadataPreserver
         return true;
     }
 
-    private static bool HasCompleteRevisionHistorySidecarGraph(ZipArchive sourceArchive)
+    private static bool HasCompleteRevisionHistorySidecarGraph(XlsxSourcePackagePreservationContext context)
     {
         const string revisionHeadersRelationshipType =
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionHeaders";
@@ -132,11 +144,11 @@ internal static class XlsxWorkbookMetadataPreserver
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionLog";
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-        var workbookRelationshipsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookRelationshipsEntry is null)
+        var workbookRelationshipsXml = context.SourceWorkbookRelationshipsXml;
+        if (workbookRelationshipsXml is null)
             return false;
 
-        var workbookRelationshipsXml = XlsxPackageXmlEditor.LoadXml(workbookRelationshipsEntry);
+        var sourceArchive = context.SourceArchive;
         foreach (var relationship in workbookRelationshipsXml.Root?.Elements(relationshipNs + "Relationship") ?? [])
         {
             if (!IsInternalRelationshipOfType(relationship, revisionHeadersRelationshipType))
@@ -216,7 +228,7 @@ internal static class XlsxWorkbookMetadataPreserver
             return false;
 
         var clone = new XElement(sourceBlock);
-        XlsxWorkbookFileVersionNormalizer.NormalizeElement(clone);
+        XlsxWorkbookLeafElementNormalizer.Normalize(clone);
         targetRoot.Add(clone);
         return true;
     }
@@ -229,7 +241,7 @@ internal static class XlsxWorkbookMetadataPreserver
         foreach (var sourceBlock in sourceBlocks)
         {
             var clone = new XElement(sourceBlock);
-            XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(clone);
+            XlsxWorkbookLeafElementNormalizer.Normalize(clone);
             targetRoot.Add(clone);
         }
 
@@ -287,14 +299,14 @@ internal static class XlsxWorkbookMetadataPreserver
             if (!hasModeledFileSharing)
             {
                 var clone = new XElement(sourceFileSharing);
-                XlsxWorkbookFileSharingNormalizer.NormalizeElement(clone);
+                XlsxWorkbookLeafElementNormalizer.Normalize(clone);
                 targetRoot.Add(clone);
                 return true;
             }
 
             var cloned = new XElement(sourceFileSharing);
             RemoveModeledFileSharingAttributes(cloned);
-            XlsxWorkbookFileSharingNormalizer.NormalizeElement(cloned);
+            XlsxWorkbookLeafElementNormalizer.Normalize(cloned);
             if (!cloned.HasAttributes && !cloned.HasElements)
                 return false;
 
@@ -306,7 +318,7 @@ internal static class XlsxWorkbookMetadataPreserver
             sourceFileSharing,
             targetFileSharing,
             [XName.Get("readOnlyRecommended"), XName.Get("userName"), XName.Get("reservationPassword")]);
-        if (XlsxWorkbookFileSharingNormalizer.NormalizeElement(targetFileSharing))
+        if (XlsxWorkbookLeafElementNormalizer.Normalize(targetFileSharing))
             changed = true;
 
         return changed;
@@ -434,7 +446,7 @@ internal static class XlsxWorkbookMetadataPreserver
                 return false;
 
             var clone = new XElement(sourceWorkbookProtection);
-            XlsxWorkbookProtectionNormalizer.NormalizeElement(clone);
+            XlsxWorkbookLeafElementNormalizer.Normalize(clone);
             targetRoot.AddFirst(clone);
             return true;
         }
@@ -451,7 +463,7 @@ internal static class XlsxWorkbookMetadataPreserver
         // verifier alongside a freshly-set one; see
         // FreeXCleanupMED15Tests.ProtectWorkbookCommand_AfterUnprotectingModernHashWorkbook_DropsStaleVerifierForOldPassword).
         // Only the normalizer runs, to keep formatting consistent with the wholesale-clone branch above.
-        return XlsxWorkbookProtectionNormalizer.NormalizeElement(targetWorkbookProtection);
+        return XlsxWorkbookLeafElementNormalizer.Normalize(targetWorkbookProtection);
     }
 
     private static bool MergeCalculationProperties(XElement? sourceCalculationProperties, XElement targetRoot, XNamespace workbookNs)
@@ -463,7 +475,7 @@ internal static class XlsxWorkbookMetadataPreserver
         if (targetCalculationProperties is null)
         {
             var cloned = new XElement(sourceCalculationProperties);
-            XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(cloned);
+            XlsxWorkbookLeafElementNormalizer.Normalize(cloned);
             targetRoot.Add(cloned);
             return true;
         }
@@ -495,7 +507,7 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         }
 
-        if (XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(targetCalculationProperties))
+        if (XlsxWorkbookLeafElementNormalizer.Normalize(targetCalculationProperties))
             changed = true;
 
         return changed;
@@ -513,7 +525,7 @@ internal static class XlsxWorkbookMetadataPreserver
             var cloned = new XElement(sourceWorkbookProperties);
             foreach (var attribute in modeledAttributes)
                 cloned.Attribute(attribute)?.Remove();
-            XlsxWorkbookPropertiesNormalizer.NormalizeElement(cloned);
+            XlsxWorkbookLeafElementNormalizer.Normalize(cloned);
 
             if (!cloned.HasAttributes && !cloned.HasElements)
                 return false;
@@ -526,7 +538,7 @@ internal static class XlsxWorkbookMetadataPreserver
             sourceWorkbookProperties,
             targetWorkbookProperties,
             modeledAttributes);
-        if (XlsxWorkbookPropertiesNormalizer.NormalizeElement(targetWorkbookProperties))
+        if (XlsxWorkbookLeafElementNormalizer.Normalize(targetWorkbookProperties))
             changed = true;
 
         return changed;

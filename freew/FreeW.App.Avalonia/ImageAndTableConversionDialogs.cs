@@ -21,12 +21,14 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
 
     private ImageCropDialog(double left, double right, double top, double bottom)
     {
-        Title = "Crop Picture";
+        var surface = ImageCropDialogPlanner.Surface;
+        Title = surface.Title;
         Width = 300;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        ImageChartDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageCropDialogPlanner.BuildInitialState(
             left,
@@ -38,26 +40,27 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
         _rightBox = MakeBox(state.RightText);
         _topBox = MakeBox(state.TopText);
         _bottomBox = MakeBox(state.BottomText);
+        ImageChartDialogSurfaceSemantics.Apply(_leftBox, surface.Field(ImageCropDialogField.Left));
+        ImageChartDialogSurfaceSemantics.Apply(_rightBox, surface.Field(ImageCropDialogField.Right));
+        ImageChartDialogSurfaceSemantics.Apply(_topBox, surface.Field(ImageCropDialogField.Top));
+        ImageChartDialogSurfaceSemantics.Apply(_bottomBox, surface.Field(ImageCropDialogField.Bottom));
         AvaloniaCompactDialogChrome.ApplyValidationStatus(
             _status,
             DialogChromeStyle,
             new Thickness(0, 6, 0, 0));
+        ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);
 
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < 4; i++)
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(4);
 
-        AddField(grid, "Left (%):", _leftBox, 0);
-        AddField(grid, "Right (%):", _rightBox, 1);
-        AddField(grid, "Top (%):", _topBox, 2);
-        AddField(grid, "Bottom (%):", _bottomBox, 3);
+        AddField(grid, surface.Field(ImageCropDialogField.Left).Label, _leftBox, 0);
+        AddField(grid, surface.Field(ImageCropDialogField.Right).Label, _rightBox, 1);
+        AddField(grid, surface.Field(ImageCropDialogField.Top).Label, _topBox, 2);
+        AddField(grid, surface.Field(ImageCropDialogField.Bottom).Label, _bottomBox, 3);
 
-        var ok = new Button { Content = "OK", IsDefault = true };
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         ok.Click += (_, _) => Accept();
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = UiText.Get("Common_CancelText"), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => Close(null);
 
@@ -69,7 +72,7 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
                 grid,
                 new TextBlock
                 {
-                    Text = "Enter the percentage of width/height to remove from each edge (0-99).",
+                    Text = ImageCropDialogPlanner.Instruction,
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = 10,
                     Margin = new Thickness(0, 6, 0, 0),
@@ -81,8 +84,7 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
 
         Opened += (_, _) =>
         {
-            _leftBox.Focus();
-            _leftBox.SelectAll();
+            AvaloniaCompactDialogChrome.FocusAndSelect(_leftBox);
         };
         KeyDown += (_, e) =>
         {
@@ -126,8 +128,7 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
             ImageCropDialogField.Bottom => _bottomBox,
             _ => _leftBox,
         };
-        box.Focus();
-        box.SelectAll();
+        AvaloniaCompactDialogChrome.FocusAndSelect(box);
     }
 
     private static TextBox MakeBox(string text)
@@ -145,12 +146,8 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 4, 8, 0),
         };
-        Grid.SetRow(text, row);
-        Grid.SetColumn(text, 0);
-        grid.Children.Add(text);
-        Grid.SetRow(field, row);
-        Grid.SetColumn(field, 1);
-        grid.Children.Add(field);
+        AvaloniaLabeledFormRow.Place(grid, text, row, 0);
+        AvaloniaLabeledFormRow.Place(grid, field, row, 1);
     }
 }
 
@@ -161,6 +158,7 @@ internal sealed class TableTextConversionDialog : FreeWDialogWindow
 
     private TableTextConversionDialog(string title)
     {
+        var text = TableTextConversionDialogPlanner.ResolveText(UiText.Get);
         Title = title;
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -171,17 +169,17 @@ internal sealed class TableTextConversionDialog : FreeWDialogWindow
         {
             MinWidth = 240,
             MinHeight = 90,
-            ItemsSource = TableTextConversionDialogPlanner.Choices.Select(choice => choice.Label).ToArray(),
+            ItemsSource = text.Choices.Select(choice => choice.Label).ToArray(),
             SelectedIndex = TableTextConversionDialogPlanner.DefaultChoiceIndex,
             Margin = new Thickness(0, 0, 0, 12),
         };
         AvaloniaCompactDialogChrome.ApplyListBox(_choices, DialogChromeStyle);
         _choices.DoubleTapped += (_, _) => Accept();
 
-        var ok = new Button { Content = "OK", IsDefault = true };
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         ok.Click += (_, _) => Accept();
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = UiText.Get("Common_CancelText"), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => Close(null);
 
@@ -192,7 +190,7 @@ internal sealed class TableTextConversionDialog : FreeWDialogWindow
             {
                 new TextBlock
                 {
-                    Text = TableTextConversionDialogPlanner.PromptLabel,
+                    Text = text.PromptLabel,
                     Margin = new Thickness(0, 0, 0, 4),
                 },
                 _choices,

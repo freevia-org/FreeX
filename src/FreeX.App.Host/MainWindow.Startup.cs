@@ -14,8 +14,8 @@ public partial class MainWindow
         InitializePageLayoutScaleToFitControls();
 
         PopulateFormatTableGalleryMenu();
+        TryApplyDeclarativeRibbon();
         ApplyOptionsToView();
-        NormalizeRibbonSurface(forceCompact: true);
         if (ShouldAdoptSharedWorkbookOnLoad)
         {
             // Secondary window (Excel "New Window"): share the existing workbook rather than
@@ -24,16 +24,15 @@ public partial class MainWindow
         }
         else
         {
-            CreateNewWorkbook();
+            var shouldCreateInitialWorkbook = true;
+            AdjustExternalInitialWorkbookCreation(ref shouldCreateInitialWorkbook);
+            if (shouldCreateInitialWorkbook)
+                CreateNewWorkbook();
         }
         UpdateViewport();
         RefreshSheetTabs();
         UpdateTitleBar();
         RegisterWithWindowRegistry();
-        TryApplyDeclarativeRibbon();
-        TryStartScreenshotTour();
-        TryStartSheetTabVisualTour();
-        TryStartSheetTabWorkflowsTour();
-        TryStartAccentBarVisualTour();
+        StartExternalLoadedWorkflows();
     }
 }

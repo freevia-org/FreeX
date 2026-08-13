@@ -1,6 +1,7 @@
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Host;
 
@@ -14,22 +15,18 @@ public static class Program
     /// The active brand theme selected at startup (default: <see cref="BrandThemes.FreeW"/>).
     /// Stored so tests and future windows can read the active palette.
     /// </summary>
-    internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeW;
+    internal static Theme ActiveTheme { get; private set; } = FreeWApplicationStartup.Theme.DefaultTheme;
 
     [STAThread]
     public static void Main(string[] args)
         => WpfApplicationStartupRunner.Run(new WpfApplicationStartupSpec<FreeWOptions>(
-            new AppProductIdentity("FreeW", "FREEW_DIAGNOSTICS", "FreeW"),
+            FreeWApplicationStartup.ProductIdentity,
             (options, optionsStore, startupFilePaths) =>
                 new MainWindow(options, optionsStore, startupFilePaths: startupFilePaths))
         {
             InstallSharedSeams = AppLocalization.Bootstrap.InstallSharedSeams,
             Theme = new WpfApplicationThemeStartupSpec<Theme>(
-                EnvironmentVariableName: "FREEW_THEME",
-                AlternateThemeValue: "midnight",
-                DefaultTheme: BrandThemes.FreeW,
-                AlternateTheme: BrandThemes.FreeXMidnight,
-                ResourceKeyPrefix: "FreeW",
+                Plan: FreeWApplicationStartup.Theme,
                 ApplyTheme: WpfThemeApplier.Apply)
             {
                 SetActiveTheme = theme => ActiveTheme = theme

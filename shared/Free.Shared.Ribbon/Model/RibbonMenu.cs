@@ -13,7 +13,8 @@ public sealed record RibbonMenuItem(
     string? KeyTip = null,
     string? InputGesture = null,
     RibbonMenuItemKind Kind = RibbonMenuItemKind.Command,
-    IReadOnlyList<RibbonMenuItem>? Children = null)
+    IReadOnlyList<RibbonMenuItem>? Children = null,
+    RibbonCommandIcon? Icon = null)
 {
     public IReadOnlyList<RibbonMenuItem> Children { get; init; } =
         Children ?? Array.Empty<RibbonMenuItem>();

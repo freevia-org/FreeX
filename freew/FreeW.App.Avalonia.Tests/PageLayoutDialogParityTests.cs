@@ -68,21 +68,24 @@ public sealed class PageLayoutDialogParityTests
     }
 
     [Fact]
-    public void Mandatory_route_ids_are_declared_and_registered()
+    public void Mandatory_route_ids_are_declared_and_mapped_by_the_shared_profile()
     {
         var definition = ReadDefinitionSource();
-        var registry = ReadSource(Path.Combine("Ribbon", "FreeWAvaloniaRibbonCommands.cs"));
-        foreach (var id in new[]
+        var workflow = ReadPresentationSource(Path.Combine("Ribbon", "FreeWRibbonCommandWorkflow.cs"));
+        var profile = ReadPresentationSource(Path.Combine("Ribbon", "FreeWRibbonHostExecutionProfile.cs"));
+        var renderer = ReadSource(Path.Combine("Ribbon", "FreeWAvaloniaRibbonCommands.cs"));
+        foreach (var (id, action) in new[]
         {
-            "freew.columns-more",
-            "freew.custom-paragraph-spacing",
-            "freew.drop-cap-options",
-            "freew.hyphenation-options",
-            "freew.line-numbers-options",
+            ("freew.columns-more", "ColumnsMore"),
+            ("freew.custom-paragraph-spacing", "CustomParagraphSpacing"),
+            ("freew.drop-cap-options", "DropCapOptions"),
+            ("freew.hyphenation-options", "HyphenationOptions"),
+            ("freew.line-numbers-options", "LineNumbersOptions"),
         })
         {
             definition.Should().Contain(id);
-            registry.Should().Contain($"Register(\"{id}\"");
+            workflow.Should().Contain($"new(\"{id}\", FreeWRibbonCommandAction.{action})");
+            (profile + renderer).Should().Contain($"FreeWRibbonCommandAction.{action}");
         }
     }
 
@@ -90,13 +93,15 @@ public sealed class PageLayoutDialogParityTests
     public void Manual_hyphenation_uses_owner_modal_shared_session_without_enabling_automatic_mode()
     {
         var dialogs = ReadSource("PageLayoutDialogs.cs");
-        var registry = ReadSource(Path.Combine("Ribbon", "FreeWAvaloniaRibbonCommands.cs"));
+        var profile = ReadPresentationSource(Path.Combine("Ribbon", "FreeWRibbonHostExecutionProfile.cs"));
         var mainWindow = ReadSource("MainWindow.cs");
         var start = dialogs.IndexOf("public sealed class ManualHyphenationDialog", StringComparison.Ordinal);
         var end = dialogs.IndexOf("public sealed class LineNumberOptionsDialog", start, StringComparison.Ordinal);
         var dialog = dialogs[start..end];
 
-        registry.Should().Contain("callbacks.OpenManualHyphenationDialog");
+        profile.Should().Contain(
+            "BindOrEmpty(bindings, FreeWRibbonCommandAction.HyphenationManual, ports.OpenManualHyphenationDialog)");
+        mainWindow.Should().Contain("OpenManualHyphenationDialog: () => _ = OpenManualHyphenationDialogAsync()");
         mainWindow.Should().Contain("ManualHyphenationDialog.ShowAndApplyAsync(this, _editor");
         dialog.Should().Contain("ManualHyphenationPlanner.CreateSession(editor.Document)");
         dialog.Should().Contain("editor.ApplyManualHyphenation(session.Edits)");
@@ -108,7 +113,18 @@ public sealed class PageLayoutDialogParityTests
     private static string ReadDefinitionSource()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
-        return File.ReadAllText(Path.Combine(root, "freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs"));
+        var definitionRoot = Path.Combine(root, "freew", "FreeW.Ribbon.Definitions");
+        return string.Join(
+            Environment.NewLine,
+            Directory.GetFiles(definitionRoot, "FreeWCanonicalRibbonTabs*.cs")
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(File.ReadAllText));
+    }
+
+    private static string ReadPresentationSource(string relativePath)
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        return File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Presentation", relativePath));
     }
 
     private static string ReadSource(string relativePath)

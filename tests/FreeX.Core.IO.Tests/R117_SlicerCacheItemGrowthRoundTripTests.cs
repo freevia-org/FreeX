@@ -94,7 +94,9 @@ public sealed class R117_SlicerCacheItemGrowthRoundTripTests
             "the preserved pivotCacheDefinition part's <sharedItems> must also carry the newly-appended " +
             "value, or the slicer's new CacheItems index points past the reloaded SharedItems list");
 
-        var available = SlicerItemResolver.ResolveAvailableItems(reloadedSlicer, reloaded);
+        var available = reloadedSlicer.CacheItems
+            .OrderBy(item => item.Index)
+            .Select(item => fieldAfterReload.SharedItems[item.Index]);
         available.Should().BeEquivalentTo(["A", "B", "C"]);
     }
 

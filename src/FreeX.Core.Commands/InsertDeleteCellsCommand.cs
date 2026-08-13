@@ -33,32 +33,12 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     private readonly GridRange _range;
     private readonly InsertCellsShiftDirection _direction;
     private CellShiftSnapshot? _snapshot;
+    private RowColumnMutationSnapshot? _mutationSnapshot;
     // R96-commands-undo-affected-cells-2: the raw captured (original-address, cell) pairs behind
     // _snapshot, kept alongside it so Revert can recompute AffectedCells at the CURRENT (post-Revert)
     // address of every relocated formula cell -- see RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress.
     private IReadOnlyList<(CellAddress Address, Cell Cell)>? _capturedCells;
     private IReadOnlyList<CellAddress> _affectedCells = [];
-    private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
-    private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
-    private List<CellAddress>? _shownCommentsSnapshot;
-    private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
-    private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
-    private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
-    private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
-    private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
-    private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
-    private List<GridRange>? _mergeSnapshot;
-    private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
-    private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _cfRuleSnapshot;
-    private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
-    private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
-    private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
-    private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
-    private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
-    private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
-    private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
-    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
-    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private List<CellAddress>? _movedDestinationCells;
     // R52-commands-clear-delete-3-1: style-only (formatted-but-empty) cells are invisible to
     // sheet.GetOccupiedCellMap() (which only sees value/formula-bearing Cell entries), so the
@@ -96,6 +76,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
+
+        _mutationSnapshot = RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet);
 
         if (_direction == InsertCellsShiftDirection.Right)
         {
@@ -148,24 +130,16 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             _capturedCells = capture.Cells;
 
             // Snapshot and shift annotations (comments, hyperlinks, style-only) in the band
-            _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
             ShiftAnnotationsInBandRight(sheet.Comments, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
             // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy
             // note author + pinned/"Show Comment" state) and must shift in lockstep with it within
             // the same band, or a note's author/pinned box goes stale at its old address.
-            _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
             ShiftAnnotationsInBandRight(sheet.CommentAuthors, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
-            _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
             ShiftAnnotationsSetInBandRight(sheet.ShownComments, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
-            _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
             ShiftAnnotationsInBandRight(sheet.ThreadedComments, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
-            _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
             ShiftAnnotationsInBandRight(sheet.Hyperlinks, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
-            _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
             ShiftAnnotationsInBandRight(sheet.HyperlinkMetadata, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
-            _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
             ShiftAnnotationsInBandRight(sheet.RichTextRuns, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
-            _phoneticGuideSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CellPhoneticGuides);
             ShiftAnnotationsInBandRight(sheet.CellPhoneticGuides, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
             // R52-commands-clear-delete-3-1: shift style-only (formatted-but-empty) cells in lockstep
             // with the value cells in the same band, so a fill/border applied to an empty cell moves
@@ -174,19 +148,15 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             ShiftStyleOnlyInBandRight(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
 
             // Snapshot and update merged regions
-            _mergeSnapshot = sheet.MergedRegions.ToList();
             sheet.ReplaceMergedRegions(AdjustMergesShiftRight(sheet.MergedRegions, _range.Start.Row, _range.End.Row, _range.Start.Col, width));
 
             // Snapshot and adjust CF/DV rule ranges that are fully inside the band
-            (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
             RowColumnShiftHelpers.AdjustRulesInsertShiftRight(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
 
             // R21-defined-name-management-1: plain (GridRange-backed) named ranges fully inside the
             // band's row span are shifted right in lockstep with the cells, the same way whole-row/
             // whole-column insert already does via RowColumnShiftHelpers.ShiftNamedRangeRowsUp/Down/
             // ColumnsUp/Down — this band-scoped path never touched NamedRanges/ScopedNamedRanges at all.
-            _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
-            _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
             ShiftNamedRangesInBandRight(ctx.Workbook, _sheetId, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
 
             // R86-meta-3: see ShiftSparklinesInBandRight for the move/grow rationale (mirrors
@@ -216,19 +186,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             // already shifted above by ShiftAnnotationsInBandRight) so a "Place in This Document"
             // link whose Bookmark text points at a cell inside the shifted band keeps pointing at
             // the same logical cell, matching whole-row/whole-column insert.
-            _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
-                ctx.Workbook, sheet, insertRightOp, sheet.Name);
-            _formulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, insertRightOp, _formulaSnapshot);
-            _namedFormulaSnapshot.Clear();
-            _scopedNamedFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, insertRightOp, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-            _cfFormulaSnapshot.Clear();
-            _cfThresholdSnapshot.Clear();
-            _dvFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, insertRightOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
-            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, insertRightOp);
+            _mutationSnapshot!.RewriteReferences(ctx.Workbook, sheet, insertRightOp);
         }
         else
         {
@@ -265,40 +223,28 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             _capturedCells = capture.Cells;
 
             // Snapshot and shift annotations in the band
-            _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
             ShiftAnnotationsInBandDown(sheet.Comments, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
             // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy
             // note author + pinned/"Show Comment" state) and must shift in lockstep with it within
             // the same band, or a note's author/pinned box goes stale at its old address.
-            _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
             ShiftAnnotationsInBandDown(sheet.CommentAuthors, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
-            _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
             ShiftAnnotationsSetInBandDown(sheet.ShownComments, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
-            _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
             ShiftAnnotationsInBandDown(sheet.ThreadedComments, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
-            _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
             ShiftAnnotationsInBandDown(sheet.Hyperlinks, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
-            _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
             ShiftAnnotationsInBandDown(sheet.HyperlinkMetadata, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
-            _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
             ShiftAnnotationsInBandDown(sheet.RichTextRuns, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
-            _phoneticGuideSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CellPhoneticGuides);
             ShiftAnnotationsInBandDown(sheet.CellPhoneticGuides, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
             // R52-commands-clear-delete-3-1: see the Shift-Right branch above.
             _styleOnlySnapshot = CaptureStyleOnlyEntries(sheet);
             ShiftStyleOnlyInBandDown(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
 
             // Snapshot and update merged regions
-            _mergeSnapshot = sheet.MergedRegions.ToList();
             sheet.ReplaceMergedRegions(AdjustMergesShiftDown(sheet.MergedRegions, _range.Start.Col, _range.End.Col, _range.Start.Row, height));
 
             // Snapshot and adjust CF/DV rule ranges that are fully inside the band
-            (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
             RowColumnShiftHelpers.AdjustRulesInsertShiftDown(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
 
             // R21-defined-name-management-1: see the Shift-Right branch above.
-            _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
-            _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
             ShiftNamedRangesInBandDown(ctx.Workbook, _sheetId, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
 
             // R86-meta-3: see ShiftSparklinesInBandDown for the move/grow rationale (mirrors
@@ -323,19 +269,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             // already shifted above by ShiftAnnotationsInBandDown) so a "Place in This Document"
             // link whose Bookmark text points at a cell inside the shifted band keeps pointing at
             // the same logical cell, matching whole-row/whole-column insert.
-            _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
-                ctx.Workbook, sheet, insertDownOp, sheet.Name);
-            _formulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, insertDownOp, _formulaSnapshot);
-            _namedFormulaSnapshot.Clear();
-            _scopedNamedFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, insertDownOp, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-            _cfFormulaSnapshot.Clear();
-            _cfThresholdSnapshot.Clear();
-            _dvFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, insertDownOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
-            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, insertDownOp);
+            _mutationSnapshot!.RewriteReferences(ctx.Workbook, sheet, insertDownOp);
         }
 
         // R98-commands-dependency-vacated-2: mirror InsertRowsCommand's
@@ -352,11 +286,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         // yields EVERY captured formula cell's original address unconditionally -- the ones already
         // covered by _range.AllCells() are harmless duplicates, de-duped by
         // BuildAffectedCellsForFormulaRewrite.
-        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+        _affectedCells = _mutationSnapshot!.BuildAffectedCells(
             _range.AllCells()
                 .Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>())
-                .Concat(VacatedAddressesForRelocatedFormulaCells(_capturedCells ?? [])),
-            _formulaSnapshot);
+                .Concat(VacatedAddressesForRelocatedFormulaCells(_capturedCells ?? [])));
         return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
@@ -380,11 +313,12 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         if (_snapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
 
-        // R96-commands-undo-affected-cells-2: RestoreFormulas below clears _formulaSnapshot as its
+        // R96-commands-undo-affected-cells-2: RestoreFormulas below clears _mutationSnapshot!.FormulaTexts as its
         // last step, so capture its keys (the post-shift addresses of every stationary formula cell
         // whose text was rewritten by Apply) now, before that happens -- needed to recompute
         // _affectedCells at the end of this method.
-        var formulaSnapshotAddressesBeforeRestore = _formulaSnapshot.Keys.ToList();
+        if (_mutationSnapshot is null) return;
+        var formulaSnapshotAddressesBeforeRestore = _mutationSnapshot.RestoreRewrittenFormulas(ctx.Workbook);
 
         // R98-commands-dependency-vacated-2: capture the CURRENT (post-Apply, pre-Revert) address of
         // every relocated formula cell now, before _capturedCells is nulled at the end of this
@@ -401,30 +335,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         //
         // Do NOT reorder. The undo-redo-undo convergence test in InsertDeleteCellsCommandTests
         // verifies that this sequence leaves the model identical to its initial state.
-        RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
-        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
-
         _snapshot.Restore(ctx.GetSheet(_sheetId));
         _snapshot = null;
 
-        if (_mergeSnapshot is not null)
-            sheet.ReplaceMergedRegions(_mergeSnapshot);
-
-        RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dvRuleSnapshot, _cfRuleSnapshot);
-        RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
-        RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
-
-        RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
-        RowColumnShiftHelpers.RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
-        RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
+        _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: true);
         RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
         RestoreSparklines(sheet, _sparklineSnapshot);
 
@@ -434,11 +348,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         // CommandBus.Undo reads this live property instead of the frozen forward payload.
         // R98-commands-dependency-vacated-2: also surface the address the Revert's own move-back
         // just vacated (vacatedAfterRevert, captured above) -- symmetric to the Apply-side fix.
-        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+        _affectedCells = _mutationSnapshot.BuildAffectedCells(
             RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_capturedCells ?? [])
                 .Concat(formulaSnapshotAddressesBeforeRestore)
                 .Concat(vacatedAfterRevert),
-            []);
+            includeRewrittenFormulaAddresses: false);
         _capturedCells = null;
     }
 
@@ -1749,39 +1663,12 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     private readonly GridRange _range;
     private readonly DeleteCellsShiftDirection _direction;
     private CellShiftSnapshot? _snapshot;
+    private RowColumnMutationSnapshot? _mutationSnapshot;
     // R96-commands-undo-affected-cells-2: see InsertCellsCommand's field of the same name. Here the
     // captured list covers BOTH the shifted-back survivors and the restored-deleted cells (a single
     // unified capture over the whole shift region, unlike DeleteRowsCommand's two separate lists).
     private IReadOnlyList<(CellAddress Address, Cell Cell)>? _capturedCells;
     private IReadOnlyList<CellAddress> _affectedCells = [];
-    private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
-    private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
-    private List<CellAddress>? _shownCommentsSnapshot;
-    private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
-    private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
-    private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
-    private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
-    private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
-    private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
-    private List<GridRange>? _mergeSnapshot;
-    private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
-    private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _cfRuleSnapshot;
-    private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
-    private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
-    private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
-    private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
-    private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
-    private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
-    // R135-commands-cf-dv-promote-anchor-1: see DeleteRowsCommand.cs -- separate snapshot for the
-    // anchor-delta rewrite AdjustRulesDeleteShiftLeft/Up apply when a CF/DV rule's primary AppliesTo
-    // area is fully consumed and it promotes an AdditionalRanges survivor to the new primary. Shared
-    // by both shift directions below since only one of them runs per Apply call.
-    private readonly Dictionary<Guid, string?> _cfPromotionFormulaSnapshot = [];
-    private readonly Dictionary<(Guid Id, int Slot), string?> _cfPromotionThresholdSnapshot = [];
-    private readonly Dictionary<(Guid Id, int Slot), string?> _dvPromotionFormulaSnapshot = [];
-    private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
-    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
-    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private List<CellAddress>? _movedDestinationCells;
     // R52-commands-clear-delete-3-1: see InsertCellsCommand's field of the same name.
     private List<(uint Row, uint Col, StyleId StyleId)>? _styleOnlySnapshot;
@@ -1815,6 +1702,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
+        _mutationSnapshot = RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet);
+
         if (_direction == DeleteCellsShiftDirection.Left)
         {
             var shiftRegion = CellShiftRegion.Rightward(_range);
@@ -1847,24 +1736,16 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             uint width = _range.ColCount;
 
             // Snapshot and shift annotations
-            _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
             DeleteAnnotationsInBandLeft(sheet.Comments, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
             // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy
             // note author + pinned/"Show Comment" state) and must delete/shift in lockstep with it
             // within the same band, or a note's author/pinned box goes stale.
-            _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
             DeleteAnnotationsInBandLeft(sheet.CommentAuthors, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
-            _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
             DeleteAnnotationsSetInBandLeft(sheet.ShownComments, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
-            _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
             DeleteAnnotationsInBandLeft(sheet.ThreadedComments, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
-            _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
             DeleteAnnotationsInBandLeft(sheet.Hyperlinks, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
-            _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
             DeleteAnnotationsInBandLeft(sheet.HyperlinkMetadata, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
-            _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
             DeleteAnnotationsInBandLeft(sheet.RichTextRuns, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
-            _phoneticGuideSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CellPhoneticGuides);
             DeleteAnnotationsInBandLeft(sheet.CellPhoneticGuides, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
             // R52-commands-clear-delete-3-1: clear/shift style-only (formatted-but-empty) cells in
             // lockstep with the value cells in the same band — see InsertCellsCommand's Shift-Right
@@ -1873,23 +1754,17 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             DeleteStyleOnlyInBandLeft(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
 
             // Snapshot and update merged regions
-            _mergeSnapshot = sheet.MergedRegions.ToList();
             sheet.ReplaceMergedRegions(AdjustMergesDeleteLeft(sheet.MergedRegions, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width));
 
             // Snapshot and adjust CF/DV rule ranges that are fully inside the band
-            (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
-            _cfPromotionFormulaSnapshot.Clear();
-            _cfPromotionThresholdSnapshot.Clear();
-            _dvPromotionFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.AdjustRulesDeleteShiftLeft(
-                sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width,
-                _cfPromotionFormulaSnapshot, _cfPromotionThresholdSnapshot, _dvPromotionFormulaSnapshot);
+            _mutationSnapshot!.CaptureRulePromotionFormulas((cfFormulas, cfThresholds, dvFormulas) =>
+                RowColumnShiftHelpers.AdjustRulesDeleteShiftLeft(
+                    sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width,
+                    cfFormulas, cfThresholds, dvFormulas));
 
             // R21-defined-name-management-1/-3: named ranges fully inside the band's row span are
             // shifted left (surviving portion) or removed (fully inside the deleted columns — see
             // InsertCellsCommand.DeleteNamedRangesInBandLeft for the #REF!-vs-drop rationale).
-            _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
-            _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
             InsertCellsCommand.DeleteNamedRangesInBandLeft(ctx.Workbook, _sheetId, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
 
             // R84-commands-clear-delete-5-1: a sparkline's Location/DataRange (and optional
@@ -1917,19 +1792,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             // already shifted/removed above by DeleteAnnotationsInBandLeft) so a surviving "Place in
             // This Document" link whose Bookmark text points at a cell after the deleted band keeps
             // pointing at the same logical cell, matching whole-row/whole-column delete.
-            _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
-                ctx.Workbook, sheet, deleteLeftOp, sheet.Name);
-            _formulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, deleteLeftOp, _formulaSnapshot);
-            _namedFormulaSnapshot.Clear();
-            _scopedNamedFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, deleteLeftOp, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-            _cfFormulaSnapshot.Clear();
-            _cfThresholdSnapshot.Clear();
-            _dvFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, deleteLeftOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
-            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, deleteLeftOp);
+            _mutationSnapshot!.RewriteReferences(ctx.Workbook, sheet, deleteLeftOp);
         }
         else
         {
@@ -1959,45 +1822,31 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             uint height = _range.RowCount;
 
             // Snapshot and shift annotations
-            _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
             DeleteAnnotationsInBandUp(sheet.Comments, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
             // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy
             // note author + pinned/"Show Comment" state) and must delete/shift in lockstep with it
             // within the same band, or a note's author/pinned box goes stale.
-            _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
             DeleteAnnotationsInBandUp(sheet.CommentAuthors, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
-            _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
             DeleteAnnotationsSetInBandUp(sheet.ShownComments, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
-            _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
             DeleteAnnotationsInBandUp(sheet.ThreadedComments, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
-            _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
             DeleteAnnotationsInBandUp(sheet.Hyperlinks, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
-            _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
             DeleteAnnotationsInBandUp(sheet.HyperlinkMetadata, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
-            _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
             DeleteAnnotationsInBandUp(sheet.RichTextRuns, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
-            _phoneticGuideSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CellPhoneticGuides);
             DeleteAnnotationsInBandUp(sheet.CellPhoneticGuides, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
             // R52-commands-clear-delete-3-1: see the Delete-Shift-Left branch above.
             _styleOnlySnapshot = InsertCellsCommand.CaptureStyleOnlyEntries(sheet);
             DeleteStyleOnlyInBandUp(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
 
             // Snapshot and update merged regions
-            _mergeSnapshot = sheet.MergedRegions.ToList();
             sheet.ReplaceMergedRegions(AdjustMergesDeleteUp(sheet.MergedRegions, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height));
 
             // Snapshot and adjust CF/DV rule ranges that are fully inside the band
-            (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
-            _cfPromotionFormulaSnapshot.Clear();
-            _cfPromotionThresholdSnapshot.Clear();
-            _dvPromotionFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.AdjustRulesDeleteShiftUp(
-                sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height,
-                _cfPromotionFormulaSnapshot, _cfPromotionThresholdSnapshot, _dvPromotionFormulaSnapshot);
+            _mutationSnapshot!.CaptureRulePromotionFormulas((cfFormulas, cfThresholds, dvFormulas) =>
+                RowColumnShiftHelpers.AdjustRulesDeleteShiftUp(
+                    sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height,
+                    cfFormulas, cfThresholds, dvFormulas));
 
             // R21-defined-name-management-1/-3: see the Delete-Shift-Left branch above.
-            _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
-            _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
             InsertCellsCommand.DeleteNamedRangesInBandUp(ctx.Workbook, _sheetId, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
 
             // R84-commands-clear-delete-5-1: see the Delete-Shift-Left branch above.
@@ -2020,19 +1869,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             // already shifted/removed above by DeleteAnnotationsInBandUp) so a surviving "Place in
             // This Document" link whose Bookmark text points at a cell after the deleted band keeps
             // pointing at the same logical cell, matching whole-row/whole-column delete.
-            _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
-                ctx.Workbook, sheet, deleteUpOp, sheet.Name);
-            _formulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, deleteUpOp, _formulaSnapshot);
-            _namedFormulaSnapshot.Clear();
-            _scopedNamedFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, deleteUpOp, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-            _cfFormulaSnapshot.Clear();
-            _cfThresholdSnapshot.Clear();
-            _dvFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, deleteUpOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
-            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, deleteUpOp);
+            _mutationSnapshot!.RewriteReferences(ctx.Workbook, sheet, deleteUpOp);
         }
 
         // R98-commands-dependency-vacated-2: mirror InsertCellsCommand's Apply-side fix (above).
@@ -2043,11 +1880,10 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         // _movedDestinationCells, which only holds the NEW address). InsertCellsCommand's
         // VacatedAddressesForRelocatedFormulaCells yields every captured formula cell's original
         // Address unconditionally, which covers both cases (duplicates de-duped downstream).
-        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+        _affectedCells = _mutationSnapshot!.BuildAffectedCells(
             _range.AllCells()
                 .Concat(_movedDestinationCells ?? Enumerable.Empty<CellAddress>())
-                .Concat(InsertCellsCommand.VacatedAddressesForRelocatedFormulaCells(_capturedCells ?? [])),
-            _formulaSnapshot);
+                .Concat(InsertCellsCommand.VacatedAddressesForRelocatedFormulaCells(_capturedCells ?? [])));
         return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
@@ -2057,8 +1893,6 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         var sheet = ctx.GetSheet(_sheetId);
 
         // R96-commands-undo-affected-cells-2: see InsertCellsCommand.Revert above.
-        var formulaSnapshotAddressesBeforeRestore = _formulaSnapshot.Keys.ToList();
-
         // R98-commands-dependency-vacated-2: capture the CURRENT (post-Apply, pre-Revert) address of
         // every shifted-survivor formula cell now, before _capturedCells is nulled at the end of this
         // method. Unlike InsertCellsCommand, _movedDestinationCells here is a FILTERED subset of
@@ -2067,35 +1901,14 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         // recomputed directly from _range/_direction rather than reused index-aligned.
         var vacatedAfterRevert = VacatedAddressesAfterRevert(_capturedCells ?? []).ToList();
 
-        RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
-        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-        // R135-commands-cf-dv-promote-anchor-1: undo the promotion-driven anchor-delta rewrite AFTER
-        // the DeleteCells-op-driven rewrite above (LIFO -- see DeleteRowsCommand.cs). Uses the
-        // per-sheet overload directly (promotion only ever touches the single sheet being shifted).
-        RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfPromotionFormulaSnapshot, _cfPromotionThresholdSnapshot, _dvPromotionFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
+        if (_mutationSnapshot is null) return;
+        var formulaSnapshotAddressesBeforeRestore = _mutationSnapshot.RestoreRewrittenFormulas(ctx.Workbook);
+        _mutationSnapshot.RestoreRulePromotionFormulas(ctx.Workbook);
 
         _snapshot.Restore(ctx.GetSheet(_sheetId));
         _snapshot = null;
 
-        if (_mergeSnapshot is not null)
-            sheet.ReplaceMergedRegions(_mergeSnapshot);
-
-        // Full rebuild because delete operations may have removed rules from the collection.
-        RowColumnShiftHelpers.RestoreRuleRanges(sheet, _dvRuleSnapshot, _cfRuleSnapshot);
-        RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
-        RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
-
-        RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
-        RowColumnShiftHelpers.RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
-        RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
+        _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: false);
         InsertCellsCommand.RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
         InsertCellsCommand.RestoreSparklines(sheet, _sparklineSnapshot);
 
@@ -2106,11 +1919,11 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         // CommandBus.Undo reads this live property instead of the frozen forward payload.
         // R98-commands-dependency-vacated-2: also surface the address the Revert's own move-back
         // just vacated for each shifted survivor (vacatedAfterRevert, captured above).
-        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+        _affectedCells = _mutationSnapshot.BuildAffectedCells(
             RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_capturedCells ?? [])
                 .Concat(formulaSnapshotAddressesBeforeRestore)
                 .Concat(vacatedAfterRevert),
-            []);
+            includeRewrittenFormulaAddresses: false);
         _capturedCells = null;
     }
 

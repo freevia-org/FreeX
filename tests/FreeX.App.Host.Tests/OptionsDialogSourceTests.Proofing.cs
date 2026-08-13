@@ -36,19 +36,12 @@ public sealed partial class OptionsDialogSourceTests
         xaml.Should().Contain("AutomationProperties.HelpText=\"Clear all custom dictionary words.\"");
 
         source.Should().Contain("PopulateProofingCustomDictionaryWords();");
-        source.Should().Contain("FreeXOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text)");
-        source.Should().Contain("FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords.Append(word))");
-        // R123: computed into `editedCustomDictionaryWords` and applied onto the freshly-reloaded
-        // `opts` only when changed from _opts -- see FreeXOptionsDialogMultiWindowSaveTests.
-        source.Should().Contain("editedCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
+        source.Should().Contain("private readonly CustomDictionaryEditorSession _customDictionaryEditor");
+        source.Should().Contain("_customDictionaryEditor.SetPendingWord(ProofingCustomDictionaryWordBox.Text)");
+        source.Should().Contain("_customDictionaryEditor.AddPendingWord();");
+        source.Should().Contain("_customDictionaryEditor = _dialogSession.CustomDictionary;");
+        source.Should().Contain("var saveResult = _dialogSession.Commit(");
         source.Should().Contain("OptProofingIgnoreUppercase.IsChecked = _opts.ProofingIgnoreUppercase;");
-        // R123: this dialog has no control that edits ProofingIgnoreUppercase/ProofingIgnoreNumbers,
-        // so OkBtn_Click intentionally leaves them untouched on `opts` (which was just reloaded from
-        // disk) instead of pinning them to the dialog-open-time `_opts` snapshot -- pinning them would
-        // silently revert a value another MainWindow instance already saved (see
-        // FreeXOptionsDialogMultiWindowSaveTests).
-        source.Should().NotContain("ProofingIgnoreUppercase = _opts.ProofingIgnoreUppercase");
-        source.Should().NotContain("ProofingIgnoreNumbers = _opts.ProofingIgnoreNumbers");
     }
 
     [Fact]
@@ -56,14 +49,16 @@ public sealed partial class OptionsDialogSourceTests
     {
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "options.json");
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, path);
 
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new FreeXOptions
+            var initial = new AppOptions
             {
                 SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh"]
-            });
+            };
+            AppOptionsStore.SaveToPath(initial, path).Should().BeTrue();
+            var dialog = new OptionsDialog(initial);
             dialog.Show();
             try
             {
@@ -104,7 +99,7 @@ public sealed partial class OptionsDialogSourceTests
             }
         });
 
-        FreeXOptions.LoadFromPath(path)
+        AppOptionsStore.LoadFromPath(path)
             .SpellCheckCustomDictionaryWords
             .Should()
             .Equal("Final");
@@ -113,7 +108,7 @@ public sealed partial class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_CancelDoesNotMutateOriginalProofingCustomDictionaryWords()
     {
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             SpellCheckCustomDictionaryWords = [" keep ", "Keep", "also"]
         };

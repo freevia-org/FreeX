@@ -4,44 +4,11 @@ using System.Windows.Controls;
 using System.Windows.Input;
 
 using FreeX.App.Presentation.Charts.Editing;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
-
-public sealed record ChartAreaLegendDialogResult(
-    CellColor? ChartAreaFillColor,
-    CellColor? PlotAreaFillColor,
-    CellColor? PlotAreaBorderColor,
-    double PlotAreaBorderThickness,
-    bool ShowLegend,
-    ChartLegendPosition LegendPosition,
-    bool LegendOverlay,
-    CellColor? LegendTextColor,
-    CellColor? LegendFillColor,
-    CellColor? LegendBorderColor,
-    double LegendBorderThickness,
-    double LegendFontSize)
-{
-    public ChartAreaFormatInput ToInput() =>
-        new(
-            ChartAreaFillColor,
-            PlotAreaFillColor,
-            PlotAreaBorderColor,
-            PlotAreaBorderThickness,
-            ShowLegend,
-            LegendPosition,
-            LegendOverlay,
-            LegendTextColor,
-            LegendFillColor,
-            LegendBorderColor,
-            LegendBorderThickness,
-            LegendFontSize);
-
-    public ChartLayoutOptions ToOptions() => ChartAreaFormatPlanner.Plan(ToInput());
-}
 
 public sealed class ChartAreaLegendDialog : Window
 {
@@ -58,11 +25,11 @@ public sealed class ChartAreaLegendDialog : Window
     private readonly TextBox _legendBorderThicknessBox = new();
     private readonly TextBox _legendFontSizeBox = new();
 
-    public ChartAreaLegendDialogResult Result { get; private set; }
+    public ChartAreaFormatInput Result { get; private set; }
 
     public ChartAreaLegendDialog(ChartModel chart)
     {
-        Result = FromChart(chart);
+        Result = ChartAreaFormatPlanner.Read(chart);
         Title = UiText.Get("ChartAreaLegend_Title");
         Width = ChartAreaFormatPlanner.DialogWidth;
         Height = ChartAreaFormatPlanner.DialogHeight;
@@ -73,66 +40,6 @@ public sealed class ChartAreaLegendDialog : Window
         Content = CreateContent();
         Load(Result);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
-    }
-
-    public static ChartAreaLegendDialogResult FromChart(ChartModel chart)
-    {
-        var input = ChartAreaFormatPlanner.Read(chart);
-        return CreateResult(
-            input.ChartAreaFillColor,
-            input.PlotAreaFillColor,
-            input.PlotAreaBorderColor,
-            input.PlotAreaBorderThickness,
-            input.ShowLegend,
-            input.LegendPosition,
-            input.LegendOverlay,
-            input.LegendTextColor,
-            input.LegendFillColor,
-            input.LegendBorderColor,
-            input.LegendBorderThickness,
-            input.LegendFontSize);
-    }
-
-    public static ChartAreaLegendDialogResult CreateResult(
-        CellColor? chartAreaFillColor,
-        CellColor? plotAreaFillColor,
-        CellColor? plotAreaBorderColor,
-        double plotAreaBorderThickness,
-        bool showLegend,
-        ChartLegendPosition legendPosition,
-        bool legendOverlay,
-        CellColor? legendTextColor,
-        CellColor? legendFillColor,
-        CellColor? legendBorderColor,
-        double legendBorderThickness,
-        double legendFontSize)
-    {
-        var input = ChartAreaFormatPlanner.Normalize(new ChartAreaFormatInput(
-            chartAreaFillColor,
-            plotAreaFillColor,
-            plotAreaBorderColor,
-            plotAreaBorderThickness,
-            showLegend,
-            legendPosition,
-            legendOverlay,
-            legendTextColor,
-            legendFillColor,
-            legendBorderColor,
-            legendBorderThickness,
-            legendFontSize));
-        return new(
-            input.ChartAreaFillColor,
-            input.PlotAreaFillColor,
-            input.PlotAreaBorderColor,
-            input.PlotAreaBorderThickness,
-            input.ShowLegend,
-            input.LegendPosition,
-            input.LegendOverlay,
-            input.LegendTextColor,
-            input.LegendFillColor,
-            input.LegendBorderColor,
-            input.LegendBorderThickness,
-            input.LegendFontSize);
     }
 
     private StackPanel CreateContent()
@@ -166,7 +73,7 @@ public sealed class ChartAreaLegendDialog : Window
         return root;
     }
 
-    private void Load(ChartAreaLegendDialogResult result)
+    private void Load(ChartAreaFormatInput result)
     {
         _chartAreaFillBox.Text = ChartDialogHelpers.FormatColor(result.ChartAreaFillColor);
         _plotAreaFillBox.Text = ChartDialogHelpers.FormatColor(result.PlotAreaFillColor);
@@ -211,19 +118,7 @@ public sealed class ChartAreaLegendDialog : Window
             return;
         }
 
-        Result = CreateResult(
-            input.ChartAreaFillColor,
-            input.PlotAreaFillColor,
-            input.PlotAreaBorderColor,
-            input.PlotAreaBorderThickness,
-            input.ShowLegend,
-            input.LegendPosition,
-            input.LegendOverlay,
-            input.LegendTextColor,
-            input.LegendFillColor,
-            input.LegendBorderColor,
-            input.LegendBorderThickness,
-            input.LegendFontSize);
+        Result = input;
         DialogResult = true;
     }
 
@@ -257,19 +152,20 @@ public sealed class ChartAreaLegendDialog : Window
 
     private void ShowPlannerParseWarning(ChartAreaFormatParseIssue issue)
     {
-        var (message, target) = issue switch
+        var presentation = ChartValidationPresentationPlanner.Describe(issue);
+        var target = presentation.FocusTarget switch
         {
-            ChartAreaFormatParseIssue.PlotAreaFillColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _plotAreaFillBox),
-            ChartAreaFormatParseIssue.PlotAreaBorderColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _plotAreaBorderBox),
-            ChartAreaFormatParseIssue.PlotAreaBorderThickness => (UiText.Get("ChartAreaLegend_InvalidPlotAreaBorderWidthMessage"), _plotAreaBorderThicknessBox),
-            ChartAreaFormatParseIssue.LegendTextColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _legendTextBox),
-            ChartAreaFormatParseIssue.LegendFillColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _legendFillBox),
-            ChartAreaFormatParseIssue.LegendBorderColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _legendBorderBox),
-            ChartAreaFormatParseIssue.LegendBorderThickness => (UiText.Get("ChartAreaLegend_InvalidLegendBorderWidthMessage"), _legendBorderThicknessBox),
-            ChartAreaFormatParseIssue.LegendFontSize => (UiText.Get("ChartAreaLegend_InvalidLegendFontSizeMessage"), _legendFontSizeBox),
-            _ => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _chartAreaFillBox)
+            ChartAreaFormatDialogFieldId.PlotAreaFillColor => _plotAreaFillBox,
+            ChartAreaFormatDialogFieldId.PlotAreaBorderColor => _plotAreaBorderBox,
+            ChartAreaFormatDialogFieldId.PlotAreaBorderThickness => _plotAreaBorderThicknessBox,
+            ChartAreaFormatDialogFieldId.LegendTextColor => _legendTextBox,
+            ChartAreaFormatDialogFieldId.LegendFillColor => _legendFillBox,
+            ChartAreaFormatDialogFieldId.LegendBorderColor => _legendBorderBox,
+            ChartAreaFormatDialogFieldId.LegendBorderThickness => _legendBorderThicknessBox,
+            ChartAreaFormatDialogFieldId.LegendFontSize => _legendFontSizeBox,
+            _ => _chartAreaFillBox
         };
-        ShowInvalidInputWarning(message, target);
+        ShowInvalidInputWarning(presentation.Message.Resolve(UiText.Get, UiText.Format), target);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

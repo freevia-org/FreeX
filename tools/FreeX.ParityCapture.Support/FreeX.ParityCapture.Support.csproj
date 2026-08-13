@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\docs\parity\parity-demo.csv"
+                      LogicalName="FreeX.Parity.DemoWorkbook.csv" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <AssemblyName>FreeX.ParityCapture.Support</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <Import Project="..\ToolProjects.props" />
+</Project>

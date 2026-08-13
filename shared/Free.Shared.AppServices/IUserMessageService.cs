@@ -6,15 +6,44 @@ namespace Free.Shared.AppServices;
 /// </summary>
 public interface IUserMessageService
 {
-    void ShowError(string message, string title = "Error");
-    void ShowWarning(string message, string title = "Warning");
-    void ShowInfo(string message, string title = "Information");
-    bool AskYesNo(string message, string title = "Confirm");
+    void ShowError(string message, string title = "Error") =>
+        ShowMessage(message, title, UserMessageButtons.Ok, UserMessageIcon.Error);
+
+    void ShowWarning(string message, string title = "Warning") =>
+        ShowMessage(message, title, UserMessageButtons.Ok, UserMessageIcon.Warning);
+
+    void ShowInfo(string message, string title = "Information") =>
+        ShowMessage(message, title, UserMessageButtons.Ok, UserMessageIcon.Information);
+
+    bool AskYesNo(string message, string title = "Confirm") =>
+        ShowMessage(message, title, UserMessageButtons.YesNo, UserMessageIcon.Question)
+            == UserMessageResult.Yes;
+
     UserMessageResult ShowMessage(
         string message,
         string title,
         UserMessageButtons buttons,
-        UserMessageIcon icon);
+        UserMessageIcon icon) =>
+        throw new NotSupportedException(
+            "This user-message service is asynchronous. Call ShowMessageAsync instead.");
+
+    /// <summary>
+    /// Shows an owned message without imposing a synchronous modal API on asynchronous
+    /// renderers. Existing synchronous implementations remain valid through this default bridge.
+    /// </summary>
+    ValueTask<UserMessageResult> ShowMessageAsync(
+        UserMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return ValueTask.FromResult(ShowMessage(
+            request.Message,
+            request.Title,
+            request.Buttons,
+            request.Kind));
+    }
 }
 
 public static class UserMessageServiceFileCommandExtensions
@@ -73,14 +102,27 @@ public static class UserMessageServiceFileCommandExtensions
         ArgumentNullException.ThrowIfNull(messageService);
         ArgumentNullException.ThrowIfNull(imageDiagnostics);
 
-        if (imageDiagnostics.Count == 0)
+        var message = BuildExportImageWarningMessage(exportedSummary, imageDiagnostics);
+        if (message is null)
             return;
 
         messageService.ShowMessage(
-            $"{exportedSummary}, but {imageDiagnostics.Count} image warning(s) occurred:\n" +
-            string.Join("\n", imageDiagnostics),
+            message,
             appTitle,
             UserMessageButtons.Ok,
             UserMessageIcon.Warning);
+    }
+
+    public static string? BuildExportImageWarningMessage(
+        string exportedSummary,
+        IReadOnlyCollection<string> imageDiagnostics)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(exportedSummary);
+        ArgumentNullException.ThrowIfNull(imageDiagnostics);
+
+        return imageDiagnostics.Count == 0
+            ? null
+            : $"{exportedSummary}, but {imageDiagnostics.Count} image warning(s) occurred:\n" +
+                string.Join("\n", imageDiagnostics);
     }
 }

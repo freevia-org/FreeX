@@ -44,9 +44,9 @@ public sealed class InsertChartDialogVisualParityTests
     {
         var workspace = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(
-            workspace, "freew", "tools", "FreeW.DialogVisualHarness.Avalonia", "AvaloniaDialogRouteFactory.cs"));
+            workspace, "freew", "tools", "FreeW.DialogVisualHarness", "FreeWDialogEvidenceCatalog.cs"));
 
-        source.Should().Contain("[\"insert-chart\"] = \"InsertChartDialog\"");
+        source.Should().Contain("Pair(\"insert-chart\", \"InsertChartDialog\")");
     }
 
     private static InsertChartDialog CreateDialog()

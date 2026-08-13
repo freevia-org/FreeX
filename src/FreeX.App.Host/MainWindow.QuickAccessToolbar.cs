@@ -5,6 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Shell;
 using FreeX.App.Services.Ribbon;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Commands;
 using SharedQat = Free.Shared.Ribbon.Wpf.QuickAccessToolbarRenderer;
 using SharedQatItem = Free.Shared.Ribbon.Wpf.QuickAccessToolbarItem;
@@ -65,8 +66,8 @@ public partial class MainWindow
 
     // Builds a QAT button from a neutral descriptor through the shared Free.Shared.Ribbon.Wpf QAT renderer
     // (style, glyph, size, hit-test-in-chrome, automation id/name — the construction FreeX and FreeW shared),
-    // then layers FreeX-only decorations the renderer leaves to the host: the RibbonTooltip title/key-tip/
-    // description, RibbonMetadata, the per-command customization context menu, and the sender/args click that
+    // then layers FreeX-only decorations the renderer leaves to the host: localized tooltip/key-tip metadata,
+    // command metadata, the per-command customization context menu, and the sender/args click that
     // forwards to ExecuteQuickAccessToolbarCommand. The neutral QuickAccessToolbarCatalog and command state
     // live in FreeX.App.Services.Ribbon; this WPF layer only renders and dispatches them.
     private Button CreateQuickAccessToolbarButton(
@@ -91,7 +92,7 @@ public partial class MainWindow
                 margin: hasHistoryFlyout ? new Thickness(0) : new Thickness(0, 0, 2, 0)));
 
         RibbonTooltip.SetTitle(button, title);
-        RibbonTooltip.SetKeyTip(button, FormatQuickAccessToolbarKeyTip(visibleIndex));
+        RibbonTooltip.SetKeyTip(button, QuickAccessToolbarCatalog.FormatKeyTip(visibleIndex));
         RibbonTooltip.SetDescription(button, UiText.Get(command.DescriptionResourceKey));
         RibbonMetadata.SetCommandName(button, command.CommandName);
         RibbonMetadata.SetCatalogId(button, command.Id);
@@ -102,7 +103,7 @@ public partial class MainWindow
 
     // FreeX-side QAT render options: the shared renderer draws the button (TitleBarQatButton on the navy
     // caption, or RibbonBtn when shown below the ribbon) with FreeX's own RibbonIcon glyph factory so the
-    // icons match the rest of the app. FreeX keeps its own RibbonTooltip (not the WPF ToolTip), name
+    // icons match the rest of the app. FreeX keeps localized RibbonTooltip metadata, name
     // registration (tracked for rebuild) and click (sender/args), so those shared hooks are turned off.
     private SharedQatOptions QuickAccessToolbarRenderOptions(
         bool showBelowRibbon,
@@ -251,18 +252,16 @@ public partial class MainWindow
         string commandId,
         QuickAccessToolbarCustomizationAction action)
     {
-        var commandIds = QuickAccessToolbarCustomizationPlanner.Apply(
-            _options.QuickAccessToolbarCommands,
-            commandId,
-            action);
-        if (_options.QuickAccessToolbarCommands.SequenceEqual(commandIds, StringComparer.OrdinalIgnoreCase))
-            return;
-
-        _options.QuickAccessToolbarCommands = commandIds.ToList();
-        if (!_options.Save())
+        var saveResult = MutateRuntimeOptions(options =>
+            options.QuickAccessToolbarCommands =
+                QuickAccessToolbarCustomizationPlanner.Apply(
+                    options.QuickAccessToolbarCommands,
+                    commandId,
+                    action).ToList());
+        if (!saveResult.IsPersisted)
         {
             ShowOwnedMessage(
-                _options.LastPersistenceError ?? "Failed to save Quick Access Toolbar customization.",
+                saveResult.PersistenceError ?? UiText.Get("QuickAccessToolbar_CustomizationSaveFailed"),
                 UiText.Get("Options_QuickAccessToolbar"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -284,19 +283,6 @@ public partial class MainWindow
             UnregisterName(name);
             _registeredQuickAccessToolbarNames.Remove(name);
         }
-    }
-
-    private static string FormatQuickAccessToolbarKeyTip(int visibleIndex)
-    {
-        if (visibleIndex <= 9)
-            return visibleIndex.ToString();
-
-        var offset = visibleIndex - 9;
-        const string extraKeyTipCharacters = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        if (offset <= extraKeyTipCharacters.Length)
-            return $"0{extraKeyTipCharacters[offset - 1]}";
-
-        return visibleIndex.ToString();
     }
 
     private IEnumerable<FrameworkElement> EnumerateQuickAccessToolbarButtons() =>
@@ -328,8 +314,8 @@ public partial class MainWindow
 
     private QuickAccessCommandState CreateQuickAccessCommandState() =>
         new(
-            _commandBus.CanUndo(_workbook.Id),
-            _commandBus.CanRedo(_workbook.Id),
+            _session.CanUndo,
+            _session.CanRedo,
             HasActiveWorksheetForQuickAccessCommandState(),
             HasSelectionForQuickAccessCommandState());
 
@@ -394,13 +380,10 @@ public partial class MainWindow
 
     private IReadOnlyList<CommandHistoryEntry> GetQuickAccessHistoryEntries(string commandId)
     {
-        if (_commandBus is not ICommandHistoryProvider historyProvider)
-            return [];
-
         return commandId switch
         {
-            QuickAccessToolbarCommandIds.Undo => historyProvider.GetUndoHistory(_workbook.Id, QuickAccessHistoryMaxCount),
-            QuickAccessToolbarCommandIds.Redo => historyProvider.GetRedoHistory(_workbook.Id, QuickAccessHistoryMaxCount),
+            QuickAccessToolbarCommandIds.Undo => _session.GetUndoHistory(QuickAccessHistoryMaxCount),
+            QuickAccessToolbarCommandIds.Redo => _session.GetRedoHistory(QuickAccessHistoryMaxCount),
             _ => []
         };
     }
@@ -473,120 +456,13 @@ public partial class MainWindow
 
     private async void ExecuteQuickAccessToolbarCommand(string commandId, object sender, RoutedEventArgs args)
     {
-        switch (commandId)
-        {
-            case QuickAccessToolbarCommandIds.Save:
-                SaveButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Undo:
-                ExecuteUndo();
-                break;
-            case QuickAccessToolbarCommandIds.Redo:
-                ExecuteRedo();
-                break;
-            case QuickAccessToolbarCommandIds.New:
-                await RequestNewWorkbookAsync();
-                break;
-            case QuickAccessToolbarCommandIds.Open:
-                OpenButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.SaveAs:
-                SaveAsButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Print:
-                PrintButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.ExportPdfXps:
-                ExportPdfButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Cut:
-                CutBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Copy:
-                CopyBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Paste:
-                PasteBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.FormatPainter:
-                FormatPainterBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Bold:
-                ExecuteToggleQuickAccessCommand("Bold", BoldButton_Click);
-                break;
-            case QuickAccessToolbarCommandIds.Italic:
-                ExecuteToggleQuickAccessCommand("Italic", ItalicButton_Click);
-                break;
-            case QuickAccessToolbarCommandIds.Underline:
-                ExecuteToggleQuickAccessCommand("Underline", UnderlineButton_Click);
-                break;
-            case QuickAccessToolbarCommandIds.FillColor:
-                FillColorBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.FontColor:
-                FontColorBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.FormatCells:
-                OpenFormatCellsDialog();
-                break;
-            case QuickAccessToolbarCommandIds.InsertFunction:
-                InsertFunctionBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.AutoSum:
-                InsertAutoSumFormula("SUM");
-                break;
-            case QuickAccessToolbarCommandIds.CalculateNow:
-                CalcNowBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.CalculateSheet:
-                CalcSheetBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.RefreshAll:
-                RefreshAllBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.SortAscending:
-                SortAscButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.SortDescending:
-                SortDescButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Filter:
-                FilterButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.DataValidation:
-                ValidationButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.NameManager:
-                NamedRangesButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Spelling:
-                SpellCheckBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.CheckAccessibility:
-                AccessibilityCheckerBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.ShareWorkbook:
-                ShareWorkbookBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.Zoom100:
-                Zoom100Btn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.ZoomSelection:
-                ZoomSelectionBtn_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.FreezePanes:
-                FreezeAtSelectionMenuItem_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.InsertSheet:
-                AddSheetButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.FindSelect:
-                FindButton_Click(sender, args);
-                break;
-            case QuickAccessToolbarCommandIds.SelectionPane:
-                SelectionPaneBtn_Click(sender, args);
-                break;
-        }
+        if (!WorkbookApplicationCommandRouter.TryRouteQuickAccess(commandId, out var route))
+            return;
+
+        await WorkbookApplicationCommands.TryExecuteAsync(
+            route,
+            nativeSource: sender,
+            nativeEventArgs: args);
     }
 
     // The QAT runs a ribbon toggle command without the toggle's own Click: flip the command's checked

@@ -169,9 +169,10 @@ public sealed partial class MainWindow
                     out var options,
                     out var inputError))
             {
-                ShowWarning(inputError == FillSeriesInputError.InvalidStop
-                    ? UiText.Get("FillSeries_InvalidStop")
-                    : UiText.Get("FillSeries_InvalidStep"));
+                ShowWarning(FillSeriesPlanner
+                    .DescribeInputError(inputError, FillSeriesValidationTextProfile.Avalonia)
+                    .Message
+                    .Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -180,7 +181,7 @@ public sealed partial class MainWindow
             var edits = FillSeriesPlanner.BuildSeriesEdits(sheet, range, options);
             if (edits.Count == 0)
             {
-                ShowWarning(UiText.Get("FillSeries_NoSeed"));
+                ShowWarning(FillSeriesPlanner.DescribeNoSeed().Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -188,11 +189,15 @@ public sealed partial class MainWindow
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
             {
-                ShowWarning(result.ErrorMessage ?? UiText.Get("FillSeries_Failed"));
+                ShowWarning(FillSeriesPlanner
+                    .DescribeCommandFailure(result.ErrorMessage)
+                    .Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
-            RefreshShell(UiText.Format("FillSeries_Filled", FormatRangeReference(range)));
+            RefreshShell(FillSeriesPlanner
+                .DescribeSuccess(FormatRangeReference(range))
+                .Resolve(UiText.Get, UiText.Format));
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();

@@ -34,7 +34,7 @@ public sealed class FreeXBackstagePaneCatalogTests
     }
 
     [Fact]
-    public void BuildInfoDetails_PinsAvaloniaAndParityDetailRows()
+    public void BuildInfoDetails_PinsAvaloniaAndWpfDetailRows()
     {
         FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.AvaloniaInfoDialog)
             .Select(detail => (detail.Id, detail.LabelKey, detail.ValueAutomationId))
@@ -49,7 +49,7 @@ public sealed class FreeXBackstagePaneCatalogTests
                 // issues/circular references on this shell too, matching the WPF host.
                 (FreeXBackstageInfoDetailId.FormulaErrors, "Backstage_Info_FormulaErrorsLabel", "BackstageInfoFormulaErrors"));
 
-        FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.ParityCapture)
+        FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.WpfInfoPane)
             .Select(detail => detail.LabelKey)
             .Should().Equal(
                 "MainWindow_Text_WorkbookName",
@@ -61,7 +61,10 @@ public sealed class FreeXBackstagePaneCatalogTests
                 "MainWindow_Text_Share",
                 "MainWindow_Text_Export",
                 "MainWindow_Text_WorkbookProtection",
-                "MainWindow_Text_ActiveSheetProtection");
+                "MainWindow_Text_ActiveSheetProtection",
+                "MainWindow_Text_WorkbookStatistics",
+                "MainWindow_Text_Accessibility",
+                "MainWindow_Text_FormulaErrors");
     }
 
     [Fact]

@@ -98,6 +98,47 @@ public class DocumentCompareTests
     }
 
     [Fact]
+    public void InsertedNestedTable_PreservesFieldsAndStripsIncomingRevisions()
+    {
+        var revised = new TextDocument();
+        var table = Table.Create(1, 1);
+        table.Rows[0].RowRevision = RevisionKind.Inserted;
+        var paragraph = table.Rows[0].Cells[0].Paragraphs.Single();
+        paragraph.MarkRevision = RevisionKind.Deleted;
+        paragraph.ParagraphFormatRevision = new ParagraphFormatRevision(
+            ParagraphFormatting.Default,
+            "Prior reviewer",
+            DateXml);
+        var fieldRun = Run.ComplexFieldRun(" REF Total ", "42");
+        fieldRun.Revision = RevisionKind.Inserted;
+        fieldRun.MoveRevisionId = 8;
+        fieldRun.FormatRevision = new FormatRevision(RunFormatting.Default, "Prior reviewer", DateXml);
+        paragraph.Runs.Add(fieldRun);
+
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs.Single().Runs.Add(
+            Run.TableFormulaFieldRun(new TableFormulaField("=SUM(ABOVE)"), "42"));
+        table.Rows[0].Cells[0].NestedTables.Add(nested);
+        revised.Blocks.Add(table);
+
+        var cloned = DocumentCompare.Compare(new TextDocument(), revised, Author, DateXml)
+            .Blocks.OfType<Table>().Single();
+
+        cloned.Should().NotBeSameAs(table);
+        cloned.Rows[0].RowRevision.Should().Be(RevisionKind.None);
+        var clonedParagraph = cloned.Rows[0].Cells[0].Paragraphs.Single();
+        clonedParagraph.MarkRevision.Should().Be(RevisionKind.None);
+        clonedParagraph.ParagraphFormatRevision.Should().BeNull();
+        clonedParagraph.Runs.Single().ComplexField!.Instruction.Should().Be(" REF Total ");
+        clonedParagraph.Runs.Single().Revision.Should().Be(RevisionKind.None);
+        clonedParagraph.Runs.Single().MoveRevisionId.Should().BeNull();
+        clonedParagraph.Runs.Single().FormatRevision.Should().BeNull();
+        cloned.Rows[0].Cells[0].NestedTables.Single()
+            .Rows[0].Cells[0].Paragraphs.Single().Runs.Single().TableFormula
+            .Should().Be(new TableFormulaField("=SUM(ABOVE)"));
+    }
+
+    [Fact]
     public void InsertedTableWithNestedTable_PreservesNestedTable()
     {
         var original = new TextDocument();

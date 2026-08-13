@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using Free.Shared.Localization;
 
 namespace FreeX.App.Presentation.Charts.Editing;
 
@@ -17,6 +18,22 @@ public sealed record ChartTypeGalleryChoicePlan(
     string CategoryNameKey,
     string SubtypeNameKey,
     string PreviewTextFormatKey,
+    bool IsRecommended = false);
+
+public sealed record ChartTypePickerOption(
+    ChartType Type,
+    string DisplayName,
+    bool IsRecommended = false);
+
+public sealed record ChartTypePickerCategory(
+    string Name,
+    IReadOnlyList<ChartTypePickerOption> Options);
+
+public sealed record ChartTypeGalleryChoice(
+    ChartType Type,
+    string CategoryName,
+    string SubtypeName,
+    string PreviewText,
     bool IsRecommended = false);
 
 public enum ChartTypePickerPanelKind
@@ -82,10 +99,16 @@ public static class ChartTypePickerPlanner
             .Select(choice => CreateOption(choice.Type))
             .ToList();
 
+    public static IReadOnlyList<ChartTypePickerOption> GetSupportedOptions(ResourceKeyTextResolver text) =>
+        GetSupportedOptions().Select(option => CreateOption(option, text)).ToList();
+
     public static IReadOnlyList<ChartTypePickerOptionPlan> GetRecommendedOptions() =>
         ChartTypeChangePlanner.GetRecommendedTypes()
             .Select(CreateOption)
             .ToList();
+
+    public static IReadOnlyList<ChartTypePickerOption> GetRecommendedOptions(ResourceKeyTextResolver text) =>
+        GetRecommendedOptions().Select(option => CreateOption(option, text)).ToList();
 
     public static IReadOnlyList<ChartTypePickerCategoryPlan> GetCategories()
     {
@@ -99,6 +122,13 @@ public static class ChartTypePickerPlanner
             .ToList();
     }
 
+    public static IReadOnlyList<ChartTypePickerCategory> GetCategories(ResourceKeyTextResolver text) =>
+        GetCategories()
+            .Select(category => new ChartTypePickerCategory(
+                text.Get(category.NameKey),
+                category.Options.Select(option => CreateOption(option, text)).ToList()))
+            .ToList();
+
     public static IReadOnlyList<ChartTypeGalleryChoicePlan> GetGalleryChoices(string categoryNameKey) =>
         GetCategories()
             .Where(category => category.NameKey.Equals(categoryNameKey, StringComparison.OrdinalIgnoreCase))
@@ -110,6 +140,20 @@ public static class ChartTypePickerPlanner
                 option.IsRecommended)))
             .ToList();
 
+    public static IReadOnlyList<ChartTypeGalleryChoice> GetGalleryChoices(
+        string categoryName,
+        ResourceKeyTextResolver text)
+    {
+        var category = GetCategories().FirstOrDefault(candidate =>
+            candidate.NameKey.Equals(categoryName, StringComparison.OrdinalIgnoreCase) ||
+            text.Get(candidate.NameKey).Equals(categoryName, StringComparison.OrdinalIgnoreCase));
+        return category is null
+            ? []
+            : GetGalleryChoices(category.NameKey)
+                .Select(choice => CreateGalleryChoice(choice, text))
+                .ToList();
+    }
+
     public static IReadOnlyList<ChartTypeGalleryChoicePlan> GetRecommendedGalleryChoices() =>
         GetRecommendedOptions()
             .Select(option => new ChartTypeGalleryChoicePlan(
@@ -119,6 +163,9 @@ public static class ChartTypePickerPlanner
                 PreviewTextFormatKey,
                 IsRecommended: true))
             .ToList();
+
+    public static IReadOnlyList<ChartTypeGalleryChoice> GetRecommendedGalleryChoices(ResourceKeyTextResolver text) =>
+        GetRecommendedGalleryChoices().Select(choice => CreateGalleryChoice(choice, text)).ToList();
 
     public static ChartTypePickerPanelDescriptor GetRecommendedPanel() => RecommendedPanel;
 
@@ -130,4 +177,22 @@ public static class ChartTypePickerPlanner
             ChartTypeChangePlanner.DisplayNameKey(type),
             ChartTypeChangePlanner.DisplayName(type),
             RecommendedTypes.Contains(type));
+
+    private static ChartTypePickerOption CreateOption(
+        ChartTypePickerOptionPlan option,
+        ResourceKeyTextResolver text) =>
+        new(option.Type, text.Get(option.DisplayNameKey), option.IsRecommended);
+
+    private static ChartTypeGalleryChoice CreateGalleryChoice(
+        ChartTypeGalleryChoicePlan choice,
+        ResourceKeyTextResolver text)
+    {
+        var subtypeName = text.Get(choice.SubtypeNameKey);
+        return new ChartTypeGalleryChoice(
+            choice.Type,
+            text.Get(choice.CategoryNameKey),
+            subtypeName,
+            text.Format(choice.PreviewTextFormatKey, subtypeName),
+            choice.IsRecommended);
+    }
 }

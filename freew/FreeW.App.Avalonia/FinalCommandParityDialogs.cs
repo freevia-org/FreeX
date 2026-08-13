@@ -16,7 +16,8 @@ internal sealed class QuickPartNameDialog : FreeWDialogWindow
 
     private QuickPartNameDialog()
     {
-        Title = "Save to Quick Parts";
+        var text = QuickPartCommandPlanner.ResolveText(UiText.Get);
+        Title = text.SaveTitle;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -24,11 +25,11 @@ internal sealed class QuickPartNameDialog : FreeWDialogWindow
         ShowInTaskbar = false;
 
         var panel = DialogPanel();
-        panel.Children.Add(new TextBlock { Text = "Name:" });
+        panel.Children.Add(new TextBlock { Text = text.NameLabel });
         panel.Children.Add(_name);
         panel.Children.Add(ButtonRow(
-            Button("OK", Accept, isDefault: true),
-            Button("Cancel", () => Close(null), isCancel: true)));
+            Button(text.OkButton, Accept, isDefault: true),
+            Button(text.CancelButton, () => Close(null), isCancel: true)));
         Content = panel;
         Opened += (_, _) => _name.Focus();
         CloseOnEscape(this);
@@ -133,14 +134,14 @@ internal sealed class FieldPickerDialog : FreeWDialogWindow
 
 internal sealed class DrawTableDimensionDialog : FreeWDialogWindow
 {
-    private readonly TextBox _rows = new() { Text = DrawTableCommandPlanner.DefaultRows.ToString(), Width = 72 };
-    private readonly TextBox _columns = new() { Text = DrawTableCommandPlanner.DefaultColumns.ToString(), Width = 72 };
+    private readonly TextBox _rows;
+    private readonly TextBox _columns;
 
-    private DrawTableDimensionDialog(string title, int defaultRows, int defaultColumns)
+    private DrawTableDimensionDialog(DrawTableDimensionDialogPlan plan)
     {
-        Title = title;
-        _rows.Text = defaultRows.ToString();
-        _columns.Text = defaultColumns.ToString();
+        Title = plan.Title;
+        _rows = new TextBox { Text = plan.DefaultRows.ToString(), Width = 72 };
+        _columns = new TextBox { Text = plan.DefaultColumns.ToString(), Width = 72 };
         Width = 290;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -148,41 +149,35 @@ internal sealed class DrawTableDimensionDialog : FreeWDialogWindow
         ShowInTaskbar = false;
 
         var panel = QuickPartNameDialog.DialogPanel();
-        panel.Children.Add(new TextBlock { Text = "Number of rows:" });
+        panel.Children.Add(new TextBlock { Text = plan.RowsLabel });
         panel.Children.Add(_rows);
-        panel.Children.Add(new TextBlock { Text = "Number of columns:" });
+        panel.Children.Add(new TextBlock { Text = plan.ColumnsLabel });
         panel.Children.Add(_columns);
         panel.Children.Add(QuickPartNameDialog.ButtonRow(
-            QuickPartNameDialog.Button("OK", Accept, isDefault: true),
-            QuickPartNameDialog.Button("Cancel", () => Close(null), isCancel: true)));
+            QuickPartNameDialog.Button(plan.OkLabel, Accept, isDefault: true),
+            QuickPartNameDialog.Button(plan.CancelLabel, () => Close(null), isCancel: true)));
         Content = panel;
         Opened += (_, _) => _rows.Focus();
         QuickPartNameDialog.CloseOnEscape(this);
     }
 
     public static Task<(int Rows, int Columns)?> AskAsync(Window owner) =>
-        new DrawTableDimensionDialog(
-            "Draw Table",
-            DrawTableCommandPlanner.DefaultRows,
-            DrawTableCommandPlanner.DefaultColumns).ShowDialog<(int Rows, int Columns)?>(owner);
+        new DrawTableDimensionDialog(DrawTableCommandPlanner.BuildDialog(
+            DrawTableDimensionDialogKind.DrawTable,
+            UiText.Get)).ShowDialog<(int Rows, int Columns)?>(owner);
 
     public static Task<(int Rows, int Columns)?> AskSplitCellAsync(Window owner) =>
-        new DrawTableDimensionDialog("Split Cells", defaultRows: 1, defaultColumns: 2)
+        new DrawTableDimensionDialog(DrawTableCommandPlanner.BuildDialog(
+            DrawTableDimensionDialogKind.SplitCells,
+            UiText.Get))
             .ShowDialog<(int Rows, int Columns)?>(owner);
 
     private void Accept() => Close(DrawTableCommandPlanner.Normalize(_rows.Text, _columns.Text));
 }
 
-internal enum BuildingBlockActionKind
-{
-    Insert,
-}
-
-internal sealed record BuildingBlockAction(BuildingBlockActionKind Kind, string Name);
-
 internal sealed class BuildingBlocksOrganizerDialog : FreeWDialogWindow
 {
-    private readonly QuickPartLibrary _library;
+    private readonly BuildingBlocksOrganizerSession _session;
     private readonly ListBox _blocks = new()
     {
         MinWidth = BuildingBlocksOrganizerPlanner.ListMinWidth,
@@ -199,18 +194,19 @@ internal sealed class BuildingBlocksOrganizerDialog : FreeWDialogWindow
     private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 8, 0, 0) };
     private readonly Button _insertButton;
     private readonly Button _deleteButton;
+    private bool _updatingProjection;
 
     internal BuildingBlocksOrganizerDialog(QuickPartLibrary library)
     {
-        _library = library;
-        Title = "Building Blocks Organizer";
+        _session = BuildingBlocksOrganizerPlanner.CreateSession(library);
+        Title = BuildingBlocksOrganizerPlanner.Title;
         Width = BuildingBlocksOrganizerPlanner.Width;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _blocks.SelectionChanged += (_, _) => RefreshPreview();
+        _blocks.SelectionChanged += (_, _) => OnSelectionChanged();
         _blocks.DoubleTapped += (_, _) => Insert();
 
         var content = new Grid
@@ -246,9 +242,9 @@ internal sealed class BuildingBlocksOrganizerDialog : FreeWDialogWindow
         labels.Children.Add(previewLabel);
         panel.Children.Add(labels);
         panel.Children.Add(content);
-        _insertButton = QuickPartNameDialog.Button("Insert", Insert, isDefault: true);
-        _deleteButton = QuickPartNameDialog.Button("Delete", Delete);
-        var closeButton = QuickPartNameDialog.Button("Close", () => Close(null), isCancel: true);
+        _insertButton = QuickPartNameDialog.Button(BuildingBlocksOrganizerPlanner.InsertText, Insert, isDefault: true);
+        _deleteButton = QuickPartNameDialog.Button(BuildingBlocksOrganizerPlanner.DeleteText, Delete);
+        var closeButton = QuickPartNameDialog.Button(BuildingBlocksOrganizerPlanner.CloseText, () => Close(null), isCancel: true);
         foreach (var button in new[] { _insertButton, _deleteButton, closeButton })
         {
             button.MinWidth = 84;
@@ -265,36 +261,48 @@ internal sealed class BuildingBlocksOrganizerDialog : FreeWDialogWindow
         QuickPartNameDialog.CloseOnEscape(this);
     }
 
-    public static Task<BuildingBlockAction?> ShowAsync(Window owner, QuickPartLibrary library) =>
-        new BuildingBlocksOrganizerDialog(library).ShowDialog<BuildingBlockAction?>(owner);
-
-    private BuildingBlockListItem? SelectedItem => _blocks.SelectedItem as BuildingBlockListItem;
+    public static Task<BuildingBlocksOrganizerAction?> ShowAsync(Window owner, QuickPartLibrary library) =>
+        new BuildingBlocksOrganizerDialog(library).ShowDialog<BuildingBlocksOrganizerAction?>(owner);
 
     private void RefreshBlocks()
     {
-        _blocks.ItemsSource = _library.Snippets.Select(part => new BuildingBlockListItem(part)).ToArray();
-        _blocks.SelectedIndex = _blocks.ItemCount > 0 ? 0 : -1;
-        _status.Text = _blocks.ItemCount == 0 ? BuildingBlocksOrganizerPlanner.EmptyStatus : string.Empty;
-        _insertButton.IsEnabled = _blocks.ItemCount > 0;
-        _deleteButton.IsEnabled = _blocks.ItemCount > 0;
-        RefreshPreview();
+        var state = _session.Current;
+        _updatingProjection = true;
+        _blocks.ItemsSource = state.Items;
+        _blocks.SelectedIndex = state.SelectedIndex;
+        _updatingProjection = false;
+        ApplyState(state);
     }
 
-    private void RefreshPreview() => _preview.Text = BuildingBlocksOrganizerPlanner.FormatPreview(SelectedItem?.Part);
+    private void OnSelectionChanged()
+    {
+        if (_updatingProjection)
+            return;
+
+        ApplyState(_session.SelectIndex(_blocks.SelectedIndex));
+    }
+
+    private void ApplyState(BuildingBlocksOrganizerState state)
+    {
+        _preview.Text = state.PreviewText;
+        _status.Text = state.StatusText;
+        _insertButton.IsEnabled = state.CanInsert;
+        _deleteButton.IsEnabled = state.CanDelete;
+    }
 
     private void Insert()
     {
-        if (SelectedItem is { } item)
-            Close(new BuildingBlockAction(BuildingBlockActionKind.Insert, item.Part.Name));
+        if (_session.AcceptSelection() is { } action)
+            Close(action);
     }
 
     private void Delete()
     {
-        if (SelectedItem is not { } item)
+        if (!_session.Current.CanDelete)
             return;
-        _library.Remove(item.Part.Name);
+
+        _session.DeleteSelection();
         RefreshBlocks();
-        _status.Text = BuildingBlocksOrganizerPlanner.FormatRemovedStatus(item.Part.Name);
     }
 }
 

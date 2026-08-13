@@ -36,17 +36,17 @@ public sealed class MailMergeCheckErrorsParityTests
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain(
-            "Select recipients first (Mailings > Select Recipients), then check for errors.");
+            "ValidateMailMergeOperationAsync(MailMergeOperation.CheckForErrors)");
         source.Should().Contain("if (mode is not { } selected)\n            return;");
         source.Should().Contain(
-            "var result = _mailMerge.CheckForErrors(selected, completeMerge: false);");
+            "var execution = _mailMerge!.CheckForErrorsPlan(selected);");
         source.Should().Contain(
-            "OpenMailMergeErrorReport(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));");
+            "OpenMailMergeErrorReport(report);");
         source.Should().Contain(
-            "foreach (var issue in result.Issues)\n                    await FreeWInfoDialog.ShowAsync(this, issue.Message);");
+            "foreach (var message in execution.Messages)\n                await FreeWInfoDialog.ShowAsync(this, message);");
         source.Should().Contain(
-            "if (result.ShouldCompleteMerge)\n            {\n                var finishPlan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(");
-        source.Should().Contain("await ExecuteFinishMergePlanAsync(finishPlan);");
+            "if (result.ShouldCompleteMerge)");
+        source.Should().Contain("await ExecuteFinishMergePlanAsync(plan);");
         source.Should().NotContain(
             "_status.Text = $\"Mail merge error check selected: {selected}.\";");
     }

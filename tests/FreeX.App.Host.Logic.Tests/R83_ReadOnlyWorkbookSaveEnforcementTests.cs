@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows.Threading;
 using Free.Shared.AppServices;
+using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -13,7 +14,7 @@ namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// Regression coverage for R83-services-doc-recovery-props-5-1 (src/FreeX.App.Host/MainWindow.Backstage.cs
-/// + MainWindow.WorkbookLifecycle.cs). Before the fix, <c>ApplyReadOnlyRecommendedPromptIfNeeded</c>
+/// + MainWindow.WorkbookLifecycle.cs). Before the fix, <c>ApplyWorkbookReadOnlyOpenPolicy</c>
 /// (see R69_ReadOnlyRecommendedPromptTests) set <c>_isWorkbookReadOnly</c> on open but nothing ever
 /// consulted it again: <c>SaveResolvedAsync</c> resolved straight to the existing path via
 /// <c>FileSavePlanner.TryResolveExistingPath</c> and silently overwrote the very file the user had just
@@ -36,7 +37,7 @@ public sealed class R83_ReadOnlyWorkbookSaveEnforcementTests
             var target = harness.ResolveExistingSaveTarget();
 
             target.Should().BeNull(
-                "a session marked read-only by ApplyReadOnlyRecommendedPromptIfNeeded must never " +
+                "a session marked read-only by ApplyWorkbookReadOnlyOpenPolicy must never " +
                 "resolve back to its own path -- Save must fall through to Save-As instead of " +
                 "silently overwriting the protected file");
         });
@@ -66,7 +67,7 @@ public sealed class R83_ReadOnlyWorkbookSaveEnforcementTests
     private sealed class SaveTargetHarness : IDisposable
     {
         private readonly MethodInfo _resolveMethod;
-        private readonly FieldInfo _isReadOnlyField;
+        private readonly FieldInfo _readOnlySessionField;
         private readonly PropertyInfo _currentFilePathProperty;
 
         private SaveTargetHarness(MainWindow window)
@@ -75,9 +76,9 @@ public sealed class R83_ReadOnlyWorkbookSaveEnforcementTests
             _resolveMethod = typeof(MainWindow).GetMethod(
                 "ResolveExistingSaveTarget", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ResolveExistingSaveTarget");
-            _isReadOnlyField = typeof(MainWindow).GetField(
-                "_isWorkbookReadOnly", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_isWorkbookReadOnly");
+            _readOnlySessionField = typeof(MainWindow).GetField(
+                "_workbookReadOnlySession", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_workbookReadOnlySession");
             _currentFilePathProperty = typeof(MainWindow).GetProperty(
                 "_currentFilePath", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMemberException(nameof(MainWindow), "_currentFilePath");
@@ -85,7 +86,8 @@ public sealed class R83_ReadOnlyWorkbookSaveEnforcementTests
 
         public MainWindow Window { get; }
 
-        public void SetWorkbookReadOnly(bool value) => _isReadOnlyField.SetValue(Window, value);
+        public void SetWorkbookReadOnly(bool value) =>
+            ((WorkbookReadOnlySession)_readOnlySessionField.GetValue(Window)!).ApplyPromptDecision(value);
 
         public void SetCurrentFilePath(string? path) => _currentFilePathProperty.SetValue(Window, path);
 

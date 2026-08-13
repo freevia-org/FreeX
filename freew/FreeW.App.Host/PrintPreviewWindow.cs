@@ -6,7 +6,9 @@ using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -27,9 +29,19 @@ namespace FreeW.App.Host;
 /// </summary>
 public sealed class PrintPreviewWindow : Window
 {
-    public PrintPreviewWindow(DocumentView editor)
+    public PrintPreviewWindow(DocumentView editor, string? displayName = null)
     {
-        Title = "Print Preview — FreeW";
+        var source = PrintLayout.BuildPaginatedSource(editor);
+        source.DocumentPaginator.ComputePageCount();
+        var preview = new FreeWPrintPreviewSession(
+            displayName,
+            editor.Model.Page,
+            BackstageDirectPrintCapability.NativeDialogAvailable(),
+            canCreatePdf: false,
+            canDirectPrint: true);
+        var state = preview.SetPageCount(source.DocumentPaginator.PageCount);
+
+        Title = state.Title;
         Width = 900;
         Height = 760;
         Background = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
@@ -37,7 +49,8 @@ public sealed class PrintPreviewWindow : Window
 
         var viewer = new DocumentViewer
         {
-            Document = PrintLayout.BuildPaginatedSource(editor)
+            Document = source,
+            ToolTip = state.PageCountText,
         };
 
         Content = viewer;
@@ -989,16 +1002,7 @@ internal sealed class HeaderFooterPaginator(
     }
 
     private static Color ParseColor(string hex)
-    {
-        try
-        {
-            return (Color)ColorConverter.ConvertFromString(hex);
-        }
-        catch (FormatException)
-        {
-            return Colors.Black;
-        }
-    }
+        => WpfRgbColorAdapter.ParseDrawingMlOrDefault(hex, Colors.Black);
 
     /// <summary>Renders one line of header/footer text into a positioned drawing visual.</summary>
     private static DrawingVisual BuildOverlay(string text, double x, double y, double width)
@@ -1035,14 +1039,14 @@ internal sealed class HeaderFooterPaginator(
     /// page-number field run.
     /// </summary>
     private string ResolveText(HeaderFooter content, int zeroBasedPageNumber)
-    {
-        var displayPage = (zeroBasedPageNumber + 1).ToString(System.Globalization.CultureInfo.CurrentCulture);
-        var displayPageCount = inner.PageCount.ToString(System.Globalization.CultureInfo.CurrentCulture);
-        var lines = content.Paragraphs.Select(p =>
-            string.Concat(p.Runs.Select(r =>
-                r.FieldKind == RunFieldKind.PageNumber ? displayPage
-                : r.FieldKind == RunFieldKind.NumPages ? displayPageCount
-                : r.Text)));
-        return string.Join("  ", lines.Where(l => l.Length > 0));
-    }
+        => HeaderFooterVisualPlanner.ResolveLineText(
+            content,
+            new HeaderFooterFieldResolutionContext(
+                model,
+                (zeroBasedPageNumber + 1).ToString(System.Globalization.CultureInfo.CurrentCulture),
+                inner.PageCount,
+                SectionOrdinal: 1,
+                SectionPageCount: inner.PageCount,
+                EvaluatedAt: DateTime.Now,
+                Culture: System.Globalization.CultureInfo.CurrentCulture));
 }

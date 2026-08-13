@@ -67,7 +67,8 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
         var mediaSession = factory.Backend.Sessions[0];
         mediaSession.OpenCount.Should().Be(1);
         mediaSession.PlayCount.Should().Be(1);
-        mediaSession.LastSource!.Loop.Should().BeTrue();
+        mediaSession.LastSource!.Loop.Should().BeFalse(
+            "the portable slideshow session owns authored media looping");
         controller.Availability!.IsAvailable.Should().BeTrue();
 
         controller.TryHandleClick(slide, 960, 720, 960, 720, 480, 360).Should().BeTrue();
@@ -289,7 +290,8 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
 
         controller.TryHandleClick(slide, 960, 720, 960, 720, 480, 360).Should().BeTrue();
         mediaSession.PlayCount.Should().Be(1);
-        mediaSession.LastSource!.Loop.Should().BeTrue();
+        mediaSession.LastSource!.Loop.Should().BeFalse(
+            "the portable slideshow session owns authored media looping");
     }
 
     [Fact]

@@ -797,7 +797,7 @@ public partial class GridView
         var layout = TimelineLayoutBuilder.Build(
             timeline,
             new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height),
-            ResolveTimelineGranularity(timeline));
+            SlicerTimelineGranularity.Resolve(timeline));
 
         DrawNativeControlFrame(
             dc,
@@ -814,20 +814,11 @@ public partial class GridView
         // Granularity dropdown label (e.g. "MONTHS ▾") — use the layout's rect so geometry
         // is shared with the Avalonia renderer via TimelineLayoutBuilder.
         if (layout.GranularityDropdownRect.Width > 0)
-        {
-            var granLabel = layout.Granularity switch
-            {
-                TimelineGranularity.Year => "YEARS ▾",
-                TimelineGranularity.Quarter => "QUARTERS ▾",
-                TimelineGranularity.Month => "MONTHS ▾",
-                _ => "DAYS ▾"
-            };
-            DrawClippedText(dc, granLabel, ToRect(layout.GranularityDropdownRect), headerTextBrush, 7.5, verticalPadding: 0, pixelsPerDip);
-        }
+            DrawClippedText(dc, layout.GranularityLabel, ToRect(layout.GranularityDropdownRect), headerTextBrush, 7.5, verticalPadding: 0, pixelsPerDip);
 
         // Clear-filter (×) glyph — draw from the layout's shared rect when the filter is active.
         if (layout.HasActiveFilter && layout.ClearFilterIconRect.Width > 0)
-            DrawClippedText(dc, "×", ToRect(layout.ClearFilterIconRect), headerTextBrush, 9, verticalPadding: 0, pixelsPerDip);
+            DrawClippedText(dc, layout.ClearFilterGlyph, ToRect(layout.ClearFilterIconRect), headerTextBrush, 9, verticalPadding: 0, pixelsPerDip);
 
         // Summary date label — accent color and bold so it reads clearly against the white body.
         DrawClippedText(dc, layout.DateLabel, ToRect(layout.DateLabelRect), summaryLabelBrush, 9, verticalPadding: 0, pixelsPerDip, isBold: isAccentStyle);
@@ -974,34 +965,6 @@ public partial class GridView
 
     private static string GetNativeControlCaption(string? caption, string name, string? shapeName)
         => GridDrawingObjectPlanner.GetNativeControlCaption(caption, name, shapeName);
-
-    private static TimelineGranularity ResolveTimelineGranularity(TimelineModel timeline)
-    {
-        // The OOXML level attribute takes priority (0=years,1=quarters,2=months,3=days).
-        // TimelineLayoutBuilder.Build() applies this mapping, so we only need the heuristic
-        // here as the initial-pass value — the builder will override it when level is set.
-        if (!TryParseTimelineDate(timeline.StartDate, out var start) ||
-            !TryParseTimelineDate(timeline.EndDate, out var end))
-        {
-            return TimelineGranularity.Month;
-        }
-
-        var days = Math.Abs(end.DayNumber - start.DayNumber);
-        return days switch
-        {
-            <= 62 => TimelineGranularity.Day,
-            <= 366 => TimelineGranularity.Month,
-            <= 366 * 4 => TimelineGranularity.Quarter,
-            _ => TimelineGranularity.Year,
-        };
-    }
-
-    private static bool TryParseTimelineDate(string? value, out DateOnly date)
-    {
-        date = default;
-        return !string.IsNullOrWhiteSpace(value) &&
-            DateOnly.TryParseExact(value.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
-    }
 
     private static Rect ToRect(LayoutRect rect) => new(rect.X, rect.Y, rect.Width, rect.Height);
 
@@ -2135,7 +2098,7 @@ public partial class GridView
                 var modelBounds = new LayoutRect(
                     controlRect.Left, controlRect.Top, controlRect.Width, controlRect.Height);
                 var layout = FreeX.App.Presentation.SlicerTimeline.TimelineLayoutBuilder.Build(
-                    timeline, modelBounds, ResolveTimelineGranularity(timeline));
+                    timeline, modelBounds, SlicerTimelineGranularity.Resolve(timeline));
                 var hitPoint = new LayoutPoint(pos.X, pos.Y);
 
                 // Clear-filter icon hit?

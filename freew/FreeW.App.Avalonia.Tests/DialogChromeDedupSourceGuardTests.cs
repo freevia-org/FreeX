@@ -6,6 +6,16 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class DialogChromeDedupSourceGuardTests
 {
     [Fact]
+    public void ObsoleteModalCellEditingFallback_IsAbsent()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+
+        File.Exists(Path.Combine(root, "freew", "FreeW.App.Avalonia", "CellEditDialog.cs"))
+            .Should().BeFalse("table cells are edited in place");
+        ReadAvaloniaSource("MainWindow.cs").Should().NotContain("CellEditRequested");
+    }
+
+    [Fact]
     public void ResidualAvaloniaDialogs_DelegateCompactChromeToSharedHelper()
     {
         var expectations = new (string FileName, string[] RequiredSnippets)[]
@@ -15,12 +25,6 @@ public sealed class DialogChromeDedupSourceGuardTests
                 "using Free.Shared.Shell.Avalonia;",
                 "AvaloniaCompactDialogChrome.ApplyButton(yes, DialogChromeStyle, minWidth: 82, isDefault: true);",
                 "AvaloniaCompactDialogChrome.CreateActionRow([yes, no], new Thickness(16, 0, 16, 16));",
-            ]),
-            ("CellEditDialog.cs",
-            [
-                "using Free.Shared.Shell.Avalonia;",
-                "AvaloniaCompactDialogChrome.ApplyTextBox(_box, DialogChromeStyle);",
-                "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 10, 0, 0));",
             ]),
             ("DesignDialogs.cs",
             [
@@ -34,14 +38,14 @@ public sealed class DialogChromeDedupSourceGuardTests
                 "using Free.Shared.Shell.Avalonia;",
                 "AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);",
                 "AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_matchCase, DialogChromeStyle);",
-                "AvaloniaCompactDialogChrome.ApplyButton(btn, DialogChromeStyle, minWidth: 84);",
+                "AvaloniaCompactDialogChrome.ApplyButton(btn, DialogChromeStyle, minWidth: Surface.Metrics.ButtonMinWidth);",
                 "AvaloniaCompactDialogChrome.CreateActionRow(",
             ]),
             ("FontDialog.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",
                 "AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);",
-                "FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);",
+                "FontParagraphDialogChrome.ApplyCheckBox(EffectControlFor(spec.Kind), DialogChromeStyle);",
                 "AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle",
                 "AvaloniaCompactDialogChrome.CreateOkCancelRow(",
             ]),
@@ -70,7 +74,7 @@ public sealed class DialogChromeDedupSourceGuardTests
             ("PageSetupDialog.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",
-                "PageLayoutDialogChrome.Configure(this, PageSetupDialogPlanner.Title",
+                "PageLayoutDialogChrome.Configure(this, surface.Title, metrics.WindowWidth);",
                 "PageLayoutDialogChrome.NumberBox(",
                 "PageLayoutDialogChrome.Combo(",
                 "AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle",
@@ -92,7 +96,7 @@ public sealed class DialogChromeDedupSourceGuardTests
             ("ParagraphDialog.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",
-                "PageLayoutDialogChrome.Configure(this, \"Paragraph\"",
+                "PageLayoutDialogChrome.Configure(this, Surface, 380);",
                 "PageLayoutDialogChrome.NumberBox(",
                 "PageLayoutDialogChrome.Combo(",
                 "PageLayoutDialogChrome.Actions(",

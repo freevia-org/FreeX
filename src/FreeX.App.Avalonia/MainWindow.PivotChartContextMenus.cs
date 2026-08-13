@@ -4,8 +4,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.Charts;
+using Free.Shared.Localization;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
@@ -17,6 +17,9 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static readonly ResourceKeyTextResolver PivotFieldFilterText =
+        new(UiText.Get, UiText.Format);
+
     private void AttachPivotFieldContextMenu(
         Control chip,
         PivotTableModel pivot,
@@ -132,7 +135,7 @@ public sealed partial class MainWindow
             Focusable = true,
         };
         AutomationProperties.SetAutomationId(button, $"PivotChartFieldButton_{fieldButton.Replace(" ", string.Empty)}");
-        AutomationProperties.SetName(button, $"PivotChart {fieldButton}");
+        AutomationProperties.SetName(button, UiText.Format("PivotChart_FieldButtonAutomationNameFormat", fieldButton));
         button.Click += (_, _) => SelectChart(chart);
         AvaloniaManagedContextMenu.Attach(
             button,
@@ -179,26 +182,27 @@ public sealed partial class MainWindow
         if (sourceIndex is not { } index)
             return null;
 
-        var area = pivot.PageFields.Any(field => field.SourceFieldIndex == index)
-            ? PivotHeaderArea.Page
-            : pivot.ColumnFields.Any(field => field.SourceFieldIndex == index)
-                ? PivotHeaderArea.Column
-                : PivotHeaderArea.Row;
+        var area = PivotUiPlanner.ResolvePivotChartFieldArea(pivot, index);
         return new PivotHeaderDropdownTargetModel(pivot.Name, caption, index, area, false);
     }
 
-    private static PivotChartFieldContextMenuState BuildPivotChartFieldContextMenuState(
+    private PivotChartFieldContextMenuState BuildPivotChartFieldContextMenuState(
         PivotTableModel pivot,
         PivotHeaderDropdownTargetModel target)
     {
         var sourceIndex = target.SourceFieldIndex;
-        var field = pivot.RowFields.Concat(pivot.ColumnFields).Concat(pivot.PageFields)
-            .FirstOrDefault(candidate => candidate.SourceFieldIndex == sourceIndex);
-        var hasItemFilter = field?.SelectedItems is { Count: > 0 } || !string.IsNullOrWhiteSpace(field?.SelectedItem);
-        var hasFilter = hasItemFilter ||
-            pivot.LabelFilters.Any(filter => filter.SourceFieldIndex == sourceIndex) ||
-            pivot.ValueFilters.Any(filter =>
-                PivotValueFilterOwnership.BelongsToSourceField(filter, sourceIndex));
+        var filterState = PivotFieldFilterSummary.CreateState(
+            pivot,
+            sourceIndex,
+            target.Area,
+            target.FieldCaption,
+            PivotSourceContext.ReadItems(
+                _session.Workbook,
+                _session.ActiveSheet,
+                pivot,
+                sourceIndex),
+            PivotFieldFilterText);
+        var hasFilter = filterState.HasStoredFilter;
         var summary = hasFilter ? $"{target.FieldCaption}: Filtered" : $"{target.FieldCaption}: (All)";
 
         return new PivotChartFieldContextMenuState(
@@ -256,7 +260,9 @@ public sealed partial class MainWindow
                 Focusable = true,
             };
             AutomationProperties.SetAutomationId(anchor, $"WaterfallPoint_{bar.PointIndex}");
-            AutomationProperties.SetName(anchor, $"Waterfall point {bar.PointIndex + 1}");
+            AutomationProperties.SetName(
+                anchor,
+                UiText.Format("Chart_WaterfallPointAutomationNameFormat", bar.PointIndex + 1));
             anchor.PointerPressed += (_, args) =>
             {
                 if (args.GetCurrentPoint(anchor).Properties.IsLeftButtonPressed)
@@ -281,12 +287,16 @@ public sealed partial class MainWindow
 
     private void ToggleWaterfallTotalPoint(ChartModel chart, int pointIndex)
     {
-        var setAsTotal = !WaterfallChartContextMenuPlanner.IsPointTotal(chart, pointIndex);
-        var result = _session.ExecuteReviewCommand(new SetWaterfallTotalPointCommand(
+        var command = WaterfallChartContextMenuPlanner.CreateToggleCommand(
             _session.ActiveSheet.Id,
-            chart.Id,
-            pointIndex,
-            setAsTotal));
-        RefreshShell(result.Success ? "Set as Total" : result.ErrorMessage ?? "Set as Total failed");
+            chart,
+            pointIndex);
+        if (command is null)
+            return;
+
+        var result = _session.ExecuteReviewCommand(command);
+        RefreshShell(result.Success
+            ? UiText.Get("Chart_SetAsTotalStatus")
+            : result.ErrorMessage ?? UiText.Get("Chart_SetAsTotalFailed"));
     }
 }

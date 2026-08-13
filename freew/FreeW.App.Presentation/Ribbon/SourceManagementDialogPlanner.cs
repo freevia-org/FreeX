@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Ribbon;
@@ -215,7 +216,10 @@ public sealed record SourceManagementSourceEntry(
     }
 }
 
-public sealed record SourceManagementSourceTypeChoice(SourceType Type, string Label);
+public sealed record SourceManagementSourceTypeChoice(SourceType Type, string Label)
+{
+    public override string ToString() => Label;
+}
 
 public sealed record SourceManagementSourceFieldPlan(
     SourceManagementSourceField Field,
@@ -282,6 +286,30 @@ public sealed record SourceManagementAuthorEditorState(
     IReadOnlyList<SourceManagementAuthorPersonRow> PersonalRows,
     string CorporateAuthor);
 
+public sealed record SourceManagementDialogText(
+    string SourcePickerTitle,
+    string SourcePickerLabel,
+    string AddNewSourceButtonLabel,
+    string InsertButtonLabel,
+    string CancelButtonLabel,
+    string SelectSourceValidationMessage,
+    string ManageSourcesTitle,
+    string AddButtonLabel,
+    string EditButtonLabel,
+    string DeleteButtonLabel,
+    string CopyToCurrentButtonLabel,
+    string CopyToMasterButtonLabel,
+    string OkButtonLabel,
+    string SourceConflictDialogTitle,
+    string SourceConflictKeepCurrentLabel,
+    string SourceConflictReplaceCurrentLabel,
+    string SourceConflictKeepMasterLabel,
+    string SourceConflictReplaceMasterLabel,
+    string SourceConflictMessageFormat,
+    string SourceConflictYesFormat,
+    string SourceConflictNoFormat,
+    string SourceConflictCancelDescription);
+
 public static class SourceManagementDialogPlanner
 {
     public const string SourcePickerTitle = "Insert Citation";
@@ -311,6 +339,44 @@ public static class SourceManagementDialogPlanner
     public const string SourceConflictReplaceCurrentLabel = "Replace Current Document";
     public const string SourceConflictKeepMasterLabel = "Keep Master List";
     public const string SourceConflictReplaceMasterLabel = "Replace Master List";
+
+    private static readonly ResourceTextDescriptor[] SurfaceTexts =
+    [
+        Text("SourceManagement_Picker_Title", SourcePickerTitle),
+        Text("SourceManagement_Picker_Source_Label", SourcePickerLabel),
+        Text("SourceManagement_Picker_AddNew_Label", AddNewSourceButtonLabel),
+        Text("Common_Insert", "Insert"),
+        Text("Common_CancelText", "Cancel"),
+        Text("SourceManagement_Picker_SelectSource_Validation", "Select a source or add a new one."),
+        Text("SourceManagement_Manage_Title", "Manage Sources"),
+        Text("SourceManagement_Add_Label", "Add..."),
+        Text("SourceManagement_Edit_Label", "Edit..."),
+        Text("SourceManagement_Delete_Label", "Delete"),
+        Text("SourceManagement_CopyToCurrent_Label", "Copy \u2192"),
+        Text("SourceManagement_CopyToMaster_Label", "Copy \u2190"),
+        Text("Common_OkText", "OK"),
+        Text("SourceManagement_Conflict_Title", SourceConflictDialogTitle),
+        Text("SourceManagement_Conflict_KeepCurrent_Label", SourceConflictKeepCurrentLabel),
+        Text("SourceManagement_Conflict_ReplaceCurrent_Label", SourceConflictReplaceCurrentLabel),
+        Text("SourceManagement_Conflict_KeepMaster_Label", SourceConflictKeepMasterLabel),
+        Text("SourceManagement_Conflict_ReplaceMaster_Label", SourceConflictReplaceMasterLabel),
+        Text("SourceManagement_Conflict_Message_Format", "The Master List and Current Document both contain the source tag \"{0}\", but their source details are different. Choose which version to keep."),
+        Text("SourceManagement_Conflict_Yes_Format", "Yes: {0}"),
+        Text("SourceManagement_Conflict_No_Format", "No: {0}"),
+        Text("SourceManagement_Conflict_Cancel_Description", "Cancel: Do nothing"),
+    ];
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+        SurfaceTexts.Select(text => text.ResourceKey).ToArray();
+
+    public static SourceManagementDialogText ResolveText(Func<string, string?>? getText = null)
+    {
+        var values = SurfaceTexts.Select(text => text.Resolve(getText)).ToArray();
+        return new SourceManagementDialogText(
+            values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7],
+            values[8], values[9], values[10], values[11], values[12], values[13], values[14], values[15],
+            values[16], values[17], values[18], values[19], values[20], values[21]);
+    }
 
     private static readonly IReadOnlyList<SourceManagementSourceTypeChoice> SourceTypeChoices =
     [
@@ -998,7 +1064,7 @@ public static class SourceManagementDialogPlanner
             ContributorPreservationPeople(entry.Translator, entry.Translators, existing?.Translators));
         return new Source
         {
-            Tag = SourceManagementTagIdentity.Canonicalize(entry.Tag),
+            Tag = SourceTagIdentity.Canonicalize(entry.Tag),
             Type = type,
             Author = author.DisplayText,
             PersonalAuthors = author.PersonalAuthors,
@@ -1060,62 +1126,7 @@ public static class SourceManagementDialogPlanner
     public static Source CloneSource(Source source)
     {
         ArgumentNullException.ThrowIfNull(source);
-
-        return new Source
-        {
-            Tag = SourceManagementTagIdentity.Canonicalize(source.Tag),
-            Type = source.Type,
-            Author = source.Author,
-            PersonalAuthors = ClonePersonalAuthors(source.PersonalAuthors),
-            CorporateAuthor = source.CorporateAuthor,
-            Editors = ClonePersonalAuthors(source.Editors),
-            Translators = ClonePersonalAuthors(source.Translators),
-            Title = source.Title,
-            BookTitle = source.BookTitle,
-            ConferenceName = source.ConferenceName,
-            Inventor = source.Inventor,
-            Interviewee = source.Interviewee,
-            Interviewer = source.Interviewer,
-            Artist = source.Artist,
-            Composer = source.Composer,
-            Conductor = source.Conductor,
-            Director = source.Director,
-            Performer = source.Performer,
-            ProducerName = source.ProducerName,
-            Writer = source.Writer,
-            Year = source.Year,
-            Month = source.Month,
-            Day = source.Day,
-            Institution = source.Institution,
-            Publisher = source.Publisher,
-            City = source.City,
-            Edition = source.Edition,
-            StandardNumber = source.StandardNumber,
-            ChapterNumber = source.ChapterNumber,
-            PatentNumber = source.PatentNumber,
-            CaseNumber = source.CaseNumber,
-            Court = source.Court,
-            Reporter = source.Reporter,
-            CountryRegion = source.CountryRegion,
-            StateProvince = source.StateProvince,
-            Medium = source.Medium,
-            SourceKind = source.SourceKind,
-            AlbumTitle = source.AlbumTitle,
-            ProductionCompany = source.ProductionCompany,
-            RecordingNumber = source.RecordingNumber,
-            Theater = source.Theater,
-            ShortTitle = source.ShortTitle,
-            Comments = source.Comments,
-            Journal = source.Journal,
-            Volume = source.Volume,
-            Issue = source.Issue,
-            Pages = source.Pages,
-            Url = source.Url,
-            Accessed = source.Accessed,
-            AccessedDay = source.AccessedDay,
-            AccessedMonth = source.AccessedMonth,
-            AccessedYear = source.AccessedYear
-        };
+        return source.CloneCanonicalized();
     }
 
     public static string DescribeSource(Source source)
@@ -1303,22 +1314,28 @@ public static class SourceManagementDialogPlanner
         };
     }
 
-    public static string BuildSourceConflictMessage(SourceManagementSourceConflict conflict)
+    public static string BuildSourceConflictMessage(
+        SourceManagementSourceConflict conflict,
+        SourceManagementDialogText? text = null)
     {
         ArgumentNullException.ThrowIfNull(conflict);
 
-        return $"The Master List and Current Document both contain the source tag \"{conflict.Tag}\", but their source details are different. Choose which version to keep.";
+        return string.Format(
+            System.Globalization.CultureInfo.CurrentCulture,
+            (text ?? ResolveText()).SourceConflictMessageFormat,
+            conflict.Tag);
     }
 
     public static IReadOnlyList<SourceManagementSourceConflictResolutionChoice> BuildSourceConflictResolutionChoices(
-        SourceManagementSourceConflict conflict)
+        SourceManagementSourceConflict conflict,
+        SourceManagementDialogText? text = null)
     {
         ArgumentNullException.ThrowIfNull(conflict);
 
         return
         [
-            new(conflict.KeepAction, SourceConflictResolutionLabel(conflict.KeepAction)),
-            new(conflict.ReplaceAction, SourceConflictResolutionLabel(conflict.ReplaceAction))
+            new(conflict.KeepAction, SourceConflictResolutionLabel(conflict.KeepAction, text ?? ResolveText())),
+            new(conflict.ReplaceAction, SourceConflictResolutionLabel(conflict.ReplaceAction, text ?? ResolveText()))
         ];
     }
 
@@ -1436,9 +1453,9 @@ public static class SourceManagementDialogPlanner
         SourceManagementSourceConflictResolutionAction keepAction,
         SourceManagementSourceConflictResolutionAction replaceAction)
     {
-        var tag = SourceManagementTagIdentity.Canonicalize(currentSource.Tag);
+        var tag = SourceTagIdentity.Canonicalize(currentSource.Tag);
         if (tag.Length == 0)
-            tag = SourceManagementTagIdentity.Canonicalize(masterSource.Tag);
+            tag = SourceTagIdentity.Canonicalize(masterSource.Tag);
 
         return new SourceManagementSourceConflict(
             tag,
@@ -1448,18 +1465,23 @@ public static class SourceManagementDialogPlanner
             replaceAction);
     }
 
-    private static string SourceConflictResolutionLabel(SourceManagementSourceConflictResolutionAction action) =>
+    private static string SourceConflictResolutionLabel(
+        SourceManagementSourceConflictResolutionAction action,
+        SourceManagementDialogText text) =>
         action switch
         {
-            SourceManagementSourceConflictResolutionAction.KeepCurrent => SourceConflictKeepCurrentLabel,
-            SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster => SourceConflictReplaceCurrentLabel,
-            SourceManagementSourceConflictResolutionAction.KeepMaster => SourceConflictKeepMasterLabel,
-            SourceManagementSourceConflictResolutionAction.ReplaceMasterFromCurrent => SourceConflictReplaceMasterLabel,
+            SourceManagementSourceConflictResolutionAction.KeepCurrent => text.SourceConflictKeepCurrentLabel,
+            SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster => text.SourceConflictReplaceCurrentLabel,
+            SourceManagementSourceConflictResolutionAction.KeepMaster => text.SourceConflictKeepMasterLabel,
+            SourceManagementSourceConflictResolutionAction.ReplaceMasterFromCurrent => text.SourceConflictReplaceMasterLabel,
             _ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
         };
 
+    private static ResourceTextDescriptor Text(string resourceKey, string fallbackText) =>
+        new(resourceKey, fallbackText);
+
     private static bool SourcePayloadEquals(Source left, Source right) =>
-        SourceManagementTagIdentity.Equals(left.Tag, right.Tag)
+        SourceTagIdentity.Equals(left.Tag, right.Tag)
         && left.Type == right.Type
         && SourceValueEquals(left.Author, right.Author)
         && SourcePeopleEqual(left.PersonalAuthors, right.PersonalAuthors)
@@ -1540,7 +1562,7 @@ public static class SourceManagementDialogPlanner
 
     private static int UpsertSourceByTag(List<Source> sources, Source source)
     {
-        if (!SourceManagementTagIdentity.HasIdentity(source.Tag))
+        if (!SourceTagIdentity.HasIdentity(source.Tag))
         {
             sources.Add(CloneSource(source));
             return sources.Count - 1;
@@ -1562,7 +1584,7 @@ public static class SourceManagementDialogPlanner
     {
         sources.RemoveAt(selectedIndex);
 
-        if (SourceManagementTagIdentity.HasIdentity(source.Tag))
+        if (SourceTagIdentity.HasIdentity(source.Tag))
         {
             var duplicateIndex = FindSourceIndexByTag(sources, source.Tag);
             if (duplicateIndex >= 0)
@@ -1580,7 +1602,7 @@ public static class SourceManagementDialogPlanner
     private static int RemoveSourceAtIndexOrMatchingTag(List<Source> sources, int selectedIndex)
     {
         var tag = sources[selectedIndex].Tag;
-        if (!SourceManagementTagIdentity.HasIdentity(tag))
+        if (!SourceTagIdentity.HasIdentity(tag))
         {
             sources.RemoveAt(selectedIndex);
             return Math.Min(selectedIndex, sources.Count);
@@ -1595,7 +1617,7 @@ public static class SourceManagementDialogPlanner
         if (index < 0)
             return index;
 
-        sources.RemoveAll(source => SourceManagementTagIdentity.Equals(source.Tag, tag));
+        sources.RemoveAll(source => SourceTagIdentity.Equals(source.Tag, tag));
         return Math.Min(index, sources.Count);
     }
 
@@ -1603,7 +1625,7 @@ public static class SourceManagementDialogPlanner
     {
         for (var index = 0; index < sources.Count; index++)
         {
-            if (SourceManagementTagIdentity.Equals(sources[index].Tag, tag))
+            if (SourceTagIdentity.Equals(sources[index].Tag, tag))
                 return index;
         }
 
@@ -1664,7 +1686,7 @@ public static class SourceManagementDialogPlanner
         || entry.AccessedYear.Length > 0;
 
     private static bool HasManagedSourceData(SourceManagementSourceEntry entry) =>
-        SourceManagementTagIdentity.Canonicalize(entry.Tag).Length > 0 || HasCitationSourceData(entry);
+        SourceTagIdentity.Canonicalize(entry.Tag).Length > 0 || HasCitationSourceData(entry);
 
     private static string FieldValue(SourceManagementSourceEntry entry, SourceManagementSourceField field) =>
         field switch
@@ -1882,10 +1904,7 @@ public static class SourceManagementDialogPlanner
     }
 
     private static IReadOnlyList<SourceAuthorPerson> ClonePersonalAuthors(IEnumerable<SourceAuthorPerson> people) =>
-        people
-            .Where(person => person is not null && !person.IsEmpty)
-            .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
-            .ToArray();
+        SourceAuthorPerson.Canonicalize(people);
 
     private static IReadOnlyList<SourceManagementAuthorPersonRow> ToAuthorPersonRows(
         IEnumerable<SourceAuthorPerson> people) =>

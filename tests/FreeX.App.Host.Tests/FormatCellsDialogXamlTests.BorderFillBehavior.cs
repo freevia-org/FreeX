@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Globalization;
 using FreeX.App.Host;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -27,13 +28,13 @@ public sealed partial class FormatCellsDialogXamlTests
                 GetControl<TextBox>(dialog, "DlgFillColorBox").Text = "12,34,56";
                 GetControl<TextBox>(dialog, "DlgFillPatternColorBox").Text = "90,80,70";
                 GetControl<ComboBox>(dialog, "DlgFillPatternStyleBox").SelectedItem = "Diagonal Crosshatch";
-                GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = nameof(BorderStyle.Thick);
+                GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.Thick);
                 GetControl<TextBox>(dialog, "DlgBorderTopColorBox").Text = "1,2,3";
-                GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = nameof(BorderStyle.Dashed);
+                GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.Dashed);
                 GetControl<TextBox>(dialog, "DlgBorderRightColorBox").Text = "4,5,6";
-                GetControl<ComboBox>(dialog, "DlgBorderBottomStyleBox").SelectedItem = nameof(BorderStyle.Dotted);
+                GetControl<ComboBox>(dialog, "DlgBorderBottomStyleBox").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.Dotted);
                 GetControl<TextBox>(dialog, "DlgBorderBottomColorBox").Text = "7,8,9";
-                GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = nameof(BorderStyle.Double);
+                GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.Double);
                 GetControl<TextBox>(dialog, "DlgBorderLeftColorBox").Text = "10,11,12";
                 GetControl<CheckBox>(dialog, "DlgLockedCheck").IsChecked = false;
                 GetControl<CheckBox>(dialog, "DlgHiddenCheck").IsChecked = true;
@@ -67,7 +68,7 @@ public sealed partial class FormatCellsDialogXamlTests
             var dialog = ShowDialogForTest(new CellStyle());
             try
             {
-                GetControl<ListBox>(dialog, "DlgBorderLineStyleList").SelectedItem = nameof(BorderStyle.Dashed);
+                GetControl<ListBox>(dialog, "DlgBorderLineStyleList").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.Dashed);
                 GetControl<TextBox>(dialog, "DlgBorderLineColorBox").Text = "20,30,40";
                 InvokeDialogHandler(dialog, "DlgBorderPresetInsideButton_Click");
                 ClickOkForTest(dialog);
@@ -91,7 +92,7 @@ public sealed partial class FormatCellsDialogXamlTests
             var dialog = ShowDialogForTest(new CellStyle());
             try
             {
-                GetControl<ListBox>(dialog, "DlgBorderLineStyleList").SelectedItem = nameof(BorderStyle.Thick);
+                GetControl<ListBox>(dialog, "DlgBorderLineStyleList").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.Thick);
                 GetControl<TextBox>(dialog, "DlgBorderLineColorBox").Text = "1,2,3";
                 InvokeDialogHandler(dialog, "DlgBorderPresetOutlineButton_Click");
                 ClickOkForTest(dialog);

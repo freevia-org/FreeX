@@ -19,4 +19,17 @@ public sealed record BackstageActionGroup(
 public sealed record BackstageActionRow(
     string Label,
     string Description,
-    Action Invoke);
+    Action Invoke)
+{
+    public string? AutomationId { get; init; }
+
+    public bool IsEnabled { get; init; } = true;
+
+    public string ResolveAutomationId(string fallbackPrefix)
+    {
+        ArgumentNullException.ThrowIfNull(fallbackPrefix);
+        return string.IsNullOrWhiteSpace(AutomationId)
+            ? fallbackPrefix + AutomationIdToken.KeepLettersAndDigits(Label)
+            : AutomationId;
+    }
+}

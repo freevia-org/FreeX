@@ -32,6 +32,9 @@ public static class QuickAnalysisTotalsPlanner
         GridRange range,
         Func<uint, string> formulaForRow)
     {
+        if (range.End.Col >= CellAddress.MaxCol)
+            return [];
+
         var edits = new List<(CellAddress Address, Cell NewCell)>();
         var targetCol = range.End.Col + 1;
         for (var row = range.Start.Row; row <= range.End.Row; row++)

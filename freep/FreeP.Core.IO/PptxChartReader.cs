@@ -1009,14 +1009,6 @@ internal static class PptxChartReader
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
-    private static void ReadScatterChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
-        Dictionary<int, ChartSeries> idxMap)
-    {
-        ReadVaryColors(el, shape);
-        shape.ChartType = ChartType.Scatter;
-        ReadSeriesFromChart(el, shape, scheme, idxMap);
-    }
-
     private static void ReadDoughnutChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
         Dictionary<int, ChartSeries> idxMap)
     {
@@ -1502,7 +1494,7 @@ internal static class PptxChartReader
         style.Dash = ReadLineDash(lnEl.Element(A + "prstDash")?.Attribute("val")?.Value);
 
         if (long.TryParse(lnEl.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var widthEmu) && widthEmu > 0)
-            style.WidthPt = DrawingMlUnits.EmuToPoints(widthEmu);
+            style.WidthPt = DrawingMlCoordinateUnits.EmuToPoints(widthEmu);
 
         return style;
     }

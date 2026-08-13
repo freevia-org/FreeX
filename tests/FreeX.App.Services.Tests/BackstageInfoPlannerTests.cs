@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using FluentAssertions;
+using Free.Shared.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -36,6 +37,36 @@ public sealed class BackstageInfoPlannerTests
         plan.SharingStatus.Should().Be(@"Ready for Windows Share from C:\work\budget.xlsx.");
         plan.ExportStatus.Should().Contain("selected range");
         plan.ExportStatus.Should().Contain("No Microsoft account or cloud service is required.");
+    }
+
+    [Fact]
+    public void CreatePaneRequest_ProjectsEveryInfoPlanField()
+    {
+        var workbook = new Workbook("Budget");
+        var sheet = workbook.AddSheet("Budget");
+        var plan = BackstageInfoPlanner.Build(
+            workbook,
+            @"C:\work\budget.xlsx",
+            Strings(),
+            activeSheet: sheet,
+            fileExists: _ => true,
+            hasSelection: true);
+
+        var request = BackstageInfoPlanner.CreatePaneRequest(plan);
+
+        request.WorkbookName.Should().Be(plan.WorkbookName);
+        request.FilePath.Should().Be(plan.FilePath);
+        request.SheetCount.Should().Be(plan.SheetCount);
+        request.Format.Should().Be(plan.Format);
+        request.FileSize.Should().Be(plan.FileSize);
+        request.LastModified.Should().Be(plan.LastModified);
+        request.SharingStatus.Should().Be(plan.SharingStatus);
+        request.ExportStatus.Should().Be(plan.ExportStatus);
+        request.WorkbookProtectionSummary.Should().Be(plan.Summary.WorkbookProtectionSummary);
+        request.ActiveSheetProtectionSummary.Should().Be(plan.Summary.ActiveSheetProtectionSummary);
+        request.StatisticsSummary.Should().Be(plan.StatisticsSummary);
+        request.AccessibilitySummary.Should().Be(plan.AccessibilitySummary);
+        request.FormulaErrorSummary.Should().Be(plan.FormulaErrorSummary);
     }
 
     [Fact]
@@ -186,7 +217,7 @@ public sealed class BackstageInfoPlannerTests
         plan.Summary.ActiveSheetProtectionSummary.Should().Be("Active sheet protected.");
     }
 
-    private static WorkbookInfoDisplayStrings Strings() =>
+    private static ResourceKeyTextResolver Strings() =>
         new(GetText, (key, args) => string.Format(CultureInfo.InvariantCulture, GetText(key), args));
 
     private static string GetText(string key) => key switch

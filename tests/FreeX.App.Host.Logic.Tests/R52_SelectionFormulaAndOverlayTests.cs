@@ -1,5 +1,6 @@
 using System.Reflection;
 using FluentAssertions;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -106,7 +107,7 @@ public sealed class R52_SelectionFormulaAndOverlayTests
             {
                 var sheet = workbook.GetSheetAt(0);
                 SetPrivateField(window, "_formulaEditCell", (CellAddress?)new CellAddress(sheet.Id, 1, 1));
-                SetPrivateField(window, "_formulaRangeEntryMode", true);
+                ConfigureFormulaRangeEditingSession(window);
                 window.FormulaBar.Text = "=SUM(";
                 window.FormulaBar.CaretIndex = window.FormulaBar.Text.Length;
 
@@ -132,7 +133,7 @@ public sealed class R52_SelectionFormulaAndOverlayTests
             {
                 var sheet = workbook.GetSheetAt(0);
                 SetPrivateField(window, "_formulaEditCell", (CellAddress?)new CellAddress(sheet.Id, 1, 1));
-                SetPrivateField(window, "_formulaRangeEntryMode", true);
+                ConfigureFormulaRangeEditingSession(window);
                 window.FormulaBar.Text = "=SUM(";
                 window.FormulaBar.CaretIndex = window.FormulaBar.Text.Length;
 
@@ -158,7 +159,7 @@ public sealed class R52_SelectionFormulaAndOverlayTests
             {
                 var sheet = workbook.GetSheetAt(0);
                 SetPrivateField(window, "_formulaEditCell", (CellAddress?)new CellAddress(sheet.Id, 1, 1));
-                SetPrivateField(window, "_formulaRangeEntryMode", true);
+                ConfigureFormulaRangeEditingSession(window);
                 window.FormulaBar.Text = "=SUM(";
                 window.FormulaBar.CaretIndex = window.FormulaBar.Text.Length;
 
@@ -222,9 +223,7 @@ public sealed class R52_SelectionFormulaAndOverlayTests
                 window.FormulaBar.Text = "=SUM(A1";
                 window.FormulaBar.CaretIndex = window.FormulaBar.Text.Length;
                 SetPrivateField(window, "_formulaEditCell", (CellAddress?)new CellAddress(sheetId, 5, 5));
-                SetPrivateField(window, "_formulaRangeEntryMode", true);
-                SetPrivateField(window, "_formulaReferenceStart", (int?)5);
-                SetPrivateField(window, "_formulaReferenceLength", (int?)2);
+                ConfigureFormulaRangeEditingSession(window, referenceStart: 5, referenceLength: 2);
 
                 var c3 = new CellAddress(sheetId, 3, 3);
                 var appended = (bool)R49MainWindowTestHarness.Invoke(
@@ -255,7 +254,7 @@ public sealed class R52_SelectionFormulaAndOverlayTests
             {
                 var sheet = workbook.GetSheetAt(0);
                 SetPrivateField(window, "_formulaEditCell", (CellAddress?)new CellAddress(sheet.Id, 5, 5));
-                SetPrivateField(window, "_formulaRangeEntryMode", true);
+                ConfigureFormulaRangeEditingSession(window);
                 window.FormulaBar.Text = "=SUM(";
 
                 var target = new CellAddress(sheet.Id, 3, 3);
@@ -410,5 +409,19 @@ public sealed class R52_SelectionFormulaAndOverlayTests
         var field = typeof(MainWindow).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingFieldException(nameof(MainWindow), fieldName);
         field.SetValue(window, value);
+    }
+
+    private static void ConfigureFormulaRangeEditingSession(
+        MainWindow window,
+        int? referenceStart = null,
+        int? referenceLength = null)
+    {
+        var field = typeof(MainWindow).GetField(
+            "_formulaRangeEditingSession",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(nameof(MainWindow), "_formulaRangeEditingSession");
+        var session = (FormulaRangeEditingSession)field.GetValue(window)!;
+        session.SetPointMode(true);
+        session.TrackReferenceSpan(referenceStart, referenceLength);
     }
 }

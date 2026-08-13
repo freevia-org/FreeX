@@ -459,8 +459,8 @@ public sealed partial class MainWindow
         // remembered anchor (first import) or its sheet has since been deleted.
         CellAddress destination;
         // R134-io-getdata-refresh-shrink-1: the extent (row/col count) the PREVIOUS import wrote to this
-        // exact anchor, if this is a refresh reusing it. Handed to ImportSheetCommand below so it can
-        // clear the leftover cells when the refreshed source has since lost rows/columns -- otherwise
+        // exact anchor, if this is a refresh reusing it. Handed to WorkbookImportWorkflow below so its
+        // shared command can clear leftover cells when the refreshed source has lost rows/columns -- otherwise
         // those cells keep the prior, larger import's stale values and read as if they were still part
         // of the current import. Only set when the remembered source's anchor still matches the one
         // being reused; a stale _lastImportSource pointing elsewhere must never drive clearing here.
@@ -492,11 +492,15 @@ public sealed partial class MainWindow
                 : _session.SelectedRange.Start;
         }
 
-        var command = new ImportSheetCommand(destination.Sheet, destination, sourceSheet, previousExtent);
-        var outcome = _session.ExecuteReviewCommand(command);
-        if (!outcome.Success)
+        var importResult = WorkbookImportWorkflow.ApplyImportedWorkbookEdit(
+            imported,
+            destination.Sheet,
+            destination,
+            command => _session.ExecuteReviewCommand(command),
+            previousExtent);
+        if (!importResult.Succeeded)
         {
-            error = outcome.ErrorMessage ?? UiText.Get("GetData_ImportFailed");
+            error = importResult.CellEditResult?.ErrorMessage ?? UiText.Get("GetData_ImportFailed");
             return false;
         }
 

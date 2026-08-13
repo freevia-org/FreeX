@@ -3,27 +3,30 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
+using PivotCalculatedFieldResult = FreeX.App.Presentation.PivotUI.PivotCalculatedFieldPlanner.PivotCalculatedFieldResult;
+using PivotCalculatedItemResult = FreeX.App.Presentation.PivotUI.PivotCalculatedItemPlanner.PivotCalculatedItemResult;
 
 namespace FreeX.App.Host;
-
-public sealed record PivotCalculatedFieldDialogResult(string Name, string Formula)
-{
-    public PivotCalculatedFieldModel ToModel() => new(Name, Formula);
-}
 
 public sealed class PivotCalculatedFieldDialog : Window
 {
     private readonly TextBox _nameBox = new();
     private readonly TextBox _formulaBox = new();
     private readonly ListBox _fieldList = new() { Height = 92 };
-    private readonly IReadOnlyList<string> _fields;
+    private readonly PivotCalculatedFieldSession _session;
 
-    public PivotCalculatedFieldDialogResult Result { get; private set; }
+    public PivotCalculatedFieldResult Result { get; private set; }
 
     public PivotCalculatedFieldDialog(string name = "", string formula = "", IEnumerable<string>? fieldNames = null)
     {
-        _fields = CreateFieldNames(fieldNames ?? []);
+        var text = PivotCalculatedFieldSessionText.Default with
+        {
+            EmptyNameMessage = UiText.Get("PivotCalculated_EnterCalculatedFieldName"),
+            EmptyFormulaMessage = UiText.Get("PivotCalculated_EnterCalculatedFieldFormula")
+        };
+        _session = PivotCalculatedFieldSession.CreateDraft(name, formula, fieldNames ?? [], text);
         Result = CreateResult(name, formula);
         Title = UiText.Get("PivotCalculated_CalculatedField");
         Width = 480;
@@ -34,17 +37,20 @@ public sealed class PivotCalculatedFieldDialog : Window
         Content = CreateContent();
         _nameBox.Text = Result.Name;
         _formulaBox.Text = Result.Formula;
-        _fieldList.ItemsSource = _fields;
-        if (_fields.Count > 0)
+        _fieldList.ItemsSource = _session.FieldReferences;
+        if (_session.FieldReferences.Count > 0)
             _fieldList.SelectedIndex = 0;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static PivotCalculatedFieldDialogResult CreateResult(string name, string formula) =>
-        new(name.Trim(), formula.Trim());
+    public static PivotCalculatedFieldResult CreateResult(string name, string formula)
+    {
+        var draft = PivotCalculatedDraft.Normalize(name, formula);
+        return new PivotCalculatedFieldResult(draft.Name, draft.Formula);
+    }
 
     public static string InsertFormulaReference(string formula, string reference, int selectionStart, int selectionLength) =>
-        PivotFormulaInsertion.InsertFormulaToken(formula, reference, selectionStart, selectionLength);
+        PivotCalculatedFieldPlanner.InsertReference(formula, reference, selectionStart, selectionLength).Formula;
 
     private StackPanel CreateContent()
     {
@@ -74,28 +80,19 @@ public sealed class PivotCalculatedFieldDialog : Window
 
     private void Accept()
     {
-        if (!ValidateInputs())
+        var plan = _session.PlanSave(_nameBox.Text, _formulaBox.Text);
+        if (!plan.Success)
+        {
+            var issue = plan.Issue!;
+            ShowInvalidInputWarning(
+                issue.Message,
+                issue.Target == PivotCalculatedInputTarget.Formula ? _formulaBox : _nameBox);
             return;
+        }
 
-        Result = CreateResult(_nameBox.Text, _formulaBox.Text);
+        var result = plan.Submission!.Result!;
+        Result = result;
         DialogResult = true;
-    }
-
-    private bool ValidateInputs()
-    {
-        if (string.IsNullOrWhiteSpace(_nameBox.Text))
-        {
-            ShowInvalidInputWarning(UiText.Get("PivotCalculated_EnterCalculatedFieldName"), _nameBox);
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(_formulaBox.Text))
-        {
-            ShowInvalidInputWarning(UiText.Get("PivotCalculated_EnterCalculatedFieldFormula"), _formulaBox);
-            return false;
-        }
-
-        return true;
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
@@ -128,38 +125,21 @@ public sealed class PivotCalculatedFieldDialog : Window
 
     private void InsertFormulaText(string reference)
     {
-        var inserted = InsertFormulaReference(
-            _formulaBox.Text,
+        _session.UpdateDraft(_nameBox.Text, _formulaBox.Text);
+        var inserted = _session.InsertReference(
             reference,
             _formulaBox.SelectionStart,
             _formulaBox.SelectionLength);
-        var caretIndex = Math.Min(inserted.Length, _formulaBox.SelectionStart + reference.Length);
-        _formulaBox.Text = inserted;
+        _formulaBox.Text = inserted.Formula;
         _formulaBox.Focus();
-        _formulaBox.SelectionStart = caretIndex;
+        _formulaBox.SelectionStart = inserted.CaretIndex;
         _formulaBox.SelectionLength = 0;
     }
-
-    private static IReadOnlyList<string> CreateFieldNames(IEnumerable<string> fieldNames) =>
-        fieldNames
-            .Select(name => name.Trim())
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
 
     private static void AddTextBox(Panel stack, string label, TextBox textBox)
     {
         PivotDialogLayout.AddLabeledControl(stack, label, textBox);
     }
-}
-
-public sealed record PivotCalculatedItemDialogResult(
-    string SourceFieldName,
-    int SourceFieldIndex,
-    string Name,
-    string Formula)
-{
-    public PivotCalculatedItemModel ToModel() => new(SourceFieldIndex, Name, Formula);
 }
 
 public sealed class PivotCalculatedItemDialog : Window
@@ -169,10 +149,9 @@ public sealed class PivotCalculatedItemDialog : Window
     private readonly ListBox _itemList = new() { Height = 80 };
     private readonly TextBox _nameBox = new();
     private readonly TextBox _formulaBox = new();
-    private readonly IReadOnlyList<PivotCalculatedItemSourceFieldOption> _fields;
-    private readonly IReadOnlyDictionary<int, IReadOnlyList<string>> _itemsBySourceFieldIndex;
+    private readonly PivotCalculatedItemSession _session;
 
-    public PivotCalculatedItemDialogResult Result { get; private set; }
+    public PivotCalculatedItemResult Result { get; private set; }
 
     public PivotCalculatedItemDialog(
         IEnumerable<string> fieldNames,
@@ -181,10 +160,22 @@ public sealed class PivotCalculatedItemDialog : Window
         string formula = "",
         IReadOnlyDictionary<int, IEnumerable<string>>? itemNamesBySourceFieldIndex = null)
     {
-        _fields = CreateFieldOptions(fieldNames);
-        _itemsBySourceFieldIndex = CreateItemOptions(itemNamesBySourceFieldIndex);
-        var selectedField = FindFieldBySourceIndexOrFirst(_fields, selectedSourceFieldIndex);
-        Result = CreateResult(selectedField?.Name ?? "", selectedField?.Index ?? 0, name, formula);
+        var text = PivotCalculatedItemSessionText.Default with
+        {
+            EmptyNameMessage = UiText.Get("PivotCalculated_EnterCalculatedItemName"),
+            EmptyFormulaMessage = UiText.Get("PivotCalculated_EnterCalculatedItemFormula")
+        };
+        _session = PivotCalculatedItemSession.CreateDraft(
+            fieldNames,
+            selectedSourceFieldIndex,
+            name,
+            formula,
+            itemNamesBySourceFieldIndex,
+            text);
+        Result = CreateResult(
+            _session.SelectedSourceFieldIndex,
+            name,
+            formula);
 
         Title = UiText.Get("PivotCalculated_CalculatedItem");
         Width = 500;
@@ -197,22 +188,27 @@ public sealed class PivotCalculatedItemDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static PivotCalculatedItemDialogResult CreateResult(
-        string sourceFieldName,
+    public static PivotCalculatedItemResult CreateResult(
         int sourceFieldIndex,
         string name,
-        string formula) =>
-        new(sourceFieldName.Trim(), Math.Max(0, sourceFieldIndex), name.Trim(), formula.Trim());
+        string formula)
+    {
+        var draft = PivotCalculatedDraft.Normalize(name, formula);
+        return new PivotCalculatedItemResult(
+            Math.Max(0, sourceFieldIndex),
+            draft.Name,
+            draft.Formula);
+    }
 
     public static string InsertFormulaReference(string formula, string reference, int selectionStart, int selectionLength) =>
-        PivotFormulaInsertion.InsertFormulaToken(formula, reference, selectionStart, selectionLength);
+        PivotCalculatedItemPlanner.InsertReference(formula, reference, selectionStart, selectionLength).Formula;
 
     private StackPanel CreateContent()
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
         var itemPanel = PivotDialogLayout.CreateGroupPanel();
-        _fieldBox.ItemsSource = _fields;
-        _fieldBox.DisplayMemberPath = nameof(PivotCalculatedItemSourceFieldOption.Name);
+        _fieldBox.ItemsSource = _session.Fields;
+        _fieldBox.DisplayMemberPath = nameof(PivotCalculatedItemPlanner.CalculatedItemField.Caption);
         _fieldBox.SelectionChanged += (_, _) => RefreshItemList();
         PivotDialogLayout.AddLabeledControl(itemPanel, UiText.Get("PivotCalculated_SourceFieldLabel"), _fieldBox);
         AddTextBox(itemPanel, UiText.Get("PivotCalculated_NameLabel"), _nameBox);
@@ -220,8 +216,8 @@ public sealed class PivotCalculatedItemDialog : Window
         stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotCalculated_FieldAndItemGroup"), itemPanel));
 
         var insertPanel = PivotDialogLayout.CreateGroupPanel();
-        _fieldList.ItemsSource = _fields;
-        _fieldList.DisplayMemberPath = nameof(PivotCalculatedItemSourceFieldOption.Name);
+        _fieldList.ItemsSource = _session.Fields;
+        _fieldList.DisplayMemberPath = nameof(PivotCalculatedItemPlanner.CalculatedItemField.Caption);
         _fieldList.MouseDoubleClick += FieldList_MouseDoubleClick;
         AutomationProperties.SetName(_fieldList, UiText.Get("PivotCalculated_AvailableFields"));
         PivotDialogLayout.AddLabeledControl(insertPanel, UiText.Get("PivotCalculated_AvailableFieldsLabel"), _fieldList);
@@ -236,46 +232,34 @@ public sealed class PivotCalculatedItemDialog : Window
         return stack;
     }
 
-    private void Load(PivotCalculatedItemDialogResult result)
+    private void Load(PivotCalculatedItemResult result)
     {
-        _fieldBox.SelectedItem = FindFieldBySourceIndexOrFirst(_fields, result.SourceFieldIndex);
+        _fieldBox.SelectedItem = _session.Fields.FirstOrDefault(
+            field => field.SourceFieldIndex == result.SourceFieldIndex) ?? _session.Fields.FirstOrDefault();
         _nameBox.Text = result.Name;
         _formulaBox.Text = result.Formula;
         _fieldList.SelectedItem = _fieldBox.SelectedItem;
-        if (_fieldList.SelectedItem is null && _fields.Count > 0)
+        if (_fieldList.SelectedItem is null && _session.Fields.Count > 0)
             _fieldList.SelectedIndex = 0;
         RefreshItemList();
     }
 
     private void Accept()
     {
-        if (!ValidateInputs())
+        SyncSelectedSourceField();
+        var plan = _session.PlanSave(_nameBox.Text, _formulaBox.Text);
+        if (!plan.Success)
+        {
+            var issue = plan.Issue!;
+            ShowInvalidInputWarning(
+                issue.Message,
+                issue.Target == PivotCalculatedInputTarget.Formula ? _formulaBox : _nameBox);
             return;
+        }
 
-        var selectedField = _fieldBox.SelectedItem as PivotCalculatedItemSourceFieldOption;
-        Result = CreateResult(
-            selectedField?.Name ?? "",
-            selectedField?.Index ?? 0,
-            _nameBox.Text,
-            _formulaBox.Text);
+        var result = plan.Submission!.Result!;
+        Result = result;
         DialogResult = true;
-    }
-
-    private bool ValidateInputs()
-    {
-        if (string.IsNullOrWhiteSpace(_nameBox.Text))
-        {
-            ShowInvalidInputWarning(UiText.Get("PivotCalculated_EnterCalculatedItemName"), _nameBox);
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(_formulaBox.Text))
-        {
-            ShowInvalidInputWarning(UiText.Get("PivotCalculated_EnterCalculatedItemFormula"), _formulaBox);
-            return false;
-        }
-
-        return true;
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
@@ -293,13 +277,15 @@ public sealed class PivotCalculatedItemDialog : Window
 
     private void RefreshItemList()
     {
-        var selectedField = _fieldBox.SelectedItem as PivotCalculatedItemSourceFieldOption;
-        var items = selectedField is not null &&
-            _itemsBySourceFieldIndex.TryGetValue(selectedField.Index, out var sourceItems)
-                ? sourceItems
-                : [];
-        _itemList.ItemsSource = items;
-        _itemList.SelectedIndex = items.Count > 0 ? 0 : -1;
+        SyncSelectedSourceField();
+        _itemList.ItemsSource = _session.ItemReferences;
+        _itemList.SelectedIndex = _session.ItemReferences.Count > 0 ? 0 : -1;
+    }
+
+    private void SyncSelectedSourceField()
+    {
+        if (_fieldBox.SelectedItem is PivotCalculatedItemPlanner.CalculatedItemField selectedField)
+            _session.SelectSourceField(selectedField.SourceFieldIndex);
     }
 
     private void FieldList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -316,12 +302,12 @@ public sealed class PivotCalculatedItemDialog : Window
 
     private bool InsertSelectedField()
     {
-        var selectedField = _fieldList.SelectedItem as PivotCalculatedItemSourceFieldOption
-            ?? _fieldBox.SelectedItem as PivotCalculatedItemSourceFieldOption;
+        var selectedField = _fieldList.SelectedItem as PivotCalculatedItemPlanner.CalculatedItemField
+            ?? _fieldBox.SelectedItem as PivotCalculatedItemPlanner.CalculatedItemField;
         if (selectedField is null)
             return false;
 
-        InsertFormulaText(selectedField.Name);
+        InsertFormulaText(selectedField.Caption);
         return true;
     }
 
@@ -336,51 +322,16 @@ public sealed class PivotCalculatedItemDialog : Window
 
     private void InsertFormulaText(string reference)
     {
-        var inserted = InsertFormulaReference(
-            _formulaBox.Text,
+        _session.UpdateDraft(_nameBox.Text, _formulaBox.Text);
+        var inserted = _session.InsertReference(
             reference,
             _formulaBox.SelectionStart,
             _formulaBox.SelectionLength);
-        var caretIndex = Math.Min(inserted.Length, _formulaBox.SelectionStart + reference.Length);
-        _formulaBox.Text = inserted;
+        _formulaBox.Text = inserted.Formula;
         _formulaBox.Focus();
-        _formulaBox.SelectionStart = caretIndex;
+        _formulaBox.SelectionStart = inserted.CaretIndex;
         _formulaBox.SelectionLength = 0;
     }
-
-    private static IReadOnlyList<PivotCalculatedItemSourceFieldOption> CreateFieldOptions(IEnumerable<string> fieldNames) =>
-        fieldNames
-            .Select((name, index) => new PivotCalculatedItemSourceFieldOption(index, name.Trim()))
-            .Where(field => !string.IsNullOrWhiteSpace(field.Name))
-            .ToList();
-
-    private static PivotCalculatedItemSourceFieldOption? FindFieldBySourceIndexOrFirst(
-        IReadOnlyList<PivotCalculatedItemSourceFieldOption> fields,
-        int sourceFieldIndex)
-    {
-        var normalizedIndex = Math.Max(0, sourceFieldIndex);
-        PivotCalculatedItemSourceFieldOption? firstField = null;
-        for (var fieldIndex = 0; fieldIndex < fields.Count; fieldIndex++)
-        {
-            var field = fields[fieldIndex];
-            if (fieldIndex == 0)
-                firstField = field;
-            if (field.Index == normalizedIndex)
-                return field;
-        }
-
-        return firstField;
-    }
-
-    private static IReadOnlyDictionary<int, IReadOnlyList<string>> CreateItemOptions(
-        IReadOnlyDictionary<int, IEnumerable<string>>? itemNamesBySourceFieldIndex) =>
-        itemNamesBySourceFieldIndex?.ToDictionary(
-            pair => Math.Max(0, pair.Key),
-            pair => (IReadOnlyList<string>)pair.Value
-                .Select(item => item.Trim())
-                .Where(item => !string.IsNullOrWhiteSpace(item))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList()) ?? new Dictionary<int, IReadOnlyList<string>>();
 
     private static Button CreateInsertButton(string content, Action action)
     {
@@ -398,19 +349,5 @@ public sealed class PivotCalculatedItemDialog : Window
     private static void AddTextBox(Panel stack, string label, TextBox textBox)
     {
         PivotDialogLayout.AddLabeledControl(stack, label, textBox);
-    }
-
-    private sealed record PivotCalculatedItemSourceFieldOption(int Index, string Name);
-}
-
-file static class PivotFormulaInsertion
-{
-    public static string InsertFormulaToken(string formula, string reference, int selectionStart, int selectionLength)
-    {
-        var safeFormula = formula ?? "";
-        var safeReference = reference ?? "";
-        var start = Math.Clamp(selectionStart, 0, safeFormula.Length);
-        var length = Math.Clamp(selectionLength, 0, safeFormula.Length - start);
-        return safeFormula.Remove(start, length).Insert(start, safeReference);
     }
 }

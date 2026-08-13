@@ -484,28 +484,30 @@ public static class PagePaginationPlanner
         var rowScale = ComputeScaleFraction(detail.BaseRowsPerPage, capacity.RowsPerPage);
         var columnScale = ComputeScaleFraction(detail.BaseColumnsPerPage, capacity.ColumnsPerPage);
 
-        var rowTitleSize = ComputeRepeatRangeSize(printTitleRows, CellAddress.MaxRow, isRowHidden, RowSize);
-        var columnTitleSize = ComputeRepeatRangeSize(printTitleColumns, CellAddress.MaxCol, isColumnHidden, ColumnSize);
+        var rowTitleSize = PageAxisPaginationRules.ComputeRepeatRangeSize(
+            printTitleRows, CellAddress.MaxRow, isRowHidden, RowSize);
+        var columnTitleSize = PageAxisPaginationRules.ComputeRepeatRangeSize(
+            printTitleColumns, CellAddress.MaxCol, isColumnHidden, ColumnSize);
 
         var rowBodyBudget = detail.PrintableHeight / rowScale - rowTitleSize;
         var columnBodyBudget = detail.PrintableWidth / columnScale - columnTitleSize;
 
-        var accumulatedRowBreaks = ComputeAccumulationBreakPoints(
+        var accumulatedRowBreaks = PageAxisPaginationRules.ComputeAccumulationBreakPoints(
             printRange.Start.Row, printRange.End.Row, printTitleRows, isRowHidden, RowSize, rowBodyBudget);
-        var accumulatedColumnBreaks = ComputeAccumulationBreakPoints(
+        var accumulatedColumnBreaks = PageAxisPaginationRules.ComputeAccumulationBreakPoints(
             printRange.Start.Col, printRange.End.Col, printTitleColumns, isColumnHidden, ColumnSize, columnBodyBudget);
 
         var rowPlans = PrintLayoutPlanner.BuildRowPlans(
             printRange,
             printTitleRows,
-            UnboundedAxisCapacity(printRange.Start.Row, printRange.End.Row),
-            MergeBreaks(rowPageBreaks, accumulatedRowBreaks),
+            PageAxisPaginationRules.UnboundedAxisCapacity(printRange.Start.Row, printRange.End.Row),
+            PageAxisPaginationRules.MergeBreaks(rowPageBreaks, accumulatedRowBreaks),
             isRowHidden);
         var columnPlans = PrintLayoutPlanner.BuildColumnPlans(
             printRange,
             printTitleColumns,
-            UnboundedAxisCapacity(printRange.Start.Col, printRange.End.Col),
-            MergeBreaks(columnPageBreaks, accumulatedColumnBreaks),
+            PageAxisPaginationRules.UnboundedAxisCapacity(printRange.Start.Col, printRange.End.Col),
+            PageAxisPaginationRules.MergeBreaks(columnPageBreaks, accumulatedColumnBreaks),
             isColumnHidden);
 
         var effectiveScale = CalculateEffectiveScalePercent(scaleToFit, rowPlans.Count, columnPlans.Count);
@@ -851,92 +853,4 @@ public static class PagePaginationPlanner
         return Math.Max(MinimumPrintColumnWidth, ColumnWidthPixelMapper.ColumnWidthToPixels(chars));
     }
 
-    /// <summary>
-    /// Sums the real (visible, non-hidden) size of the rows/columns in <paramref name="repeat"/>
-    /// (clipped to <paramref name="maxItem"/>), the title rows/columns that are reprinted on every
-    /// page and so must be reserved out of each page's body budget.
-    /// </summary>
-    private static double ComputeRepeatRangeSize(
-        WorksheetRepeatRange? repeat,
-        uint maxItem,
-        Func<uint, bool>? isHidden,
-        Func<uint, double> sizeOf)
-    {
-        if (repeat is not { } range || range.Start == 0 || range.Start > maxItem || range.End < range.Start)
-            return 0.0;
-
-        var total = 0.0;
-        var end = Math.Min(range.End, maxItem);
-        for (var value = range.Start; value <= end; value++)
-        {
-            if (value >= 1 && isHidden?.Invoke(value) != true)
-                total += Math.Max(0.0, sizeOf(value));
-        }
-
-        return total;
-    }
-
-    /// <summary>
-    /// Computes extra "manual" break points so that pages break on the real ACCUMULATED size of
-    /// visible, non-title rows/columns (R18-print-pagination-exact-3), instead of the fixed count
-    /// derived from an average size. Walks [<paramref name="startValue"/>, <paramref name="endValue"/>]
-    /// in order, skipping title and hidden values, and records a break before the first value whose
-    /// addition would push the running total past <paramref name="availableBodySize"/> -- guaranteeing
-    /// at least one value per page even when a single oversized value alone exceeds the budget.
-    /// </summary>
-    private static List<uint> ComputeAccumulationBreakPoints(
-        uint startValue,
-        uint endValue,
-        WorksheetRepeatRange? repeat,
-        Func<uint, bool>? isHidden,
-        Func<uint, double> sizeOf,
-        double availableBodySize)
-    {
-        var breaks = new List<uint>();
-        if (endValue < startValue)
-            return breaks;
-
-        var budget = double.IsFinite(availableBodySize) ? Math.Max(1.0, availableBodySize) : double.MaxValue;
-        var accumulated = 0.0;
-        var pageHasValue = false;
-        for (var value = startValue; value <= endValue; value++)
-        {
-            if (PageGeometryRules.IsWithinRepeatRange(repeat, value) || isHidden?.Invoke(value) == true)
-                continue;
-
-            var size = Math.Max(0.0, sizeOf(value));
-            if (pageHasValue && accumulated + size > budget)
-            {
-                breaks.Add(value);
-                accumulated = 0.0;
-                pageHasValue = false;
-            }
-
-            accumulated += size;
-            pageHasValue = true;
-        }
-
-        return breaks;
-    }
-
-    /// <summary>Unions any real manual breaks with the accumulated-size break points.</summary>
-    private static List<uint> MergeBreaks(IReadOnlyCollection<uint>? userBreaks, List<uint> computedBreaks)
-    {
-        if (computedBreaks.Count == 0)
-            return userBreaks is null ? [] : new List<uint>(userBreaks);
-
-        var merged = new HashSet<uint>(computedBreaks);
-        if (userBreaks is not null)
-            merged.UnionWith(userBreaks);
-
-        return [.. merged];
-    }
-
-    /// <summary>
-    /// An axis capacity large enough that <see cref="PrintLayoutPlanner"/>'s own count-based slicing
-    /// never forces a break within a page; used together with <see cref="MergeBreaks"/> so accumulated
-    /// (and any real manual) break points are the only thing that decides where pages split.
-    /// </summary>
-    private static uint UnboundedAxisCapacity(uint start, uint end) =>
-        end >= start ? (uint)Math.Min(uint.MaxValue - 1L, (long)(end - start) + 2L) : 1u;
 }

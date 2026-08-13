@@ -263,7 +263,7 @@ internal static partial class XlsxChartXmlWriter
                 : new XElement(drawingNs + "ln",
                     borderThickness is null
                         ? null
-                        : new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(borderThickness.Value, 0, 10) * DrawingMlUnits.EmuPerPoint))),
+                        : new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(borderThickness.Value, 0, 10) * DrawingMlCoordinateUnits.EmuPerPoint))),
                     lineFill);
         }
 

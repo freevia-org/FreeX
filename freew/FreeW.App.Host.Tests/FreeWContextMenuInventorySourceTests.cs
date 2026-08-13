@@ -6,7 +6,7 @@ namespace FreeW.App.Host.Tests;
 public sealed class FreeWContextMenuInventorySourceTests
 {
     [Fact]
-    public void WpfHost_HasExactlySevenExplicitMenuConstructions()
+    public void WpfHost_HasExactlySixExplicitMenuConstructions()
     {
         var root = HostRoot();
         var source = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
@@ -14,14 +14,15 @@ public sealed class FreeWContextMenuInventorySourceTests
                 && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Select(File.ReadAllText);
 
-        source.Sum(text => Regex.Matches(text, @"new\s+ContextMenu\s*\(").Count).Should().Be(7);
+        source.Sum(text => Regex.Matches(text, @"new\s+ContextMenu\s*\(").Count).Should().Be(6);
     }
 
     [Fact]
     public void EveryExplicitWpfFamily_ConsumesTheSharedPlannerAuthority()
     {
         Read("Editing", "DocumentView.cs").Should().Contain("FreeWContextMenuPlanner.BuildContentControl");
-        Read("MainWindow.cs").Should().Contain("FreeWContextMenuPlanner.BuildOutline");
+        ReadPresentation("Panes", "NavigationPaneSession.cs")
+            .Should().Contain("FreeWContextMenuPlanner.BuildOutline");
         Read("FindReplaceDialog.cs").Should().Contain("FreeWContextMenuPlanner.FindSpecialCharacters")
             .And.NotContain("SpecialChars =");
         Read("Ribbon", "ThemeGallery.cs").Should()
@@ -31,10 +32,18 @@ public sealed class FreeWContextMenuInventorySourceTests
     }
 
     private static string HostRoot() => Path.Combine(
-        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+        WorkspaceRoot(),
         "freew",
         "FreeW.App.Host");
 
+    private static string WorkspaceRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+
     private static string Read(params string[] parts) =>
         File.ReadAllText(parts.Aggregate(HostRoot(), Path.Combine));
+
+    private static string ReadPresentation(params string[] parts) =>
+        File.ReadAllText(parts.Aggregate(
+            Path.Combine(WorkspaceRoot(), "freew", "FreeW.App.Presentation"),
+            Path.Combine));
 }

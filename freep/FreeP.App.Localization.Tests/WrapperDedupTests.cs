@@ -6,13 +6,12 @@ namespace FreeP.App.Localization.Tests;
 public sealed class WrapperDedupTests
 {
     [Fact]
-    public void AppWrappers_UseSharedContractsAndKeepProductMetadata() =>
+    public void AppWrappers_UseSharedContractsAndConventionOwnedResourceMetadata() =>
         LocalizationWrapperContractTestSupport.AssertAppWrappers<
             Loc,
             LocalizedUiText,
-            AppLanguageOption,
             AppLanguageCatalog>(
             ["freep", "FreeP.App.Localization"],
-            "FreeP.App.Localization.Resources.Strings",
-            "FreeP.App.Localization.resources.dll");
+            ["freep", "FreeP.App.Host", "FreeP.App.Host.csproj"],
+            ["freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj"]);
 }

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeP.App.Compositor;
@@ -9,11 +10,9 @@ namespace FreeP.App.Host;
 /// Modal slide-size dialog. WPF owns the controls and localization shell; shared
 /// presentation policy lives in <see cref="SlideSizeDialogPlanner"/>.
 /// </summary>
-public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly EditingSession _editor;
-
-    private SlideSizeDialogUnit _unit = SlideSizeDialogUnit.Inches;
+    private readonly SlideSizeDialogSession _session;
     private bool _suppressPresetRefresh;
 
     private readonly ComboBox _presetCombo;
@@ -24,39 +23,43 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly Label _widthUnitLabel;
     private readonly Label _heightUnitLabel;
 
-    internal SlideSizeDialogResultPlan? LastResultPlan { get; private set; }
-    internal SlideSizeDialogInitialState InitialState { get; }
+    internal SlideSizeDialogResultPlan? LastResultPlan => _session.LastResultPlan;
+    internal SlideSizeDialogInitialState InitialState => _session.InitialState;
     internal string WidthText => _widthBox.Text;
     internal string HeightText => _heightBox.Text;
     internal string ValidationText => LastResultPlan?.Validation?.Message ?? string.Empty;
 
     public SlideSizeDialog(EditingSession editor)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+        _session = new SlideSizeDialogSession(editor);
+        var surface = _session.Surface;
 
-        Title = "Slide Size";
+        Title = surface.Title;
+        AutomationProperties.SetName(this, surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
         Width = 380;
         Height = 260;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
-        _presetCombo = new ComboBox { Margin = new Thickness(4) };
-        _presetCombo.Items.Add("Standard (4:3)");
-        _presetCombo.Items.Add("Widescreen (16:9)");
-        _presetCombo.Items.Add("Custom");
+        _presetCombo = new ComboBox
+        {
+            ItemsSource = surface.PresetNames,
+            Margin = new Thickness(4),
+        };
         _presetCombo.SelectedIndex = 0;
         _presetCombo.SelectionChanged += OnPresetChanged;
 
         _inchesRadio = new RadioButton
         {
-            Content = "Inches",
+            Content = surface.UnitLabel(SlideSizeDialogUnit.Inches),
             IsChecked = true,
             Margin = new Thickness(4, 0, 12, 0)
         };
         _cmRadio = new RadioButton
         {
-            Content = "Centimeters",
+            Content = surface.UnitLabel(SlideSizeDialogUnit.Centimeters),
             IsChecked = false,
             Margin = new Thickness(4, 0, 4, 0)
         };
@@ -66,15 +69,23 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _widthBox = MakeNumericBox();
         _heightBox = MakeNumericBox();
 
-        _widthUnitLabel = new Label { Content = "in", Width = 30 };
-        _heightUnitLabel = new Label { Content = "in", Width = 30 };
+        _widthUnitLabel = new Label { Content = _session.State.Display.UnitLabel, Width = 30 };
+        _heightUnitLabel = new Label { Content = _session.State.Display.UnitLabel, Width = 30 };
 
-        InitialState = LoadCurrentSize();
+        PresentationDialogControlAdapter.ApplySemantic(_presetCombo, surface.Field(SlideSizeDialogSurfaceField.Preset));
+        PresentationDialogControlAdapter.ApplySemantic(_inchesRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Inches");
+        PresentationDialogControlAdapter.ApplySemantic(_cmRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Centimeters");
+        PresentationDialogControlAdapter.ApplySemantic(_widthBox, surface.Field(SlideSizeDialogSurfaceField.Width));
+        PresentationDialogControlAdapter.ApplySemantic(_heightBox, surface.Field(SlideSizeDialogSurfaceField.Height));
+
+        LoadInitialState();
 
         var btnRow = DialogButtonRowFactory.Create(
             OnOk,
             buttonWidth: 80,
-            rowMargin: new Thickness(4, 8, 8, 8));
+            rowMargin: new Thickness(4, 8, 8, 8),
+            acceptContent: surface.Action(SlideSizeDialogAction.Accept).Label,
+            cancelContent: surface.Action(SlideSizeDialogAction.Cancel).Label);
 
         var grid = new Grid { Margin = new Thickness(12) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -87,13 +98,13 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddLabel(grid, "Preset:", 0, 0);
+        AddLabel(grid, surface.Field(SlideSizeDialogSurfaceField.Preset).Label, 0, 0);
         Grid.SetRow(_presetCombo, 0);
         Grid.SetColumn(_presetCombo, 1);
         Grid.SetColumnSpan(_presetCombo, 2);
         grid.Children.Add(_presetCombo);
 
-        AddLabel(grid, "Unit:", 1, 0);
+        AddLabel(grid, surface.Field(SlideSizeDialogSurfaceField.Unit).Label, 1, 0);
         var unitPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4) };
         unitPanel.Children.Add(_inchesRadio);
         unitPanel.Children.Add(_cmRadio);
@@ -102,7 +113,7 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetColumnSpan(unitPanel, 2);
         grid.Children.Add(unitPanel);
 
-        AddLabel(grid, "Width:", 2, 0);
+        AddLabel(grid, surface.Field(SlideSizeDialogSurfaceField.Width).Label, 2, 0);
         Grid.SetRow(_widthBox, 2);
         Grid.SetColumn(_widthBox, 1);
         grid.Children.Add(_widthBox);
@@ -110,7 +121,7 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetColumn(_widthUnitLabel, 2);
         grid.Children.Add(_widthUnitLabel);
 
-        AddLabel(grid, "Height:", 3, 0);
+        AddLabel(grid, surface.Field(SlideSizeDialogSurfaceField.Height).Label, 3, 0);
         Grid.SetRow(_heightBox, 3);
         Grid.SetColumn(_heightBox, 1);
         grid.Children.Add(_heightBox);
@@ -128,56 +139,26 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     public bool TryParseEmu(out long cxEmu, out long cyEmu)
     {
-        var parse = SlideSizeDialogPlanner.TryParsePositiveSize(
-            _widthBox.Text,
-            _heightBox.Text,
-            _unit);
+        var parse = _session.TryParse(_widthBox.Text, _heightBox.Text);
 
         cxEmu = parse.CxEmu;
         cyEmu = parse.CyEmu;
         return parse.IsValid;
     }
 
-    internal void SetInputForTests(string widthText, string heightText, SlideSizeDialogUnit unit)
+    private void LoadInitialState()
     {
         _suppressPresetRefresh = true;
         try
         {
-            _unit = unit;
-            _inchesRadio.IsChecked = unit == SlideSizeDialogUnit.Inches;
-            _cmRadio.IsChecked = unit == SlideSizeDialogUnit.Centimeters;
-            _widthBox.Text = widthText;
-            _heightBox.Text = heightText;
-            _widthUnitLabel.Content = unit == SlideSizeDialogUnit.Inches ? "in" : "cm";
-            _heightUnitLabel.Content = unit == SlideSizeDialogUnit.Inches ? "in" : "cm";
-        }
-        finally
-        {
-            _suppressPresetRefresh = false;
-        }
-    }
-
-    internal bool ApplyForTests() => Apply(showValidationDialog: false);
-
-    private SlideSizeDialogInitialState LoadCurrentSize()
-    {
-        var initial = SlideSizeDialogPlanner.BuildInitialState(
-            _editor.Presentation.SlideSizeCxEmu,
-            _editor.Presentation.SlideSizeCyEmu,
-            _unit);
-
-        _suppressPresetRefresh = true;
-        try
-        {
-            _presetCombo.SelectedIndex = ToPresetIndex(initial.Preset);
+            _presetCombo.SelectedIndex = _session.State.PresetIndex;
         }
         finally
         {
             _suppressPresetRefresh = false;
         }
 
-        ApplyDisplay(initial.Display);
-        return initial;
+        ApplyDisplay(_session.State.Display);
     }
 
     private void OnPresetChanged(object sender, SelectionChangedEventArgs e)
@@ -187,8 +168,7 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             return;
         }
 
-        var preset = PresetFromIndex(_presetCombo.SelectedIndex);
-        var display = SlideSizeDialogPlanner.BuildPresetSelectionDisplay(preset, _unit);
+        var display = _session.SelectPreset(_presetCombo.SelectedIndex);
         if (display is not null)
         {
             ApplyDisplay(display);
@@ -204,19 +184,16 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             ? SlideSizeDialogUnit.Inches
             : SlideSizeDialogUnit.Centimeters;
 
-        if (_unit == newUnit)
+        if (_session.State.Unit == newUnit)
         {
             return;
         }
 
-        var display = SlideSizeDialogPlanner.BuildUnitChangeDisplay(
+        var state = _session.ChangeUnit(
             _widthBox.Text,
             _heightBox.Text,
-            _unit,
             newUnit);
-
-        _unit = newUnit;
-        ApplyDisplay(display);
+        ApplyDisplay(state.Display);
     }
 
     private void OnOk()
@@ -224,21 +201,15 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private bool Apply(bool showValidationDialog)
     {
-        LastResultPlan = SlideSizeDialogPlanner.BuildOkResult(
-            _widthBox.Text,
-            _heightBox.Text,
-            _unit);
-
-        if (!LastResultPlan.ShouldApply)
+        if (!_session.TryCommit(_widthBox.Text, _heightBox.Text))
         {
-            var validation = LastResultPlan.Validation!;
+            var validation = LastResultPlan!.Validation!;
             if (showValidationDialog)
                 DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption);
             FocusField(validation.FocusField);
             return false;
         }
 
-        SlideSizeDialogPlanner.TryApplyResult(_editor, LastResultPlan);
         if (IsLoaded)
         {
             DialogResult = true;
@@ -268,22 +239,6 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             DialogFocus.FocusAndSelect(box);
     }
 
-    private static int ToPresetIndex(SlideSizeDialogPreset preset)
-        => preset switch
-        {
-            SlideSizeDialogPreset.Widescreen169 => 1,
-            SlideSizeDialogPreset.Custom => 2,
-            _ => 0
-        };
-
-    private static SlideSizeDialogPreset PresetFromIndex(int selectedIndex)
-        => selectedIndex switch
-        {
-            1 => SlideSizeDialogPreset.Widescreen169,
-            2 => SlideSizeDialogPreset.Custom,
-            _ => SlideSizeDialogPreset.Standard43
-        };
-
     private static TextBox MakeNumericBox() => new()
     {
         Width = 120,
@@ -304,4 +259,5 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetColumn(lbl, col);
         grid.Children.Add(lbl);
     }
+
 }

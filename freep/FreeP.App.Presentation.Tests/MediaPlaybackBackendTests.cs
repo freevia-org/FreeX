@@ -80,7 +80,7 @@ public sealed class MediaPlaybackBackendTests
     }
 
     [Fact]
-    public void HostSourceGuards_RequireRealLibVlcAdapterAndVideoSurface()
+    public void HostSourceGuards_KeepNativeSurfacesBehindPortablePlaybackContracts()
     {
         var root = FindWorkspaceRoot();
         var avaloniaController = File.ReadAllText(Path.Combine(
@@ -93,6 +93,10 @@ public sealed class MediaPlaybackBackendTests
             root, "freep", "FreeP.App.Media", "FreeP.App.Media.csproj"));
         var wpfProject = File.ReadAllText(Path.Combine(
             root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj"));
+        var wpfController = File.ReadAllText(Path.Combine(
+            root, "freep", "FreeP.App.Host", "SlideShowMediaController.cs"));
+        var wpfSession = File.ReadAllText(Path.Combine(
+            root, "freep", "FreeP.App.Host", "WpfMediaPlaybackSession.cs"));
         var linuxDockerfile = File.ReadAllText(Path.Combine(
             root, "tools", "LinuxInteractiveDocker", "Dockerfile"));
         var linuxProbe = File.ReadAllText(Path.Combine(
@@ -100,6 +104,8 @@ public sealed class MediaPlaybackBackendTests
 
         avaloniaController.Should().Contain("LibVlcMediaPlaybackBackendFactory");
         avaloniaController.Should().Contain("LibVlcMediaPlaybackSession");
+        avaloniaController.Should().Contain("AvaloniaMediaPlaybackPort");
+        avaloniaController.Should().Contain("SlideShowMediaPlaybackSession");
         avaloniaController.Should().Contain("VideoView");
         avaloniaController.Should().Contain("PlayTransitionSound");
         avaloniaController.Should().Contain("TrySeek");
@@ -117,9 +123,18 @@ public sealed class MediaPlaybackBackendTests
         avaloniaProject.Should().Contain("LibVLCSharp.Avalonia");
         avaloniaProject.Should().Contain("VideoLAN.LibVLC.Windows");
         mediaProject.Should().Contain("LibVLCSharp");
-        wpfProject.Should().NotContain("FreeP.App.Media");
+        wpfProject.Should().Contain("FreeP.App.Media");
         wpfProject.Should().NotContain("LibVLCSharp");
         wpfProject.Should().NotContain("VideoLAN.LibVLC.Windows");
+        wpfController.Should().Contain("MediaPlaybackSourceFactory.TryCreate")
+            .And.Contain("IMediaPlaybackSession")
+            .And.Contain("WpfMediaPlaybackSession")
+            .And.NotContain("ResolveSource(");
+        wpfSession.Should().Contain("IMediaPlaybackSession")
+            .And.Contain("IMediaPlaybackSourceStore")
+            .And.Contain("MediaPlaybackState")
+            .And.Contain("MediaElement")
+            .And.NotContain("LibVLC");
         linuxDockerfile.Should().Contain("libvlc5");
         linuxDockerfile.Should().Contain("libvlccore9");
         linuxDockerfile.Should().Contain("vlc-plugin-base");
@@ -131,16 +146,6 @@ public sealed class MediaPlaybackBackendTests
         linuxProbe.Should().Contain("sessionFailure");
     }
 
-    private static string FindWorkspaceRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("FreeX workspace root was not found.");
-    }
+    private static string FindWorkspaceRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
 }

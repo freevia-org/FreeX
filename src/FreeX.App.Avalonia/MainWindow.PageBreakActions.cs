@@ -68,7 +68,7 @@ public sealed partial class MainWindow
 
         var cancelButton = new Button
         {
-            Content = UiText.Get("MoveCopySheet_Cancel"),
+            Content = UiText.Get("Common_CancelText"),
             IsCancel = true,
             MinWidth = 84,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
@@ -125,16 +125,12 @@ public sealed partial class MainWindow
     private void ApplyPageBreakAction(PageBreakMenuAction action)
     {
         var sheet = _session.ActiveSheet;
-        var plan = PageLayoutRibbonCommandPlanner.PlanPageBreakAction(
+        var plan = CreatePageLayoutCommandSession().PlanPageBreakAction(
             action,
             _session.SelectedRange,
             sheet.RowPageBreaks,
             sheet.ColumnPageBreaks);
 
-        var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheet.Id, plan));
-        RefreshShell(result.Success
-            ? plan.Status
-            : result.ErrorMessage ?? UiText.Get("PageBreak_Failed"));
+        ExecutePageLayoutCommandWithShellRefresh(plan);
     }
 }

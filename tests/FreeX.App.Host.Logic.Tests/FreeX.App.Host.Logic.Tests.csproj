@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -43,14 +44,17 @@
     <Compile Include="..\FreeX.App.Host.Tests\RibbonXamlCatalogSnapshotReader.cs" Link="RibbonXamlCatalogSnapshotReader.cs" />
     <Compile Include="..\FreeX.App.Host.Tests\StaTestRunner.cs" Link="StaTestRunner.cs" />
     <Compile Include="..\FreeX.App.Host.Tests\WpfTestTree.cs" Link="WpfTestTree.cs" />
-    <Compile Include="..\FreeX.App.Host.Tests\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
+    <Compile Include="..\SharedTestInfrastructure\FreeX\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
+    <Compile Include="..\SharedTestInfrastructure\FreeX\RibbonRuntimeCatalogPlanner.cs" Link="TestSupport\RibbonRuntimeCatalogPlanner.cs" />
     <Compile Include="..\FreeX.App.Host.Tests\WorkspaceFileLocator.cs" Link="WorkspaceFileLocator.cs" />
     <Compile Include="..\FreeX.App.Host.Tests\FileAssociations\WindowsFileAssociationServiceTests.cs" Link="FileAssociations\WindowsFileAssociationServiceTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" />
+    <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Wpf\FreeX.ParityCapture.Wpf.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" Aliases="ProductionWpf" />
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -3,8 +3,12 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
 
-public sealed class OleActivationServiceTests
+public sealed class OleActivationServiceTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.OleActivationServiceTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
     [Fact]
     public void Planner_ResolvesPayloadAndSafeFilenameForPackagedObject()
     {
@@ -110,6 +114,121 @@ public sealed class OleActivationServiceTests
     }
 
     [Fact]
+    public void Coordinator_RejectsIneligibleShapesBeforeInvokingHostRoutes()
+    {
+        var calls = 0;
+        var shape = new SlideShape { Kind = SlideShapeKind.Picture };
+
+        OleActivationCoordinator.TryActivate(
+                shape,
+                _ => { calls++; return true; },
+                _ => { calls++; return true; },
+                _ => { calls++; return true; })
+            .Should().BeFalse();
+
+        calls.Should().Be(0);
+    }
+
+    [Fact]
+    public void Coordinator_UsesInPlaceInjectedAndDefaultFallbackOrder()
+    {
+        var calls = new List<string>();
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.Ole,
+            OleObject = new OleObjectInfo { EmbeddedBytes = [1, 2, 3] }
+        };
+
+        OleActivationCoordinator.TryActivate(
+                shape,
+                _ => { calls.Add("in-place"); return false; },
+                ole => { calls.Add("injected"); return false; },
+                ole =>
+                {
+                    ole.Should().BeSameAs(shape.OleObject);
+                    calls.Add("default");
+                    return true;
+                })
+            .Should().BeTrue();
+
+        calls.Should().Equal("in-place", "injected", "default");
+    }
+
+    [Fact]
+    public void Coordinator_StopsAfterSuccessfulInPlaceActivation()
+    {
+        var fallbackCalls = 0;
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.Ole,
+            OleObject = new OleObjectInfo { EmbeddedBytes = [1] }
+        };
+
+        OleActivationCoordinator.TryActivate(
+                shape,
+                _ => true,
+                _ => { fallbackCalls++; return true; },
+                _ => { fallbackCalls++; return true; })
+            .Should().BeTrue();
+
+        fallbackCalls.Should().Be(0);
+    }
+
+    [Fact]
+    public void Coordinator_PlansEligibleInPlaceBoundsWithOverlayOffset()
+    {
+        var oleObject = new OleObjectInfo { EmbeddedBytes = [1] };
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.Ole,
+            OleObject = oleObject,
+            OffsetXEmu = 9_525,
+            OffsetYEmu = 19_050,
+            ExtentCxEmu = 28_575,
+            ExtentCyEmu = 38_100,
+        };
+        var transform = new SlideTransformCore(2, 10, 20, 100, 80);
+
+        var plan = OleActivationCoordinator.PlanInPlaceActivation(
+            shape,
+            transform,
+            overlayOffsetX: 5,
+            overlayOffsetY: 6);
+
+        plan.Should().NotBeNull();
+        plan!.OleObject.Should().BeSameAs(oleObject);
+        plan.Bounds.Should().Be(new SlideScreenRect(17, 30, 6, 8));
+    }
+
+    [Fact]
+    public void Coordinator_RejectsUnsupportedInPlaceTransformsAndBounds()
+    {
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.Ole,
+            OleObject = new OleObjectInfo { EmbeddedBytes = [1] },
+            ExtentCxEmu = 9_525,
+            ExtentCyEmu = 9_525,
+        };
+
+        shape.RotationDeg = 0.02;
+        OleActivationCoordinator.PlanInPlaceActivation(shape, SlideTransformCore.Identity)
+            .Should().BeNull();
+        shape.RotationDeg = 0;
+        shape.FlipH = true;
+        OleActivationCoordinator.PlanInPlaceActivation(shape, SlideTransformCore.Identity)
+            .Should().BeNull();
+        shape.FlipH = false;
+        shape.FlipV = true;
+        OleActivationCoordinator.PlanInPlaceActivation(shape, SlideTransformCore.Identity)
+            .Should().BeNull();
+        shape.FlipV = false;
+        shape.ExtentCxEmu = 0;
+        OleActivationCoordinator.PlanInPlaceActivation(shape, SlideTransformCore.Identity)
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void TryActivate_EmptyPayload_ReturnsFalse()
     {
         OleActivationService.TryActivate(new OleObjectInfo()).Should().BeFalse();
@@ -175,7 +294,7 @@ public sealed class OleActivationServiceTests
     [Fact]
     public void TryCommitEditedPayload_ReplacesChangedBytes()
     {
-        string path = Path.Combine(Path.GetTempPath(), $"freep-ole-test-{Guid.NewGuid():N}.bin");
+        string path = Path.Combine(_temporaryDirectory.Path, "changed.bin");
         try
         {
             byte[] original = [1, 2, 3];
@@ -195,8 +314,8 @@ public sealed class OleActivationServiceTests
     [Fact]
     public void TryCommitEditedPayload_LeavesModelUntouchedForUnchangedOrEmptyPayload()
     {
-        string unchangedPath = Path.Combine(Path.GetTempPath(), $"freep-ole-test-{Guid.NewGuid():N}.bin");
-        string emptyPath = Path.Combine(Path.GetTempPath(), $"freep-ole-test-{Guid.NewGuid():N}.bin");
+        string unchangedPath = Path.Combine(_temporaryDirectory.Path, "unchanged.bin");
+        string emptyPath = Path.Combine(_temporaryDirectory.Path, "empty.bin");
         try
         {
             byte[] original = [1, 2, 3];
@@ -222,7 +341,7 @@ public sealed class OleActivationServiceTests
     [Fact]
     public void TryCommitEditedPayload_UpdatesInlineObjectBytes()
     {
-        string path = Path.Combine(Path.GetTempPath(), $"freep-inline-ole-test-{Guid.NewGuid():N}.bin");
+        string path = Path.Combine(_temporaryDirectory.Path, "inline.bin");
         try
         {
             byte[] original = [1, 2, 3];

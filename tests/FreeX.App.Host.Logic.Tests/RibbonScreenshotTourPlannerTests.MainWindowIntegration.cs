@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -265,7 +265,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
 
         editingSource.Should().Contain("private AutoFilterDialog? CreateAutoFilterFlyoutDialog");
         editingSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
-        editingSource.Should().Contain("AutoFilterMenuResources.TextProvider");
+        editingSource.Should().Contain("WpfResourceKeyTextResolver.Resources.AutoFilter");
         editingSource.Should().Contain("dialog.ConfigureAsModelessFlyout();");
         editingSource.Should().Contain("PositionAutoFilterFlyout(dialog, headerCell, anchorPoint);");
     }
@@ -456,7 +456,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("freex_options_quick_access_toolbar_category_navigation");
         source.Should().Contain("freex_options_view_category_navigation");
         source.Should().Contain("freex_options_cancel_focus_return");
-        source.Should().Contain("LocalAccountPlanner.Create");
+        source.Should().Contain("BuildLocalAccountPanePlan()");
+        source.Should().Contain("UiText.Get(accountPlan.TitleKey)");
+        source.Should().Contain("UiText.Get(detail.LabelKey)");
         // The backstage rail is now the shared BackstageFrame: the tour focuses the Account entry by its
         // automation id and invokes the account command rather than driving a named SsAccountNavBtn control.
         source.Should().Contain("_backstageFrame?.FocusEntry(\"BackstageAccountButton\")");
@@ -575,7 +577,11 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     [Fact]
     public void MainWindowScreenshotTour_CapturesAccentBarVisualEvidence()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs", "MainWindow.Startup.cs");
+        var source = string.Join(
+            Environment.NewLine,
+            DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs", "MainWindow.Startup.cs"),
+            WorkspaceFileLocator.ReadAllText(
+                "tools", "FreeX.ParityCapture.Wpf", "Capture", "MainWindow.ParityCaptureOwnership.cs"));
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
 
         source.Should().Contain("FREEX_ACCENT_BAR_TOUR");
@@ -622,7 +628,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("freex_insert_new_note_inline_popup");
         source.Should().Contain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("freex_insert_comments_list_surface");
-        source.Should().Contain("ReviewShowNotesBtn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("ShowNotesListForParityCapture();");
         source.Should().Contain("freex_insert_notes_list_surface");
         source.Should().Contain("InsertObjectsLinksTourManifest");
         source.Should().Contain("UI-CAT-INSERT-003");
@@ -749,7 +755,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("new SetWorkbookWindowArrangementCommand(WorkbookWindowArrangement.Horizontal)");
         source.Should().Contain("FindDescendantByRibbonCommandName<Button>(RibbonTabs, \"Arrange All\")");
         source.Should().Contain("new SaveCustomViewCommand(ViewPanesZoomTourCustomViewName)");
-        source.Should().Contain("new CustomViewsDialog(_workbook, _commandBus) { Owner = this }");
+        source.Should().Contain("new CustomViewsDialog(_workbook, ExecuteCustomViewDialogCommand) { Owner = this }");
         source.Should().Contain("freex_view_panes_zoom_view_tab_normal");
         source.Should().Contain("freex_view_panes_zoom_page_layout_ruler_on");
         source.Should().Contain("freex_view_panes_zoom_page_break_preview");
@@ -960,8 +966,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("FREEX_CHART_PERSISTENCE_RENDER_TOUR");
         source.Should().Contain("chart-persistence-render-tour");
         source.Should().Contain("EnsureChartPersistenceRenderTourContext");
-        source.Should().Contain("FreeXObjectDisplay.All");
-        source.Should().Contain("FreeXObjectDisplay.Placeholders");
+        source.Should().Contain("AppOptionsObjectDisplay.All");
+        source.Should().Contain("AppOptionsObjectDisplay.Placeholders");
         source.Should().Contain("new ChangeChartSourceCommand(context.Sheet.Id, context.Chart.Id, context.MutatedSourceRange");
         source.Should().Contain("new ChangeChartTypeCommand(context.Sheet.Id, context.Chart.Id, ChartType.Line)");
         source.Should().Contain("new SetChartStyleCommand(context.Sheet.Id, context.Chart.Id, 18)");
@@ -1077,7 +1083,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("TraceDependentsBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("ShowFormulasBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("RemoveTraceArrows(kind: null, \"Remove Arrows\")");
-        source.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _recalcEngine.CyclicCells)");
+        source.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _session.CyclicCells)");
         source.Should().Contain("new ErrorCheckingDialog(");
         source.Should().Contain("new EvaluateFormulaDialog(resultSummary)");
         source.Should().Contain("FindDescendantButtonByContent(evaluateFormulaDialog, UiText.Get(\"EvaluateFormula_EvaluateButton\"))");
@@ -1118,7 +1124,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("home-clipboard-cells-editing-tour");
         source.Should().Contain("EnsureHomeClipboardCellsEditingTourContext");
         source.Should().Contain("SeedHomeClipboardCellsEditingInternalClipboard");
-        source.Should().Contain("new InternalClipboard(");
+        source.Should().Contain("_workbookClipboardSession.Capture(new WorkbookClipboardSnapshot(");
         source.Should().Contain("SheetGrid.ClipboardRange = copySourceRange;");
         source.Should().Contain("CaptureHomeClipboardCellsEditingMenuAsync");
         source.Should().Contain("FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)");
@@ -1182,7 +1188,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("new InsertFunctionDialog");
         source.Should().Contain("categoryBox.SelectedItem = \"Lookup & Reference\";");
         source.Should().Contain("InsertFunctionCatalogEntry { Name: \"XLOOKUP\" }");
-        source.Should().Contain("new NamedRangeDialog(_workbook, _commandBus, context.AuthoringRange)");
+        source.Should().Contain("new NamedRangeDialog(_workbook, ExecuteDialogCommandPreservingSelection, context.AuthoringRange)");
         source.Should().Contain("new NameDefinitionDialog(");
         source.Should().Contain("new CreateNamesFromSelectionDialog");
         source.Should().Contain("freex_formula_authoring_names_formulas_tab");

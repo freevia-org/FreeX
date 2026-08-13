@@ -96,6 +96,10 @@ public sealed class FreeWOptionsPlannerTests
         surface.Tabs.Select(tab => tab.Header)
             .Should().Equal("General", "AutoCorrect", "AutoFormat As You Type");
         surface.General.UiLanguageHint.Should().Contain("uk-UA");
+        surface.General.Fields.Select(field => field.Kind).Should().Equal(
+            OptionsDialogGeneralFieldKind.RecentFilesCap,
+            OptionsDialogGeneralFieldKind.DefaultSaveFormat,
+            OptionsDialogGeneralFieldKind.UiLanguage);
         surface.General.FormatChoices.Single().Extension.Should().Be(FreeWOptions.DocxDefaultFormat);
         surface.AutoCorrect.Toggles.Select(toggle => toggle.Kind)
             .Should().Contain([
@@ -104,6 +108,9 @@ public sealed class FreeWOptionsPlannerTests
                 OptionsDialogToggleKind.ReplaceText,
             ]);
         surface.AutoCorrect.ReplacementsText.Should().Contain("teh => the");
+        surface.AutoCorrect.ReplacementColumns.Should().Equal(
+            new OptionsDialogReplacementColumnSpec(OptionsDialogReplacementFieldKind.Replace, "Replace", 1),
+            new OptionsDialogReplacementColumnSpec(OptionsDialogReplacementFieldKind.With, "With", 2));
         surface.AutoFormat.MasterToggle.Kind.Should().Be(OptionsDialogToggleKind.AutoCorrectEnabled);
         surface.AutoFormat.MasterToggle.IsChecked.Should().BeFalse();
         surface.AutoFormat.RuleToggles.Single(toggle => toggle.Kind == OptionsDialogToggleKind.Hyperlinks)
@@ -139,6 +146,70 @@ public sealed class FreeWOptionsPlannerTests
 
         replacements.Should().BeEmpty();
         errorMessage.Should().Be(OptionsDialogPlanner.ReplacementsValidationMessage);
+    }
+
+    [Fact]
+    public void Workflow_ApplyExtensions_ProjectsAutoCorrectGroupsOntoSharedBasicResult()
+    {
+        var checkedToggles = new[]
+        {
+            OptionsDialogToggleKind.AutoCorrectEnabled,
+            OptionsDialogToggleKind.SmartQuotes,
+            OptionsDialogToggleKind.Ellipsis,
+            OptionsDialogToggleKind.Capitalization,
+            OptionsDialogToggleKind.NumberedLists,
+            OptionsDialogToggleKind.Fractions,
+            OptionsDialogToggleKind.CorrectTwoInitialCapitals,
+            OptionsDialogToggleKind.ReplaceText,
+        };
+        var input = new OptionsDialogInput(
+            "7",
+            FreeWOptions.DocxDefaultFormat,
+            "  uk-UA  ",
+            checkedToggles,
+            [
+                new("  teh  ", "the"),
+                new("", "ignored"),
+                new("missing-value", null),
+            ]);
+
+        var result = BasicApplicationOptionsDialogSession<FreeWOptions>.BuildResult(
+            recentFilesCap: 7,
+            defaultSaveFormat: input.Format,
+            uiLanguage: input.UiLanguage,
+            fallbackSaveFormat: FreeWOptions.DocxDefaultFormat);
+
+        OptionsDialogWorkflowPlanner.ApplyExtensions(result, input).Should().BeSameAs(result);
+
+        result.RecentFilesCap.Should().Be(7);
+        result.UiLanguage.Should().Be("uk-UA");
+        result.AutoCorrectEnabled.Should().BeTrue();
+        result.AutoFormat.SmartQuotes.Should().BeTrue();
+        result.AutoFormat.Dashes.Should().BeFalse();
+        result.AutoFormat.Ellipsis.Should().BeTrue();
+        result.AutoFormat.Capitalization.Should().BeTrue();
+        result.AutoFormat.NumberedLists.Should().BeTrue();
+        result.AutoFormat.Fractions.Should().BeTrue();
+        result.AutoFormat.Hyperlinks.Should().BeFalse();
+        result.AutoCorrect.CorrectTwoInitialCapitals.Should().BeTrue();
+        result.AutoCorrect.CapitalizeDayNames.Should().BeFalse();
+        result.AutoCorrect.ReplaceText.Should().BeTrue();
+        result.AutoCorrect.Replacements.Should().Equal(new AutoCorrectReplacement("teh", "the"));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Workflow_PlanEnabledState_ProjectsIndependentControlGroups(
+        bool autoCorrectEnabled,
+        bool replaceTextEnabled)
+    {
+        var state = OptionsDialogWorkflowPlanner.PlanEnabledState(autoCorrectEnabled, replaceTextEnabled);
+
+        state.AutoFormatRulesEnabled.Should().Be(autoCorrectEnabled);
+        state.ReplacementsEnabled.Should().Be(replaceTextEnabled);
     }
 
     [Fact]

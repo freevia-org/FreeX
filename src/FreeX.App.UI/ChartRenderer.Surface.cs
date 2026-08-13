@@ -1,7 +1,7 @@
-using System.Globalization;
 using OxyPlot;
 using OxyPlot.Axes;
 using OxyPlot.Series;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -75,7 +75,8 @@ public static partial class ChartRenderer
                 categoryIndex + 0.45,
                 seriesIndex + 0.45)
             {
-                Color = GetSurfaceCellColor(value, minValue, maxValue)
+                Color = ToOxyColor(ChartRenderPolicyPlanner.ResolveSurfaceCellColor(value, minValue, maxValue))
+                    ?? OxyColors.Transparent
             });
         }
 
@@ -83,12 +84,4 @@ public static partial class ChartRenderer
         return model;
     }
 
-    private static OxyColor GetSurfaceCellColor(double value, double minValue, double maxValue)
-    {
-        var t = maxValue <= minValue ? 0.5 : Math.Clamp((value - minValue) / (maxValue - minValue), 0, 1);
-        var red = (byte)Math.Round(68 + (255 - 68) * t);
-        var green = (byte)Math.Round(114 + (192 - 114) * t);
-        var blue = (byte)Math.Round(196 + (0 - 196) * t);
-        return OxyColor.FromRgb(red, green, blue);
-    }
 }

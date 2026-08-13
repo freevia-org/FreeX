@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -40,11 +39,19 @@ static int Main(string[] args)
         && (routeFilter is null || s.RouteId.Equals(routeFilter, StringComparison.OrdinalIgnoreCase))))
     {
         if (!TryCapture(scenario, output, out var capture))
-            capture = Unsupported(scenario, "No constructible app-owned WPF route adapter was available for this source family.");
+            capture = Unsupported(scenario, FreeWDialogEvidenceCatalog.CreateCapturePlan(
+                "wpf", scenario.Id, scenario.RouteId, scenario.State, scenario.Tab).UnsupportedNote);
         captures.Add(capture);
     }
-    var manifest = new CaptureManifest("freew.dialog-capture-manifest.v1", 1, "wpf", output, captures);
-    File.WriteAllText(Path.Combine(output, "wpf_dialog_capture_manifest.json"), JsonSerializer.Serialize(manifest, JsonOptions()));
+    var manifest = new CaptureManifest(
+        FreeWDialogEvidenceCatalog.ManifestSchema,
+        FreeWDialogEvidenceCatalog.ManifestSchemaVersion("wpf"),
+        "wpf",
+        output,
+        captures);
+    File.WriteAllText(
+        Path.Combine(output, FreeWDialogEvidenceCatalog.ManifestFileName("wpf")),
+        JsonSerializer.Serialize(manifest, JsonOptions()));
     Console.WriteLine($"wpf scenarios: {captures.Count}; captured: {captures.Count(c => c.Status == "captured")}; unsupported: {captures.Count(c => c.Status != "captured")}");
     application.Shutdown();
     return captures.All(c => c.Status == "captured"
@@ -55,6 +62,8 @@ static int Main(string[] args)
 static bool TryCapture(Scenario scenario, string output, out Capture capture)
 {
     capture = default!;
+    var plan = FreeWDialogEvidenceCatalog.CreateCapturePlan(
+        "wpf", scenario.Id, scenario.RouteId, scenario.State, scenario.Tab);
     var owner = new Window { Width = 960, Height = 720, ShowInTaskbar = false };
     Window? dialog = null;
     try
@@ -65,7 +74,7 @@ static bool TryCapture(Scenario scenario, string output, out Capture capture)
         dialog = WpfDialogRouteFactory.Create(scenario.RouteId, scenario.State, owner);
         if (dialog is null) return false;
         dialog.Width = 560;
-        dialog.Height = TargetHeight(scenario);
+        dialog.Height = plan.TargetHeight;
         dialog.SizeToContent = SizeToContent.Manual;
         dialog.Show();
         dialog.UpdateLayout();
@@ -74,8 +83,8 @@ static bool TryCapture(Scenario scenario, string output, out Capture capture)
         dialog.UpdateLayout();
         var width = Math.Max(1, (int)Math.Ceiling(dialog.ActualWidth));
         var height = Math.Max(1, (int)Math.Ceiling(dialog.ActualHeight));
-        var path = Path.Combine(output, "full", "wpf", Safe(scenario.Id) + ".png");
-        var cropPath = Path.Combine(output, "crops", "wpf", Safe(scenario.Id) + ".png");
+        var path = ResolveOutputPath(output, plan.FullPngPath);
+        var cropPath = ResolveOutputPath(output, plan.TargetPngPath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         Directory.CreateDirectory(Path.GetDirectoryName(cropPath)!);
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
@@ -95,7 +104,7 @@ static bool TryCapture(Scenario scenario, string output, out Capture capture)
         File.WriteAllBytes(cropPath, png);
         var dpi = VisualTreeHelper.GetDpi(dialog);
         var semantics = ReadSemantics(dialog);
-        capture = new Capture(scenario.Id, "wpf", scenario.RouteId, scenario.State, "captured", Relative(output, path), width, height, width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, new Rect(0, 0, width, height), semantics, null, "Real app-owned WPF dialog rendered through RenderTargetBitmap; full and target images passed pixel-content validation.", Relative(output, cropPath), content, content);
+        capture = new Capture(scenario.Id, "wpf", scenario.RouteId, scenario.State, "captured", plan.FullPngPath, width, height, width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, new Rect(0, 0, width, height), semantics, null, plan.CapturedNote, plan.TargetPngPath, content, content);
         return true;
     }
     catch (Exception ex)
@@ -127,7 +136,10 @@ static bool TryCaptureStaticPrompt(Scenario scenario, string output, Window owne
         var dialog = Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window != owner && window.IsVisible);
         if (dialog is null) return;
         dialog.UpdateLayout();
-        if (scenario.RouteId is "font" or "paragraph" or "style")
+        if (FreeWDialogEvidenceCatalog.GetRequired(scenario.RouteId).Fixture is
+            FreeWDialogFixtureKind.DefaultRunFormatting or
+            FreeWDialogFixtureKind.DefaultParagraphFormatting or
+            FreeWDialogFixtureKind.StyleCatalog)
         {
             Populate(dialog, scenario);
             dialog.UpdateLayout();
@@ -145,10 +157,12 @@ static bool CaptureRenderedWindow(Scenario scenario, string output, Window dialo
     capture = default!;
     try
     {
+        var plan = FreeWDialogEvidenceCatalog.CreateCapturePlan(
+            "wpf", scenario.Id, scenario.RouteId, scenario.State, scenario.Tab);
         var width = Math.Max(1, (int)Math.Ceiling(dialog.ActualWidth));
         var height = Math.Max(1, (int)Math.Ceiling(dialog.ActualHeight));
-        var path = Path.Combine(output, "full", "wpf", Safe(scenario.Id) + ".png");
-        var cropPath = Path.Combine(output, "crops", "wpf", Safe(scenario.Id) + ".png");
+        var path = ResolveOutputPath(output, plan.FullPngPath);
+        var cropPath = ResolveOutputPath(output, plan.TargetPngPath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         Directory.CreateDirectory(Path.GetDirectoryName(cropPath)!);
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
@@ -169,7 +183,7 @@ static bool CaptureRenderedWindow(Scenario scenario, string output, Window dialo
         File.WriteAllBytes(cropPath, png);
         var dpi = VisualTreeHelper.GetDpi(dialog);
         var semantics = ReadSemantics(dialog);
-        capture = new Capture(scenario.Id, "wpf", scenario.RouteId, scenario.State, "captured", Relative(output, path), width, height, width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, new Rect(0, 0, width, height), semantics, null, "Real app-owned WPF static-prompt dialog captured before its cancel path returned; full and target images passed pixel-content validation.", Relative(output, cropPath), content, content);
+        capture = new Capture(scenario.Id, "wpf", scenario.RouteId, scenario.State, "captured", plan.FullPngPath, width, height, width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, new Rect(0, 0, width, height), semantics, null, plan.CapturedNote, plan.TargetPngPath, content, content);
         return true;
     }
     catch (Exception ex)
@@ -189,14 +203,15 @@ static PixelContent ReadContent(RenderTargetBitmap bitmap, int width, int height
 static void Populate(Window dialog, Scenario scenario)
 {
     var state = scenario.State;
-    if (scenario.RouteId == "about")
+    var population = FreeWDialogEvidenceCatalog.GetRequired(scenario.RouteId).Population;
+    if (population == FreeWDialogPopulationKind.None)
     {
         // About has no editable or stateful fields. Keep initial and populated
         // captures on the same production presentation contract.
         FocusScenarioTarget(dialog, scenario);
         return;
     }
-    if (scenario.RouteId == "manual-hyphenation")
+    if (population == FreeWDialogPopulationKind.ManualHyphenation)
     {
         var choices = FindVisualChildren<ComboBox>(dialog).FirstOrDefault();
         if (choices is not null && state != "initial")
@@ -204,7 +219,7 @@ static void Populate(Window dialog, Scenario scenario)
         FocusScenarioTarget(dialog, scenario);
         return;
     }
-    if (scenario.RouteId == "style")
+    if (population == FreeWDialogPopulationKind.Style)
     {
         var styleTextBoxes = FindVisualChildren<TextBox>(dialog).ToArray();
         var combos = FindVisualChildren<ComboBox>(dialog).ToArray();
@@ -232,7 +247,7 @@ static void Populate(Window dialog, Scenario scenario)
         FocusScenarioTarget(dialog, scenario);
         return;
     }
-    if (scenario.RouteId == "footnote-endnote-options")
+    if (population == FreeWDialogPopulationKind.FootnoteEndnoteOptions)
     {
         var combos = FindVisualChildren<ComboBox>(dialog).ToArray();
         var routeTextBoxes = FindVisualChildren<TextBox>(dialog).ToArray();
@@ -257,8 +272,7 @@ static void Populate(Window dialog, Scenario scenario)
         else if (state == "validation-error" && routeTextBoxes.Length > 0)
         {
             routeTextBoxes[0].Text = "not-a-number";
-            dialog.GetType().GetMethod("ValidateForTest", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .Invoke(dialog, null);
+            ((FootnoteEndnoteOptionsDialog)dialog).ValidateForTest();
         }
         FocusScenarioTarget(dialog, scenario);
         return;
@@ -392,8 +406,7 @@ static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : Dep
 }
 static string Required(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : throw new ArgumentException($"Missing {option}."); }
 static string? Optional(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
-static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
-static string Safe(string value) => System.Text.RegularExpressions.Regex.Replace(value, "[^A-Za-z0-9._-]", "-");
-static int TargetHeight(Scenario scenario) => scenario.RouteId == "compare-documents" && scenario.Tab == "More" ? 720 : 600;
+static string ResolveOutputPath(string root, string relativePath) =>
+    Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
 static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 }

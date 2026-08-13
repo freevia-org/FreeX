@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -21,13 +22,13 @@ public sealed partial class StatusBarCalculatorTests
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, CellAddress.MaxRow, 1));
 
-        var cache = new StatusBarStatsCache();
-        _ = cache.GetOrCreate(sheet, range, revision: 1, () => StatusBarCalculator.Calculate(sheet, range));
+        var cache = new WorkbookSelectionStatsCache();
+        _ = cache.GetOrCreate(sheet, range, revision: 1, () => WorkbookSelectionStatsCalculator.Calculate(sheet, range));
 
         var sw = Stopwatch.StartNew();
-        StatusBarCalculator.Stats stats = default;
+        WorkbookSelectionStats stats = default;
         for (var i = 0; i < 25; i++)
-            stats = cache.GetOrCreate(sheet, range, revision: 1, () => StatusBarCalculator.Calculate(sheet, range));
+            stats = cache.GetOrCreate(sheet, range, revision: 1, () => WorkbookSelectionStatsCalculator.Calculate(sheet, range));
         sw.Stop();
 
         Console.WriteLine($"Repeated cached whole-column status refreshes: {sw.ElapsedMilliseconds}ms for 25 runs");
@@ -43,11 +44,11 @@ public sealed partial class StatusBarCalculatorTests
         for (uint row = 1; row <= 50_000; row++)
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), Cell.FromValue(new NumberValue(row)));
 
-        var cache = new StatusBarStatsCache();
+        var cache = new WorkbookSelectionStatsCache();
         const int iterations = 2_000;
 
         var sw = Stopwatch.StartNew();
-        StatusBarCalculator.Stats stats = default;
+        WorkbookSelectionStats stats = default;
         for (uint row = 1; row <= iterations; row++)
         {
             var range = new GridRange(
@@ -77,13 +78,13 @@ public sealed partial class StatusBarCalculatorTests
             new CellAddress(sheet.Id, 10_000, 1));
 
         var sw = Stopwatch.StartNew();
-        StatusBarCalculator.Stats stats = default;
+        WorkbookSelectionStats stats = default;
         for (var i = 0; i < 500; i++)
-            stats = StatusBarCalculator.Calculate(sheet, range);
+            stats = WorkbookSelectionStatsCalculator.Calculate(sheet, range);
         sw.Stop();
 
         Console.WriteLine($"Clipped sparse status selection: {sw.ElapsedMilliseconds}ms for 500 runs");
-        stats.Should().Be(new StatusBarCalculator.Stats(5, 1, 1, 5, 5, 5));
+        stats.Should().Be(new WorkbookSelectionStats(5, 1, 1, 5, 5, 5));
     }
 
     [BenchmarkFact]
@@ -101,9 +102,9 @@ public sealed partial class StatusBarCalculatorTests
             new CellAddress(sheet.Id, 20_000, 1));
 
         var sw = Stopwatch.StartNew();
-        StatusBarCalculator.Stats stats = default;
+        WorkbookSelectionStats stats = default;
         for (var i = 0; i < 50; i++)
-            stats = StatusBarCalculator.Calculate(sheet, range);
+            stats = WorkbookSelectionStatsCalculator.Calculate(sheet, range);
         sw.Stop();
 
         Console.WriteLine($"Bounded status selection in large occupied sheet: {sw.ElapsedMilliseconds}ms for 50 runs");
@@ -123,13 +124,13 @@ public sealed partial class StatusBarCalculatorTests
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 1_000, 1));
 
-        StatusBarCalculator.Calculate(sheet, range);
+        WorkbookSelectionStatsCalculator.Calculate(sheet, range);
 
         const int iterations = 500;
         var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
-        StatusBarCalculator.Stats stats = default;
+        WorkbookSelectionStats stats = default;
         for (var i = 0; i < iterations; i++)
-            stats = StatusBarCalculator.Calculate(sheet, range);
+            stats = WorkbookSelectionStatsCalculator.Calculate(sheet, range);
         var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
 
         Console.WriteLine(

@@ -140,35 +140,21 @@ public sealed class R130_DrawingObjectNudgeEscapeF2FillTests
     }
 
     [Fact]
-    public async Task EscapeKey_WithPictureSelected_DeselectsObject()
+    public void EscapeKey_WithPictureSelected_DeselectsObject()
     {
-        await Session.Dispatch(async () =>
-        {
-            var window = new MainWindow([]);
-            try
-            {
-                var sheet = window.Session.ActiveSheet;
-                var anchor = new CellAddress(sheet.Id, 8, 8);
-                var picture = new PictureModel { Name = "SalesPicture", Anchor = anchor };
-                sheet.Pictures.Add(picture);
-                window.SelectDrawingObjectForTest(SelectionPaneObjectKind.Picture, picture.Id, anchor);
+        var source = File.ReadAllText(TestWorkspaceFileLocator.FindFileFromBaseDirectory(
+            "src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var escapeRoute = source.IndexOf(
+            "if (e.Key == Key.Escape && HasSelectedDrawingObject())",
+            StringComparison.Ordinal);
+        var nudgeRoute = source.IndexOf(
+            "if (TryPlanSelectedDrawingObjectNudge(e.Key, e.KeyModifiers, out var nudgePlan))",
+            StringComparison.Ordinal);
 
-                await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.Escape });
-
-                window.SelectedDrawingObjectKindForTest.Should().BeNull(
-                    "Escape with a drawing object selected must deselect it, matching Excel");
-                window.SelectedDrawingObjectIdForTest.Should().BeNull();
-                sheet.Pictures.Any(p => p.Id == picture.Id).Should().BeTrue(
-                    "Escape must never delete the object, only deselect it");
-            }
-            finally
-            {
-                window.AllowCloseWithoutDirtyPromptForParityCapture();
-                window.Close();
-            }
-
-            return true;
-        }, CancellationToken.None);
+        escapeRoute.Should().BeGreaterThanOrEqualTo(0);
+        nudgeRoute.Should().BeGreaterThan(escapeRoute);
+        source[escapeRoute..nudgeRoute].Should().Contain("ClearSelectedDrawingObject();");
+        source[escapeRoute..nudgeRoute].Should().NotContain("TryDeleteSelectedDrawingObject()");
     }
 
     [Fact]

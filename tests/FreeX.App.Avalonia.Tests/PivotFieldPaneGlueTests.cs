@@ -1,4 +1,3 @@
-using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -10,8 +9,8 @@ namespace FreeX.App.Avalonia.Tests;
 /// <summary>
 /// Unit tests for the UI-free pivot field-pane glue used by the Avalonia/macOS shell: source-context
 /// detection (<see cref="PivotSourceContext"/>), the validated drop → layout-command mapping
-/// (<see cref="PivotFieldDragValidator"/> + <see cref="PivotFieldLayoutCommandFactory"/>), and the header
-/// action → command mapping (<see cref="PivotHeaderMenuCommandFactory"/>). No running shell required.
+/// (<see cref="PivotFieldDragValidator"/> + <see cref="PivotFieldLayoutPlanner"/>), and the header
+/// action → command mapping (<see cref="PivotHeaderCommandPlanner"/>). No running shell required.
 /// </summary>
 public sealed class PivotFieldPaneGlueTests
 {
@@ -82,10 +81,10 @@ public sealed class PivotFieldPaneGlueTests
         result.IsAllowed.Should().BeTrue();
         result.DefaultSummaryFunction.Should().Be("sum");
 
-        var command = PivotFieldLayoutCommandFactory.TryCreate(sheet.Id, pivot, headers, result);
+        var command = PivotFieldLayoutPlanner.TryCreateCommand(sheet.Id, pivot, headers, result);
         command.Should().NotBeNull();
 
-        var areas = PivotFieldLayoutCommandFactory.BuildAreas(
+        var areas = PivotFieldLayoutPlanner.BuildAreas(
             pivot, headers, result.ResultingLayout!, result.DefaultSummaryFunction);
         areas.RowFields.Select(f => f.SourceFieldIndex).Should().Equal(0);
         areas.DataFields.Select(d => d.SourceFieldIndex).Should().Equal(2, 2);
@@ -106,10 +105,10 @@ public sealed class PivotFieldPaneGlueTests
         var request = new PivotFieldDropRequest(1, PivotFieldBucket.Columns);
         var result = validator.Validate(pivot, headers, request);
 
-        var command = PivotFieldLayoutCommandFactory.TryCreate(sheet.Id, pivot, headers, result);
+        var command = PivotFieldLayoutPlanner.TryCreateCommand(sheet.Id, pivot, headers, result);
         command.Should().BeOfType<ConfigurePivotTableLayoutCommand>();
 
-        var areas = PivotFieldLayoutCommandFactory.BuildAreas(
+        var areas = PivotFieldLayoutPlanner.BuildAreas(
             pivot, headers, result.ResultingLayout!, result.DefaultSummaryFunction);
         areas.RowFields.Select(f => f.SourceFieldIndex).Should().Equal(0);
         areas.ColumnFields.Select(f => f.SourceFieldIndex).Should().Equal(1);
@@ -128,7 +127,7 @@ public sealed class PivotFieldPaneGlueTests
         var request = new PivotFieldDropRequest(2, PivotFieldBucket.Available);
         var result = validator.Validate(pivot, headers, request);
 
-        PivotFieldLayoutCommandFactory.TryCreate(sheet.Id, pivot, headers, result).Should().BeNull();
+        PivotFieldLayoutPlanner.TryCreateCommand(sheet.Id, pivot, headers, result).Should().BeNull();
     }
 
     [Fact]
@@ -142,7 +141,7 @@ public sealed class PivotFieldPaneGlueTests
 
         var request = new PivotFieldDropRequest(1, PivotFieldBucket.Columns);
         var result = validator.Validate(pivot, headers, request);
-        var command = PivotFieldLayoutCommandFactory.TryCreate(sheet.Id, pivot, headers, result)!;
+        var command = PivotFieldLayoutPlanner.TryCreateCommand(sheet.Id, pivot, headers, result)!;
 
         command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
         pivot.ColumnFields.Select(f => f.SourceFieldIndex).Should().Equal(1);
@@ -161,7 +160,7 @@ public sealed class PivotFieldPaneGlueTests
         var validator = NumericAwareValidator(workbook, pivot);
         var target = RowTarget(pivot, headers, sourceFieldIndex: 0);
 
-        var result = PivotHeaderMenuCommandFactory.Create(
+        var result = PivotHeaderCommandPlanner.Create(
             sheet.Id, pivot, headers, target, PivotHeaderMenuAction.SortAscending, validator);
 
         result.Kind.Should().Be(PivotHeaderCommandKind.View);
@@ -182,7 +181,7 @@ public sealed class PivotFieldPaneGlueTests
         var validator = NumericAwareValidator(workbook, pivot);
         var target = RowTarget(pivot, headers, sourceFieldIndex: 0);
 
-        var result = PivotHeaderMenuCommandFactory.Create(
+        var result = PivotHeaderCommandPlanner.Create(
             sheet.Id, pivot, headers, target, PivotHeaderMenuAction.ClearSort, validator);
 
         result.IsNoOp.Should().BeTrue();
@@ -204,7 +203,7 @@ public sealed class PivotFieldPaneGlueTests
         var validator = NumericAwareValidator(workbook, pivot);
         var target = RowTarget(pivot, headers, sourceFieldIndex: 0);
 
-        var result = PivotHeaderMenuCommandFactory.Create(
+        var result = PivotHeaderCommandPlanner.Create(
             sheet.Id, pivot, headers, target, PivotHeaderMenuAction.ClearFilter, validator);
 
         result.Kind.Should().Be(PivotHeaderCommandKind.View);
@@ -222,7 +221,7 @@ public sealed class PivotFieldPaneGlueTests
         var validator = NumericAwareValidator(workbook, pivot);
         var target = RowTarget(pivot, headers, sourceFieldIndex: 0);
 
-        var result = PivotHeaderMenuCommandFactory.Create(
+        var result = PivotHeaderCommandPlanner.Create(
             sheet.Id, pivot, headers, target, PivotHeaderMenuAction.MoveToColumns, validator);
 
         result.Kind.Should().Be(PivotHeaderCommandKind.Layout);
@@ -242,7 +241,7 @@ public sealed class PivotFieldPaneGlueTests
         var validator = NumericAwareValidator(workbook, pivot);
         var target = RowTarget(pivot, headers, sourceFieldIndex: 0);
 
-        var result = PivotHeaderMenuCommandFactory.Create(
+        var result = PivotHeaderCommandPlanner.Create(
             sheet.Id, pivot, headers, target, PivotHeaderMenuAction.RemoveField, validator);
 
         result.Kind.Should().Be(PivotHeaderCommandKind.Layout);
@@ -265,7 +264,7 @@ public sealed class PivotFieldPaneGlueTests
         var validator = NumericAwareValidator(workbook, pivot);
         var target = RowTarget(pivot, headers, sourceFieldIndex: 0);
 
-        var result = PivotHeaderMenuCommandFactory.Create(sheet.Id, pivot, headers, target, action, validator);
+        var result = PivotHeaderCommandPlanner.Create(sheet.Id, pivot, headers, target, action, validator);
 
         result.IsDeferred.Should().BeTrue();
         result.DeferredReason.Should().NotBeNullOrWhiteSpace();
@@ -273,14 +272,6 @@ public sealed class PivotFieldPaneGlueTests
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
-    }
 
     private static PivotFieldDragValidator NumericAwareValidator(Workbook workbook, PivotTableModel pivot) =>
         new(sourceFieldIndex => PivotSourceContext.IsNumericSourceColumn(workbook, pivot, sourceFieldIndex));

@@ -7,14 +7,8 @@ public sealed class StatusBarViewSwitchSourceTests
     [Fact]
     public void StatusBarViewSwitches_RenderAsCompactAccessibleIcons()
     {
-        var source = File.ReadAllText(Path.Combine(
-            AppContext.BaseDirectory,
-            "..",
-            "..",
-            "..",
-            "..",
-            "FreeW.App.Host",
-            "MainWindow.cs"));
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freew", "FreeW.App.Host", "MainWindow.cs");
 
         var viewSwitchStart = source.IndexOf("private UIElement BuildViewSwitchControl()", StringComparison.Ordinal);
         var navPaneStart = source.IndexOf("// The left navigation pane:", viewSwitchStart, StringComparison.Ordinal);
@@ -31,19 +25,25 @@ public sealed class StatusBarViewSwitchSourceTests
     [Fact]
     public void StatusBarTextPlanning_LivesInPresentationPlanner()
     {
-        var source = File.ReadAllText(Path.Combine(
-            AppContext.BaseDirectory,
-            "..",
-            "..",
-            "..",
-            "..",
-            "FreeW.App.Host",
-            "MainWindow.cs"));
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freew", "FreeW.App.Host", "MainWindow.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Shell;");
-        source.Should().Contain("FreeWEditorStatusPlanner.Build(");
-        source.Should().Contain("new FreeWEditorStatusSnapshot(");
+        source.Should().Contain("_editorInteraction.BuildStatus(");
+        source.Should().Contain("new FreeWEditorStatusContext(");
+        source.Should().NotContain("new FreeWEditorStatusSnapshot(");
+        source.Should().NotContain("WordCount.Of(");
         source.Should().NotContain("WordCount.Words(selectionText)");
         source.Should().NotContain("FormatDocumentSelectionStatus(words, characters)");
+    }
+
+    [Fact]
+    public void ZoomStatusText_UsesCanonicalZoomFormatter()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freew", "FreeW.App.Host", "MainWindow.cs");
+
+        source.Should().Contain("ZoomLevels.FormatPercent(");
+        source.Should().NotContain("$\"{ZoomLevels.ToPercent(");
     }
 }

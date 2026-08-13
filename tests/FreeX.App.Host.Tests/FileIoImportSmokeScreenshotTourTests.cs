@@ -19,7 +19,7 @@ public sealed class FileIoImportSmokeScreenshotTourTests
         source.Should().Contain("SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, xlsxSaveAdapter))");
         source.Should().Contain("await OpenFileAsync(savedWorkbookPath)");
         source.Should().Contain("new ImportSheetCommand(_currentSheetId, destination, imported.Sheets[0])");
-        source.Should().Contain("ImportFailureDiagnosticFactory.FromException");
+        source.Should().Contain("WorkbookImportFailurePlanner.FromException");
         source.Should().Contain("ShowOwnedMessage(diagnostic.UserMessage, caption, MessageBoxButton.OK, MessageBoxImage.Error)");
         source.Should().Contain("new ExportOptionsDialog(hasSelection: true, initialPdfLanguage: _options.PdfExportLanguage, format)");
         source.Should().Contain("FindOwnedNativeWindow(owner, caption)");

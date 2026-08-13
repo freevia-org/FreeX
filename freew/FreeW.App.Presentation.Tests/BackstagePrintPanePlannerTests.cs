@@ -43,11 +43,11 @@ public sealed class BackstagePrintPanePlannerTests
             row.Status == BackstagePrintEvidenceStatus.FixtureReady &&
             row.FixtureScenarioIds.Contains("backstage-print-preview-fidelity") &&
             row.Requirements.Any(requirement =>
-                requirement.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                requirement.HostId == BackstagePrintEvidenceRequirementCatalog.WpfHostId &&
                 requirement.ScenarioId == "backstage-print-preview-fidelity" &&
                 requirement.MinimumExpectedOutputs == 2) &&
             row.Requirements.Any(requirement =>
-                requirement.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                requirement.HostId == BackstagePrintEvidenceRequirementCatalog.AvaloniaHostId &&
                 requirement.ScenarioId == "backstage-print-preview-fidelity" &&
                 requirement.MinimumExpectedOutputs == 2));
         plan.Evidence.Should().Contain(row =>
@@ -55,11 +55,11 @@ public sealed class BackstagePrintPanePlannerTests
             row.Status == BackstagePrintEvidenceStatus.FixtureReady &&
             row.FixtureScenarioIds.Contains("backstage-pdf-export-fidelity") &&
             row.Requirements.Any(requirement =>
-                requirement.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                requirement.HostId == BackstagePrintEvidenceRequirementCatalog.WpfHostId &&
                 requirement.ScenarioId == "backstage-pdf-export-fidelity" &&
                 requirement.MinimumExpectedOutputs == 2) &&
             row.Requirements.Any(requirement =>
-                requirement.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                requirement.HostId == BackstagePrintEvidenceRequirementCatalog.AvaloniaHostId &&
                 requirement.ScenarioId == "backstage-pdf-export-fidelity" &&
                 requirement.MinimumExpectedOutputs == 2));
         plan.Evidence.Should().Contain(row =>
@@ -70,7 +70,7 @@ public sealed class BackstagePrintPanePlannerTests
     }
 
     [Fact]
-    public void BuildEvidenceRequirements_MirrorsVisualSummaryContract()
+    public void BuildEvidenceRequirements_UsesProductionRequirementCatalog()
     {
         var preview = BackstagePrintPanePlanner.BuildEvidenceRequirements(
             BackstagePrintEvidenceKind.PrintPreviewFidelity);
@@ -78,129 +78,20 @@ public sealed class BackstagePrintPanePlannerTests
             BackstagePrintEvidenceKind.PdfExportFidelity);
 
         preview.Should().BeEquivalentTo(
-            FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios
-                .Where(expected => expected.ScenarioId == "backstage-print-preview-fidelity")
-                .Select(expected => new BackstagePrintEvidenceRequirement(
-                    expected.HostId,
-                    expected.ScenarioId,
-                    expected.MinimumExpectedOutputs)));
+            BackstagePrintEvidenceRequirementCatalog.Build(
+                BackstagePrintEvidenceKind.PrintPreviewFidelity));
         pdf.Should().BeEquivalentTo(
-            FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios
-                .Where(expected => expected.ScenarioId == "backstage-pdf-export-fidelity")
-                .Select(expected => new BackstagePrintEvidenceRequirement(
-                    expected.HostId,
-                    expected.ScenarioId,
-                    expected.MinimumExpectedOutputs)));
+            BackstagePrintEvidenceRequirementCatalog.Build(
+                BackstagePrintEvidenceKind.PdfExportFidelity));
 
         preview.Select(requirement => requirement.HostId).Should().BeEquivalentTo([
-            FreeWVisualEvidenceManifestNormalizer.WpfHostId,
-            FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId
+            BackstagePrintEvidenceRequirementCatalog.WpfHostId,
+            BackstagePrintEvidenceRequirementCatalog.AvaloniaHostId
         ]);
         pdf.Select(requirement => requirement.HostId).Should().BeEquivalentTo([
-            FreeWVisualEvidenceManifestNormalizer.WpfHostId,
-            FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId
+            BackstagePrintEvidenceRequirementCatalog.WpfHostId,
+            BackstagePrintEvidenceRequirementCatalog.AvaloniaHostId
         ]);
-    }
-
-    [Fact]
-    public void Build_WithTrustedVisualEvidenceSummary_MarksBackstageRendererRowsHostBacked()
-    {
-        var summary = BuildSummary(
-            trusted: true,
-            BuildScenario(
-                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
-                "backstage-print-preview-fidelity",
-                trustedOutputs: 2),
-            BuildScenario(
-                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
-                "backstage-print-preview-fidelity",
-                trustedOutputs: 2),
-            BuildScenario(
-                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
-                "backstage-pdf-export-fidelity",
-                trustedOutputs: 2),
-            BuildScenario(
-                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
-                "backstage-pdf-export-fidelity",
-                trustedOutputs: 2));
-
-        var plan = BackstagePrintPanePlanner.Build(
-            "Agenda",
-            new PageSettings(),
-            visualEvidenceSummary: summary);
-
-        plan.Evidence.Should().Contain(row =>
-            row.Kind == BackstagePrintEvidenceKind.PrintPreviewFidelity &&
-            row.Status == BackstagePrintEvidenceStatus.HostBacked &&
-            row.Description.Contains("Real WPF and Avalonia captures", StringComparison.Ordinal));
-        plan.Evidence.Should().Contain(row =>
-            row.Kind == BackstagePrintEvidenceKind.PdfExportFidelity &&
-            row.Status == BackstagePrintEvidenceStatus.HostBacked &&
-            row.Description.Contains("backstage-pdf-export-fidelity", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void Build_WithPartialVisualEvidenceSummary_MarksMissingRealCapturesDeferred()
-    {
-        var summary = BuildSummary(
-            trusted: false,
-            BuildScenario(
-                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
-                "backstage-print-preview-fidelity",
-                trustedOutputs: 2),
-            BuildScenario(
-                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
-                "backstage-print-preview-fidelity",
-                trustedOutputs: 1));
-
-        var plan = BackstagePrintPanePlanner.Build(
-            "Agenda",
-            new PageSettings(),
-            visualEvidenceSummary: summary);
-
-        var preview = plan.Evidence.Single(row =>
-            row.Kind == BackstagePrintEvidenceKind.PrintPreviewFidelity);
-        preview.Status.Should().Be(BackstagePrintEvidenceStatus.Deferred);
-        preview.Description.Should().Contain("avalonia-page-layout-shot/backstage-print-preview-fidelity");
-        preview.Description.Should().Contain("expected at least 2 trusted output");
-
-        var pdf = plan.Evidence.Single(row =>
-            row.Kind == BackstagePrintEvidenceKind.PdfExportFidelity);
-        pdf.Status.Should().Be(BackstagePrintEvidenceStatus.Deferred);
-        pdf.Description.Should().Contain("wpf-fidelity-render/backstage-pdf-export-fidelity");
-        pdf.Description.Should().Contain("missing normalized scenario row");
-    }
-
-    [Fact]
-    public void BuildEvidenceReadiness_IncludesScenarioSpecificSummaryFailures()
-    {
-        var summary = BuildSummary(
-            trusted: false,
-            [
-                BuildScenario(
-                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
-                    "backstage-pdf-export-fidelity",
-                    trustedOutputs: 2),
-                BuildScenario(
-                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
-                    "backstage-pdf-export-fidelity",
-                    trustedOutputs: 2),
-            ],
-            failures:
-            [
-                "backstage renderer pair 'backstage-pdf-export-fidelity' missing Avalonia page(s): p2",
-                "review renderer pair 'f2-comments' missing Avalonia page(s): p1"
-            ]);
-
-        var readiness = BackstagePrintPanePlanner.BuildEvidenceReadiness(
-            BackstagePrintEvidenceKind.PdfExportFidelity,
-            summary);
-
-        readiness.Status.Should().Be(BackstagePrintEvidenceStatus.Deferred);
-        readiness.Failures.Should().Contain(failure =>
-            failure.Contains("backstage-pdf-export-fidelity", StringComparison.Ordinal));
-        readiness.Failures.Should().NotContain(failure =>
-            failure.Contains("f2-comments", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -235,67 +126,4 @@ public sealed class BackstagePrintPanePlannerTests
         plan.Fields.Should().Contain(row => row.Label == "Margins" && row.Value.EndsWith(" (mirror margins)", StringComparison.Ordinal));
     }
 
-    private static FreeWVisualEvidenceNormalizedSummary BuildSummary(
-        bool trusted,
-        params FreeWVisualEvidenceNormalizedScenario[] scenarios) =>
-        BuildSummary(trusted, scenarios, failures: []);
-
-    private static FreeWVisualEvidenceNormalizedSummary BuildSummary(
-        bool trusted,
-        IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> scenarios,
-        IReadOnlyList<string> failures) =>
-        new(
-            FreeWVisualEvidenceManifestNormalizer.SummarySchemaId,
-            FreeWVisualEvidenceManifestNormalizer.SummarySchemaVersion,
-            [],
-            scenarios.Select(scenario => new FreeWVisualEvidenceExpectedScenario(
-                scenario.HostId,
-                scenario.ScenarioId,
-                scenario.MinimumExpectedOutputs)).ToArray(),
-            scenarios,
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            new FreeWVisualEvidenceAuthoritySummary(
-                "local-visual-evidence-only",
-                false,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                []),
-            [],
-            new FreeWVisualEvidenceTrust(trusted, failures));
-
-    private static FreeWVisualEvidenceNormalizedScenario BuildScenario(
-        string hostId,
-        string scenarioId,
-        int trustedOutputs,
-        bool trusted = true,
-        IReadOnlyList<string>? failures = null) =>
-        new(
-            hostId,
-            scenarioId,
-            MinimumExpectedOutputs: 2,
-            ActualOutputs: trustedOutputs,
-            TrustedOutputs: trustedOutputs,
-            Expected: true,
-            new FreeWVisualEvidenceTrust(trusted, failures ?? []));
 }

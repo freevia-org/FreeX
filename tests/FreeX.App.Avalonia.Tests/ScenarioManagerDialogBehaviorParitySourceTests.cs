@@ -16,11 +16,11 @@ public sealed class ScenarioManagerDialogBehaviorParitySourceTests
         dialogSource.Should().Contain("WorkbookRangeTextCodec.TryParseMany(");
         dialogSource.Should().Contain("var acceptedName = accepted.NewScenarioName.Trim();");
         dialogSource.Should().Contain("acceptedName,");
-        dialogSource.Should().Contain("ReplaceScenarioName: accepted.Action == ScenarioManagerDialogAction.Edit");
+        dialogSource.Should().Contain("ReplaceScenarioName: accepted.Action == ScenarioManagerAction.Edit");
         dialogSource.Should().Contain("Hidden: accepted.Hidden");
         dialogSource.Should().Contain("Locked: accepted.Locked");
-        dialogSource.Should().Contain("saveButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerDialogAction.Add);");
-        dialogSource.Should().Contain("editButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerDialogAction.Edit);");
+        dialogSource.Should().Contain("saveButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerAction.Add);");
+        dialogSource.Should().Contain("editButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerAction.Edit);");
         dialogSource.Should().Contain("ranges = [_session.SelectedRange];");
         dialogSource.Should().Contain("new HashSet<CellAddress>()");
         dialogSource.Should().Contain("RefreshDialogPlan(acceptedName);");
@@ -32,7 +32,7 @@ public sealed class ScenarioManagerDialogBehaviorParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var dialogSource = source[SourceStart(source)..SourceEnd(source)];
 
-        dialogSource.Should().Contain("ValidateScenarioManagerFields(ScenarioManagerDialogAction.Report)");
+        dialogSource.Should().Contain("ValidateScenarioManagerFields(ScenarioManagerAction.Report)");
         dialogSource.Should().Contain("ScenarioManager_EnterValidResultCellsReference");
         dialogSource.Should().Contain("CreateSummaryReportPlan(_session.Workbook, resultCells)");
         dialogSource.Should().Contain("resultRanges.SelectMany(range => range.AllCells()).Distinct().ToArray()");
@@ -45,15 +45,6 @@ public sealed class ScenarioManagerDialogBehaviorParitySourceTests
     private static int SourceEnd(string source) =>
         source.IndexOf("private static string FormatScenarioManagerSelectionSummary", StringComparison.Ordinal);
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

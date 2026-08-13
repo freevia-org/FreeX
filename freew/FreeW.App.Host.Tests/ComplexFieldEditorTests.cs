@@ -510,7 +510,7 @@ public sealed class ComplexFieldEditorTests
 
         view.UpdateFields();
 
-        var today = DateTime.Now.ToString("d", System.Globalization.CultureInfo.CurrentCulture);
+        var today = DocumentFieldDisplayPlanner.FormatTemporalValue(RunFieldKind.Date, DateTime.Now);
         FieldRun(view)!.Text.Should().Be(today);
         FieldRun(view)!.Text.Should().NotBe("1/1/2000");
     }

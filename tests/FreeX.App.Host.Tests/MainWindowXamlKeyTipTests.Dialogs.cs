@@ -38,7 +38,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void DeferredCommandButtons_DescribeDeferredStatusInTooltip()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace ribbonWpf = "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var missing = document
@@ -46,8 +46,8 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Where(element => element.Name == presentation + "Button" || element.Name == presentation + "ToggleButton")
             .Where(button => button.Attribute("Click")?.Value == "PageLayoutDeferredBtn_Click")
             .Where(button =>
-                LocalizedAttribute(button, local + "RibbonTooltip.Description")?.Contains("Deferred:", StringComparison.OrdinalIgnoreCase) != true)
-            .Select(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") ?? LocalizedAttribute(button, "Content") ?? "Button")
+                LocalizedAttribute(button, ribbonWpf + "RibbonTooltip.Description")?.Contains("Deferred:", StringComparison.OrdinalIgnoreCase) != true)
+            .Select(button => LocalizedAttribute(button, ribbonWpf + "RibbonTooltip.Title") ?? LocalizedAttribute(button, "Content") ?? "Button")
             .ToList();
 
         missing.Should().BeEmpty("deferred visible commands should clearly say they are deferred before the user clicks");

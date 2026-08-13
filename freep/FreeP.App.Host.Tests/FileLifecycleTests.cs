@@ -3,35 +3,34 @@ using System.Windows;
 using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
+using FreeP.App.Recording;
 using FreeP.Core.IO;
 
 namespace FreeP.App.Host.Tests;
 
 public sealed class FileLifecycleTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.FileLifecycleTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.FileLifecycleTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public FileLifecycleTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private (
         Window Window,
-        FileCommands File,
+        PresentationFileCommandSession File,
         Func<Presentation> GetModel,
         Func<int> ChangeCount,
-        RecordingUserMessageService Messages) CreateHarness(bool canEncodeVideo = false)
+        RecordingUserMessageService Messages) CreateHarness(
+            bool canEncodeVideo = false,
+            Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
+                videoFramePackageArtifactFactory = null)
     {
         var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
         var model = Presentation.CreateEmpty();
         var changes = 0;
         var recentStorePath = Path.Combine(_tempDir, "recent.json");
         var messages = new RecordingUserMessageService();
-        var file = new FileCommands(
+        var file = WpfPresentationFileCommandSessionFactory.Create(
             window,
             () => model,
             loaded => model = loaded,
@@ -39,9 +38,10 @@ public sealed class FileLifecycleTests : IDisposable
             loadRecentFilesStore: () => RecentFilesStore.Load(recentStorePath),
             messageService: messages,
             videoEncoderCapability: canEncodeVideo
-                ? new WpfVideoEncoderCapability(true, "ffmpeg.exe", "libx264", "test encoder ready")
-                : WpfVideoEncoderCapability.Unavailable("Test encoder handoff deferred."),
-            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+                ? new LinuxVideoEncoderCapability(true, "ffmpeg.exe", "libx264", false, "test encoder ready")
+                : LinuxVideoEncoderCapability.Unavailable("Test encoder handoff deferred."),
+            nativePrintCapability: PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", "Test printer handoff deferred."),
+            videoFramePackageArtifactFactory: videoFramePackageArtifactFactory);
         return (window, file, () => model, () => changes, messages);
     }
 
@@ -73,9 +73,9 @@ public sealed class FileLifecycleTests : IDisposable
     {
         var (_, file, getModel, _, _) = CreateHarness();
         var path = WritePptx("Deck.pptx", "Opened");
-        file.OpenPath(path).Should().BeTrue();
+        Run(file.OpenPathAsync(path)).Should().BeTrue();
 
-        var proceeded = file.New();
+        var proceeded = Run(file.NewAsync());
 
         proceeded.Should().BeTrue();
         file.IsDirty.Should().BeFalse();
@@ -91,7 +91,7 @@ public sealed class FileLifecycleTests : IDisposable
         messages.NextResult = UserMessageResult.No;
 
         file.MarkDirty();
-        var proceeded = file.New();
+        var proceeded = Run(file.NewAsync());
 
         proceeded.Should().BeTrue();
         file.IsDirty.Should().BeFalse();
@@ -337,6 +337,39 @@ public sealed class FileLifecycleTests : IDisposable
         package.Frames[0].WidthPx.Should().Be(852);
         package.Frames[0].HeightPx.Should().Be(480);
         package.Bytes.Length.Should().BeGreaterThan(100);
+        file.LastVideoFrameImageDiagnostics.Should().BeEmpty();
+    }
+
+    [StaFact]
+    public void BuildVideoFramePackage_InjectedWpfArtifactRetainsImageDiagnostics()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var request = new PresentationVideoExportRequest(
+            Quality: PresentationVideoQualityKind.Standard,
+            SecondsPerSlide: 0.5,
+            IncludeNarration: false);
+        var package = PresentationVideoFramePackageExecutor.BuildPackage(
+            presentation,
+            request,
+            static (_, _, _, _) => [0x89, 0x50, 0x4E, 0x47]);
+        string[] diagnostics = ["Slide 1: injected WPF image diagnostic"];
+        var artifact = new PresentationVideoFramePackageArtifact(package, diagnostics);
+        PresentationVideoExportRequest? receivedRequest = null;
+        var (_, file, _, _, _) = CreateHarness(
+            videoFramePackageArtifactFactory: request =>
+            {
+                receivedRequest = request;
+                return artifact;
+            });
+
+        var result = file.BuildVideoFramePackage(request);
+
+        result.Should().BeSameAs(package);
+        receivedRequest.Should().BeSameAs(request);
+        file.LastVideoFramePackage.Should().BeSameAs(package);
+        file.LastVideoFrameImageDiagnostics.Should().BeSameAs(diagnostics);
+        file.LastVideoExecutionDescriptor!.PackagePlan.Should().BeSameAs(package.Plan);
+        file.LastVideoExportHandoffPlan.Should().BeSameAs(file.LastVideoExecutionDescriptor.HandoffPlan);
     }
 
     [StaFact]
@@ -345,7 +378,7 @@ public sealed class FileLifecycleTests : IDisposable
         var (_, file, getModel, _, _) = CreateHarness();
         var path = WritePptx("Opened.pptx", "Quarterly Review");
 
-        var opened = file.OpenPath(path);
+        var opened = Run(file.OpenPathAsync(path));
 
         opened.Should().BeTrue();
         file.IsDirty.Should().BeFalse();
@@ -360,7 +393,7 @@ public sealed class FileLifecycleTests : IDisposable
         var (_, file, getModel, _, _) = CreateHarness();
         var path = WriteFxp("Legacy.fxp", "Legacy Review");
 
-        var opened = file.OpenPath(path);
+        var opened = Run(file.OpenPathAsync(path));
 
         opened.Should().BeTrue();
         file.IsDirty.Should().BeFalse();
@@ -374,13 +407,13 @@ public sealed class FileLifecycleTests : IDisposable
     {
         var (_, file, getModel, _, _) = CreateHarness();
         var path = WritePptx("Deck.pptx", "Initial");
-        file.OpenPath(path).Should().BeTrue();
+        Run(file.OpenPathAsync(path)).Should().BeTrue();
 
         getModel().Properties.Title = "Updated";
         file.MarkDirty();
         file.IsDirty.Should().BeTrue();
 
-        var saved = file.Save();
+        var saved = Run(file.SaveAsync());
 
         saved.Should().BeTrue();
         file.IsDirty.Should().BeFalse();
@@ -393,13 +426,13 @@ public sealed class FileLifecycleTests : IDisposable
     {
         var (_, file, getModel, _, _) = CreateHarness();
         var path = WriteFxp("Legacy.fxp", "Initial");
-        file.OpenPath(path).Should().BeTrue();
+        Run(file.OpenPathAsync(path)).Should().BeTrue();
 
         getModel().Properties.Title = "Updated Legacy";
         file.MarkDirty();
         file.IsDirty.Should().BeTrue();
 
-        var saved = file.Save();
+        var saved = Run(file.SaveAsync());
 
         saved.Should().BeTrue();
         file.IsDirty.Should().BeFalse();
@@ -412,9 +445,9 @@ public sealed class FileLifecycleTests : IDisposable
     {
         var (_, file, _, _, _) = CreateHarness();
         var path = WritePptx("Clean.pptx", "Clean");
-        file.OpenPath(path).Should().BeTrue();
+        Run(file.OpenPathAsync(path)).Should().BeTrue();
 
-        var saved = file.Save();
+        var saved = Run(file.SaveAsync());
 
         saved.Should().BeTrue();
         file.IsDirty.Should().BeFalse();
@@ -428,7 +461,7 @@ public sealed class FileLifecycleTests : IDisposable
         var path = Path.Combine(_tempDir, "corrupt.pptx");
         File.WriteAllText(path, "this is not a valid pptx");
 
-        var opened = file.OpenPath(path);
+        var opened = Run(file.OpenPathAsync(path));
 
         opened.Should().BeFalse();
         file.IsDirty.Should().BeFalse();
@@ -447,7 +480,7 @@ public sealed class FileLifecycleTests : IDisposable
         var messages = new RecordingUserMessageService { NextResult = UserMessageResult.No };
         var window = new MainWindow(new FreePOptions(), messageService: messages);
 
-        GetFileCommands(window).MarkDirty();
+        GetFileSession(window).MarkDirty();
         window.Close();
 
         messages.Messages.Should().ContainSingle();
@@ -463,7 +496,7 @@ public sealed class FileLifecycleTests : IDisposable
     // path on the command line always opened the hardcoded empty presentation instead. These pin the
     // fix at the MainWindow constructor -- the same seam Program.cs's CreateWindow lambda calls in
     // production (`new MainWindow(options, optionsStore, startupFilePaths: startupFilePaths)`) -- so
-    // they exercise the real production entry point, not just FileCommands.OpenPath in isolation.
+    // they exercise the real production entry point, not just the portable session in isolation.
     [StaFact]
     public void MainWindow_WithStartupFilePath_OpensItInsteadOfTheEmptyPresentation()
     {
@@ -473,8 +506,8 @@ public sealed class FileLifecycleTests : IDisposable
         var window = new MainWindow(new FreePOptions(), messageService: messages, startupFilePaths: [path]);
 
         messages.Messages.Should().BeEmpty();
-        GetFileCommands(window).CurrentPath.Should().Be(path);
-        GetFileCommands(window).IsDirty.Should().BeFalse();
+        GetFileSession(window).CurrentPath.Should().Be(path);
+        GetFileSession(window).IsDirty.Should().BeFalse();
         window.Close();
     }
 
@@ -486,8 +519,8 @@ public sealed class FileLifecycleTests : IDisposable
     {
         var window = new MainWindow(new FreePOptions());
 
-        GetFileCommands(window).CurrentPath.Should().BeNull();
-        GetFileCommands(window).IsDirty.Should().BeFalse();
+        GetFileSession(window).CurrentPath.Should().BeNull();
+        GetFileSession(window).IsDirty.Should().BeFalse();
         window.Close();
     }
 
@@ -502,7 +535,7 @@ public sealed class FileLifecycleTests : IDisposable
 
         var window = new MainWindow(new FreePOptions(), messageService: messages, startupFilePaths: [missingPath]);
 
-        GetFileCommands(window).CurrentPath.Should().BeNull();
+        GetFileSession(window).CurrentPath.Should().BeNull();
         messages.Messages.Should().ContainSingle();
         messages.Messages[0].Message.Should().StartWith("Could not open the presentation:\n");
         window.Close();
@@ -520,7 +553,7 @@ public sealed class FileLifecycleTests : IDisposable
         var window = new MainWindow(
             new FreePOptions(), messageService: messages, startupFilePaths: [unsupportedPath]);
 
-        GetFileCommands(window).CurrentPath.Should().BeNull();
+        GetFileSession(window).CurrentPath.Should().BeNull();
         messages.Messages.Should().ContainSingle();
         messages.Messages[0].Message.Should().StartWith("Could not open the presentation:\n");
         window.Close();
@@ -539,13 +572,16 @@ public sealed class FileLifecycleTests : IDisposable
         return body;
     }
 
-    private static FileCommands GetFileCommands(MainWindow window)
+    private static PresentationFileCommandSession GetFileSession(MainWindow window)
     {
         var field = typeof(MainWindow).GetField(
-            "_file",
+            "_fileSession",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        return (FileCommands)field!.GetValue(window)!;
+        return (PresentationFileCommandSession)field!.GetValue(window)!;
     }
+
+    private static bool Run(Task<PresentationFileCommandResult> command) =>
+        command.GetAwaiter().GetResult().Succeeded;
 
     private string WritePptx(string name, string title)
     {

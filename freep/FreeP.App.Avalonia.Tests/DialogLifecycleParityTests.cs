@@ -90,6 +90,10 @@ public sealed class DialogLifecycleParityTests
             buttons.Single(button => Equals(button.Content, "OK")).IsDefault.Should().BeTrue();
             buttons.Single(button => Equals(button.Content, "Cancel")).IsCancel.Should().BeTrue();
             dialog.InitialState.Should().Be(new SlideShowSettingsState(true, true, false));
+            dialog.GetLogicalDescendants()
+                .OfType<ComboBox>()
+                .Single()
+                .ItemsSource.Should().BeSameAs(SlideShowSettingsDialogSession.ShowTypeOptions);
 
             dialog.ApplyForTests(
                 useSlideTimings: false,
@@ -109,6 +113,8 @@ public sealed class DialogLifecycleParityTests
             editor.Presentation.ShowBrowseScrollbar.Should().BeFalse();
             editor.Presentation.KioskRestartAfterMilliseconds.Should().Be(18_000);
             editor.Presentation.ShowWithNarration.Should().BeFalse();
+            dialog.LastCommitPlan!.Settings.ShowType.Should().Be(PresentationShowType.BrowsedAtKiosk);
+            dialog.LastCommitPlan.Settings.KioskRestartAfterMilliseconds.Should().Be(18_000);
             editor.Presentation.ShowMediaControls.Should().BeFalse();
             editor.Presentation.ShowMasterShapes.Should().BeFalse();
             editor.Undo();
@@ -176,6 +182,32 @@ public sealed class DialogLifecycleParityTests
             shape.TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("dog dog");
             refreshCount.Should().BeGreaterThanOrEqualTo(2);
         }, CancellationToken.None);
+    }
+
+    [Fact]
+    public void FindReplace_renderer_is_a_native_adapter_over_portable_catalog_and_dispatch()
+    {
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            repositoryRoot,
+            "freep",
+            "FreeP.App.Avalonia",
+            "FindReplaceDialog.cs"));
+
+        source.Should().Contain("_session.Surface");
+        source.Should().Contain("AutomationProperties.SetName(");
+        source.Should().Contain("AutomationProperties.SetAutomationId(");
+        source.Should().NotContain("FindReplaceDialogPlanner.BuildSurfacePlan(");
+        source.Should().Contain("_session.Dispatch(");
+        source.Should().Contain("ApplyWorkflowPlan(_session.LastWorkflowPlan)");
+        source.Should().NotContain("_session.Navigate(");
+        source.Should().NotContain("_session.ReplaceCurrent(");
+        source.Should().NotContain("_session.ReplaceAll(");
+        source.Should().NotContain("_editor.");
+        source.Should().NotContain("\"Find what:\"");
+        source.Should().NotContain("\"Replace with:\"");
+        source.Should().NotContain("\"Match case\"");
+        source.Should().NotContain("\"Whole word\"");
     }
 
     [Fact]

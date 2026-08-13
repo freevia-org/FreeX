@@ -89,8 +89,8 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         source.Should().Contain("viewH = Math.Max(viewH, captureRange is null ? 100 : 1)");
         source.Should().Contain("new RenderTargetBitmap(pixelW, pixelH, 96.0, 96.0, PixelFormats.Pbgra32)");
         source.Should().Contain("ctx.PushTransform(new ScaleTransform(scaleX, scaleY))");
-        source.Should().Contain("PivotHeaderDropdownPlanner.BuildTargets");
-        source.Should().Contain("new PivotHeaderDropdownButton(target.HeaderCell, target.IsActive)");
+        source.Should().Contain("PivotGridAdornmentPlanner.BuildHeaderTargets");
+        source.Should().Contain("PivotGridAdornmentPlanner.BuildRowLabelAdornments");
         source.Should().Contain("IsLikelyBlankReferencePng");
         source.Should().Contain("opaqueRatio");
         source.Should().Contain("TrySaveClipboardImageToPng");

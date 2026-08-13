@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
@@ -938,12 +939,10 @@ public partial class GridView
             var currentRect = _objectDragCurrentRect;
 
             var rotationDegrees = _objectRotationPreviewDegrees;
+            var startFlipHorizontal = _objectDragStartFlipHorizontal;
+            var startFlipVertical = _objectDragStartFlipVertical;
             var currentFlipHorizontal = _objectDragCurrentFlipHorizontal;
             var currentFlipVertical = _objectDragCurrentFlipVertical;
-            var flipChanged =
-                currentFlipHorizontal != _objectDragStartFlipHorizontal ||
-                currentFlipVertical != _objectDragStartFlipVertical;
-
             _objectDragKind = ObjectDragKind.None;
             _objectDragCurrentRect = Rect.Empty;
             _objectRotationPreviewDegrees = 0;
@@ -958,38 +957,54 @@ public partial class GridView
             {
                 CommitChartObjectBoundsChange(id, startRect, currentRect);
             }
-            else if (dragKind == ObjectDragKind.Rotate)
-            {
-                ObjectRotated?.Invoke(id, kind, rotationDegrees);
-            }
-            else if (dragKind == ObjectDragKind.Move)
-            {
-                var newAnchor = HitTestAnchorCell(new Point(currentRect.Left, currentRect.Top));
-                if (newAnchor.HasValue && newAnchor.Value != _objectDragStartAnchor)
-                    ObjectMoved?.Invoke(id, kind, newAnchor.Value);
-            }
             else
             {
                 var newWidth  = Math.Max(GridObjectDragPlanner.MinimumObjectSize, currentRect.Width);
                 var newHeight = Math.Max(GridObjectDragPlanner.MinimumObjectSize, currentRect.Height);
-                var resized =
-                    Math.Abs(newWidth - startRect.Width) > 1 ||
-                    Math.Abs(newHeight - startRect.Height) > 1;
-                var boundsMoved =
-                    Math.Abs(currentRect.Left - startRect.Left) > 1 ||
-                    Math.Abs(currentRect.Top - startRect.Top) > 1;
+                var newAnchor = dragKind == ObjectDragKind.Rotate
+                    ? null
+                    : HitTestAnchorCell(new Point(currentRect.Left, currentRect.Top));
+                var plan = GridObjectDragPlanner.PlanCommit(
+                    dragKind,
+                    startRect,
+                    currentRect,
+                    _objectDragStartAnchor,
+                    newAnchor,
+                    newWidth,
+                    newHeight,
+                    rotationDegrees,
+                    startFlipHorizontal,
+                    startFlipVertical,
+                    currentFlipHorizontal,
+                    currentFlipVertical);
 
-                if ((resized || boundsMoved || flipChanged) && boundsMoved)
+                switch (plan.Kind)
                 {
-                    var newAnchor = HitTestAnchorCell(new Point(currentRect.Left, currentRect.Top));
-                    if (newAnchor.HasValue)
-                        ObjectResizedWithAnchor?.Invoke(id, kind, newAnchor.Value, newWidth, newHeight, currentFlipHorizontal, currentFlipVertical);
-                    else
-                        ObjectResized?.Invoke(id, kind, newWidth, newHeight, currentFlipHorizontal, currentFlipVertical);
-                }
-                else if (resized || flipChanged)
-                {
-                    ObjectResized?.Invoke(id, kind, newWidth, newHeight, currentFlipHorizontal, currentFlipVertical);
+                    case ObjectDragCommitKind.Move:
+                        ObjectMoved?.Invoke(id, kind, plan.Anchor!.Value);
+                        break;
+                    case ObjectDragCommitKind.ResizeWithAnchor:
+                        ObjectResizedWithAnchor?.Invoke(
+                            id,
+                            kind,
+                            plan.Anchor!.Value,
+                            plan.Width,
+                            plan.Height,
+                            plan.FlipHorizontal,
+                            plan.FlipVertical);
+                        break;
+                    case ObjectDragCommitKind.Resize:
+                        ObjectResized?.Invoke(
+                            id,
+                            kind,
+                            plan.Width,
+                            plan.Height,
+                            plan.FlipHorizontal,
+                            plan.FlipVertical);
+                        break;
+                    case ObjectDragCommitKind.Rotate:
+                        ObjectRotated?.Invoke(id, kind, plan.RotationDegrees);
+                        break;
                 }
             }
 

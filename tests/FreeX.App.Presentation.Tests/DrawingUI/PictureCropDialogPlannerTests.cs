@@ -1,6 +1,7 @@
 using System.Globalization;
 using FluentAssertions;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Tests.DrawingUI;
@@ -106,5 +107,18 @@ public sealed class PictureCropDialogPlannerTests
         ok.Should().BeFalse();
         result.Should().BeNull();
         error.Should().Be(PictureCropDialogPlanner.InvalidPercentMessage);
+    }
+
+    [Fact]
+    public void BuildCommand_MapsValidatedCropAndResetToCoreCommands()
+    {
+        var sheetId = SheetId.New();
+        var pictureId = Guid.NewGuid();
+        var crop = new PictureCropDialogPlanner.CropResult(0.1, 0.2, 0.3, 0.05);
+
+        PictureCropDialogPlanner.BuildCommand(sheetId, pictureId, crop)
+            .Should().BeOfType<SetPictureCropCommand>();
+        PictureCropDialogPlanner.BuildResetCommand(sheetId, pictureId)
+            .Should().BeOfType<SetPictureCropCommand>();
     }
 }

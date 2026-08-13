@@ -13,28 +13,35 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class ChartDialogTests
 {
     [Fact]
-    public void ChartTypeFormatDialogResults_DelegateProjectionToSharedEditingPlanners()
+    public void ChartTypeFormatDialogs_ReturnSharedEditingContracts()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartTypeFormatDialogs.cs");
 
         source.Should().Contain("ChartBarFormatPlanner.Read(chart)");
-        source.Should().Contain("ChartBarFormatPlanner.Normalize(input)");
+        source.Should().Contain("public ChartBarFormatInput Result { get; private set; }");
+        source.Should().NotContain("public static ChartBarFormatInput CreateResult(");
         source.Should().Contain("ChartBarFormatPlanner.TryParseDialogInput(");
-        source.Should().Contain("ChartBarFormatPlanner.Plan(ToInput())");
         source.Should().Contain("ChartPieFormatPlanner.Read(chart)");
-        source.Should().Contain("ChartPieFormatPlanner.Normalize(input)");
+        source.Should().Contain("public ChartPieFormatInput Result { get; private set; }");
+        source.Should().NotContain("public static ChartPieFormatInput CreateResult(");
         source.Should().Contain("ChartPieFormatPlanner.TryParseDialogInput(");
         source.Should().Contain("ChartPieFormatPlanner.ToDisplayPercent(");
-        source.Should().Contain("ChartPieFormatPlanner.Plan(ToInput())");
         source.Should().Contain("ChartBubbleFormatPlanner.Read(chart)");
-        source.Should().Contain("ChartBubbleFormatPlanner.Normalize(input)");
+        source.Should().Contain("public ChartBubbleFormatInput Result { get; private set; }");
+        source.Should().NotContain("public static ChartBubbleFormatInput CreateResult(");
         source.Should().Contain("ChartBubbleFormatPlanner.TryParseDialogInput(");
-        source.Should().Contain("ChartBubbleFormatPlanner.Plan(ToInput())");
         source.Should().Contain("ChartStockFormatPlanner.Read(chart)");
-        source.Should().Contain("ChartStockFormatPlanner.Normalize(input)");
+        source.Should().Contain("public ChartStockFormatInput Result { get; private set; }");
+        source.Should().NotContain("public static ChartStockFormatInput CreateResult(");
         source.Should().Contain("ChartStockFormatPlanner.TryParseDialogInput(");
-        source.Should().Contain("ChartStockFormatPlanner.Plan(ToInput())");
         source.Should().Contain("ChartBubbleFormatPlanner.GetSizeRepresentsChoices()");
+        source.Should().NotContain("FormatDialogResult");
+        source.Should().NotContain("ToInput()");
+        source.Should().NotContain("FromInput(");
+        source.Should().NotContain("public static ChartBarFormatInput FromChart(");
+        source.Should().NotContain("public static ChartPieFormatInput FromChart(");
+        source.Should().NotContain("public static ChartBubbleFormatInput FromChart(");
+        source.Should().NotContain("public static ChartStockFormatInput FromChart(");
 
         source.Should().NotContain("chart.BarGapWidth ?? 150");
         source.Should().NotContain("chart.UpDownBarGapWidth ?? 150");
@@ -50,102 +57,104 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void ChartBarFormatDialogResult_ClampsGapWidthTo0To500()
+    public void ChartBarFormatInput_ClampsGapWidthTo0To500()
     {
-        ChartBarFormatDialogResult.CreateResult(-10, 0).BarGapWidth.Should().Be(0);
-        ChartBarFormatDialogResult.CreateResult(600, 0).BarGapWidth.Should().Be(500);
-        ChartBarFormatDialogResult.CreateResult(150, 0).BarGapWidth.Should().Be(150);
-        ChartBarFormatDialogResult.CreateResult(0, 0).BarGapWidth.Should().Be(0);
+        ChartBarFormatPlanner.Normalize(new ChartBarFormatInput(-10, 0)).BarGapWidth.Should().Be(0);
+        ChartBarFormatPlanner.Normalize(new ChartBarFormatInput(600, 0)).BarGapWidth.Should().Be(500);
+        ChartBarFormatPlanner.Normalize(new ChartBarFormatInput(150, 0)).BarGapWidth.Should().Be(150);
+        ChartBarFormatPlanner.Normalize(new ChartBarFormatInput(0, 0)).BarGapWidth.Should().Be(0);
     }
 
     [Fact]
-    public void ChartBarFormatDialogResult_ClampsOverlapToMinus100To100()
+    public void ChartBarFormatInput_ClampsOverlapToMinus100To100()
     {
-        ChartBarFormatDialogResult.CreateResult(150, -200).BarOverlap.Should().Be(-100);
-        ChartBarFormatDialogResult.CreateResult(150, 200).BarOverlap.Should().Be(100);
-        ChartBarFormatDialogResult.CreateResult(150, 50).BarOverlap.Should().Be(50);
-        ChartBarFormatDialogResult.CreateResult(150, -50).BarOverlap.Should().Be(-50);
+        ChartBarFormatPlanner.Normalize(new ChartBarFormatInput(150, -200)).BarOverlap.Should().Be(-100);
+        ChartBarFormatPlanner.Normalize(new ChartBarFormatInput(150, 200)).BarOverlap.Should().Be(100);
+        ChartBarFormatPlanner.Normalize(new ChartBarFormatInput(150, 50)).BarOverlap.Should().Be(50);
+        ChartBarFormatPlanner.Normalize(new ChartBarFormatInput(150, -50)).BarOverlap.Should().Be(-50);
     }
 
     [Fact]
-    public void ChartBarFormatDialogResult_LoadsFromChart()
+    public void ChartBarFormatInput_LoadsFromChart()
     {
         var chart = new ChartModel { Type = ChartType.Column, BarGapWidth = 200, BarOverlap = 30 };
-        var result = ChartBarFormatDialogResult.FromChart(chart);
+        var result = ChartBarFormatPlanner.Read(chart);
         result.BarGapWidth.Should().Be(200);
         result.BarOverlap.Should().Be(30);
     }
 
     [Fact]
-    public void ChartBarFormatDialogResult_UsesDefaultsWhenChartHasNoGapWidth()
+    public void ChartBarFormatInput_UsesDefaultsWhenChartHasNoGapWidth()
     {
         var chart = new ChartModel { Type = ChartType.Column };
-        var result = ChartBarFormatDialogResult.FromChart(chart);
+        var result = ChartBarFormatPlanner.Read(chart);
         result.BarGapWidth.Should().Be(150);
         result.BarOverlap.Should().Be(0);
     }
 
     [Fact]
-    public void ChartBarFormatDialogResult_MapsToLayoutOptions()
+    public void ChartBarFormatInput_MapsToLayoutOptions()
     {
-        var result = ChartBarFormatDialogResult.CreateResult(200, 30);
-        result.ToOptions().BarGapWidth.Should().Be(200);
-        result.ToOptions().BarOverlap.Should().Be(30);
+        var result = ChartBarFormatPlanner.Normalize(new ChartBarFormatInput(200, 30));
+        var options = ChartBarFormatPlanner.Plan(result);
+        options.BarGapWidth.Should().Be(200);
+        options.BarOverlap.Should().Be(30);
     }
 
     [Fact]
-    public void ChartBubbleFormatDialogResult_ClampsBubbleScaleTo1To300()
+    public void ChartBubbleFormatInput_ClampsBubbleScaleTo1To300()
     {
-        ChartBubbleFormatDialogResult.CreateResult(0, false, ChartBubbleSizeRepresents.Area).BubbleScale.Should().Be(1);
-        ChartBubbleFormatDialogResult.CreateResult(400, false, ChartBubbleSizeRepresents.Area).BubbleScale.Should().Be(300);
-        ChartBubbleFormatDialogResult.CreateResult(100, false, ChartBubbleSizeRepresents.Area).BubbleScale.Should().Be(100);
+        ChartBubbleFormatPlanner.Normalize(new ChartBubbleFormatInput(0, false, ChartBubbleSizeRepresents.Area)).BubbleScale.Should().Be(1);
+        ChartBubbleFormatPlanner.Normalize(new ChartBubbleFormatInput(400, false, ChartBubbleSizeRepresents.Area)).BubbleScale.Should().Be(300);
+        ChartBubbleFormatPlanner.Normalize(new ChartBubbleFormatInput(100, false, ChartBubbleSizeRepresents.Area)).BubbleScale.Should().Be(100);
     }
 
     [Fact]
-    public void ChartBubbleFormatDialogResult_LoadsFromChart()
+    public void ChartBubbleFormatInput_LoadsFromChart()
     {
         var chart = new ChartModel { Type = ChartType.Bubble, BubbleScale = 150, ShowNegativeBubbles = true, BubbleSizeRepresents = ChartBubbleSizeRepresents.Width };
-        var result = ChartBubbleFormatDialogResult.FromChart(chart);
+        var result = ChartBubbleFormatPlanner.Read(chart);
         result.BubbleScale.Should().Be(150);
         result.ShowNegativeBubbles.Should().BeTrue();
         result.BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
     }
 
     [Fact]
-    public void ChartBubbleFormatDialogResult_MapsToLayoutOptions()
+    public void ChartBubbleFormatInput_MapsToLayoutOptions()
     {
-        var result = ChartBubbleFormatDialogResult.CreateResult(150, true, ChartBubbleSizeRepresents.Width);
-        result.ToOptions().BubbleScale.Should().Be(150);
-        result.ToOptions().ShowNegativeBubbles.Should().BeTrue();
-        result.ToOptions().BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
+        var result = ChartBubbleFormatPlanner.Normalize(new ChartBubbleFormatInput(150, true, ChartBubbleSizeRepresents.Width));
+        var options = ChartBubbleFormatPlanner.Plan(result);
+        options.BubbleScale.Should().Be(150);
+        options.ShowNegativeBubbles.Should().BeTrue();
+        options.BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
     }
 
     [Fact]
-    public void ChartPieFormatDialogResult_ClampsFirstSliceAngleTo0To359()
+    public void ChartPieFormatInput_ClampsFirstSliceAngleTo0To359()
     {
-        ChartPieFormatDialogResult.CreateResult(-10, -1, 0.1, 0.55).FirstSliceAngle.Should().Be(0);
-        ChartPieFormatDialogResult.CreateResult(400, -1, 0.1, 0.55).FirstSliceAngle.Should().Be(359);
-        ChartPieFormatDialogResult.CreateResult(180, -1, 0.1, 0.55).FirstSliceAngle.Should().Be(180);
+        ChartPieFormatPlanner.Normalize(new ChartPieFormatInput(-10, -1, 0.1, 0.55)).FirstSliceAngle.Should().Be(0);
+        ChartPieFormatPlanner.Normalize(new ChartPieFormatInput(400, -1, 0.1, 0.55)).FirstSliceAngle.Should().Be(359);
+        ChartPieFormatPlanner.Normalize(new ChartPieFormatInput(180, -1, 0.1, 0.55)).FirstSliceAngle.Should().Be(180);
     }
 
     [Fact]
-    public void ChartPieFormatDialogResult_ClampsExplodedSliceDistanceTo0To50Percent()
+    public void ChartPieFormatInput_ClampsExplodedSliceDistanceTo0To50Percent()
     {
-        ChartPieFormatDialogResult.CreateResult(0, 0, -0.1, 0.55).ExplodedSliceDistance.Should().Be(0);
-        ChartPieFormatDialogResult.CreateResult(0, 0, 0.8, 0.55).ExplodedSliceDistance.Should().Be(0.5);
-        ChartPieFormatDialogResult.CreateResult(0, 0, 0.25, 0.55).ExplodedSliceDistance.Should().BeApproximately(0.25, 0.0001);
+        ChartPieFormatPlanner.Normalize(new ChartPieFormatInput(0, 0, -0.1, 0.55)).ExplodedSliceDistance.Should().Be(0);
+        ChartPieFormatPlanner.Normalize(new ChartPieFormatInput(0, 0, 0.8, 0.55)).ExplodedSliceDistance.Should().Be(0.5);
+        ChartPieFormatPlanner.Normalize(new ChartPieFormatInput(0, 0, 0.25, 0.55)).ExplodedSliceDistance.Should().BeApproximately(0.25, 0.0001);
     }
 
     [Fact]
-    public void ChartPieFormatDialogResult_ClampsDoughnutHoleSizeTo10To90Percent()
+    public void ChartPieFormatInput_ClampsDoughnutHoleSizeTo10To90Percent()
     {
-        ChartPieFormatDialogResult.CreateResult(0, -1, 0.1, 0.05).DoughnutHoleSize.Should().Be(0.1);
-        ChartPieFormatDialogResult.CreateResult(0, -1, 0.1, 0.95).DoughnutHoleSize.Should().Be(0.9);
-        ChartPieFormatDialogResult.CreateResult(0, -1, 0.1, 0.75).DoughnutHoleSize.Should().BeApproximately(0.75, 0.0001);
+        ChartPieFormatPlanner.Normalize(new ChartPieFormatInput(0, -1, 0.1, 0.05)).DoughnutHoleSize.Should().Be(0.1);
+        ChartPieFormatPlanner.Normalize(new ChartPieFormatInput(0, -1, 0.1, 0.95)).DoughnutHoleSize.Should().Be(0.9);
+        ChartPieFormatPlanner.Normalize(new ChartPieFormatInput(0, -1, 0.1, 0.75)).DoughnutHoleSize.Should().BeApproximately(0.75, 0.0001);
     }
 
     [Fact]
-    public void ChartPieFormatDialogResult_LoadsFromChart()
+    public void ChartPieFormatInput_LoadsFromChart()
     {
         var chart = new ChartModel
         {
@@ -155,7 +164,7 @@ public sealed partial class ChartDialogTests
             ExplodedSliceDistance = 0.2,
             DoughnutHoleSize = 0.6
         };
-        var result = ChartPieFormatDialogResult.FromChart(chart);
+        var result = ChartPieFormatPlanner.Read(chart);
         result.FirstSliceAngle.Should().Be(45);
         result.ExplodedSliceIndex.Should().Be(2);
         result.ExplodedSliceDistance.Should().BeApproximately(0.2, 0.0001);
@@ -163,33 +172,34 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void ChartPieFormatDialogResult_MapsToLayoutOptions()
+    public void ChartPieFormatInput_MapsToLayoutOptions()
     {
-        var result = ChartPieFormatDialogResult.CreateResult(90, 1, 0.3, 0.7);
-        result.ToOptions().FirstSliceAngle.Should().Be(90);
-        result.ToOptions().ExplodedSliceIndex.Should().Be(1);
-        result.ToOptions().ExplodedSliceDistance.Should().BeApproximately(0.3, 0.0001);
-        result.ToOptions().DoughnutHoleSize.Should().BeApproximately(0.7, 0.0001);
+        var result = ChartPieFormatPlanner.Normalize(new ChartPieFormatInput(90, 1, 0.3, 0.7));
+        var options = ChartPieFormatPlanner.Plan(result);
+        options.FirstSliceAngle.Should().Be(90);
+        options.ExplodedSliceIndex.Should().Be(1);
+        options.ExplodedSliceDistance.Should().BeApproximately(0.3, 0.0001);
+        options.DoughnutHoleSize.Should().BeApproximately(0.7, 0.0001);
     }
 
     [Fact]
-    public void ChartStockFormatDialogResult_ClampsUpDownBarGapWidthTo0To500()
+    public void ChartStockFormatInput_ClampsUpDownBarGapWidthTo0To500()
     {
-        ChartStockFormatDialogResult.CreateResult(-5, null, null, null, null, null, 1.0).UpDownBarGapWidth.Should().Be(0);
-        ChartStockFormatDialogResult.CreateResult(600, null, null, null, null, null, 1.0).UpDownBarGapWidth.Should().Be(500);
-        ChartStockFormatDialogResult.CreateResult(150, null, null, null, null, null, 1.0).UpDownBarGapWidth.Should().Be(150);
+        ChartStockFormatPlanner.Normalize(new ChartStockFormatInput(-5, null, null, null, null, null, 1.0)).UpDownBarGapWidth.Should().Be(0);
+        ChartStockFormatPlanner.Normalize(new ChartStockFormatInput(600, null, null, null, null, null, 1.0)).UpDownBarGapWidth.Should().Be(500);
+        ChartStockFormatPlanner.Normalize(new ChartStockFormatInput(150, null, null, null, null, null, 1.0)).UpDownBarGapWidth.Should().Be(150);
     }
 
     [Fact]
-    public void ChartStockFormatDialogResult_ClampsHighLowLineThicknessTo05To10()
+    public void ChartStockFormatInput_ClampsHighLowLineThicknessTo05To10()
     {
-        ChartStockFormatDialogResult.CreateResult(150, null, null, null, null, null, 0.1).HighLowLineThickness.Should().BeApproximately(0.5, 0.001);
-        ChartStockFormatDialogResult.CreateResult(150, null, null, null, null, null, 20.0).HighLowLineThickness.Should().BeApproximately(10.0, 0.001);
-        ChartStockFormatDialogResult.CreateResult(150, null, null, null, null, null, 1.5).HighLowLineThickness.Should().BeApproximately(1.5, 0.001);
+        ChartStockFormatPlanner.Normalize(new ChartStockFormatInput(150, null, null, null, null, null, 0.1)).HighLowLineThickness.Should().BeApproximately(0.5, 0.001);
+        ChartStockFormatPlanner.Normalize(new ChartStockFormatInput(150, null, null, null, null, null, 20.0)).HighLowLineThickness.Should().BeApproximately(10.0, 0.001);
+        ChartStockFormatPlanner.Normalize(new ChartStockFormatInput(150, null, null, null, null, null, 1.5)).HighLowLineThickness.Should().BeApproximately(1.5, 0.001);
     }
 
     [Fact]
-    public void ChartStockFormatDialogResult_LoadsFromChart()
+    public void ChartStockFormatInput_LoadsFromChart()
     {
         var chart = new ChartModel
         {
@@ -200,7 +210,7 @@ public sealed partial class ChartDialogTests
             HighLowLineColor = new CellColor(100, 100, 100),
             HighLowLineThickness = 2.0
         };
-        var result = ChartStockFormatDialogResult.FromChart(chart);
+        var result = ChartStockFormatPlanner.Read(chart);
         result.UpDownBarGapWidth.Should().Be(200);
         result.UpBarFillColor.Should().Be(new CellColor(0, 128, 0));
         result.DownBarFillColor.Should().Be(new CellColor(255, 0, 0));
@@ -209,19 +219,20 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void ChartStockFormatDialogResult_MapsToLayoutOptions()
+    public void ChartStockFormatInput_MapsToLayoutOptions()
     {
-        var result = ChartStockFormatDialogResult.CreateResult(
+        var result = ChartStockFormatPlanner.Normalize(new ChartStockFormatInput(
             150, new CellColor(0, 200, 0), new CellColor(0, 100, 0),
             new CellColor(200, 0, 0), new CellColor(100, 0, 0),
-            new CellColor(80, 80, 80), 1.5);
-        result.ToOptions().UpDownBarGapWidth.Should().Be(150);
-        result.ToOptions().UpBarFillColor.Should().Be(new CellColor(0, 200, 0));
-        result.ToOptions().UpBarBorderColor.Should().Be(new CellColor(0, 100, 0));
-        result.ToOptions().DownBarFillColor.Should().Be(new CellColor(200, 0, 0));
-        result.ToOptions().DownBarBorderColor.Should().Be(new CellColor(100, 0, 0));
-        result.ToOptions().HighLowLineColor.Should().Be(new CellColor(80, 80, 80));
-        result.ToOptions().HighLowLineThickness.Should().BeApproximately(1.5, 0.001);
+            new CellColor(80, 80, 80), 1.5));
+        var options = ChartStockFormatPlanner.Plan(result);
+        options.UpDownBarGapWidth.Should().Be(150);
+        options.UpBarFillColor.Should().Be(new CellColor(0, 200, 0));
+        options.UpBarBorderColor.Should().Be(new CellColor(0, 100, 0));
+        options.DownBarFillColor.Should().Be(new CellColor(200, 0, 0));
+        options.DownBarBorderColor.Should().Be(new CellColor(100, 0, 0));
+        options.HighLowLineColor.Should().Be(new CellColor(80, 80, 80));
+        options.HighLowLineThickness.Should().BeApproximately(1.5, 0.001);
     }
 
 }

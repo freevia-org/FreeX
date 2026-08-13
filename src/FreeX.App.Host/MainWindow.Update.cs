@@ -1,4 +1,5 @@
 using System.Windows;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services.Updates;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,13 +35,8 @@ public partial class MainWindow
         var updates = App.Services.GetService<IUpdateService>();
         if (updates is null) return;
 
-        var versionText = string.IsNullOrWhiteSpace(_stagedUpdateVersion) ? "" : $" {_stagedUpdateVersion}";
-        var choice = ShowOwnedMessage(
-            UiText.Format("MainWindowMessage_UpdateReadyToInstallFormat", versionText),
-            UiText.Get("MainWindowMessage_UpdateFreeXTitle"),
-            MessageBoxButton.OKCancel,
-            MessageBoxImage.Information);
-        if (choice == MessageBoxResult.OK)
+        var plan = FreeXSynchronousPromptCatalog.ForUpdateReady(_stagedUpdateVersion);
+        if (plan.ShouldApply(ShowOwnedSynchronousPrompt(plan.Confirmation)))
             updates.ApplyAndRestart();
     }
 }

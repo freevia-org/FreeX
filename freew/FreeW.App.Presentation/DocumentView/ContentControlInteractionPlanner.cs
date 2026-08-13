@@ -53,16 +53,6 @@ public static class ContentControlInteractionPlanner
         CultureInfo? culture = null) =>
         date.ToString(DateFormatOrDefault(dateFormat), culture ?? CultureInfo.CurrentCulture);
 
-    public static ContentControlChromePlan BuildChromePlan(Run run)
-    {
-        var control = run.Control;
-        return new ContentControlChromePlan(
-            control is null ? string.Empty : Tooltip(control),
-            control is null ? run.Text : DisplayText(run),
-            control is not null && IsInteractive(control),
-            control is null ? [] : Choices(control));
-    }
-
     public static bool CanEditExistingContentControl(
         Run run,
         RestrictEditingEnforcementPolicy protectionPolicy) =>

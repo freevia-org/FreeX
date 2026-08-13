@@ -159,38 +159,6 @@ internal sealed class CrossPageSelection
         return sb.ToString();
     }
 
-    /// <summary>
-    /// Returns XamlPackage bytes representing the selected content in document order.
-    /// Each spanned box contributes its selection range; ranges are concatenated via
-    /// in-memory DataObject serialisation.  Returns null when the selection is not active.
-    /// </summary>
-    internal string? GetSelectedXaml(IReadOnlyList<PageBox> boxes)
-    {
-        if (!IsActive || AnchorPointer is null || ActivePointer is null)
-            return null;
-
-        var (startBox, startPtr, endBox, endPtr) = NormalizeDirection(boxes);
-        var sb = new System.Text.StringBuilder();
-
-        for (int i = startBox; i <= endBox; i++)
-        {
-            var box = boxes[i];
-            TextPointer from = (i == startBox) ? startPtr : box.Body.Document.ContentStart;
-            TextPointer to   = (i == endBox)   ? endPtr   : box.Body.Document.ContentEnd;
-
-            try
-            {
-                var range = new TextRange(from, to);
-                sb.Append(range.Text);
-                if (i < endBox)
-                    sb.AppendLine();
-            }
-            catch { /* ignore */ }
-        }
-
-        return sb.ToString();
-    }
-
     // ── internal rendering helpers ────────────────────────────────────────────────────────────────
 
     /// <summary>

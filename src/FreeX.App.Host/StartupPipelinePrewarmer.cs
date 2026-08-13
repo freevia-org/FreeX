@@ -22,7 +22,7 @@ namespace FreeX.App.Host;
 /// so it can never touch the application's live workbook or services, and any failure is swallowed —
 /// prewarming is a latency optimization, never a correctness dependency.</para>
 /// </summary>
-internal static class StartupPipelinePrewarmer
+internal static partial class StartupPipelinePrewarmer
 {
     private static int _started;
 
@@ -50,12 +50,6 @@ internal static class StartupPipelinePrewarmer
             }
         });
     }
-
-    /// <summary>
-    /// Runs the prewarm synchronously and lets failures surface.  Test-only entry point used to
-    /// guard against a silent regression that would turn the optimization into a no-op.
-    /// </summary>
-    internal static void RunPrewarmForTests() => Prewarm();
 
     private static void Prewarm()
     {

@@ -15,6 +15,11 @@ public enum PrintWhat
     Selection
 }
 
+public enum PrintDialogFocusTarget
+{
+    ConfirmAction
+}
+
 public sealed record PrintPreviewSettings(
     bool IgnorePrintArea = false,
     int Copies = 1,
@@ -38,6 +43,9 @@ public sealed record PrintSettingsTextResolver(
 
 public static class PrintSettingsPlanner
 {
+    public static PrintDialogFocusTarget InitialDialogFocusTarget =>
+        PrintDialogFocusTarget.ConfirmAction;
+
     public static PrintSettingsPlan Build(
         Sheet sheet,
         bool ignorePrintArea = false,

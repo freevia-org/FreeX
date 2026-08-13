@@ -1,6 +1,7 @@
 using Avalonia.Controls.Documents;
 using Avalonia.Media;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -50,11 +51,24 @@ internal static class CellRichTextInlinesBuilder
         InlineCollection inlines,
         Func<CellColor, IBrush> brushFactory)
     {
-        foreach (var run in runs)
+        var segments = CellTextMaterializationPlanner.MaterializeRuns(
+            string.Empty,
+            runs,
+            CellRichTextMaterializationMode.NativeRunText);
+        Build(segments, inlines, brushFactory);
+    }
+
+    public static void Build(
+        IReadOnlyList<CellTextRunMaterializationSegment> segments,
+        InlineCollection inlines,
+        Func<CellColor, IBrush> brushFactory)
+    {
+        foreach (var segment in segments)
         {
+            var run = segment.Run;
             var inline = new Run
             {
-                Text              = run.Text,
+                Text              = segment.Text,
                 FontSize          = run.RenderedFontSize,
                 FontWeight        = run.Bold    ? FontWeight.Bold   : FontWeight.Normal,
                 FontStyle         = run.Italic  ? FontStyle.Italic  : FontStyle.Normal,

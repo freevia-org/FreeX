@@ -7,8 +7,7 @@ namespace FreeX.App.Host.Tests;
 
 // Ribbon-focused UI test lane: extra harness helpers shared by the RibbonLane.* test files.
 // These reuse the offscreen MainWindow + ribbon-tree queries already defined on MainWindowHarness,
-// adding tab enumeration, adaptive/fallback diagnostics passthrough, a faithful live-resize-drag
-// simulation, and per-step resize timing.
+// adding tab enumeration, a faithful live-resize-drag simulation, and per-step resize timing.
 public sealed partial class MainWindowAdaptiveRibbonTests
 {
     // The non-contextual ribbon tabs the declarative model renders content for. "File" is the backstage
@@ -37,9 +36,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             .GetMethod("NormalizeRibbonSurfaceAfterResize", BindingFlags.Instance | BindingFlags.NonPublic, [])
             ?? throw new MissingMethodException(nameof(MainWindow), "NormalizeRibbonSurfaceAfterResize");
 
-        private static readonly MethodInfo CompleteRibbonResizeCompactionMethod = typeof(MainWindow)
-            .GetMethod("CompleteRibbonResizeCompaction", BindingFlags.Instance | BindingFlags.NonPublic, [])
-            ?? throw new MissingMethodException(nameof(MainWindow), "CompleteRibbonResizeCompaction");
+        private static readonly MethodInfo CompleteRibbonResizeLayoutMethod = typeof(MainWindow)
+            .GetMethod("CompleteRibbonResizeLayout", BindingFlags.Instance | BindingFlags.NonPublic, [])
+            ?? throw new MissingMethodException(nameof(MainWindow), "CompleteRibbonResizeLayout");
 
         // Headers of every selectable, currently-visible ribbon tab except the File backstage.
         public IReadOnlyList<string> SelectableRibbonTabHeaders =>
@@ -61,9 +60,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public int ActiveRibbonGroupCount => ActiveRibbonGroupNames.Count;
 
-        // Counts the rendered group containers in the selected tab. Unlike ActiveRibbonGroupNames (which
-        // keys off the legacy StackPanel surface), this walks for RibbonGroupHost — the declarative
-        // renderer's group container — so it works for every tab, including non-Home and contextual tabs.
+        // Counts the rendered group containers in the selected tab. Unlike ActiveRibbonGroupNames, this
+        // walks RibbonGroupHost directly, so it works for every tab, including contextual tabs.
         public int SelectedTabGroupHostCount =>
             WpfTestTree.FindVisualSelfAndDescendants<RibbonGroupHost>(SelectedRibbonContentRoot).Count();
 
@@ -90,9 +88,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             }
         }
 
-        // Counts the command controls currently shown (expanded) in the selected tab — visible buttons
-        // that are not the single collapsed-group overflow button. Robust for the declarative ribbon,
-        // unlike VisibleRibbonCommandLabels which depends on the legacy label-extraction path.
+        // Counts the command controls currently shown (expanded) in the selected tab: visible buttons
+        // that are not the single collapsed-group overflow button.
         // Count of visible command buttons in the selected tab that are disabled (greyed). Used to verify
         // the Help tab's commands bind to live handlers instead of rendering disabled.
         public int SelectedTabDisabledCommandButtonCount =>
@@ -115,21 +112,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .Where(IsEffectivelyVisible)
                 .Count(button => !RibbonMetadata.IsCollapsedGroupButton(button));
 
-        public RibbonAdaptiveDiagnosticsSnapshot AdaptiveDiagnostics =>
-            _window.GetRibbonAdaptiveDiagnosticsForTests();
-
-        public RibbonFallbackDiagnosticsSnapshot FallbackDiagnostics =>
-            _window.GetRibbonFallbackDiagnosticsForTests();
-
-        public void ResetRibbonDiagnostics()
-        {
-            _window.ResetRibbonAdaptiveDiagnosticsForTests();
-            _window.ResetRibbonFallbackDiagnosticsForTests();
-        }
-
-        // Sets the window width WITHOUT forcing a compaction pass — the layout is left to react through
-        // the real SizeChanged -> NormalizeRibbonSurfaceAfterResize path, exactly as it does at runtime.
-        // (SetRibbonWidth, by contrast, force-compacts and so would mask realtime/deferral behavior.)
+        // Sets the window width without forcing a synchronous pass. The shared panel reacts through the
+        // real SizeChanged -> NormalizeRibbonSurfaceAfterResize path, exactly as it does at runtime.
         public void SetWindowWidthThroughResizePath(double width)
         {
             _window.WindowState = WindowState.Normal;
@@ -140,7 +124,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         // Faithful simulation of a user dragging the window edge: WM_ENTERSIZEMOVE sets the move-loop
         // flag, each mouse move resizes the window (the OS raises SizeChanged), WM_EXITSIZEMOVE clears
-        // the flag and completes any deferred compaction. Width/UpdateLayout raises SizeChanged
+        // the flag and completes the shared panel layout. Width/UpdateLayout raises SizeChanged
         // synchronously, so the same NormalizeRibbonSurfaceAfterResize handler runs as in production.
         public void BeginSimulatedResizeDrag() => InWindowResizeMoveLoopField.SetValue(_window, true);
 
@@ -156,7 +140,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         public void EndSimulatedResizeDrag()
         {
             InWindowResizeMoveLoopField.SetValue(_window, false);
-            CompleteRibbonResizeCompactionMethod.Invoke(_window, null);
+            CompleteRibbonResizeLayoutMethod.Invoke(_window, null);
             _window.UpdateLayout();
             PumpDispatcher();
             PumpDispatcher();
@@ -164,16 +148,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public bool CanUseRequestedWidth(double width) => _window.ActualWidth >= width - 1;
 
-        // Forces one adaptive-compaction pass at the current width (same call the resize path makes),
-        // used by perf guards to count how much layout work a redundant resize tick does.
-        public void ForceRibbonCompaction()
-        {
-            _updateRibbonCompactMode.Invoke(_window, [true]);
-            PumpDispatcher();
-        }
-
-        // Drives the window across widths through the real resize path (no forced compaction), as a live
-        // drag would, letting the threshold gate and measurement caches behave exactly as in production.
+        // Drives the window across widths through the real resize path, as a live drag would, letting the
+        // shared adaptive panel remeasure exactly as it does in production.
         public void ResizeThroughResizePath(IReadOnlyList<double> widths)
         {
             foreach (var width in widths)

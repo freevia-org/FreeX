@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -65,7 +64,7 @@ public sealed class R79_InsertDeleteCellsWholeRowColumnRoutingTests
                 new CellAddress(sheet.Id, CellAddress.MaxRow, 5));
             window.Session.SelectRange(wholeColumnE);
 
-            await InvokePrivateAsync(window, "ShowInsertCellsDialogAsync");
+            await window.ShowInsertCellsDialogForTestAsync();
 
             window.StatusTextForTest.Text.Should().Be("Inserted columns",
                 "a whole-column selection must route to InsertColumnsCommand and succeed, not be " +
@@ -108,7 +107,7 @@ public sealed class R79_InsertDeleteCellsWholeRowColumnRoutingTests
                 new CellAddress(sheet.Id, CellAddress.MaxRow, 5));
             window.Session.SelectRange(wholeColumnE);
 
-            await InvokePrivateAsync(window, "ShowDeleteCellsDialogAsync");
+            await window.ShowDeleteCellsDialogForTestAsync();
 
             window.StatusTextForTest.Text.Should().Be("Deleted columns",
                 "a whole-column selection must route to DeleteColumnsCommand and succeed, not be " +
@@ -147,7 +146,7 @@ public sealed class R79_InsertDeleteCellsWholeRowColumnRoutingTests
                 new CellAddress(sheet.Id, 5, CellAddress.MaxCol));
             window.Session.SelectRange(wholeRow5);
 
-            await InvokePrivateAsync(window, "ShowInsertCellsDialogAsync");
+            await window.ShowInsertCellsDialogForTestAsync();
 
             window.StatusTextForTest.Text.Should().Be("Inserted rows",
                 "a whole-row selection must route to InsertRowsCommand and succeed");
@@ -178,7 +177,7 @@ public sealed class R79_InsertDeleteCellsWholeRowColumnRoutingTests
                 new CellAddress(sheet.Id, 5, CellAddress.MaxCol));
             window.Session.SelectRange(wholeRow5);
 
-            await InvokePrivateAsync(window, "ShowDeleteCellsDialogAsync");
+            await window.ShowDeleteCellsDialogForTestAsync();
 
             window.StatusTextForTest.Text.Should().Be("Deleted rows",
                 "a whole-row selection must route to DeleteRowsCommand and succeed");
@@ -193,12 +192,4 @@ public sealed class R79_InsertDeleteCellsWholeRowColumnRoutingTests
         }, CancellationToken.None);
     }
 
-    private static async Task InvokePrivateAsync(MainWindow window, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        var task = (Task)method.Invoke(window, null)!;
-        await task;
-    }
 }

@@ -5,14 +5,66 @@ namespace FreeX.Core.IO.Tests;
 public sealed class ToolHarnessDedupSourceTests
 {
     [Fact]
+    public void GeneratedEvidenceTools_UseNeutralSharedRunner()
+    {
+        var runner = TestWorkspaceFiles.ReadRepoText(
+            "tools", "Free.ToolsShared", "GeneratedEvidenceToolRunner.cs");
+        var programs = new[]
+        {
+            TestWorkspaceFiles.ReadRepoText("tools", "FreeP.KeyboardContextEvidence", "Program.cs"),
+            TestWorkspaceFiles.ReadRepoText("tools", "FreeP.RandomTransitionEvidence", "Program.cs"),
+            TestWorkspaceFiles.ReadRepoText("tools", "FreeW.BackstageParityEvidence", "Program.cs"),
+        };
+
+        runner.Should().Contain("public static int Run(");
+        runner.Should().Contain("Generated evidence is stale:");
+        runner.Should().Contain("new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)");
+        programs.Should().OnlyContain(program =>
+            program.Contains("GeneratedEvidenceToolRunner.Run(", StringComparison.Ordinal) &&
+            !program.Contains("string? GetOption(", StringComparison.Ordinal) &&
+            !program.Contains("static string FindRepositoryRoot(", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ToolRepositoryRootDiscovery_UsesNeutralSharedLocator()
+    {
+        var locator = TestWorkspaceFiles.ReadRepoText(
+            "tools", "Free.ToolsShared", "RepositoryRootLocator.cs");
+        var runner = TestWorkspaceFiles.ReadRepoText(
+            "tools", "Free.ToolsShared", "GeneratedEvidenceToolRunner.cs");
+        var freePProgram = TestWorkspaceFiles.ReadRepoText(
+            "tools", "FreeP.RenderSlideshowMediaParityEvidence", "Program.cs");
+        var parityOptions = TestWorkspaceFiles.ReadRepoText(
+            "tools", "FreeX.ParityCompare", "CliOptions.cs");
+        var parityProgram = TestWorkspaceFiles.ReadRepoText(
+            "tools", "FreeX.ParityCompare", "Program.cs");
+        var smartArtEvidence = TestWorkspaceFiles.ReadRepoText(
+            "tools", "FreeP.RenderCompare.Tests", "SmartArtFixtureEvidenceTests.cs");
+
+        locator.Should().Contain("public static string? Find(string startDirectory, string marker)");
+        runner.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, spec.RepositoryMarker)");
+        freePProgram.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, \"FreeP.slnx\")");
+        parityProgram.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, \"FreeX.slnx\")");
+        smartArtEvidence.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, \"FreeX.slnx\")");
+        runner.Should().NotContain("private static string FindRepositoryRoot(");
+        freePProgram.Should().NotContain("static string FindRoot()");
+        parityOptions.Should().NotContain("class RepoLocator");
+        smartArtEvidence.Should().NotContain("new DirectoryInfo(");
+        smartArtEvidence.Should().NotContain("FindRepositoryRoot()");
+    }
+
+    [Fact]
     public void FormatHarnesses_UseSharedFileNameSanitizer()
     {
-        var sanitizer = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ToolsShared", "ToolFileNameSanitizer.cs");
+        var sanitizer = TestWorkspaceFiles.ReadRepoText("tools", "Free.ToolsShared", "ToolFileNameSanitizer.cs");
         var chainRunner = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.FormatFidelity", "ChainRunner.cs");
         var crossCheckRunner = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.FormatCrossCheck", "CrossCheckRunner.cs");
         var chartExamples = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelExamplesCharts", "Program.cs");
 
         sanitizer.Should().Contain("ReplaceNonAlphaNumericWithUnderscore");
+        chainRunner.Should().Contain("using Free.ToolsShared;");
+        crossCheckRunner.Should().Contain("using Free.ToolsShared;");
+        chartExamples.Should().Contain("using Free.ToolsShared;");
         chainRunner.Should().Contain("ToolFileNameSanitizer.ReplaceNonAlphaNumericWithUnderscore(chain.Name)");
         crossCheckRunner.Should().Contain(
             "ToolFileNameSanitizer.ReplaceNonAlphaNumericWithUnderscore(Path.GetFileNameWithoutExtension(sourcePath))");

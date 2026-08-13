@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Free.Shared.Ribbon;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -16,7 +17,7 @@ public sealed class CommandParityCropTableToTextTests
     [Fact]
     public void AvaloniaRibbon_ExposesCropAndTableToTextInWpfEquivalentGroups()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
 
         definition.FindTab("picture-format")!.FindGroup("picture-adjust")!.Controls
             .Select(CommandId)
@@ -49,9 +50,13 @@ public sealed class CommandParityCropTableToTextTests
             editor.Measure(new Size(800, 1200));
             var callbacks = NoopCallbacks() with
             {
-                OpenImageCropDialog = () => editor.SetSelectedImageCrop(0.1, 0.2, 0.15, 0.05),
+                ShowImageCropDialogAsync = selected =>
+                {
+                    selected.Should().BeSameAs(image);
+                    return ValueTask.FromResult<ImageCropDialogResult?>(new(0.1, 0.2, 0.15, 0.05));
+                },
             };
-            var registry = FreeWRibbon.BuildRegistry(editor, callbacks);
+            var registry = FreeWAvaloniaRibbonCommands.Build(editor, callbacks);
             var command = Stateful(registry, "freew.image-crop");
             command.GetState().IsEnabled.Should().BeFalse();
 
@@ -86,9 +91,9 @@ public sealed class CommandParityCropTableToTextTests
             editor.Measure(new Size(800, 1200));
             var callbacks = NoopCallbacks() with
             {
-                OpenTableToTextDialog = () => editor.ConvertTableToText(';'),
+                ShowTableToTextDialogAsync = () => ValueTask.FromResult<char?>(';'),
             };
-            var registry = FreeWRibbon.BuildRegistry(editor, callbacks);
+            var registry = FreeWAvaloniaRibbonCommands.Build(editor, callbacks);
             var command = Stateful(registry, "freew.table-to-text");
             command.GetState().IsEnabled.Should().BeFalse();
 
@@ -128,7 +133,7 @@ public sealed class CommandParityCropTableToTextTests
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { },
             Save: () => { },

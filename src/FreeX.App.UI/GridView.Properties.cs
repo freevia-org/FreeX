@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Model;
 
@@ -400,11 +401,11 @@ public partial class GridView
     }
 
     public static readonly DependencyProperty PivotHeaderDropdownsProperty =
-        DependencyProperty.Register(nameof(PivotHeaderDropdowns), typeof(IReadOnlyList<PivotHeaderDropdownButton>), typeof(GridView),
+        DependencyProperty.Register(nameof(PivotHeaderDropdowns), typeof(IReadOnlyList<PivotHeaderDropdownTarget>), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
-    public IReadOnlyList<PivotHeaderDropdownButton>? PivotHeaderDropdowns
+    public IReadOnlyList<PivotHeaderDropdownTarget>? PivotHeaderDropdowns
     {
-        get => (IReadOnlyList<PivotHeaderDropdownButton>?)GetValue(PivotHeaderDropdownsProperty);
+        get => (IReadOnlyList<PivotHeaderDropdownTarget>?)GetValue(PivotHeaderDropdownsProperty);
         set => SetValue(PivotHeaderDropdownsProperty, value);
     }
 

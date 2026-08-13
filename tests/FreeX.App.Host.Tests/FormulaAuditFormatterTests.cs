@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.FormulaAuditing;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;

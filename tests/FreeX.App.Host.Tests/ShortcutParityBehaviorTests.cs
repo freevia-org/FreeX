@@ -328,14 +328,14 @@ public sealed class ShortcutParityBehaviorTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.EditingDropdowns.cs");
 
         source.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
-        source.Should().Contain("AutoFilterMenuResources.TextProvider");
+        source.Should().Contain("WpfResourceKeyTextResolver.Resources.AutoFilter");
         source.Should().Contain("new AutoFilterDialog(menuPlan)");
     }
 
     [Fact]
     public void AutoFilterDropdownMenuPlanner_SupportsCriteriaSuggestionsAndFilterFamilySubmenus()
     {
-        var hostResourcesSource = DialogSourceTestSupport.ReadHostSources("AutoFilterMenuResources.cs");
+        var hostResourcesSource = DialogSourceTestSupport.ReadPresentationSources("Localization", "FreeXPlannerTextResources.cs");
         var plannerSource = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Presentation", "Filtering", "AutoFilterDropdownMenuPlanner.cs");
         var menuModelSource = WorkspaceFileLocator.ReadAllText(
@@ -355,9 +355,12 @@ public sealed class ShortcutParityBehaviorTests
     public void DataFilterCommands_UsesFilterPromptPlannerForTopBottomAverageAndCriterionFilters()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
+        var workflowSource = DialogSourceTestSupport.ReadPresentationSources(
+            "Filtering", "WorksheetFilterWorkflowSession.cs");
 
-        source.Should().Contain("FilterPromptPlanner.TryPlan");
-        source.Should().Contain("promptPlan.CreateCommand");
+        source.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
+        workflowSource.Should().Contain("FilterPromptPlanner.TryPlan");
+        workflowSource.Should().Contain("promptPlan.CreateCommand");
     }
 
     // --- Ctrl+Q (Quick Analysis) ---
@@ -613,12 +616,12 @@ public sealed class ShortcutParityBehaviorTests
     }
 
     [Fact]
-    public void RepeatLastAction_RoutesToCommandBusRepeatLastWithSelectionTracking()
+    public void RepeatLastAction_RoutesToWorkbookSessionWithSelectionTracking()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CommandExecution.cs");
 
         source.Should().Contain("ExecuteRepeatLast");
-        source.Should().Contain("_commandBus.RepeatLast");
+        source.Should().Contain("_session.RepeatLastAction()");
     }
 
     [Fact]
@@ -680,19 +683,19 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void RibbonKeyTipMode_ClosesOnEscape()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RibbonKeyTipMode.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
 
-        // Escape exits keytip mode
-        source.Should().ContainAny("Escape", "escape", "Key.Escape");
+        source.Should().Contain("_ribbonKeyTipSession.HandleEscape()");
+        source.Should().Contain("ExitRibbonKeyTipMode()");
     }
 
     [Fact]
     public void RibbonKeytipRouter_SupportsTopLevelTabsAndBackstageFile()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RibbonTopLevelKeyTipRouter.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs", "MainWindow.KeyTips.cs");
 
-        source.Should().Contain("BackstageFile");
-        source.Should().Contain("RibbonTab");
+        source.Should().Contain("FreeXRibbonKeyTipRoutePlanner.ResolveTopLevel");
+        source.Should().Contain("FreeXRibbonKeyTipRoutePlanner.HasLongerTopLevelKeyTipPrefix");
     }
 
     [Fact]

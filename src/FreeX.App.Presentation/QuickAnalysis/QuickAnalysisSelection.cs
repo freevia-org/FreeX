@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.App.Presentation.GridInteraction;
 
 namespace FreeX.App.Presentation.QuickAnalysis;
 
@@ -39,6 +40,21 @@ public sealed record QuickAnalysisSelectionDescription(
     bool HasHeaderRow,
     IReadOnlyList<QuickAnalysisColumnKind> ColumnKinds)
 {
+    /// <summary>
+    /// Populated when the selection is wholly contained by a structured table. The shared model uses
+    /// this to avoid offering conversion to a table that already owns the selected cells.
+    /// </summary>
+    public StructuredTableSelectionContext? StructuredTableContext { get; init; }
+
+    /// <summary>
+    /// Overrides heuristic row counting when a structured table has an explicit data body. Header and
+    /// totals rows are table chrome, not analysis data.
+    /// </summary>
+    public uint? DataRowCountOverride { get; init; }
+
+    /// <summary>True when any selected cell overlaps an existing structured table.</summary>
+    public bool OverlapsStructuredTable { get; init; }
+
     /// <summary>Number of rows in the selection (including any header row).</summary>
     public uint RowCount => Range.RowCount;
 
@@ -46,7 +62,14 @@ public sealed record QuickAnalysisSelectionDescription(
     public uint ColCount => Range.ColCount;
 
     /// <summary>Number of data rows, excluding the header row when present.</summary>
-    public uint DataRowCount => HasHeaderRow && RowCount > 0 ? RowCount - 1 : RowCount;
+    public uint DataRowCount =>
+        DataRowCountOverride ?? (HasHeaderRow && RowCount > 0 ? RowCount - 1 : RowCount);
+
+    /// <summary>True when the selected cells already belong to a structured table.</summary>
+    public bool IsStructuredTableSelection => StructuredTableContext is not null;
+
+    /// <summary>True when totals or sparklines can be placed immediately to the right.</summary>
+    public bool CanWriteAdjacentColumn => Range.End.Col < CellAddress.MaxCol;
 
     /// <summary>True when the selection is a single cell, which offers no suggestions.</summary>
     public bool IsSingleCell => RowCount == 1 && ColCount == 1;

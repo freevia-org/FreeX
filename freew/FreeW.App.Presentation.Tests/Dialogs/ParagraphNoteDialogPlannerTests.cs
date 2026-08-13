@@ -8,12 +8,22 @@ public sealed class ParagraphNoteDialogPlannerTests
     [Fact]
     public void FootnoteEndnoteOptions_ExposeOneCrossHostLayoutPolicy()
     {
+        var surface = FootnoteEndnoteOptionsDialogPlanner.Surface;
+
         FootnoteEndnoteOptionsDialogPlanner.DialogWidth.Should().Be(380);
         FootnoteEndnoteOptionsDialogPlanner.OuterMargin.Should().Be(14);
         FootnoteEndnoteOptionsDialogPlanner.FieldVerticalMargin.Should().Be(4);
         FootnoteEndnoteOptionsDialogPlanner.LabelFieldGap.Should().Be(8);
         FootnoteEndnoteOptionsDialogPlanner.ButtonWidth.Should().Be(72);
         FootnoteEndnoteOptionsDialogPlanner.StartAtMinWidth.Should().Be(60);
+        surface.Sections.Select(section => section.Kind)
+            .Should().Equal(FootnoteEndnoteNoteKind.Footnote, FootnoteEndnoteNoteKind.Endnote);
+        surface.Sections.Should().OnlyContain(section =>
+            section.Fields.Select(field => field.Kind).SequenceEqual(Enum.GetValues<FootnoteEndnoteFieldKind>()));
+        surface.Sections.SelectMany(section => section.Fields).Select(field => field.AutomationId)
+            .Should().OnlyHaveUniqueItems();
+        surface.Section(FootnoteEndnoteNoteKind.Endnote).StartAtValidationField
+            .Should().Be(FootnoteEndnoteOptionsDialogField.EndnoteStartAt);
     }
 
     [Fact]
@@ -53,6 +63,9 @@ public sealed class ParagraphNoteDialogPlannerTests
         state.EndnoteFormatIndex.Should().Be(4);
         state.EndnoteStartAtText.Should().Be("12");
         state.EndnoteRestartIndex.Should().Be(1);
+        state.FormatIndex(FootnoteEndnoteNoteKind.Footnote).Should().Be(1);
+        state.StartAtText(FootnoteEndnoteNoteKind.Endnote).Should().Be("12");
+        state.RestartIndex(FootnoteEndnoteNoteKind.Endnote).Should().Be(1);
     }
 
     [Fact]

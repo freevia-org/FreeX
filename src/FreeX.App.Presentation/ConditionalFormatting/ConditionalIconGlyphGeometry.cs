@@ -119,6 +119,12 @@ public readonly record struct CfGlyphOp(
         new(CfGlyphPrimitiveKind.StarFillFraction, CfGlyphFill.Icon, CfGlyphStroke.Outline, points, RadiusX: fillFraction);
 }
 
+public readonly record struct CfStarFillPlan(
+    IReadOnlyList<LayoutPoint> Points,
+    LayoutRect ClipRect,
+    bool ShouldFill,
+    bool RequiresClip);
+
 /// <summary>
 /// Toolkit-neutral geometry emitter for conditional-format icon-set glyphs. Given the glyph kind
 /// (resolved by <see cref="ConditionalIconGlyphResolver"/>), the bucket index/count and the target
@@ -128,6 +134,34 @@ public readonly record struct CfGlyphOp(
 /// </summary>
 public static class ConditionalIconGlyphGeometry
 {
+    public static CfStarFillPlan PlanStarFill(CfGlyphOp op)
+    {
+        if (op.Kind != CfGlyphPrimitiveKind.StarFillFraction)
+            throw new ArgumentException("The glyph operation must be a partial-fill star.", nameof(op));
+        if (op.Points.Count == 0)
+            throw new ArgumentException("The partial-fill star must contain points.", nameof(op));
+
+        var minX = op.Points[0].X;
+        var maxX = minX;
+        var minY = op.Points[0].Y;
+        var maxY = minY;
+        for (var index = 1; index < op.Points.Count; index++)
+        {
+            var point = op.Points[index];
+            minX = Math.Min(minX, point.X);
+            maxX = Math.Max(maxX, point.X);
+            minY = Math.Min(minY, point.Y);
+            maxY = Math.Max(maxY, point.Y);
+        }
+
+        var fillFraction = Math.Clamp(op.RadiusX, 0d, 1d);
+        return new CfStarFillPlan(
+            op.Points,
+            new LayoutRect(minX, minY, (maxX - minX) * fillFraction, maxY - minY),
+            ShouldFill: fillFraction > 0d,
+            RequiresClip: fillFraction < 1d);
+    }
+
     /// <summary>
     /// Build the ordered primitive ops for a glyph. <paramref name="x"/>/<paramref name="y"/>/
     /// <paramref name="width"/>/<paramref name="height"/> describe the target rect; ops are emitted in

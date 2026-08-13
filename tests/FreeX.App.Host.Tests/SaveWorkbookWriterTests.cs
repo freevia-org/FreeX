@@ -6,7 +6,7 @@ using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed class SaveWorkbookWriterTests
+public sealed class WorkbookSaveServiceTests
 {
     [Fact]
     public void FormatSavingFileDetail_ChangesEveryThreeSeconds()
@@ -42,18 +42,20 @@ public sealed class SaveWorkbookWriterTests
             using var writer = new StreamWriter(stream, leaveOpen: true);
             writer.Write("saved payload");
         });
-        var progressUpdates = new List<SaveProgressUpdate>();
-        var saver = new SaveWorkbookWriter();
+        var progressUpdates = new List<WorkbookSaveProgressUpdate>();
+        var saver = new WorkbookSaveService();
 
         await saver.SaveAsync(
             tempPath,
             adapter,
             workbook,
-            new TestProgress<SaveProgressUpdate>(progressUpdates.Add));
+            new TestProgress<WorkbookSaveProgressUpdate>(progressUpdates.Add));
 
         (await File.ReadAllTextAsync(tempPath)).Should().Be("saved payload");
-        progressUpdates.Should().Contain(update => update.Detail.StartsWith("Saving file (serializing)", StringComparison.Ordinal));
-        progressUpdates.Should().Contain(update => update.Detail.StartsWith("Saving file (writing)", StringComparison.Ordinal));
+        progressUpdates.Should().Contain(update => WorkbookProgressTextFormatter
+            .FormatSave(update, UiText.Get).Detail.StartsWith("Saving file (serializing)", StringComparison.Ordinal));
+        progressUpdates.Should().Contain(update => WorkbookProgressTextFormatter
+            .FormatSave(update, UiText.Get).Detail.StartsWith("Saving file (writing)", StringComparison.Ordinal));
         progressUpdates.Should().Contain(update => update.Percent == 99);
         progressUpdates.Should().Contain(update => update.Percent == 100);
     }
@@ -67,13 +69,13 @@ public sealed class SaveWorkbookWriterTests
         var workbook = new Workbook("Saved");
         workbook.AddSheet("Sheet1");
         var adapter = new TestFileAdapter(save: (_, _) => throw new InvalidOperationException("boom"));
-        var saver = new SaveWorkbookWriter();
+        var saver = new WorkbookSaveService();
 
         var act = async () => await saver.SaveAsync(
             tempPath,
             adapter,
             workbook,
-            new TestProgress<SaveProgressUpdate>(_ => { }));
+            new TestProgress<WorkbookSaveProgressUpdate>(_ => { }));
 
         await act.Should().ThrowAsync<InvalidOperationException>();
         (await File.ReadAllTextAsync(tempPath)).Should().Be("original");
@@ -88,7 +90,7 @@ public sealed class SaveWorkbookWriterTests
         workbook.AddSheet("Sheet1");
         var adapterInvoked = false;
         var adapter = new TestFileAdapter(save: (_, _) => adapterInvoked = true);
-        var saver = new SaveWorkbookWriter();
+        var saver = new WorkbookSaveService();
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
@@ -96,7 +98,7 @@ public sealed class SaveWorkbookWriterTests
             tempPath,
             adapter,
             workbook,
-            new TestProgress<SaveProgressUpdate>(_ => { }),
+            new TestProgress<WorkbookSaveProgressUpdate>(_ => { }),
             cancellation.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();

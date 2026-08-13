@@ -19,10 +19,10 @@ public sealed class GridViewPageLayoutTests
             WorksheetPageOrientation.Portrait,
             WorksheetPageMargins.Normal);
 
-        handles.Left.Should().Be(new Rect(130 - 4, 18 - 14, 8, 12));
-        handles.Right.Should().Be(new Rect(780 - 4, 18 - 14, 8, 12));
-        handles.Top.Should().Be(new Rect(30 - 14, 118 - 4, 12, 8));
-        handles.Bottom.Should().Be(new Rect(30 - 14, 1018 - 4, 12, 8));
+        handles.Left.Should().Be(new Rect(100 - 4, 18 - 14, 8, 12));
+        handles.Right.Should().Be(new Rect(810 - 4, 18 - 14, 8, 12));
+        handles.Top.Should().Be(new Rect(30 - 14, 93 - 4, 12, 8));
+        handles.Bottom.Should().Be(new Rect(30 - 14, 1043 - 4, 12, 8));
     }
 
     [Fact]

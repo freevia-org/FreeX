@@ -24,14 +24,14 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class R68_PasteDestinationCaptureOrderTests
 {
     private const string PasteClipboardTextAsyncSignature = "private async Task PasteClipboardTextAsync()";
-    private const string TryPasteClipboardImageAsyncSignature = "private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)";
+    private const string TryPasteClipboardImageAsyncSignature = "private async Task<bool> TryPasteClipboardImageAsync()";
 
     [Fact]
     public void PasteClipboardTextAsync_CapturesDestination_AfterTheHtmlAwait_NotBeforeIt()
     {
         var body = ExtractMethodBody(PasteClipboardTextAsyncSignature);
 
-        var htmlAwaitIndex = body.IndexOf("await TryGetClipboardHtmlAsync(clipboard)", StringComparison.Ordinal);
+        var htmlAwaitIndex = body.IndexOf("await TryGetClipboardHtmlAsync()", StringComparison.Ordinal);
         var destinationCaptureIndex = body.IndexOf("var destination = _session.ActiveCell;", StringComparison.Ordinal);
         var pasteCallIndex = body.IndexOf("_session.PasteClipboardTextAtActiveCell(", StringComparison.Ordinal);
 
@@ -61,13 +61,13 @@ public sealed class R68_PasteDestinationCaptureOrderTests
     [Fact]
     public void TryPasteClipboardImageAsync_CapturesDestination_AfterTheBitmapAwait_NotBeforeIt()
     {
-        // ExtractMethodBody itself only matches the NEW single-parameter signature (ending in
-        // "clipboard)") -- the OLD signature ended in ", CellAddress destination)", so this whole
+        // ExtractMethodBody itself only matches the NEW parameterless signature -- the OLD signature
+        // accepted a clipboard and destination, so this whole
         // test fails at signature-lookup before the fix, proving the destination PARAMETER (the
         // caller used to capture it before awaiting the bitmap read) was removed.
         var body = ExtractMethodBody(TryPasteClipboardImageAsyncSignature);
 
-        var bitmapAwaitIndex = body.IndexOf("await clipboard.TryGetBitmapAsync()", StringComparison.Ordinal);
+        var bitmapAwaitIndex = body.IndexOf("await _platformClipboard.ReadImageAsync()", StringComparison.Ordinal);
         var destinationCaptureIndex = body.IndexOf("var destination = _session.ActiveCell;", StringComparison.Ordinal);
         var pasteCallIndex = body.IndexOf("_session.PasteClipboardImageAtActiveCell(", StringComparison.Ordinal);
 
@@ -89,8 +89,8 @@ public sealed class R68_PasteDestinationCaptureOrderTests
 
         // Both call sites must compile against the new (destination-less) signature.
         var source = MainWindowSource();
-        source.Should().Contain("await TryPasteClipboardImageAsync(clipboard))");
-        source.Should().Contain("return await TryPasteClipboardImageAsync(clipboard);");
+        source.Should().Contain("await TryPasteClipboardImageAsync())");
+        source.Should().Contain("return await TryPasteClipboardImageAsync();");
     }
 
     private static string ExtractMethodBody(string signature)
@@ -123,15 +123,6 @@ public sealed class R68_PasteDestinationCaptureOrderTests
 
     private static string MainWindowSource() => File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

@@ -21,17 +21,26 @@ public sealed class DesignDialogParityTests
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogParity.cs"));
         source.Should().Contain("CustomizeThemeColorsDialogPlanner.BuildInitialState(current)");
         source.Should().Contain("CustomizeThemeColorsDialogPlanner.TryBuildResult(");
-        source.Should().Contain("CustomizeThemeFontsDialogPlanner.BuildInitialState(current)");
-        source.Should().Contain("CustomizeThemeFontsDialogPlanner.TryBuildResult(");
+        source.Should().Contain("CustomizeThemeFontsDialogPlanner.CreateSession(current)");
+        source.Should().Contain("_session.PlanAcceptance(");
+        source.Should().Contain("acceptance.FocusField == CustomizeThemeFontsDialogField.BodyFont");
+        source.Should().NotContain("CustomizeThemeFontsDialogPlanner.BuildInitialState(");
+        source.Should().NotContain("CustomizeThemeFontsDialogPlanner.TryBuildResult(");
         source.Should().Contain("PageColorDialogPlanner.TryBuildResult(");
         source.Should().Contain("SetAsDefaultConfirmationPlanner.BuildState()");
 
         var spacingSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "PageLayoutDialogs.cs"));
-        spacingSource.Should().Contain("CustomParagraphSpacingDialogPlanner.BuildInitialState(current, DialogCulture)");
-        spacingSource.Should().Contain("CustomParagraphSpacingDialogPlanner.TryBuildResult(");
+        spacingSource.Should().Contain("CustomParagraphSpacingDialogSession");
+        spacingSource.Should().Contain("_session.PlanAcceptance(");
+        spacingSource.Should().NotContain("CustomParagraphSpacingDialogPlanner.BuildInitialState(");
+        spacingSource.Should().NotContain("CustomParagraphSpacingDialogPlanner.TryBuildResult(");
 
         var borderSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogs.cs"));
-        borderSource.Should().Contain("BordersAndShadingDialogPlanner.TryBuildResult(");
+        borderSource.Should().Contain("BordersAndShadingDialogPlanner.BuildPageBordersInitialState(");
+        borderSource.Should().Contain("BordersAndShadingDialogPlanner.SubmitPageBorders(");
+        borderSource.Should().Contain("new PageBordersDialogInput(");
+        borderSource.Should().NotContain("new BordersAndShadingDialogInput(");
+        borderSource.Should().NotContain("private static int ColorIndex(");
         borderSource.Should().Contain("BordersAndShadingDialogPlanner.ArtBorders");
 
         var styleSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "StyleDialog.cs"));
@@ -193,17 +202,6 @@ public sealed class DesignDialogParityTests
         }, CancellationToken.None);
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var directory = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(directory))
-        {
-            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-            directory = Directory.GetParent(directory)?.FullName;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

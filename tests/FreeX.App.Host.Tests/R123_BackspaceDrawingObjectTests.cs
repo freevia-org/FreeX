@@ -58,7 +58,7 @@ public sealed class R123_BackspaceDrawingObjectTests
                 var sheet = workbook.GetSheetAt(0);
                 // The cell that was active BEFORE the drawing object was clicked (e.g. the default
                 // A1 on a freshly opened sheet) -- clicking the picture never moves it.
-                var activeCell = new CellAddress(sheet.Id, 0, 0);
+                var activeCell = new CellAddress(sheet.Id, 1, 1);
                 sheet.SetCell(activeCell, new NumberValue(42));
                 var picture = new PictureModel
                 {

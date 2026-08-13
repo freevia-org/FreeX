@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Media;
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -18,10 +19,6 @@ namespace FreeX.App.Avalonia;
 internal static class CellPatternFill
 {
     // ── Tile size (DIPs) — matches WPF step=6 for lines, step=8 for diagonals ──────────────────
-    private const double LineTileSize     = 6.0;   // horizontal/vertical hatch period
-    private const double DiagonalTileSize = 8.0;   // diagonal hatch period
-    private const double PenWidth         = 0.75;  // matches WPF FillPatternPenForCellColor
-
     // ── Public API ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -30,34 +27,23 @@ internal static class CellPatternFill
     /// </summary>
     public static bool NeedsPatternBrush(CellStyle? style) =>
         style is not null &&
-        style.FillPatternStyle is not CellFillPatternStyle.None and not CellFillPatternStyle.Solid;
+        CellFillPatternPlanner.Plan(style.FillPatternStyle).Kind != CellFillPatternPlanKind.None;
 
     /// <summary>
     /// Returns <see langword="true"/> when the pattern is one of the five gray-density styles
     /// (Gray0625 … DarkGray) that are rendered as a semi-transparent rectangle rather than a
     /// line hatch.
     /// </summary>
-    public static bool IsGrayPattern(CellFillPatternStyle style) => style
-        is CellFillPatternStyle.Gray0625
-        or CellFillPatternStyle.Gray125
-        or CellFillPatternStyle.LightGray
-        or CellFillPatternStyle.MediumGray
-        or CellFillPatternStyle.DarkGray;
+    public static bool IsGrayPattern(CellFillPatternStyle style) =>
+        CellFillPatternPlanner.Plan(style).Kind == CellFillPatternPlanKind.Opacity;
 
     /// <summary>
     /// Returns the fill opacity (0.0–1.0) for a gray-density pattern.
     /// Matches WPF: Gray0625=12%, Gray125=18%, LightGray=28%, MediumGray=45%, DarkGray=62%.
     /// Returns 0 for non-gray patterns.
     /// </summary>
-    public static double GrayPatternOpacity(CellFillPatternStyle style) => style switch
-    {
-        CellFillPatternStyle.Gray0625   => 0.12,
-        CellFillPatternStyle.Gray125    => 0.18,
-        CellFillPatternStyle.LightGray  => 0.28,
-        CellFillPatternStyle.MediumGray => 0.45,
-        CellFillPatternStyle.DarkGray   => 0.62,
-        _                               => 0.0,
-    };
+    public static double GrayPatternOpacity(CellFillPatternStyle style) =>
+        CellFillPatternPlanner.Plan(style).Opacity;
 
     /// <summary>
     /// Builds a compositing <see cref="IBrush"/> for the pattern portion of a cell fill.
@@ -68,71 +54,64 @@ internal static class CellPatternFill
     /// </summary>
     public static IBrush? Build(CellStyle? style, WorkbookTheme theme)
     {
-        if (!NeedsPatternBrush(style))
+        var fillPlan = CellFillMaterializationPlanner.Plan(
+            style,
+            theme,
+            CellFillMaterializationProfile.Avalonia,
+            CellFillFallbackKind.Transparent);
+        return Build(fillPlan);
+    }
+
+    public static IBrush? Build(CellFillMaterializationPlan fillPlan)
+    {
+        var patternPlan = fillPlan.Pattern;
+        if (patternPlan.Kind == CellFillPatternPlanKind.None || fillPlan.PatternColor is not { } patternColor)
             return null;
 
-        var patternColor = style!.ResolveFillPatternColor(theme) ?? CellColor.Black;
         var fgColor      = Color.FromRgb(patternColor.R, patternColor.G, patternColor.B);
 
-        if (IsGrayPattern(style.FillPatternStyle))
+        if (patternPlan.Kind == CellFillPatternPlanKind.Opacity)
         {
             // Semi-transparent rectangle — same visual as WPF dc.DrawRectangle with alpha brush.
-            var opacity = GrayPatternOpacity(style.FillPatternStyle);
-            return new SolidColorBrush(fgColor, opacity);
+            return new SolidColorBrush(fgColor, patternPlan.Opacity);
         }
 
         // Line/cross-hatch patterns — build a tiling DrawingBrush.
-        return BuildHatchBrush(style.FillPatternStyle, fgColor);
+        return BuildHatchBrush(patternPlan, fgColor);
     }
 
     // ── Hatch DrawingBrush construction ───────────────────────────────────────────────────────────
 
-    private static DrawingBrush BuildHatchBrush(CellFillPatternStyle patternStyle, Color fgColor)
+    private static DrawingBrush BuildHatchBrush(CellFillPatternPlan patternPlan, Color fgColor)
     {
-        var pen  = new Pen(new SolidColorBrush(fgColor), PenWidth);
-        var size = patternStyle is
-            CellFillPatternStyle.LightDown or CellFillPatternStyle.DarkDown or
-            CellFillPatternStyle.LightUp   or CellFillPatternStyle.DarkUp   or
-            CellFillPatternStyle.LightTrellis or CellFillPatternStyle.DarkTrellis
-            ? DiagonalTileSize : LineTileSize;
+        var pen  = new Pen(new SolidColorBrush(fgColor), patternPlan.StrokeThickness);
+        var size = patternPlan.TileSize;
 
         var group = new DrawingGroup();
 
-        switch (patternStyle)
+        foreach (var line in patternPlan.Lines)
         {
-            case CellFillPatternStyle.LightHorizontal:
-            case CellFillPatternStyle.DarkHorizontal:
+            switch (line)
+            {
+            case CellFillPatternLinePrimitive.Horizontal:
                 AddHorizontalLine(group, pen, size);
                 break;
 
-            case CellFillPatternStyle.LightVertical:
-            case CellFillPatternStyle.DarkVertical:
+            case CellFillPatternLinePrimitive.Vertical:
                 AddVerticalLine(group, pen, size);
                 break;
 
-            case CellFillPatternStyle.LightGrid:
-            case CellFillPatternStyle.DarkGrid:
-                AddHorizontalLine(group, pen, size);
-                AddVerticalLine(group, pen, size);
-                break;
-
-            case CellFillPatternStyle.LightDown:
-            case CellFillPatternStyle.DarkDown:
+            case CellFillPatternLinePrimitive.DescendingDiagonal:
                 // Descending diagonal: top-left → bottom-right.
                 AddDiagonalLine(group, pen, size, descending: true);
                 break;
 
-            case CellFillPatternStyle.LightUp:
-            case CellFillPatternStyle.DarkUp:
+            case CellFillPatternLinePrimitive.AscendingDiagonal:
                 // Ascending diagonal: bottom-left → top-right.
                 AddDiagonalLine(group, pen, size, descending: false);
                 break;
 
-            case CellFillPatternStyle.LightTrellis:
-            case CellFillPatternStyle.DarkTrellis:
-                AddDiagonalLine(group, pen, size, descending: true);
-                AddDiagonalLine(group, pen, size, descending: false);
-                break;
+            }
         }
 
         return new DrawingBrush(group)

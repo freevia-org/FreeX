@@ -1,4 +1,4 @@
-using System.Globalization;
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -80,16 +80,10 @@ public static class DataValidationDisplayTextPlanner
     }
 
     public static string FormatCellReference(CellAddress address) =>
-        CellAddress.NumberToColumnName(address.Col) + address.Row.ToString(CultureInfo.InvariantCulture);
+        SpreadsheetDisplayFormatter.FormatCellReference(address, useR1C1ReferenceStyle: false);
 
-    public static string FormatRangeReference(GridRange range)
-    {
-        var start = FormatCellReference(range.Start);
-        var end = FormatCellReference(range.End);
-        return string.Equals(start, end, StringComparison.Ordinal)
-            ? start
-            : $"{start}:{end}";
-    }
+    public static string FormatRangeReference(GridRange range) =>
+        SpreadsheetDisplayFormatter.FormatRangeReference(range, useR1C1ReferenceStyle: false);
 
     private static DataValidationRuleTypeMetadata? FindRuleTypeMetadata(DvType type)
     {

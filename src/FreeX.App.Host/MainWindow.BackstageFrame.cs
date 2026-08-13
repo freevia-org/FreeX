@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.PageLayout;
@@ -57,10 +58,8 @@ public partial class MainWindow
 
     private void DecorateBackstageNavButton(BackstageEntry? entry, Button button)
     {
-        // The shared frame stamps the shared RibbonTooltip attached properties on each nav button, but
-        // FreeX's Alt-keytip overlay (MainWindow.KeyTips.cs) reads FreeX's own RibbonTooltip attached
-        // properties. Mirror key-tip/title/description onto the FreeX properties so the rail still lights up
-        // under Alt and shows the Excel-style hover card, exactly as the hand-rolled rail did.
+        // The shared frame stamps RibbonTooltip metadata on each nav button. Reapply localized values here
+        // so FreeX's Alt overlay and hover card keep the same key tips and copy as the hand-rolled rail.
         var keyTip = entry?.KeyTip ?? "B"; // null entry == back arrow
         var title = entry?.TooltipTitle ?? UiText.Get("MainWindow_TooltipTitle_Back");
         RibbonTooltip.SetKeyTip(button, keyTip);
@@ -89,44 +88,44 @@ public partial class MainWindow
     {
         var navigation = entry.Navigation;
         if (navigation.Kind == FreeXBackstageNavigationEntryKind.Divider)
-            return BackstageEntry.Divider(navigation.DockBottom);
+            return WpfBackstageEntryProjection.FromPlan(
+                SisterBackstageEntryPlan<UIElement>.Divider(navigation.DockBottom));
 
-        var label = ResolveBackstageText(navigation.LabelKey);
-        var automationName = ResolveOptionalBackstageText(navigation.AutomationNameKey);
-        var automationHelpText = ResolveOptionalBackstageText(navigation.AutomationHelpTextKey);
-        var tooltipTitle = ResolveOptionalBackstageText(navigation.TooltipTitleKey);
-        var tooltipDescription = ResolveOptionalBackstageText(navigation.TooltipDescriptionKey);
+        var label = FreeXBackstageTextValue.ResolveKey(navigation.LabelKey, UiText.Get);
+        var automationName = FreeXBackstageTextValue.ResolveOptionalKey(navigation.AutomationNameKey, UiText.Get);
+        var automationHelpText = FreeXBackstageTextValue.ResolveOptionalKey(navigation.AutomationHelpTextKey, UiText.Get);
+        var tooltipTitle = FreeXBackstageTextValue.ResolveOptionalKey(navigation.TooltipTitleKey, UiText.Get);
+        var tooltipDescription = FreeXBackstageTextValue.ResolveOptionalKey(navigation.TooltipDescriptionKey, UiText.Get);
 
-        return navigation.Kind switch
+        var mapped = navigation.Kind switch
         {
-            FreeXBackstageNavigationEntryKind.Pane => BackstageEntry.Pane(
+            FreeXBackstageNavigationEntryKind.Pane => SisterBackstageEntryPlan<UIElement>.Pane(
                 label,
-                navigation.Icon,
+                navigation.Icon!.Value,
                 () => BuildBackstagePane(RequirePaneFlow(entry)),
                 navigation.DockBottom,
-                navigation.KeyTip,
-                navigation.AutomationId,
-                automationName,
-                automationHelpText,
-                tooltipTitle,
-                tooltipDescription,
                 navigation.IconCommandName),
 
-            FreeXBackstageNavigationEntryKind.Command => BackstageEntry.Command(
+            FreeXBackstageNavigationEntryKind.Command => SisterBackstageEntryPlan<UIElement>.Command(
                 label,
-                navigation.Icon,
+                navigation.Icon!.Value,
                 ResolveBackstageCommand(RequireCommandWorkflow(entry)),
                 navigation.DockBottom,
-                navigation.KeyTip,
-                navigation.AutomationId,
-                automationName,
-                automationHelpText,
-                tooltipTitle,
-                tooltipDescription,
                 navigation.IconCommandName),
 
             _ => throw new InvalidOperationException($"Unsupported Backstage entry kind '{navigation.Kind}'.")
         };
+
+        return WpfBackstageEntryProjection.FromPlan(mapped with
+        {
+            StableId = entry.StableId,
+            KeyTip = navigation.KeyTip,
+            AutomationId = navigation.AutomationId,
+            AutomationName = automationName,
+            AutomationHelpText = automationHelpText,
+            TooltipTitle = tooltipTitle,
+            TooltipDescription = tooltipDescription,
+        });
     }
 
     private static FreeXBackstagePaneFlowPlan RequirePaneFlow(FreeXBackstageFrameEntryPlan entry) =>
@@ -136,12 +135,6 @@ public partial class MainWindow
     private static FreeXBackstageCommandWorkflowPlan RequireCommandWorkflow(FreeXBackstageFrameEntryPlan entry) =>
         entry.CommandWorkflow
         ?? throw new InvalidOperationException($"Backstage command entry '{entry.Navigation.LabelKey}' is missing a workflow plan.");
-
-    private static string ResolveBackstageText(string? key) =>
-        key is null ? string.Empty : UiText.Get(key);
-
-    private static string? ResolveOptionalBackstageText(string? key) =>
-        key is null ? null : UiText.Get(key);
 
     private Action ResolveBackstageCommand(FreeXBackstageCommandWorkflowPlan plan) =>
         async () => await FreeXBackstageCommandWorkflowExecutor.ExecuteAsync(

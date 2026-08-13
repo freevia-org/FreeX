@@ -94,9 +94,9 @@ public sealed partial class MenuKeyTipAssignerTests
             MenuKeyTipAssigner.AssignUniqueKeyTips([accented, symbolOnly]);
 
             RibbonTooltip.GetKeyTip(accented).Should().Be("C");
-            RibbonKeyTipMode.ToKeyTipToken(Key.C).Should().Be(RibbonTooltip.GetKeyTip(accented));
+            MainWindow.ToWpfKeyTipToken(Key.C).Should().Be(RibbonTooltip.GetKeyTip(accented));
             RibbonTooltip.GetKeyTip(symbolOnly).Should().Be("1");
-            RibbonKeyTipMode.ToKeyTipToken(Key.D1).Should().Be(RibbonTooltip.GetKeyTip(symbolOnly));
+            MainWindow.ToWpfKeyTipToken(Key.D1).Should().Be(RibbonTooltip.GetKeyTip(symbolOnly));
         });
     }
 }

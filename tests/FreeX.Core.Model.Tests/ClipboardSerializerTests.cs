@@ -90,31 +90,6 @@ public sealed class ClipboardSerializerTests
             options => options.WithStrictOrdering());
     }
 
-    [Fact]
-    public void ConvertTsvToCsv_PreservesRowsColumnsAndEmptyFields()
-    {
-        var csv = ClipboardSerializer.ConvertTsvToCsv("Name\t\r\nJohn\t30");
-
-        csv.Should().Be("Name,\r\nJohn,30");
-    }
-
-    [Fact]
-    public void ConvertTsvToCsv_QuotesCsvDelimitersQuotesAndEmbeddedLineBreaks()
-    {
-        var csv = ClipboardSerializer.ConvertTsvToCsv(
-            "Smith, John\t\"He said \"\"hi\"\"\"\t\"first\r\nsecond\"");
-
-        csv.Should().Be("\"Smith, John\",\"He said \"\"hi\"\"\",\"first\r\nsecond\"");
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData(null)]
-    public void ConvertTsvToCsv_EmptyInputProducesEmptyPayload(string? tsvText)
-    {
-        ClipboardSerializer.ConvertTsvToCsv(tsvText).Should().BeEmpty();
-    }
-
     [BenchmarkFact]
     public void Benchmark_SerializeDenseViewport_ReportsTimingAndAllocatedBytes()
     {

@@ -121,7 +121,7 @@ public sealed class AvaloniaRibbonSplitButtonTests
             try
             {
                 var collapsed = ribbon.GetLogicalDescendants().OfType<Button>()
-                    .First(button => button.Classes.Contains("freex-ribbon-collapsed-group"));
+                    .First(button => button.Classes.Contains("free-ribbon-collapsed-group"));
 
                 Assert.True(AvaloniaRibbonRenderer.TryActivateKeyTip(ribbon, "HGR"));
                 Assert.NotNull(collapsed.Flyout);
@@ -183,7 +183,7 @@ public sealed class AvaloniaRibbonSplitButtonTests
             try
             {
                 var collapsed = content.GetLogicalDescendants().OfType<Button>()
-                    .Single(button => button.Classes.Contains("freex-ribbon-collapsed-group"));
+                    .Single(button => button.Classes.Contains("free-ribbon-collapsed-group"));
                 var flyout = Assert.IsType<MenuFlyout>(collapsed.Flyout);
                 var projection = Assert.Single(flyout.Items.OfType<MenuItem>());
 
@@ -219,7 +219,7 @@ public sealed class AvaloniaRibbonSplitButtonTests
             try
             {
                 var collapsed = ribbon.GetLogicalDescendants().OfType<Button>()
-                    .First(button => button.Classes.Contains("freex-ribbon-collapsed-group") &&
+                    .First(button => button.Classes.Contains("free-ribbon-collapsed-group") &&
                                      Equals(button.Tag, "collapsed:group"));
                 var flyout = Assert.IsType<MenuFlyout>(collapsed.Flyout);
                 var items = flyout.Items.OfType<MenuItem>().ToArray();
@@ -234,7 +234,7 @@ public sealed class AvaloniaRibbonSplitButtonTests
                     style => style.Setters.OfType<Setter>().Any(setter =>
                         setter.Property == TemplatedControl.MinWidthProperty &&
                         Equals(setter.Value, RibbonVisualMetrics.PopupChrome.MinWidth)));
-                Assert.Contains("freex-ribbon-popup-chrome", flyout.FlyoutPresenterClasses);
+                Assert.Contains("free-ribbon-popup-chrome", flyout.FlyoutPresenterClasses);
                 Assert.False(items[0].IsEnabled);
                 Assert.Equal(RibbonVisualMetrics.PopupChrome.ItemMinHeight, items[0].MinHeight);
                 Assert.Equal(new Thickness(10, 5, 10, 5), items[0].Padding);
@@ -282,7 +282,7 @@ public sealed class AvaloniaRibbonSplitButtonTests
             try
             {
                 var collapsed = content.GetLogicalDescendants().OfType<Button>()
-                    .Single(button => button.Classes.Contains("freex-ribbon-collapsed-group"));
+                    .Single(button => button.Classes.Contains("free-ribbon-collapsed-group"));
                 var flyout = Assert.IsType<MenuFlyout>(collapsed.Flyout);
                 var items = flyout.Items.OfType<MenuItem>().ToArray();
 
@@ -319,7 +319,7 @@ public sealed class AvaloniaRibbonSplitButtonTests
             try
             {
                 var collapsed = content.GetLogicalDescendants().OfType<Button>()
-                    .First(button => button.Classes.Contains("freex-ribbon-collapsed-group") &&
+                    .First(button => button.Classes.Contains("free-ribbon-collapsed-group") &&
                                      Equals(button.Tag, "collapsed:group"));
                 var flyout = Assert.IsType<MenuFlyout>(collapsed.Flyout);
                 var parent = Assert.Single(flyout.Items.OfType<MenuItem>());
@@ -383,7 +383,7 @@ public sealed class AvaloniaRibbonSplitButtonTests
                 Assert.Equal(PlacementMode.Bottom, flyout.Placement);
                 Assert.Equal(RibbonVisualMetrics.PopupChrome.ItemMinHeight, parent.MinHeight);
                 Assert.Equal(RibbonVisualMetrics.PopupChrome.Submenu.ItemMinHeight, child.MinHeight);
-                Assert.Contains("freex-ribbon-popup-chrome", flyout.FlyoutPresenterClasses);
+                Assert.Contains("free-ribbon-popup-chrome", flyout.FlyoutPresenterClasses);
 
                 flyout.ShowAt(dropdown);
                 parent.Focus();

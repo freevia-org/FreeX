@@ -10,7 +10,7 @@ public partial class MainWindow
             () => _workbook,
             () => _currentSheetId,
             () => SheetGrid.SelectedRange,
-            () => FreeXOptions.NormalizeUserName(_options.UserName),
+            () => AppOptions.NormalizeUserName(_options.UserName),
             (plan, fallbackRange) =>
             {
                 if (!TryExecuteRepeatableCurrentRangeCommand(

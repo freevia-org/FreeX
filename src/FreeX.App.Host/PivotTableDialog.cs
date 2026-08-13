@@ -6,15 +6,9 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public enum PivotTableDestinationKind
-{
-    NewWorksheet,
-    ExistingWorksheet
-}
-
 public sealed record PivotTableDialogResult(
     string SourceRangeText,
-    PivotTableDestinationKind DestinationKind,
+    PivotDestinationKind DestinationKind,
     string DestinationRangeText,
     bool OpenFieldList);
 
@@ -57,7 +51,7 @@ public sealed class PivotTableDialog : Window
         var destinationText = PivotCreatePlanner.FormatDefaultDestination(workbook, sourceSheetId, sourceRange);
         Result = CreateResult(
             sourceRangeText,
-            PivotTableDestinationKind.NewWorksheet,
+            PivotDestinationKind.NewWorksheet,
             destinationText,
             openFieldList: true);
 
@@ -114,8 +108,8 @@ public sealed class PivotTableDialog : Window
             Result = CreateResult(
                 _sourceRangeBox.Text,
                 _existingWorksheetButton.IsChecked == true
-                    ? PivotTableDestinationKind.ExistingWorksheet
-                    : PivotTableDestinationKind.NewWorksheet,
+                    ? PivotDestinationKind.ExistingWorksheet
+                    : PivotDestinationKind.NewWorksheet,
                 _destinationRangeBox.Text,
                 _openFieldListBox.IsChecked == true);
             DialogResult = true;
@@ -139,13 +133,13 @@ public sealed class PivotTableDialog : Window
 
     public static PivotTableDialogResult CreateResult(
         string sourceRangeText,
-        PivotTableDestinationKind destinationKind,
+        PivotDestinationKind destinationKind,
         string destinationRangeText,
         bool openFieldList) =>
         new(
             RequireRangeText(sourceRangeText, nameof(sourceRangeText)),
             destinationKind,
-            destinationKind == PivotTableDestinationKind.NewWorksheet
+            destinationKind == PivotDestinationKind.NewWorksheet
                 ? string.Empty
                 : RequireRangeText(destinationRangeText, nameof(destinationRangeText)),
             openFieldList);

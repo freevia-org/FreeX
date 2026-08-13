@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Presentation.Tests.DrawingUI;
 
@@ -99,17 +100,17 @@ public sealed class DrawingObjectContextualRibbonPlannerTests
 
         specs.Select(spec => spec.CommandId).Should().OnlyHaveUniqueItems();
         specs.Should().Contain(new DrawingObjectContextualCommandSpec(
-            "pictureFormat.formatPicture",
+            "Format Picture",
             DrawingObjectContextualCommandAction.FormatPicture));
         specs.Should().Contain(new DrawingObjectContextualCommandSpec(
-            "shapeFormat.shapeGradient",
+            "Shape Gradient",
             DrawingObjectContextualCommandAction.ShapeGradient));
         specs.Should().Contain(new DrawingObjectContextualCommandSpec(
-            "shapeFormat.shapeEffectShadow",
+            FreeXRibbonCommandIds.DrawingShapeEffectShadow,
             DrawingObjectContextualCommandAction.ShapeEffectPreset,
             DrawingShapeEffectPreset.Shadow));
         specs.Should().Contain(new DrawingObjectContextualCommandSpec(
-            "3-D Rotation",
+            FreeXRibbonCommandIds.DrawingShapeEffectThreeDRotation,
             DrawingObjectContextualCommandAction.ShapeEffectPreset,
             DrawingShapeEffectPreset.ThreeDRotation));
     }

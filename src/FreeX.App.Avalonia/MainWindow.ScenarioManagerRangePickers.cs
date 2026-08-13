@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Shell;
 
 namespace FreeX.App.Avalonia;
 
@@ -22,7 +23,7 @@ public sealed partial class MainWindow
         if (dialog.Owner is not MainWindow owner
             || !string.Equals(
                 AutomationProperties.GetAutomationId(dialog),
-                "ScenarioManagerCompactDialog",
+                FreeXAutomationIdCatalog.ScenarioManager.AvaloniaDialog,
                 StringComparison.Ordinal))
         {
             return;
@@ -31,16 +32,16 @@ public sealed partial class MainWindow
         AddScenarioManagerRangePicker(
             owner,
             dialog,
-            "ScenarioManagerChangingCellsBox",
-            "ScenarioManagerChangingCellsPickerButton",
-            "Select changing cells range",
+            FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsBox,
+            FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsPickerButton,
+            UiText.Get("ScenarioManager_SelectChangingCellsRangeAutomationName"),
             "range.scenario-manager.changing-cells");
         AddScenarioManagerRangePicker(
             owner,
             dialog,
-            "ScenarioManagerResultCellsBox",
-            "ScenarioManagerResultCellsPickerButton",
-            "Select result cells range",
+            FreeXAutomationIdCatalog.ScenarioManager.ResultCellsBox,
+            FreeXAutomationIdCatalog.ScenarioManager.ResultCellsPickerButton,
+            UiText.Get("ScenarioManager_SelectResultCellsRangeAutomationName"),
             "range.scenario-manager.result-cells");
     }
 

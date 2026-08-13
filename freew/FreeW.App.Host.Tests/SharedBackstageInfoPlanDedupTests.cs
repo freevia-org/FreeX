@@ -42,7 +42,9 @@ public sealed class SharedBackstageInfoPlanDedupTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var sharedInfo = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell", "BackstageInfoPaneSpec.cs"));
         var sharedPlanner = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell", "SisterBackstageInfoPanePlanner.cs"));
+        var session = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Presentation", "Backstage", "FreeWBackstageSession.cs"));
         var wpfComposer = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell.Wpf", "BackstagePaneComposer.cs"));
+        var avaloniaComposer = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell.Avalonia", "AvaloniaBackstagePaneComposer.cs"));
         var wpfView = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Backstage", "BackstageView.cs"));
         var avaloniaView = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "Backstage", "BackstageView.cs"));
 
@@ -50,12 +52,16 @@ public sealed class SharedBackstageInfoPlanDedupTests
         File.Exists(Path.Combine(root, "shared", "Free.Shared.Shell.Wpf", "SisterBackstageInfoPanePlanner.cs")).Should().BeFalse();
         sharedInfo.Should().Contain("namespace Free.Shared.Shell;");
         sharedPlanner.Should().Contain("namespace Free.Shared.Shell;");
+        session.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
+        session.Should().Contain("BackstageInfoStatisticsPlanner.Build(document)");
         wpfComposer.Should().Contain("BuildInfoPane(BackstageInfoPaneSpec spec)");
         wpfComposer.Should().NotContain("public sealed record BackstageInfoPaneSpec");
-        avaloniaView.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
-        avaloniaView.Should().Contain("BackstageInfoPaneSpec plan");
-        wpfView.Should().Contain("BackstageInfoStatisticsPlanner.Build(model)");
-        avaloniaView.Should().Contain("BackstageInfoStatisticsPlanner.Build(document)");
+        avaloniaComposer.Should().Contain("BuildInfoPane(BackstageInfoPaneSpec spec)");
+        avaloniaComposer.Should().NotContain("public sealed record BackstageInfoPaneSpec");
+        wpfView.Should().Contain("_session.BuildInfoPane()");
+        avaloniaView.Should().Contain("_session.BuildInfoPane()");
+        wpfView.Should().NotContain("SisterBackstageInfoPanePlanner.Build(");
+        avaloniaView.Should().NotContain("SisterBackstageInfoPanePlanner.Build(");
         avaloniaView.Should().NotContain("BackstagePaneSurfacePlanner.BuildInfoPane(");
     }
 

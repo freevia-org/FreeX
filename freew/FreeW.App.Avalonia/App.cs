@@ -1,46 +1,41 @@
 using Avalonia;
+using Free.Shared.AppServices;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 using Free.Shared.Shell.Avalonia;
-using FreeW.App.Avalonia.Smoke;
+using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia;
 
-public sealed class App : Application
+public sealed partial class App : Application
 {
-    public static IReadOnlyList<string> StartupArguments { get; set; } = [];
-    internal static LaunchSmokeOptions? LaunchSmokeOptions { get; set; }
-    internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeW;
+    internal static Theme ActiveTheme { get; private set; } = FreeWApplicationStartup.Theme.DefaultTheme;
+
+    internal static SisterAvaloniaStandardDesktopProfile<App, MainWindow, FreeWOptions> DesktopProfile { get; } =
+        new(
+            FreeWApplicationStartup.ProductIdentity,
+            new SisterAvaloniaLocalizationStartupDescriptor(
+                () => AvaloniaAppLocalizationBootstrap.InstallSharedSeams(
+                    UiText.Get,
+                    UiText.Format,
+                    UiText.CreateAutomationName)),
+            new SisterAvaloniaThemeStartupDescriptor<Theme>(
+                FreeWApplicationStartup.Theme,
+                theme => ActiveTheme = theme,
+                (application, theme, resourceKeyPrefix) =>
+                    application.Resources.MergedDictionaries.Add(
+                        AvaloniaThemeApplier.BuildResources(theme, resourceKeyPrefix))),
+            new SisterAvaloniaOptionsStartupDescriptor<FreeWOptions>(
+                () => ApplicationOptionsStore<FreeWOptions>.Create(
+                    PlatformApplicationDataPathProvider.LocalInstance)),
+            new SisterAvaloniaWindowStartupDescriptor<MainWindow, FreeWOptions>(
+                (startupArguments, options, optionsStore) =>
+                    new MainWindow(startupArguments, options, optionsStore)));
 
     public override void OnFrameworkInitializationCompleted()
     {
-        // Route the shared shell's OK/Cancel button text and generic message-box titles
-        // (AvaloniaDialogButtonRowFactory.CreateOkCancel, AvaloniaUserMessageDialog) through
-        // FreeW's own localized resource catalog instead of the shared shell's neutral-English
-        // ShellStrings.Current default — mirrors the WPF host's
-        // AppLocalization.Bootstrap.InstallSharedSeams() (App.xaml.cs). Must run before any
-        // window/dialog can be shown, so it goes first.
-        AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName);
-
-        var theme = string.Equals(
-            Environment.GetEnvironmentVariable("FREEW_THEME"),
-            "midnight",
-            StringComparison.OrdinalIgnoreCase)
-            ? BrandThemes.FreeXMidnight
-            : BrandThemes.FreeW;
-        ActiveTheme = theme;
-        AvaloniaThemeApplier.Apply(this, theme, "FreeW");
-
-        SisterAvaloniaAppBootstrap.Initialize(
-            this,
-            new SisterAvaloniaAppBootstrapSpec<MainWindow>(
-                StartupArguments,
-                args => new MainWindow(args),
-                mainWindow =>
-                {
-                    if (LaunchSmokeOptions is { } options)
-                        LaunchSmokeCoordinator.Start(mainWindow, options);
-                }));
+        SisterAvaloniaStandardDesktopFactory.Initialize(this, DesktopProfile);
 
         base.OnFrameworkInitializationCompleted();
     }

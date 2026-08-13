@@ -45,6 +45,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var catalogSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("QuickAccessToolbarCatalog.cs");
         var qatSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
+        var applicationRoutingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
         var keyTipSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var lifecycleSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookLifecycle.cs");
@@ -60,7 +61,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         catalogSource.Should().Contain("QuickAccessToolbarCommandIds.InsertFunction");
         catalogSource.Should().Contain("QuickAccessToolbarCommandIds.NameManager");
         qatSource.Should().Contain("RebuildQuickAccessToolbar()");
-        qatSource.Should().Contain("RibbonTooltip.SetKeyTip(button, FormatQuickAccessToolbarKeyTip(visibleIndex));");
+        qatSource.Should().Contain("RibbonTooltip.SetKeyTip(button, QuickAccessToolbarCatalog.FormatKeyTip(visibleIndex));");
         // The QAT button (style, glyph, hit-test, automation id/name) is built through the shared
         // Free.Shared.Ribbon.Wpf QAT renderer from a neutral descriptor carrying the catalog automation id;
         // FreeX keeps its RibbonTooltip / RibbonMetadata / context-menu / click decorations on top.
@@ -84,19 +85,20 @@ public sealed partial class MainWindowXamlKeyTipTests
         // (MainWindow.WorkbookLifecycle.cs), the same resolution the dirty-gate's "Save then proceed" takes.
         backstageSource.Should().Contain("await SaveResolvedAsync()");
         lifecycleSource.Should().Contain("private async Task<bool> SaveResolvedAsync()");
-        lifecycleSource.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
+        lifecycleSource.Should().Contain("_fileWorkflow.SaveResolvedAsync(");
         lifecycleSource.Should().Contain("_fileAdapters");
         lifecycleSource.Should().Contain("SaveWorkbookToTargetAsync");
         lifecycleSource.Should().Contain("SaveWorkbookWithDialogAsync");
         backstageSource.Should().Contain("MarkWorkbookSaved()");
         backstageSource.Should().Contain("UpdateTitleBar()");
 
-        qatSource.Should().Contain("case QuickAccessToolbarCommandIds.Undo:");
-        qatSource.Should().Contain("ExecuteUndo();");
-        qatSource.Should().Contain("case QuickAccessToolbarCommandIds.Redo:");
-        qatSource.Should().Contain("ExecuteRedo();");
-        commandSource.Should().Contain("_commandBus.Undo(_workbook.Id)");
-        commandSource.Should().Contain("_commandBus.Redo(_workbook.Id)");
+        qatSource.Should().Contain("WorkbookApplicationCommandRouter.TryRouteQuickAccess(commandId, out var route)");
+        applicationRoutingSource.Should().Contain("Undo = Handled(");
+        applicationRoutingSource.Should().Contain("ExecuteUndo()");
+        applicationRoutingSource.Should().Contain("Redo = Handled(");
+        applicationRoutingSource.Should().Contain("ExecuteRedo()");
+        commandSource.Should().Contain("_session.UndoLastEdit()");
+        commandSource.Should().Contain("_session.RedoLastEdit()");
         commandSource.Should().Contain("RefreshToolbar()");
     }
 

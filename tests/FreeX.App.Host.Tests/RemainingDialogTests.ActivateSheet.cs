@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using FluentAssertions;
 using FreeX.App.Presentation.SheetUI;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -59,7 +60,7 @@ public sealed partial class RemainingDialogTests
                 selected.DisplayName.Should().Be("Sheet1");
                 selected.SheetId.Should().Be(first.Id);
                 dialog.Result.Should().Be(new ActivateSheetDialogResult(first.Id));
-                AutomationProperties.GetAutomationId(sheetList).Should().Be("ActivateSheetList");
+                AutomationProperties.GetAutomationId(sheetList).Should().Be(FreeXAutomationIdCatalog.ActivateSheetList);
                 AutomationProperties.GetName(sheetList).Should().Be(UiText.Get("ActivateSheet_ListAutomationName"));
             }
             finally

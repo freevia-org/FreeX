@@ -28,7 +28,7 @@ public sealed partial class InsertChartDialog : Window
 
         var root = new DockPanel { Margin = new Thickness(16), LastChildFill = false };
         var tabs = new TabControl { Height = 310, Margin = new Thickness(0, 0, 0, 12) };
-        _recommendedGallery.ItemsSource = ChartTypePickerPlanner.GetRecommendedGalleryChoices();
+        _recommendedGallery.ItemsSource = ChartTypePickerPlanner.GetRecommendedGalleryChoices(WpfResourceKeyTextResolver.Instance);
         _recommendedGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
         _recommendedGallery.SelectedIndex = 0;
         _recommendedGallery.MouseDoubleClick += Gallery_MouseDoubleClick;
@@ -60,7 +60,7 @@ public sealed partial class InsertChartDialog : Window
         new(chartType, UseRecommendedLayout: false);
 
     public static InsertChartDialogResult CreateRecommendedResult() =>
-        new(ChartTypePickerPlanner.GetRecommendedOptions().First().Type, UseRecommendedLayout: true);
+        new(ChartTypePickerPlanner.GetRecommendedOptions(WpfResourceKeyTextResolver.Instance).First().Type, UseRecommendedLayout: true);
 
     private void Accept()
     {

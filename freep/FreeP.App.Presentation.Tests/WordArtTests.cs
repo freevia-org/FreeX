@@ -15,15 +15,10 @@ namespace FreeP.App.Compositor.Tests;
 /// </summary>
 public sealed class WordArtTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.WordArtTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.WordArtTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public WordArtTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     // ─── helpers ─────────────────────────────────────────────────────────────
 
@@ -1137,24 +1132,6 @@ public sealed class WordArtTests : IDisposable
     private static string ReadWorkspaceFile(params string[] relativeParts)
         => File.ReadAllText(FindWorkspaceFile(relativeParts));
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var parts = new string[relativeParts.Length + 1];
-            parts[0] = directory.FullName;
-            relativeParts.CopyTo(parts, 1);
-
-            var candidate = Path.Combine(parts);
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(
-            "Could not locate workspace file.",
-            Path.Combine(relativeParts));
-    }
+    private static string FindWorkspaceFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.Find(relativeParts);
 }

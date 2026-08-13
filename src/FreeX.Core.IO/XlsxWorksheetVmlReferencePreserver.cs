@@ -10,14 +10,13 @@ internal static class XlsxWorksheetVmlReferencePreserver
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
 
     public static void Preserve(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
         XlsxSourcePackagePreservationContext? context,
         Workbook workbook)
     {
         if (context is null)
             return;
 
+        var targetArchive = context.TargetArchive;
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
             // R105: rename-tolerant lookup removed as inert (proven dead this round) --
@@ -31,14 +30,12 @@ internal static class XlsxWorksheetVmlReferencePreserver
             if (sheet is null)
                 continue;
 
-            var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+            var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceWorksheetPath);
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
             if (sourceWorksheetXml?.Root is null || targetWorksheetEntry is null)
                 continue;
 
             PreserveMarker(
-                sourceArchive,
-                targetArchive,
                 context,
                 sourceWorksheetPath,
                 targetWorksheetPath,
@@ -47,8 +44,6 @@ internal static class XlsxWorksheetVmlReferencePreserver
                 context.WorkbookNs + "legacyDrawing",
                 CanPreserveLegacyDrawing(sheet));
             PreserveMarker(
-                sourceArchive,
-                targetArchive,
                 context,
                 sourceWorksheetPath,
                 targetWorksheetPath,
@@ -62,8 +57,6 @@ internal static class XlsxWorksheetVmlReferencePreserver
     private static bool CanPreserveLegacyDrawing(Sheet sheet) => sheet.Comments.Count > 0;
 
     private static void PreserveMarker(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
         XlsxSourcePackagePreservationContext context,
         string sourceWorksheetPath,
         string targetWorksheetPath,
@@ -75,16 +68,14 @@ internal static class XlsxWorksheetVmlReferencePreserver
         if (!shouldPreserve)
             return;
 
+        var targetArchive = context.TargetArchive;
         var sourceMarker = sourceRoot.Element(markerName);
         var sourceRelId = sourceMarker?.Attribute(context.RelNs + "id")?.Value;
         if (string.IsNullOrWhiteSpace(sourceRelId) ||
-            !TryGetInternalRelationshipTarget(
-                sourceArchive,
-                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
+            !context.TryGetSourceRelationshipTarget(
                 sourceWorksheetPath,
                 sourceRelId,
                 VmlDrawingRelationshipType,
-                context.PackageRelNs,
                 out var vmlPath) ||
             targetArchive.GetEntry(vmlPath) is null ||
             (markerName.LocalName == "legacyDrawingHF" &&
@@ -93,17 +84,15 @@ internal static class XlsxWorksheetVmlReferencePreserver
             return;
         }
 
-        var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
-        var targetWorksheetRelsXml = targetArchive.GetEntry(targetWorksheetRelsPath) is { } targetWorksheetRelsEntry
-            ? XlsxPackageXmlEditor.LoadXml(targetWorksheetRelsEntry)
-            : new XDocument(new XElement(context.PackageRelNs + "Relationships"));
+        var (targetWorksheetRelsPath, targetWorksheetRelsXml) =
+            context.LoadOrCreateTargetRelationships(targetWorksheetPath);
         var targetRelId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
             targetWorksheetRelsXml,
             context.PackageRelNs,
             targetWorksheetPath,
             vmlPath,
             VmlDrawingRelationshipType);
-        XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
+        context.ReplaceTargetPartXml(targetWorksheetRelsPath, targetWorksheetRelsXml);
 
         var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
         var targetRoot = targetWorksheetXml.Root;
@@ -112,35 +101,7 @@ internal static class XlsxWorksheetVmlReferencePreserver
 
         targetRoot.SetAttributeValue(XNamespace.Xmlns + "r", context.RelNs.NamespaceName);
         SetSingleMarker(targetRoot, markerName, context.RelNs, targetRelId);
-        XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
-    }
-
-    private static bool TryGetInternalRelationshipTarget(
-        ZipArchive archive,
-        string relationshipsPath,
-        string sourcePartPath,
-        string relationshipId,
-        string relationshipType,
-        XNamespace packageRelNs,
-        out string targetPath)
-    {
-        targetPath = "";
-        var relationshipsEntry = archive.GetEntry(relationshipsPath);
-        if (relationshipsEntry is null)
-            return false;
-
-        var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
-        var relationship = FindInternalRelationship(
-            relationshipsXml.Root,
-            packageRelNs,
-            relationshipId,
-            relationshipType);
-        var target = relationship?.Attribute("Target")?.Value;
-        if (string.IsNullOrWhiteSpace(target))
-            return false;
-
-        targetPath = XlsxPackagePath.ResolveRelationshipTarget(sourcePartPath, target);
-        return !string.IsNullOrWhiteSpace(targetPath);
+        context.ReplaceTargetPartXml(targetWorksheetPath, targetWorksheetXml);
     }
 
     private static void SetSingleMarker(
@@ -176,28 +137,6 @@ internal static class XlsxWorksheetVmlReferencePreserver
             worksheetRoot.Add(marker);
         else
             insertionPoint.AddBeforeSelf(marker);
-    }
-
-    private static XElement? FindInternalRelationship(
-        XElement? relationshipsRoot,
-        XNamespace packageRelNs,
-        string relationshipId,
-        string relationshipType)
-    {
-        if (relationshipsRoot is null)
-            return null;
-
-        foreach (var candidate in relationshipsRoot.Elements(packageRelNs + "Relationship"))
-        {
-            if (string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
-                string.Equals(candidate.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(candidate.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
     }
 
     private static XElement? FindInsertionPoint(

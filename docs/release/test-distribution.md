@@ -10,7 +10,7 @@
 | 4. Hosted release channel | Complete | GitHub Actions publishes latest builds through GitHub Releases with versioned artifacts, a stable latest test build link, and an MSIX package that is signed when release certificate secrets are configured. |
 | 5. Crash analytics | Complete | Opt-in Sentry crash upload is wired behind tester consent and `FREEX_SENTRY_DSN`; local diagnostics remain available without network upload. |
 | 6. Lightweight usage analytics | Complete | Stabilization-only app usage events are recorded through the existing diagnostics pipeline and safe crash breadcrumbs. |
-| 7. Auto-update readiness | Complete | Help now exposes the stable latest release page while full in-app update packaging remains deferred. |
+| 7. Auto-update readiness | Complete | Help exposes the stable latest release page, and Velopack-managed installs can check, download, apply, and restart into an update; plain single-file and MSIX builds retain the manual latest-download path. |
 | 8. Accessibility validation | Complete | UIA AutomationProperties audit completed; `GridView`/`SheetGrid` exposes grid, selection, visible cell grid-item, value, and selection-item provider contracts; `TabChrome` name binding is fixed; automated UIA property and `GridViewAutomationPeerTests` guards cover the current contracts. Every public-preview candidate still needs a live keyboard-only smoke pass, screen-reader smoke pass, and UI Automation catalog review recorded in release notes. |
 
 ## Phase 4 Release Channel

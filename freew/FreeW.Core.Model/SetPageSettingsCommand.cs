@@ -16,35 +16,41 @@ namespace FreeW.Core.Model;
 /// the command copies the full page setup surface and remains suitable for undoable column/layout
 /// changes as well as the Page Setup dialog's geometry changes.
 /// </para>
-///
-/// <para>
-/// <paramref name="sectionIndex"/> selects which section's <see cref="PageSettings"/> Apply/Revert
-/// read from and write to, resolved via <see cref="PageSettingsSectionResolver"/>: a negative value
-/// (the default) targets the document's final section (<see cref="TextDocument.Page"/>), matching the
-/// original single-section-only behavior; a non-negative value targets that section of a multi-section
-/// document (e.g. the section containing the caret when the command was built), so Layout/Page Setup
-/// edits land on the section the user is actually editing instead of always the last one.
-/// </para>
 /// </summary>
-public sealed class SetPageSettingsCommand(PageSettings settings, int sectionIndex = -1) : IDocumentCommand
+public sealed class SetPageSettingsCommand : IDocumentCommand
 {
+    private readonly PageSettings _settings;
+    private readonly int _sectionIndex;
+    private readonly string _label;
     private PageSettings? _previous;
 
-    public string Label => "Page Setup";
+    public SetPageSettingsCommand(PageSettings settings, string label = "Page Setup")
+        : this(settings, -1, label)
+    {
+    }
+
+    public SetPageSettingsCommand(PageSettings settings, int sectionIndex, string label = "Page Setup")
+    {
+        _settings = settings;
+        _sectionIndex = sectionIndex;
+        _label = label;
+    }
+
+    public string Label => _label;
 
     public void Apply(IDocumentCommandContext context)
     {
-        var page = PageSettingsSectionResolver.Resolve(context.Document, sectionIndex);
+        var page = PageSettingsSectionResolver.Resolve(context.Document, _sectionIndex);
         // Snapshot for undo on first Apply.
         _previous ??= page.Clone();
-        CopyTo(settings, page);
+        CopyTo(_settings, page);
     }
 
     public void Revert(IDocumentCommandContext context)
     {
         if (_previous is null)
             return;
-        CopyTo(_previous, PageSettingsSectionResolver.Resolve(context.Document, sectionIndex));
+        CopyTo(_previous, PageSettingsSectionResolver.Resolve(context.Document, _sectionIndex));
         _previous = null;
     }
 

@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using System.Xml.Linq;
+using System.IO;
 using FluentAssertions;
 using FreeX.App.Host;
 using FreeX.App.Presentation.PivotUI;
@@ -27,17 +28,9 @@ public sealed partial class MainWindowXamlKeyTipTests
             source.IndexOf("private bool TryShowPivotTableDetails", StringComparison.Ordinal)..
             source.IndexOf("private void RefreshPivotFieldListPane", StringComparison.Ordinal)];
 
-        handlerSource.Should().Contain("PivotUiPlanner.ResolveShowDetailsTarget(sheet, SheetGrid.SelectedRange)");
-        handlerSource.Should().Contain("new DrillDownPivotTableCommand(_currentSheetId, target.PivotTableName, target.PivotCell)");
-        handlerSource.Should().Contain("\"Show PivotTable Details\"");
-        handlerSource.Should().Contain("out var outcome");
-        handlerSource.Should().Contain("FindAffectedCellAnchor(outcome)");
-        source.Should().Contain("private static CellAddress? FindAffectedCellAnchor(CommandOutcome outcome)");
-        source.Should().Contain("outcome.AffectedCells is { } affectedCells");
-        source.Should().Contain("affectedCells.Count == 0 ? default : affectedCells[0]");
-        handlerSource.Should().Contain("_currentSheetId = detailAnchor.Sheet;");
-        handlerSource.Should().Contain("RefreshSheetTabs();");
-        handlerSource.Should().Contain("UpdateViewport();");
+        handlerSource.Should().Contain("PivotApplication.PlanShowDetails(_currentSheetId, SheetGrid.SelectedRange)");
+        handlerSource.Should().Contain("ApplyPivotApplicationPlan(plan, title)");
+        handlerSource.Should().NotContain("new DrillDownPivotTableCommand(");
         handlerSource.Should().NotContain("new AddSheetCommand");
         handlerSource.Should().NotContain("_workbook.Sheets.LastOrDefault()");
         handlerSource.Should().NotContain("PivotTableRefreshService.Refresh");
@@ -155,12 +148,16 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_RoutesThroughLayoutCommand()
     {
-        var source = ReadPivotCommandSource();
+        var hostSource = ReadPivotCommandSource();
+        var plannerSource = DialogSourceTestSupport.ReadPresentationSources(
+            "PivotUI",
+            "PivotApplicationSession.cs");
 
-        source.Should().Contain("RefreshPivotFieldListPane()");
-        source.Should().Contain("ConfigurePivotTableLayoutCommand");
-        source.Should().Contain("PivotFieldToRowsBtn_Click");
-        source.Should().Contain("PivotFieldListCloseBtn_Click");
+        hostSource.Should().Contain("RefreshPivotFieldListPane()");
+        hostSource.Should().Contain("PivotApplication.PlanLayout(");
+        hostSource.Should().Contain("PivotFieldToRowsBtn_Click");
+        hostSource.Should().Contain("PivotFieldListCloseBtn_Click");
+        plannerSource.Should().Contain("new ConfigurePivotTableLayoutCommand(");
     }
 
     [Fact]
@@ -209,7 +206,11 @@ public sealed partial class MainWindowXamlKeyTipTests
 
         mainWindowSource.Should().Contain("new PivotValueFieldSettingsDialog(current, context.Headers)");
         mainWindowSource.Should().NotContain("Value Field Settings: name,function,show-values-as");
-        var plannerSource = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialogPlanner.cs");
+        var hostPlannerPath = Path.Combine(
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            "src",
+            "FreeX.App.Host",
+            "PivotValueFieldSettingsDialogPlanner.cs");
         var presentationSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotValueFieldPlanner.cs");
         var dialogSource = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialog.xaml.cs");
         var expectedShowValuesAsKeys = new[]
@@ -224,7 +225,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         foreach (var key in expectedShowValuesAsKeys)
         {
             presentationSource.Should().Contain($"\"{key}\"");
-            plannerSource.Should().NotContain($"\"{key}\"");
+            dialogSource.Should().NotContain($"\"{key}\"");
         }
 
         presentationSource.Should().Contain("PivotValueFieldOption<PivotShowValuesAs>");
@@ -235,19 +236,19 @@ public sealed partial class MainWindowXamlKeyTipTests
         presentationSource.Should().Contain("DefaultCustomNumberFormatId");
         presentationSource.Should().Contain("\"PivotValueFieldSettings_SelectBaseFieldMessage\"");
         presentationSource.Should().Contain("\"PivotValueFieldSettings_EnterBaseItemMessage\"");
-        plannerSource.Should().Contain("LocalizeOptions(PivotValueFieldPlanner.ShowValuesAsOptions)");
-        plannerSource.Should().Contain("UiText.Get(option.ResourceKey)");
-        plannerSource.Should().Contain("PivotValueFieldPlanner.DescribeValidationError");
-        plannerSource.Should().Contain("UiText.Get(errorPlan.ResourceKey)");
-        plannerSource.Should().Contain("PivotValueFieldPlanner.FindNumberFormatPresetIndex");
-        plannerSource.Should().NotContain("\"PivotValueFieldSettings_SelectBaseFieldMessage\"");
-        plannerSource.Should().NotContain("\"PivotValueFieldSettings_EnterBaseItemMessage\"");
-        plannerSource.Should().NotContain("\"PivotValueFieldSettings_NumberFormatCurrency\"");
+        File.Exists(hostPlannerPath).Should().BeFalse();
+        presentationSource.Should().Contain("GetShowValuesAsOptions(");
+        presentationSource.Should().Contain("GetNumberFormatPresets(");
+        presentationSource.Should().Contain("ResourceKeyTextResolver text");
+        dialogSource.Should().Contain("WpfResourceKeyTextResolver.Instance");
+        dialogSource.Should().NotContain("\"PivotValueFieldSettings_SelectBaseFieldMessage\"");
+        dialogSource.Should().NotContain("\"PivotValueFieldSettings_EnterBaseItemMessage\"");
+        dialogSource.Should().NotContain("\"PivotValueFieldSettings_NumberFormatCurrency\"");
         PivotValueFieldPlanner.ShowValuesAsOptions
             .Select(option => option.ResourceKey)
             .Should()
             .Contain(expectedShowValuesAsKeys);
-        PivotValueFieldSettingsDialogPlanner.ShowValuesAsOptions
+        PivotValueFieldPlanner.GetShowValuesAsOptions(new ResourceKeyTextResolver(UiText.Get, UiText.Format))
             .Select(option => option.Label)
             .Should()
             .Contain(expectedShowValuesAsKeys.Select(UiText.Get));
@@ -314,7 +315,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         source.Should().Contain("PivotFieldRemoveDropZone_DragOver");
         source.Should().Contain("PivotFieldListRemoveZone_DragOver");
         source.Should().Contain("Mouse.SetCursor(Cursors.No)");
-        source.Should().Contain("MovePivotFieldToZone(caption, PivotFieldDropZone.Available");
+        source.Should().Contain("MovePivotFieldToZone(caption, PivotFieldBucket.Available");
         xamlSource.Should().Contain("DragOver=\"PivotFieldRemoveDropZone_DragOver\"");
         xamlSource.Should().Contain("DragOver=\"PivotFieldListRemoveZone_DragOver\"");
     }
@@ -361,7 +362,8 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Should()
             .Be("PivotAvailableFieldCheckBox_Click");
 
-        source.Should().Contain("PivotFieldListItem");
+        source.Should().Contain("PivotAvailableFieldItemModel");
+        source.Should().Contain("PivotFieldListPaneBuilder.BuildAvailableFields");
         source.Should().Contain("PivotAvailableFieldCheckBox_Click");
         source.Should().Contain("TogglePivotAvailableField");
     }
@@ -439,7 +441,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var xamlSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
-        var source = ReadPivotCommandSource();
+        var hostSource = ReadPivotCommandSource();
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -454,15 +456,16 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Should()
             .Contain(["SlicerItemsControl", "TimelineItemsControl"]);
 
-        source.Should().Contain("RefreshSlicerTimelinePane");
-        source.Should().Contain("GetPivotSourceSheet");
-        source.Should().Contain("AddSlicerCommand");
-        source.Should().Contain("AddTimelineCommand");
-        source.Should().Contain("SetSlicerSelectionCommand");
-        source.Should().Contain("SetTimelineRangeCommand");
-        source.Should().Contain("SlicerTileButton_Click");
-        source.Should().Contain("TimelineApplyButton_Click");
-        source.Should().Contain("SlicerTimelinePlanner.HasActiveSlicerFilter(slicer)");
+        hostSource.Should().Contain("RefreshSlicerTimelinePane");
+        hostSource.Should().Contain("PivotApplication.ReadSourceHeaders(");
+        hostSource.Should().Contain("PivotApplication.PlanInsertSlicer(");
+        hostSource.Should().Contain("PivotApplication.PlanInsertTimeline(");
+        hostSource.Should().Contain("PivotApplication.PlanSlicerSelection(");
+        hostSource.Should().Contain("PivotApplication.PlanTimelineRange(");
+        hostSource.Should().Contain("SlicerTileButton_Click");
+        hostSource.Should().Contain("TimelineApplyButton_Click");
+        hostSource.Should().Contain("new SlicerTimelineSourceSession(_workbook)");
+        hostSource.Should().Contain("Select(sourceSession.BuildSlicerPaneItem)");
         xamlSource.Should().Contain("Binding=\"{Binding HasActiveFilter}\"");
         xamlSource.Should().Contain("IsEnabled=\"{Binding HasActiveFilter}\"");
         xamlSource.Should().Contain("Binding=\"{Binding IsSelected}\"");
@@ -473,8 +476,9 @@ public sealed partial class MainWindowXamlKeyTipTests
     {
         var source = ReadPivotCommandSource();
 
-        source.Should().Contain("ApplyPivotOptions(");
-        source.Should().Contain("new ConfigurePivotTableOptionsCommand");
+        source.Should().Contain("ApplyPivotDesignOptions(");
+        source.Should().Contain("PivotApplication.PlanDesignOptions(");
+        source.Should().NotContain("new ConfigurePivotTableOptionsCommand");
         source.Should().NotContain("PivotTableRefreshService.Refresh(_workbook, sheet, pivotTable);");
     }
 
@@ -483,14 +487,10 @@ public sealed partial class MainWindowXamlKeyTipTests
     {
         var source = ReadPivotCommandSource();
 
-        source.Should().Contain("int? compactRowLabelIndent = null");
-        source.Should().Contain("bool? printTitles = null");
-        source.Should().Contain("bool? printExpandCollapseButtons = null");
-        source.Should().Contain("bool updateAltText = false");
+        source.Should().Contain("PivotOptionsPlanner.CaptureDesignValues(pivotTable)");
         source.Should().Contain("showExpandCollapseButtons: !pivotTable.ShowExpandCollapseButtons");
-        source.Should().Contain("showFieldHeaders: !pivotTable.ShowFieldHeaders");
-        source.Should().Contain("compactRowLabelIndent,");
-        source.Should().Contain("updateAltText: true");
+        source.Should().Contain("ShowFieldHeaders = !pivotTable.ShowFieldHeaders");
+        source.Should().Contain("PivotApplication.PlanDialogOptions(");
     }
 
     [Fact]
@@ -498,7 +498,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     {
         var source = ReadPivotCommandSource();
 
-        source.Should().Contain("new ChangePivotTableSourceCommand");
+        source.Should().Contain("PivotApplication.PlanChangeDataSource(target, dialog.Result.SourceRangeText)");
         source.Should().Contain("TryParseWorkbookRange");
         source.Should().NotContain("Rebinding a loaded PivotTable cache to a different source range is still tracked as a parity gap.");
     }

@@ -16,19 +16,44 @@ public sealed class HyperlinkDialogTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreePHeadlessApp).Assembly);
 
     [Fact]
-    public void AvaloniaHyperlinkDialog_UsesSharedPlannerForPolicy()
+    public void AvaloniaHyperlinkDialog_UsesSharedSessionForSemanticWorkflow()
     {
         var source = File.ReadAllText(FindRepoFile(
             "freep",
             "FreeP.App.Avalonia",
             "HyperlinkDialog.cs"));
+        var testSupport = File.ReadAllText(FindRepoFile(
+            "freep",
+            "TestSupport",
+            "HostAccess.Avalonia",
+            "BasicDialogs.TestAccess.cs"));
 
         source.Should().Contain("HyperlinkDialogPlanner.BuildDialogRequest(slides, current)");
-        source.Should().Contain("HyperlinkDialogPlanner.BuildResult(");
+        source.Should().Contain("new HyperlinkDialogSession(request)");
+        source.Should().Contain("_session.Surface");
+        source.Should().Contain("AutomationProperties.SetName(");
+        source.Should().Contain("AutomationProperties.SetAutomationId(");
+        source.Should().NotContain("ForTests");
+        testSupport.Should().Contain("partial class HyperlinkDialog");
+        testSupport.Should().Contain("_session.SetInput(");
+        source.Should().Contain("_session.SelectTarget(");
+        source.Should().Contain("_session.SetUrlText(");
+        source.Should().Contain("_session.SelectSlide(");
+        source.Should().Contain("_session.SetTooltipText(");
+        source.Should().Contain("_session.TryAccept()");
+        source.Should().Contain("RenderInputState(state)");
+        source.Should().NotContain("HyperlinkDialogPlanner.BuildResult(");
+        source.Should().NotContain("SelectedItem as HyperlinkDialogSlideOption");
+        source.Should().NotContain("Result = plan.Result");
         source.Should().NotContain("Uri.TryCreate");
         source.Should().NotContain("new Hyperlink { Url =");
         source.Should().NotContain("new Hyperlink { TargetSlideId =");
         source.Should().NotContain("slide.Title");
+        source.Should().NotContain("HyperlinkDialogPlanner.BuildSurfacePlan(");
+        source.Should().NotContain("\"Web address:\"");
+        source.Should().NotContain("\"Slide in this presentation:\"");
+        source.Should().NotContain("\"Target slide:\"");
+        source.Should().NotContain("\"Tooltip:\"");
     }
 
     [Fact]
@@ -76,7 +101,7 @@ public sealed class HyperlinkDialogTests
             var dialog = new HyperlinkDialog(CreateRequest());
             var validation = GetField<TextBlock>(dialog, "_validationText");
 
-            dialog.ApplyForVisualEvidence(
+            dialog.ApplyInputForTests(
                 HyperlinkDialogTargetKind.Url,
                 "not a url",
                 0,
@@ -86,7 +111,7 @@ public sealed class HyperlinkDialogTests
             validation.IsVisible.Should().BeTrue();
             dialog.Result.Should().BeNull();
 
-            dialog.ApplyForVisualEvidence(
+            dialog.ApplyInputForTests(
                 HyperlinkDialogTargetKind.Url,
                 "https://example.test/accepted",
                 0,
@@ -103,18 +128,20 @@ public sealed class HyperlinkDialogTests
     }
 
     [Fact]
-    public void MainWindow_RoutesAvaloniaHyperlinkDialogRequestAndApplyPayload()
+    public void MainWindow_RoutesAvaloniaHyperlinkThroughSharedWorkflow()
     {
         var source = File.ReadAllText(FindRepoFile(
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
 
-        source.Should().Contain("HyperlinkDialogPlanner.BuildDialogRequest(");
-        source.Should().Contain("HyperlinkDialogPlanner.BuildApplyPlan(");
-        source.Should().Contain("Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip)");
-        source.Should().Contain("r.Register(\"freep.insert-link\", new ActionRibbonCommand(OpenHyperlinkDialog))");
-        source.Should().NotContain("_ = HyperlinkDialogPlanner.BuildDialogRequest(");
+        source.Should().Contain("PresentationHyperlinkWorkflowSession _hyperlinkWorkflowSession");
+        source.Should().Contain("_hyperlinkWorkflowSession.BuildRequest(");
+        source.Should().Contain("_hyperlinkWorkflowSession.Apply(");
+        source.Should().Contain("FreePRibbonHostRegistryComposer.Build(");
+        source.Should().Contain("OpenHyperlink = OpenHyperlinkDialog");
+        source.Should().NotContain("Editor.SetShapeHyperlink(");
+        source.Should().NotContain("r.Register(\"freep.insert-link\"");
     }
 
     [Fact]
@@ -263,21 +290,7 @@ public sealed class HyperlinkDialogTests
             .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(dialog)!;
 
-    private static string FindRepoFile(params string[] relativeParts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-            {
-                var parts = new string[relativeParts.Length + 1];
-                parts[0] = directory.FullName;
-                Array.Copy(relativeParts, 0, parts, 1, relativeParts.Length);
-                return Path.Combine(parts);
-            }
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
+    private static string FindRepoFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeP.slnx", relativeParts);
 }

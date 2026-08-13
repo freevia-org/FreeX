@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Media;
 
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
@@ -257,20 +258,16 @@ public partial class GridView
             return;
 
         var style = cell.Style;
-        Brush? fill = WorksheetBackground == null ? Brushes.White : null;
-        if (style?.GradientFill is { } cellGradFill)
-        {
-            fill = BuildCellGradientBrush(cellGradFill);
-        }
-        else if (style?.ResolveFillColor(WorkbookTheme) is { } fillColor)
-        {
-            fill = BrushForCellColor(fillColor, _brushCache);
-        }
+        var fillPlan = CellFillMaterializationPlanner.Plan(
+            style,
+            WorkbookTheme,
+            CellFillMaterializationProfile.Wpf,
+            WorksheetBackground == null ? CellFillFallbackKind.White : CellFillFallbackKind.Transparent);
+        var fill = BuildCellBackgroundBrush(fillPlan, _brushCache);
 
         if (fill is not null || gridPen is not null)
             dc.DrawRectangle(fill, gridPen, rect);
-        if (style?.GradientFill is null)
-            DrawFillPattern(dc, rect, style, WorkbookTheme, _brushCache, _fillPatternPenCache);
+        DrawFillPattern(dc, rect, fillPlan, _brushCache, _fillPatternPenCache);
         if (cell.ConditionalDataBar is { } splitDataBar)
             DrawConditionalDataBar(dc, splitDataBar, rect, _brushCache);
 
@@ -367,8 +364,6 @@ public partial class GridView
                 pixelsPerDip);
         }
 
-        ResolveSuperSubFontAdjustment(style, fontSize, out fontSize, out double splitSuperSubBaselineOffsetPx);
-
         // Pre-resolve rich runs (split-pane path).  Same cache-bypass logic as the main pass:
         // cells with rich runs get a fresh FormattedText so ApplyRichRunFormatting can mutate it.
         // Use CellStyle.Default when cell.Style is null so null run props inherit sensible defaults.
@@ -379,7 +374,17 @@ public partial class GridView
             if (richTextMapSplit.TryGetValue(cellAddrSplit, out var rawRunsSplit) && rawRunsSplit is { Count: > 0 })
                 splitRichRuns = CellRichRunLayoutPlanner.Resolve(rawRunsSplit, style ?? CellStyle.Default);
         }
-        var hasSplitRichRuns = splitRichRuns is { Count: > 0 };
+        var textMaterialization = CellTextMaterializationPlanner.Plan(
+            renderText,
+            isNumeric,
+            style,
+            fontSize,
+            splitRichRuns,
+            CellTextMaterializationProfile.Wpf);
+        fontSize = textMaterialization.RenderedFontSize;
+        var splitSuperSubBaselineOffsetPx = textMaterialization.BaselineOffset;
+        var hasSplitRichRuns = textMaterialization.HasRichText;
+        var materializedIsNumeric = textMaterialization.Formatting.IsNumericOrDate;
 
         // The cached default-layout fast paths below always build FlowDirection.LeftToRight text keyed
         // without regard to reading order, so an effectively-RTL cell must bypass them and take the
@@ -390,7 +395,7 @@ public partial class GridView
         var useDefaultWrappedTextLayout = false;
         if (!useDefaultTextLayout && wrapText)
         {
-            wrapTextAlignment = ResolveWrapTextAlignment(hAlign, isNumeric, isEffectivelyRightToLeft);
+            wrapTextAlignment = ResolveWrapTextAlignment(hAlign, materializedIsNumeric, isEffectivelyRightToLeft);
             useDefaultWrappedTextLayout = !hasSplitRichRuns && !isEffectivelyRightToLeft && CanUseDefaultWrappedFormattedText(style);
         }
         FormattedText text;
@@ -423,7 +428,7 @@ public partial class GridView
 
         // Per-run rich text (split-pane path).
         if (hasSplitRichRuns)
-            ApplyRichRunFormatting(text, splitRichRuns!, _brushCache);
+            ApplyRichRunFormatting(text, textMaterialization.RunSegments, _brushCache);
 
         if (wrapText && !useDefaultWrappedTextLayout)
         {
@@ -437,7 +442,7 @@ public partial class GridView
             text.Height,
             ResolveGeneralAlignmentHorizontalAlignment(hAlign, cell.RawValue),
             style?.VerticalAlignment,
-            isNumeric,
+            materializedIsNumeric,
             indentPx,
             textRotation,
             isEffectivelyRightToLeft);
@@ -536,30 +541,6 @@ public partial class GridView
     /// both describe the same physical grid edge (one from each of the two adjoining cells),
     /// heaviest/most-prominent first. An unrecognized style ranks lowest (last).
     /// </summary>
-    private static readonly BorderStyle[] BorderEdgePrecedence =
-    {
-        BorderStyle.Double,
-        BorderStyle.Thick,
-        BorderStyle.Medium,
-        BorderStyle.MediumDashDotDot,
-        BorderStyle.MediumDashDot,
-        BorderStyle.MediumDashed,
-        BorderStyle.SlantDashDot,
-        BorderStyle.Thin,
-        BorderStyle.DashDotDot,
-        BorderStyle.DashDot,
-        BorderStyle.Dashed,
-        BorderStyle.Dotted,
-        BorderStyle.Hair,
-        BorderStyle.None,
-    };
-
-    private static int BorderEdgePrecedenceRank(BorderStyle style)
-    {
-        var index = Array.IndexOf(BorderEdgePrecedence, style);
-        return index < 0 ? BorderEdgePrecedence.Length : index;
-    }
-
     /// <summary>
     /// Resolves which of two <see cref="CellBorder"/> values describing the same shared grid
     /// edge (one owned by each neighboring cell) should actually be painted, matching Excel's
@@ -569,12 +550,8 @@ public partial class GridView
     /// PDF render path (PrintRenderer.GridCells.cs, a different assembly) can resolve shared
     /// edges with this exact same precedence rule instead of duplicating or drifting from it.
     /// </summary>
-    public static CellBorder ResolveBorderEdgeWinner(CellBorder mine, CellBorder neighbor)
-    {
-        if (mine.Style == BorderStyle.None) return neighbor;
-        if (neighbor.Style == BorderStyle.None) return mine;
-        return BorderEdgePrecedenceRank(mine.Style) <= BorderEdgePrecedenceRank(neighbor.Style) ? mine : neighbor;
-    }
+    public static CellBorder ResolveBorderEdgeWinner(CellBorder mine, CellBorder neighbor) =>
+        CellBorderVisualPlanner.ResolveEdgeWinner(mine, neighbor);
 
     private void RenderCells(DrawingContext dc)
     {
@@ -656,12 +633,9 @@ public partial class GridView
             // outer perimeter is ever drawn -- matching Excel, which never shows an interior
             // line through a merged cell.
             var merge = hasMergedSurfaces ? FindMerge(cell.Row, cell.Col) : null;
-            var suppressTop = merge is { } mTop && cell.Row > mTop.Start.Row;
-            var suppressBottom = merge is { } mBottom && cell.Row < mBottom.End.Row;
-            var suppressLeft = merge is { } mLeft && cell.Col > mLeft.Start.Col;
-            var suppressRight = merge is { } mRight && cell.Col < mRight.End.Col;
+            var visibleEdges = ViewportGeometryPlanner.GetCellEdgeVisibility(merge, cell.Row, cell.Col);
 
-            if (!suppressTop)
+            if (visibleEdges.Top)
             {
                 var neighborBottom = borderStyleLookup is not null &&
                     borderStyleLookup.TryGetValue((cell.Row - 1, cell.Col), out var aboveStyle)
@@ -670,7 +644,7 @@ public partial class GridView
                 var winner = ResolveBorderEdgeWinner(style.BorderTop, neighborBottom);
                 DrawBorderEdge(dc, winner, new Point(x, y), new Point(x + w, y), _brushCache, _borderPenCache, borderPixelsPerDip);
             }
-            if (!suppressBottom)
+            if (visibleEdges.Bottom)
             {
                 var neighborTop = borderStyleLookup is not null &&
                     borderStyleLookup.TryGetValue((cell.Row + 1, cell.Col), out var belowStyle)
@@ -679,7 +653,7 @@ public partial class GridView
                 var winner = ResolveBorderEdgeWinner(style.BorderBottom, neighborTop);
                 DrawBorderEdge(dc, winner, new Point(x, y + h), new Point(x + w, y + h), _brushCache, _borderPenCache, borderPixelsPerDip);
             }
-            if (!suppressLeft)
+            if (visibleEdges.Left)
             {
                 var neighborRight = borderStyleLookup is not null &&
                     borderStyleLookup.TryGetValue((cell.Row, cell.Col - 1), out var leftStyle)
@@ -688,7 +662,7 @@ public partial class GridView
                 var winner = ResolveBorderEdgeWinner(style.BorderLeft, neighborRight);
                 DrawBorderEdge(dc, winner, new Point(x, y), new Point(x, y + h), _brushCache, _borderPenCache, borderPixelsPerDip);
             }
-            if (!suppressRight)
+            if (visibleEdges.Right)
             {
                 var neighborLeft = borderStyleLookup is not null &&
                     borderStyleLookup.TryGetValue((cell.Row, cell.Col + 1), out var rightStyle)
@@ -751,23 +725,24 @@ public partial class GridView
 
                 var ownStyle = borderStyleLookup is not null && borderStyleLookup.TryGetValue(fringeKey, out var s) ? s : null;
                 var fringeMerge = hasMergedSurfaces ? FindMerge(fringeRow, fringeCol) : null;
+                var fringeVisibleEdges = ViewportGeometryPlanner.GetCellEdgeVisibility(fringeMerge, fringeRow, fringeCol);
 
-                if (edges.Top is { } topEdge && (fringeMerge is not { } mTop || fringeRow == mTop.Start.Row))
+                if (edges.Top is { } topEdge && fringeVisibleEdges.Top)
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderTop ?? default, topEdge);
                     DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx + fw, fy), _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
-                if (edges.Bottom is { } bottomEdge && (fringeMerge is not { } mBottom || fringeRow == mBottom.End.Row))
+                if (edges.Bottom is { } bottomEdge && fringeVisibleEdges.Bottom)
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderBottom ?? default, bottomEdge);
                     DrawBorderEdge(dc, winner, new Point(fx, fy + fh), new Point(fx + fw, fy + fh), _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
-                if (edges.Left is { } leftEdge && (fringeMerge is not { } mLeft || fringeCol == mLeft.Start.Col))
+                if (edges.Left is { } leftEdge && fringeVisibleEdges.Left)
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderLeft ?? default, leftEdge);
                     DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx, fy + fh), _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
-                if (edges.Right is { } rightEdge && (fringeMerge is not { } mRight || fringeCol == mRight.End.Col))
+                if (edges.Right is { } rightEdge && fringeVisibleEdges.Right)
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderRight ?? default, rightEdge);
                     DrawBorderEdge(dc, winner, new Point(fx + fw, fy), new Point(fx + fw, fy + fh), _brushCache, _borderPenCache, borderPixelsPerDip);
@@ -898,9 +873,6 @@ public partial class GridView
                     pixelsPerDip);
             }
 
-            // Super/subscript: scale font to ~58% and apply a vertical baseline offset.
-            ResolveSuperSubFontAdjustment(style, fontSize, out fontSize, out double superSubBaselineOffsetPx);
-
             // Pre-resolve rich runs so we know whether to bypass the shared FormattedText cache.
             // The cache must NOT be modified in-place (it is shared across cells), so when this cell
             // has per-run rich text the default-layout fast-path is suppressed and a fresh
@@ -914,7 +886,17 @@ public partial class GridView
                 if (richTextMap.TryGetValue(cellAddr, out var rawRuns) && rawRuns is { Count: > 0 })
                     cellRichRuns = CellRichRunLayoutPlanner.Resolve(rawRuns, style ?? CellStyle.Default);
             }
-            var hasRichRuns = cellRichRuns is { Count: > 0 };
+            var textMaterialization = CellTextMaterializationPlanner.Plan(
+                renderText,
+                isNumeric,
+                style,
+                fontSize,
+                cellRichRuns,
+                CellTextMaterializationProfile.Wpf);
+            fontSize = textMaterialization.RenderedFontSize;
+            var superSubBaselineOffsetPx = textMaterialization.BaselineOffset;
+            var hasRichRuns = textMaterialization.HasRichText;
+            var materializedIsNumeric = textMaterialization.Formatting.IsNumericOrDate;
 
             // When the cell has per-run rich text, force the full (non-cached) FormattedText path so
             // ApplyRichRunFormatting can mutate font/color ranges without corrupting the shared cache.
@@ -926,7 +908,7 @@ public partial class GridView
             var useDefaultWrappedTextLayout = false;
             if (!useDefaultTextLayout && wrapText)
             {
-                wrapTextAlignment = ResolveWrapTextAlignment(hAlign, isNumeric, isEffectivelyRightToLeft);
+                wrapTextAlignment = ResolveWrapTextAlignment(hAlign, materializedIsNumeric, isEffectivelyRightToLeft);
                 useDefaultWrappedTextLayout = !hasRichRuns && !isEffectivelyRightToLeft && CanUseDefaultWrappedFormattedText(style);
             }
 
@@ -961,7 +943,7 @@ public partial class GridView
             // cellRichRuns is pre-resolved above; the formattedText is guaranteed to be a fresh
             // (non-cached) instance when hasRichRuns == true.
             if (hasRichRuns)
-                ApplyRichRunFormatting(text, cellRichRuns!, _brushCache);
+                ApplyRichRunFormatting(text, textMaterialization.RunSegments, _brushCache);
 
             if (wrapText && !useDefaultWrappedTextLayout)
             {
@@ -975,73 +957,32 @@ public partial class GridView
                 text.Height,
                 ResolveGeneralAlignmentHorizontalAlignment(hAlign, cell.RawValue),
                 style?.VerticalAlignment,
-                isNumeric,
+                materializedIsNumeric,
                 indentPx,
                 textRotation,
                 isEffectivelyRightToLeft);
 
             double clipLeft = rect.Left;
-            if (canOverflow && textLayout.Bounds.Right > rect.Right)
+            var overflowRight = canOverflow && textLayout.Bounds.Right > rect.Right;
+            var overflowLeft = canOverflow && textLayout.Bounds.Left < rect.Left && colMetric.Col > 1;
+            if (overflowRight || overflowLeft)
             {
-                occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
-                uint nextCol = colMetric.Col + 1;
-                // A plain hidden column has NO entry in colLookup at all (ViewportService.Metrics
-                // skips it entirely instead of giving it a zero-width entry), so a TryGetValue miss
-                // doesn't necessarily mean "end of the viewport" -- it can also mean "this column is
-                // hidden". Excel treats a hidden column as transparent to overflow (the text slides
-                // straight over it), so a miss only stops the scan once we're past the last column
-                // metric actually present in the viewport; otherwise skip over it and keep going.
-                uint maxViewportCol = viewport.ColMetrics.Count > 0 ? viewport.ColMetrics[^1].Col : colMetric.Col;
-                // The frozen/scrolled-body seam is a DIFFERENT kind of colLookup gap than a
-                // hidden column: when scrolled, colLookup only has entries for 1..FrozenCols and
-                // bodyStart..end, so the (possibly huge) range of merely scrolled-off columns in
-                // between is indistinguishable from a hidden column by TryGetValue alone. Excel's
-                // frozen pane is a genuinely separate clip region, so overflow must never tunnel
-                // across that seam -- clamp the scan so it cannot pass the last frozen column.
-                var frozenColsRight = viewport.FrozenPanes?.Cols ?? 0;
-                if (frozenColsRight > 0 && colMetric.Col <= frozenColsRight)
-                    maxViewportCol = Math.Min(maxViewportCol, frozenColsRight);
-                while (nextCol <= maxViewportCol)
+                var occupiedCells = occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
+                var availability = ViewportGeometryPlanner.CalculateOverflowAvailability(
+                    cell.Row,
+                    cell.Col,
+                    ViewportGeometryPlanner.GetColumnIndex(viewport.ColMetrics, cell.Col),
+                    viewport.ColMetrics,
+                    viewport.FrozenPanes?.Cols ?? 0,
+                    new ViewportGeometrySettings(0, 0),
+                    ViewportOverflowTraversal.LogicalColumns,
+                    (_, column) => occupiedCells.Contains((cell.Row, column)));
+                if (overflowRight)
+                    renderWidth += availability.RightWidth;
+                if (overflowLeft)
                 {
-                    var hasNextMetric = colLookup.TryGetValue(nextCol, out var nextMetric);
-                    if (hasNextMetric && !occupied.Contains((cell.Row, nextCol)))
-                        renderWidth += nextMetric!.Width;
-                    else if (hasNextMetric)
-                        break;
-                    nextCol++;
-                }
-            }
-
-            // Right/Center-aligned text can overflow leftward into empty cells (mirrors Excel,
-            // which slides right-aligned/centered overflow text over blank cells to its left).
-            if (canOverflow && textLayout.Bounds.Left < rect.Left && colMetric.Col > 1)
-            {
-                occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
-                uint prevCol = colMetric.Col - 1;
-                // Same hidden-column transparency as the rightward scan above: a missing colLookup
-                // entry means "hidden", not "stop" -- only bail once we pass the leftmost column
-                // metric actually present in the viewport.
-                uint minViewportCol = viewport.ColMetrics.Count > 0 ? viewport.ColMetrics[0].Col : colMetric.Col;
-                // Mirror of the seam clamp above: a scrollable-body cell's leftward overflow must
-                // not tunnel backward across the scrolled-off gap into the frozen pane, so clamp
-                // the scan to stop at the first column past the frozen boundary.
-                var frozenColsLeft = viewport.FrozenPanes?.Cols ?? 0;
-                if (frozenColsLeft > 0 && colMetric.Col > frozenColsLeft)
-                    minViewportCol = Math.Max(minViewportCol, frozenColsLeft + 1);
-                while (prevCol >= minViewportCol)
-                {
-                    var hasPrevMetric = colLookup.TryGetValue(prevCol, out var prevMetric);
-                    if (hasPrevMetric && !occupied.Contains((cell.Row, prevCol)))
-                    {
-                        clipLeft -= prevMetric!.Width;
-                        renderWidth += prevMetric.Width;
-                    }
-                    else if (hasPrevMetric)
-                        break;
-
-                    if (prevCol == minViewportCol)
-                        break;
-                    prevCol--;
+                    clipLeft -= availability.LeftWidth;
+                    renderWidth += availability.LeftWidth;
                 }
             }
 
@@ -1150,22 +1091,16 @@ public partial class GridView
         // Re-resolve against the CURRENT theme rather than reading the baked FillColor directly,
         // so a theme-bound fill (FillThemeColor) repaints after a Theme Colors swap instead of
         // staying stuck at whatever RGB was baked in at style-creation/load time.
-        var resolvedFill = bg?.ResolveFillColor(WorkbookTheme);
-
-        Brush? fill = null;
-        if (bg?.GradientFill is { } gradFill)
-        {
-            fill = BuildCellGradientBrush(gradFill);
-        }
-        else if (resolvedFill is { } resolvedFillColor)
-        {
-            fill = BrushForCellColor(resolvedFillColor, _brushCache);
-        }
-        else if (WorksheetBackground == null &&
-                 (isMerged || bg?.FillPatternStyle is not null and not CellFillPatternStyle.None))
-        {
-            fill = Brushes.White;
-        }
+        var fillFallback = WorksheetBackground == null &&
+            (isMerged || bg?.FillPatternStyle is not null and not CellFillPatternStyle.None)
+                ? CellFillFallbackKind.White
+                : CellFillFallbackKind.Transparent;
+        var fillPlan = CellFillMaterializationPlanner.Plan(
+            bg,
+            WorkbookTheme,
+            CellFillMaterializationProfile.Wpf,
+            fillFallback);
+        var fill = BuildCellBackgroundBrush(fillPlan, _brushCache);
 
         // A merged cell's gray outline is the default GRIDLINE (the same one an unmerged cell gets
         // for free from RenderCellBackgroundBase's base grid), not an authored border -- so it must
@@ -1175,13 +1110,12 @@ public partial class GridView
         // never draw when the merge has its own explicit fill (gradient or solid FillColor) painted
         // over it -- an unmerged filled cell never gets a matching gray outline over its fill either,
         // only the plain "no authored fill" default-white merge fallback above does.
-        var hasExplicitFill = bg?.GradientFill is not null || resolvedFill.HasValue;
+        var hasExplicitFill = fillPlan.HasExplicitPrimaryFill;
         var strokeMergeGridline = isMerged && ShowGridLines && !hasExplicitFill;
 
         if (fill is not null || strokeMergeGridline)
             dc.DrawRectangle(fill, strokeMergeGridline ? GridPen : null, rect);
-        if (bg is not null && bg.GradientFill is null)
-            DrawFillPattern(dc, rect, bg, WorkbookTheme, _brushCache, _fillPatternPenCache);
+        DrawFillPattern(dc, rect, fillPlan, _brushCache, _fillPatternPenCache);
     }
 
     private void RenderCellBackgroundBase(DrawingContext dc, double rowHeaderWidth, double columnHeaderHeight)

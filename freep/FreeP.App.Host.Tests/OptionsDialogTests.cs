@@ -27,7 +27,19 @@ public sealed class OptionsDialogTests
         content.Should().NotBeNull();
 
         var buttons = FindButtons((DependencyObject)content!);
-        buttons.Should().Contain(button => Equals(button.Content, "Edit options…"));
+        buttons.Should().Contain(button => Equals(
+            button.Content,
+            FreePBackstagePaneTextCatalog.Descriptor.OptionsEditText!.FallbackText));
+    }
+
+    [Fact]
+    public void BackstageOptionsPane_UsesCatalogLabelWithoutHostFallback()
+    {
+        var source = File.ReadAllText(TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Host", "Backstage", "BackstageView.cs"));
+
+        source.Should().Contain("Panes.BuildOptionsPane(PanePlans.BuildOptionsPane(");
+        source.Should().NotContain("Edit options");
     }
 
     [StaFact]
@@ -92,31 +104,23 @@ public sealed class OptionsDialogTests
     public void R128_EditFlow_AppliesLiveAndPersists()
     {
         // Mirrors MainWindow.OpenOptions without opening a real modal: the dialog produces a normalized
-        // result, the host copies it onto the live options instance (so FileCommands/Program see the new
+        // result, the host copies it onto the live options instance (so the file session/Program see the new
         // cap/language immediately) and saves via the shared ApplicationOptionsStore.
-        var tempDir = Path.Combine(Path.GetTempPath(), "FreeP.OptionsDialogTests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
-        try
+        using var temporaryDirectory = new TestTemporaryDirectory("FreeP.OptionsDialogTests-");
         {
-            var path = Path.Combine(tempDir, "settings.json");
+            var path = Path.Combine(temporaryDirectory.Path, "settings.json");
             var store = Free.Shared.AppServices.ApplicationOptionsStore<FreePOptions>.ForPath(path);
             var live = new FreePOptions { RecentFilesCap = FreePOptions.DefaultRecentFilesCap };
+            var runtime = new FreePOptionsRuntimeSession(live);
 
             var edited = OptionsDialogPlanner.BuildResult(recentFilesCap: 3, format: null, uiLanguage: "uk-UA");
-            live.RecentFilesCap = edited.RecentFilesCap;
-            live.DefaultSaveFormat = edited.DefaultSaveFormat;
-            live.UiLanguage = edited.UiLanguage;
-            live.Normalize();
-            store.Save(live).Should().BeTrue();
+            var outcome = runtime.ApplyAndPersist(edited, _ => store.Save(live));
+            outcome.Persisted.Should().BeTrue();
 
             live.RecentFilesCap.Should().Be(3);
             var reloaded = Free.Shared.AppServices.ApplicationOptionsStore<FreePOptions>.ForPath(path).Load();
             reloaded.RecentFilesCap.Should().Be(3);
             reloaded.UiLanguage.Should().Be("uk-UA");
-        }
-        finally
-        {
-            try { Directory.Delete(tempDir, recursive: true); } catch { /* best-effort */ }
         }
     }
 

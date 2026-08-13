@@ -100,6 +100,40 @@ public sealed class QuickSortRangePlannerTests
             .Should().BeFalse();
     }
 
+    [Fact]
+    public void HasLikelyHeaderRow_UsesStructuredTableHeaderMetadataForTextBody()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var range = new GridRange(Address(sheet, 1, 1), Address(sheet, 3, 2));
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 3,
+            Name = "People",
+            DisplayName = "People",
+            Range = range,
+            HeaderRowCount = 1
+        });
+        sheet.SetCell(Address(sheet, 1, 1), new TextValue("First"));
+        sheet.SetCell(Address(sheet, 1, 2), new TextValue("Last"));
+        sheet.SetCell(Address(sheet, 2, 1), new TextValue("Ada"));
+        sheet.SetCell(Address(sheet, 2, 2), new TextValue("Lovelace"));
+        sheet.SetCell(Address(sheet, 3, 1), new TextValue("Grace"));
+        sheet.SetCell(Address(sheet, 3, 2), new TextValue("Hopper"));
+
+        QuickSortRangePlanner.HasLikelyHeaderRow(sheet, range).Should().BeTrue();
+    }
+
+    [Fact]
+    public void SourceOwnership_DelegatesHeaderInterpretationWithoutCellScanning()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "QuickSortRangePlanner.cs"));
+
+        source.Should().Contain("QuickAnalysisSelectionReader.HasHeaderRow(sheet, range)");
+        source.Should().NotContain("for (var row =");
+        source.Should().NotContain("for (var col =");
+    }
+
     private static Sheet CreateSheetWithSalesList()
     {
         var workbook = new Workbook("Book1");

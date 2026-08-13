@@ -75,8 +75,15 @@ public sealed class HomeNumberFormatCommandSourceTests
     {
         var declarativeSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDeclarative.cs");
         var formattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
+        var definition = FreeXRibbonCompositionPlanner.Compose(FreeXRibbon.Build(), key => key);
+        var numberFormatCombo = definition.FindTab(FreeXRibbonTabIds.Home)!
+            .Groups.SelectMany(group => group.Controls)
+            .OfType<RibbonComboBox>()
+            .Single(control => control.CommandId.Value == "Number Format");
 
-        declarativeSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label)");
+        declarativeSource.Should().Contain("FreeXRibbonCompositionPlanner.Compose(FreeXRibbon.Build(), UiText.Get)");
+        numberFormatCombo.Choices.Select(choice => (choice.Value, choice.Label)).Should().Equal(
+            HomeNumberFormatDropdownPlanner.Options.Select(option => (option.Value, option.Label)));
         formattingSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options[selectedIndex]");
         formattingSource.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Number)");
     }

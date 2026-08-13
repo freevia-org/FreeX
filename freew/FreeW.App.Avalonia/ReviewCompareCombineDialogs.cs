@@ -11,28 +11,26 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class CompareDocumentsDialog : FreeWDialogWindow
+internal sealed partial class CompareDocumentsDialog : FreeWDialogWindow
 {
-    private const string ReviewerValidationMessage =
-        "Enter a reviewer name to label the tracked changes.";
-
     private readonly string _originalPath;
+    private readonly CompareDocumentsDialogPlan _plan;
     private readonly TextBox _authorBox = new()
     {
         MinWidth = 220,
         MaxWidth = 260,
     };
 
-    private readonly CheckBox _insertions = MakeCheckBox("Insertions and deletions", true);
-    private readonly CheckBox _deletions = MakeCheckBox("Deletions", true);
-    private readonly CheckBox _moves = MakeCheckBox("Moves", true);
-    private readonly CheckBox _comments = MakeCheckBox("Comments", true);
-    private readonly CheckBox _formatting = MakeCheckBox("Formatting", true);
-    private readonly CheckBox _caseChanges = MakeCheckBox("Case changes", true);
-    private readonly CheckBox _whitespace = MakeCheckBox("White space", true);
-    private readonly RadioButton _showNew = MakeRadio("New document", true);
-    private readonly RadioButton _showOriginal = MakeRadio("Original document");
-    private readonly RadioButton _showRevised = MakeRadio("Revised document");
+    private readonly CheckBox _insertions;
+    private readonly CheckBox _deletions;
+    private readonly CheckBox _moves;
+    private readonly CheckBox _comments;
+    private readonly CheckBox _formatting;
+    private readonly CheckBox _caseChanges;
+    private readonly CheckBox _whitespace;
+    private readonly RadioButton _showNew;
+    private readonly RadioButton _showOriginal;
+    private readonly RadioButton _showRevised;
     private readonly Expander _moreExpander;
     private readonly TextBlock _validation = new()
     {
@@ -41,7 +39,7 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
         TextWrapping = TextWrapping.Wrap,
         IsVisible = false,
     };
-    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.CompareDocuments;
+    private static readonly Free.Shared.Shell.DialogFocusPlan<string> FocusPlan = FreeWDialogFocusPlanner.CompareDocuments;
 
     public CompareDocumentsDialogResult? Result { get; private set; }
 
@@ -51,9 +49,20 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
         ArgumentNullException.ThrowIfNull(state);
 
         _originalPath = originalPath;
-        _authorBox.Text = state.DefaultAuthor;
+        _plan = ReviewCompareCombineWorkflow.BuildCompareDialogPlan(originalPath, state);
+        _authorBox.Text = _plan.DefaultAuthor;
+        _insertions = MakeCheckBox(_plan, CompareChangeKind.Insertions);
+        _deletions = MakeCheckBox(_plan, CompareChangeKind.Deletions);
+        _moves = MakeCheckBox(_plan, CompareChangeKind.Moves);
+        _comments = MakeCheckBox(_plan, CompareChangeKind.Comments);
+        _formatting = MakeCheckBox(_plan, CompareChangeKind.Formatting);
+        _caseChanges = MakeCheckBox(_plan, CompareChangeKind.CaseChanges);
+        _whitespace = MakeCheckBox(_plan, CompareChangeKind.Whitespace);
+        _showNew = MakeRadio(_plan, CompareShowChangesIn.NewDocument);
+        _showOriginal = MakeRadio(_plan, CompareShowChangesIn.Original);
+        _showRevised = MakeRadio(_plan, CompareShowChangesIn.Revised);
 
-        Title = "Compare Documents";
+        Title = _plan.Title;
         Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -65,23 +74,23 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
         ApplyRadioChrome(_showNew, _showOriginal, _showRevised);
 
         AutomationProperties.SetAutomationId(this, "CompareDocumentsDialog");
-        AutomationProperties.SetAutomationId(_authorBox, FocusPlan.InitialFocusTargetAutomationId);
+        AutomationProperties.SetAutomationId(_authorBox, FocusPlan.InitialFocusTarget);
         AutomationProperties.SetAutomationId(_validation, "CompareDocumentsValidationText");
 
         var grid = DialogGrid(rows: 7);
-        AddReadOnlyRow(grid, 0, "Original:", ReviewCompareCombineWorkflow.TruncatePathForDialog(originalPath));
-        AddReadOnlyRow(grid, 1, "Revised:", string.IsNullOrWhiteSpace(state.RevisedTitle) ? "(current document)" : state.RevisedTitle);
+        AddReadOnlyRow(grid, 0, _plan.OriginalLabel, _plan.OriginalDisplayPath);
+        AddReadOnlyRow(grid, 1, _plan.RevisedLabel, _plan.RevisedDisplayName);
 
         var separator = new Separator { Margin = new Thickness(0, 6, 0, 6) };
         Grid.SetRow(separator, 2);
         Grid.SetColumnSpan(separator, 2);
         grid.Children.Add(separator);
 
-        AddFieldRow(grid, 3, "Label revisions with:", _authorBox);
+        AddFieldRow(grid, 3, _plan.AuthorLabel, _authorBox);
 
         _moreExpander = new Expander
         {
-            Header = "More",
+            Header = _plan.MoreLabel,
             Content = BuildCompareSettingsPanel(),
             IsExpanded = false,
             Margin = new Thickness(0, 6, 0, 0),
@@ -120,7 +129,7 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
         var panel = new StackPanel { Margin = new Thickness(16, 4, 0, 4) };
         panel.Children.Add(new TextBlock
         {
-            Text = "Mark up which changes:",
+            Text = _plan.ChangeOptionsHeading,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 4),
         });
@@ -134,7 +143,7 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
         panel.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 6) });
         panel.Children.Add(new TextBlock
         {
-            Text = "Show changes in:",
+            Text = _plan.ShowChangesHeading,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 4),
         });
@@ -144,55 +153,38 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
         return panel;
     }
 
-    internal static CompareDocumentsDialog CreateForTest(
-        string originalPath,
-        CompareDocumentsPromptState state) =>
-        new(originalPath, state);
-
-    internal TextBox AuthorBoxForTest => _authorBox;
-    internal TextBlock ValidationForTest => _validation;
-    internal Expander MoreExpanderForTest => _moreExpander;
-
-    internal CompareDocumentsDialogResult? AcceptForTest(string? author)
-    {
-        _authorBox.Text = author;
-        TryAccept(close: false);
-        return Result;
-    }
-
     private void Accept() => TryAccept(close: true);
 
     private void TryAccept(bool close)
     {
-        var author = _authorBox.Text?.Trim();
-        if (string.IsNullOrEmpty(author))
+        var showIn = _showOriginal.IsChecked == true ? CompareShowChangesIn.Original
+            : _showRevised.IsChecked == true ? CompareShowChangesIn.Revised
+            : CompareShowChangesIn.NewDocument;
+
+        var selection = new CompareDocumentsDialogSelection(
+            _insertions.IsChecked == true,
+            _deletions.IsChecked == true,
+            _moves.IsChecked == true,
+            _comments.IsChecked == true,
+            _formatting.IsChecked == true,
+            _caseChanges.IsChecked == true,
+            _whitespace.IsChecked == true,
+            showIn);
+        if (!ReviewCompareCombineWorkflow.TryBuildCompareDialogResult(
+                _originalPath,
+                _authorBox.Text,
+                selection,
+                out var result,
+                out var validationMessage))
         {
-            _validation.Text = ReviewerValidationMessage;
+            _validation.Text = validationMessage;
             _validation.IsVisible = true;
             FocusAuthor();
             return;
         }
 
         _validation.IsVisible = false;
-
-        var showIn = _showOriginal.IsChecked == true ? CompareShowChangesIn.Original
-            : _showRevised.IsChecked == true ? CompareShowChangesIn.Revised
-            : CompareShowChangesIn.NewDocument;
-
-        Result = new CompareDocumentsDialogResult(
-            _originalPath,
-            author,
-            new CompareSettings
-            {
-                Insertions = _insertions.IsChecked == true,
-                Deletions = _deletions.IsChecked == true,
-                Moves = _moves.IsChecked == true,
-                Comments = _comments.IsChecked == true,
-                Formatting = _formatting.IsChecked == true,
-                CaseChanges = _caseChanges.IsChecked == true,
-                Whitespace = _whitespace.IsChecked == true,
-                ShowChangesIn = showIn,
-            });
+        Result = result;
         if (close)
             Close();
     }
@@ -205,17 +197,28 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
             _authorBox.Focus();
     }
 
-    private static CheckBox MakeCheckBox(string content, bool isChecked) =>
-        new() { Content = content, IsChecked = isChecked, Margin = new Thickness(0, 0, 0, 2) };
-
-    private static RadioButton MakeRadio(string content, bool isChecked = false) =>
-        new()
+    private static CheckBox MakeCheckBox(CompareDocumentsDialogPlan plan, CompareChangeKind kind)
+    {
+        var option = plan.ChangeOptions.Single(item => item.Kind == kind);
+        return new CheckBox
         {
-            Content = content,
-            IsChecked = isChecked,
+            Content = option.Label,
+            IsChecked = option.IsChecked,
+            Margin = new Thickness(0, 0, 0, 2),
+        };
+    }
+
+    private static RadioButton MakeRadio(CompareDocumentsDialogPlan plan, CompareShowChangesIn value)
+    {
+        var option = plan.ShowOptions.Single(item => item.Value == value);
+        return new RadioButton
+        {
+            Content = option.Label,
+            IsChecked = option.IsChecked,
             GroupName = "FreeWCompareShowChangesIn",
             Margin = new Thickness(0, 0, 0, 2),
         };
+    }
 
     private static void ApplyCheckBoxChrome(params CheckBox[] boxes)
     {
@@ -308,10 +311,11 @@ internal sealed class CombineDocumentsDialog : FreeWDialogWindow
 
         _originalPath = originalPath;
         _reviewerBPath = reviewerBPath;
-        _authorABox.Text = state.DefaultAuthorA;
-        _authorBBox.Text = state.DefaultAuthorB;
+        var plan = ReviewCompareCombineWorkflow.BuildCombineDialogPlan(originalPath, reviewerBPath, state);
+        _authorABox.Text = plan.DefaultAuthorA;
+        _authorBBox.Text = plan.DefaultAuthorB;
 
-        Title = "Combine Documents";
+        Title = plan.Title;
         Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -322,17 +326,17 @@ internal sealed class CombineDocumentsDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyTextBox(_authorBBox, InsertDialogLayout.ChromeStyle);
 
         var grid = CompareDocumentsDialog.DialogGrid(rows: 7);
-        CompareDocumentsDialog.AddReadOnlyRow(grid, 0, "Original:", ReviewCompareCombineWorkflow.TruncatePathForDialog(originalPath));
-        CompareDocumentsDialog.AddReadOnlyRow(grid, 1, "Reviewer A:", string.IsNullOrWhiteSpace(state.ReviewerATitle) ? "(current document)" : state.ReviewerATitle);
-        CompareDocumentsDialog.AddReadOnlyRow(grid, 2, "Reviewer B:", ReviewCompareCombineWorkflow.TruncatePathForDialog(reviewerBPath));
+        CompareDocumentsDialog.AddReadOnlyRow(grid, 0, plan.OriginalLabel, plan.OriginalDisplayPath);
+        CompareDocumentsDialog.AddReadOnlyRow(grid, 1, plan.ReviewerALabel, plan.ReviewerADisplayName);
+        CompareDocumentsDialog.AddReadOnlyRow(grid, 2, plan.ReviewerBLabel, plan.ReviewerBDisplayPath);
 
         var separator = new Separator { Margin = new Thickness(0, 6, 0, 6) };
         Grid.SetRow(separator, 3);
         Grid.SetColumnSpan(separator, 2);
         grid.Children.Add(separator);
 
-        CompareDocumentsDialog.AddFieldRow(grid, 4, "Label Reviewer A with:", _authorABox);
-        CompareDocumentsDialog.AddFieldRow(grid, 5, "Label Reviewer B with:", _authorBBox);
+        CompareDocumentsDialog.AddFieldRow(grid, 4, plan.AuthorALabel, _authorABox);
+        CompareDocumentsDialog.AddFieldRow(grid, 5, plan.AuthorBLabel, _authorBBox);
 
         var buttons = InsertDialogLayout.OkCancelRow(Accept, Close);
         Grid.SetRow(buttons, 6);
@@ -357,15 +361,18 @@ internal sealed class CombineDocumentsDialog : FreeWDialogWindow
 
     private void Accept()
     {
-        var authorA = _authorABox.Text?.Trim();
-        if (string.IsNullOrEmpty(authorA))
+        if (!ReviewCompareCombineWorkflow.TryBuildCombineDialogResult(
+                _originalPath,
+                _reviewerBPath,
+                _authorABox.Text,
+                _authorBBox.Text,
+                out var result,
+                out _))
+        {
             return;
+        }
 
-        var authorB = _authorBBox.Text?.Trim();
-        if (string.IsNullOrEmpty(authorB))
-            return;
-
-        Result = new CombineDocumentsDialogResult(_originalPath, _reviewerBPath, authorA, authorB);
+        Result = result;
         Close();
     }
 }

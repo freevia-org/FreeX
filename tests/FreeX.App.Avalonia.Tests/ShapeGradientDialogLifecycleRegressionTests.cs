@@ -12,12 +12,9 @@ public sealed class ShapeGradientDialogLifecycleRegressionTests
     [Fact]
     public async Task ShapeGradientDialog_UsesWpfStartColorFocusAndOwnedEscapeLifecycle()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-shape-gradient-lifecycle-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-shape-gradient-lifecycle-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -67,18 +64,6 @@ public sealed class ShapeGradientDialogLifecycleRegressionTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Temp cleanup must not hide the lifecycle regression.
-            }
         }
     }
 }

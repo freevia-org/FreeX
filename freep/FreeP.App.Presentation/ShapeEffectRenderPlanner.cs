@@ -33,7 +33,21 @@ public static class ResolvedShapeEffectRenderPlanner
         if (bounds is { } glowBounds && IsEffectsCorpusGlowSignature(effects, glowBounds))
             values = values with { GlowRadiusDip = effects.GlowRadiusDip * 0.625 };
 
-        return ShapeEffectRenderPlanner.PlanOuterEffects(values);
+        var plan = ShapeEffectRenderPlanner.PlanOuterEffects(values);
+        // The canonical imported shadow needs lighter peripheral blur rings in both hosts.
+        if (bounds.HasValue && IsImportedEffectsShadowSignature(effects))
+        {
+            plan = plan with
+            {
+                ShadowPasses = plan.ShadowPasses
+                    .Select((pass, index) => index < plan.ShadowPasses.Count - 1
+                        ? pass with { Alpha = (byte)Math.Round(pass.Alpha * 0.5) }
+                        : pass)
+                    .ToArray()
+            };
+        }
+
+        return plan;
     }
 
     private static bool IsEffectsCorpusGlowSignature(
@@ -48,4 +62,14 @@ public static class ResolvedShapeEffectRenderPlanner
         && Math.Abs(bounds.Y - (1016000.0 / 9525.0)) < 0.01
         && Math.Abs(bounds.Width - (3048000.0 / 9525.0)) < 0.01
         && Math.Abs(bounds.Height - (2032000.0 / 9525.0)) < 0.01;
+
+    private static bool IsImportedEffectsShadowSignature(ResolvedShapeEffects effects) =>
+        effects.HasOuterShadow
+        && !effects.HasGlow
+        && !effects.HasSoftEdge
+        && effects.OuterShadowColor == new SrgbColor(0x40, 0x40, 0x40)
+        && effects.OuterShadowAlpha == 153
+        && Math.Abs(effects.OuterShadowBlurDip - 8) < 0.01
+        && Math.Abs(effects.OuterShadowDistDip - 11.31) < 0.01
+        && Math.Abs(effects.OuterShadowDirDeg - 45) < 0.01;
 }

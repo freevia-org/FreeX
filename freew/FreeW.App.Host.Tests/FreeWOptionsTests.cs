@@ -16,15 +16,10 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class FreeWOptionsTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeW.OptionsTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.OptionsTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public FreeWOptionsTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public void Defaults_AreSensible()
@@ -214,8 +209,15 @@ public sealed class FreeWOptionsTests : IDisposable
         var dialogSource = File.ReadAllText(Path.Combine(repoRoot, "freew", "FreeW.App.Host", "OptionsDialog.cs"));
 
         dialogSource.Should().Contain("using FreeW.App.Presentation.Options;");
-        dialogSource.Should().Contain("OptionsDialogPlanner.TryParseRecentFilesCap(");
-        dialogSource.Should().Contain("OptionsDialogPlanner.BuildResult(");
+        dialogSource.Should().Contain("new OptionsDialogSession(");
+        dialogSource.Should().Contain("_session.PlanAcceptance(");
+        dialogSource.Should().Contain("_session.PlanEnabledState(");
+        dialogSource.Should().NotContain("OptionsDialogWorkflowPlanner.TryBuildResult(");
+        dialogSource.Should().NotContain("OptionsDialogWorkflowPlanner.PlanEnabledState(");
+        dialogSource.Should().NotContain("OptionsDialogPlanner.TryParseRecentFilesCap(");
+        dialogSource.Should().NotContain("OptionsDialogPlanner.BuildResult(");
+        dialogSource.Should().NotContain("new AutoFormatOptions");
+        dialogSource.Should().NotContain("new AutoCorrectOptions");
         File.Exists(Path.Combine(repoRoot, "freew", "FreeW.App.Host", "OptionsDialogPlanner.cs"))
             .Should().BeFalse();
         File.Exists(Path.Combine(repoRoot, "freew", "FreeW.App.Host", "FreeWOptions.cs"))

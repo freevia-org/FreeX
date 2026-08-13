@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Drawing;
 using Free.Shared.Pdf;
 using SkiaSharp;
 
@@ -39,23 +40,43 @@ public static class SkiaPdfWriter
     /// dependency-free writer as a platform fallback when Skia cannot initialize.
     /// </summary>
     /// <remarks>
-    /// Deliberately kept single-parameter (no <c>imageDiagnostics</c> pass-through, unlike
-    /// <see cref="WriteToBytes"/>): several hosts bind this method as a bare method-group to a
-    /// fixed single-parameter delegate type (e.g. FreeP's <c>PresentationPdfContentWriter</c>), and
-    /// C# method-group-to-delegate conversion does not permit dropping trailing optional parameters
-    /// -- adding one here breaks that binding at compile time. Callers that need image diagnostics
-    /// should call <see cref="WriteToBytes"/> or <see cref="Write"/> directly.
+    /// The one-parameter overload remains available for method-group bindings. Callers that collect
+    /// non-fatal image warnings can use the required two-parameter overload below.
     /// </remarks>
     public static byte[] WriteToBytesWithPortableFallback(PdfContentDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
+        using var stream = new MemoryStream();
+        PdfBackendFallbackExecutor.Execute(
+            stream,
+            target => Write(document, target),
+            target =>
+            {
+                PortablePdfWriter.Write(document, target);
+                return document.Pages.Count;
+            });
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Uses the same Skia-then-portable fallback while forwarding non-fatal image diagnostics from
+    /// the backend that ultimately produced the document.
+    /// </summary>
+    public static byte[] WriteToBytesWithPortableFallback(
+        PdfContentDocument document,
+        ICollection<string> imageDiagnostics)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(imageDiagnostics);
+
         try
         {
-            return WriteToBytes(document);
+            return WriteToBytes(document, imageDiagnostics);
         }
         catch (Exception ex) when (SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex))
         {
-            return PortablePdfWriter.WriteToBytes(document);
+            imageDiagnostics.Clear();
+            return PortablePdfWriter.WriteToBytes(document, imageDiagnostics: imageDiagnostics);
         }
     }
 
@@ -135,57 +156,23 @@ public static class SkiaPdfWriter
 
     private static void AddNamedDestinations(SKCanvas canvas, PdfContentPage page)
     {
-        if (page.NamedDestinations is not { Count: > 0 })
-            return;
-
-        foreach (var destination in page.NamedDestinations)
+        foreach (var destination in PdfAnnotationPlanner.BuildNamedDestinations(page))
         {
-            var name = destination.Name?.Trim();
-            if (string.IsNullOrEmpty(name)
-                || !double.IsFinite(destination.X)
-                || !double.IsFinite(destination.Y))
-                continue;
-
             canvas.DrawNamedDestinationAnnotation(
-                new SKPoint(
-                    (float)Math.Clamp(destination.X, 0, page.WidthPoints),
-                    (float)Math.Clamp(destination.Y, 0, page.HeightPoints)),
-                name);
+                new SKPoint((float)destination.X, (float)destination.Y),
+                destination.Name);
         }
     }
 
     private static void AddLinkAnnotations(SKCanvas canvas, PdfContentPage page)
     {
-        if (page.LinkOverlays is not { Count: > 0 })
-            return;
-
-        foreach (var overlay in page.LinkOverlays)
+        foreach (var link in PdfAnnotationPlanner.BuildLinkAnnotations(page))
         {
-            if (!double.IsFinite(overlay.X)
-                || !double.IsFinite(overlay.Y)
-                || !double.IsFinite(overlay.Width)
-                || !double.IsFinite(overlay.Height)
-                || overlay.Width <= 0
-                || overlay.Height <= 0)
-                continue;
-
-            var uri = overlay.Uri?.Trim();
-            var destinationName = overlay.DestinationName?.Trim();
-            if (string.IsNullOrEmpty(uri) && string.IsNullOrEmpty(destinationName))
-                continue;
-
-            var left = Math.Clamp(overlay.X, 0, page.WidthPoints);
-            var right = Math.Clamp(overlay.X + overlay.Width, 0, page.WidthPoints);
-            var top = Math.Clamp(overlay.Y, 0, page.HeightPoints);
-            var bottom = Math.Clamp(overlay.Y + overlay.Height, 0, page.HeightPoints);
-            if (right <= left || bottom <= top)
-                continue;
-
-            var rect = new SKRect((float)left, (float)top, (float)right, (float)bottom);
-            if (!string.IsNullOrEmpty(uri))
-                canvas.DrawUrlAnnotation(rect, uri);
+            var rect = new SKRect((float)link.Left, (float)link.Top, (float)link.Right, (float)link.Bottom);
+            if (!string.IsNullOrEmpty(link.Uri))
+                canvas.DrawUrlAnnotation(rect, link.Uri);
             else
-                canvas.DrawLinkDestinationAnnotation(rect, destinationName!);
+                canvas.DrawLinkDestinationAnnotation(rect, link.DestinationName!);
         }
     }
 
@@ -972,49 +959,49 @@ public static class SkiaPdfWriter
         var height = Math.Max(1, (int)Math.Round(pattern.TileHeight));
         var scaleX = width / pattern.TileWidth;
         var scaleY = height / pattern.TileHeight;
-        var unit = pattern.UnitScale * Math.Min(scaleX, scaleY);
-        var midX = width / 2f;
-        var midY = height / 2f;
         var bitmap = new SKBitmap(width, height);
         using (var canvas = new SKCanvas(bitmap))
-        using (var background = new SKPaint { Color = ToSkColor(pattern.Background), Style = SKPaintStyle.Fill, IsAntialias = true })
-        using (var foreground = new SKPaint { Color = ToSkColor(pattern.Foreground), Style = SKPaintStyle.Stroke, StrokeWidth = (float)(pattern.StrokeWidth * Math.Min(scaleX, scaleY)), IsAntialias = true })
         {
-            canvas.DrawRect(new SKRect(0, 0, width, height), background);
-            switch (pattern.Kind)
+            foreach (var primitive in pattern.Recipe.Primitives)
             {
-                case PdfPatternKind.Horizontal:
-                    canvas.DrawLine(0, midY, width, midY, foreground);
-                    break;
-                case PdfPatternKind.Vertical:
-                    canvas.DrawLine(midX, 0, midX, height, foreground);
-                    break;
-                case PdfPatternKind.DownDiagonal:
-                    canvas.DrawLine(0, 0, width, height, foreground);
-                    break;
-                case PdfPatternKind.UpDiagonal:
-                    canvas.DrawLine(0, height, width, 0, foreground);
-                    break;
-                case PdfPatternKind.Cross:
-                    canvas.DrawLine(0, midY, width, midY, foreground);
-                    canvas.DrawLine(midX, 0, midX, height, foreground);
-                    break;
-                case PdfPatternKind.Dot:
-                    foreground.Style = SKPaintStyle.Fill;
-                    canvas.DrawCircle(midX, midY, (float)(unit / 2), foreground);
-                    break;
-                case PdfPatternKind.Brick:
-                    canvas.DrawLine(0, 0, width, 0, foreground);
-                    canvas.DrawLine(6 * (float)unit, 4 * (float)unit, width, 4 * (float)unit, foreground);
-                    canvas.DrawLine(0, 4 * (float)unit, 3 * (float)unit, 4 * (float)unit, foreground);
-                    canvas.DrawLine(6 * (float)unit, 0, 6 * (float)unit, 4 * (float)unit, foreground);
-                    canvas.DrawLine(0, 4 * (float)unit, 0, height, foreground);
-                    canvas.DrawLine(width, 4 * (float)unit, width, height, foreground);
-                    break;
-                case PdfPatternKind.DiagonalCross:
-                    canvas.DrawLine(0, 0, width, height, foreground);
-                    canvas.DrawLine(width, 0, 0, height, foreground);
-                    break;
+                var color = primitive.ColorRole == DrawingMlPatternFillColorRole.Foreground
+                    ? pattern.Foreground
+                    : pattern.Background;
+                using var paint = new SKPaint { Color = ToSkColor(color), IsAntialias = true };
+                switch (primitive)
+                {
+                    case DrawingMlPatternFillRectangle rectangle:
+                        paint.Style = SKPaintStyle.Fill;
+                        canvas.DrawRect(
+                            (float)(rectangle.X * pattern.UnitScale * scaleX),
+                            (float)(rectangle.Y * pattern.UnitScale * scaleY),
+                            (float)(rectangle.Width * pattern.UnitScale * scaleX),
+                            (float)(rectangle.Height * pattern.UnitScale * scaleY),
+                            paint);
+                        break;
+                    case DrawingMlPatternFillLine line:
+                        paint.Style = SKPaintStyle.Stroke;
+                        paint.StrokeWidth = (float)(line.StrokeWidth * pattern.UnitScale * Math.Min(scaleX, scaleY));
+                        canvas.DrawLine(
+                            (float)(line.Start.X * pattern.UnitScale * scaleX),
+                            (float)(line.Start.Y * pattern.UnitScale * scaleY),
+                            (float)(line.End.X * pattern.UnitScale * scaleX),
+                            (float)(line.End.Y * pattern.UnitScale * scaleY),
+                            paint);
+                        break;
+                    case DrawingMlPatternFillEllipse ellipse:
+                        paint.Style = SKPaintStyle.Fill;
+                        canvas.DrawOval(
+                            new SKRect(
+                                (float)((ellipse.CenterX - ellipse.RadiusX) * pattern.UnitScale * scaleX),
+                                (float)((ellipse.CenterY - ellipse.RadiusY) * pattern.UnitScale * scaleY),
+                                (float)((ellipse.CenterX + ellipse.RadiusX) * pattern.UnitScale * scaleX),
+                                (float)((ellipse.CenterY + ellipse.RadiusY) * pattern.UnitScale * scaleY)),
+                            paint);
+                        break;
+                    default:
+                        throw new InvalidOperationException($"Unsupported pattern primitive {primitive.GetType().Name}.");
+                }
             }
         }
 

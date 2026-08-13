@@ -12,8 +12,13 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("SourceManagementDialogPlanner.BuildSourceTypeChoices(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildEntryFieldPlans(");
         source.Should().Contain("SourceManagementDialogPlanner.CreateEntry(");
-        source.Should().Contain("SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(");
-        source.Should().Contain("SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(");
+        source.Should().Contain("new SourceManagementAuthorEditorSession(entry)");
+        source.Should().Contain("session.AddPersonalAuthorRow(");
+        source.Should().Contain("session.RemoveFinalPersonalAuthorRow(");
+        source.Should().Contain("session.SelectMode(");
+        source.Should().Contain("session.Accept(");
+        source.Should().Contain("plan.PersonalAuthorFieldsEnabled");
+        source.Should().Contain("plan.CorporateAuthorFieldEnabled");
         source.Should().Contain("SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(");
         source.Should().Contain("_fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text),");
         source.Should().Contain("_entryBaseline);");
@@ -67,6 +72,9 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().NotContain("SourceValueEquals(");
         source.Should().NotContain("SourceManagementTagIdentity");
         source.Should().NotContain("FindSourceIndexByTag(");
+        source.Should().NotContain("rowControls.Count <= 1");
+        source.Should().NotContain("new SourceManagementAuthorEditorState(");
+        source.Should().NotContain("SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(");
     }
 
     [Fact]
@@ -76,7 +84,8 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
 
         source.Should().Contain("SizeToContent = SizeToContent.WidthAndHeight;");
         source.Should().NotContain("Width = 620;");
-        source.Should().Contain("Button(\"Copy →\", () => _ = CopyMasterToCurrentAsync())");
+        source.Should().Contain("Button(text.CopyToCurrentButtonLabel, () => _ = CopyMasterToCurrentAsync())");
+        source.Should().Contain("Button(text.CopyToMasterButtonLabel, () => _ = CopyCurrentToMasterAsync())");
         source.Should().Contain("ApplyButton(button, DialogChromeStyle, minWidth: 72");
     }
 

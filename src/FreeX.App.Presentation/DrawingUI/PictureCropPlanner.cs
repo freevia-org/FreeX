@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.DrawingUI;
@@ -96,6 +97,27 @@ public static class PictureCropDialogPlanner
             ? TryCreateResult(parts[0], parts[1], parts[2], parts[3], out result, out error)
             : Invalid(out result, out error);
     }
+
+    public static SetPictureCropCommand BuildCommand(
+        SheetId sheetId,
+        Guid pictureId,
+        CropResult crop)
+    {
+        ArgumentNullException.ThrowIfNull(crop);
+        return BuildCommand(sheetId, pictureId, crop.Left, crop.Top, crop.Right, crop.Bottom);
+    }
+
+    public static SetPictureCropCommand BuildCommand(
+        SheetId sheetId,
+        Guid pictureId,
+        double left,
+        double top,
+        double right,
+        double bottom) =>
+        new(sheetId, pictureId, left, top, right, bottom);
+
+    public static SetPictureCropCommand BuildResetCommand(SheetId sheetId, Guid pictureId) =>
+        BuildCommand(sheetId, pictureId, 0, 0, 0, 0);
 
     private static bool Invalid(out CropResult? result, out string? error)
     {

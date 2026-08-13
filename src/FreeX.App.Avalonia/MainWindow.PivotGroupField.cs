@@ -3,9 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 
-using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.PivotUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -19,7 +17,7 @@ namespace FreeX.App.Avalonia;
 /// All catalogs, the current-grouping capture, the start/end/by validation, the result <see cref="PivotFieldModel"/>
 /// building, and the row/column/page layout rewrite come from the portable <see cref="PivotGroupFieldPlanner"/>
 /// so the behavior is single-sourced with the WPF host and reusable on macOS. The rewritten layout round-trips
-/// through <see cref="ConfigurePivotTableCalculatedItemsCommand"/> (the same command the desktop host's grouping
+/// through the shared Pivot application session (the same command policy the desktop host's grouping
 /// uses), carrying the existing calculated fields/items untouched. Reached from the Analyze ▸ Group Field /
 /// Ungroup ribbon commands (<c>pivotAnalyze.groupField</c> / <c>pivotAnalyze.ungroup</c>).
 /// </summary>
@@ -50,11 +48,18 @@ public sealed partial class MainWindow
             return;
         }
 
-        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot!);
+        var headers = PivotApplication.ReadSourceHeaders(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot!));
         var caption = PivotFieldListPaneBuilder.FieldCaption(headers, field.SourceFieldIndex);
-        var ungrouped = PivotGroupFieldPlanner.CreateField(
-            field.SourceFieldIndex, PivotFieldGrouping.None, ungroup: true, null, null, null);
-        ApplyPivotGrouping(pivot!, ungrouped, UiText.Format("PivotGroup_Ungrouped", caption));
+        var submission = PivotGroupFieldPlanner.CreateSubmission(
+            caption,
+            field.SourceFieldIndex,
+            PivotFieldGrouping.None,
+            ungroup: true,
+            start: null,
+            end: null,
+            interval: null);
+        ApplyPivotGrouping(pivot!, submission, UiText.Format("PivotGroup_Ungrouped", caption));
     }
 
     private async Task OpenPivotGroupFieldDialogAsync(PivotTableModel pivot)
@@ -62,7 +67,8 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving)
             return;
 
-        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+        var headers = PivotApplication.ReadSourceHeaders(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot));
         var layoutFields = LayoutFieldOptions(pivot, headers);
         if (layoutFields.Count == 0)
         {
@@ -189,34 +195,39 @@ public sealed partial class MainWindow
             ? layoutFields[fieldBox.SelectedIndex]
             : layoutFields[0];
         var selectedGrouping = PivotGroupFieldPlanner.GroupingFromIndex(groupingBox.SelectedIndex);
-        if (!PivotGroupFieldPlanner.TryValidate(
-                selectedGrouping, ungroup: false, startBox.Text, endBox.Text, intervalBox.Text,
-                out var start, out var end, out var interval, out var lateError))
+        if (!PivotGroupFieldPlanner.TryCreateSubmission(
+                selected.Caption,
+                selected.SourceFieldIndex,
+                selectedGrouping,
+                ungroup: false,
+                startBox.Text,
+                endBox.Text,
+                intervalBox.Text,
+                out var submission,
+                out var lateError))
         {
             ShowEditIssue(lateError ?? PivotGroupFieldPlanner.InvalidStartMessage);
             return;
         }
 
-        var groupedField = PivotGroupFieldPlanner.CreateField(
-            selected.SourceFieldIndex, selectedGrouping, ungroup: false, start, end, interval);
         var status = selectedGrouping == PivotFieldGrouping.None
             ? UiText.Format("PivotGroup_Ungrouped", selected.Caption)
             : UiText.Format("PivotGroup_Grouped", selected.Caption);
-        ApplyPivotGrouping(pivot, groupedField, status);
+        ApplyPivotGrouping(pivot, submission!, status);
     }
 
-    private void ApplyPivotGrouping(PivotTableModel pivot, PivotFieldModel groupedField, string status)
+    private void ApplyPivotGrouping(PivotTableModel pivot, PivotGroupFieldSubmission submission, string status)
     {
-        var layout = PivotGroupFieldPlanner.BuildLayout(pivot, groupedField);
-        var command = new ConfigurePivotTableCalculatedItemsCommand(
-            _session.ActiveSheet.Id,
-            pivot.Name,
-            layout.RowFields,
-            layout.ColumnFields,
-            layout.PageFields,
-            pivot.CalculatedFields.ToList(),
-            pivot.CalculatedItems.ToList());
-        ExecutePivotTabCommand(command, status);
+        var layout = PivotGroupFieldPlanner.BuildLayout(pivot, submission.Field);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanCalculatedConfiguration(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                layout.RowFields,
+                layout.ColumnFields,
+                layout.PageFields,
+                pivot.CalculatedFields.ToList(),
+                pivot.CalculatedItems.ToList()),
+            status);
     }
 
     // The row/column/page fields placed in the layout, captioned, in the order they appear (rows, columns,

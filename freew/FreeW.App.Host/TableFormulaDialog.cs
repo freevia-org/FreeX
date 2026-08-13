@@ -17,13 +17,15 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly TableFormulaDialogSession _session;
     private readonly TextBox _formula;
     private readonly ComboBox _format;
     private TableFormulaField? _result;
-    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.TableFormula;
+    private static readonly Free.Shared.Shell.DialogFocusPlan<string> FocusPlan = FreeWDialogFocusPlanner.TableFormula;
 
     private TableFormulaDialog(Window? owner, TableFormulaDialogInitialState initialState)
     {
+        _session = new TableFormulaDialogSession(initialState);
         Owner = owner;
         Title = TableFormulaDialogPlanner.Title;
         Width = 360;
@@ -31,30 +33,33 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        AutomationProperties.SetAutomationId(this, TableFormulaDialogPlanner.AutomationId);
 
         var panel = new StackPanel { Margin = new Thickness(14) };
 
         panel.Children.Add(new TextBlock { Text = TableFormulaDialogPlanner.FormulaLabel, Margin = new Thickness(0, 0, 0, 4) });
-        _formula = new TextBox { Text = initialState.FormulaText };
-        AutomationProperties.SetAutomationId(_formula, FocusPlan.InitialFocusTargetAutomationId);
+        _formula = new TextBox { Text = _session.InitialState.FormulaText };
+        AutomationProperties.SetAutomationId(_formula, FocusPlan.InitialFocusTarget);
         panel.Children.Add(_formula);
 
         panel.Children.Add(new TextBlock { Text = TableFormulaDialogPlanner.NumberFormatLabel, Margin = new Thickness(0, 10, 0, 4) });
         _format = new ComboBox { IsEditable = true };
-        foreach (var format in TableFormulaDialogPlanner.NumberFormats)
+        foreach (var format in _session.NumberFormats)
             _format.Items.Add(format);
-        _format.SelectedIndex = Math.Clamp(initialState.NumberFormatIndex, 0, _format.Items.Count - 1);
+        _format.SelectedIndex = Math.Clamp(_session.InitialState.NumberFormatIndex, 0, _format.Items.Count - 1);
+        AutomationProperties.SetAutomationId(_format, TableFormulaDialogPlanner.NumberFormatAutomationId);
         panel.Children.Add(_format);
 
         panel.Children.Add(new TextBlock { Text = TableFormulaDialogPlanner.PasteFunctionLabel, Margin = new Thickness(0, 10, 0, 4) });
         var function = new ComboBox();
-        foreach (var name in TableFormulaDialogPlanner.Functions)
+        foreach (var name in _session.Functions)
             function.Items.Add(name);
+        AutomationProperties.SetAutomationId(function, TableFormulaDialogPlanner.PasteFunctionAutomationId);
         function.SelectionChanged += (_, _) =>
         {
             if (function.SelectedItem is string name)
             {
-                var pasted = TableFormulaDialogPlanner.PasteFunction(_formula.Text, name);
+                var pasted = _session.PasteFunction(_formula.Text, name);
                 _formula.Text = pasted.Text;
                 _formula.Focus();
                 _formula.CaretIndex = pasted.CaretIndex;
@@ -81,17 +86,16 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Accept()
     {
-        if (!TableFormulaDialogPlanner.TryBuildResult(
-                new TableFormulaDialogInput(_formula.Text, _format.Text),
-                out var result,
-                out var errorMessage))
+        var acceptance = _session.PlanAcceptance(
+            new TableFormulaDialogInput(_formula.Text, _format.Text));
+        if (!acceptance.IsAccepted)
         {
-            DialogMessageHelper.ShowWarning(this, errorMessage ?? TableFormulaDialogPlanner.ValidationMessage, TableFormulaDialogPlanner.Title);
+            DialogMessageHelper.ShowWarning(this, acceptance.ValidationMessage, TableFormulaDialogPlanner.Title);
             FocusFormula();
             return;
         }
 
-        _result = result;
+        _result = acceptance.Result;
         DialogResult = true;
     }
 

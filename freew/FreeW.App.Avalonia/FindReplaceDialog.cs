@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -29,9 +30,10 @@ namespace FreeW.App.Avalonia;
 /// The inline find bar in MainWindow continues to work; the dialog is opened via a separate
 /// <c>freew.find-replace-dialog</c> ribbon command (Home → Editing group) or Ctrl+H.
 /// </summary>
-public sealed class FindReplaceDialog : FreeWDialogWindow
+public sealed partial class FindReplaceDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
+    private static readonly FindReplaceDialogSurfaceSpec Surface = FindReplaceDialogPlanner.Surface;
 
     // ── Editor reference ──────────────────────────────────────────────────────
 
@@ -41,37 +43,34 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
 
     private readonly TextBox _findBox = new()
     {
-        MinWidth = 220,
+        MinWidth = Surface.Metrics.FieldMinWidth,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
     private readonly TextBox _replaceBox = new()
     {
-        MinWidth = 220,
+        MinWidth = Surface.Metrics.FieldMinWidth,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
     private readonly CheckBox _matchCase = new()
     {
-        Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.MatchCase),
         Margin = new Thickness(0, 6, 0, 0),
     };
 
     private readonly CheckBox _wholeWord = new()
     {
-        Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.WholeWord),
         Margin = new Thickness(0, 4, 0, 0),
     };
 
     private readonly CheckBox _useWildcards = new()
     {
-        Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.UseWildcards),
         Margin = new Thickness(0, 4, 0, 0),
     };
 
     private readonly ComboBox _goToTarget = new()
     {
-        MinWidth = 220,
+        MinWidth = Surface.Metrics.FieldMinWidth,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
@@ -82,7 +81,7 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
     };
 
     private TextBox _lastFocusedBox = null!;
-    private FindReplaceDialogOpenMode _openMode;
+    private readonly FindReplaceDialogSession _session;
 
     // ── Construction ──────────────────────────────────────────────────────────
 
@@ -91,10 +90,10 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         FindReplaceDialogOpenMode openMode = FindReplaceDialogOpenMode.Find)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        _openMode = openMode;
+        _session = new FindReplaceDialogSession(new AvaloniaFindReplaceCommandHost(_editor), openMode);
 
-        Title = "Find & Replace";
-        Width = 420;
+        Title = Surface.Title;
+        Width = Surface.Metrics.WindowWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -102,6 +101,15 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
 
         _useWildcards.IsCheckedChanged += (_, _) => ApplyOptionPolicy();
         ApplyOptionPolicy();
+        AutomationProperties.SetAutomationId(_findBox, Surface.Field(FindReplaceDialogFieldKind.Find).AutomationId);
+        AutomationProperties.SetAutomationId(_replaceBox, Surface.Field(FindReplaceDialogFieldKind.Replace).AutomationId);
+        AutomationProperties.SetAutomationId(_goToTarget, Surface.GoToTargetAutomationId);
+        _matchCase.Content = Surface.Option(FindReplaceOptionKind.MatchCase).Label;
+        _wholeWord.Content = Surface.Option(FindReplaceOptionKind.WholeWord).Label;
+        _useWildcards.Content = Surface.Option(FindReplaceOptionKind.UseWildcards).Label;
+        AutomationProperties.SetAutomationId(_matchCase, Surface.Option(FindReplaceOptionKind.MatchCase).AutomationId);
+        AutomationProperties.SetAutomationId(_wholeWord, Surface.Option(FindReplaceOptionKind.WholeWord).AutomationId);
+        AutomationProperties.SetAutomationId(_useWildcards, Surface.Option(FindReplaceOptionKind.UseWildcards).AutomationId);
         AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_replaceBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_matchCase, DialogChromeStyle);
@@ -110,14 +118,14 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyComboBox(_goToTarget, DialogChromeStyle);
 
         // --- Main grid (Find label | Find box, Replace label | Replace box) ------
-        var grid = new Grid { Margin = new Thickness(14, 14, 14, 0) };
+        var grid = new Grid { Margin = new Thickness(Surface.Metrics.OuterMargin, Surface.Metrics.OuterMargin, Surface.Metrics.OuterMargin, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         // Row 0: Find:
-        AddLabeledRow(grid, 0, "Find:", _findBox);
+        AddLabeledRow(grid, 0, Surface.Field(FindReplaceDialogFieldKind.Find).Label, _findBox);
         // Row 1: Replace:
-        AddLabeledRow(grid, 1, "Replace:", _replaceBox);
+        AddLabeledRow(grid, 1, Surface.Field(FindReplaceDialogFieldKind.Replace).Label, _replaceBox);
 
         _lastFocusedBox = _findBox;
         _findBox.GotFocus += (_, _) => _lastFocusedBox = _findBox;
@@ -139,19 +147,22 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         grid.Children.Add(specialButton);
 
         // --- Action buttons ---------------------------------------------------
-        var findNextButton = MakeButton("Find Next", (_, _) => FindNext());
-        var replaceButton = MakeButton("Replace", (_, _) => Replace());
-        var replaceAllButton = MakeButton("Replace All", (_, _) => ReplaceAll());
-        var closeButton = MakeButton("Close", (_, _) => Close());
+        var actionButtons = new[]
+        {
+            MakeButton(Surface.Actions[0], (_, _) => Execute(Surface.Actions[0].Kind)),
+            MakeButton(Surface.Actions[1], (_, _) => Execute(Surface.Actions[1].Kind)),
+            MakeButton(Surface.Actions[2], (_, _) => Execute(Surface.Actions[2].Kind)),
+            MakeButton(Surface.Actions[3], (_, _) => Close()),
+        };
         var btnRow = AvaloniaCompactDialogChrome.CreateActionRow(
-            [findNextButton, replaceButton, replaceAllButton, closeButton],
-            new Thickness(14, 10, 14, 14));
+            actionButtons,
+            new Thickness(Surface.Metrics.OuterMargin, Surface.Metrics.ActionTopMargin, Surface.Metrics.OuterMargin, Surface.Metrics.OuterMargin));
 
         // --- Go To section ---------------------------------------------------
         var goToSection = BuildGoToSection();
 
         // --- Status bar -------------------------------------------------------
-        var statusHost = new Border { Margin = new Thickness(14, 0, 14, 12), Child = _status };
+        var statusHost = new Border { Margin = new Thickness(Surface.Metrics.OuterMargin, 0, Surface.Metrics.OuterMargin, 12), Child = _status };
 
         // --- Outer stack ------------------------------------------------------
         var outer = new StackPanel();
@@ -165,7 +176,11 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         // Keyboard: Enter = Find Next in find box, Escape = close dialog.
         _findBox.KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Enter) { FindNext(); e.Handled = true; }
+            if (e.Key == Key.Enter)
+            {
+                Execute(FindReplaceDialogActionKind.FindNext);
+                e.Handled = true;
+            }
             else if (e.Key == Key.Escape) { Close(); e.Handled = true; }
         };
         _replaceBox.KeyDown += (_, e) =>
@@ -173,25 +188,19 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
             if (e.Key == Key.Escape) { Close(); e.Handled = true; }
         };
 
-        Opened += (_, _) => ActivateFor(_openMode);
+        Opened += (_, _) => ActivateFor(_session.State.OpenMode);
     }
 
     internal void ActivateFor(FindReplaceDialogOpenMode openMode)
     {
-        _openMode = openMode;
+        var state = _session.ActivateFor(openMode);
         AvaloniaCompactDialogChrome.FocusAndSelect(
-            _openMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox);
+            state.OpenMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox);
     }
-
-    internal FindReplaceDialogOpenMode OpenModeForTest => _openMode;
-
-    internal FindReplaceDialogOpenMode? FocusedFieldForTest =>
-        _findBox.IsFocused ? FindReplaceDialogOpenMode.Find :
-        _replaceBox.IsFocused ? FindReplaceDialogOpenMode.Replace : null;
 
     private Button BuildSpecialButton()
     {
-        var button = MakeButton("Special \u25be", (_, _) => { });
+        var button = MakeButton(Surface.SpecialButtonLabel, (_, _) => { }, Surface.SpecialButtonAutomationId);
         button.HorizontalAlignment = HorizontalAlignment.Left;
         button.Margin = new Thickness(0, 6, 0, 0);
 
@@ -213,9 +222,9 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
     private void InsertSpecial(string text)
     {
         var box = _lastFocusedBox ?? _findBox;
-        var caret = Math.Clamp(box.CaretIndex, 0, box.Text?.Length ?? 0);
-        box.Text = (box.Text ?? string.Empty).Insert(caret, text);
-        box.CaretIndex = caret + text.Length;
+        var plan = _session.PlanSpecialInsertion(box.Text, box.CaretIndex, text);
+        box.Text = plan.Text;
+        box.CaretIndex = plan.CaretIndex;
         box.Focus();
     }
 
@@ -223,7 +232,7 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
 
     private Panel BuildGoToSection()
     {
-        var panel = new StackPanel { Margin = new Thickness(14, 0, 14, 0) };
+        var panel = new StackPanel { Margin = new Thickness(Surface.Metrics.OuterMargin, 0, Surface.Metrics.OuterMargin, 0) };
 
         panel.Children.Add(new Border
         {
@@ -234,7 +243,7 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
 
         panel.Children.Add(new TextBlock
         {
-            Text = "Go to:",
+            Text = Surface.GoToSectionLabel,
             FontWeight = FontWeight.SemiBold,
         });
 
@@ -246,7 +255,7 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         Grid.SetColumn(_goToTarget, 0);
         row.Children.Add(_goToTarget);
 
-        var goBtn = MakeButton("Go", (_, _) => GoTo());
+        var goBtn = MakeButton(Surface.GoToButtonLabel, (_, _) => GoTo(), Surface.GoToButtonAutomationId);
         Grid.SetColumn(goBtn, 2);
         row.Children.Add(goBtn);
 
@@ -261,135 +270,47 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         return panel;
     }
 
-    private readonly record struct GoToItem(int BlockIndex, string Label)
-    {
-        public override string ToString() => Label;
-    }
-
     private void PopulateGoToTargets()
     {
-        var prevIndex = _goToTarget.SelectedIndex;
-        var items = new List<GoToItem>
-        {
-            new(-1, "Document start"),
-            new(int.MaxValue, "Document end"),
-        };
-
-        foreach (var entry in DocumentOutline.Of(_editor.Document))
-        {
-            var text = string.IsNullOrWhiteSpace(entry.Text) ? "(untitled heading)" : entry.Text;
-            var indent = new string(' ', entry.Level * 2);
-            items.Add(new GoToItem(entry.BlockIndex, $"{indent}{text}"));
-        }
-
-        _goToTarget.ItemsSource = items;
-        _goToTarget.SelectedIndex = prevIndex >= 0 && prevIndex < items.Count ? prevIndex : 0;
+        var plan = _session.BuildGoToTargets(_editor.Document, _goToTarget.SelectedIndex);
+        _goToTarget.ItemsSource = plan.Targets;
+        _goToTarget.SelectedIndex = plan.SelectedIndex;
     }
 
     private void GoTo()
     {
-        if (_goToTarget.SelectedItem is not GoToItem item)
+        var plan = _session.PlanGoTo(
+            _goToTarget.SelectedItem as FindReplaceGoToTarget,
+            _editor.Document.Blocks.Count);
+        if (plan is null)
             return;
 
-        int blockIndex;
-        string label;
-        if (item.BlockIndex == -1)
-        {
-            // Jump to the first block.
-            blockIndex = 0;
-            label = "Document start";
-        }
-        else if (item.BlockIndex == int.MaxValue)
-        {
-            // Jump to the last block.
-            blockIndex = Math.Max(0, _editor.Document.Blocks.Count - 1);
-            label = "Document end";
-        }
-        else
-        {
-            blockIndex = item.BlockIndex;
-            label = item.Label.Trim();
-        }
-
-        ScrollEditorToBlock(blockIndex);
+        ScrollEditorToBlock(plan.BlockIndex);
         _editor.Focus();
-        _status.Text = $"Jumped to {label}.";
+        _status.Text = _session.State.StatusText;
     }
 
     // ── Find / Replace logic ──────────────────────────────────────────────────
 
-    private void FindNext()
-    {
-        if (!FindReplaceDialogPlanner.TryCreateSearchRequest(
-                _findBox.Text,
-                CurrentOptions(),
-                out var request,
-                out var error))
-        {
-            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
-            return;
-        }
+    private void Execute(FindReplaceDialogActionKind action) =>
+        _status.Text = _session.Execute(action, ReadInput()).StatusText;
 
-        var found = FindNextWithOptions(request!);
-        _status.Text = FindReplaceDialogPlanner.BuildFindStatus(request!, found);
-    }
+    private FindReplaceDialogState SyncSessionInput() =>
+        _session.SetInput(ReadInput());
 
-    /// <summary>
-    /// The editor executes the same option-aware planner contract for every search mode.
-    /// </summary>
-    private bool FindNextWithOptions(FindReplaceSearchRequest request)
-    {
-        return _editor.FindNext(request.Term, request.Options);
-    }
-
-    private void Replace()
-    {
-        if (!FindReplaceDialogPlanner.TryCreateReplaceRequest(
-                _findBox.Text,
-                _replaceBox.Text,
-                CurrentOptions(),
-                out var request,
-                out var error))
-        {
-            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
-            return;
-        }
-
-        var replaced = _editor.ReplaceNext(request!.Term, request.Replacement, request.Options);
-        _status.Text = FindReplaceDialogPlanner.BuildReplaceStatus(request, replaced);
-    }
-
-    private void ReplaceAll()
-    {
-        if (!FindReplaceDialogPlanner.TryCreateReplaceRequest(
-                _findBox.Text,
-                _replaceBox.Text,
-                CurrentOptions(),
-                out var request,
-                out var error))
-        {
-            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
-            return;
-        }
-
-        var count = _editor.ReplaceAll(request!.Term, request.Replacement, request.Options);
-        _status.Text = FindReplaceDialogPlanner.BuildReplaceAllStatus(request, count);
-    }
-
-    private FindReplaceSearchOptions CurrentOptions() =>
-        FindReplaceDialogPlanner.NormalizeOptions(new FindReplaceSearchOptions(
+    private FindReplaceDialogInput ReadInput() =>
+        new(
+            _findBox.Text,
+            _replaceBox.Text,
             _matchCase.IsChecked == true,
             _wholeWord.IsChecked == true,
-            _useWildcards.IsChecked == true));
+            _useWildcards.IsChecked == true);
 
     private void ApplyOptionPolicy()
     {
-        var options = CurrentOptions();
-        var wholeWordEnabled = FindReplaceDialogPlanner.IsOptionEnabled(
-            FindReplaceOptionKind.WholeWord,
-            options);
-        _wholeWord.IsEnabled = wholeWordEnabled;
-        if (!wholeWordEnabled)
+        var state = SyncSessionInput();
+        _wholeWord.IsEnabled = state.WholeWordEnabled;
+        if (_wholeWord.IsChecked == true && !state.Options.WholeWord)
             _wholeWord.IsChecked = false;
     }
 
@@ -422,7 +343,7 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         {
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 6, 8, 0),
+            Margin = new Thickness(0, Surface.Metrics.RowTopMargin, 8, 0),
         };
         Grid.SetRow(lbl, row);
         Grid.SetColumn(lbl, 0);
@@ -433,15 +354,19 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         grid.Children.Add(field);
     }
 
-    private static Button MakeButton(string content, EventHandler<RoutedEventArgs> onClick)
+    private static Button MakeButton(string content, EventHandler<RoutedEventArgs> onClick, string automationId)
     {
         var btn = new Button
         {
             Content = content,
         };
-        AvaloniaCompactDialogChrome.ApplyButton(btn, DialogChromeStyle, minWidth: 84);
+        AutomationProperties.SetAutomationId(btn, automationId);
+        AvaloniaCompactDialogChrome.ApplyButton(btn, DialogChromeStyle, minWidth: Surface.Metrics.ButtonMinWidth);
         btn.Click += onClick;
         return btn;
     }
+
+    private static Button MakeButton(FindReplaceDialogActionSpec action, EventHandler<RoutedEventArgs> onClick) =>
+        MakeButton(action.Label, onClick, action.AutomationId);
 
 }

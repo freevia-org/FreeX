@@ -11,15 +11,15 @@ namespace FreeX.ParityCompare.Tests;
 /// </summary>
 public sealed class ParityEngineReportTests : IDisposable
 {
-    private readonly string _root;
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("parity-cmp-test-");
     private readonly string _winDir;
     private readonly string _linDir;
     private readonly string _imagesDir;
     private readonly string _reportDir;
+    private string _root => _temporaryDirectory.Path;
 
     public ParityEngineReportTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "parity-cmp-test-" + Guid.NewGuid().ToString("N"));
         _winDir = Path.Combine(_root, "win");
         _linDir = Path.Combine(_root, "lin");
         _imagesDir = Path.Combine(_root, "images");
@@ -28,10 +28,7 @@ public sealed class ParityEngineReportTests : IDisposable
             Directory.CreateDirectory(d);
     }
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_root, recursive: true); } catch { /* best effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private void WritePng(string dir, string name, PixelImage img) =>
         PngCodec.EncodeFile(img, Path.Combine(dir, name));

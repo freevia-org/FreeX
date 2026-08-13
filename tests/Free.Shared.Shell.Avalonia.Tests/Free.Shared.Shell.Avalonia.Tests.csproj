@@ -25,6 +25,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj" />
+    <Compile Include="..\SharedTestInfrastructure\Avalonia\AvaloniaActionLabelInspector.cs"
+             Link="TestSupport\AvaloniaActionLabelInspector.cs" />
   </ItemGroup>
 
 </Project>

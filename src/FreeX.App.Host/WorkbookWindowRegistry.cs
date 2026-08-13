@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using FreeX.App.Presentation.Shell;
@@ -29,7 +28,7 @@ public interface IWorkbookWindow
     /// </summary>
     WorkbookId DocumentId { get; }
 
-    /// <summary>Applies an Excel-style window-number suffix (e.g. " - 2", or "" for a lone window).</summary>
+    /// <summary>Applies an Excel-style window-number suffix (e.g. ":2", or "" for a lone window).</summary>
     void ApplyWindowTitleSuffix(string suffix);
 
     /// <summary>Refreshes the viewport/status from the shared workbook after a cross-window change.</summary>
@@ -88,50 +87,55 @@ public interface IWorkbookWindow
 /// and View Side by Side deliberately span all documents (Excel parity — side-by-side exists to
 /// compare two different workbooks).
 ///
-/// The registry is a thin coordinator: every ordering decision (which window to
-/// switch to, how to number titles, which windows to refresh) is delegated to the pure, unit-tested
-/// <see cref="WorkbookWindowOrdering"/> helper; geometry decisions are delegated to
+/// The registry is a thin adapter: registration, grouping, title numbering, notification audiences,
+/// and switch-window cycling are delegated to the portable, unit-tested
+/// <see cref="WorkbookWindowRegistryCore{TWindow}"/>; geometry decisions are delegated to
 /// <see cref="WindowResetPositionPlanner"/>, <see cref="ArrangeAllLayoutPlanner"/>, and <see cref="SideBySideLayoutPlanner"/>.
 ///
 /// Registered as a DI singleton so all windows coordinate through one registry.
 /// </summary>
 public sealed class WorkbookWindowRegistry
 {
-    private readonly List<IWorkbookWindow> _windows = [];
+    private readonly WorkbookWindowRegistryCore<IWorkbookWindow> _core;
     private readonly HashSet<IWorkbookWindow> _hidden = [];
 
-    // Side-by-side / synchronous-scroll state. The pair is the two windows that were tiled together.
-    private IWorkbookWindow? _sideBySidePrimary;
-    private IWorkbookWindow? _sideBySidePartner;
-    private bool _synchronousScroll;
-    private bool _applyingBroadcast;
+    private readonly WorkbookSideBySideCoordinator<IWorkbookWindow> _sideBySide = new();
+
+    public WorkbookWindowRegistry()
+    {
+        _core = new WorkbookWindowRegistryCore<IWorkbookWindow>(
+            static window => window.DocumentId,
+            window => !_hidden.Contains(window),
+            static (window, suffix) => window.ApplyWindowTitleSuffix(suffix));
+    }
 
     /// <summary>Live windows in registration order.</summary>
-    public IReadOnlyList<IWorkbookWindow> Windows => _windows;
+    public IReadOnlyList<IWorkbookWindow> Windows => _core.Windows;
 
     /// <summary>Registered windows that expose a live formula point-mode session.</summary>
     public IReadOnlyList<IFormulaPointModeWorkbookWindow> FormulaPointModeWindows =>
-        _windows.OfType<IFormulaPointModeWorkbookWindow>().ToList();
+        _core.Windows.OfType<IFormulaPointModeWorkbookWindow>().ToList();
 
     /// <summary>Registered windows that are currently visible, in registration order.</summary>
-    public IReadOnlyList<IWorkbookWindow> VisibleWindows => _windows.Where(w => !_hidden.Contains(w)).ToList();
+    public IReadOnlyList<IWorkbookWindow> VisibleWindows => _core.VisibleWindows;
 
-    public int Count => _windows.Count;
+    public int Count => _core.Count;
 
     /// <summary>Number of registered windows that are currently visible (not hidden).</summary>
     public int VisibleCount => VisibleWindows.Count;
 
     /// <summary>Currently-hidden windows, in registration order.</summary>
-    public IReadOnlyList<IWorkbookWindow> HiddenWindows => _windows.Where(_hidden.Contains).ToList();
+    public IReadOnlyList<IWorkbookWindow> HiddenWindows => _core.Windows.Where(_hidden.Contains).ToList();
 
     /// <summary>True when View Side by Side is currently tiling a pair of windows.</summary>
-    public bool IsSideBySideActive => _sideBySidePrimary is not null && _sideBySidePartner is not null;
+    public bool IsSideBySideActive => _sideBySide.IsActive;
 
     /// <summary>True when scrolling one side-by-side window mirrors into its partner.</summary>
-    public bool IsSynchronousScrollActive => IsSideBySideActive && _synchronousScroll;
+    public bool IsSynchronousScrollActive => _sideBySide.IsSynchronousScrollActive;
 
     /// <summary>True when the window is registered and not hidden.</summary>
-    public bool IsVisible(IWorkbookWindow window) => _windows.Contains(window) && !_hidden.Contains(window);
+    public bool IsVisible(IWorkbookWindow window) =>
+        window is not null && _core.IndexOf(window) >= 0 && !_hidden.Contains(window);
 
     /// <summary>
     /// A window can be hidden only when it is registered, currently visible, and at least one
@@ -147,7 +151,7 @@ public sealed class WorkbookWindowRegistry
             return false;
 
         _hidden.Add(window);
-        if (IsSideBySideEndpoint(window))
+        if (_sideBySide.Contains(window))
             DisableSideBySide();
         window.SetWindowVisible(false);
         return true;
@@ -168,17 +172,13 @@ public sealed class WorkbookWindowRegistry
     /// True once at least one window exists. (Whether a new window adopts an existing document is
     /// decided per document via <see cref="HasWindowForDocument"/>, not by this process-wide flag.)
     /// </summary>
-    public bool HasWindows => _windows.Count > 0;
+    public bool HasWindows => _core.HasWindows;
 
     /// <summary>Adds a window and renumbers every window's Excel-style title suffix.</summary>
     public void Register(IWorkbookWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);
-        if (_windows.Contains(window))
-            return;
-
-        _windows.Add(window);
-        RenumberTitles();
+        _core.Register(window);
     }
 
     /// <summary>Removes a closing window and renumbers the survivors.</summary>
@@ -186,14 +186,13 @@ public sealed class WorkbookWindowRegistry
     {
         ArgumentNullException.ThrowIfNull(window);
         _hidden.Remove(window);
-        if (ReferenceEquals(window, _sideBySidePrimary) || ReferenceEquals(window, _sideBySidePartner))
+        if (_sideBySide.Contains(window))
             DisableSideBySide();
-        if (_windows.Remove(window))
-            RenumberTitles();
+        _core.Unregister(window);
     }
 
     /// <summary>Index of <paramref name="window"/> in registration order, or -1 if not registered.</summary>
-    public int IndexOf(IWorkbookWindow window) => _windows.IndexOf(window);
+    public int IndexOf(IWorkbookWindow window) => _core.IndexOf(window);
 
     /// <summary>
     /// The next window to activate when cycling Switch Windows from <paramref name="currentWindow"/>.
@@ -202,20 +201,7 @@ public sealed class WorkbookWindowRegistry
     public IWorkbookWindow? NextWindowTarget(IWorkbookWindow currentWindow)
     {
         ArgumentNullException.ThrowIfNull(currentWindow);
-        var visibleWindows = VisibleWindows.ToList();
-        if (visibleWindows.Count <= 1)
-            return null;
-
-        var currentIndex = visibleWindows.IndexOf(currentWindow);
-        if (currentIndex < 0)
-            return null;
-
-        var nextIndex = WorkbookWindowOrdering.NextWindowIndex(currentIndex, visibleWindows.Count);
-        if (nextIndex == WorkbookWindowOrdering.NoTarget)
-            return null;
-
-        var target = visibleWindows[nextIndex];
-        return ReferenceEquals(target, currentWindow) ? null : target;
+        return _core.NextWindowTarget(currentWindow, WorkbookWindowCycleDirection.Forward);
     }
 
     /// <summary>
@@ -225,42 +211,25 @@ public sealed class WorkbookWindowRegistry
     public IWorkbookWindow? PreviousWindowTarget(IWorkbookWindow currentWindow)
     {
         ArgumentNullException.ThrowIfNull(currentWindow);
-        var visibleWindows = VisibleWindows.ToList();
-        if (visibleWindows.Count <= 1)
-            return null;
-
-        var currentIndex = visibleWindows.IndexOf(currentWindow);
-        if (currentIndex < 0)
-            return null;
-
-        var previousIndex = WorkbookWindowOrdering.PreviousWindowIndex(currentIndex, visibleWindows.Count);
-        if (previousIndex == WorkbookWindowOrdering.NoTarget)
-            return null;
-
-        var target = visibleWindows[previousIndex];
-        return ReferenceEquals(target, currentWindow) ? null : target;
+        return _core.NextWindowTarget(currentWindow, WorkbookWindowCycleDirection.Backward);
     }
 
     /// <summary>Activates the next window in the cycle, if there is one. Returns true if it switched.</summary>
     public bool SwitchToNextWindow(IWorkbookWindow currentWindow)
     {
-        var target = NextWindowTarget(currentWindow);
-        if (target is null)
-            return false;
-
-        target.ActivateWindow();
-        return true;
+        return _core.SwitchToWindow(
+            currentWindow,
+            WorkbookWindowCycleDirection.Forward,
+            static target => target.ActivateWindow());
     }
 
     /// <summary>Activates the previous window in the cycle, if there is one. Returns true if it switched.</summary>
     public bool SwitchToPreviousWindow(IWorkbookWindow currentWindow)
     {
-        var target = PreviousWindowTarget(currentWindow);
-        if (target is null)
-            return false;
-
-        target.ActivateWindow();
-        return true;
+        return _core.SwitchToWindow(
+            currentWindow,
+            WorkbookWindowCycleDirection.Backward,
+            static target => target.ActivateWindow());
     }
 
     /// <summary>
@@ -275,11 +244,10 @@ public sealed class WorkbookWindowRegistry
     public void NotifyDocumentStateChanged(IWorkbookWindow origin)
     {
         ArgumentNullException.ThrowIfNull(origin);
-        foreach (var window in _windows)
-        {
-            if (window.DocumentId == origin.DocumentId)
-                window.RefreshTitleBar();
-        }
+        _core.Notify(
+            origin,
+            WorkbookWindowNotificationAudience.SameDocument,
+            static window => window.RefreshTitleBar());
     }
 
     /// <summary>
@@ -291,16 +259,10 @@ public sealed class WorkbookWindowRegistry
     public void NotifyWorkbookChanged(IWorkbookWindow origin)
     {
         ArgumentNullException.ThrowIfNull(origin);
-        if (_windows.Count <= 1)
-            return;
-
-        var originIndex = _windows.IndexOf(origin);
-        foreach (var index in WorkbookWindowOrdering.IndicesToNotify(originIndex, _windows.Count))
-        {
-            var window = _windows[index];
-            if (window.DocumentId == origin.DocumentId)
-                window.RefreshFromSharedWorkbook();
-        }
+        _core.Notify(
+            origin,
+            WorkbookWindowNotificationAudience.SameDocumentExceptOrigin,
+            static window => window.RefreshFromSharedWorkbook());
     }
 
     /// <summary>
@@ -315,11 +277,10 @@ public sealed class WorkbookWindowRegistry
     public void BroadcastFormulaBarVisibility(IWorkbookWindow origin, bool visible)
     {
         ArgumentNullException.ThrowIfNull(origin);
-        foreach (var window in _windows)
-        {
-            if (!ReferenceEquals(window, origin))
-                window.ApplyFormulaBarVisibility(visible);
-        }
+        _core.Notify(
+            origin,
+            WorkbookWindowNotificationAudience.AllExceptOrigin,
+            window => window.ApplyFormulaBarVisibility(visible));
     }
 
     /// <summary>
@@ -333,11 +294,10 @@ public sealed class WorkbookWindowRegistry
     public void BroadcastSaveInProgress(IWorkbookWindow origin, bool inProgress)
     {
         ArgumentNullException.ThrowIfNull(origin);
-        foreach (var window in _windows)
-        {
-            if (!ReferenceEquals(window, origin) && window.DocumentId == origin.DocumentId)
-                window.ApplySaveInProgress(inProgress);
-        }
+        _core.Notify(
+            origin,
+            WorkbookWindowNotificationAudience.SameDocumentExceptOrigin,
+            window => window.ApplySaveInProgress(inProgress));
     }
 
     /// <summary>
@@ -349,25 +309,13 @@ public sealed class WorkbookWindowRegistry
     public bool HasOtherWindowsForDocument(IWorkbookWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);
-        foreach (var candidate in _windows)
-        {
-            if (!ReferenceEquals(candidate, window) && candidate.DocumentId == window.DocumentId)
-                return true;
-        }
-
-        return false;
+        return _core.HasOtherWindowForDocument(window);
     }
 
     /// <summary>True when any registered window currently views the document <paramref name="documentId"/>.</summary>
     public bool HasWindowForDocument(WorkbookId documentId)
     {
-        foreach (var candidate in _windows)
-        {
-            if (candidate.DocumentId == documentId)
-                return true;
-        }
-
-        return false;
+        return _core.HasWindowForDocument(documentId);
     }
 
     /// <summary>
@@ -376,7 +324,7 @@ public sealed class WorkbookWindowRegistry
     /// window that shared its document with siblings), where a window changes document group
     /// without registering or unregistering.
     /// </summary>
-    public void RefreshWindowNumbering() => RenumberTitles();
+    public void RefreshWindowNumbering() => _core.RefreshWindowNumbering();
 
     // Arrange All
 
@@ -402,7 +350,7 @@ public sealed class WorkbookWindowRegistry
         if (!Enum.IsDefined(arrangement))
             return false;
 
-        IEnumerable<IWorkbookWindow> candidates = _windows.Where(w => !_hidden.Contains(w));
+        IEnumerable<IWorkbookWindow> candidates = _core.VisibleWindows;
         if (restrictToDocumentId is { } documentId)
             candidates = candidates.Where(w => w.DocumentId == documentId);
         var visibleWindows = candidates.ToList();
@@ -421,7 +369,7 @@ public sealed class WorkbookWindowRegistry
         // behavior). A restricted one only breaks it if the pair is actually among the windows
         // being re-tiled -- arranging one workbook's windows must not silently un-pair an unrelated
         // side-by-side comparison between two OTHER documents.
-        if (restrictToDocumentId is null || visibleWindows.Any(IsSideBySideEndpoint))
+        if (restrictToDocumentId is null || visibleWindows.Any(_sideBySide.Contains))
             DisableSideBySide();
 
         for (var index = 0; index < visibleWindows.Count; index++)
@@ -454,9 +402,7 @@ public sealed class WorkbookWindowRegistry
         primary.TileToWorkArea(new Rect(primaryBounds.X, primaryBounds.Y, primaryBounds.Width, primaryBounds.Height));
         partner.TileToWorkArea(new Rect(partnerBounds.X, partnerBounds.Y, partnerBounds.Width, partnerBounds.Height));
 
-        _sideBySidePrimary = primary;
-        _sideBySidePartner = partner;
-        return true;
+        return _sideBySide.Enable(primary, partner);
     }
 
     /// <summary>
@@ -470,7 +416,7 @@ public sealed class WorkbookWindowRegistry
     /// </summary>
     public bool ResetSideBySidePair(double workAreaWidth, double workAreaHeight)
     {
-        if (_sideBySidePrimary is not { } primary || _sideBySidePartner is not { } partner)
+        if (!_sideBySide.TryGetPair(out var primary, out var partner))
             return false;
 
         var (primaryBounds, partnerBounds) = SideBySideLayoutPlanner.Tile(workAreaWidth, workAreaHeight);
@@ -480,12 +426,7 @@ public sealed class WorkbookWindowRegistry
     }
 
     /// <summary>Stops side-by-side mode. Layout is left as-is; synchronous scrolling is also turned off.</summary>
-    public void DisableSideBySide()
-    {
-        _sideBySidePrimary = null;
-        _sideBySidePartner = null;
-        _synchronousScroll = false;
-    }
+    public void DisableSideBySide() => _sideBySide.Disable();
 
     /// <summary>
     /// Stops side-by-side mode only if <paramref name="requester"/> is actually one of the paired
@@ -500,11 +441,7 @@ public sealed class WorkbookWindowRegistry
     public bool DisableSideBySideFor(IWorkbookWindow requester)
     {
         ArgumentNullException.ThrowIfNull(requester);
-        if (!IsSideBySideActive || !IsSideBySideEndpoint(requester))
-            return false;
-
-        DisableSideBySide();
-        return true;
+        return _sideBySide.DisableFor(requester);
     }
 
     /// <summary>
@@ -513,11 +450,7 @@ public sealed class WorkbookWindowRegistry
     /// </summary>
     public bool SetSynchronousScroll(bool active)
     {
-        if (active && !IsSideBySideActive)
-            return false;
-
-        _synchronousScroll = active;
-        return true;
+        return _sideBySide.SetSynchronousScroll(active);
     }
 
     /// <summary>
@@ -528,80 +461,15 @@ public sealed class WorkbookWindowRegistry
     public void BroadcastScrollOffset(IWorkbookWindow origin, WorkbookScrollOffset offset)
     {
         ArgumentNullException.ThrowIfNull(origin);
-        if (!IsSynchronousScrollActive || _applyingBroadcast)
-            return;
-
-        var target = SideBySidePartnerOf(origin);
-        if (target is null)
-            return;
-
-        _applyingBroadcast = true;
-        try
-        {
-            target.SetScrollOffset(offset);
-        }
-        finally
-        {
-            _applyingBroadcast = false;
-        }
+        _sideBySide.ApplyToSynchronousPartner(
+            origin,
+            offset,
+            static (target, synchronizedOffset) => target.SetScrollOffset(synchronizedOffset));
     }
-
-    /// <summary>The side-by-side partner of <paramref name="window"/>, or null if it is not part of the pair.</summary>
-    private IWorkbookWindow? SideBySidePartnerOf(IWorkbookWindow window)
-    {
-        if (!IsSideBySideActive)
-            return null;
-        if (ReferenceEquals(window, _sideBySidePrimary))
-            return _sideBySidePartner;
-        if (ReferenceEquals(window, _sideBySidePartner))
-            return _sideBySidePrimary;
-        return null;
-    }
-
-    private bool IsSideBySideEndpoint(IWorkbookWindow window) =>
-        ReferenceEquals(window, _sideBySidePrimary) ||
-        ReferenceEquals(window, _sideBySidePartner);
 
     /// <summary>The next visible window after <paramref name="window"/> in the switch cycle, skipping hidden windows.</summary>
     private IWorkbookWindow? NextVisibleWindow(IWorkbookWindow window)
     {
-        if (_windows.Count <= 1)
-            return null;
-
-        var startIndex = _windows.IndexOf(window);
-        for (var step = 1; step < _windows.Count; step++)
-        {
-            var candidate = _windows[(startIndex + step) % _windows.Count];
-            if (!ReferenceEquals(candidate, window) && !_hidden.Contains(candidate))
-                return candidate;
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Excel numbers windows per workbook: "Book1 - 1" / "Book1 - 2" only when a document has
-    /// several views, while a document's lone window carries no suffix. Positions count in
-    /// registration order within each document group.
-    /// </summary>
-    private void RenumberTitles()
-    {
-        var groupTotals = new Dictionary<WorkbookId, int>();
-        foreach (var window in _windows)
-        {
-            groupTotals.TryGetValue(window.DocumentId, out var total);
-            groupTotals[window.DocumentId] = total + 1;
-        }
-
-        var groupPositions = new Dictionary<WorkbookId, int>();
-        foreach (var window in _windows)
-        {
-            groupPositions.TryGetValue(window.DocumentId, out var previousPosition);
-            var position = previousPosition + 1;
-            groupPositions[window.DocumentId] = position;
-            window.ApplyWindowTitleSuffix(WorkbookWindowOrdering.FormatWindowTitleSuffix(
-                position,
-                totalWindowCount: groupTotals[window.DocumentId]));
-        }
+        return _core.NextWindowTarget(window, WorkbookWindowCycleDirection.Forward);
     }
 }

@@ -15,7 +15,7 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     private readonly RadioButton[] _radios;
     private readonly PasswordBox _passwordBox;
     private readonly PasswordBox _confirmBox;
-    private readonly ProtectionSettings _currentProtection;
+    private readonly RestrictEditingDialogSession _session;
     private readonly RestrictEditingDialogPlan _plan;
     private ProtectionSettings? _result;
 
@@ -31,8 +31,8 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _currentProtection = current;
-        _plan = RestrictEditingDialogPlanner.BuildPlan(current);
+        _session = new RestrictEditingDialogSession(current);
+        _plan = _session.InitialPlan;
         _passwordBox = new PasswordBox { MinWidth = 180 };
         _confirmBox = new PasswordBox { MinWidth = 180 };
 
@@ -96,7 +96,7 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             IsEnabled = _plan.CanStopProtection,
             IsDefault = presentation.DefaultButtonText == RestrictEditingDialogPlanner.StopButtonText
         };
-        stop.Click += (_, _) => StopProtection();
+        stop.Click += async (_, _) => await StopProtectionAsync();
         panel.Children.Add(stop);
 
         var cancel = new Button
@@ -107,6 +107,7 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             Margin = new Thickness(0, presentation.CancelActionTopMargin, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Right
         };
+        cancel.Click += (_, _) => _session.Cancel();
         panel.Children.Add(cancel);
 
         Content = panel;
@@ -115,58 +116,46 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
     private void Enforce()
     {
-        if (!RestrictEditingDialogPlanner.TryCreateStartSettings(
-            SelectedMode(),
+        var outcome = _session.Start(
+            SelectedModeIndex(),
             _passwordBox.Password,
-            _confirmBox.Password,
-            out var settings,
-            out var validationMessage))
+            _confirmBox.Password);
+        if (!outcome.IsAccepted)
         {
-            DialogMessageHelper.ShowWarning(this, validationMessage, Title);
+            DialogMessageHelper.ShowWarning(this, outcome.ValidationMessage, Title);
             _passwordBox.Focus();
             return;
         }
 
-        _result = settings;
+        _result = outcome.Settings;
         Close();
     }
 
-    private void StopProtection()
+    private async Task StopProtectionAsync()
     {
-        if (_currentProtection.HasPassword)
+        var outcome = await _session.StopAsync((title, prompt) =>
+            ValueTask.FromResult(PasswordPromptDialog.Ask(Owner, title, prompt)));
+        if (outcome.Kind == RestrictEditingDialogOutcomeKind.Cancelled)
+            return;
+        if (!outcome.IsAccepted)
         {
-            var pw = PasswordPromptDialog.Ask(Owner, "Stop Protection", RestrictEditingDialogPlanner.StopPasswordPrompt);
-            if (pw is null)
-                return;
-
-            if (!RestrictEditingDialogPlanner.TryCreateStopSettings(
-                _currentProtection,
-                pw,
-                out var settings,
-                out var validationMessage))
-            {
-                DialogMessageHelper.ShowWarning(this, validationMessage, Title);
-                return;
-            }
-
-            _result = settings;
-            Close();
+            DialogMessageHelper.ShowWarning(this, outcome.ValidationMessage, Title);
             return;
         }
 
-        RestrictEditingDialogPlanner.TryCreateStopSettings(_currentProtection, null, out _result, out _);
+        _result = outcome.Settings;
         Close();
     }
 
-    private ProtectionMode SelectedMode()
+    private int SelectedModeIndex()
     {
         for (var i = 0; i < _radios.Length; i++)
         {
             if (_radios[i].IsChecked == true)
-                return RestrictEditingDialogPlanner.ModeOptions[i].Mode;
+                return i;
         }
 
-        return ProtectionMode.ReadOnly;
+        return -1;
     }
 
     /// <summary>

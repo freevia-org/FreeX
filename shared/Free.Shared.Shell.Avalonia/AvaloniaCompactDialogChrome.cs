@@ -279,6 +279,10 @@ public static class AvaloniaCompactDialogChrome
         textBox.FontFamily = style.FontFamily;
         var inputBorder = style.InputBorderBrush ?? InputBorderBrush;
         var textBoxBackground = style.TextBoxBackgroundBrush ?? ThemeWhiteBrush();
+        textBox.Foreground = ThemeTextBrush(style);
+        textBox.Background = textBoxBackground;
+        textBox.BorderBrush = inputBorder;
+        textBox.BorderThickness = new Thickness(1);
         textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>())
         {
             Setters =

@@ -1,4 +1,5 @@
 using FreeX.Core.Commands;
+using Free.Shared.Localization;
 
 namespace FreeX.App.Presentation.DataTools;
 
@@ -18,8 +19,30 @@ public sealed record SubtotalDialogInputParseResult(
     bool PageBreakBetweenGroups,
     bool SummaryBelowData);
 
+public enum SubtotalDialogInputFocusTarget
+{
+    GroupColumn,
+    SubtotalColumns,
+    Function
+}
+
 public static class SubtotalDialogInputParser
 {
+    public static ValidationPresentationDescriptor<SubtotalDialogInputFocusTarget> DescribeIssue(
+        SubtotalDialogInputParseIssue issue) =>
+        issue switch
+        {
+            SubtotalDialogInputParseIssue.InvalidSubtotalColumnOffsets => new(
+                LocalizedTextDescriptor.Resource("Subtotal_AtLeastOneSubtotalColumnIsRequired"),
+                SubtotalDialogInputFocusTarget.SubtotalColumns),
+            SubtotalDialogInputParseIssue.UnsupportedSubtotalFunction => new(
+                LocalizedTextDescriptor.Resource("Subtotal_UnsupportedSubtotalFunction"),
+                SubtotalDialogInputFocusTarget.Function),
+            _ => new(
+                LocalizedTextDescriptor.Resource("Subtotal_UnsupportedSubtotalFunction"),
+                SubtotalDialogInputFocusTarget.GroupColumn)
+        };
+
     public static bool TryParse(
         string? groupColumnText,
         string? subtotalColumnsText,

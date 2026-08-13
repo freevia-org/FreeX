@@ -88,12 +88,9 @@ public sealed class OwnedDialogLifecycleRegressionTests
     [Fact]
     public async Task AllowEditRangeDialog_UsesWpfRangeBoxAsInitialFocusAndTabOrigin()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-allow-edit-range-focus-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-allow-edit-range-focus-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -137,29 +134,14 @@ public sealed class OwnedDialogLifecycleRegressionTests
                 }
             }, CancellationToken.None);
         }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Temp cleanup must not hide the dialog focus regression.
-            }
-        }
     }
 
     [Fact]
     public async Task ConfirmPasswordDialog_UsesSharedProtectionInputFocusAndEscapeLifecycle()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-confirm-password-focus-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-confirm-password-focus-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -205,29 +187,14 @@ public sealed class OwnedDialogLifecycleRegressionTests
                 }
             }, CancellationToken.None);
         }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Temp cleanup must not hide the protection focus regression.
-            }
-        }
     }
 
     [Fact]
     public async Task AdvancedFilterOwnedModal_ClosesThroughEscapeContract()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-advanced-filter-escape-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-advanced-filter-escape-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -261,18 +228,6 @@ public sealed class OwnedDialogLifecycleRegressionTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Test cleanup must not hide interaction lifecycle regressions.
-            }
         }
     }
 
@@ -316,12 +271,9 @@ public sealed class OwnedDialogLifecycleRegressionTests
     /// </summary>
     private static async Task RunAssignedDialogsBatchAsync(string[] batchIds, string batchTag)
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            $"freex-owned-dialog-lifecycle-{batchTag}-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory($"freex-owned-dialog-lifecycle-{batchTag}-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -373,18 +325,6 @@ public sealed class OwnedDialogLifecycleRegressionTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Test cleanup must not hide interaction lifecycle regressions.
-            }
         }
     }
 }

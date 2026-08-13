@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -45,11 +43,7 @@ public static partial class PrintRenderer
         var pageW = printPlan.Metrics.PageWidth;
         var pageH = printPlan.Metrics.PageHeight;
         var marginLeft = printPlan.Metrics.MarginLeft;
-        var marginRight = printPlan.Metrics.MarginRight;
         var marginTop = printPlan.Metrics.MarginTop;
-        var marginBottom = printPlan.Metrics.MarginBottom;
-        var headerMargin = printPlan.Metrics.HeaderMargin;
-        var footerMargin = printPlan.Metrics.FooterMargin;
 
         var viewport = viewportService.GetViewport(workbook, sheetId,
             new ViewportRequest(
@@ -59,26 +53,12 @@ public static partial class PrintRenderer
                 AvailableWidth: printPlan.Viewport.RequestWidth));
 
         var cellLookup = viewport.Cells.ToDictionary(c => (c.Row, c.Col));
-        var columnWidthsPixels = BuildColumnWidthsPixels(sheet);
-
-        IReadOnlyList<PrintCommentSummaryPagePlan> commentSummaryPages;
-        if (sheet.PrintComments == WorksheetPrintComments.AtEnd)
-        {
-            var (printedComments, printedThreadedComments) = PrintCommentSummaryPlanner.FilterToPrintedCells(sheet, printPlan);
-            commentSummaryPages = PrintCommentSummaryPlanner.BuildPages(printedComments, printedThreadedComments, pageH, marginTop);
-        }
-        else
-        {
-            commentSummaryPages = [];
-        }
+        var commentSummaryPages = WorksheetPrintPageContentPlanner.BuildCommentSummaryPages(sheet, printPlan);
         // For a single-sheet render this is just this sheet's own page count. RenderWorkbook/
         // CreateWorkbookPaginator (Entire Workbook printing) override this with the combined
         // page count across every printed sheet so &N is the whole print job's total instead of
         // restarting at each sheet's own count (R60-services-print-preview-6-1).
         var totalPages = totalPageCountOverride ?? (printPlan.GridPageCount + commentSummaryPages.Count);
-        var printableHyperlinks = BuildPrintableHyperlinkLookup(workbook, sheet);
-        var printableCellDestinations = BuildPrintableCellDestinationLookup(workbook, sheet);
-
         foreach (var page in printPlan.Pages)
             AddPrintPage(page);
 
@@ -90,78 +70,25 @@ public static partial class PrintRenderer
 
         void AddPrintPage(WorksheetPrintPagePlan page)
         {
-            var rowPlan = page.RowPlan;
-            var columnPlan = page.ColumnPlan;
-            var pageRows = page.Rows;
-            var pageColumns = page.Columns;
-            if (pageRows.Count == 0 || pageColumns.Count == 0)
+            var contentPlan = WorksheetPrintPageContentPlanner.Build(
+                workbook,
+                sheet,
+                printPlan,
+                page,
+                PrintTextMeasurer,
+                WorksheetPrintMaterializationProfile.WpfNative,
+                workbookDirectory: workbookDirectory,
+                pageNumberOffset: pageNumberOffset,
+                totalPageCountOverride: totalPages);
+            if (contentPlan is null)
                 return;
 
-            var measurement = PrintLayoutPlanner.MeasurePrintableGrid(
-                printPlan.Metrics.PrintableWidth,
-                printPlan.Metrics.PrintableHeight,
-                pageRows,
-                pageColumns,
-                sheet.RowHeights,
-                columnWidthsPixels,
-                sheet.PrintHeadings);
-            // ResolveHeaderFooterForPage's "different first page"/odd-even distinction is decided
-            // per-sheet (each sheet keeps its own Page Setup), so it must key off this sheet's OWN
-            // page number, not the cross-sheet running total below -- only the &P/&N text drawn on
-            // the page uses the continuous, offset number.
-            var pageNumber = page.PageNumber;
-            var displayedPageNumber = pageNumber + pageNumberOffset;
-            var (pageHeader, pageFooter, pageHeaderPictures, pageFooterPictures) = ResolveHeaderFooterForPage(sheet, pageNumber);
-            // Same effective scale percent (explicit Scale% or the ratio implied by Fit-to-pages) that
-            // PagePaginationPlanner already used to decide this area's page capacity/count -- feeding it
-            // through here keeps the drawn scale in lockstep with the portable/Skia PDF export path instead of
-            // re-deriving an independent per-page ratio from each page's own geometry (P97).
-            var configuredScalePercent = printPlan.AreaPlans[page.AreaIndex].Pagination.EffectiveScalePercent;
             var (visual, textOverlays, linkOverlays, cellDestinationOverlays) = RenderPageVisual(
                 workbook,
                 sheet,
-                pageW,
-                pageH,
-                marginLeft,
-                marginRight,
-                marginTop,
-                marginBottom,
-                headerMargin,
-                footerMargin,
-                measurement,
-                pageRows,
-                pageColumns,
+                contentPlan,
                 cellLookup,
-                printableHyperlinks,
-                printableCellDestinations,
-                sheet.PrintGridlines,
-                sheet.PrintHeadings,
-                pageHeader,
-                pageFooter,
-                pageHeaderPictures,
-                pageFooterPictures,
-                workbook.Name,
-                sheet.Name,
-                workbook.Theme,
-                sheet.TextBoxes,
-                sheet.Charts,
                 viewport,
-                rowPlan.BodyRows,
-                columnPlan.BodyColumns,
-                sheet.HeaderFooterAlignWithMargins,
-                sheet.CenterHorizontallyOnPage,
-                sheet.CenterVerticallyOnPage,
-                sheet.PrintErrorValue,
-                sheet.PrintComments,
-                sheet.Comments,
-                sheet.ThreadedComments,
-                printPlan.Metrics.PrintableWidth,
-                printPlan.Metrics.PrintableHeight,
-                displayedPageNumber,
-                totalPages,
-                sheet.PrintDraftQuality,
-                sheet.PrintBlackAndWhite,
-                configuredScalePercent,
                 workbookDirectory);
 
             var container = new VisualHost
@@ -294,16 +221,10 @@ public static partial class PrintRenderer
         if (!WorksheetPrintRenderPlanner.TryBuild(sheet, printRangeOverride: null, ignorePrintArea, out var printPlan))
             return 0;
 
-        if (sheet.PrintComments != WorksheetPrintComments.AtEnd)
-            return printPlan.GridPageCount;
-
-        var (printedComments, printedThreadedComments) = PrintCommentSummaryPlanner.FilterToPrintedCells(sheet, printPlan);
-        var commentSummaryPageCount = PrintCommentSummaryPlanner.BuildPages(
-            printedComments, printedThreadedComments, printPlan.Metrics.PageHeight, printPlan.Metrics.MarginTop).Count;
-        return printPlan.GridPageCount + commentSummaryPageCount;
+        return WorksheetPrintPageContentPlanner.ComputeTotalPageCount(sheet, printPlan);
     }
 
-    private static PageContent ClonePageAsBitmap(FixedDocument document, PageContent pageContent)
+    internal static PageContent ClonePageAsBitmap(FixedDocument document, PageContent pageContent)
     {
         pageContent.GetPageRoot(forceReload: false);
         var sourcePage = pageContent.Child ??
@@ -351,131 +272,5 @@ public static partial class PrintRenderer
         var clone = new PageContent();
         ((IAddChild)clone).AddChild(fixedPage);
         return clone;
-    }
-
-    /// <summary>
-    /// Converts the sheet's character-unit column widths to pixels (matching
-    /// <see cref="PagePaginationPlanner.AverageColumnWidthPixels"/>'s per-column conversion), so
-    /// <see cref="PrintLayoutPlanner.MeasurePrintableGrid(double, double, IReadOnlyList{uint}, IReadOnlyList{uint}, IReadOnlyDictionary{uint, double}, IReadOnlyDictionary{uint, double}, bool)"/>
-    /// can measure each printed page from the sheet's real per-column pixel sizes.
-    /// </summary>
-    private static IReadOnlyDictionary<uint, double> BuildColumnWidthsPixels(Sheet sheet)
-    {
-        var pixels = new Dictionary<uint, double>(sheet.ColumnWidths.Count);
-        foreach (var (col, width) in sheet.ColumnWidths)
-            pixels[col] = ColumnWidthPixelMapper.ColumnWidthToPixels(width);
-
-        return pixels;
-    }
-
-    /// <summary>
-    /// Restricts the "Comments: At end of sheet" appendix (and the equivalent portable/PDF path) to
-    /// notes/threaded comments whose cell is actually printed on at least one page of this render
-    /// plan -- Excel never lists a note on a hidden row/column or a cell outside the print area in
-    /// that appendix, matching the same rows/columns-actually-printed restriction the "As displayed"
-    /// overlay path already applies via PageLayout.GetDisplayedCommentOverlays' rowIndexes/columnIndexes
-    /// filtering. A cell counts as printed when its row and column both appear together on some page
-    /// of the SAME configured print area (areas are evaluated independently so a row from one disjoint
-    /// print area can never combine with a column from another to falsely mark a cell as printed).
-    /// </summary>
-    private sealed record PdfLinkTarget(
-        string Target,
-        HyperlinkTargetKind TargetKind,
-        CellAddress SourceAddress,
-        CellAddress? TargetAddress);
-
-    private static IReadOnlyDictionary<(uint Row, uint Col), PdfLinkTarget> BuildPrintableHyperlinkLookup(Workbook workbook, Sheet sheet)
-    {
-        if (sheet.Hyperlinks.Count == 0)
-            return new Dictionary<(uint Row, uint Col), PdfLinkTarget>();
-
-        var result = new Dictionary<(uint Row, uint Col), PdfLinkTarget>();
-        foreach (var (address, target) in sheet.Hyperlinks)
-        {
-            if (address.Sheet != sheet.Id || string.IsNullOrWhiteSpace(target))
-                continue;
-            sheet.HyperlinkMetadata.TryGetValue(address, out var metadata);
-            var targetKind = metadata?.LinkType ?? HyperlinkTargetKind.ExistingFileOrWebPage;
-            if (targetKind == HyperlinkTargetKind.PlaceInThisDocument)
-            {
-                if (!TryResolveInternalHyperlinkDestination(workbook, sheet, target, metadata, out var targetAddress))
-                    continue;
-
-                result[(address.Row, address.Col)] = new PdfLinkTarget(target, targetKind, address, targetAddress);
-                continue;
-            }
-
-            result[(address.Row, address.Col)] = new PdfLinkTarget(target, targetKind, address, null);
-        }
-
-        return result;
-    }
-
-    private static IReadOnlyDictionary<(uint Row, uint Col), CellAddress> BuildPrintableCellDestinationLookup(Workbook workbook, Sheet destinationSheet)
-    {
-        var result = new Dictionary<(uint Row, uint Col), CellAddress>();
-        foreach (var sourceSheet in workbook.Sheets)
-        {
-            foreach (var (address, target) in sourceSheet.Hyperlinks)
-            {
-                if (address.Sheet != sourceSheet.Id || string.IsNullOrWhiteSpace(target))
-                    continue;
-
-                sourceSheet.HyperlinkMetadata.TryGetValue(address, out var metadata);
-                if ((metadata?.LinkType ?? HyperlinkTargetKind.ExistingFileOrWebPage) != HyperlinkTargetKind.PlaceInThisDocument ||
-                    !TryResolveInternalHyperlinkDestination(workbook, sourceSheet, target, metadata, out var targetAddress) ||
-                    targetAddress.Sheet != destinationSheet.Id)
-                {
-                    continue;
-                }
-
-                result[(targetAddress.Row, targetAddress.Col)] = targetAddress;
-            }
-        }
-
-        return result;
-    }
-
-    private static bool TryResolveInternalHyperlinkDestination(
-        Workbook workbook,
-        Sheet sourceSheet,
-        string target,
-        HyperlinkMetadata? metadata,
-        out CellAddress address)
-    {
-        address = default;
-        var reference = !string.IsNullOrWhiteSpace(metadata?.Bookmark)
-            ? metadata.Bookmark
-            : target;
-        reference = reference.Trim();
-        if (reference.StartsWith("#", StringComparison.Ordinal))
-            reference = reference[1..].Trim();
-        if (reference.Length == 0)
-            return false;
-
-        if (!WorkbookRangeTextCodec.TryParse(
-                sourceSheet.Id,
-                reference,
-                sheetName => ResolveSheetIdByName(workbook, sheetName),
-                out var range) ||
-            range.Start.Row != range.End.Row ||
-            range.Start.Col != range.End.Col)
-        {
-            return false;
-        }
-
-        address = range.Start;
-        return true;
-    }
-
-    private static SheetId? ResolveSheetIdByName(Workbook workbook, string sheetName)
-    {
-        foreach (var sheet in workbook.Sheets)
-        {
-            if (string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))
-                return sheet.Id;
-        }
-
-        return null;
     }
 }

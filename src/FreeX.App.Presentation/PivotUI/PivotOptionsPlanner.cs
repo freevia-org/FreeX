@@ -61,13 +61,27 @@ public sealed record PivotOptionsDialogValues(
     string? ErrorValueText = null,
     bool EnableDrill = true);
 
+public sealed record PivotDesignOptionsValues(
+    bool ShowRowGrandTotals,
+    bool ShowColumnGrandTotals,
+    bool ShowSubtotals,
+    PivotSubtotalPlacement SubtotalPlacement,
+    bool RepeatItemLabels,
+    bool BlankLineAfterItems,
+    string StyleName,
+    PivotReportLayout ReportLayout,
+    bool ShowRowHeaders,
+    bool ShowColumnHeaders,
+    bool ShowRowStripes,
+    bool ShowColumnStripes,
+    bool ShowFieldHeaders);
+
 /// <summary>
 /// Portable, UI-free planning for the PivotTable Options dialog: the report-layout and subtotal-placement
 /// display catalogs (English labels), capturing the current option values off a <see cref="PivotTableModel"/>,
 /// validating the compact-row-label indent box, and applying the dialog's collected values back onto a
-/// values record. Single-sourced here so every desktop host shares identical behavior; building the command
-/// and running it stays with each shell's command glue (the host passes these values to
-/// <c>ConfigurePivotTableOptionsCommand</c>, leaving its other cache/print/alt-text options untouched).
+/// values record. Single-sourced here so every desktop host shares identical behavior; the pivot application
+/// session turns these values into commands while each shell retains only native dialog and rendering work.
 /// </summary>
 public static class PivotOptionsPlanner
 {
@@ -102,6 +116,19 @@ public static class PivotOptionsPlanner
         ("Show subtotals at top of group", PivotSubtotalPlacement.Top),
     ];
 
+    public static readonly IReadOnlyList<(string Label, bool PageOverThenDown)> PageFieldLayouts =
+    [
+        ("Down, then over", false),
+        ("Over, then down", true),
+    ];
+
+    public static readonly IReadOnlyList<(string Label, int? Limit)> MissingItemsLimits =
+    [
+        ("Automatic", null),
+        ("None", 0),
+        ("Maximum", MaxMissingItemsLimit),
+    ];
+
     public static int FindReportLayoutIndex(PivotReportLayout layout)
     {
         for (var index = 0; index < ReportLayouts.Count; index++)
@@ -111,6 +138,17 @@ public static class PivotOptionsPlanner
         }
 
         return 0;
+    }
+
+    public static string GetReportLayoutLabel(PivotReportLayout layout)
+    {
+        foreach (var option in ReportLayouts)
+        {
+            if (option.Value == layout)
+                return option.Label;
+        }
+
+        return ReportLayouts[^1].Label;
     }
 
     public static int FindSubtotalPlacementIndex(PivotSubtotalPlacement placement)
@@ -130,6 +168,43 @@ public static class PivotOptionsPlanner
     public static PivotSubtotalPlacement SubtotalPlacementFromIndex(int selectedIndex) =>
         SubtotalPlacements[Math.Max(0, Math.Min(selectedIndex, SubtotalPlacements.Count - 1))].Value;
 
+    public static int FindPageFieldLayoutIndex(bool pageOverThenDown) =>
+        pageOverThenDown ? 1 : 0;
+
+    public static bool PageFieldLayoutFromIndex(int selectedIndex) =>
+        PageFieldLayouts[Math.Clamp(selectedIndex, 0, PageFieldLayouts.Count - 1)].PageOverThenDown;
+
+    public static string GetPageFieldLayoutLabel(bool pageOverThenDown) =>
+        PageFieldLayouts[FindPageFieldLayoutIndex(pageOverThenDown)].Label;
+
+    public static bool PageFieldLayoutFromLabel(string? label) =>
+        string.Equals(label, PageFieldLayouts[1].Label, StringComparison.OrdinalIgnoreCase);
+
+    public static int FindMissingItemsLimitIndex(int? value) =>
+        NormalizeMissingItemsLimit(value) switch
+        {
+            null => 0,
+            <= 0 => 1,
+            _ => 2,
+        };
+
+    public static int? MissingItemsLimitFromIndex(int selectedIndex) =>
+        MissingItemsLimits[Math.Clamp(selectedIndex, 0, MissingItemsLimits.Count - 1)].Limit;
+
+    public static string GetMissingItemsLimitLabel(int? value) =>
+        MissingItemsLimits[FindMissingItemsLimitIndex(value)].Label;
+
+    public static int? MissingItemsLimitFromLabel(string? label)
+    {
+        foreach (var option in MissingItemsLimits)
+        {
+            if (string.Equals(label, option.Label, StringComparison.OrdinalIgnoreCase))
+                return option.Limit;
+        }
+
+        return null;
+    }
+
     /// <summary>Snapshots the current totals/layout-display option values off the pivot.</summary>
     public static PivotOptionsValues Capture(PivotTableModel pivotTable)
     {
@@ -144,6 +219,25 @@ public static class PivotOptionsPlanner
             pivotTable.RepeatItemLabels,
             pivotTable.BlankLineAfterItems,
             pivotTable.MergeAndCenterLabels);
+    }
+
+    public static PivotDesignOptionsValues CaptureDesignValues(PivotTableModel pivotTable)
+    {
+        ArgumentNullException.ThrowIfNull(pivotTable);
+        return new PivotDesignOptionsValues(
+            pivotTable.ShowRowGrandTotals,
+            pivotTable.ShowColumnGrandTotals,
+            pivotTable.ShowSubtotals,
+            pivotTable.SubtotalPlacement,
+            pivotTable.RepeatItemLabels,
+            pivotTable.BlankLineAfterItems,
+            pivotTable.StyleName,
+            pivotTable.ReportLayout,
+            pivotTable.ShowRowHeaders,
+            pivotTable.ShowColumnHeaders,
+            pivotTable.ShowRowStripes,
+            pivotTable.ShowColumnStripes,
+            pivotTable.ShowFieldHeaders);
     }
 
     /// <summary>Validates the compact-form indent box; parses it on success.</summary>

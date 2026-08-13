@@ -312,7 +312,8 @@ internal abstract class DocumentVirtualAutomationPeer(
         DocumentAccessibilityNodeKind.Shape
             or DocumentAccessibilityNodeKind.Chart
             or DocumentAccessibilityNodeKind.WordArt
-            or DocumentAccessibilityNodeKind.SmartArt => AutomationControlType.Image,
+            or DocumentAccessibilityNodeKind.SmartArt
+            or DocumentAccessibilityNodeKind.EmbeddedObject => AutomationControlType.Image,
         DocumentAccessibilityNodeKind.DrawingGroup => AutomationControlType.Group,
         _ => AutomationControlType.Custom
     };
@@ -369,7 +370,8 @@ internal abstract class DocumentVirtualAutomationPeer(
             or DocumentAccessibilityNodeKind.Chart
             or DocumentAccessibilityNodeKind.WordArt
             or DocumentAccessibilityNodeKind.SmartArt
-            or DocumentAccessibilityNodeKind.DrawingGroup;
+            or DocumentAccessibilityNodeKind.DrawingGroup
+            or DocumentAccessibilityNodeKind.EmbeddedObject;
 
     protected override bool IsOffscreenCore()
     {

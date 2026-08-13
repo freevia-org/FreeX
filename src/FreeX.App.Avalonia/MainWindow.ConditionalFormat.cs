@@ -8,10 +8,10 @@ using Avalonia.Media;
 using Avalonia.Styling;
 
 using Free.Shared.Shell.Avalonia;
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
+using Free.Shared.Localization;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -36,61 +36,9 @@ internal sealed record ManageConditionalFormatScopeItem(string Label, ManageCond
 
 public sealed partial class MainWindow
 {
+    private static readonly ResourceKeyTextResolver ManageConditionalFormatsText = new(UiText.Get, UiText.Format);
+
     private static AvaloniaCompactDialogChromeStyle ConditionalFormatDialogChromeStyle => new(FormulaBarFontFamily);
-
-    /// <summary>The rule types the Avalonia conditional-format editor exposes, in dropdown order.</summary>
-    private static readonly IReadOnlyList<(CfRuleType Type, string Label)> ConditionalFormatRuleTypeChoices =
-    [
-        (CfRuleType.CellValue, "Cell Value"),
-        (CfRuleType.Formula, "Formula"),
-        (CfRuleType.Top10, "Top / Bottom"),
-        (CfRuleType.IconSet, "Icon Set"),
-        (CfRuleType.DataBar, "Data Bar"),
-        (CfRuleType.ColorScale, "Color Scale"),
-        (CfRuleType.ContainsText, "Text Contains"),
-        (CfRuleType.DateOccurring, "Date Occurring"),
-        (CfRuleType.DuplicateValues, "Duplicate Values"),
-        (CfRuleType.UniqueValues, "Unique Values"),
-        (CfRuleType.AboveAverage, "Above Average"),
-    ];
-
-    /// <summary>
-    /// The Excel "Select a Rule Type:" list shown on the left of the New/Edit Formatting Rule dialog,
-    /// in Excel order. Each shell entry maps to the <see cref="CfRuleType"/> the right-hand description
-    /// editor pre-selects when that row is chosen.
-    /// </summary>
-    private static readonly IReadOnlyList<(string LabelKey, CfRuleType Type)> ConditionalFormatRuleShellChoices =
-    [
-        ("ConditionalFormatDialog_RuleShell_FormatAllCells", CfRuleType.ColorScale),
-        ("ConditionalFormatDialog_RuleShell_FormatContainingCells", CfRuleType.CellValue),
-        ("ConditionalFormatDialog_RuleShell_FormatTopBottom", CfRuleType.Top10),
-        ("ConditionalFormatDialog_RuleShell_FormatAboveBelowAverage", CfRuleType.AboveAverage),
-        ("ConditionalFormatDialog_RuleShell_FormatUniqueDuplicate", CfRuleType.DuplicateValues),
-        ("ConditionalFormatDialog_RuleShell_UseFormula", CfRuleType.Formula),
-    ];
-
-    /// <summary>Maps a concrete rule type to the shell row that should be highlighted for it.</summary>
-    private static int ConditionalFormatShellIndexForRuleType(CfRuleType ruleType) => ruleType switch
-    {
-        CfRuleType.ColorScale or CfRuleType.DataBar or CfRuleType.IconSet => 0,
-        CfRuleType.Top10 => 2,
-        CfRuleType.AboveAverage => 3,
-        CfRuleType.DuplicateValues or CfRuleType.UniqueValues => 4,
-        CfRuleType.Formula => 5,
-        _ => 1,
-    };
-
-    private static readonly IReadOnlyList<(CfOperator Op, string Label)> ConditionalFormatOperatorChoices =
-    [
-        (CfOperator.GreaterThan, "greater than"),
-        (CfOperator.LessThan, "less than"),
-        (CfOperator.GreaterThanOrEqual, "greater than or equal to"),
-        (CfOperator.LessThanOrEqual, "less than or equal to"),
-        (CfOperator.Equal, "equal to"),
-        (CfOperator.NotEqual, "not equal to"),
-        (CfOperator.Between, "between"),
-        (CfOperator.NotBetween, "not between"),
-    ];
 
     /// <summary>The quick presets the New Rule editor offers as a starting point, in dropdown order.</summary>
     private static readonly IReadOnlyList<(ConditionalFormatPreset Preset, string Label)> ConditionalFormatPresetChoices =
@@ -98,44 +46,12 @@ public sealed partial class MainWindow
             .Select(preset => (preset, ConditionalFormatPresetFactory.DisplayName(preset)))
             .ToList();
 
-    /// <summary>Controls the rule editor exposes to the launch-smoke probe.</summary>
-    private sealed record ConditionalFormatRuleDialogSmokeProbe(
-        Window Dialog,
-        ComboBox RuleTypeBox,
-        ComboBox PresetBox,
-        ComboBox OperatorBox,
-        TextBox Value1Box,
-        TextBox FormulaBox,
-        TextBox TextBox,
-        TextBox RankBox,
-        ComboBox TopBottomBox,
-        ComboBox IconSetBox,
-        TextBox MinColorBox,
-        TextBox MaxColorBox,
-        ComboBox HighlightBox,
-        Button OkButton,
-        Button CancelButton);
-
-    /// <summary>Controls the Manage Rules dialog exposes to the launch-smoke probe.</summary>
-    internal sealed record ManageConditionalFormatsDialogSmokeProbe(
-        Window Dialog,
-        ComboBox ScopeBox,
-        ListBox ListBox,
-        TextBox AppliesToBox,
-        Button NewButton,
-        Button EditButton,
-        Button DeleteButton,
-        Button MoveUpButton,
-        Button MoveDownButton,
-        Button ApplyAppliesToButton,
-        Button CloseButton);
-
     /// <summary>The native Format-menu "Conditional Formatting" submenu: New Rule, quick presets, Manage.</summary>
     private NativeMenu CreateNativeConditionalFormatMenu()
     {
         var menu = new NativeMenu();
 
-        var newRule = new NativeMenuItem { Header = "New Rule..." };
+        var newRule = new NativeMenuItem { Header = UiText.Get("MainWindow_Header_NewRule") };
         newRule.Click += async (_, _) => await ShowConditionalFormatNewRuleDialogAsync();
         menu.Items.Add(newRule);
         menu.Items.Add(new NativeMenuItemSeparator());
@@ -153,21 +69,21 @@ public sealed partial class MainWindow
             menu.Items.Add(item);
         }
 
-        var greaterThan = new NativeMenuItem { Header = "Highlight Cells > Greater Than..." };
+        var greaterThan = new NativeMenuItem { Header = UiText.Get("ConditionalFormat_HighlightCellsGreaterThan") };
         greaterThan.Click += async (_, _) => await ApplyHighlightGreaterThanPresetAsync();
         menu.Items.Add(greaterThan);
 
-        var top10 = new NativeMenuItem { Header = "Top 10 Items" };
+        var top10 = new NativeMenuItem { Header = UiText.Get("ConditionalFormatDialog_RuleType_Top10Items") };
         top10.Click += (_, _) => ApplyConditionalFormatPreset(ConditionalFormatPreset.Top10);
         menu.Items.Add(top10);
 
         menu.Items.Add(new NativeMenuItemSeparator());
 
-        var clear = new NativeMenuItem { Header = "Clear Rules from Selected Cells" };
+        var clear = new NativeMenuItem { Header = UiText.Get("ConditionalFormat_ClearRulesFromSelectedCells") };
         clear.Click += (_, _) => ClearConditionalFormatsFromSelection();
         menu.Items.Add(clear);
 
-        var manage = new NativeMenuItem { Header = "Manage Rules..." };
+        var manage = new NativeMenuItem { Header = UiText.Get("MainWindow_Header_ManageRules") };
         manage.Click += async (_, _) => await ShowManageConditionalFormatsDialogAsync();
         menu.Items.Add(manage);
 
@@ -181,11 +97,10 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        var rule = ConditionalFormatPresetFactory.BuildRule(preset, range);
-        var command = BuildMultiAreaConditionalFormatCommand(rule, "Conditional Formatting");
-        RunConditionalFormatCommand(
-            command,
-            UiText.Format("InsertLoc_CfAppliedPreset", ConditionalFormatPresetFactory.DisplayName(preset), FormatRangeReference(range)));
+        RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyPreset(
+            _session.GetCurrentGroupedEditSheetIds(),
+            ResolveConditionalFormatSelectionRanges(range),
+            preset));
     }
 
     /// <summary>Applies an icon-set conditional format of the given catalog style to the selection.</summary>
@@ -195,9 +110,10 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        var rule = ConditionalFormatPresetFactory.BuildIconSetRule(iconSetStyle, range);
-        var command = BuildMultiAreaConditionalFormatCommand(rule, "Conditional Formatting");
-        RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfAppliedIconSet", FormatRangeReference(range)));
+        RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyIconSet(
+            _session.GetCurrentGroupedEditSheetIds(),
+            ResolveConditionalFormatSelectionRanges(range),
+            iconSetStyle));
     }
 
     /// <summary>Prompts for a threshold and applies the Highlight &gt; Greater Than preset.</summary>
@@ -214,9 +130,10 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        var rule = ConditionalFormatPresetFactory.BuildRule(ConditionalFormatPreset.HighlightGreaterThan, range, value);
-        var command = BuildMultiAreaConditionalFormatCommand(rule, "Conditional Formatting");
-        RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfAppliedHighlight", FormatRangeReference(range)));
+        RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyHighlightGreaterThan(
+            _session.GetCurrentGroupedEditSheetIds(),
+            ResolveConditionalFormatSelectionRanges(range),
+            value));
     }
 
     /// <summary>Clears every conditional-format rule overlapping the current selection (one undo step).</summary>
@@ -226,64 +143,42 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        var ranges = ResolveConditionalFormatSelectionRanges(range);
-        var command = SelectionStyleCommandPlanner.CreateRangeCommand(
+        RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanClear(
             _session.GetCurrentGroupedEditSheetIds(),
-            ranges,
-            (sheetId, currentRange) => new ClearConditionalFormatsCommand(sheetId, currentRange),
-            "Clear Conditional Formatting");
-        RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfCleared", FormatRangeReference(range)));
+            ResolveConditionalFormatSelectionRanges(range)));
     }
 
-    /// <summary>
-    /// R128-avalonia-cf-multiarea-1: the disjoint areas of a Ctrl+click multi-area selection, the
-    /// same choke point every other multi-area command in this shell already routes through
-    /// (MainWindow.Outline.cs, MainWindow.RowColumnVisibility.cs, MainWindow.MergePaste.cs, ...).
-    /// Falls back to <paramref name="fallbackRange"/> when nothing is selected.
-    /// </summary>
     private IReadOnlyList<GridRange> ResolveConditionalFormatSelectionRanges(GridRange fallbackRange)
     {
         var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
         return ranges.Count > 0 ? ranges : [fallbackRange];
     }
 
-    /// <summary>
-    /// R128-avalonia-cf-multiarea-1: applies a built conditional-format rule to every disjoint area
-    /// of the current selection, not just the single active area the caller built
-    /// <paramref name="templateRule"/> over. Mirrors the WPF host's
-    /// ApplyConditionalFormatPreset(ConditionalFormat rule) (MainWindow.HomeFormatting.cs): each area
-    /// gets its own cloned rule (a fresh Id via GroupedSheetRangePlanner.CloneConditionalFormatForSheet,
-    /// so each area's rule can be edited/deleted independently, exactly like Excel creating one rule
-    /// per pasted-preset area) and, like every other multi-area command in this shell, also honors a
-    /// grouped-sheet edit (multiple selected sheet tabs).
-    /// </summary>
-    private IWorkbookCommand BuildMultiAreaConditionalFormatCommand(ConditionalFormat templateRule, string title)
-    {
-        var ranges = ResolveConditionalFormatSelectionRanges(templateRule.AppliesTo);
-        return SelectionStyleCommandPlanner.CreateRangeCommand(
-            _session.GetCurrentGroupedEditSheetIds(),
-            ranges,
-            (sheetId, currentRange) =>
-            {
-                var sheetRule = GroupedSheetRangePlanner.CloneConditionalFormatForSheet(templateRule, sheetId);
-                sheetRule.AppliesTo = currentRange;
-                return new ApplyConditionalFormatCommand(sheetId, sheetRule);
-            },
-            title);
-    }
-
     /// <summary>Runs a conditional-format command through the shared session command path and refreshes.</summary>
-    private void RunConditionalFormatCommand(IWorkbookCommand command, string successStatus)
+    private void RunConditionalFormatCommand(ConditionalFormatCommandExecutionPlan plan)
     {
-        var result = _session.ExecuteReviewCommand(command);
+        var result = _session.ExecuteReviewCommand(plan.Command);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_CfFailed"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get(plan.FailureResourceKey));
             return;
         }
 
-        RefreshShell(successStatus);
+        ApplyConditionalFormatRefresh(plan.RefreshPolicy, ResolveConditionalFormatStatus(plan.SuccessStatus));
     }
+
+    private void ApplyConditionalFormatRefresh(
+        ConditionalFormatStateRefreshPolicy policy,
+        string successStatus)
+    {
+        if (policy == ConditionalFormatStateRefreshPolicy.WorksheetVisualState)
+            RefreshShell(successStatus);
+    }
+
+    private static string ResolveConditionalFormatStatus(ConditionalFormatStatusPlan status) =>
+        status.Arguments.Count == 0
+            ? UiText.Get(status.ResourceKey)
+            : UiText.Format(status.ResourceKey, status.Arguments.Cast<object?>().ToArray());
 
     /// <summary>Shows the rule editor for a new rule and applies the built Core rule to the selection.</summary>
     private Task ShowConditionalFormatNewRuleDialogAsync() =>
@@ -298,30 +193,25 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var built = await ShowConditionalFormatRuleEditorAsync(existingRule: null, startRuleType, launchSmokeProbe: null);
+        var built = await ShowConditionalFormatRuleEditorAsync(existingRule: null, startRuleType);
         if (built is null)
             return;
 
         var range = built.AppliesTo;
-        var command = BuildMultiAreaConditionalFormatCommand(built, "Conditional Formatting");
-        RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfAppliedRule", FormatRangeReference(range)));
+        RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyRule(
+            _session.GetCurrentGroupedEditSheetIds(),
+            ResolveConditionalFormatSelectionRanges(range),
+            built));
     }
 
     private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(ConditionalFormat? existingRule) =>
-        ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null, launchSmokeProbe: null);
+        ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null);
 
     private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
-        ConditionalFormat? existingRule,
-        Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe) =>
-        ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null, launchSmokeProbe);
-
-    private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
-        QuickAnalysisConditionalFormatDialogSeed seed,
-        Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe = null) =>
+        QuickAnalysisConditionalFormatDialogSeed seed) =>
         ShowConditionalFormatRuleEditorAsync(
             existingRule: null,
             startRuleType: seed.RuleType,
-            launchSmokeProbe,
             initialSeed: seed);
 
     /// <summary>
@@ -333,7 +223,6 @@ public sealed partial class MainWindow
     private async Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
         ConditionalFormat? existingRule,
         CfRuleType? startRuleType,
-        Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe,
         QuickAnalysisConditionalFormatDialogSeed? initialSeed = null)
     {
         ConditionalFormat? result = null;
@@ -353,12 +242,14 @@ public sealed partial class MainWindow
 
         var ruleTypeBox = new ComboBox
         {
-            ItemsSource = ConditionalFormatRuleTypeChoices.Select(c => c.Label).ToList(),
+            ItemsSource = ConditionalFormatDialogCatalog.RuleEditorTypeOptions
+                .Select(option => UiText.Get(option.LabelKey))
+                .ToList(),
             MinWidth = 220,
         };
         ApplyCfComboBoxChrome(ruleTypeBox);
         AutomationProperties.SetAutomationId(ruleTypeBox, "ConditionalFormatRuleTypeBox");
-        AutomationProperties.SetName(ruleTypeBox, "Rule type");
+        AutomationProperties.SetName(ruleTypeBox, UiText.CreateAutomationName(UiText.Get("ConditionalFormat_RuleTypeLabel")));
 
         var presetBox = new ComboBox
         {
@@ -367,11 +258,13 @@ public sealed partial class MainWindow
         };
         ApplyCfComboBoxChrome(presetBox);
         AutomationProperties.SetAutomationId(presetBox, "ConditionalFormatPresetBox");
-        AutomationProperties.SetName(presetBox, "Preset");
+        AutomationProperties.SetName(presetBox, UiText.CreateAutomationName(UiText.Get("ConditionalFormat_PresetLabel")));
 
         var operatorBox = new ComboBox
         {
-            ItemsSource = ConditionalFormatOperatorChoices.Select(c => c.Label).ToList(),
+            ItemsSource = ConditionalFormatDialogCatalog.RuleEditorOperatorOptions
+                .Select(option => UiText.Get(option.LabelKey))
+                .ToList(),
             SelectedIndex = 0,
             MinWidth = 220,
         };
@@ -404,7 +297,7 @@ public sealed partial class MainWindow
         };
         ApplyCfComboBoxChrome(topBottomBox);
         AutomationProperties.SetAutomationId(topBottomBox, "ConditionalFormatTopBottomBox");
-        AutomationProperties.SetName(topBottomBox, "Top or bottom");
+        AutomationProperties.SetName(topBottomBox, UiText.CreateAutomationName(UiText.Get("ConditionalFormat_TopOrBottomLabel")));
         var iconSetBox = new ComboBox
         {
             ItemsSource = ConditionalFormatIconSetCatalog.Styles.Select(s => s.Style).ToList(),
@@ -516,11 +409,11 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(errorText, "ConditionalFormatErrorText");
 
         CfRuleType SelectedRuleType() =>
-            ConditionalFormatRuleTypeChoices[Math.Max(0, ruleTypeBox.SelectedIndex)].Type;
+            ConditionalFormatDialogCatalog.RuleEditorTypeOptions[Math.Max(0, ruleTypeBox.SelectedIndex)].RuleType;
 
         CfRuleInput CollectInput()
         {
-            var op = ConditionalFormatOperatorChoices[Math.Max(0, operatorBox.SelectedIndex)].Op;
+            var op = ConditionalFormatDialogCatalog.RuleEditorOperatorOptions[Math.Max(0, operatorBox.SelectedIndex)].Operator;
             return new CfRuleInput
             {
                 RuleType = SelectedRuleType(),
@@ -546,7 +439,7 @@ public sealed partial class MainWindow
             var schema = ConditionalFormatRuleSchema.ForRuleType(ruleType);
             operatorField.IsVisible = schema.HasField(CfInputField.Operator);
             value1Field.IsVisible = schema.HasField(CfInputField.Value1);
-            var op = ConditionalFormatOperatorChoices[Math.Max(0, operatorBox.SelectedIndex)].Op;
+            var op = ConditionalFormatDialogCatalog.RuleEditorOperatorOptions[Math.Max(0, operatorBox.SelectedIndex)].Operator;
             value2Field.IsVisible = schema.HasField(CfInputField.Value2)
                 && op is CfOperator.Between or CfOperator.NotBetween;
             formulaField.IsVisible = schema.HasField(CfInputField.Formula);
@@ -583,14 +476,6 @@ public sealed partial class MainWindow
 
             var preset = ConditionalFormatPresetChoices[presetBox.SelectedIndex].Preset;
             var presetInput = ConditionalFormatPresetFactory.BuildInput(preset);
-
-            // BuildInput returns an identical AboveAverage CfRuleInput for both the AboveAverage
-            // and BelowAverage presets (the model has no dedicated field for the direction; it
-            // reuses IsTop/AboveAverage instead), so the Below Average choice must flip IsTop here
-            // the same way ConditionalFormatPresetFactory.BuildRule does for the ribbon's one-click
-            // apply path. Without this, picking "Below Average" silently seeds an Above Average rule.
-            if (preset == ConditionalFormatPreset.BelowAverage)
-                presetInput = presetInput with { IsTop = false };
 
             ApplyConditionalFormatPresetToEditor(
                 presetInput,
@@ -649,7 +534,9 @@ public sealed partial class MainWindow
         // Pre-select a starting rule type for new rules (e.g. the ribbon's "New Formula Rule…").
         if (existingRule is null && initialSeed is null && startRuleType is { } seedType)
         {
-            var seedIndex = ConditionalFormatRuleTypeChoices.ToList().FindIndex(c => c.Type == seedType);
+            var seedIndex = ConditionalFormatDialogCatalog.RuleEditorTypeOptions
+                .ToList()
+                .FindIndex(option => option.RuleType == seedType);
             if (seedIndex >= 0)
                 ruleTypeBox.SelectedIndex = seedIndex;
         }
@@ -660,8 +547,8 @@ public sealed partial class MainWindow
         // dropdown that drives the description editor on the right, keeping the two in sync.
         var ruleTypeShellList = new ListBox
         {
-            ItemsSource = ConditionalFormatRuleShellChoices
-                .Select(c => UiText.Get(c.LabelKey).Replace("_", string.Empty, StringComparison.Ordinal))
+            ItemsSource = ConditionalFormatDialogCatalog.RuleEditorShellOptions
+                .Select(option => UiText.Get(option.LabelKey).Replace("_", string.Empty, StringComparison.Ordinal))
                 .ToList(),
             MinHeight = 182,
             Background = Brushes.White,
@@ -680,7 +567,8 @@ public sealed partial class MainWindow
             if (syncingShell)
                 return;
             syncingShell = true;
-            ruleTypeShellList.SelectedIndex = ConditionalFormatShellIndexForRuleType(SelectedRuleType());
+            ruleTypeShellList.SelectedIndex = ConditionalFormatDialogCatalog
+                .RuleEditorShellIndexForModelRuleType(SelectedRuleType());
             syncingShell = false;
         }
 
@@ -689,8 +577,12 @@ public sealed partial class MainWindow
             if (syncingShell || ruleTypeShellList.SelectedIndex < 0)
                 return;
 
-            var targetType = ConditionalFormatRuleShellChoices[ruleTypeShellList.SelectedIndex].Type;
-            var idx = ConditionalFormatRuleTypeChoices.ToList().FindIndex(c => c.Type == targetType);
+            var targetType = ConditionalFormatDialogCatalog
+                .RuleEditorShellOptions[ruleTypeShellList.SelectedIndex]
+                .RuleType;
+            var idx = ConditionalFormatDialogCatalog.RuleEditorTypeOptions
+                .ToList()
+                .FindIndex(option => option.RuleType == targetType);
             if (idx >= 0 && idx != ruleTypeBox.SelectedIndex)
             {
                 syncingShell = true;
@@ -825,30 +717,22 @@ public sealed partial class MainWindow
         ConfigureNativeDialogInitialFocus(dialog, root, ruleTypeBox);
         dialog.Content = root;
 
-        if (launchSmokeProbe is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                RunLaunchSmokeDialogProbe(
-                    dialog,
-                    () => launchSmokeProbe(new ConditionalFormatRuleDialogSmokeProbe(
-                        dialog,
-                        ruleTypeBox,
-                        presetBox,
-                        operatorBox,
-                        value1Box,
-                        formulaBox,
-                        textBox,
-                        rankBox,
-                        topBottomBox,
-                        iconSetBox,
-                        minColorBox,
-                        maxColorBox,
-                        highlightBox,
-                        okButton,
-                        cancelButton)));
-            };
-        }
+        AttachOptionalConditionalFormatRuleDialogObservation(
+            dialog,
+            ruleTypeBox,
+            presetBox,
+            operatorBox,
+            value1Box,
+            formulaBox,
+            textBox,
+            rankBox,
+            topBottomBox,
+            iconSetBox,
+            minColorBox,
+            maxColorBox,
+            highlightBox,
+            okButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -880,8 +764,8 @@ public sealed partial class MainWindow
         }
 
         var typeIndex = 0;
-        for (var i = 0; i < ConditionalFormatRuleTypeChoices.Count; i++)
-            if (ConditionalFormatRuleTypeChoices[i].Type == rule.RuleType)
+        for (var i = 0; i < ConditionalFormatDialogCatalog.RuleEditorTypeOptions.Count; i++)
+            if (ConditionalFormatDialogCatalog.RuleEditorTypeOptions[i].RuleType == rule.RuleType)
             {
                 typeIndex = i;
                 break;
@@ -889,8 +773,8 @@ public sealed partial class MainWindow
 
         ruleTypeBox.SelectedIndex = typeIndex;
 
-        for (var i = 0; i < ConditionalFormatOperatorChoices.Count; i++)
-            if (ConditionalFormatOperatorChoices[i].Op == rule.Operator)
+        for (var i = 0; i < ConditionalFormatDialogCatalog.RuleEditorOperatorOptions.Count; i++)
+            if (ConditionalFormatDialogCatalog.RuleEditorOperatorOptions[i].Operator == rule.Operator)
             {
                 operatorBox.SelectedIndex = i;
                 break;
@@ -927,15 +811,15 @@ public sealed partial class MainWindow
         TextBox midColorBox,
         TextBox maxColorBox)
     {
-        for (var i = 0; i < ConditionalFormatRuleTypeChoices.Count; i++)
-            if (ConditionalFormatRuleTypeChoices[i].Type == preset.RuleType)
+        for (var i = 0; i < ConditionalFormatDialogCatalog.RuleEditorTypeOptions.Count; i++)
+            if (ConditionalFormatDialogCatalog.RuleEditorTypeOptions[i].RuleType == preset.RuleType)
             {
                 ruleTypeBox.SelectedIndex = i;
                 break;
             }
 
-        for (var i = 0; i < ConditionalFormatOperatorChoices.Count; i++)
-            if (ConditionalFormatOperatorChoices[i].Op == preset.Operator)
+        for (var i = 0; i < ConditionalFormatDialogCatalog.RuleEditorOperatorOptions.Count; i++)
+            if (ConditionalFormatDialogCatalog.RuleEditorOperatorOptions[i].Operator == preset.Operator)
             {
                 operatorBox.SelectedIndex = i;
                 break;
@@ -969,11 +853,15 @@ public sealed partial class MainWindow
         CheckBox percentBox,
         ComboBox topBottomBox)
     {
-        var ruleTypeIndex = ConditionalFormatRuleTypeChoices.ToList().FindIndex(choice => choice.Type == seed.RuleType);
+        var ruleTypeIndex = ConditionalFormatDialogCatalog.RuleEditorTypeOptions
+            .ToList()
+            .FindIndex(option => option.RuleType == seed.RuleType);
         if (ruleTypeIndex >= 0)
             ruleTypeBox.SelectedIndex = ruleTypeIndex;
 
-        var operatorIndex = ConditionalFormatOperatorChoices.ToList().FindIndex(choice => choice.Op == seed.Operator);
+        var operatorIndex = ConditionalFormatDialogCatalog.RuleEditorOperatorOptions
+            .ToList()
+            .FindIndex(option => option.Operator == seed.Operator);
         if (operatorIndex >= 0)
             operatorBox.SelectedIndex = operatorIndex;
 
@@ -986,7 +874,7 @@ public sealed partial class MainWindow
     }
 
     private static string FormatRgb(RgbColor color) =>
-        $"{color.R},{color.G},{color.B}";
+        ConditionalFormatInputParser.FormatRgb(color);
 
     // ── Chrome helpers ────────────────────────────────────────────────────────
 
@@ -1070,9 +958,6 @@ public sealed partial class MainWindow
         return result;
     }
 
-    private Task ShowManageConditionalFormatsDialogAsync() =>
-        ShowManageConditionalFormatsDialogAsync(launchSmokeProbe: null, parityCapture: false);
-
     /// <summary>
     /// The Manage Rules dialog: lists the selection's overlapping rules (or every sheet rule when the
     /// selection is a single cell) with New, Edit, Delete, reorder (move up/down), and change applies-to.
@@ -1083,16 +968,18 @@ public sealed partial class MainWindow
     /// mirroring the Windows host's manager (which buffers edits in a private
     /// <c>ObservableCollection&lt;ConditionalFormat&gt;</c>).
     /// </summary>
-    internal async Task ShowManageConditionalFormatsDialogAsync(
-        Action<ManageConditionalFormatsDialogSmokeProbe>? launchSmokeProbe,
-        bool parityCapture = false)
+    private async Task ShowManageConditionalFormatsDialogAsync()
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        // The working copy: a deep-cloned snapshot of the sheet's rules that every button below edits
-        // in place. Nothing here reaches the live sheet until Commit() runs on OK.
-        var workingRules = ConditionalFormatManageModel.CloneAll(_session.ActiveSheet.ConditionalFormats);
+        var scopePlan = ManageConditionalFormatsPlanner.CreateDialogPlan(
+            _session.ActiveSheet,
+            _session.SelectedRange);
+        var manageSession = new ManageConditionalFormatsSession(
+            _session.ActiveSheet.ConditionalFormats,
+            scopePlan.DefaultScopeOption.Range,
+            ManageConditionalFormatsWorkingCopyPolicy.FullSheet);
 
         var dialog = new Window
         {
@@ -1122,17 +1009,10 @@ public sealed partial class MainWindow
         // columns (the WPF GridView), instead of the default single-string row. Toggling Stop If
         // True mutates the matching rule directly in the working copy (mirroring the WPF grid's
         // two-way-bound checkbox column) — it never touches the live sheet until Commit().
-        listBox.ItemTemplate = new FuncDataTemplate<ConditionalFormatRuleListItem>(
+        listBox.ItemTemplate = new FuncDataTemplate<ManageConditionalFormatRuleProjection>(
             (item, _) => BuildManageConditionalFormatRow(item, isChecked =>
             {
-                foreach (var rule in workingRules)
-                {
-                    if (rule.Id == item.Id)
-                    {
-                        rule.StopIfTrue = isChecked;
-                        break;
-                    }
-                }
+                manageSession.SetStopIfTrue(item.Id, isChecked);
             }),
             supportsRecycling: true);
 
@@ -1159,7 +1039,7 @@ public sealed partial class MainWindow
         };
         ApplyCfButtonChrome(appliesToPicker, 32);
         AutomationProperties.SetAutomationId(appliesToPicker, "ManageConditionalFormatsAppliesToPickerButton");
-        AutomationProperties.SetName(appliesToPicker, "Select conditional format range");
+        AutomationProperties.SetName(appliesToPicker, UiText.Get("ConditionalFormat_SelectRangeAutomationName"));
 
         var appliesToRow = new AvaloniaGrid
         {
@@ -1174,7 +1054,6 @@ public sealed partial class MainWindow
 
         // Shared with the WPF host: builds Sheet/Table/Selection options, adding "This Table"
         // only when the current selection sits inside a structured table (FindSelectionTableRange).
-        var scopePlan = ManageConditionalFormatsPlanner.CreateDialogPlan(_session.ActiveSheet, _session.SelectedRange);
         var scopeItems = scopePlan.ScopeOptions
             .Select(option => new ManageConditionalFormatScopeItem(
                 UiText.Get(option.LabelKey).Replace("_", string.Empty, StringComparison.Ordinal),
@@ -1193,15 +1072,14 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(scopeBox, "ManageConditionalFormatsScopeBox");
         AutomationProperties.SetName(scopeBox, UiText.Get("ManageConditionalFormats_ShowFormattingRulesFor").Replace("_", string.Empty, StringComparison.Ordinal));
 
-        // The scope filter shared by BuildList (what the listBox shows) and MoveInWorkingCopy (what
-        // "neighbour" means for Move Up/Down) — a single source of truth so the toolbar can never act
-        // on a different subset than the one the user is looking at.
+        // The shared session uses this scope for both the list projection and move neighbours.
         GridRange? CurrentScope() => scopeBox.SelectedItem is ManageConditionalFormatScopeItem { Range: { } range } ? range : null;
 
         void Reload(Guid? selectId = null)
         {
             var scope = CurrentScope();
-            var items = ConditionalFormatManageModel.BuildList(workingRules, scope);
+            manageSession.SetScope(scope);
+            var items = manageSession.BuildProjection();
             listBox.ItemsSource = items;
             emptyText.IsVisible = items.Count == 0;
             if (items.Count > 0)
@@ -1223,7 +1101,7 @@ public sealed partial class MainWindow
 
         void SyncAppliesTo()
         {
-            appliesToBox.Text = listBox.SelectedItem is ConditionalFormatRuleListItem item
+            appliesToBox.Text = listBox.SelectedItem is ManageConditionalFormatRuleProjection item
                 ? FormatRangeReference(item.Rule.AppliesTo)
                 : string.Empty;
         }
@@ -1262,14 +1140,14 @@ public sealed partial class MainWindow
 
         void SyncCommandState()
         {
-            var hasSelection = listBox.SelectedItem is ConditionalFormatRuleListItem;
+            var hasSelection = listBox.SelectedItem is ManageConditionalFormatRuleProjection;
             editButton.IsEnabled = hasSelection;
             duplicateButton.IsEnabled = hasSelection;
             deleteButton.IsEnabled = hasSelection;
             moveUpButton.IsEnabled = hasSelection && listBox.SelectedIndex > 0;
             moveDownButton.IsEnabled = hasSelection && listBox.SelectedIndex >= 0 && listBox.SelectedIndex < listBox.ItemCount - 1;
             applyAppliesToButton.IsEnabled = hasSelection;
-            appliesToRow.IsVisible = !parityCapture && hasSelection;
+            appliesToRow.IsVisible = hasSelection;
             appliesToPicker.IsEnabled = hasSelection;
         }
 
@@ -1287,64 +1165,56 @@ public sealed partial class MainWindow
                 return;
 
             // Append to the working copy only — nothing reaches the live sheet until Commit().
-            workingRules = ConditionalFormatManageModel.AddToWorkingCopy(workingRules, built);
+            manageSession.Add(built);
             Reload(built.Id);
         };
 
         editButton.Click += async (_, _) =>
         {
-            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+            if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
 
             var edited = await ShowConditionalFormatRuleEditorAsync(item.Rule);
             if (edited is null)
                 return;
 
-            var updated = ConditionalFormatManageModel.ReplaceInWorkingCopy(workingRules, edited);
-            if (updated is null)
+            if (!manageSession.Replace(edited))
                 return;
 
-            workingRules = updated;
             Reload(edited.Id);
         };
 
         deleteButton.Click += (_, _) =>
         {
-            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+            if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
 
-            var remaining = ConditionalFormatManageModel.DeleteFromWorkingCopy(workingRules, item.Id);
-            if (remaining is null)
+            if (!manageSession.Delete(item.Id))
                 return;
 
-            workingRules = remaining;
             Reload();
         };
 
         duplicateButton.Click += async (_, _) =>
         {
-            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+            if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
 
             var duplicateId = Guid.NewGuid();
-            var updated = ConditionalFormatManageModel.DuplicateInWorkingCopy(workingRules, item.Id, duplicateId);
-            if (updated is null)
+            if (!manageSession.Duplicate(item.Id, duplicateId))
                 return;
 
-            workingRules = updated;
             Reload(duplicateId);
         };
 
         void Move(ConditionalFormatRuleMoveDirection direction)
         {
-            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+            if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
 
-            var updated = ConditionalFormatManageModel.MoveInWorkingCopy(workingRules, CurrentScope(), item.Id, direction);
-            if (updated is null)
+            if (!manageSession.Move(item.Id, direction))
                 return;
 
-            workingRules = updated;
             Reload(item.Id);
         }
 
@@ -1353,22 +1223,20 @@ public sealed partial class MainWindow
 
         applyAppliesToButton.Click += (_, _) =>
         {
-            if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
+            if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
 
-            var reference = appliesToBox.Text;
+            var reference = ManageConditionalFormatsPlanner.NormalizeAppliesToText(appliesToBox.Text);
             if (string.IsNullOrWhiteSpace(reference)
                 || !_session.TryResolveReferenceRange(reference, out var range))
             {
-                ShowEditIssue(UiText.Get("InsertLoc_CfAppliesToInvalid"));
+                ShowEditIssue(UiText.Get(ConditionalFormatCommandPlanner.InvalidAppliesToResourceKey));
                 return;
             }
 
-            var updated = ConditionalFormatManageModel.ApplyRangeInWorkingCopy(workingRules, item.Id, range);
-            if (updated is null)
+            if (!manageSession.ApplyRange(item.Id, range))
                 return;
 
-            workingRules = updated;
             Reload(item.Id);
         };
 
@@ -1376,9 +1244,9 @@ public sealed partial class MainWindow
         {
             // A single atomic replace-all: one undo step for every New/Edit/Delete/Duplicate/Move/
             // AppliesTo/Stop-If-True edit made in this dialog session.
-            RunConditionalFormatCommand(
-                new ReplaceAllConditionalFormatsCommand(_session.ActiveSheet.Id, workingRules),
-                UiText.Get("InsertLoc_CfManageRulesApplied"));
+            RunConditionalFormatCommand(manageSession.CreateApplyPlan(
+                [_session.ActiveSheet.Id],
+                _session.ActiveSheet.Id));
         }
 
         closeButton.Click += (_, _) =>
@@ -1514,26 +1382,19 @@ public sealed partial class MainWindow
         // target, so Tab and Shift+Tab both start from the same predictable control.
         dialog.Opened += (_, _) => scopeBox.Focus();
 
-        if (launchSmokeProbe is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                RunLaunchSmokeDialogProbe(
-                    dialog,
-                    () => launchSmokeProbe(new ManageConditionalFormatsDialogSmokeProbe(
-                        dialog,
-                        scopeBox,
-                        listBox,
-                        appliesToBox,
-                        newButton,
-                        editButton,
-                        deleteButton,
-                        moveUpButton,
-                        moveDownButton,
-                        applyAppliesToButton,
-                        closeButton)));
-            };
-        }
+        AttachOptionalManageConditionalFormatsDialogObservation(
+            dialog,
+            scopeBox,
+            listBox,
+            appliesToBox,
+            newButton,
+            editButton,
+            deleteButton,
+            moveUpButton,
+            moveDownButton,
+            applyAppliesToButton,
+            appliesToRow,
+            closeButton);
 
         AttachDialogRangePicker(
             dialog,
@@ -1556,7 +1417,7 @@ public sealed partial class MainWindow
     /// edits the working-copy rule directly rather than requiring the rule editor).
     /// </summary>
     private Control BuildManageConditionalFormatRow(
-        ConditionalFormatRuleListItem item,
+        ManageConditionalFormatRuleProjection item,
         Action<bool> onStopIfTrueToggled)
     {
         var rule = item.Rule;
@@ -1583,7 +1444,7 @@ public sealed partial class MainWindow
         };
 
         AddCell(RowText(rule.Priority.ToString(global::System.Globalization.CultureInfo.InvariantCulture)), 0);
-        AddCell(RowText(item.Description), 1);
+        AddCell(RowText(ManageConditionalFormatsPlanner.ResolveDescription(item.Description, ManageConditionalFormatsText)), 1);
         AddCell(BuildConditionalFormatPreviewSwatch(rule), 2);
         AddCell(RowText(FormatRangeReference(rule.AppliesTo)), 3);
         // Stop-If-True: an interactive checkbox that mutates the working-copy rule directly

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
@@ -114,12 +115,12 @@ public sealed class PrintLayoutTests
 
         var sourceState = Descendants(view.Document)
             .OfType<TabStopLeaderElement>()
-            .Select(element => (element.Leader, element.BrushToken, element.Width))
+            .Select(element => (element.Leader, element.HasLeader, element.BrushToken, element.Width))
             .ToArray();
         var clone = PrintLayout.BuildPaginatedDocument(view);
         var clonedState = Descendants(clone)
             .OfType<TabStopLeaderElement>()
-            .Select(element => (element.Leader, element.BrushToken, element.Width))
+            .Select(element => (element.Leader, element.HasLeader, element.BrushToken, element.Width))
             .ToArray();
 
         Assert.NotEmpty(sourceState);
@@ -243,7 +244,7 @@ public sealed class PrintLayoutTests
             Assert.Null(blank.FooterSubEditor);
             Assert.Equal([1, 2, 3], panel.PageBoxes.Select(box => box.PageNumber));
 
-            var selectedPhysicalPages = PageRangeDocumentPaginator.Create(paginator, 2, 3);
+            var selectedPhysicalPages = WpfPageRangeDocumentPaginator.CreateClampedInclusive(paginator, 2, 3);
             Assert.Equal(2, selectedPhysicalPages.PageCount);
             Assert.NotSame(
                 System.Windows.Documents.DocumentPage.Missing,

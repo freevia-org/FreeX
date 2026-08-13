@@ -48,6 +48,7 @@ public static class RibbonCommandIconSlugAliases
             ["merge-rule-fill-in"] = "merge-rule-ask", ["merge-rule-set"] = "merge-rule-ask",
             ["merge-rule-ref"] = "merge-rule-ask", ["theme"] = "themes", ["spellcheck-toggle"] = "spelling",
             ["accept-all"] = "accept-change", ["reject-all"] = "reject-change", ["paste-plain"] = "paste-special",
+            ["track-formatting"] = "track-changes",
             ["paste-merge"] = "paste-special", ["bullet-list"] = "bullets", ["bulleted-list"] = "bullets",
             ["numbered-list"] = "numbering", ["pictures"] = "picture", ["table-insert"] = "table",
             ["table-of-contents-gallery"] = "table-of-contents", ["toc"] = "table-of-contents", ["tof"] = "table-of-contents",

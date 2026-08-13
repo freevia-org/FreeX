@@ -81,13 +81,20 @@ public sealed class ThesaurusPaneParityTests
         var wpf = File.ReadAllText(RepoFile("freew", "FreeW.App.Host", "ThesaurusPane.cs"));
 
         pane.Should().Contain("Content = \"↵\"");
+        pane.Should().Contain("ThesaurusPaneSession _session");
+        pane.Should().Contain("_session.CompleteReplacement");
         pane.Should().Contain("action.InsertToolTip");
-        pane.Should().Contain("TopLevel.GetTopLevel(this)?.Clipboard");
+        pane.Should().Contain("private readonly Func<string, Task<bool>>? _copyText;");
+        pane.Should().NotContain("TopLevel.GetTopLevel(this)?.Clipboard");
         pane.Should().Contain("return false;");
         pane.Should().NotContain("Content = \"Replace\"");
+        pane.Should().NotContain("ThesaurusPresentationPlanner.Lookup");
         wpf.Should().Contain("Content = \"↵\"");
+        wpf.Should().Contain("ThesaurusPaneSession _session");
+        wpf.Should().Contain("_session.CompleteReplacement");
         wpf.Should().Contain("action.InsertToolTip");
         wpf.Should().NotContain("action.ReplaceToolTip");
+        wpf.Should().NotContain("ThesaurusPresentationPlanner.Lookup");
     }
 
     private static DocumentView NewEditor(string text)
@@ -105,11 +112,6 @@ public sealed class ThesaurusPaneParityTests
     private static string RepoFile(params string[] parts) =>
         Path.Combine(FindRepoRoot(), Path.Combine(parts));
 
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-        return directory?.FullName ?? throw new InvalidOperationException("FreeX repository root not found.");
-    }
+    private static string FindRepoRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

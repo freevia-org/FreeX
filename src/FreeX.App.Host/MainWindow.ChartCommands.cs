@@ -23,7 +23,7 @@ public partial class MainWindow
         {
             var currentRange = SheetGrid.SelectedRange ?? range;
             var sheet = _workbook.GetSheet(_currentSheetId);
-            command = ChartInsertionPlanner.BuildChartSheetCommand(
+            command = ChartCommandWorkflowPlanner.BuildChartSheetCommand(
                 sheet,
                 _currentSheetId,
                 currentRange,
@@ -32,14 +32,8 @@ public partial class MainWindow
             return command;
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Insert Chart Sheet");
+        if (!TryExecuteRepeatableCommand(CreateCommand, "Insert Chart Sheet", out _))
             return;
-        }
-
-        _repeatPostAction = null;
         if (command?.CreatedSheetId is { } createdSheetId)
         {
             _currentSheetId = createdSheetId;
@@ -69,13 +63,13 @@ public partial class MainWindow
                 {
                     var sheet = _workbook.GetSheet(_currentSheetId);
                     var plan = sheet is null
-                        ? ChartInsertionPlanner.CreateEmbeddedChartPlan(
+                        ? ChartCommandWorkflowPlanner.CreateEmbeddedChartPlan(
                             _currentSheetId,
                             currentRange,
                             type,
                             "Chart",
                             ChartInsertionPlanner.DefaultPlacement)
-                        : ChartInsertionPlanner.CreateEmbeddedChartPlan(
+                        : ChartCommandWorkflowPlanner.CreateEmbeddedChartPlan(
                             sheet,
                             currentRange,
                             type,
@@ -120,7 +114,12 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!TryExecuteCommand(new ChangeChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType), command.Label))
+        if (!TryExecuteCommand(
+                ChartCommandWorkflowPlanner.BuildChangeTypeCommand(
+                    _currentSheetId,
+                    chart,
+                    dialog.Result.ChartType),
+                ChartWorkflowCaption(command)))
             return;
 
         UpdateViewport();
@@ -157,14 +156,13 @@ public partial class MainWindow
         }
 
         if (!TryExecuteCommand(
-                new ChangeChartSourceCommand(
+                ChartCommandWorkflowPlanner.BuildChangeSourceCommand(
                     _currentSheetId,
-                    chart.Id,
+                    chart,
                     dataRange,
-                    firstRowIsHeader: chart.FirstRowIsHeader,
-                    firstColIsCategories: dialog.Result.FirstColumnIsCategories,
-                    seriesInRows: dialog.Result.SwitchRowColumn),
-                command.Label))
+                    dialog.Result.FirstColumnIsCategories,
+                    dialog.Result.SwitchRowColumn),
+                ChartWorkflowCaption(command)))
             return;
 
         // R92-app-chart-data-edit-5-1: replay each Remove Series click, in the SAME order the user
@@ -178,7 +176,11 @@ public partial class MainWindow
         if (dialog.Result.PendingSeriesRemovals is { Count: > 0 } pendingRemovals)
         {
             foreach (var seriesIndex in pendingRemovals)
-                TryExecuteCommand(new RemoveChartSeriesCommand(_currentSheetId, chart.Id, seriesIndex), command.Label);
+            {
+                TryExecuteCommand(
+                    ChartCommandWorkflowPlanner.BuildRemoveSeriesCommand(_currentSheetId, chart, seriesIndex),
+                    ChartWorkflowCaption(command));
+            }
         }
 
         // R92-app-chart-data-edit-5-3: only issue a Hidden/Empty Cell Settings undo step when the
@@ -188,12 +190,12 @@ public partial class MainWindow
             dialog.Result.ShowDataInHiddenRowsAndColumns != chart.ShowDataInHiddenRowsAndColumns)
         {
             TryExecuteCommand(
-                new ConfigureChartHiddenEmptyCellsCommand(
+                ChartCommandWorkflowPlanner.BuildHiddenEmptyCellsCommand(
                     _currentSheetId,
-                    chart.Id,
+                    chart,
                     dialog.Result.BlankDisplayMode,
                     dialog.Result.ShowDataInHiddenRowsAndColumns),
-                command.Label);
+                ChartWorkflowCaption(command));
         }
 
         UpdateViewport();
@@ -226,31 +228,25 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (dialog.Result.TargetKind == MoveChartTargetKind.NewChartSheet)
+        var movePlan = ChartCommandWorkflowPlanner.PlanMoveCommand(
+            _workbook,
+            _currentSheetId,
+            chart,
+            dialog.Result);
+        if (!movePlan.CanExecute)
         {
-            if (!TryExecuteCommand(new MoveChartToNewSheetCommand(_currentSheetId, chart.Id, dialog.Result.TargetName), command.Label))
-                return;
-
-            var createdSheet = _workbook.GetSheet(dialog.Result.TargetName);
-            if (createdSheet is not null)
-                _currentSheetId = createdSheet.Id;
+            ShowCommandError(new CommandOutcome(false, movePlan.Error), ChartWorkflowCaption(command));
+            return;
         }
-        else
-        {
-            var targetSheet = _workbook.GetSheet(dialog.Result.TargetName);
-            if (targetSheet is null)
-            {
-                _messageService.ShowWarning(
-                    UiText.Get("MainWindowMessage_ChartTargetSheetNotFound"),
-                    UiText.Get("MainWindowMessage_MoveChartTitle"));
-                return;
-            }
 
-            if (!TryExecuteCommand(new MoveChartCommand(_currentSheetId, chart.Id, targetSheet.Id), command.Label))
-                return;
+        if (!TryExecuteCommand(movePlan.Command!, ChartWorkflowCaption(command)))
+            return;
 
+        var targetSheet = movePlan.ExistingTargetSheetId is { } targetSheetId
+            ? _workbook.GetSheet(targetSheetId)
+            : _workbook.GetSheet(movePlan.TargetName);
+        if (targetSheet is not null)
             _currentSheetId = targetSheet.Id;
-        }
 
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
@@ -268,7 +264,12 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!TryExecuteCommand(new SetChartStyleCommand(_currentSheetId, chart.Id, dialog.Result.ChartStyleId), "Chart Styles"))
+        if (!TryExecuteCommand(
+                ChartCommandWorkflowPlanner.BuildStyleCommand(
+                    _currentSheetId,
+                    chart,
+                    dialog.Result.StyleId),
+                "Chart Styles"))
             return;
 
         UpdateViewport();
@@ -284,9 +285,9 @@ public partial class MainWindow
             return;
 
         if (!TryExecuteCommand(
-                new SetChartBoundsCommand(
+                ChartCommandWorkflowPlanner.BuildBoundsCommand(
                     _currentSheetId,
-                    chart.Id,
+                    chart,
                     chart.Left,
                     chart.Top,
                     dialog.Result.Width,
@@ -309,7 +310,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ApplyChartLayoutDialogResult(ChartWorkflowCaption(command), chart, dialog.Result.ToOptions()))
+        if (!ApplyChartLayoutDialogResult(ChartWorkflowCaption(command), chart, ChartAreaFormatPlanner.Plan(dialog.Result)))
             return;
 
         UpdateViewport();
@@ -437,7 +438,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartBarFormatPlanner.Plan(dialog.Result));
     }
 
     private void ChartBubbleFormatBtn_Click(object sender, RoutedEventArgs e)
@@ -457,7 +458,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartBubbleFormatPlanner.Plan(dialog.Result));
     }
 
     private void ChartPieFormatBtn_Click(object sender, RoutedEventArgs e)
@@ -477,7 +478,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartPieFormatPlanner.Plan(dialog.Result));
     }
 
     private void ChartStockFormatBtn_Click(object sender, RoutedEventArgs e)
@@ -497,7 +498,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartStockFormatPlanner.Plan(dialog.Result));
     }
 
     private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)
@@ -516,7 +517,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartDataLabelsPlanner.Plan(dialog.Result));
     }
 
     private void ChartDataLabelPositionBtn_Click(object sender, RoutedEventArgs e)
@@ -605,7 +606,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartTitlesPlanner.Plan(chart.Type, dialog.Result));
     }
 
     private void ChartTitleSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -680,7 +681,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartTrendlinePlanner.Plan(dialog.Result));
     }
 
     private void ChartTrendlineTypeBtn_Click(object sender, RoutedEventArgs e)
@@ -740,7 +741,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions()))
+        if (!ApplyChartLayoutDialogResult(caption, chart, ChartErrorBarsPlanner.Plan(dialog.Result)))
             return;
 
         UpdateViewport();
@@ -799,7 +800,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions(chart));
+        ApplyChartLayoutDialogResult(caption, chart, ChartSeriesFormatPlanner.Plan(chart, dialog.Result));
     }
 
     private void ChartSeriesMarkerSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -812,12 +813,11 @@ public partial class MainWindow
         var unsupportedMessage = command.HostUnsupportedMessageResourceKey is null
             ? null
             : UiText.Get(command.HostUnsupportedMessageResourceKey);
-        if (!TryExecuteRepeatableChartLayout(
-                command.Label,
+        if (!TryExecuteRepeatableChartQuickCommand(
+                UiText.Get(command.TitleResourceKey),
                 UiText.Get(command.HostMissingSelectionMessageResourceKey),
-                chart => ChartQuickCommandPlanner.CanApply(chart, command.Command),
                 unsupportedMessage,
-                chart => ChartQuickCommandPlanner.Plan(chart, command.Command)))
+                command))
             return;
 
         UpdateViewport();

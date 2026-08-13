@@ -1,37 +1,47 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
-using Avalonia.Media;
-using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
 internal sealed class SectionZoomDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private readonly ZoomSingleTargetDialogSession _session;
     private readonly ComboBox _targetCombo;
 
-    internal string? SelectedTargetSectionId { get; private set; }
+    internal string? SelectedTargetSectionId => _session.SelectedTargetId;
 
     internal SectionZoomDialog(
         IReadOnlyList<(string Id, string DisplayName)> options,
         string? title = null,
         string? selectedTargetId = null)
     {
-        ArgumentNullException.ThrowIfNull(options);
-        Title = title ?? SectionZoomInsertionPlanner.DialogTitle;
+        _session = new ZoomSingleTargetDialogSession(
+            ZoomTargetDialogKind.Section,
+            options,
+            selectedTargetId,
+            title);
+        var surface = _session.Surface;
+        Title = surface.Title;
         Width = 420;
         Height = 160;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        AvaloniaCompactDialogChrome.ApplyWindow(this, DialogChromeStyle);
+        ZoomDialogChrome.Apply(this, surface);
 
-        var items = options.Select(option => new TargetOption(option.Id, option.DisplayName)).ToArray();
-        _targetCombo = new ComboBox { ItemsSource = items, SelectedIndex = FindSelectedIndex(items, selectedTargetId), MinWidth = 260 };
+        _targetCombo = new ComboBox
+        {
+            ItemsSource = _session.Options,
+            SelectedIndex = _session.InitialSelectedIndex,
+            MinWidth = 260,
+        };
+        ZoomDialogChrome.ApplyField(_targetCombo, surface.Field(ZoomTargetDialogField.Target));
 
-        var ok = MakeButton("OK", true, Apply);
-        ok.IsEnabled = items.Length > 0;
+        var ok = ZoomDialogChrome.MakeButton(
+            surface.Action(ZoomTargetDialogAction.Accept),
+            Apply,
+            _session.CanAccept);
         Content = new StackPanel
         {
             Margin = new Thickness(14),
@@ -43,7 +53,11 @@ internal sealed class SectionZoomDialog : Window
                     ColumnDefinitions = new ColumnDefinitions("115, *"),
                     Children =
                     {
-                        new TextBlock { Text = "Target section:", VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock
+                        {
+                            Text = surface.Field(ZoomTargetDialogField.Target).Label,
+                            VerticalAlignment = VerticalAlignment.Center,
+                        },
                         _targetCombo,
                     },
                 },
@@ -52,7 +66,13 @@ internal sealed class SectionZoomDialog : Window
                     Orientation = Orientation.Horizontal,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     Spacing = 8,
-                    Children = { ok, MakeButton("Cancel", false, () => Close(false)) },
+                    Children =
+                    {
+                        ok,
+                        ZoomDialogChrome.MakeButton(
+                            surface.Action(ZoomTargetDialogAction.Cancel),
+                            () => Close(false)),
+                    },
                 },
             },
         };
@@ -61,31 +81,7 @@ internal sealed class SectionZoomDialog : Window
 
     private void Apply()
     {
-        SelectedTargetSectionId = (_targetCombo.SelectedItem as TargetOption)?.Id;
-        if (!string.IsNullOrWhiteSpace(SelectedTargetSectionId))
+        if (_session.TryAccept(_targetCombo.SelectedIndex))
             Close(true);
-    }
-
-    private static int FindSelectedIndex(IReadOnlyList<TargetOption> options, string? selectedTargetId)
-    {
-        if (options.Count == 0)
-            return -1;
-        for (var index = 0; index < options.Count; index++)
-            if (string.Equals(options[index].Id, selectedTargetId, StringComparison.OrdinalIgnoreCase))
-                return index;
-        return 0;
-    }
-
-    private static Button MakeButton(string label, bool isDefault, Action action)
-    {
-        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
-        button.Click += (_, _) => action();
-        return button;
-    }
-
-    private sealed record TargetOption(string Id, string DisplayName)
-    {
-        public override string ToString() => DisplayName;
     }
 }

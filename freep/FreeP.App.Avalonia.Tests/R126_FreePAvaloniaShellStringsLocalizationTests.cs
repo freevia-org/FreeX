@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
+using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia.Tests;
 
@@ -58,6 +59,9 @@ public sealed class R126_FreePAvaloniaShellStringsLocalizationTests : IDisposabl
         AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName);
 
         BackstageStrings.Current.Get("Backstage_GreetingMorning").Should().Be("Bonjour");
+        BackstageStrings.Current.Get(FreePBackstagePaneResourceKeys.OptionsEditText)
+            .Should()
+            .Be("Modifier les options…");
     }
 
     /// <summary>
@@ -69,22 +73,13 @@ public sealed class R126_FreePAvaloniaShellStringsLocalizationTests : IDisposabl
     {
         var source = File.ReadAllText(RepositoryFile("freep", "FreeP.App.Avalonia", "App.cs"));
 
-        source.Should().Contain(
-            "AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName)");
+        source.Should().Contain("new SisterAvaloniaLocalizationStartupDescriptor(");
+        source.Should().Contain("AvaloniaAppLocalizationBootstrap.InstallSharedSeams(");
+        source.Should().Contain("UiText.Get,");
+        source.Should().Contain("UiText.Format,");
+        source.Should().Contain("UiText.CreateAutomationName");
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var directory = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(directory))
-        {
-            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = Directory.GetParent(directory)?.FullName;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

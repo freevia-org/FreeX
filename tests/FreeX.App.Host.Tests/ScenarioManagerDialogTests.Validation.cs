@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -14,9 +15,10 @@ public sealed partial class ScenarioManagerDialogTests
     [InlineData("show", ScenarioManagerAction.Show)]
     [InlineData("list", ScenarioManagerAction.List)]
     [InlineData("report", ScenarioManagerAction.Report)]
+    [InlineData("merge", ScenarioManagerAction.Merge)]
     public void TryParseAction_MapsLegacyPromptWords(string text, ScenarioManagerAction expected)
     {
-        ScenarioManagerDialog.TryParseAction(text, out var action).Should().BeTrue();
+        ScenarioManagerPlanner.TryParseAction(text, out var action).Should().BeTrue();
 
         action.Should().Be(expected);
     }
@@ -29,101 +31,103 @@ public sealed partial class ScenarioManagerDialogTests
     [InlineData(ScenarioManagerAction.Delete, false)]
     [InlineData(ScenarioManagerAction.List, false)]
     [InlineData(ScenarioManagerAction.Report, false)]
+    [InlineData(ScenarioManagerAction.Merge, false)]
     public void RequiresScenarioName_OnlyRequiresNamesForSaveActions(ScenarioManagerAction action, bool expected)
     {
-        ScenarioManagerDialog.RequiresScenarioName(action).Should().Be(expected);
+        ScenarioManagerDialogPlanner.RequiresScenarioName(action).Should().Be(expected);
     }
 
     [Fact]
-    public void TryValidateScenarioName_RejectsBlankName()
+    public void ValidateScenarioName_RejectsBlankName()
     {
-        ScenarioManagerDialog.TryValidateScenarioName(" ", out var error)
+        ScenarioManagerDialogPlanner.ValidateScenarioName(" ")
             .Should()
-            .BeFalse();
-
-        error.Should().Be("Enter a scenario name.");
+            .Be(ScenarioManagerDialogValidation.Fail(ScenarioManagerDialogValidationError.EnterScenarioName));
     }
 
     [Fact]
-    public void TryValidateScenarioName_AcceptsNonBlankName()
+    public void ValidateScenarioName_AcceptsNonBlankName()
     {
-        ScenarioManagerDialog.TryValidateScenarioName(" Best Case ", out var error)
+        ScenarioManagerDialogPlanner.ValidateScenarioName(" Best Case ")
             .Should()
-            .BeTrue(error);
+            .Be(ScenarioManagerDialogValidation.Ok);
     }
 
     [Fact]
-    public void TryValidateChangingCells_AllowsBlankToUseCurrentSelectionFallback()
+    public void ValidateChangingCells_AllowsBlankToUseCurrentSelectionFallback()
     {
-        ScenarioManagerDialog.TryValidateChangingCells(" ", SheetId.New(), _ => null, out var error)
+        ScenarioManagerDialogPlanner.ValidateChangingCells(" ", SheetId.New(), _ => null)
             .Should()
-            .BeTrue(error);
+            .Be(ScenarioManagerDialogValidation.Ok);
     }
 
     [Fact]
-    public void TryValidateChangingCells_RejectsInvalidTypedReference()
+    public void ValidateChangingCells_RejectsInvalidTypedReference()
     {
         var sheetId = SheetId.New();
 
-        ScenarioManagerDialog.TryValidateChangingCells("not a range", sheetId, _ => null, out var error)
+        ScenarioManagerDialogPlanner.ValidateChangingCells("not a range", sheetId, _ => null)
             .Should()
-            .BeFalse();
-
-        error.Should().Be("Enter a valid changing cells reference.");
+            .Be(ScenarioManagerDialogValidation.Fail(
+                ScenarioManagerDialogValidationError.EnterValidChangingCellsReference));
     }
 
     [Fact]
-    public void TryValidateChangingCells_AcceptsValidTypedReference()
+    public void ValidateChangingCells_AcceptsValidTypedReference()
     {
         var sheetId = SheetId.New();
 
-        ScenarioManagerDialog.TryValidateChangingCells("Sheet1!A1:B2", sheetId, name => name == "Sheet1" ? sheetId : null, out var error)
+        ScenarioManagerDialogPlanner.ValidateChangingCells(
+                "Sheet1!A1:B2",
+                sheetId,
+                name => name == "Sheet1" ? sheetId : null)
             .Should()
-            .BeTrue(error);
+            .Be(ScenarioManagerDialogValidation.Ok);
     }
 
     [Fact]
-    public void TryValidateResultCells_AllowsBlankForPlainScenarioSummary()
+    public void ValidateResultCells_AllowsBlankForPlainScenarioSummary()
     {
-        ScenarioManagerDialog.TryValidateResultCells(" ", SheetId.New(), _ => null, out var error)
+        ScenarioManagerDialogPlanner.ValidateResultCells(" ", SheetId.New(), _ => null)
             .Should()
-            .BeTrue(error);
+            .Be(ScenarioManagerDialogValidation.Ok);
     }
 
     [Fact]
-    public void TryValidateResultCells_RejectsInvalidTypedReference()
-    {
-        var sheetId = SheetId.New();
-
-        ScenarioManagerDialog.TryValidateResultCells("not a range", sheetId, _ => null, out var error)
-            .Should()
-            .BeFalse();
-
-        error.Should().Be("Enter a valid result cells reference.");
-    }
-
-    [Fact]
-    public void TryValidateResultCells_AcceptsValidTypedReference()
+    public void ValidateResultCells_RejectsInvalidTypedReference()
     {
         var sheetId = SheetId.New();
 
-        ScenarioManagerDialog.TryValidateResultCells("Sheet1!C1:C2", sheetId, name => name == "Sheet1" ? sheetId : null, out var error)
+        ScenarioManagerDialogPlanner.ValidateResultCells("not a range", sheetId, _ => null)
             .Should()
-            .BeTrue(error);
+            .Be(ScenarioManagerDialogValidation.Fail(
+                ScenarioManagerDialogValidationError.EnterValidResultCellsReference));
     }
 
     [Fact]
-    public void TryValidateResultCells_AcceptsCommaSeparatedTypedReferences()
+    public void ValidateResultCells_AcceptsValidTypedReference()
+    {
+        var sheetId = SheetId.New();
+
+        ScenarioManagerDialogPlanner.ValidateResultCells(
+                "Sheet1!C1:C2",
+                sheetId,
+                name => name == "Sheet1" ? sheetId : null)
+            .Should()
+            .Be(ScenarioManagerDialogValidation.Ok);
+    }
+
+    [Fact]
+    public void ValidateResultCells_AcceptsCommaSeparatedTypedReferences()
     {
         var sheetId = SheetId.New();
         var resultsSheetId = SheetId.New();
 
-        ScenarioManagerDialog.TryValidateResultCells(
+        ScenarioManagerDialogPlanner.ValidateResultCells(
                 "B2,Results!D5:E5",
                 sheetId,
-                name => name == "Results" ? resultsSheetId : null,
-                out var error)
+                name => name == "Results" ? resultsSheetId : null)
             .Should()
-            .BeTrue(error);
+            .Be(ScenarioManagerDialogValidation.Ok);
     }
 }

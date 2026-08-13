@@ -1,11 +1,11 @@
 using FluentAssertions;
-using FreeX.Core.Commands;
+using FreeX.App.Presentation.Editing;
 
 namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// Regression coverage for R57-services-clipboard-formats-5-3
-/// (src/FreeX.App.Host/MainWindow.ClipboardCommands.cs, ExecuteCopy).
+/// (src/FreeX.App.Host/MainWindow.ClipboardCommands.cs, ExecuteCopy/ClipboardCsvTextRenderer).
 ///
 /// Before the fix: Copy (Ctrl+C) placed only plain Text and CF_HTML on the OS clipboard -- never a
 /// comma-delimited "CSV" clipboard format, unlike real Excel, which places CSV alongside Text/HTML on
@@ -13,14 +13,16 @@ namespace FreeX.App.Host.Tests;
 /// would receive no data at all from a FreeX copy where it would from an Excel copy.
 ///
 /// After the fix, ExecuteCopy also places a CSV-formatted (RFC4180-quoted, comma-delimited) payload
-/// via the shared ClipboardSerializer, built by re-delimiting the already-serialized tab-delimited text.
+/// via ClipboardCsvTextRenderer, built by re-delimiting the already-serialized tab-delimited text.
 /// </summary>
 public sealed class R57_CopyCsvClipboardFormatTests
 {
     [Fact]
-    public void BuildCsvClipboardText_PlainFields_JoinsWithCommasAndCrlfRows()
+    public void Render_PlainFields_JoinsWithCommasAndCrlfRows()
     {
-        var csv = ClipboardSerializer.ConvertTsvToCsv("Name\tAge\r\nJohn\t30");
+        var tsv = "Name\tAge\r\nJohn\t30";
+
+        var csv = ClipboardCsvTextRenderer.Render(tsv);
 
         csv.Should().Be("Name,Age\r\nJohn,30");
     }
@@ -29,9 +31,11 @@ public sealed class R57_CopyCsvClipboardFormatTests
     // must come out RFC4180-quoted (doubled embedded quotes) rather than corrupting the row/column
     // structure -- exactly the escaping real Excel's own CSV clipboard format applies.
     [Fact]
-    public void BuildCsvClipboardText_FieldContainingCommaOrQuote_IsRfc4180Quoted()
+    public void Render_FieldContainingCommaOrQuote_IsRfc4180Quoted()
     {
-        var csv = ClipboardSerializer.ConvertTsvToCsv("Smith, John\tHe said \"hi\"");
+        var tsv = "Smith, John\tHe said \"hi\"";
+
+        var csv = ClipboardCsvTextRenderer.Render(tsv);
 
         csv.Should().Be("\"Smith, John\",\"He said \"\"hi\"\"\"");
     }

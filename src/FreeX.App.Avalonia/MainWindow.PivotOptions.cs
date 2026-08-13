@@ -7,7 +7,6 @@ using Avalonia.Media;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.PivotUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -16,7 +15,7 @@ namespace FreeX.App.Avalonia;
 
 /// <summary>
 /// Windows-parity "PivotTable Options" dialog for the Avalonia/macOS shell. The full six-tab option surface
-/// is backed by <see cref="PivotOptionsPlanner"/> and <see cref="ConfigurePivotTableOptionsCommand"/>, so
+/// is backed by <see cref="PivotOptionsPlanner"/> and the shared Pivot application session, so
 /// dialog edits round-trip through the same pivot/cache model as the WPF host.
 /// </summary>
 public sealed partial class MainWindow
@@ -116,7 +115,9 @@ public sealed partial class MainWindow
             PivotOptionsPlanner.FindReportLayoutIndex(values.ReportLayout));
         ApplyPivotComboBoxChrome(reportLayoutBox);
         AutomationProperties.SetAutomationId(reportLayoutBox, "PivotOptionsReportLayoutBox");
-        AutomationProperties.SetName(reportLayoutBox, "Report layout");
+        AutomationProperties.SetName(
+            reportLayoutBox,
+            UiText.CreateAutomationName(UiText.Get("PivotTableOptions_ReportLayoutLabel")));
 
         var compactIndentBox = OptionTextBox(
             PivotOptionsPlanner.CompactRowLabelIndentText(values.CompactRowLabelIndent),
@@ -126,7 +127,7 @@ public sealed partial class MainWindow
         compactIndentBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Center;
         ApplyPivotTextBoxChrome(compactIndentBox);
         AutomationProperties.SetAutomationId(compactIndentBox, "PivotOptionsCompactIndentBox");
-        AutomationProperties.SetName(compactIndentBox, "Compact form row label indent");
+        AutomationProperties.SetName(compactIndentBox, UiText.Get("PivotTableOptions_CompactIndentAutomationName"));
 
         var subtotalsBox = new CheckBox
         {
@@ -140,7 +141,9 @@ public sealed partial class MainWindow
             PivotOptionsPlanner.SubtotalPlacements.Select(item => (string?)item.Label).ToArray(),
             PivotOptionsPlanner.FindSubtotalPlacementIndex(values.SubtotalPlacement));
         AutomationProperties.SetAutomationId(subtotalPlacementBox, "PivotOptionsSubtotalPlacementBox");
-        AutomationProperties.SetName(subtotalPlacementBox, "Subtotal placement");
+        AutomationProperties.SetName(
+            subtotalPlacementBox,
+            UiText.CreateAutomationName(UiText.Get("PivotTableOptions_SubtotalPlacementLabel")));
 
         var repeatLabelsBox = new CheckBox
         {
@@ -218,15 +221,19 @@ public sealed partial class MainWindow
         };
 
         // ── Tab: Layout & Format ───────────────────────────────────────────────
-        var pageFieldLayoutBox = OptionComboBox(["Down, then over", "Over, then down"], values.PageOverThenDown ? 1 : 0);
+        var pageFieldLayoutBox = OptionComboBox(
+            PivotOptionsPlanner.PageFieldLayouts.Select(option => option.Label).ToArray(),
+            PivotOptionsPlanner.FindPageFieldLayoutIndex(values.PageOverThenDown));
         AutomationProperties.SetAutomationId(pageFieldLayoutBox, "PivotOptionsPageFieldLayoutBox");
-        AutomationProperties.SetName(pageFieldLayoutBox, "Report filter area");
+        AutomationProperties.SetName(pageFieldLayoutBox, UiText.Get("PivotTableOptions_ReportFilterAreaAutomationName"));
         pageWrapBox = OptionTextBox(PivotOptionsPlanner.PageWrapText(values.PageWrap), 80);
         pageWrapBox.Width = 60;
         pageWrapBox.MinWidth = 60;
         pageWrapBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Center;
         AutomationProperties.SetAutomationId(pageWrapBox, "PivotOptionsPageWrapBox");
-        AutomationProperties.SetName(pageWrapBox, "Report filter fields per column");
+        AutomationProperties.SetName(
+            pageWrapBox,
+            UiText.CreateAutomationName(UiText.Get("PivotTableOptions_ReportFilterFieldsPerColumnLabel")));
 
         var layoutSection = new StackPanel { Spacing = 6 };
         layoutSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_ReportLayoutLabel")));
@@ -354,7 +361,9 @@ public sealed partial class MainWindow
             UiText.Get("PivotTableOptions_EnableShowDetails"), values.EnableDrill);
         var preserveSourceSortFilterBox = OptionCheckBox(
             UiText.Get("PivotTableOptions_PreserveSourceSortAndFilterSettings"), values.PreserveSourceSortFilter);
-        var missingItemsLimitBox = OptionComboBox(MissingItemsLimitLabels, MissingItemsLimitIndex(values.MissingItemsLimit));
+        var missingItemsLimitBox = OptionComboBox(
+            PivotOptionsPlanner.MissingItemsLimits.Select(option => option.Label).ToArray(),
+            PivotOptionsPlanner.FindMissingItemsLimitIndex(values.MissingItemsLimit));
         AutomationProperties.SetAutomationId(missingItemsLimitBox, "PivotOptionsMissingItemsLimitBox");
         dataSection.Children.Add(refreshOnOpenBox);
         dataSection.Children.Add(saveSourceDataBox);
@@ -450,7 +459,7 @@ public sealed partial class MainWindow
             saveSourceData: saveSourceDataBox.IsChecked == true,
             enableRefresh: enableRefreshBox.IsChecked == true,
             preserveSourceSortFilter: preserveSourceSortFilterBox.IsChecked == true,
-            missingItemsLimit: MissingItemsLimitForIndex(missingItemsLimitBox.SelectedIndex),
+            missingItemsLimit: PivotOptionsPlanner.MissingItemsLimitFromIndex(missingItemsLimitBox.SelectedIndex),
             printTitles: printTitlesBox.IsChecked == true,
             printExpandCollapseButtons: printExpandCollapseBox.IsChecked == true,
             altTextTitle: altTextTitleBox.Text,
@@ -466,80 +475,19 @@ public sealed partial class MainWindow
             mergeAndCenterLabels: mergeLabelsBox.IsChecked == true,
             showItemsWithNoDataOnRows: showItemsWithNoDataRowsBox.IsChecked == true,
             showItemsWithNoDataOnColumns: showItemsWithNoDataColumnsBox.IsChecked == true,
-            pageOverThenDown: pageFieldLayoutBox.SelectedIndex == 1,
+            pageOverThenDown: PivotOptionsPlanner.PageFieldLayoutFromIndex(pageFieldLayoutBox.SelectedIndex),
             pageWrap: pageWrap,
             errorValueText: errorValuesBox.Text,
             enableDrill: enableShowDetailsBox.IsChecked == true);
 
-        var command = BuildPivotTableOptionsCommand(pivot, result);
-
-        ExecutePivotTabCommand(command, "PivotTable options updated.");
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanDialogOptions(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                result),
+            "PivotTable options updated.");
     }
 
     // ── Pivot option control factories ────────────────────────────────────────
-    private static readonly string[] MissingItemsLimitLabels = ["Automatic", "None", "Maximum"];
-
-    private static int MissingItemsLimitIndex(int? value) => PivotOptionsPlanner.NormalizeMissingItemsLimit(value) switch
-    {
-        null => 0,
-        <= 0 => 1,
-        _ => 2,
-    };
-
-    private static int? MissingItemsLimitForIndex(int selectedIndex) => selectedIndex switch
-    {
-        1 => 0,
-        2 => PivotOptionsPlanner.MaxMissingItemsLimit,
-        _ => null,
-    };
-
-    private ConfigurePivotTableOptionsCommand BuildPivotTableOptionsCommand(
-        PivotTableModel pivot,
-        PivotOptionsDialogValues values) => new(
-        _session.ActiveSheet.Id,
-        pivot.Name,
-        showRowGrandTotals: values.ShowRowGrandTotals,
-        showColumnGrandTotals: values.ShowColumnGrandTotals,
-        showSubtotals: values.ShowSubtotals,
-        subtotalPlacement: values.SubtotalPlacement,
-        repeatItemLabels: values.RepeatItemLabels,
-        blankLineAfterItems: values.BlankLineAfterItems,
-        styleName: values.StyleName,
-        showRowHeaders: values.ShowRowHeaders,
-        showColumnHeaders: values.ShowColumnHeaders,
-        showRowStripes: values.ShowRowStripes,
-        showColumnStripes: values.ShowColumnStripes,
-        reportLayout: values.ReportLayout,
-        emptyValueText: values.EmptyValueText,
-        updateEmptyValueText: true,
-        refreshOnOpen: values.RefreshOnOpen,
-        saveSourceData: values.SaveSourceData,
-        enableRefresh: values.EnableRefresh,
-        preserveSourceSortFilter: values.PreserveSourceSortFilter,
-        missingItemsLimit: values.MissingItemsLimit,
-        updateMissingItemsLimit: true,
-        printTitles: values.PrintTitles,
-        printExpandCollapseButtons: values.PrintExpandCollapseButtons,
-        altTextTitle: values.AltTextTitle,
-        altTextDescription: values.AltTextDescription,
-        compactRowLabelIndent: values.CompactRowLabelIndent,
-        updateAltText: true,
-        showExpandCollapseButtons: values.ShowExpandCollapseButtons,
-        autofitColumnsOnUpdate: values.AutofitColumnsOnUpdate,
-        preserveFormattingOnUpdate: values.PreserveFormattingOnUpdate,
-        showFieldHeaders: values.ShowFieldHeaders,
-        showContextualTooltips: values.ShowContextualTooltips,
-        showPropertiesInTooltips: values.ShowPropertiesInTooltips,
-        showClassicLayout: values.ShowClassicLayout,
-        mergeAndCenterLabels: values.MergeAndCenterLabels,
-        showItemsWithNoDataOnRows: values.ShowItemsWithNoDataOnRows,
-        showItemsWithNoDataOnColumns: values.ShowItemsWithNoDataOnColumns,
-        pageOverThenDown: values.PageOverThenDown,
-        pageWrap: values.PageWrap,
-        errorCaption: values.ErrorValueText,
-        updateErrorCaption: true,
-        enableDrill: values.EnableDrill);
-
     private static TextBlock OptionLabel(string text) => new()
     {
         Text = StripDisplayMnemonic(text),

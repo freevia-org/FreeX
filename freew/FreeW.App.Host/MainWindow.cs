@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -14,15 +13,22 @@ using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation;
+using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Documents;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Panes;
+using FreeW.App.Presentation.Ribbon;
+using FreeW.Ribbon.Definitions;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
-using TextSearch = FreeW.Core.Model.TextSearch;
 
 namespace FreeW.App.Host;
 
@@ -32,7 +38,7 @@ namespace FreeW.App.Host;
 /// model and rendered by a small local renderer; the status bar shows that the shared storage
 /// helpers resolve FreeW's own data folder (because Program.Main set AppProduct = "FreeW").
 /// </summary>
-public sealed class MainWindow : Window
+public sealed partial class MainWindow : Window
 {
     private FileCommands _file = null!;
     private AutosaveCoordinator _autosave = null!;
@@ -54,6 +60,7 @@ public sealed class MainWindow : Window
     private Border _navPane = null!;
     private ListBox _navList = null!;
     private bool _navPaneVisible;
+    private NavigationPaneSession _navigationPaneSession = null!;
 
     // Reveal Formatting pane (Word's Shift+F1): a read-only side pane, docked on the right (Word's side),
     // that mirrors the effective FONT / PARAGRAPH / SECTION formatting of the current selection. It updates
@@ -71,12 +78,12 @@ public sealed class MainWindow : Window
     private Border _reviewPane = null!;
     private ListBox _reviewList = null!;
     private TextBlock _reviewStatus = null!;
+    private Button _reviewAcceptButton = null!;
+    private Button _reviewRejectButton = null!;
+    private Button _reviewPreviousButton = null!;
+    private Button _reviewNextButton = null!;
     private bool _reviewPaneVisible;
-    private bool _reviewPaneVisibleBeforeReadMode;
-    // The revisions currently shown in the pane (the live snapshot the list items index into).
-    private System.Collections.Generic.IReadOnlyList<RevisionEntry> _reviewEntries = System.Array.Empty<RevisionEntry>();
-    // Active sort order for the Reviewing Pane. Default: reading order (sequence/date).
-    private ReviewRevisionSortOrder _reviewSortOrder = ReviewRevisionSortOrder.Sequence;
+    private ReviewingPaneSession _reviewingPaneSession = null!;
 
     // Thesaurus Pane (Review > Proofing > Thesaurus, Shift+F7): a docked right pane showing senses +
     // synonyms for the word at the caret, backed by the bundled compact synonym dictionary. Insert replaces
@@ -100,8 +107,7 @@ public sealed class MainWindow : Window
     private Button _notesApplyButton = null!;
     private Button _notesDeleteButton = null!;
     private bool _notesPaneVisible;
-    // The note currently loaded in the sub-editor (null = nothing selected).
-    private (bool IsFootnote, int Id)? _activeNote;
+    private DocumentNotesPaneSession _documentNotesPaneSession = null!;
 
     // Header/Footer Pane (replaces plain-text HeaderFooterSlotDialog): a docked pane with a slot
     // selector (header/footer/even/first × header/footer) and a DocumentView sub-editor so run
@@ -110,7 +116,7 @@ public sealed class MainWindow : Window
     private Border _hfPane = null!;
     private TextBlock _hfSlotLabel = null!;
     private DocumentView _hfSubEditor = null!;
-    private string? _hfActiveSlot;   // "header" | "footer" | "even-header" | … | null
+    private HeaderFooterSlotKind? _hfActiveSlot;
 
     // Navigation-pane search (the box at the top of the pane). Typing finds every occurrence of the term
     // in the document body; the result label shows the count and Next/Prev step through the matches,
@@ -121,45 +127,27 @@ public sealed class MainWindow : Window
     private TextBlock _navSearchStatus = null!;
     private Button _navSearchPrev = null!;
     private Button _navSearchNext = null!;
-    private readonly List<int> _navSearchHits = new(); // model block indices with a match, in order
-    private int _navSearchHitIndex = -1;                // current position within _navSearchHits
 
     // Identity/palette for the shared window shell.  Colors are resolved from the active theme tokens
     // (FreeWTitleBarBrush / FreeWAccentBrush) registered by WpfThemeApplier at startup, with literal
     // fallbacks so tests that construct MainWindow without a running Application still work.
     // Values are BYTE-IDENTICAL to the previous literals when the default FreeW theme is active.
+    private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeW;
+
     private static ShellChromeOptions BuildChromeOptions() => new()
     {
         BadgeLetter = "W",
-        TitleBarColor = ResolveTokenColor("FreeWTitleBarBrush", Color.FromRgb(0x17, 0x32, 0x4D)),
-        BadgeColor    = ResolveTokenColor("FreeWAccentBrush",   Color.FromRgb(0x0F, 0x6D, 0x8C)),
+        TitleBarColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
+            ThemeResources.TitleBarBrush,
+            brush => brush.Color,
+            Color.FromRgb(0x17, 0x32, 0x4D)),
+        BadgeColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
+            ThemeResources.BadgeBrush,
+            brush => brush.Color,
+            Color.FromRgb(0x0F, 0x6D, 0x8C)),
         CaptionHeight = 34,
         IconUri = "pack://application:,,,/FreeW.App.Host;component/Resources/FreeW.ico"
     };
-
-    /// <summary>
-    /// Looks up a frozen <see cref="SolidColorBrush"/> registered by <see cref="WpfThemeApplier"/> in
-    /// <see cref="Application.Current"/> and returns its <see cref="SolidColorBrush.Color"/>.
-    /// Falls back to <paramref name="fallback"/> when no Application is running (e.g. unit tests) or the
-    /// key is absent.
-    /// </summary>
-    private static Color ResolveTokenColor(string key, Color fallback)
-    {
-        if (System.Windows.Application.Current?.Resources[key] is SolidColorBrush brush)
-            return brush.Color;
-        return fallback;
-    }
-
-    /// <summary>
-    /// Looks up a frozen <see cref="SolidColorBrush"/> registered by <see cref="WpfThemeApplier"/> in
-    /// <see cref="Application.Current"/> and returns it, or <see langword="null"/> when absent/no Application.
-    /// </summary>
-    private static Brush? ResolveTokenBrush(string key)
-    {
-        if (System.Windows.Application.Current?.Resources[key] is Brush brush)
-            return brush;
-        return null;
-    }
 
     // The grey "desk" the Print-Layout page floats on. Frozen so it can back the editor cheaply.
     private static readonly Brush WorkspaceBrush = CreateWorkspaceBrush();
@@ -191,7 +179,9 @@ public sealed class MainWindow : Window
     private FrameworkElement _dataFolderItem = null!;
     private FrameworkElement _viewSwitchItem = null!;
     private FrameworkElement _zoomItem = null!;
-    private bool _readMode;
+    private IDisposable? _readAloudCommandLifetime;
+    private readonly FreeWEditorInteractionSession _editorInteraction = new();
+    private FreeWApplicationCommandRouter _applicationCommands = null!;
 
     // Status-bar view-switch toggle buttons for the three mutually-exclusive print-family view modes
     // (Print Layout / Web Layout / Draft). They mirror the same state as the View ribbon's Views group;
@@ -203,14 +193,9 @@ public sealed class MainWindow : Window
     // Multiple Pages / Side to Side / Split share the same host-neutral view-depth policy as Avalonia.
     // Both multi-page modes use the editable page-box surface; only their page arrangement and
     // navigation chrome differ.
-    private FreeWViewDepthPlan _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
+    private readonly FreeWViewSession _viewSession = new(FreeWViewDepthCapabilities.FullDesktop);
     private FlowDocumentPageViewer? _paginatedViewer; // the overlay page viewer (non-null while active)
     private PaginatedEditorPanel? _editablePaginatedPanel;
-    private FreeWViewDepthPagePairNavigationState _sideToSideNavigation =
-        FreeWViewDepthPlanner.BuildPagePairNavigation(
-            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
-            requestedFirstVisiblePageNumber: 1,
-            totalPages: 1);
     private Button? _sideToSidePreviousPairButton;
     private Button? _sideToSideNextPairButton;
     private TextBlock? _sideToSidePairStatusText;
@@ -233,8 +218,6 @@ public sealed class MainWindow : Window
     // the same save/restore shape as Read Mode. The model is never mutated by switching views.
     private OutlineView _outlineView = null!;
     private bool _outlineMode;
-    private bool _navPaneVisibleBeforeReadMode;
-    private bool _revealPaneVisibleBeforeReadMode;
     private Thickness _editorMarginBeforeReadMode;
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
@@ -243,25 +226,92 @@ public sealed class MainWindow : Window
     private double _editorWidthBeforeReadMode = double.NaN;
     private Effect? _editorEffectBeforeReadMode;
     private System.Windows.Media.Brush? _editorBackgroundBeforeReadMode;
-    private Visibility _titleBarVisibilityBeforeReadMode = Visibility.Visible;
-    private Visibility _ribbonVisibilityBeforeReadMode = Visibility.Visible;
-    private Visibility _dataFolderVisibilityBeforeReadMode = Visibility.Visible;
-    private Visibility _viewSwitchVisibilityBeforeReadMode = Visibility.Visible;
-    private Visibility _zoomVisibilityBeforeReadMode = Visibility.Visible;
-
-    // Feature 4 — Read Mode options: column width token ("narrow"/"default"/"wide") and page color token.
-    private string _readModeColumnWidth = "default";
-    private string _readModePageColor   = "none";
 
     // FreeW's persisted settings (shared JsonSettingsStore). Defaults are used when none are supplied,
     // so the window stays constructible in isolation; Program.Main passes the loaded options + the store
     // that persists edits made from the backstage Options dialog. The options instance is mutated in place
     // so settings read live by FileCommands (e.g. the recent-files cap) take effect without a restart.
     private readonly FreeWOptions _options;
-    private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
+    private readonly FreeWOptionsRuntimeSession _optionsRuntime;
+    private readonly IApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly IUserMessageService? _messageService;
+    private readonly IPlatformClipboard _platformClipboard;
     private readonly FreeWDocumentWindowPlanner _documentWindowPlanner;
     private readonly int _documentWindowNumber;
+
+    private FreeWRibbonHostExecutionPorts CreateRibbonHostExecutionPorts() =>
+        FreeWRibbonHostExecutionPorts.Empty with
+        {
+            Open = () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument),
+            Save = () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
+            Cut = () => _applicationCommands.Execute(FreeWKeyboardCommand.Cut),
+            Copy = () => _applicationCommands.Execute(FreeWKeyboardCommand.Copy),
+            Paste = () => _applicationCommands.Execute(FreeWKeyboardCommand.Paste),
+            Backstage = ShowBackstage,
+            NewDocument = () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
+            ToggleNavigationPane = ToggleNavPane,
+            IsNavigationPaneVisible = () => _navPaneVisible,
+            ToggleReviewingPane = ToggleReviewPane,
+            IsReviewingPaneVisible = () => _reviewPaneVisible,
+            ToggleRevealFormatting = ToggleRevealFormatting,
+            IsRevealFormattingVisible = () => _revealPaneVisible,
+            OpenFindReplaceDialog = () => OpenFindReplace(),
+            SetPrintLayout = () => SetViewMode(DocumentViewMode.PrintLayout),
+            IsPrintLayoutActive = () => _editor.ViewMode == DocumentViewMode.PrintLayout,
+            SetWebLayout = () => SetViewMode(DocumentViewMode.WebLayout),
+            IsWebLayoutActive = () => !_outlineMode && _editor.ViewMode == DocumentViewMode.WebLayout,
+            SetDraftView = () => SetViewMode(DocumentViewMode.Draft),
+            IsDraftViewActive = () => !_outlineMode && _editor.ViewMode == DocumentViewMode.Draft,
+            SetOutlineView = ToggleOutlineView,
+            IsOutlineViewActive = () => _outlineMode,
+            OpenZoomDialog = OpenZoomDialog,
+            ApplyZoom = (absolute, delta) =>
+                _editor.ZoomLevel = absolute ?? ZoomLevels.Clamp(_editor.ZoomLevel + delta),
+            ZoomOnePage = ZoomToOnePage,
+            ZoomPageWidth = ZoomToPageWidth,
+            OpenPrintPreview = OpenPrintPreview,
+            ToggleReadMode = ToggleReadMode,
+            IsReadModeActive = () => _editorInteraction.IsReadModeActive,
+            ApplyReadModeColumnWidth = ApplyReadModeColumnWidth,
+            ApplyReadModePageColor = ApplyReadModePageColor,
+            ToggleRuler = ToggleRulers,
+            IsRulerVisible = () => _rulersVisible,
+            ToggleMultiplePages = ToggleMultiplePages,
+            IsMultiplePagesActive = () => _viewSession.CurrentDepth.IsMultiplePagesActive,
+            ToggleSideToSide = ToggleSideToSide,
+            IsSideToSideActive = () => _viewSession.CurrentDepth.IsSideToSideActive,
+            ToggleSplit = ToggleSplitWindow,
+            IsSplitActive = () => _viewSession.CurrentDepth.IsSplitActive,
+            TogglePagedEditView = TogglePagedEditView,
+            IsPagedEditViewActive = () => _pagedEditMode,
+            ToggleNotesPane = ToggleNotesPane,
+            IsNotesPaneVisible = () => _notesPaneVisible,
+            OpenHeaderFooterPane = OpenHeaderFooterPane,
+            CloseHeaderFooterPane = CloseHeaderFooterPane,
+            AcceptThisChange = AcceptSelectedRevision,
+            RejectThisChange = RejectSelectedRevision,
+            PreviousChange = () => StepRevision(-1),
+            NextChange = () => StepRevision(+1),
+            NewWindow = OpenNewWindow,
+            ArrangeAll = ArrangeAllWindows,
+            OpenThesaurus = ToggleThesaurusPane,
+            ToggleReviewBalloons = ToggleBalloons,
+            IsReviewBalloonsActive = () => _balloonOverlay.BalloonsEnabled,
+            OpenHelpOnline = () => OpenExternalHelpLink(
+                FreeWProductInfo.HelpUrl,
+                FreeWApplicationFrameTextCatalog.HelpOnlineCommandName),
+            OpenFeedback = () => OpenExternalHelpLink(
+                FreeWProductInfo.FeedbackUrl,
+                FreeWApplicationFrameTextCatalog.FeedbackCommandName),
+            CopyDiagnostics = CopyDiagnostics,
+            CheckForUpdates = () => OpenExternalHelpLink(
+                FreeWProductInfo.LatestReleaseUrl,
+                FreeWApplicationFrameTextCatalog.CheckForUpdatesCommandName),
+            OpenAbout = ShowAboutDialog,
+            OpenLegalNotices = ShowLegalNoticesDialog,
+            OpenMailMergeErrorReport = OpenMailMergeErrorReport,
+            PrintMailMergeDocument = PrintMailMergeDocument,
+        };
 
     public MainWindow() : this(new FreeWOptions())
     {
@@ -269,8 +319,9 @@ public sealed class MainWindow : Window
 
     public MainWindow(
         FreeWOptions options,
-        ApplicationOptionsStore<FreeWOptions>? optionsStore = null,
+        IApplicationOptionsStore<FreeWOptions>? optionsStore = null,
         IUserMessageService? messageService = null,
+        IPlatformClipboard? platformClipboard = null,
         IReadOnlyList<string>? startupFilePaths = null,
         bool suppressStartupRecoveryOffer = false,
         FreeWDocumentWindowPlanner? documentWindowPlanner = null,
@@ -280,20 +331,19 @@ public sealed class MainWindow : Window
             throw new ArgumentOutOfRangeException(nameof(documentWindowNumber));
 
         _options = options ?? new FreeWOptions();
+        _optionsRuntime = new FreeWOptionsRuntimeSession(_options);
         _messageService = messageService;
+        _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(Dispatcher);
         _documentWindowPlanner = documentWindowPlanner ?? new FreeWDocumentWindowPlanner();
         _documentWindowNumber = documentWindowNumber;
-        // No store supplied (e.g. constructed in isolation / tests) → a no-op in-memory store so editing
-        // still round-trips through the dialog and applies live, just without touching the real profile.
-        _optionsStore = optionsStore ?? ApplicationOptionsStore<FreeWOptions>.ForPath(
-            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FreeW", "settings.transient.json"));
-        Title = "FreeW";
+        _optionsStore = optionsStore ?? new InMemoryApplicationOptionsStore<FreeWOptions>(_options);
+        Title = FreeWApplicationFrameDescriptor.Title.ApplicationName;
         Width = 1280;
         Height = 760;
         // Open maximized like FreeX, so the ribbon shows its groups in full rather than collapsing the
         // dense tabs to overflow dropdowns at a small default size.
         WindowState = WindowState.Maximized;
-        Background = ResolveTokenBrush("FreeWSheetSurfaceBrush")
+        Background = WpfThemeResourceResolver.Find<Brush>(ThemeResources.SheetSurfaceBrush)
             ?? new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         // Build the borderless WindowChrome shell — custom integrated title bar with embedded window
@@ -307,7 +357,7 @@ public sealed class MainWindow : Window
 
         var body = new DockPanel { LastChildFill = true };
 
-        var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
+        var editor = new DocumentView(_platformClipboard) { Margin = new Thickness(40, 24, 40, 24) };
         _editor = editor;
         _lastFocusedDocumentEditor = editor;
         AddHandler(
@@ -316,60 +366,107 @@ public sealed class MainWindow : Window
             handledEventsToo: true);
         // Push the persisted AutoCorrect / AutoFormat-As-You-Type settings so the editor's as-you-type
         // rules honour the user's toggles from the first keystroke (re-applied when Options is saved).
-        ApplyAutoFormatOptions();
-        editor.LoadModel(CreateSampleDocument());
+        ApplyEditorTypingOptions(_optionsRuntime.EditorTypingOptions);
+        editor.LoadModel(FreeWSampleDocumentFactory.Create(FreeWSampleDocumentProfile.ClassicEditor));
+        _navigationPaneSession = new NavigationPaneSession(
+            CurrentPaneDocument,
+            new NavigationPaneMutationActions(
+                editor.MoveHeading,
+                editor.PromoteHeading,
+                editor.DemoteHeading,
+                editor.CollapseHeading,
+                editor.ExpandHeading,
+                editor.IsHeadingCollapsed),
+            NavigationPaneTextCatalog.Resolve(UiText.Get));
+        _reviewingPaneSession = new ReviewingPaneSession(
+            editor.ListRevisions,
+            new ReviewingPaneMutationActions(
+                editor.AcceptRevision,
+                editor.RejectRevision,
+                () =>
+                {
+                    if (!editor.HasRevisions())
+                        return false;
+                    editor.AcceptAllRevisions();
+                    return true;
+                },
+                () =>
+                {
+                    if (!editor.HasRevisions())
+                        return false;
+                    editor.RejectAllRevisions();
+                    return true;
+                }));
+        _documentNotesPaneSession = new DocumentNotesPaneSession(
+            CurrentPaneDocument,
+            new DocumentNotesPaneMutationActions(
+                (id, footnote, paragraphs) =>
+                {
+                    var exists = footnote
+                        ? editor.Model.Footnotes.ContainsKey(id)
+                        : editor.Model.Endnotes.ContainsKey(id);
+                    if (!exists)
+                        return false;
+                    editor.ReplaceNoteContent(id, footnote, paragraphs);
+                    return true;
+                },
+                (id, footnote) =>
+                {
+                    var exists = footnote
+                        ? editor.Model.Footnotes.ContainsKey(id)
+                        : editor.Model.Endnotes.ContainsKey(id);
+                    if (!exists)
+                        return false;
+                    if (footnote)
+                        editor.DeleteFootnote(id);
+                    else
+                        editor.DeleteEndnote(id);
+                    return true;
+                }));
         var stateStore = new RibbonStateStore();
         _stateStore = stateStore;
         var commands = FreeWRibbonCommands.Build(
-            editor, stateStore, OpenPrintPreview, ToggleNavPane, () => _navPaneVisible, ToggleReadMode, () => _readMode,
-            () => SetViewMode(DocumentViewMode.PrintLayout), () => _editor.ViewMode == DocumentViewMode.PrintLayout,
-            ToggleOutlineView, () => _outlineMode, OpenZoomDialog,
-            onZoom100: () => _editor.ZoomLevel = ZoomLevels.Default,
-            onZoomOnePage: ZoomToOnePage,
-            onZoomPageWidth: ZoomToPageWidth,
-            onWebLayout: () => SetViewMode(DocumentViewMode.WebLayout),
-            isWebLayoutActive: () => !_outlineMode && _editor.ViewMode == DocumentViewMode.WebLayout,
-            onDraftView: () => SetViewMode(DocumentViewMode.Draft),
-            isDraftViewActive: () => !_outlineMode && _editor.ViewMode == DocumentViewMode.Draft,
-            onToggleRevealFormatting: ToggleRevealFormatting,
-            isRevealFormattingVisible: () => _revealPaneVisible,
-            onToggleReviewingPane: ToggleReviewPane,
-            isReviewingPaneVisible: () => _reviewPaneVisible,
-            onAcceptThisChange: AcceptSelectedRevision,
-            onRejectThisChange: RejectSelectedRevision,
-            onPreviousChange: () => StepRevision(-1),
-            onNextChange: () => StepRevision(+1),
-            onFindReplace: () => OpenFindReplace(),
-            onToggleRuler: ToggleRulers,
-            isRulerVisible: () => _rulersVisible,
-            onToggleMultiplePages: ToggleMultiplePages,
-            isMultiplePagesActive: () => _viewDepthPlan.IsMultiplePagesActive,
-            onToggleSideToSide: ToggleSideToSide,
-            isSideToSideActive: () => _viewDepthPlan.IsSideToSideActive,
-            onToggleSplitWindow: ToggleSplitWindow,
-            isSplitWindowActive: () => _viewDepthPlan.IsSplitActive,
-            onHelpOnline: () => OpenExternalHelpLink(FreeWAppInfo.HelpUrl, "Help Online"),
-            onFeedback: () => OpenExternalHelpLink(FreeWAppInfo.FeedbackUrl, "Feedback"),
-            onCopyDiagnostics: CopyDiagnostics,
-            onCheckForUpdates: () => OpenExternalHelpLink(FreeWAppInfo.LatestReleaseUrl, "Check for Updates"),
-            onAbout: ShowAboutDialog,
-            onLegalNotices: ShowLegalNoticesDialog,
-            onToggleNotesPane: ToggleNotesPane,
-            isNotesPaneVisible: () => _notesPaneVisible,
-            onOpenHeaderFooterPane: OpenHeaderFooterPane,
-            onCloseHeaderFooterPane: CloseHeaderFooterPane,
-            onTogglePagedEditView: TogglePagedEditView,
-            isPagedEditViewActive: () => _pagedEditMode,
-            onReadModeColumnWidth: ApplyReadModeColumnWidth,
-            onReadModePageColor: ApplyReadModePageColor,
-            onNewWindow: OpenNewWindow,
-            onArrangeAll: ArrangeAllWindows,
-            onToggleThesaurus: ToggleThesaurusPane,
-            onToggleBalloons: ToggleBalloons,
-            onOpenMailMergeErrorReport: OpenMailMergeErrorReport,
-            onPrintMailMergeDocument: PrintMailMergeDocument,
-            resolveFieldEditor: ResolveFieldCommandEditor);
+            editor,
+            stateStore,
+            CreateRibbonHostExecutionPorts(),
+            new FreeWWpfRibbonNativeExecutionPorts(
+                ResolveFieldEditor: ResolveFieldCommandEditor));
+        if (commands.TryGet("freew.read-aloud", out var readAloudCommand))
+            _readAloudCommandLifetime = readAloudCommand as IDisposable;
         _file = new FileCommands(this, editor, UpdateTitle, _options, messageService: _messageService);
+        _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
+            NewDocument: () => _file.New(),
+            OpenDocument: () => _file.Open(),
+            SaveDocument: () => _file.Save(),
+            SaveDocumentAs: () => _file.SaveAs(),
+            PrintDocument: Print,
+            Find: () => OpenFindReplace(FindReplaceDialogOpenMode.Find),
+            Replace: () => OpenFindReplace(FindReplaceDialogOpenMode.Replace),
+            Cut: () => ExecuteEditingCommand(ApplicationCommands.Cut),
+            Copy: () => ExecuteEditingCommand(ApplicationCommands.Copy),
+            Paste: () => ExecuteEditingCommand(ApplicationCommands.Paste),
+            PasteTextOnly: _editor.PastePlainText,
+            SelectAll: () => ExecuteEditingCommand(ApplicationCommands.SelectAll),
+            Undo,
+            Redo,
+            RevealFormatting: ToggleRevealFormatting,
+            Thesaurus: ToggleThesaurusPane,
+            LockCurrentField: () => ExecuteCurrentFieldCommand(
+                FreeWKeyboardCommand.LockCurrentField,
+                ResolveFieldCommandEditor()),
+            UnlockCurrentField: () => ExecuteCurrentFieldCommand(
+                FreeWKeyboardCommand.UnlockCurrentField,
+                ResolveFieldCommandEditor()),
+            UnlinkCurrentField: () => ExecuteCurrentFieldCommand(
+                FreeWKeyboardCommand.UnlinkCurrentField,
+                ResolveFieldCommandEditor()),
+            ToggleCurrentFieldCode: () => ExecuteCurrentFieldCommand(
+                FreeWKeyboardCommand.ToggleCurrentFieldCode,
+                ResolveFieldCommandEditor()),
+            ToggleFieldCodes: _editor.ToggleFieldCodes,
+            UpdateCurrentField: () => ExecuteCurrentFieldCommand(
+                FreeWKeyboardCommand.UpdateCurrentField,
+                ResolveFieldCommandEditor())));
         editor.TextChanged += (_, _) =>
         {
             _file.MarkDirty();
@@ -410,6 +507,7 @@ public sealed class MainWindow : Window
                 e.Cancel = true;
                 return;
             }
+            DisposeReadAloud();
             _autosave.Stop();
         };
 
@@ -422,7 +520,10 @@ public sealed class MainWindow : Window
         _titleBinder = new SisterWpfWindowTitleBinder(this, titleBar.TitleText);
         AddQuickAccessButtons(titleBar.QatHost);
 
-        var (ribbon, ribbonTabs) = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
+        var (ribbon, ribbonTabs) = BuildRibbon(
+            FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf),
+            commands,
+            stateStore);
         _ribbon = ribbon;
         _ribbonTabs = ribbonTabs;
         chromeStack.Children.Add(ribbon);
@@ -453,7 +554,7 @@ public sealed class MainWindow : Window
 
         // Thesaurus Pane docks on the RIGHT (Review > Proofing > Thesaurus, Shift+F7). Collapsed by
         // default; ToggleThesaurusPane shows/hides it and triggers a lookup from the bundled dataset.
-        _thesaurusPane = new ThesaurusPane(editor);
+        _thesaurusPane = new ThesaurusPane(editor, _platformClipboard);
         var thesaurusPane = _thesaurusPane.Build();
         DockPanel.SetDock(thesaurusPane, Dock.Right);
         body.Children.Add(thesaurusPane);
@@ -570,12 +671,22 @@ public sealed class MainWindow : Window
         // Keep the Reveal Formatting pane (when shown) reflecting the caret's current formatting.
         editor.SelectionChanged += (_, _) => RefreshRevealFormatting();
 
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.New, (_, _) => _file.New()));
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, (_, _) => _file.Open()));
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.Save, (_, _) => _file.Save()));
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.SaveAs, (_, _) => _file.SaveAs()));
+        CommandBindings.Add(new CommandBinding(
+            ApplicationCommands.New,
+            (_, _) => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument)));
+        CommandBindings.Add(new CommandBinding(
+            ApplicationCommands.Open,
+            (_, _) => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument)));
+        CommandBindings.Add(new CommandBinding(
+            ApplicationCommands.Save,
+            (_, _) => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument)));
+        CommandBindings.Add(new CommandBinding(
+            ApplicationCommands.SaveAs,
+            (_, _) => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocumentAs)));
 
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.Print, (_, _) => Print()));
+        CommandBindings.Add(new CommandBinding(
+            ApplicationCommands.Print,
+            (_, _) => _applicationCommands.Execute(FreeWKeyboardCommand.PrintDocument)));
         InstallSharedKeyboardShortcuts();
 
         UpdateTitle();
@@ -590,22 +701,27 @@ public sealed class MainWindow : Window
         // The Word-style Backstage (File screen) is a full-window overlay above the document. It is
         // hidden by default; the File button (title bar) shows it, a back arrow / Esc hides it. It reuses
         // the host's existing File commands — no file IO is reimplemented in the backstage.
-        _backstage = new BackstageView(_editor, _file, new BackstageActions(
-            New: () => _file.New(),
-            Open: () => _file.Open(),
-            ImportPdfText: () => _file.ImportPdfText(),
-            OpenPath: path => _file.OpenRecentPath(path),
+        _backstage = new BackstageView(new BackstageCallbacks(
+            DisplayName: _file.DisplayName,
+            CurrentPath: _file.CurrentPath,
+            GetRecentEntries: () => _file.RecentEntries,
+            GetFileFormats: () => _file.SaveFormats,
+            GetPageSettings: () => CurrentBackstageDocument().Page,
+            GetCurrentOptions: () => _options,
+            GetDataFolder: FreeWApplicationFrameDescriptor.ResolveDataFolderLabel,
+            GetDocument: CurrentBackstageDocument,
+            GetIsDirty: () => _file.IsDirty,
+            NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
+            OpenRecent: path => _file.OpenRecentPath(path),
             OpenFolder: folder => _file.OpenFromFolder(folder),
-            Save: () => _file.Save(),
-            SaveAs: () => _file.SaveAs(),
-            SaveAsType: extension => _file.SaveAs(extension),
-            SaveAsSuggested: (fileName, extension) => _file.SaveAsSuggested(fileName, extension),
-            SaveCopy: () => _file.SaveCopy(),
+            Browse: () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument),
             RecoverUnsaved: () => _autosave.RecoverUnsavedDocuments(this),
+            ImportPdfText: () => _file.ImportPdfText(),
+            Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
+            SaveAs: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocumentAs),
+            SaveAsFormat: (extension, _) => _file.SaveAs(extension),
+            SaveCopy: () => _file.SaveCopy(),
             OpenContainingFolder: OpenContainingFolder,
-            Close: CloseDocument,
-            Print: Print,
-            PrintPreview: OpenPrintPreview,
             ExportPdf: ExportToPdf,
             ExportXps: ExportToXps,
             EditProperties: OpenProperties,
@@ -613,10 +729,14 @@ public sealed class MainWindow : Window
             RestrictEditing: OpenRestrictEditing,
             InspectDocument: InspectDocument,
             CheckAccessibility: CheckAccessibility,
-            EditOptions: OpenOptions,
-            CurrentOptions: () => _options,
+            OpenOptions: OpenOptions,
+            CloseDocument: CloseDocument,
+            Print: () => _applicationCommands.Execute(FreeWKeyboardCommand.PrintDocument),
+            PrintPreview: OpenPrintPreview,
+            SaveAsSuggested: (fileName, extension) => _file.SaveAsSuggested(fileName, extension),
             OnClosed: () => SetEditorAdornersVisible(true),
-            DataFolder: ResolveDataFolderLabel));
+            GetDisplayName: () => _file.DisplayName,
+            GetCurrentPath: () => _file.CurrentPath));
 
         // Compose the window. The title bar occupies its own top row of the OUTER grid, always above the
         // Backstage; `belowTitle` stacks the Backstage overlay over the 3-row body (ribbon + document +
@@ -662,7 +782,9 @@ public sealed class MainWindow : Window
 
     private void InstallSharedKeyboardShortcuts()
     {
-        var commands = Enum.GetValues<FreeWKeyboardCommand>()
+        var commands = _applicationCommands.Shortcuts
+            .Select(shortcut => shortcut.Command)
+            .Distinct()
             .ToDictionary(
                 command => command,
                 command => new RoutedUICommand(command.ToString(), $"FreeW{command}", typeof(MainWindow)));
@@ -671,46 +793,14 @@ public sealed class MainWindow : Window
         {
             CommandBindings.Add(new CommandBinding(
                 routedCommand,
-                (_, _) => ExecuteKeyboardCommand(command)));
+                (_, _) => _applicationCommands.Execute(command)));
         }
 
-        foreach (var shortcut in FreeWKeyboardShortcutCatalog.All)
+        foreach (var shortcut in _applicationCommands.Shortcuts)
         {
             InputBindings.Add(new KeyBinding(
                 commands[shortcut.Command],
                 new KeyGesture(ToWpfKey(shortcut.Key), ToWpfModifiers(shortcut.Modifiers))));
-        }
-    }
-
-    private void ExecuteKeyboardCommand(FreeWKeyboardCommand command)
-    {
-        switch (command)
-        {
-            case FreeWKeyboardCommand.NewDocument: _file.New(); break;
-            case FreeWKeyboardCommand.OpenDocument: _file.Open(); break;
-            case FreeWKeyboardCommand.SaveDocument: _file.Save(); break;
-            case FreeWKeyboardCommand.SaveDocumentAs: _file.SaveAs(); break;
-            case FreeWKeyboardCommand.PrintDocument: Print(); break;
-            case FreeWKeyboardCommand.Find: OpenFindReplace(FindReplaceDialogOpenMode.Find); break;
-            case FreeWKeyboardCommand.Replace: OpenFindReplace(FindReplaceDialogOpenMode.Replace); break;
-            case FreeWKeyboardCommand.Cut: ExecuteEditingCommand(ApplicationCommands.Cut); break;
-            case FreeWKeyboardCommand.Copy: ExecuteEditingCommand(ApplicationCommands.Copy); break;
-            case FreeWKeyboardCommand.Paste: ExecuteEditingCommand(ApplicationCommands.Paste); break;
-            case FreeWKeyboardCommand.PasteTextOnly: _editor.PastePlainText(); break;
-            case FreeWKeyboardCommand.SelectAll: ExecuteEditingCommand(ApplicationCommands.SelectAll); break;
-            case FreeWKeyboardCommand.Undo: Undo(); break;
-            case FreeWKeyboardCommand.Redo: Redo(); break;
-            case FreeWKeyboardCommand.RevealFormatting: ToggleRevealFormatting(); break;
-            case FreeWKeyboardCommand.Thesaurus: ToggleThesaurusPane(); break;
-            case FreeWKeyboardCommand.LockCurrentField:
-            case FreeWKeyboardCommand.UnlockCurrentField:
-            case FreeWKeyboardCommand.UnlinkCurrentField:
-            case FreeWKeyboardCommand.ToggleCurrentFieldCode:
-            case FreeWKeyboardCommand.UpdateCurrentField:
-                ExecuteCurrentFieldCommand(command, ResolveFieldCommandEditor());
-                break;
-            case FreeWKeyboardCommand.ToggleFieldCodes: _editor.ToggleFieldCodes(); break;
-            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
         }
     }
 
@@ -851,6 +941,12 @@ public sealed class MainWindow : Window
         _backstage.Show();
     }
 
+    private TextDocument CurrentBackstageDocument()
+    {
+        _editor.CommitToModel();
+        return _editor.Model;
+    }
+
     private void CloseDocument()
     {
         Close();
@@ -858,26 +954,16 @@ public sealed class MainWindow : Window
 
     private static void OpenContainingFolder(string documentPath)
     {
-        var folder = System.IO.Path.GetDirectoryName(documentPath);
-        if (string.IsNullOrWhiteSpace(folder))
-            return;
-
-        Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
+        _ = DesktopPathLauncher.RevealFile(documentPath);
     }
 
     private void OpenExternalHelpLink(string url, string title)
     {
-        var result = ExternalUriLauncher.Open(
-            url,
-            uri => Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }));
-
-        if (result == ExternalUriLaunchResult.Launched)
+        var result = DesktopExternalUriLauncher.Open(url);
+        if (FreeWSupportCommandFeedbackPlanner.PlanExternalUriLaunch(result, title, url) is not { } feedback)
             return;
 
-        DialogMessageHelper.ShowWarning(
-            this,
-            $"FreeW could not open {title}. The link is:\n\n{url}",
-            title);
+        PresentCommandFeedback(feedback);
     }
 
     private void CopyDiagnostics()
@@ -888,14 +974,25 @@ public sealed class MainWindow : Window
 
         try
         {
-            Clipboard.SetText(diagnosticsText, TextDataFormat.UnicodeText);
-            Clipboard.Flush();
-            DialogMessageHelper.ShowInfo(this, "FreeW diagnostics were copied to the clipboard.", "Copy Diagnostics");
+            var result = _platformClipboard.WriteAsync(new PlatformClipboardContent(Text: diagnosticsText))
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+            PresentCommandFeedback(FreeWSupportCommandFeedbackPlanner.PlanDiagnosticsCopy(result));
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or System.Threading.ThreadStateException)
         {
-            DialogMessageHelper.ShowWarning(this, $"FreeW could not access the clipboard: {ex.Message}", "Copy Diagnostics");
+            PresentCommandFeedback(FreeWSupportCommandFeedbackPlanner.PlanDiagnosticsCopy(
+                PlatformClipboardWriteResult.Failed(ex.Message)));
         }
+    }
+
+    private void PresentCommandFeedback(FreeWCommandFeedbackPlan feedback)
+    {
+        if (feedback.Tone == FreeWCommandFeedbackTone.Information)
+            DialogMessageHelper.ShowInfo(this, feedback.Message, feedback.Title);
+        else
+            DialogMessageHelper.ShowWarning(this, feedback.Message, feedback.Title);
     }
 
     private void ShowAboutDialog()
@@ -951,9 +1048,16 @@ public sealed class MainWindow : Window
             host,
             this,
             new SisterQuickAccessToolbarActions(
-                Save: () => _file.Save(),
-                Undo,
-                Redo));
+                Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
+                Undo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Undo),
+                Redo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Redo)));
+
+    private void DisposeReadAloud()
+    {
+        var lifetime = _readAloudCommandLifetime;
+        _readAloudCommandLifetime = null;
+        lifetime?.Dispose();
+    }
 
     private void UpdateTitle()
     {
@@ -973,38 +1077,15 @@ public sealed class MainWindow : Window
     private void UpdateCounts()
     {
         var selectionText = _editor.Selection.Text;
-        if (!string.IsNullOrEmpty(selectionText))
-        {
-            ApplyStatusPlan(BuildStatusPlan(selectionText, words: 0, charactersWithSpaces: 0, paragraphs: 0));
-            return;
-        }
-
-        _editor.CommitToModel();
-        var stats = WordCount.Of(_editor.Model);
-        ApplyStatusPlan(BuildStatusPlan(
-            selectionText: null,
-            stats.Words,
-            stats.CharactersWithSpaces,
-            stats.Paragraphs));
-    }
-
-    private FreeWEditorStatusPlan BuildStatusPlan(
-        string? selectionText,
-        int words,
-        int charactersWithSpaces,
-        int paragraphs)
-    {
         var (current, total) = _editor.PageInfo();
         var (section, sections) = _editor.SectionInfo();
-        return FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
-            words,
-            charactersWithSpaces,
-            paragraphs,
-            current,
-            total,
-            section,
-            sections,
-            selectionText));
+        ApplyStatusPlan(_editorInteraction.BuildStatus(new FreeWEditorStatusContext(
+            _editor.Model,
+            CurrentPage: current,
+            TotalPages: total,
+            CurrentSection: section,
+            TotalSections: sections,
+            SelectionText: selectionText)));
     }
 
     // Refresh the Word-style "Page X of Y", section, and count status. Page position is an approximate
@@ -1029,9 +1110,10 @@ public sealed class MainWindow : Window
     // until the document is marked final; see RefreshMarkedAsFinalBanner.
     private Border BuildMarkedAsFinalBanner()
     {
+        var safetyText = BackstageInfoSafetyPanePlanner.ResolveText(UiText.Get);
         var text = new TextBlock
         {
-            Text = "Marked as Final  An author has marked this document as final to discourage editing.",
+            Text = safetyText.MarkedAsFinalBanner,
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x4D, 0x00)),
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -1040,7 +1122,7 @@ public sealed class MainWindow : Window
 
         var editAnyway = new Button
         {
-            Content = "Edit Anyway",
+            Content = safetyText.EditAnywayLabel,
             MinWidth = 96,
             Padding = new Thickness(8, 2, 8, 2),
             VerticalAlignment = VerticalAlignment.Center
@@ -1087,7 +1169,8 @@ public sealed class MainWindow : Window
         var dataFolderPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         dataFolderPanel.Children.Add(SisterAppStatusBarChrome.CreateSeparator());
         _dataFolderText = SisterAppStatusBarChrome.CreateInfoText();
-        _dataFolderText.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(ResolveDataFolderLabel());
+        _dataFolderText.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(
+            FreeWApplicationFrameDescriptor.ResolveDataFolderLabel());
         _dataFolderText.ToolTip = _dataFolderText.Text;
         dataFolderPanel.Children.Add(_dataFolderText);
         _dataFolderItem = dataFolderPanel;
@@ -1101,7 +1184,7 @@ public sealed class MainWindow : Window
 
         _status = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
             // Status bar surface routed through FreeWStatusSurfaceBrush token (#17324D default).
-            ResolveTokenBrush("FreeWStatusSurfaceBrush")
+            WpfThemeResourceResolver.Find<Brush>(ThemeResources.StatusSurfaceBrush)
                 ?? new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
             left,
             [_viewSwitchItem, _zoomItem])).Root;
@@ -1155,9 +1238,21 @@ public sealed class MainWindow : Window
             return toggle;
         }
 
-        _printLayoutSwitch = ViewToggle("Print Layout", "Print Layout page view", RibbonCommandIconKind.PrintLayout, DocumentViewMode.PrintLayout);
-        _webLayoutSwitch = ViewToggle("Web Layout", "Web Layout: continuous, full-width view (no page chrome)", RibbonCommandIconKind.WebLayout, DocumentViewMode.WebLayout);
-        _draftSwitch = ViewToggle("Draft", "Draft: simplified continuous view for fast editing", RibbonCommandIconKind.Draft, DocumentViewMode.Draft);
+        _printLayoutSwitch = ViewToggle(
+            FreeWApplicationFrameTextCatalog.PrintLayout.Label,
+            FreeWApplicationFrameTextCatalog.PrintLayout.HelpText,
+            RibbonCommandIconKind.PrintLayout,
+            DocumentViewMode.PrintLayout);
+        _webLayoutSwitch = ViewToggle(
+            FreeWApplicationFrameTextCatalog.WebLayoutLabel,
+            UiText.Get("View_WebLayout_WpfHelpText"),
+            RibbonCommandIconKind.WebLayout,
+            DocumentViewMode.WebLayout);
+        _draftSwitch = ViewToggle(
+            FreeWApplicationFrameTextCatalog.Draft.Label,
+            FreeWApplicationFrameTextCatalog.Draft.HelpText,
+            RibbonCommandIconKind.Draft,
+            DocumentViewMode.Draft);
         // PagedEdit has its own toggle (enter/exit), not routed through SetViewMode(mode), because
         // the paged surface is a separate workspace child swap — not a DocumentView mode change.
         _pagedEditSwitch = new ToggleButton
@@ -1168,13 +1263,17 @@ public sealed class MainWindow : Window
             Height = 22,
             Padding = new Thickness(4, 2, 4, 2),
             Margin = new Thickness(1, 2, 1, 2),
-            ToolTip = "Page Edit: editable paginated page boxes (WYSIWYG pagination)"
+            ToolTip = UiText.Get("View_PageEdit_WpfHelpText")
         };
-        AutomationProperties.SetName(_pagedEditSwitch, "Page Edit");
-        AutomationProperties.SetHelpText(_pagedEditSwitch, "Page Edit: editable paginated page boxes (WYSIWYG pagination)");
+        AutomationProperties.SetName(_pagedEditSwitch, FreeWApplicationFrameTextCatalog.PageEditLabel);
+        AutomationProperties.SetHelpText(_pagedEditSwitch, UiText.Get("View_PageEdit_WpfHelpText"));
         _pagedEditSwitch.Click += (_, _) => TogglePagedEditView();
 
-        panel.Children.Add(ViewButton("Read Mode", "Toggle distraction-free Read Mode", RibbonCommandIconKind.ReadMode, ToggleReadMode));
+        panel.Children.Add(ViewButton(
+            FreeWApplicationFrameTextCatalog.ReadMode.Label,
+            FreeWApplicationFrameTextCatalog.ReadMode.HelpText,
+            RibbonCommandIconKind.ReadMode,
+            ToggleReadMode));
         panel.Children.Add(_printLayoutSwitch);
         panel.Children.Add(_webLayoutSwitch);
         panel.Children.Add(_draftSwitch);
@@ -1204,7 +1303,7 @@ public sealed class MainWindow : Window
 
         var header = new TextBlock
         {
-            Text = "Navigation",
+            Text = NavigationPaneTextCatalog.Resolve(UiText.Get).Title,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(10, 8, 10, 6)
         };
@@ -1238,7 +1337,7 @@ public sealed class MainWindow : Window
         {
             Margin = new Thickness(10, 0, 10, 4),
             Padding = new Thickness(2, 1, 2, 1),
-            ToolTip = "Search document"
+            ToolTip = NavigationPaneTextCatalog.Resolve(UiText.Get).SearchDocument
         };
         _navSearch.TextChanged += (_, _) => RunNavSearch();
         _navSearch.KeyDown += (_, e) =>
@@ -1251,8 +1350,9 @@ public sealed class MainWindow : Window
             }
         };
 
-        _navSearchPrev = new Button { Content = "‹", Width = 22, Padding = new Thickness(0), ToolTip = "Previous match" };
-        _navSearchNext = new Button { Content = "›", Width = 22, Padding = new Thickness(0), ToolTip = "Next match" };
+        var text = NavigationPaneTextCatalog.Resolve(UiText.Get);
+        _navSearchPrev = new Button { Content = "‹", Width = 22, Padding = new Thickness(0), ToolTip = text.PreviousMatch };
+        _navSearchNext = new Button { Content = "›", Width = 22, Padding = new Thickness(0), ToolTip = text.NextMatch };
         _navSearchPrev.Click += (_, _) => StepNavSearch(forward: false);
         _navSearchNext.Click += (_, _) => StepNavSearch(forward: true);
 
@@ -1282,42 +1382,14 @@ public sealed class MainWindow : Window
     // An empty term clears the search and shows the full outline again.
     private void RunNavSearch()
     {
-        _navSearchHits.Clear();
-        _navSearchHitIndex = -1;
-
-        var term = _navSearch?.Text ?? string.Empty;
-        if (!string.IsNullOrEmpty(term))
-        {
-            _editor.CommitToModel();
-            var blocks = _editor.Model.Blocks;
-            for (var i = 0; i < blocks.Count; i++)
-            {
-                if (BlockMatches(blocks[i], term))
-                    _navSearchHits.Add(i);
-            }
-
-            if (_navSearchHits.Count > 0)
-            {
-                _navSearchHitIndex = 0;
-                _editor.BringBlockIntoView(_navSearchHits[0]);
-            }
-        }
-
-        RefreshOutline();
-        UpdateNavSearchStatus();
+        RenderNavigationOutcome(_navigationPaneSession.SetQuery(_navSearch?.Text));
     }
 
     // Move to the next/previous document match (wrapping at the ends) and bring it into view. No-op when
     // there are no matches.
     private void StepNavSearch(bool forward)
     {
-        if (_navSearchHits.Count == 0)
-            return;
-        _navSearchHitIndex = forward
-            ? (_navSearchHitIndex + 1) % _navSearchHits.Count
-            : (_navSearchHitIndex - 1 + _navSearchHits.Count) % _navSearchHits.Count;
-        _editor.BringBlockIntoView(_navSearchHits[_navSearchHitIndex]);
-        UpdateNavSearchStatus();
+        RenderNavigationOutcome(_navigationPaneSession.StepSearch(forward ? 1 : -1));
     }
 
     // Update the "n of m" / "No matches" status label and enable the Prev/Next buttons accordingly.
@@ -1326,33 +1398,18 @@ public sealed class MainWindow : Window
         if (_navSearchStatus is null)
             return;
 
-        var hasTerm = !string.IsNullOrEmpty(_navSearch?.Text);
-        var hasHits = _navSearchHits.Count > 0;
-        _navSearchStatus.Text = !hasTerm
-            ? string.Empty
-            : hasHits
-                ? $"{_navSearchHitIndex + 1} of {_navSearchHits.Count}"
-                : "No matches";
-        _navSearchPrev.IsEnabled = hasHits;
-        _navSearchNext.IsEnabled = hasHits;
+        var state = _navigationPaneSession.State;
+        _navSearchStatus.Text = state.SearchStatusText;
+        _navSearchPrev.IsEnabled = state.CanStepSearch;
+        _navSearchNext.IsEnabled = state.CanStepSearch;
     }
 
-    // Whether a model block's plain text contains at least one match for the term (case-insensitive,
-    // whole-word off — the live "search as you type" behaviour), via the shared TextSearch helper.
-    private static bool BlockMatches(Block block, string term)
+    // WPF's model is committed before a portable pane session projects it.
+    private TextDocument CurrentPaneDocument()
     {
-        var text = block switch
-        {
-            Paragraph paragraph => paragraph.PlainText,
-            Table table => TableText(table),
-            _ => string.Empty
-        };
-        return TextSearch.FindAll(text, term, matchCase: false, wholeWord: false).Any();
+        _editor.CommitToModel();
+        return _editor.Model;
     }
-
-    // Flatten a table's cell text so a search term inside a table cell still registers as a hit.
-    private static string TableText(Table table) =>
-        string.Join(" ", table.Rows.SelectMany(row => row.Cells).Select(cell => cell.PlainText));
 
     // Show/hide the navigation pane and push the new checked-state into the ribbon state store so the
     // View > Navigation Pane toggle button stays in sync. Refreshes the outline when the pane appears.
@@ -1400,7 +1457,7 @@ public sealed class MainWindow : Window
             FontSize = 9,
             Focusable = true
         };
-        AutomationProperties.SetName(button, "Tab stop selector");
+        AutomationProperties.SetName(button, UiText.Get("Ruler_TabStopSelector_AutomationName"));
 
         void Refresh()
         {
@@ -1413,10 +1470,10 @@ public sealed class MainWindow : Window
             };
             button.ToolTip = _hRuler.SelectedTabStopAlignment switch
             {
-                TabStopAlignment.Center => "Center tab",
-                TabStopAlignment.Right => "Right tab",
-                TabStopAlignment.Decimal => "Decimal tab",
-                _ => "Left tab"
+                TabStopAlignment.Center => UiText.Get("Ruler_CenterTab_ToolTip"),
+                TabStopAlignment.Right => UiText.Get("Ruler_RightTab_ToolTip"),
+                TabStopAlignment.Decimal => UiText.Get("Ruler_DecimalTab_ToolTip"),
+                _ => UiText.Get("Ruler_LeftTab_ToolTip")
             };
         }
 
@@ -1444,7 +1501,7 @@ public sealed class MainWindow : Window
     {
         var header = new TextBlock
         {
-            Text = "Reveal Formatting",
+            Text = UiText.Get("Pane_RevealFormatting_Heading"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(10, 8, 10, 6)
         };
@@ -1529,11 +1586,14 @@ public sealed class MainWindow : Window
     // to that change (click-to-navigate) and the toolbar acts on the SELECTED single revision. Content
     // is rebuilt from the pure RevisionList (see RefreshReviewPane), so the pane never owns revision
     // logic. Mirrors BuildRevealPane's dock/chrome.
+    private static readonly ReviewingPanePresentationDescriptor WpfReviewingPanePresentation =
+        ReviewingPanePresentationPlanner.For(ReviewingPanePresentationProfile.CompactWpf);
+
     private UIElement BuildReviewPane()
     {
         var header = new TextBlock
         {
-            Text = "Revisions",
+            Text = WpfReviewingPanePresentation.PaneTitle,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(10, 8, 10, 6)
         };
@@ -1553,10 +1613,26 @@ public sealed class MainWindow : Window
         }
 
         var toolbar = new WrapPanel { Margin = new Thickness(10, 0, 10, 6) };
-        toolbar.Children.Add(MakeButton("Accept", "Accept the selected change", AcceptSelectedRevision));
-        toolbar.Children.Add(MakeButton("Reject", "Reject the selected change", RejectSelectedRevision));
-        toolbar.Children.Add(MakeButton("▲", "Previous change (jump up)", () => StepRevision(-1)));
-        toolbar.Children.Add(MakeButton("▼", "Next change (jump down)", () => StepRevision(+1)));
+        _reviewAcceptButton = MakeButton(
+            WpfReviewingPanePresentation.Actions.AcceptSelected.Label,
+            WpfReviewingPanePresentation.Actions.AcceptSelected.ToolTip,
+            AcceptSelectedRevision);
+        _reviewRejectButton = MakeButton(
+            WpfReviewingPanePresentation.Actions.RejectSelected.Label,
+            WpfReviewingPanePresentation.Actions.RejectSelected.ToolTip,
+            RejectSelectedRevision);
+        _reviewPreviousButton = MakeButton(
+            WpfReviewingPanePresentation.Actions.Previous.Label,
+            WpfReviewingPanePresentation.Actions.Previous.ToolTip,
+            () => StepRevision(-1));
+        _reviewNextButton = MakeButton(
+            WpfReviewingPanePresentation.Actions.Next.Label,
+            WpfReviewingPanePresentation.Actions.Next.ToolTip,
+            () => StepRevision(+1));
+        toolbar.Children.Add(_reviewAcceptButton);
+        toolbar.Children.Add(_reviewRejectButton);
+        toolbar.Children.Add(_reviewPreviousButton);
+        toolbar.Children.Add(_reviewNextButton);
 
         // Sort control: reorders the Reviewing Pane without touching the document model.
         var sortRow = new StackPanel
@@ -1566,21 +1642,18 @@ public sealed class MainWindow : Window
         };
         sortRow.Children.Add(new TextBlock
         {
-            Text = "Sort:",
+            Text = WpfReviewingPanePresentation.SortLabel,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0)
         });
         var sortCombo = new ComboBox { MinWidth = 130 };
-        foreach (var option in ReviewRevisionSortPlanner.Options)
+        foreach (var option in WpfReviewingPanePresentation.SortOptions)
             sortCombo.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Order });
-        sortCombo.SelectedIndex = ReviewRevisionSortPlanner.IndexOf(_reviewSortOrder);
+        sortCombo.SelectedIndex = 0;
         sortCombo.SelectionChanged += (_, _) =>
         {
             if (sortCombo.SelectedItem is ComboBoxItem { Tag: ReviewRevisionSortOrder order })
-            {
-                _reviewSortOrder = order;
-                RefreshReviewPane();
-            }
+                RenderReviewOutcome(_reviewingPaneSession.SetSortOrder(order));
         };
         sortRow.Children.Add(sortCombo);
 
@@ -1597,12 +1670,7 @@ public sealed class MainWindow : Window
             Margin = new Thickness(4, 0, 4, 8)
         };
         // Selecting an entry navigates the editor to that change (click-to-navigate).
-        _reviewList.SelectionChanged += (_, _) =>
-        {
-            var index = _reviewList.SelectedIndex;
-            if (index >= 0 && index < _reviewEntries.Count)
-                _editor.NavigateToRevision(_reviewEntries[index]);
-        };
+        _reviewList.SelectionChanged += OnReviewSelectionChanged;
 
         var layout = new DockPanel { Width = 270 };
         DockPanel.SetDock(header, Dock.Top);
@@ -1646,36 +1714,59 @@ public sealed class MainWindow : Window
         if (_reviewList is null || !_reviewPaneVisible)
             return;
 
-        var previousIndex = _reviewList.SelectedIndex;
-        _reviewEntries = ReviewRevisionSortPlanner.Sort(_editor.ListRevisions(), _reviewSortOrder);
+        RenderReviewOutcome(_reviewingPaneSession.Refresh());
+    }
 
+    private void RenderReviewOutcome(ReviewingPaneOutcome outcome)
+    {
+        var state = outcome.State;
+        _reviewList.SelectionChanged -= OnReviewSelectionChanged;
         _reviewList.Items.Clear();
-        foreach (var entry in _reviewEntries)
+        foreach (var entry in state.Entries)
             _reviewList.Items.Add(BuildRevisionItem(entry));
 
-        var paneState = ReviewingPaneStatePlanner.BuildRefreshState(_reviewEntries.Count, previousIndex);
-        _reviewStatus.Text = paneState.StatusText;
-        if (paneState.SelectedIndex < 0)
-            return;
-        _reviewList.SelectedIndex = paneState.SelectedIndex;
+        _reviewStatus.Text = ReviewingPanePresentationPlanner.BuildCountText(
+            state.Entries.Count,
+            ReviewingPanePresentationProfile.CompactWpf);
+        _reviewAcceptButton.IsEnabled = state.CanResolveSelected;
+        _reviewRejectButton.IsEnabled = state.CanResolveSelected;
+        _reviewPreviousButton.IsEnabled = state.HasRevisions;
+        _reviewNextButton.IsEnabled = state.HasRevisions;
+        _reviewList.SelectedIndex = state.SelectedIndex;
+        _reviewList.SelectionChanged += OnReviewSelectionChanged;
+
+        if (outcome.NavigateToRevision is { } target)
+        {
+            _editor.NavigateToRevision(target);
+            _reviewList.ScrollIntoView(_reviewList.SelectedItem);
+        }
+    }
+
+    private void OnReviewSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var outcome = _reviewingPaneSession.SelectIndex(_reviewList.SelectedIndex);
+        if (outcome.NavigateToRevision is { } target)
+            _editor.NavigateToRevision(target);
     }
 
     // One reviewing-pane row: a bold "Author • Type" caption over the affected text (wrapped, dimmed).
     private static UIElement BuildRevisionItem(RevisionEntry entry)
     {
-        var row = ReviewingPaneRowPlanner.Build(entry);
+        var presentation = ReviewingPanePresentationPlanner.BuildRevision(
+            entry,
+            ReviewingPanePresentationProfile.CompactWpf);
 
         var panel = new StackPanel { Margin = new Thickness(6, 4, 6, 4) };
         panel.Children.Add(new TextBlock
         {
-            Text = row.Title,
+            Text = presentation.CaptionText,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))
         });
-        if (row.PreviewText.Length > 0)
+        if (presentation.SnippetText.Length > 0)
             panel.Children.Add(new TextBlock
             {
-                Text = row.PreviewText,
+                Text = presentation.SnippetText,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50))
             });
@@ -1686,29 +1777,25 @@ public sealed class MainWindow : Window
     // selection onto the next pending change). No-op when nothing is selected.
     private void AcceptSelectedRevision()
     {
-        var index = _reviewList.SelectedIndex;
-        if (index < 0 || index >= _reviewEntries.Count)
-            return;
-        if (_editor.AcceptRevision(_reviewEntries[index]))
+        var outcome = _reviewingPaneSession.AcceptSelected();
+        if (outcome.MutationApplied)
         {
             _file.MarkDirty();
             UpdateCounts();
         }
-        RefreshReviewPane();
+        RenderReviewOutcome(outcome);
     }
 
     // Reject the single revision selected in the Reviewing Pane, then rebuild the list.
     private void RejectSelectedRevision()
     {
-        var index = _reviewList.SelectedIndex;
-        if (index < 0 || index >= _reviewEntries.Count)
-            return;
-        if (_editor.RejectRevision(_reviewEntries[index]))
+        var outcome = _reviewingPaneSession.RejectSelected();
+        if (outcome.MutationApplied)
         {
             _file.MarkDirty();
             UpdateCounts();
         }
-        RefreshReviewPane();
+        RenderReviewOutcome(outcome);
     }
 
     // Previous/Next change: step the selection through the list (and so navigate the editor, via the list's
@@ -1717,16 +1804,7 @@ public sealed class MainWindow : Window
     {
         if (!_reviewPaneVisible)
             ToggleReviewPane();
-        else
-            RefreshReviewPane();
-        var next = ReviewingPaneStatePlanner.ResolveStep(
-            _reviewEntries.Count,
-            _reviewList.SelectedIndex,
-            direction);
-        if (next < 0)
-            return;
-        _reviewList.SelectedIndex = next;
-        _reviewList.ScrollIntoView(_reviewList.SelectedItem);
+        RenderReviewOutcome(_reviewingPaneSession.Step(direction));
     }
 
     // ── Thesaurus Pane ──────────────────────────────────────────────────────────────────────────────
@@ -1759,7 +1837,7 @@ public sealed class MainWindow : Window
     {
         var header = new TextBlock
         {
-            Text = "Notes",
+            Text = FreeWUiTextCatalog.NotesHeading,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(10, 8, 10, 4)
         };
@@ -1807,8 +1885,15 @@ public sealed class MainWindow : Window
             return btn;
         }
 
-        _notesApplyButton  = MakeButton("Apply",  "Commit edits back to this note",   ApplySelectedNote,  isPrimary: true);
-        _notesDeleteButton = MakeButton("Delete", "Delete this note and its marker",  DeleteSelectedNote);
+        _notesApplyButton = MakeButton(
+            FreeWUiTextCatalog.NotesApply,
+            FreeWUiTextCatalog.NotesApplyToolTip,
+            ApplySelectedNote,
+            isPrimary: true);
+        _notesDeleteButton = MakeButton(
+            FreeWUiTextCatalog.NotesDelete,
+            FreeWUiTextCatalog.NotesDeleteToolTip,
+            DeleteSelectedNote);
         _notesApplyButton.Visibility  = Visibility.Collapsed;
         _notesDeleteButton.Visibility = Visibility.Collapsed;
 
@@ -1817,7 +1902,7 @@ public sealed class MainWindow : Window
         toolbar.Children.Add(_notesDeleteButton);
 
         // Selecting a stub loads the note's content into the sub-editor.
-        _notesList.SelectionChanged += (_, _) => LoadSelectedNote();
+        _notesList.SelectionChanged += OnNoteSelectionChanged;
 
         var layout = new DockPanel();
         DockPanel.SetDock(header, Dock.Top);
@@ -1858,106 +1943,56 @@ public sealed class MainWindow : Window
         if (_notesList is null || !_notesPaneVisible)
             return;
 
-        var prevIndex = _notesList.SelectedIndex;
-        _notesList.Items.Clear();
-        foreach (var note in _editor.Model.Footnotes.Values.OrderBy(n => n.Id))
-            _notesList.Items.Add(new NoteStub(IsFootnote: true,  Id: note.Id, Label: $"Footnote {note.Id}", Preview: note.PlainText));
-        foreach (var note in _editor.Model.Endnotes.Values.OrderBy(n => n.Id))
-            _notesList.Items.Add(new NoteStub(IsFootnote: false, Id: note.Id, Label: $"Endnote {note.Id}",  Preview: note.PlainText));
-
-        if (_notesList.Items.Count > 0)
-            _notesList.SelectedIndex = System.Math.Min(System.Math.Max(prevIndex, 0), _notesList.Items.Count - 1);
+        RenderNotesOutcome(_documentNotesPaneSession.Refresh());
     }
 
     // Load the note selected in the stub list into the sub-editor.
-    private void LoadSelectedNote()
+    private void OnNoteSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_notesList.SelectedItem is not NoteStub stub)
+        RenderNotesOutcome(_documentNotesPaneSession.SelectIndex(_notesList.SelectedIndex));
+    }
+
+    private void RenderNotesOutcome(DocumentNotesPaneOutcome outcome)
+    {
+        var state = outcome.State;
+        _notesList.SelectionChanged -= OnNoteSelectionChanged;
+        _notesList.ItemsSource = state.Items;
+        _notesList.SelectedIndex = state.SelectedIndex;
+        _notesList.SelectionChanged += OnNoteSelectionChanged;
+
+        _notesSelectedLabel.Text = state.SelectedNote?.Label ?? string.Empty;
+        _notesSelectedLabel.Visibility = state.HasSelection ? Visibility.Visible : Visibility.Collapsed;
+        _notesSubEditor.Visibility = state.HasSelection ? Visibility.Visible : Visibility.Collapsed;
+        _notesApplyButton.Visibility = state.CanApply ? Visibility.Visible : Visibility.Collapsed;
+        _notesDeleteButton.Visibility = state.CanDelete ? Visibility.Visible : Visibility.Collapsed;
+        if (state.EditorDocument is { } editorDocument)
         {
-            _notesSelectedLabel.Visibility = Visibility.Collapsed;
-            _notesSubEditor.Visibility     = Visibility.Collapsed;
-            _notesApplyButton.Visibility   = Visibility.Collapsed;
-            _notesDeleteButton.Visibility  = Visibility.Collapsed;
-            _activeNote = null;
-            return;
+            ConfigureFieldEvaluationContext(_notesSubEditor);
+            _notesSubEditor.LoadModel(editorDocument);
         }
-
-        _activeNote = (stub.IsFootnote, stub.Id);
-        _notesSelectedLabel.Text       = stub.Label;
-        _notesSelectedLabel.Visibility = Visibility.Visible;
-        _notesApplyButton.Visibility   = Visibility.Visible;
-        _notesDeleteButton.Visibility  = Visibility.Visible;
-        _notesSubEditor.Visibility     = Visibility.Visible;
-
-        // Build a wrapper TextDocument seeded with the main doc's DefaultRun/Styles so fonts match.
-        var wrapper = TextDocument.CreateEmpty();
-        wrapper.DefaultRun       = _editor.Model.DefaultRun;
-        wrapper.DefaultParagraph = _editor.Model.DefaultParagraph;
-        wrapper.Blocks.Clear();
-
-        var content = stub.IsFootnote
-            ? (_editor.Model.Footnotes.TryGetValue(stub.Id, out var fn) ? fn.Content : null)
-            : (_editor.Model.Endnotes.TryGetValue(stub.Id, out var en) ? en.Content : null);
-
-        if (content is not null)
-        {
-            foreach (var para in content)
-                wrapper.Blocks.Add(DocumentMerge.CloneBlock(para));
-        }
-        if (wrapper.Blocks.Count == 0)
-            wrapper.Blocks.Add(new Paragraph());
-
-        ConfigureFieldEvaluationContext(_notesSubEditor);
-        _notesSubEditor.LoadModel(wrapper);
     }
 
     // Apply edits from the sub-editor back to the selected note's Content, then re-render the main editor
     // so marker tooltips (which show the note's plain text) refresh.
     private void ApplySelectedNote()
     {
-        if (_activeNote is not { } active)
-            return;
-
         _notesSubEditor.CommitToModel();
-
-        var paragraphs = _notesSubEditor.Model.Blocks.OfType<Paragraph>()
-            .Select(paragraph => (Paragraph)DocumentMerge.CloneBlock(paragraph))
-            .ToArray();
-        _editor.ReplaceNoteContent(active.Id, active.IsFootnote, paragraphs);
-        _file.MarkDirty();
-        RefreshNotesPane();
+        var outcome = _documentNotesPaneSession.Apply(_notesSubEditor.Model.Blocks);
+        if (outcome.MutationApplied)
+            _file.MarkDirty();
+        RenderNotesOutcome(outcome);
     }
 
     // Delete the selected note from the model and strip its marker run from the body, then refresh.
     private void DeleteSelectedNote()
     {
-        if (_activeNote is not { } active)
-            return;
-
-        if (active.IsFootnote)
-            _editor.DeleteFootnote(active.Id);
-        else
-            _editor.DeleteEndnote(active.Id);
-
-        _activeNote = null;
-        _file.MarkDirty();
-        RefreshNotesPane();
-        // Clear the sub-editor so the deleted note's content is not accidentally re-applied.
-        _notesSubEditor.Visibility    = Visibility.Collapsed;
-        _notesApplyButton.Visibility  = Visibility.Collapsed;
-        _notesDeleteButton.Visibility = Visibility.Collapsed;
-        _notesSelectedLabel.Visibility = Visibility.Collapsed;
+        var outcome = _documentNotesPaneSession.DeleteSelected();
+        if (outcome.MutationApplied)
+            _file.MarkDirty();
+        RenderNotesOutcome(outcome);
     }
 
     // Lightweight stub for the Notes pane's list. Carries enough for display + selection → load.
-    private sealed record NoteStub(bool IsFootnote, int Id, string Label, string Preview)
-    {
-        public override string ToString() =>
-            string.IsNullOrWhiteSpace(Preview)
-                ? Label
-                : $"{Label}: {(Preview.Length > 60 ? Preview[..57] + "…" : Preview)}";
-    }
-
     // ── Header/Footer Pane (Feature 2A) ─────────────────────────────────────────────────────────────
 
     // Build the Header/Footer pane: a slot-label, a DocumentView sub-editor for rich editing
@@ -1981,7 +2016,7 @@ public sealed class MainWindow : Window
 
         var closeBtn = new Button
         {
-            Content = "Close Header and Footer",
+            Content = UiText.Get("HeaderFooter_Close_Label"),
             Padding = new Thickness(10, 3, 10, 3),
             Margin = new Thickness(10, 4, 10, 6),
             HorizontalAlignment = HorizontalAlignment.Left
@@ -2012,41 +2047,26 @@ public sealed class MainWindow : Window
     // Phase 4 (DEBUG): when PagedEdit is active, route to the in-page header/footer region instead
     // of opening the docked pane, so the in-page sub-editor gets focus. The docked pane remains
     // for the non-paged modes.
-    private void OpenHeaderFooterPane(string slotName)
+    private void OpenHeaderFooterPane(string slotName) =>
+        OpenHeaderFooterPane(HeaderFooterDialogPlanner.ParseSlot(slotName));
+
+    private void OpenHeaderFooterPane(HeaderFooterSlotKind slot)
     {
         if (_pagedEditMode && _pagedEditPanel is not null)
         {
             // Route to the in-page region; if the slot is not visible (e.g. "even-header" when
             // DifferentOddEvenPages is off) FocusInPageHfRegion returns false and we fall through
             // to the docked pane as a fallback.
-            if (_pagedEditPanel.FocusInPageHfRegion(slotName))
+            if (_pagedEditPanel.FocusInPageHfRegion(slot))
                 return;
         }
-        _hfActiveSlot = slotName;
+        _hfActiveSlot = slot;
 
-        var label = slotName switch
-        {
-            "header"       => "Default Header",
-            "footer"       => "Default Footer",
-            "even-header"  => "Even-Page Header",
-            "even-footer"  => "Even-Page Footer",
-            "first-header" => "First-Page Header",
-            "first-footer" => "First-Page Footer",
-            _              => slotName
-        };
-        _hfSlotLabel.Text = $"Editing: {label}";
+        var label = HeaderFooterDialogPlanner.LabelFor(slot);
+        _hfSlotLabel.Text = UiText.Format("HeaderFooter_Editing_Status_Format", label);
 
         var hf = _editor.Model.FinalSectionHeadersFooters;
-        var current = slotName switch
-        {
-            "header"       => hf.Header,
-            "footer"       => hf.Footer,
-            "even-header"  => hf.EvenHeader,
-            "even-footer"  => hf.EvenFooter,
-            "first-header" => hf.FirstHeader,
-            "first-footer" => hf.FirstFooter,
-            _              => null
-        };
+        var current = HeaderFooterDialogPlanner.GetSlot(hf, slot);
 
         // Wrapper document — seeded with the main doc's DefaultRun so fonts match.
         var wrapper = TextDocument.CreateEmpty();
@@ -2088,15 +2108,7 @@ public sealed class MainWindow : Window
 
         // Write back to the correct slot.
         var hf = _editor.Model.FinalSectionHeadersFooters;
-        switch (_hfActiveSlot)
-        {
-            case "header":       hf.Header      = hfOut; break;
-            case "footer":       hf.Footer      = hfOut; break;
-            case "even-header":  hf.EvenHeader  = hfOut; break;
-            case "even-footer":  hf.EvenFooter  = hfOut; break;
-            case "first-header": hf.FirstHeader = hfOut; break;
-            case "first-footer": hf.FirstFooter = hfOut; break;
-        }
+        HeaderFooterDialogPlanner.SetSlot(hf, _hfActiveSlot.Value, hfOut);
 
         _hfActiveSlot  = null;
         _hfPane.Visibility = Visibility.Collapsed;
@@ -2116,127 +2128,98 @@ public sealed class MainWindow : Window
     // in sync, exactly like the navigation-pane toggle.
     private void ToggleReadMode()
     {
-        _readMode = !_readMode;
-        if (_readMode)
+        var plan = _editorInteraction.ToggleReadMode(new FreeWEditorChromeVisibility(
+            TitleBar: ToChromeVisibility(_titleBar.Visibility),
+            Ribbon: ToChromeVisibility(_ribbon.Visibility),
+            DataFolder: ToChromeVisibility(_dataFolderItem.Visibility),
+            ViewSwitch: ToChromeVisibility(_viewSwitchItem.Visibility),
+            Zoom: ToChromeVisibility(_zoomItem.Visibility),
+            NavigationPane: ToChromeVisibility(_navPaneVisible),
+            RevealPane: ToChromeVisibility(_revealPaneVisible),
+            ReviewingPane: ToChromeVisibility(_reviewPaneVisible)));
+
+        if (plan.IsActive)
         {
-            _titleBarVisibilityBeforeReadMode = _titleBar.Visibility;
-            _ribbonVisibilityBeforeReadMode = _ribbon.Visibility;
-            _dataFolderVisibilityBeforeReadMode = _dataFolderItem.Visibility;
-            _viewSwitchVisibilityBeforeReadMode = _viewSwitchItem.Visibility;
-            _zoomVisibilityBeforeReadMode = _zoomItem.Visibility;
-            // Remember the normal layout so we can put it back verbatim when read mode is switched off.
-            _navPaneVisibleBeforeReadMode = _navPaneVisible;
             _editorMarginBeforeReadMode = _editor.Margin;
             _editorMaxWidthBeforeReadMode = _editor.MaxWidth;
             _editorAlignmentBeforeReadMode = _editor.HorizontalAlignment;
             _editorWidthBeforeReadMode = _editor.Width;
             _editorEffectBeforeReadMode = _editor.Effect;
             _editorBackgroundBeforeReadMode = _editor.Background;
+        }
 
-            _titleBar.Visibility = Visibility.Collapsed;
-            _ribbon.Visibility = Visibility.Collapsed;
-            _dataFolderItem.Visibility = Visibility.Collapsed;
-            _viewSwitchItem.Visibility = Visibility.Collapsed;
-            _zoomItem.Visibility = Visibility.Collapsed;
+        _titleBar.Visibility = ToVisibility(plan.Chrome.TitleBar);
+        _ribbon.Visibility = ToVisibility(plan.Chrome.Ribbon);
+        _dataFolderItem.Visibility = ToVisibility(plan.Chrome.DataFolder);
+        _viewSwitchItem.Visibility = ToVisibility(plan.Chrome.ViewSwitch);
+        _zoomItem.Visibility = ToVisibility(plan.Chrome.Zoom);
+        _navPane.Visibility = ToVisibility(plan.Chrome.NavigationPane);
+        _revealPane.Visibility = ToVisibility(plan.Chrome.RevealPane);
+        _reviewPane.Visibility = ToVisibility(plan.Chrome.ReviewingPane);
 
-            // Collapse the navigation pane while reading (without disturbing its remembered state).
-            _navPane.Visibility = Visibility.Collapsed;
-
-            // Likewise hide the Reveal Formatting pane while reading (its remembered state is untouched).
-            _revealPaneVisibleBeforeReadMode = _revealPaneVisible;
-            _revealPane.Visibility = Visibility.Collapsed;
-
-            // And hide the Reviewing Pane while reading (its remembered state is untouched).
-            _reviewPaneVisibleBeforeReadMode = _reviewPaneVisible;
-            _reviewPane.Visibility = Visibility.Collapsed;
-
-            // A centered, comfortable reading column: cap the width and add generous breathing room.
-            // Drop any Print-Layout page sizing/shadow so the reading column owns the surface width.
-            // Column width respects the user's last-chosen token (Feature 4).
+        if (plan.IsActive)
+        {
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
             _editor.Width = double.NaN;
             _editor.Effect = null;
-            _editor.MaxWidth = FreeWReadModePlanner.ColumnWidth(_readModeColumnWidth);
+            _editor.MaxWidth = plan.ColumnWidth;
             _editor.Margin = new Thickness(40, 40, 40, 40);
-            // Apply saved page color (Feature 4).
-            _editor.Background = ReadModeBrush(_readModePageColor);
+            _editor.Background = ReadModeBrush(plan.PageColorHex);
         }
         else
         {
-            _titleBar.Visibility = _titleBarVisibilityBeforeReadMode;
-            _ribbon.Visibility = _ribbonVisibilityBeforeReadMode;
-            _dataFolderItem.Visibility = _dataFolderVisibilityBeforeReadMode;
-            _viewSwitchItem.Visibility = _viewSwitchVisibilityBeforeReadMode;
-            _zoomItem.Visibility = _zoomVisibilityBeforeReadMode;
-
-            // Restore the editor's original presentation (including any Print-Layout page sizing/shadow).
             _editor.HorizontalAlignment = _editorAlignmentBeforeReadMode;
             _editor.MaxWidth = _editorMaxWidthBeforeReadMode;
             _editor.Margin = _editorMarginBeforeReadMode;
             _editor.Width = _editorWidthBeforeReadMode;
             _editor.Effect = _editorEffectBeforeReadMode;
             _editor.Background = _editorBackgroundBeforeReadMode;
-
-            // Restore the navigation pane to whatever it was before entering read mode.
-            _navPane.Visibility = _navPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
-
-            // Restore the Reveal Formatting pane to whatever it was before entering read mode.
-            _revealPane.Visibility = _revealPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
-
-            // Restore the Reviewing Pane to whatever it was before entering read mode.
-            _reviewPane.Visibility = _reviewPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        _stateStore.SetChecked("freew.read-mode", _readMode);
+        _stateStore.SetChecked("freew.read-mode", plan.IsActive);
     }
+
+    private static FreeWChromeVisibility ToChromeVisibility(bool isVisible) =>
+        isVisible ? FreeWChromeVisibility.Visible : FreeWChromeVisibility.Collapsed;
+
+    private static FreeWChromeVisibility ToChromeVisibility(Visibility visibility) => visibility switch
+    {
+        Visibility.Visible => FreeWChromeVisibility.Visible,
+        Visibility.Hidden => FreeWChromeVisibility.Hidden,
+        _ => FreeWChromeVisibility.Collapsed,
+    };
+
+    private static Visibility ToVisibility(FreeWChromeVisibility visibility) => visibility switch
+    {
+        FreeWChromeVisibility.Visible => Visibility.Visible,
+        FreeWChromeVisibility.Hidden => Visibility.Hidden,
+        _ => Visibility.Collapsed,
+    };
 
     // Feature 4 — Read Mode column width: Narrow (560 px) / Default (760 px) / Wide (1024 px).
     // Stores the token and, if read mode is currently active, applies the new max-width immediately.
     private void ApplyReadModeColumnWidth(string token)
     {
-        _readModeColumnWidth = FreeWReadModePlanner.NormalizeColumnWidth(token);
-        if (!_readMode) return;
-        _editor.MaxWidth = FreeWReadModePlanner.ColumnWidth(_readModeColumnWidth);
+        var plan = _editorInteraction.UpdateReadModeColumnWidth(token);
+        if (plan.ApplyImmediately)
+            _editor.MaxWidth = plan.ColumnWidth;
     }
 
     // Feature 4 — Read Mode page color: None (white), Sepia (#F0E0C0), or Inverse (dark #1E1E1E).
     // Stores the token and, if read mode is currently active, tints the editor background immediately.
     private void ApplyReadModePageColor(string token)
     {
-        _readModePageColor = FreeWReadModePlanner.NormalizePageColor(token);
-        if (!_readMode) return;
-        _editor.Background = ReadModeBrush(_readModePageColor);
+        var plan = _editorInteraction.UpdateReadModePageColor(token);
+        if (plan.ApplyImmediately)
+            _editor.Background = ReadModeBrush(plan.PageColorHex);
     }
 
-    private static System.Windows.Media.Brush ReadModeBrush(string token) =>
+    private static System.Windows.Media.Brush ReadModeBrush(string colorHex) =>
         new System.Windows.Media.SolidColorBrush(
-            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
-                FreeWReadModePlanner.PageColorHex(token))!);
+            WpfRgbColorAdapter.ParseColorToken(colorHex));
 
-    internal bool IsReadModeActiveForTests => _readMode;
-    internal double ReadModeMaxWidthForTests => _editor.MaxWidth;
-    internal string ReadModeColumnWidthForTests => _readModeColumnWidth;
-    internal string ReadModePageColorForTests => _readModePageColor;
-    internal bool IsTitleBarVisibleForTests => _titleBar.Visibility == Visibility.Visible;
-    internal bool IsRibbonVisibleForTests => _ribbon.Visibility == Visibility.Visible;
-    internal bool IsNavigationPaneVisibleForTests => _navPane.Visibility == Visibility.Visible;
-    internal bool IsRevealPaneVisibleForTests => _revealPane.Visibility == Visibility.Visible;
-    internal bool IsReviewingPaneVisibleForTests => _reviewPane.Visibility == Visibility.Visible;
-    internal void SetReadModePaneVisibilityForTests(bool navigation, bool reveal, bool reviewing)
-    {
-        _navPaneVisible = navigation;
-        _revealPaneVisible = reveal;
-        _reviewPaneVisible = reviewing;
-        _navPane.Visibility = navigation ? Visibility.Visible : Visibility.Collapsed;
-        _revealPane.Visibility = reveal ? Visibility.Visible : Visibility.Collapsed;
-        _reviewPane.Visibility = reviewing ? Visibility.Visible : Visibility.Collapsed;
-    }
-    internal void ToggleReadModeForTests() => ToggleReadMode();
-    internal void ApplyReadModeColumnWidthForTests(string token) => ApplyReadModeColumnWidth(token);
-    internal void ApplyReadModePageColorForTests(string token) => ApplyReadModePageColor(token);
-
-    // Feature 5 — New Window: the shared planner snapshots the live model and owns numbering/file state;
-    // WPF only commits its native editor, constructs a native window, and loads the resulting plan.
+    // Feature 5 — New Window: shared code snapshots document/file state and assigns the view number;
+    // WPF only creates the native window and loads the resulting plan.
     private void OpenNewWindow()
     {
         _editor.CommitToModel();
@@ -2286,7 +2269,7 @@ public sealed class MainWindow : Window
     {
         var reportWindow = new MainWindow(_options, messageService: _messageService);
         reportWindow._editor.LoadModel(report);
-        reportWindow.Title = "FreeW — Mail Merge Error Report";
+        reportWindow.Title = FreeWUiTextCatalog.MailMergeErrorReportWindowTitle;
         reportWindow.Show();
         reportWindow._editor.Focus();
     }
@@ -2331,23 +2314,22 @@ public sealed class MainWindow : Window
     // bar so exactly one mode reads as active. Switching never mutates the model.
     private void SetViewMode(DocumentViewMode mode)
     {
-        // Outline view swaps the whole surface out, so it would hide whichever print-family view is chosen.
-        // Picking Print Layout / Web Layout / Draft therefore leaves Outline first (Word's views are all
-        // mutually exclusive), mirroring how the ribbon's Views group behaves.
-        if (_outlineMode)
+        var plan = _viewSession.PlanDocumentViewChange(
+            _editor.ViewMode,
+            _outlineMode,
+            _pagedEditMode,
+            mode);
+
+        if (plan.ExitOutlineMode)
             ToggleOutlineView();
 
-        // Multiple Pages / Side to Side overlay the workspace child with a read-only page viewer;
-        // switching back to any live editor mode must restore the workspaceGrid first.
-        if (_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive)
-            ExitPaginatedView();
+        if (plan.ExitPaginatedView)
+            ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
 
-        // PagedEdit also swaps the workspace child; switching to any print-family mode exits it,
-        // committing the page boxes back to the model first.
-        if (_pagedEditMode)
+        if (plan.ExitPagedEditMode)
             ExitPagedEdit();
 
-        _editor.SetViewMode(mode);
+        _editor.SetViewMode(plan.TargetMode);
         RefreshViewModeChecks();
     }
 
@@ -2358,20 +2340,20 @@ public sealed class MainWindow : Window
     // read-mode / nav-pane toggles keep their buttons in sync.
     private void RefreshViewModeChecks()
     {
-        var mode = _editor.ViewMode;
-        var printLayout = !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.PrintLayout;
-        var webLayout = !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.WebLayout;
-        var draft = !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.Draft;
+        var plan = _viewSession.BuildDocumentViewChecks(
+            _editor.ViewMode,
+            _outlineMode,
+            _pagedEditMode);
 
-        _stateStore.SetChecked("freew.print-layout", printLayout);
-        _stateStore.SetChecked("freew.web-layout", webLayout);
-        _stateStore.SetChecked("freew.draft-view", draft);
-        _stateStore.SetChecked("freew.paged-edit-view", _pagedEditMode);
+        _stateStore.SetChecked("freew.print-layout", plan.PrintLayout);
+        _stateStore.SetChecked("freew.web-layout", plan.WebLayout);
+        _stateStore.SetChecked("freew.draft-view", plan.Draft);
+        _stateStore.SetChecked("freew.paged-edit-view", plan.PagedEdit);
 
-        if (_printLayoutSwitch is not null) _printLayoutSwitch.IsChecked = printLayout;
-        if (_webLayoutSwitch is not null) _webLayoutSwitch.IsChecked = webLayout;
-        if (_draftSwitch is not null) _draftSwitch.IsChecked = draft;
-        if (_pagedEditSwitch is not null) _pagedEditSwitch.IsChecked = _pagedEditMode;
+        if (_printLayoutSwitch is not null) _printLayoutSwitch.IsChecked = plan.PrintLayout;
+        if (_webLayoutSwitch is not null) _webLayoutSwitch.IsChecked = plan.WebLayout;
+        if (_draftSwitch is not null) _draftSwitch.IsChecked = plan.Draft;
+        if (_pagedEditSwitch is not null) _pagedEditSwitch.IsChecked = plan.PagedEdit;
     }
 
     // View > Outline: swap the normal editing surface for the heading-structured outline view (and its
@@ -2412,60 +2394,29 @@ public sealed class MainWindow : Window
     // view mode (Print Layout / Web Layout / Draft) restores the live editor via ExitPaginatedView.
     // The two modes are mutually exclusive with each other and with any live-editor overlay mode.
 
-    internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests => _sideToSideNavigation;
-    internal bool HasSideToSideEditablePageSurfaceForTests =>
-        _viewDepthPlan.IsSideToSideActive && _editablePaginatedPanel is not null;
-    internal bool HasMultiplePagesEditablePageSurfaceForTests =>
-        _viewDepthPlan.IsMultiplePagesActive && _editablePaginatedPanel is not null;
-    internal PaginatedEditorPanel? EditablePaginatedPanelForTests => _editablePaginatedPanel;
-    internal bool HasSideToSidePagePairNavigationForTests =>
-        _sideToSidePreviousPairButton is not null &&
-        _sideToSideNextPairButton is not null &&
-        _sideToSidePairStatusText is not null;
-
-    internal void NavigateSideToSideNextPairForTests() =>
-        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair);
-
-    internal void NavigateSideToSidePreviousPairForTests() =>
-        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair);
-
     /// <summary>
     /// Enters (or exits) the Multiple Pages paginated overlay. Commits the editor to the model first so
     /// the viewer reflects the latest content, then swaps the workspace child from the workspaceGrid to
     /// a full-window <see cref="FlowDocumentPageViewer"/> backed by <see cref="PrintLayout.BuildPaginatedDocument"/>.
     /// </summary>
     private void ToggleMultiplePages() =>
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleMultiplePages));
+        ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleMultiplePages));
 
     /// <summary>
     /// Enters (or exits) the Side to Side paginated overlay — same as Multiple Pages but the viewer
     /// is zoomed to fit two pages and exposes shared pair-wise page navigation.
     /// </summary>
     private void ToggleSideToSide() =>
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSideToSide));
+        ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleSideToSide));
 
-    private FreeWViewDepthState CurrentViewDepthState() => new(_viewDepthPlan.Mode);
-
-    private void ApplyViewDepthPlan(FreeWViewDepthPlan plan)
+    private void ApplyViewDepthTransition(FreeWViewDepthTransition transition)
     {
-        if (_viewDepthPlan.IsSplitActive && plan.SurfaceKind != FreeWViewDepthSurfaceKind.SplitEditorWithReadOnlyPreview)
-            ExitSplitView(resetPlan: false);
+        if (transition.ExitSplitSurface)
+            ExitSplitView();
+        if (transition.ExitPageSurface)
+            ExitPaginatedView();
 
-        if ((_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive) &&
-            plan.SurfaceKind is not FreeWViewDepthSurfaceKind.ReadOnlyPagePreview and
-            not FreeWViewDepthSurfaceKind.EditablePageView)
-        {
-            ExitPaginatedView(resetPlan: false);
-        }
-        else if ((_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive) &&
-                 plan.SurfaceKind is (FreeWViewDepthSurfaceKind.ReadOnlyPagePreview or
-                     FreeWViewDepthSurfaceKind.EditablePageView) &&
-                 plan.Mode != _viewDepthPlan.Mode)
-        {
-            ExitPaginatedView(resetPlan: false);
-        }
-
-        _viewDepthPlan = plan;
+        var plan = transition.Current;
         _editor.ApplyViewDepthLayout(plan.Layout);
 
         switch (plan.SurfaceKind)
@@ -2502,9 +2453,7 @@ public sealed class MainWindow : Window
         _workspaceGridChild = _workspace.Child;
         if (plan.IsSideToSideActive)
         {
-            _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-                plan,
-                requestedFirstVisiblePageNumber: 1,
+            _viewSession.StartPagePairNavigation(
                 totalPages: _editablePaginatedPanel.PageBoxes.Count);
             _workspace.Child = BuildSideToSideNavigationHost(_editablePaginatedPanel);
             ApplySideToSideNavigationToViewer();
@@ -2552,10 +2501,7 @@ public sealed class MainWindow : Window
         UIElement preview = viewer;
         if (plan.IsSideToSideActive)
         {
-            _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-                plan,
-                requestedFirstVisiblePageNumber: 1,
-                totalPages: paginator.PageCount);
+            _viewSession.StartPagePairNavigation(totalPages: paginator.PageCount);
             preview = BuildSideToSideNavigationHost(viewer);
         }
         else
@@ -2581,18 +2527,20 @@ public sealed class MainWindow : Window
         };
 
         _sideToSidePreviousPairButton = MakeSideToSideNavigationButton(
-            "Previous pair",
-            "Previous Side-to-Side page pair",
+            FreeWApplicationFrameTextCatalog.PreviousPagePairLabel,
+            FreeWApplicationFrameTextCatalog.PreviousPagePairSemantic,
             () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair));
         _sideToSidePairStatusText = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(12, 0, 12, 0)
         };
-        AutomationProperties.SetAutomationId(_sideToSidePairStatusText, "FreeW.SideToSidePagePairStatus");
+        AutomationProperties.SetAutomationId(
+            _sideToSidePairStatusText,
+            FreeWApplicationFrameTextCatalog.PagePairStatusAutomationId);
         _sideToSideNextPairButton = MakeSideToSideNavigationButton(
-            "Next pair",
-            "Next Side-to-Side page pair",
+            FreeWApplicationFrameTextCatalog.NextPagePairLabel,
+            FreeWApplicationFrameTextCatalog.NextPagePairSemantic,
             () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair));
 
         toolbar.Children.Add(_sideToSidePreviousPairButton);
@@ -2606,41 +2554,41 @@ public sealed class MainWindow : Window
         return host;
     }
 
-    private static Button MakeSideToSideNavigationButton(string text, string automationName, Action action)
+    private static Button MakeSideToSideNavigationButton(
+        string text,
+        FreeWSemanticIdentity semantic,
+        Action action)
     {
         var button = new Button
         {
             Content = text,
             Padding = new Thickness(10, 4, 10, 4),
             MinWidth = 96,
-            ToolTip = automationName
+            ToolTip = semantic.AutomationName
         };
         button.Click += (_, _) => action();
-        AutomationProperties.SetAutomationId(button, $"FreeW.SideToSide.{text.Replace(" ", string.Empty)}");
-        AutomationProperties.SetName(button, automationName);
+        AutomationProperties.SetAutomationId(button, semantic.AutomationId);
+        AutomationProperties.SetName(button, semantic.AutomationName);
         return button;
     }
 
     private void NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand command)
     {
-        if (!_viewDepthPlan.IsSideToSideActive ||
+        if (!_viewSession.CurrentDepth.IsSideToSideActive ||
             (_paginatedViewer is null && _editablePaginatedPanel is null))
             return;
 
-        _sideToSideNavigation = FreeWViewDepthPlanner.NavigatePagePair(
-            _viewDepthPlan,
-            _sideToSideNavigation,
-            command);
+        _viewSession.NavigatePagePair(command);
         ApplySideToSideNavigationToViewer();
         SyncSideToSideNavigationControls();
     }
 
     private void ApplySideToSideNavigationToViewer()
     {
-        if (!_viewDepthPlan.IsSideToSideActive)
+        if (!_viewSession.CurrentDepth.IsSideToSideActive)
             return;
 
-        var firstPage = _sideToSideNavigation.FirstVisiblePageNumber;
+        var firstPage = _viewSession.PagePairNavigation.FirstVisiblePageNumber;
         if (_paginatedViewer is not null && _paginatedViewer.CanGoToPage(firstPage))
             _paginatedViewer.GoToPage(firstPage);
         else
@@ -2650,19 +2598,16 @@ public sealed class MainWindow : Window
     private void SyncSideToSideNavigationControls()
     {
         if (_sideToSidePreviousPairButton is not null)
-            _sideToSidePreviousPairButton.IsEnabled = _sideToSideNavigation.CanGoToPreviousPair;
+            _sideToSidePreviousPairButton.IsEnabled = _viewSession.PagePairNavigation.CanGoToPreviousPair;
         if (_sideToSideNextPairButton is not null)
-            _sideToSideNextPairButton.IsEnabled = _sideToSideNavigation.CanGoToNextPair;
+            _sideToSideNextPairButton.IsEnabled = _viewSession.PagePairNavigation.CanGoToNextPair;
         if (_sideToSidePairStatusText is not null)
-            _sideToSidePairStatusText.Text = _sideToSideNavigation.StatusText;
+            _sideToSidePairStatusText.Text = _viewSession.PagePairNavigation.StatusText;
     }
 
     private void ResetSideToSideNavigation()
     {
-        _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
-            requestedFirstVisiblePageNumber: 1,
-            totalPages: 1);
+        _viewSession.ResetPagePairNavigation();
         _sideToSidePreviousPairButton = null;
         _sideToSideNextPairButton = null;
         _sideToSidePairStatusText = null;
@@ -2672,7 +2617,7 @@ public sealed class MainWindow : Window
     /// Restores the live workspaceGrid as the workspace child, dismissing the paginated overlay and
     /// clearing both the Multiple Pages and Side to Side flags.
     /// </summary>
-    private void ExitPaginatedView(bool resetPlan = true)
+    private void ExitPaginatedView()
     {
         if (_workspaceGridChild is not null)
             _workspace.Child = _workspaceGridChild;
@@ -2686,11 +2631,6 @@ public sealed class MainWindow : Window
         _editablePaginatedPanel = null;
         _workspaceGridChild = null;
         ResetSideToSideNavigation();
-        if (resetPlan)
-        {
-            _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
-            _editor.ApplyViewDepthLayout(_viewDepthPlan.Layout);
-        }
         SyncViewDepthRibbonState();
     }
 
@@ -2723,8 +2663,8 @@ public sealed class MainWindow : Window
             return;
 
         // Leave any overlay modes that also swap the workspace child.
-        if (_viewDepthPlan.Mode != FreeWViewDepthMode.LiveEditor)
-            ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor));
+        if (_viewSession.CurrentDepth.Mode != FreeWViewDepthMode.LiveEditor)
+            ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
         if (_outlineMode)
             ToggleOutlineView();
 
@@ -2781,7 +2721,7 @@ public sealed class MainWindow : Window
     /// <see cref="FlowDocumentScrollViewer"/> snapshot (bottom). When exiting, restores the original child.
     /// </summary>
     private void ToggleSplitWindow() =>
-        ApplyViewDepthPlan(FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSplit));
+        ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleSplit));
 
     private void EnterSplitView()
     {
@@ -2845,15 +2785,10 @@ public sealed class MainWindow : Window
     /// <summary>
     /// Exits the split-window view, restoring the original workspace child (the workspaceGrid + editor).
     /// </summary>
-    private void ExitSplitView(bool resetPlan = true)
+    private void ExitSplitView()
     {
         if (_splitGrid is null)
         {
-            if (resetPlan)
-            {
-                _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
-                _editor.ApplyViewDepthLayout(_viewDepthPlan.Layout);
-            }
             SyncViewDepthRibbonState();
             return;
         }
@@ -2869,19 +2804,14 @@ public sealed class MainWindow : Window
         _splitDebounceTimer?.Stop();
         _splitDebounceTimer = null;
 
-        if (resetPlan)
-        {
-            _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
-            _editor.ApplyViewDepthLayout(_viewDepthPlan.Layout);
-        }
         SyncViewDepthRibbonState();
     }
 
     private void SyncViewDepthRibbonState()
     {
-        _stateStore.SetChecked("freew.zoom-multiple-pages", _viewDepthPlan.IsMultiplePagesActive);
-        _stateStore.SetChecked("freew.zoom-side-to-side", _viewDepthPlan.IsSideToSideActive);
-        _stateStore.SetChecked("freew.split-window", _viewDepthPlan.IsSplitActive);
+        _stateStore.SetChecked("freew.zoom-multiple-pages", _viewSession.CurrentDepth.IsMultiplePagesActive);
+        _stateStore.SetChecked("freew.zoom-side-to-side", _viewSession.CurrentDepth.IsSideToSideActive);
+        _stateStore.SetChecked("freew.split-window", _viewSession.CurrentDepth.IsSplitActive);
     }
 
     /// <summary>
@@ -2891,7 +2821,7 @@ public sealed class MainWindow : Window
     /// </summary>
     private void ScheduleSplitPaneRefresh()
     {
-        if (!_viewDepthPlan.IsSplitActive || _splitGrid is null)
+        if (!_viewSession.CurrentDepth.IsSplitActive || _splitGrid is null)
             return;
 
         // Restart the debounce timer on every TextChanged.
@@ -2934,7 +2864,7 @@ public sealed class MainWindow : Window
     /// </summary>
     private void RefreshSplitSnapshot()
     {
-        if (!_viewDepthPlan.IsSplitActive || _splitGrid is null || _splitGrid.Children.Count < 3)
+        if (!_viewSession.CurrentDepth.IsSplitActive || _splitGrid is null || _splitGrid.Children.Count < 3)
             return;
 
         _editor.CommitToModel();
@@ -2952,41 +2882,24 @@ public sealed class MainWindow : Window
         if (_navList is null || !_navPaneVisible)
             return;
 
-        _editor.CommitToModel();
-        var outline = DocumentOutline.Of(_editor.Model);
-
-        // When a search term is active, narrow the outline to headings that are themselves a match or
-        // that own a matching block in their subtree, so the list doubles as a "results in this document"
-        // view (Word's navigation-pane search behaviour). With no term the full outline is shown.
-        var term = _navSearch?.Text ?? string.Empty;
-        if (!string.IsNullOrEmpty(term) && outline.Count > 0)
-            outline = FilterOutlineToMatches(outline, term);
-
-        // Repopulate without triggering a navigation jump from the resulting selection reset.
-        _navList.SelectionChanged -= OnOutlineSelected;
-        _navList.Items.Clear();
-        foreach (var entry in outline)
-            _navList.Items.Add(new OutlineItem(entry));
-        _navList.SelectionChanged += OnOutlineSelected;
+        RenderNavigationOutcome(_navigationPaneSession.Refresh());
     }
 
-    // Keep only the outline entries relevant to the active search: a heading whose own text matches, or
-    // one that owns a matching block anywhere in its subtree (OutlineTools.SubtreeRange). Reuses the same
-    // TextSearch matching as the document scan so the filtered headings and the Next/Prev hits agree.
-    private IReadOnlyList<OutlineEntry> FilterOutlineToMatches(IReadOnlyList<OutlineEntry> outline, string term)
+    private void RenderNavigationOutcome(NavigationPaneOutcome outcome)
     {
-        var blocks = _editor.Model.Blocks;
-        var kept = new List<OutlineEntry>(outline.Count);
-        foreach (var entry in outline)
-        {
-            var (start, end) = OutlineTools.SubtreeRange(blocks, entry.BlockIndex);
-            var matched = false;
-            for (var i = start; i < end && !matched; i++)
-                matched = BlockMatches(blocks[i], term);
-            if (matched)
-                kept.Add(entry);
-        }
-        return kept;
+        var state = outcome.State;
+        _navList.SelectionChanged -= OnOutlineSelected;
+        _navList.Items.Clear();
+        foreach (var heading in state.Headings)
+            _navList.Items.Add(new OutlineItem(heading));
+        _navList.SelectedIndex = state.SelectedHeadingBlockIndex is { } blockIndex
+            ? state.Headings.ToList().FindIndex(heading => heading.BlockIndex == blockIndex)
+            : -1;
+        _navList.SelectionChanged += OnOutlineSelected;
+        UpdateNavSearchStatus();
+
+        if (outcome.NavigateToBlockIndex is { } target)
+            _editor.BringBlockIntoView(target);
     }
 
     // Clicking an outline entry scrolls the matching heading into view and moves the caret there by
@@ -2994,7 +2907,7 @@ public sealed class MainWindow : Window
     private void OnOutlineSelected(object sender, SelectionChangedEventArgs e)
     {
         if (_navList.SelectedItem is OutlineItem item)
-            _editor.BringBlockIntoView(item.Entry.BlockIndex);
+            RenderNavigationOutcome(_navigationPaneSession.SelectHeading(item.Entry.BlockIndex));
     }
 
     // The outline-entry context menu (Promote / Demote / Collapse / Expand). Each item acts on the
@@ -3009,11 +2922,7 @@ public sealed class MainWindow : Window
 
     private void PopulateOutlineContextMenu(ContextMenu menu)
     {
-        var blockIndex = _navList.SelectedItem is OutlineItem selected ? selected.Entry.BlockIndex : -1;
-        var plan = FreeWContextMenuPlanner.BuildOutline(
-            _editor.Model.Blocks,
-            blockIndex,
-            blockIndex >= 0 && _editor.IsHeadingCollapsed(blockIndex));
+        var plan = _navigationPaneSession.BuildOutlineMenu();
 
         menu.Items.Clear();
         foreach (var planned in plan.Items)
@@ -3026,58 +2935,21 @@ public sealed class MainWindow : Window
 
             var item = new MenuItem { Header = planned.Header, IsEnabled = planned.IsEnabled };
             if (planned.CommandId is { } commandId)
-                item.Click += (_, _) => ExecuteOutlineContextCommand(commandId.Value, blockIndex);
+                item.Click += (_, _) => ExecuteOutlineContextCommand(commandId);
             menu.Items.Add(item);
         }
     }
 
-    private void ExecuteOutlineContextCommand(string commandId, int blockIndex)
+    private void ExecuteOutlineContextCommand(RibbonCommandId commandId)
     {
-        var newIndex = blockIndex;
-        switch (commandId)
-        {
-            case FreeWContextMenuPlanner.OutlineMoveUp:
-                newIndex = _editor.MoveHeading(blockIndex, moveUp: true);
-                break;
-            case FreeWContextMenuPlanner.OutlineMoveDown:
-                newIndex = _editor.MoveHeading(blockIndex, moveUp: false);
-                break;
-            case FreeWContextMenuPlanner.OutlinePromote:
-                _editor.PromoteHeading(blockIndex);
-                break;
-            case FreeWContextMenuPlanner.OutlineDemote:
-                _editor.DemoteHeading(blockIndex);
-                break;
-            case FreeWContextMenuPlanner.OutlineCollapse:
-                _editor.CollapseHeading(blockIndex);
-                break;
-            case FreeWContextMenuPlanner.OutlineExpand:
-                _editor.ExpandHeading(blockIndex);
-                break;
-        }
-        RefreshOutline();
-        SelectOutlineEntry(newIndex);
-    }
-
-    // Select the nav-list row whose entry maps to model block index `blockIndex` (no jump beyond the one
-    // the selection already triggers). A no-op when no row matches (e.g. it was filtered out by a search).
-    private void SelectOutlineEntry(int blockIndex)
-    {
-        foreach (var listItem in _navList.Items)
-        {
-            if (listItem is OutlineItem outlineItem && outlineItem.Entry.BlockIndex == blockIndex)
-            {
-                _navList.SelectedItem = listItem;
-                return;
-            }
-        }
+        RenderNavigationOutcome(_navigationPaneSession.ExecuteOutlineCommand(commandId));
     }
 
     // A nav-list row: indents the heading text by its outline level and remembers the source entry
     // (so a click can map back to the model block index). ToString drives the default ListBox display.
-    private sealed class OutlineItem(OutlineEntry entry)
+    private sealed class OutlineItem(NavigationHeadingProjection entry)
     {
-        public OutlineEntry Entry { get; } = entry;
+        public NavigationHeadingProjection Entry { get; } = entry;
 
         public override string ToString()
         {
@@ -3117,7 +2989,7 @@ public sealed class MainWindow : Window
             TickFrequency = ZoomLevels.Step,
             SmallChange = ZoomLevels.Step,
             LargeChange = ZoomLevels.Step,
-            ToolTip = "Zoom"
+            ToolTip = FreeWUiTextCatalog.Zoom
         };
         _zoomSlider.ValueChanged += (_, e) => _editor.ZoomLevel = e.NewValue;
 
@@ -3129,14 +3001,14 @@ public sealed class MainWindow : Window
             Margin = new Thickness(6, 0, 2, 0),
             MinWidth = 38,
             TextAlignment = System.Windows.TextAlignment.Right,
-            Text = $"{ZoomLevels.ToPercent(_editor.ZoomLevel)}%"
+            Text = ZoomLevels.FormatPercent(_editor.ZoomLevel)
         };
 
         // Keep the slider + label in sync no matter how zoom changes (buttons, wheel, or the slider itself).
         _editor.ZoomChanged += (_, factor) =>
         {
             _zoomSlider.Value = factor;
-            _zoomLabel.Text = $"{ZoomLevels.ToPercent(factor)}%";
+            _zoomLabel.Text = ZoomLevels.FormatPercent(factor);
         };
 
         panel.Children.Add(ZoomButton("−", () => _editor.ZoomLevel = ZoomLevels.StepDown(_editor.ZoomLevel)));
@@ -3148,7 +3020,7 @@ public sealed class MainWindow : Window
             Content = _zoomLabel,
             Style = (Style)FindResource("ChromeStatusButtonStyle"),
             Padding = new Thickness(2, 0, 2, 0),
-            ToolTip = "Zoom"
+            ToolTip = FreeWUiTextCatalog.Zoom
         };
         zoomButton.Click += (_, _) => OpenZoomDialog();
         panel.Children.Add(zoomButton);
@@ -3181,11 +3053,14 @@ public sealed class MainWindow : Window
     private ZoomDialogFitFactors ComputeZoomFitFactors()
     {
         _editor.CommitToModel();
+        var page = _editor.Model.Page;
+
         // The viewport the page floats in: the grey workspace, minus the editor's own breathing-room margin.
         var margin = _editor.Margin;
         var viewportWidth = Math.Max(0, _workspace.ActualWidth - margin.Left - margin.Right);
         var viewportHeight = Math.Max(0, _workspace.ActualHeight - margin.Top - margin.Bottom);
-        return ZoomDialogPlanner.BuildFitFactors(_editor.Model.Page, viewportWidth, viewportHeight);
+
+        return ZoomDialogPlanner.BuildFitFactors(page, viewportWidth, viewportHeight);
     }
 
     // QAT Undo / Redo: focus the editing surface and run its built-in (RichTextBox) undo/redo, which is
@@ -3222,48 +3097,54 @@ public sealed class MainWindow : Window
         // continuation pages.
         var paginator = PrintLayout.BuildPaginator(editor);
         paginator.ComputePageCount();
-        dialog.UserPageRangeEnabled = paginator.PageCount > 1;
+        var plan = FreeWPrintRequestPlanner.Create(
+            description,
+            editor.Model.Page,
+            paginator.PageCount);
+        dialog.UserPageRangeEnabled = plan.TotalPages > 1;
         dialog.MinPage = 1;
-        dialog.MaxPage = (uint)Math.Max(1, paginator.PageCount);
+        dialog.MaxPage = (uint)plan.TotalPages;
 
         // Print at the model's page size (points -> DIP), not just the printer's printable area, so
         // margins and page breaks match what the user sees in Print Preview.
-        var page = editor.Model.Page;
-        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
-        dialog.PrintTicket.PageMediaSize = new System.Printing.PageMediaSize(pageWidth, pageHeight);
+        dialog.PrintTicket.PageMediaSize = new System.Printing.PageMediaSize(
+            plan.PageWidthDip,
+            plan.PageHeightDip);
 
         if (dialog.ShowDialog() != true)
             return;
 
         if (dialog.PageRangeSelection == PageRangeSelection.UserPages)
         {
-            paginator = PageRangeDocumentPaginator.Create(
-                paginator,
+            var selectedRange = FreeWPrintRequestPlanner.FromOneBasedRange(
                 (int)dialog.PageRange.PageFrom,
-                (int)dialog.PageRange.PageTo);
+                (int)dialog.PageRange.PageTo,
+                plan.TotalPages);
+            var (firstPage, lastPage) = FreeWPrintRequestPlanner.ResolvePageRange(
+                selectedRange,
+                plan.TotalPages);
+            paginator = WpfPageRangeDocumentPaginator.CreateClampedInclusive(
+                paginator,
+                firstPage,
+                lastPage);
         }
 
-        // A printer failure here (offline/removed printer, stopped spooler, driver fault,
-        // invalid PrintTicket/PageMediaSize the driver rejects, access-denied on a network
-        // queue) must never crash the whole app -- match the ExportToPdf/ExportToXps pattern
-        // above of catching and showing an owned error dialog instead of letting the exception
-        // reach the WPF dispatcher unhandled (AppCrashHandlers never marks it Handled).
         try
         {
-            dialog.PrintDocument(paginator, description);
+            dialog.PrintDocument(paginator, plan.Description);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             DialogMessageHelper.ShowError(
                 this,
-                "The document could not be printed.\n\n" + ex.Message,
-                "Print");
+                UiText.Format("Print_Failed_Message_Format", ex.Message),
+                UiText.Get("Print_Title"));
         }
     }
 
     private void OpenPrintPreview()
     {
-        var preview = new PrintPreviewWindow(_editor) { Owner = this };
+        var preview = new PrintPreviewWindow(_editor, _file.DisplayName) { Owner = this };
         preview.Show();
     }
 
@@ -3272,51 +3153,55 @@ public sealed class MainWindow : Window
     /// (<see cref="PrintLayout.BuildPaginator"/>) so the exported pages match Print / Print Preview
     /// exactly (page geometry, header/footer, watermark, border, footnotes), renders them to PDF via
     /// <see cref="PdfExport"/>, and flushes atomically through the shared
-    /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>.
+    /// <see cref="Free.Shared.AppServices.AtomicFileWriter"/>.
     /// </summary>
     private void ExportToPdf()
     {
+        var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Pdf, _file.DisplayName);
         var saveResult = WpfFileDialogService.ShowSaveDialog(
             this,
-            "PDF document (*.pdf)|*.pdf",
-            _file.DisplayName + ".pdf",
-            ".pdf",
+            plan.Filter,
+            plan.SuggestedFileName,
+            plan.DefaultExtensionWithDot,
             1,
-            "Export to PDF");
+            plan.PickerTitle);
         if (!saveResult.Chosen)
             return;
 
         var path = saveResult.FileName!;
-        try
+        var execution = FreeWExportWorkflow.ExecuteAsync(
+            plan,
+            path,
+            (stream, _) =>
+            {
+                var paginator = PrintLayout.BuildPaginator(_editor);
+                paginator.ComputePageCount();
+                var imageDiagnostics = new List<string>(_editor.ImageDecodeDiagnostics);
+                var writerDiagnostics = new List<string>();
+                var bytes = PdfExport.RenderToBytes(
+                    paginator,
+                    _file.DisplayName,
+                    writerDiagnostics);
+                imageDiagnostics.AddRange(writerDiagnostics);
+                stream.Write(bytes);
+                return ValueTask.FromResult(new FreeWExportArtifact(
+                    paginator.PageCount,
+                    "WPF",
+                    imageDiagnostics.Count));
+            }).GetAwaiter().GetResult();
+        if (execution.Succeeded)
         {
-            // Render on the UI thread (walks the WPF visual tree), then write atomically.
-            var paginator = PrintLayout.BuildPaginator(_editor);
-            // Populated by the shared writer if a rendered page's bytes cannot be decoded when the
-            // PDF is written, so that loss is surfaced to the user instead of the export looking clean.
-            // This alone cannot catch an embedded picture that already failed to decode inside the
-            // editor's own content (BuildPaginator clones the live FlowDocument rather than re-decoding
-            // images, so the exported page's raster bytes are always well-formed -- they just already
-            // contain the placeholder box) -- _editor.ImageDecodeDiagnostics covers that loss point.
-            var imageDiagnostics = new List<string>(_editor.ImageDecodeDiagnostics);
-            var writerDiagnostics = new List<string>();
-            var bytes = PdfExport.RenderToBytes(paginator, _file.DisplayName, writerDiagnostics);
-            imageDiagnostics.AddRange(writerDiagnostics);
-            Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
-
-            var message = $"Exported to PDF:\n{path}";
-            if (imageDiagnostics.Count > 0)
-                message += $"\n\n{imageDiagnostics.Count} image warning(s):\n" + string.Join("\n", imageDiagnostics);
             DialogMessageHelper.ShowInfo(
                 this,
-                message,
-                "Export to PDF");
+                execution.Message,
+                plan.PickerTitle);
         }
-        catch (Exception ex)
+        else
         {
             DialogMessageHelper.ShowError(
                 this,
-                "The document could not be exported to PDF.\n\n" + ex.Message,
-                "Export to PDF");
+                execution.Message,
+                plan.PickerTitle);
         }
     }
 
@@ -3325,39 +3210,45 @@ public sealed class MainWindow : Window
     /// (<see cref="PrintLayout.BuildPaginator"/>) as Print / Export to PDF so the exported pages match
     /// exactly (page geometry, header/footer, watermark, border, footnotes), serialises them as vector
     /// glyph runs via <see cref="XpsExport"/>, and flushes atomically through the shared
-    /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>.
+    /// <see cref="Free.Shared.AppServices.AtomicFileWriter"/>.
     /// </summary>
     private void ExportToXps()
     {
+        var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Xps, _file.DisplayName);
         var saveResult = WpfFileDialogService.ShowSaveDialog(
             this,
-            "XPS document (*.xps)|*.xps",
-            _file.DisplayName + ".xps",
-            ".xps",
+            plan.Filter,
+            plan.SuggestedFileName,
+            plan.DefaultExtensionWithDot,
             1,
-            "Export to XPS");
+            plan.PickerTitle);
         if (!saveResult.Chosen)
             return;
 
         var path = saveResult.FileName!;
-        try
+        var execution = FreeWExportWorkflow.ExecuteAsync(
+            plan,
+            path,
+            (stream, _) =>
+            {
+                var paginator = PrintLayout.BuildPaginator(_editor);
+                var bytes = XpsExport.RenderToBytes(paginator);
+                stream.Write(bytes);
+                return ValueTask.FromResult(new FreeWExportArtifact());
+            }).GetAwaiter().GetResult();
+        if (execution.Succeeded)
         {
-            // Render on the UI thread (walks the WPF visual tree), then write atomically.
-            var paginator = PrintLayout.BuildPaginator(_editor);
-            var bytes = XpsExport.RenderToBytes(paginator);
-            Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
-
             DialogMessageHelper.ShowInfo(
                 this,
-                $"Exported to XPS:\n{path}",
-                "Export to XPS");
+                execution.Message,
+                plan.PickerTitle);
         }
-        catch (Exception ex)
+        else
         {
             DialogMessageHelper.ShowError(
                 this,
-                "The document could not be exported to XPS.\n\n" + ex.Message,
-                "Export to XPS");
+                execution.Message,
+                plan.PickerTitle);
         }
     }
 
@@ -3407,7 +3298,7 @@ public sealed class MainWindow : Window
         if (choice is null)
             return;
 
-        _editor.ApplyInspectorRemovals(choice.Comments, choice.Revisions, choice.Properties, choice.Bookmarks);
+        _editor.ApplyInspectorRemovals(choice);
     }
 
     private void CheckAccessibility()
@@ -3428,59 +3319,22 @@ public sealed class MainWindow : Window
             return;
 
         var edited = dialog.Result;
-        _options.RecentFilesCap = edited.RecentFilesCap;
-        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
-        _options.UiLanguage = edited.UiLanguage;
-        _options.AutoCorrectEnabled = edited.AutoCorrectEnabled;
-        _options.AutoFormat = edited.AutoFormat;
-        _options.AutoCorrect = edited.AutoCorrect;
-        _options.Normalize();
-        ApplyAutoFormatOptions();
+        ApplyEditorTypingOptions(_optionsRuntime.Apply(edited));
 
         if (!_optionsStore.Save(_options))
-            DialogMessageHelper.ShowError(this, _optionsStore.LastError, "FreeW Options");
+            DialogMessageHelper.ShowError(
+                this,
+                _optionsStore.LastError,
+                UiText.Get("Options_Dialog_Title"));
     }
 
     // Push the persisted AutoCorrect master switch + per-rule AutoFormat toggles onto the live editor so the
     // as-you-type rules honour the user's settings immediately (called at construction and after Options OK).
-    private void ApplyAutoFormatOptions()
+    private void ApplyEditorTypingOptions(FreeWEditorTypingOptionsPlan plan)
     {
-        _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
-        _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
-        _editor.AutoCorrectOptions = _options.AutoCorrect ?? AutoCorrectOptions.Default;
-    }
-
-    // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.
-    private static string ResolveDataFolderLabel()
-        => AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
-
-    // A sample document that exercises the model's styles + run/paragraph formatting.
-    private static TextDocument CreateSampleDocument()
-    {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
-
-        doc.Blocks.Add(new Paragraph("Welcome to FreeW") { StyleId = "Title" });
-        doc.Blocks.Add(new Paragraph("A free word processor") { StyleId = "Heading1" });
-
-        var intro = new Paragraph();
-        intro.Runs.Add(new Run("This document is rendered from the FreeW model. Formatting like "));
-        intro.Runs.Add(new Run("bold", new RunFormatting { Bold = true }));
-        intro.Runs.Add(new Run(", "));
-        intro.Runs.Add(new Run("italic", new RunFormatting { Italic = true }));
-        intro.Runs.Add(new Run(", "));
-        intro.Runs.Add(new Run("underline", new RunFormatting { Underline = true }));
-        intro.Runs.Add(new Run(" and "));
-        intro.Runs.Add(new Run("colour", new RunFormatting { ColorHex = "#C0504D", Bold = true }));
-        intro.Runs.Add(new Run(" resolves through styles and document defaults. Edit freely — the surface is a live RichTextBox; CommitToModel() maps your edits back."));
-        doc.Blocks.Add(intro);
-
-        doc.Blocks.Add(new Paragraph("Centered paragraph.")
-        {
-            Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
-        });
-
-        return doc;
+        _editor.AutoCorrectEnabled = plan.AutoCorrectEnabled;
+        _editor.AutoFormatOptions = plan.AutoFormat;
+        _editor.AutoCorrectOptions = plan.AutoCorrect;
     }
 
     // --- Real Word-style ribbon, rendered by the shared WPF renderer ---

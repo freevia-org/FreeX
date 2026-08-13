@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="HostTests.Shared.props" />
+  <PropertyGroup>
+    <VSTestTestCaseFilter>FullyQualifiedName~FreeX.App.Host.Tests.R</VSTestTestCaseFilter>
+  </PropertyGroup>
+</Project>

@@ -65,11 +65,9 @@ public sealed class PivotValueFieldSettingsInteractionValidationTests
     [Fact]
     public async Task ValueFieldSettings_ParityCapture_OpensFocusesTabsAndCancelsTheProductionDialog()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-pivot-value-settings-interaction-" + Guid.NewGuid().ToString("N"));
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-pivot-value-settings-interaction-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -109,11 +107,6 @@ public sealed class PivotValueFieldSettingsInteractionValidationTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            if (Directory.Exists(outputDirectory))
-                Directory.Delete(outputDirectory, recursive: true);
         }
     }
 }

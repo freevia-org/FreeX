@@ -308,38 +308,50 @@ public sealed class CanvasGesturePlannerTests
     [Fact]
     public void WpfAndAvaloniaHandlers_DelegateGesturePolicyToSharedPlanner()
     {
+        var session = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "CanvasGestureSession.cs");
+        var router = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "CanvasGestureRouter.cs");
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "CanvasGestureHandler.cs");
         var avalonia = ReadWorkspaceFile(
             "freep",
             "FreeP.App.Rendering.Avalonia",
             "AvaloniaCanvasGestureHandler.cs");
 
-        wpf.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
-        wpf.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
-        wpf.Should().Contain("CanvasGesturePlanner.PlanMultiResize");
-        wpf.Should().Contain("CanvasGesturePlanner.PlanMultiRotate");
-        wpf.Should().Contain("ApplySelectedTransforms");
-        wpf.Should().Contain("CanvasGesturePlanner.ReduceDrag");
+        session.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
+        session.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
+        session.Should().Contain("CanvasGesturePlanner.PlanMultiResize");
+        session.Should().Contain("CanvasGesturePlanner.PlanMultiRotate");
+        session.Should().Contain("CanvasGesturePlanner.ReduceDrag");
+        router.Should().Contain("CanvasGestureSession _session");
+        router.Should().Contain("_session.PlanMove(");
+        router.Should().Contain("_session.PlanMultiResize(");
+        router.Should().Contain("_session.PlanMultiRotate(");
+        router.Should().Contain("_editor.ApplySelectedTransforms(");
+        router.Should().Contain("_editor.TryApplyFormatPainterToShape(");
+
+        wpf.Should().Contain("CanvasGestureRouter _gestureRouter");
+        wpf.Should().Contain("_gestureRouter.HandlePointerPressed(");
+        wpf.Should().Contain("_gestureRouter.CompletePointer(");
         wpf.Should().Contain("BeginFormatPainter");
         wpf.Should().Contain("CancelFormatPainter");
-        wpf.Should().Contain("TryApplyFormatPainterToShape");
-        wpf.Should().Contain("StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle");
+        wpf.Should().Contain("ApplyPreviewPlan(");
         wpf.Should().NotContain("ToCanvasGestureHandle");
         wpf.Should().NotContain("private const long MinEmu");
         wpf.Should().NotContain("SlideTransformCore.UnRotateDelta(dxDip, dyDip");
         wpf.Should().NotContain("Math.Abs(ddxPx)");
         wpf.Should().NotContain("Math.Abs(ddyPx)");
 
-        avalonia.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
-        avalonia.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
-        avalonia.Should().Contain("CanvasGesturePlanner.PlanMultiResize");
-        avalonia.Should().Contain("CanvasGesturePlanner.PlanMultiRotate");
-        avalonia.Should().Contain("ApplySelectedTransforms");
-        avalonia.Should().Contain("CanvasGesturePlanner.ReduceDrag");
+        avalonia.Should().Contain("CanvasGestureRouter _gestureRouter");
+        avalonia.Should().Contain("_gestureRouter.HandlePointerPressed(");
+        avalonia.Should().Contain("_gestureRouter.CompletePointer(");
         avalonia.Should().Contain("BeginFormatPainter");
         avalonia.Should().Contain("CancelFormatPainter");
-        avalonia.Should().Contain("TryApplyFormatPainterToShape");
-        avalonia.Should().Contain("StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle");
+        avalonia.Should().Contain("ApplyPreviewPlan(");
         avalonia.Should().NotContain("ToCanvasGestureHandle");
         avalonia.Should().NotContain("private const long MinEmu");
         avalonia.Should().NotContain("SlideTransformCore.UnRotateDelta(dxDip, dyDip");
@@ -358,24 +370,6 @@ public sealed class CanvasGesturePlannerTests
         return (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos);
     }
 
-    private static string ReadWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var parts = new string[relativeParts.Length + 1];
-            parts[0] = directory.FullName;
-            relativeParts.CopyTo(parts, 1);
-
-            var candidate = Path.Combine(parts);
-            if (File.Exists(candidate))
-                return File.ReadAllText(candidate);
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(
-            "Could not locate workspace file.",
-            Path.Combine(relativeParts));
-    }
+    private static string ReadWorkspaceFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

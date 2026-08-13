@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 using Xunit;
@@ -22,6 +23,17 @@ namespace FreeX.App.Services.Tests;
 /// </summary>
 public sealed class R15_print_Tests
 {
+    [Fact]
+    public void ResolveWorkbookDirectoryTokenValue_ReturnsContainingDirectoryWithTrailingSeparator()
+    {
+        var filePath = Path.Combine("root", "reports", "Q3.xlsx");
+        var expected = Path.GetDirectoryName(filePath) + Path.DirectorySeparatorChar;
+
+        PagePrintTextPlanner.ResolveWorkbookDirectoryTokenValue(filePath).Should().Be(expected);
+        PagePrintTextPlanner.ResolveWorkbookDirectoryTokenValue(null).Should().BeEmpty();
+        PagePrintTextPlanner.ResolveWorkbookDirectoryTokenValue("Q3.xlsx").Should().BeEmpty();
+    }
+
     [Fact]
     public void ExpandHF_ShortCodeZ_ExpandsToWorkbookDirectory_NotLiteralToken()
     {

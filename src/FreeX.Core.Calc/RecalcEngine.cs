@@ -788,7 +788,7 @@ public sealed class RecalcEngine
         var numberFormat = workbook.GetStyle(cell.StyleId).NumberFormat;
         cell.Value = new NumberValue(TryGetFixedDecimalPlaces(numberFormat, out var decimals)
             ? Math.Round(raw, Math.Clamp(decimals, 0, 15), MidpointRounding.AwayFromZero)
-            : RoundToSignificantDigits(raw, 15));
+            : ExcelNumericPrecision.CapSignificantDigits(raw));
     }
 
     /// <summary>
@@ -812,7 +812,7 @@ public sealed class RecalcEngine
                 return false;
         }
 
-        var firstSection = numberFormat.Split(';')[0];
+        var firstSection = NumberFormatSectionTokenizer.Split(numberFormat)[0];
         var dotIndex = firstSection.IndexOf('.');
         if (dotIndex < 0)
             return true; // Explicit integer format (e.g. "#,##0") -- round to a whole number.
@@ -823,30 +823,6 @@ public sealed class RecalcEngine
 
         decimals = count;
         return true;
-    }
-
-    /// <summary>Round <paramref name="value"/> to at most <paramref name="digits"/> significant decimal digits.</summary>
-    private static double RoundToSignificantDigits(double value, int digits)
-    {
-        if (value == 0)
-            return 0;
-
-        var scale = digits - (int)Math.Floor(Math.Log10(Math.Abs(value))) - 1;
-        if (scale < 0)
-        {
-            // The value has more integer digits than the significant-digit cap (e.g. an 18-digit
-            // integer). Excel does not round such values to the nearest 10^-scale -- it truncates
-            // (chops) the excess low-order digits to zero, matching its 15-significant-digit storage
-            // cap. Math.Round(double, int) only accepts digits in [0, 15] and cannot express a
-            // negative scale, so replicate the truncation directly instead of clamping to a no-op.
-            var divisor = Math.Pow(10, -scale);
-            return Math.Truncate(value / divisor) * divisor;
-        }
-
-        // Math.Round(double,int) only accepts digits in [0, 15]; a small-magnitude value (|value| <
-        // 0.1) gives scale > 15, which would throw. A double already carries at most ~15-17
-        // significant digits, so rounding at the 15th place is a safe no-op for those values.
-        return Math.Round(value, Math.Min(scale, 15), MidpointRounding.AwayFromZero);
     }
 
     /// <summary>
@@ -2577,7 +2553,9 @@ public sealed class RecalcEngine
                         // circular formula), the evaluator falls back to evaluating the literal unshifted
                         // form -- so the dependency graph must track that same unshifted target rather than
                         // manufacture a self-dependency edge the evaluator never actually reads.
-                        var effectiveAst = ReferencesFormulaCell(shiftedAst, formulaCell) ? namedAst : shiftedAst;
+                        var effectiveAst = FormulaReferenceContainment.ContainsUnqualifiedCell(shiftedAst, formulaCell)
+                            ? namedAst
+                            : shiftedAst;
 
                         return CollectReferences(
                             effectiveAst,
@@ -2834,35 +2812,6 @@ public sealed class RecalcEngine
     // self-reference guard, re-declared here since the two projects share no InternalsVisibleTo.
     // Only the node kinds ShiftFormulaForCell actually rewrites are inspected; this is
     // intentionally narrow (not a full reference-tracking pass) to match that guard's purpose.
-    private static bool ReferencesFormulaCell(FormulaNode node, CellAddress current) => node switch
-    {
-        CellRefNode cr when cr.SheetName is null => cr.Row == current.Row && cr.ColumnNumber == current.Col,
-        RangeRefNode rr when rr.SheetName is null =>
-            current.Row >= Math.Min(rr.Start.Row, rr.End.Row) && current.Row <= Math.Max(rr.Start.Row, rr.End.Row) &&
-            current.Col >= Math.Min(rr.Start.ColumnNumber, rr.End.ColumnNumber) && current.Col <= Math.Max(rr.Start.ColumnNumber, rr.End.ColumnNumber),
-        FullColumnRangeRefNode fcr when fcr.SheetName is null =>
-            current.Col >= Math.Min(fcr.StartColumnNumber, fcr.EndColumnNumber) && current.Col <= Math.Max(fcr.StartColumnNumber, fcr.EndColumnNumber),
-        FullRowRangeRefNode frr when frr.SheetName is null =>
-            current.Row >= Math.Min(frr.StartRow, frr.EndRow) && current.Row <= Math.Max(frr.StartRow, frr.EndRow),
-        BinaryOpNode bin => ReferencesFormulaCell(bin.Left, current) || ReferencesFormulaCell(bin.Right, current),
-        UnaryOpNode un => ReferencesFormulaCell(un.Operand, current),
-        FunctionCallNode fn => ReferencesFormulaCellInAny(fn.Arguments, current),
-        UnionNode union => ReferencesFormulaCellInAny(union.Areas, current),
-        IntersectionNode ix => ReferencesFormulaCell(ix.Left, current) || ReferencesFormulaCell(ix.Right, current),
-        NamedRangeEndpointNode nre => ReferencesFormulaCell(nre.Start, current) || ReferencesFormulaCell(nre.End, current),
-        _ => false
-    };
-
-    private static bool ReferencesFormulaCellInAny(IReadOnlyList<FormulaNode> nodes, CellAddress current)
-    {
-        for (var i = 0; i < nodes.Count; i++)
-        {
-            if (ReferencesFormulaCell(nodes[i], current))
-                return true;
-        }
-        return false;
-    }
-
     private static bool IsVolatileFunctionName(string name) =>
         name is "NOW" or "TODAY" or "RAND" or "RANDBETWEEN" or "RANDARRAY" or "INDIRECT" or "OFFSET" or "CELL" or "INFO";
 

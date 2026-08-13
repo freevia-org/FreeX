@@ -1,5 +1,6 @@
 using System.Globalization;
 
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.ConditionalFormatting;
@@ -50,28 +51,17 @@ public static class ConditionalFormatInputParser
 
     /// <summary>Formats an <see cref="RgbColor"/> as the editor's <c>"r,g,b"</c> text.</summary>
     public static string FormatRgb(RgbColor color) =>
-        $"{color.R},{color.G},{color.B}";
+        ColorInputParser.FormatRgbColor(color);
 
     /// <summary>
     /// Parses the editor's <c>"r,g,b"</c> colour text (each component a byte 0-255). Returns
     /// <see langword="false"/> for malformed or out-of-range input.
     /// </summary>
     public static bool TryParseRgbColor(string? text, out RgbColor color)
-    {
-        color = default;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        var parts = text.Trim().Split(',', StringSplitOptions.TrimEntries);
-        if (parts.Length != 3
-            || !byte.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var r)
-            || !byte.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var g)
-            || !byte.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var b))
-            return false;
-
-        color = new RgbColor(r, g, b);
-        return true;
-    }
+        => ColorInputParser.TryParseRgbColorText(
+            text,
+            RgbTripletTextProfile.ConditionalFormatting,
+            out color);
 
     /// <summary>
     /// Parses an optional <c>"r,g,b"</c> colour field, returning <see langword="null"/> for blank input

@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
@@ -15,7 +16,7 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
-    private readonly TextDocument _document;
+    private readonly CrossReferenceDialogSession _session;
     private readonly ListBox _typeList = new() { MinWidth = 150, Height = 170 };
     private readonly ListBox _insertAsList = new() { MinWidth = 180, Height = 170 };
     private readonly ListBox _targetList = new() { MinWidth = 300, Height = 200 };
@@ -25,28 +26,59 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
         IsChecked = true,
         Margin = new Thickness(0, 10, 0, 0),
     };
+    private bool _updatingControls;
 
     public CrossReferenceDialogChoice? Result { get; private set; }
 
     public CrossReferenceDialog(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        _document = document;
+        _session = new CrossReferenceDialogSession(document);
 
         Title = CrossReferenceDialogPlanner.Title;
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        AutomationProperties.SetAutomationId(this, CrossReferenceDialogPlanner.AutomationId);
 
-        _typeList.ItemsSource = CrossReferenceDialogPlanner.BuildTypeChoices();
-        _typeList.SelectedIndex = 0;
+        _typeList.ItemsSource = _session.TypeChoices;
+        _typeList.SelectedIndex = _session.State.TypeIndex;
+        AutomationProperties.SetAutomationId(
+            _typeList,
+            CrossReferenceDialogPlanner.TypeAutomationId);
+        AutomationProperties.SetAutomationId(
+            _insertAsList,
+            CrossReferenceDialogPlanner.InsertAsAutomationId);
+        AutomationProperties.SetAutomationId(
+            _targetList,
+            CrossReferenceDialogPlanner.TargetAutomationId);
+        AutomationProperties.SetAutomationId(
+            _hyperlinkBox,
+            CrossReferenceDialogPlanner.HyperlinkAutomationId);
         _typeList.SelectionChanged += (_, _) =>
         {
-            ReloadInsertAs();
-            ReloadTargets();
+            if (_updatingControls)
+                return;
+
+            _session.UpdateType(_typeList.SelectedIndex);
+            ApplySessionChoices(includeInsertAs: true);
         };
-        _insertAsList.SelectionChanged += (_, _) => ReloadTargets();
+        _insertAsList.SelectionChanged += (_, _) =>
+        {
+            if (_updatingControls)
+                return;
+
+            _session.UpdateInsertAs(_insertAsList.SelectedIndex);
+            ApplySessionChoices(includeInsertAs: false);
+        };
+        _targetList.SelectionChanged += (_, _) =>
+        {
+            if (!_updatingControls)
+                _session.UpdateTarget(_targetList.SelectedIndex);
+        };
+        _hyperlinkBox.IsCheckedChanged += (_, _) =>
+            _session.UpdateHyperlink(_hyperlinkBox.IsChecked == true);
 
         AvaloniaCompactDialogChrome.ApplyListBox(_typeList, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyListBox(_insertAsList, DialogChromeStyle);
@@ -73,8 +105,7 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
             },
         });
 
-        ReloadInsertAs();
-        ReloadTargets();
+        ApplySessionChoices(includeInsertAs: true);
 
         var topGrid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
         topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -105,45 +136,42 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
         };
     }
 
-    private CrossRefType SelectedType =>
-        (_typeList.SelectedItem as CrossReferenceTypeChoice)?.Type ?? CrossRefType.Heading;
-
-    private CrossRefInsertAs SelectedInsertAs =>
-        (_insertAsList.SelectedItem as CrossReferenceInsertAsChoice)?.InsertAs ?? CrossRefInsertAs.Text;
-
-    private void ReloadInsertAs()
+    private void ApplySessionChoices(bool includeInsertAs)
     {
-        var previous = (_insertAsList.SelectedItem as CrossReferenceInsertAsChoice)?.InsertAs;
-        var choices = CrossReferenceDialogPlanner.BuildInsertAsChoices(SelectedType);
-        _insertAsList.ItemsSource = choices;
-        _insertAsList.SelectedIndex = CrossReferenceDialogPlanner.PreserveInsertAsSelection(choices, previous);
-    }
+        _updatingControls = true;
+        try
+        {
+            if (includeInsertAs)
+            {
+                _insertAsList.ItemsSource = _session.InsertAsChoices;
+                _insertAsList.SelectedIndex = _session.State.InsertAsIndex;
+            }
 
-    private void ReloadTargets()
-    {
-        var choices = CrossReferenceDialogPlanner.BuildTargetChoices(_document, SelectedType);
-        _targetList.ItemsSource = choices;
-        _targetList.SelectedIndex = choices.Count > 0 ? 0 : -1;
+            _targetList.ItemsSource = _session.TargetChoices;
+            _targetList.SelectedIndex = _session.State.TargetIndex;
+        }
+        finally
+        {
+            _updatingControls = false;
+        }
     }
 
     private async Task AcceptAsync()
     {
-        if (!CrossReferenceDialogPlanner.TryCreateChoice(
-                _document,
-                SelectedType,
-                SelectedInsertAs,
-                _targetList.SelectedIndex,
-                _hyperlinkBox.IsChecked == true,
-                out var choice))
+        _session.UpdateInsertAs(_insertAsList.SelectedIndex);
+        _session.UpdateTarget(_targetList.SelectedIndex);
+        _session.UpdateHyperlink(_hyperlinkBox.IsChecked == true);
+        var acceptance = _session.PlanAcceptance();
+        if (!acceptance.IsAccepted)
         {
             await AvaloniaUserMessageDialog.ShowWarningAsync(
                 this,
-                CrossReferenceDialogPlanner.MissingTargetMessage,
+                acceptance.ValidationMessage ?? CrossReferenceDialogPlanner.MissingTargetMessage,
                 CrossReferenceDialogPlanner.Title);
             return;
         }
 
-        Result = choice;
+        Result = acceptance.Result;
         Close();
     }
 
@@ -175,9 +203,10 @@ internal sealed class SourceConflictResolutionDialog : FreeWDialogWindow
 
     private SourceConflictResolutionDialog(SourceManagementSourceConflict conflict)
     {
-        var choices = SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(conflict);
+        var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
+        var choices = SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(conflict, text);
 
-        Title = SourceManagementDialogPlanner.SourceConflictDialogTitle;
+        Title = text.SourceConflictDialogTitle;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -186,7 +215,7 @@ internal sealed class SourceConflictResolutionDialog : FreeWDialogWindow
 
         var message = new TextBlock
         {
-            Text = SourceManagementDialogPlanner.BuildSourceConflictMessage(conflict),
+            Text = SourceManagementDialogPlanner.BuildSourceConflictMessage(conflict, text),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(16, 14, 16, 0),
         };
@@ -197,7 +226,7 @@ internal sealed class SourceConflictResolutionDialog : FreeWDialogWindow
                 _result = choice.Action;
                 Close();
             }))
-            .Append(Button("Cancel", () => Close(), isCancel: true))
+            .Append(Button(text.CancelButtonLabel, () => Close(), isCancel: true))
             .ToArray();
 
         var body = new StackPanel();
@@ -232,7 +261,6 @@ internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
     private readonly ListBox _sourceList = new() { MinWidth = 340, Height = 160 };
     private readonly TextBlock _status = new()
     {
-        Text = "Select a source or add a new one.",
         Foreground = Brushes.DarkRed,
         Margin = new Thickness(16, 6, 16, 0),
         IsVisible = false,
@@ -244,8 +272,10 @@ internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
     {
         ArgumentNullException.ThrowIfNull(sources);
         _sources = sources;
+        var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
+        _status.Text = text.SelectSourceValidationMessage;
 
-        Title = SourceManagementDialogPlanner.SourcePickerTitle;
+        Title = text.SourcePickerTitle;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -258,18 +288,18 @@ internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
 
         var label = new TextBlock
         {
-            Text = SourceManagementDialogPlanner.SourcePickerLabel,
+            Text = text.SourcePickerLabel,
             Margin = new Thickness(16, 12, 16, 4),
         };
         var listHost = new Border { Margin = new Thickness(16, 0, 16, 0), Child = _sourceList };
 
-        var addNew = Button(SourceManagementDialogPlanner.AddNewSourceButtonLabel, () =>
+        var addNew = Button(text.AddNewSourceButtonLabel, () =>
         {
             Pick = SourceManagementDialogPlanner.CreateAddNewPick();
             Close();
         });
-        var insert = Button("Insert", Accept, isDefault: true);
-        var cancel = Button("Cancel", () => Close(), isCancel: true);
+        var insert = Button(text.InsertButtonLabel, Accept, isDefault: true);
+        var cancel = Button(text.CancelButtonLabel, () => Close(), isCancel: true);
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow([addNew, insert, cancel], new Thickness(16, 12, 16, 14));
 
         var body = new StackPanel();
@@ -301,10 +331,11 @@ internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
     }
 }
 
-internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
+internal sealed partial class MarkIndexEntryDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
+    private readonly MarkIndexEntryDialogSession _session;
     private readonly TextBox _mainEntry = new() { MinWidth = 300 };
     private readonly TextBox _subentry = new() { MinWidth = 300 };
     private readonly TextBox _identifier = new() { MinWidth = 300 };
@@ -328,7 +359,6 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
     private readonly CheckBox _boldPageNumber = new() { Content = MarkIndexEntryDialogPlanner.BoldLabel };
     private readonly CheckBox _italicPageNumber = new() { Content = MarkIndexEntryDialogPlanner.ItalicLabel };
     private readonly Button _markAll;
-    private readonly string _selectedText;
     private readonly TextBlock _status = new()
     {
         Foreground = Brushes.DarkRed,
@@ -341,22 +371,23 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
 
     public MarkIndexEntryDialog(string? selectedText = null, IReadOnlyList<string>? bookmarkNames = null)
     {
+        _session = new MarkIndexEntryDialogSession(selectedText, bookmarkNames);
         Title = MarkIndexEntryDialogPlanner.Title;
         Width = MarkIndexEntryDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        AutomationProperties.SetAutomationId(this, MarkIndexEntryDialogPlanner.AutomationId);
 
-        _selectedText = selectedText ?? string.Empty;
-        var state = MarkIndexEntryDialogPlanner.BuildInitialState(selectedText);
+        var state = _session.InitialState;
         _mainEntry.Text = state.MainEntry;
         _subentry.Text = state.Subentry;
         _identifier.Text = state.Identifier;
         _currentPage.IsChecked = state.ReferenceKind == IndexEntryReferenceKind.CurrentPage;
         _pageRange.IsChecked = state.ReferenceKind == IndexEntryReferenceKind.PageRange;
         _crossReferenceOption.IsChecked = state.ReferenceKind == IndexEntryReferenceKind.CrossReference;
-        var bookmarks = bookmarkNames ?? [];
+        var bookmarks = _session.BookmarkNames;
         _bookmark.ItemsSource = bookmarks;
         _bookmark.SelectedItem = bookmarks.FirstOrDefault(name =>
             string.Equals(name, state.BookmarkName, StringComparison.Ordinal));
@@ -365,6 +396,12 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
         _crossReference.Text = state.CrossReference;
         _boldPageNumber.IsChecked = state.BoldPageNumber;
         _italicPageNumber.IsChecked = state.ItalicPageNumber;
+        AutomationProperties.SetAutomationId(_mainEntry, MarkIndexEntryDialogPlanner.MainEntryAutomationId);
+        AutomationProperties.SetAutomationId(_subentry, MarkIndexEntryDialogPlanner.SubentryAutomationId);
+        AutomationProperties.SetAutomationId(_identifier, MarkIndexEntryDialogPlanner.IdentifierAutomationId);
+        AutomationProperties.SetAutomationId(_bookmark, MarkIndexEntryDialogPlanner.BookmarkAutomationId);
+        AutomationProperties.SetAutomationId(_crossReference, MarkIndexEntryDialogPlanner.CrossReferenceAutomationId);
+        AutomationProperties.SetAutomationId(_status, MarkIndexEntryDialogPlanner.StatusAutomationId);
         foreach (var textBox in new[] { _mainEntry, _subentry, _identifier, _crossReference })
             AvaloniaCompactDialogChrome.ApplyTextBox(textBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_bookmark, DialogChromeStyle);
@@ -440,57 +477,6 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
         };
     }
 
-    internal void SetForTests(
-        string? mainEntry,
-        string? subentry,
-        bool useCrossReference,
-        string? crossReference,
-        bool boldPageNumber = false,
-        bool italicPageNumber = false,
-        string? identifier = null)
-    {
-        _mainEntry.Text = mainEntry;
-        _subentry.Text = subentry;
-        _identifier.Text = identifier;
-        _currentPage.IsChecked = !useCrossReference;
-        _pageRange.IsChecked = false;
-        _crossReferenceOption.IsChecked = useCrossReference;
-        _crossReference.Text = crossReference;
-        _boldPageNumber.IsChecked = boldPageNumber;
-        _italicPageNumber.IsChecked = italicPageNumber;
-        UpdateCrossReferenceState();
-    }
-
-    internal void SetForTests(
-        string? mainEntry,
-        string? subentry,
-        IndexEntryReferenceKind referenceKind,
-        string? bookmarkName,
-        string? crossReference,
-        bool boldPageNumber = false,
-        bool italicPageNumber = false,
-        string? identifier = null)
-    {
-        _mainEntry.Text = mainEntry;
-        _subentry.Text = subentry;
-        _identifier.Text = identifier;
-        _currentPage.IsChecked = referenceKind == IndexEntryReferenceKind.CurrentPage;
-        _pageRange.IsChecked = referenceKind == IndexEntryReferenceKind.PageRange;
-        _crossReferenceOption.IsChecked = referenceKind == IndexEntryReferenceKind.CrossReference;
-        _bookmark.SelectedItem = bookmarkName;
-        _crossReference.Text = crossReference;
-        _boldPageNumber.IsChecked = boldPageNumber;
-        _italicPageNumber.IsChecked = italicPageNumber;
-        UpdateCrossReferenceState();
-    }
-
-    internal bool AcceptForTests() => Accept(markAll: false, closeOnSuccess: false);
-    internal bool AcceptAllForTests() => Accept(markAll: true, closeOnSuccess: false);
-    internal bool CrossReferenceEnabledForTests => _crossReference.IsEnabled;
-    internal bool BookmarkSelectorEnabledForTests => _bookmark.IsEnabled;
-    internal bool PageNumberFormattingEnabledForTests => _boldPageNumber.IsEnabled && _italicPageNumber.IsEnabled;
-    internal bool MarkAllEnabledForTests => _markAll.IsEnabled;
-
     private IndexEntryReferenceKind ReferenceKind =>
         _pageRange.IsChecked == true
             ? IndexEntryReferenceKind.PageRange
@@ -510,19 +496,20 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
 
     private bool Accept(bool markAll, bool closeOnSuccess = true)
     {
-        if (markAll && !MarkIndexEntryDialogPlanner.CanMarkAll(_selectedText, ReferenceKind))
-            return false;
-
-        if (!MarkIndexEntryDialogPlanner.TryBuildMark(CurrentState(), out var mark, out var validation))
+        var acceptance = _session.PlanAcceptance(CurrentState(), markAll);
+        if (!acceptance.IsAccepted)
         {
-            _status.Text = validation?.Message ?? MarkIndexEntryDialogPlanner.MissingMainEntryMessage;
-            _status.IsVisible = true;
+            if (acceptance.Validation is not null)
+            {
+                _status.Text = acceptance.Validation.Message;
+                _status.IsVisible = true;
+            }
             return false;
         }
 
         _status.IsVisible = false;
-        Mark = mark;
-        MarkAll = markAll;
+        Mark = acceptance.Result!.Mark;
+        MarkAll = acceptance.Result.MarkAll;
         if (closeOnSuccess)
             Close();
         return true;
@@ -530,13 +517,12 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
 
     private void UpdateCrossReferenceState()
     {
-        var referenceKind = ReferenceKind;
-        var useCrossReference = referenceKind == IndexEntryReferenceKind.CrossReference;
-        _bookmark.IsEnabled = referenceKind == IndexEntryReferenceKind.PageRange;
-        _crossReference.IsEnabled = useCrossReference;
-        _boldPageNumber.IsEnabled = !useCrossReference;
-        _italicPageNumber.IsEnabled = !useCrossReference;
-        _markAll.IsEnabled = MarkIndexEntryDialogPlanner.CanMarkAll(_selectedText, referenceKind);
+        var enabled = _session.PlanEnabledState(ReferenceKind);
+        _bookmark.IsEnabled = enabled.BookmarkSelectorEnabled;
+        _crossReference.IsEnabled = enabled.CrossReferenceEnabled;
+        _boldPageNumber.IsEnabled = enabled.PageNumberFormattingEnabled;
+        _italicPageNumber.IsEnabled = enabled.PageNumberFormattingEnabled;
+        _markAll.IsEnabled = enabled.MarkAllEnabled;
     }
 
     private static void AddLabeledField(StackPanel panel, string label, Control field)
@@ -559,11 +545,11 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
     }
 }
 
-internal sealed class MarkCitationDialog : FreeWDialogWindow
+internal sealed partial class MarkCitationDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
-    private readonly IReadOnlyList<MarkCitationCategoryChoice> _categoryChoices;
+    private readonly MarkCitationDialogSession _session;
     private readonly ComboBox _categoryBox = new() { MinWidth = 300 };
     private readonly TextBox _longCitationBox = new() { MinWidth = 300 };
     private readonly TextBox _shortCitationBox = new() { MinWidth = 300 };
@@ -578,20 +564,25 @@ internal sealed class MarkCitationDialog : FreeWDialogWindow
 
     public MarkCitationDialog(string? seedLongCitation = null)
     {
+        _session = new MarkCitationDialogSession(seedLongCitation);
         Title = MarkCitationDialogPlanner.Title;
         Width = MarkCitationDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        AutomationProperties.SetAutomationId(this, MarkCitationDialogPlanner.AutomationId);
 
-        _categoryChoices = MarkCitationDialogPlanner.BuildCategoryChoices();
-        var state = MarkCitationDialogPlanner.BuildInitialState(seedLongCitation);
+        var state = _session.InitialState;
 
-        _categoryBox.ItemsSource = _categoryChoices;
-        _categoryBox.SelectedIndex = MarkCitationDialogPlanner.SelectCategoryIndex(_categoryChoices, state.Category);
+        _categoryBox.ItemsSource = _session.CategoryChoices;
+        _categoryBox.SelectedIndex = _session.CategoryIndex(state.Category);
         _longCitationBox.Text = state.LongCitation;
         _shortCitationBox.Text = state.ShortCitation;
+        AutomationProperties.SetAutomationId(_categoryBox, MarkCitationDialogPlanner.CategoryAutomationId);
+        AutomationProperties.SetAutomationId(_longCitationBox, MarkCitationDialogPlanner.LongCitationAutomationId);
+        AutomationProperties.SetAutomationId(_shortCitationBox, MarkCitationDialogPlanner.ShortCitationAutomationId);
+        AutomationProperties.SetAutomationId(_status, MarkCitationDialogPlanner.StatusAutomationId);
 
         AvaloniaCompactDialogChrome.ApplyComboBox(_categoryBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_longCitationBox, DialogChromeStyle);
@@ -632,19 +623,10 @@ internal sealed class MarkCitationDialog : FreeWDialogWindow
         };
     }
 
-    internal void SetForTests(CitationCategory category, string? longCitation, string? shortCitation)
-    {
-        _categoryBox.SelectedIndex = MarkCitationDialogPlanner.SelectCategoryIndex(_categoryChoices, category);
-        _longCitationBox.Text = longCitation;
-        _shortCitationBox.Text = shortCitation;
-    }
-
-    internal bool AcceptForTests() => Accept(closeOnSuccess: false);
-
     private MarkCitationDialogState CurrentState()
     {
-        var category = _categoryBox.SelectedIndex >= 0 && _categoryBox.SelectedIndex < _categoryChoices.Count
-            ? _categoryChoices[_categoryBox.SelectedIndex].Category
+        var category = _categoryBox.SelectedIndex >= 0 && _categoryBox.SelectedIndex < _session.CategoryChoices.Count
+            ? _session.CategoryChoices[_categoryBox.SelectedIndex].Category
             : CitationCategory.Cases;
         return new MarkCitationDialogState(
             category,
@@ -654,15 +636,16 @@ internal sealed class MarkCitationDialog : FreeWDialogWindow
 
     private bool Accept(bool closeOnSuccess = true)
     {
-        if (!MarkCitationDialogPlanner.TryBuildCitation(CurrentState(), out var citation, out var validation))
+        var acceptance = _session.PlanAcceptance(CurrentState());
+        if (!acceptance.IsAccepted)
         {
-            _status.Text = validation?.Message ?? MarkCitationDialogPlanner.MissingLongCitationMessage;
+            _status.Text = acceptance.Validation?.Message ?? MarkCitationDialogPlanner.MissingLongCitationMessage;
             _status.IsVisible = true;
             return false;
         }
 
         _status.IsVisible = false;
-        Citation = citation;
+        Citation = acceptance.Result!.Citation;
         if (closeOnSuccess)
             Close();
         return true;
@@ -719,7 +702,7 @@ internal sealed class SourceEntryDialog : FreeWDialogWindow
             .BuildEntryFieldPlans(entry)
             .ToDictionary(plan => plan.Field, plan => NewField(plan.Text));
 
-        _typeBox.ItemsSource = _typeChoices.Select(choice => choice.Label).ToArray();
+        _typeBox.ItemsSource = _typeChoices;
         _typeBox.SelectedIndex = SourceManagementDialogPlanner.SourceTypeSelectedIndex(entry.Type);
         _typeBox.SelectionChanged += (_, _) => RefreshFields();
         AvaloniaCompactDialogChrome.ApplyComboBox(_typeBox, DialogChromeStyle);
@@ -875,8 +858,9 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
 
     public SourceAuthorEditorDialog(SourceManagementSourceEntry entry)
     {
-        var initial = SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(entry);
-        var rowControls = new List<RowControls>();
+        var session = new SourceManagementAuthorEditorSession(entry);
+        var initial = session.CurrentPlan;
+        var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
 
         Title = SourceManagementDialogPlanner.PrimaryAuthorEditorTitle;
         Width = 460;
@@ -911,49 +895,33 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
         };
         var corporateBox = NewAuthorTextBox(initial.CorporateAuthor, minWidth: 360);
 
-        void AddPersonRow(SourceManagementAuthorPersonRow row)
-        {
-            var grid = CreatePersonRowGrid();
-            var first = NewAuthorTextBox(row.First);
-            var middle = NewAuthorTextBox(row.Middle);
-            var last = NewAuthorTextBox(row.Last, minWidth: 140);
-            AddGridChild(grid, first, 0);
-            AddGridChild(grid, middle, 1);
-            AddGridChild(grid, last, 2);
-            rowsPanel.Children.Add(grid);
-            rowControls.Add(new RowControls(first, middle, last, grid));
-        }
-
-        void RemovePersonRow()
-        {
-            if (rowControls.Count <= 1)
+        var personRows = new SourceManagementAuthorRowCollection<RowControls>(
+            row =>
             {
-                rowControls[0].First.Text = string.Empty;
-                rowControls[0].Middle.Text = string.Empty;
-                rowControls[0].Last.Text = string.Empty;
-                return;
-            }
+                var grid = CreatePersonRowGrid();
+                var first = NewAuthorTextBox(row.First);
+                var middle = NewAuthorTextBox(row.Middle);
+                var last = NewAuthorTextBox(row.Last, minWidth: 140);
+                AddGridChild(grid, first, 0);
+                AddGridChild(grid, middle, 1);
+                AddGridChild(grid, last, 2);
+                return new RowControls(first, middle, last, grid);
+            },
+            row => new SourceManagementAuthorPersonRow(
+                row.First.Text ?? string.Empty,
+                row.Middle.Text ?? string.Empty,
+                row.Last.Text ?? string.Empty),
+            row => rowsPanel.Children.Add(row.Host),
+            () => rowsPanel.Children.Clear());
 
-            var last = rowControls[^1];
-            rowsPanel.Children.Remove(last.Host);
-            rowControls.RemoveAt(rowControls.Count - 1);
-        }
-
-        void RefreshMode()
+        void ApplyMode(SourceManagementAuthorEditorPlan plan)
         {
-            var personal = personalMode.IsChecked == true;
-            peoplePanel.IsEnabled = personal;
-            corporateLabel.IsEnabled = !personal;
-            corporateBox.IsEnabled = !personal;
+            peoplePanel.IsEnabled = plan.PersonalAuthorFieldsEnabled;
+            corporateLabel.IsEnabled = plan.CorporateAuthorFieldEnabled;
+            corporateBox.IsEnabled = plan.CorporateAuthorFieldEnabled;
         }
 
-        IReadOnlyList<SourceManagementAuthorPersonRow> initialRows = initial.PersonalRows.Count == 0
-            ? [new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty)]
-            : initial.PersonalRows;
-        foreach (var row in initialRows)
-        {
-            AddPersonRow(row);
-        }
+        personRows.Render(initial.PersonalRows);
 
         var header = CreatePersonRowGrid();
         AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorFirstNameLabel), 0);
@@ -963,31 +931,32 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
         peoplePanel.Children.Add(rowsPanel);
 
         var addRow = Button(SourceManagementDialogPlanner.AddAuthorRowButtonLabel, () =>
-            AddPersonRow(new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty)));
-        var removeRow = Button(SourceManagementDialogPlanner.RemoveAuthorRowButtonLabel, RemovePersonRow);
+            personRows.Render(session.AddPersonalAuthorRow(
+                personRows.Read(),
+                corporateBox.Text).PersonalRows));
+        var removeRow = Button(SourceManagementDialogPlanner.RemoveAuthorRowButtonLabel, () =>
+            personRows.Render(session.RemoveFinalPersonalAuthorRow(
+                personRows.Read(),
+                corporateBox.Text).PersonalRows));
         peoplePanel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
             [addRow, removeRow],
             new Thickness(0, 4, 0, 0)));
 
-        personalMode.Click += (_, _) => RefreshMode();
-        corporateMode.Click += (_, _) => RefreshMode();
+        personalMode.Click += (_, _) => ApplyMode(session.SelectMode(
+            SourceManagementAuthorEditorMode.Personal,
+            personRows.Read(),
+            corporateBox.Text));
+        corporateMode.Click += (_, _) => ApplyMode(session.SelectMode(
+            SourceManagementAuthorEditorMode.Corporate,
+            personRows.Read(),
+            corporateBox.Text));
 
-        var ok = Button("OK", () =>
+        var ok = Button(text.OkButtonLabel, () =>
         {
-            var mode = corporateMode.IsChecked == true
-                ? SourceManagementAuthorEditorMode.Corporate
-                : SourceManagementAuthorEditorMode.Personal;
-            State = SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(
-                new SourceManagementAuthorEditorState(
-                    mode,
-                    rowControls.Select(row => new SourceManagementAuthorPersonRow(
-                        row.First.Text ?? string.Empty,
-                        row.Middle.Text ?? string.Empty,
-                        row.Last.Text ?? string.Empty)).ToArray(),
-                    corporateBox.Text ?? string.Empty));
+            State = session.Accept(personRows.Read(), corporateBox.Text);
             Close();
         }, isDefault: true);
-        var cancel = Button("Cancel", () => Close(), isCancel: true);
+        var cancel = Button(text.CancelButtonLabel, () => Close(), isCancel: true);
 
         var body = new StackPanel { Margin = new Thickness(16) };
         body.Children.Add(personalMode);
@@ -998,7 +967,7 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
         body.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0)));
         Content = body;
 
-        RefreshMode();
+        ApplyMode(initial);
     }
 
     private static Grid CreatePersonRowGrid()
@@ -1061,8 +1030,9 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
         IReadOnlyList<Source> masterSources)
     {
         _state = SourceManagementDialogPlanner.BuildInitialState(currentSources, masterSources);
+        var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
 
-        Title = "Manage Sources";
+        Title = text.ManageSourcesTitle;
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -1079,13 +1049,13 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
             SourceManagementDialogPlanner.MasterListLabel,
             _masterList,
             [
-                Button("Add...", () => _ = AddMasterAsync()),
-                Button("Edit...", () => _ = EditMasterAsync()),
-                Button("Delete", DeleteMaster)
+                Button(text.AddButtonLabel, () => _ = AddMasterAsync()),
+                Button(text.EditButtonLabel, () => _ = EditMasterAsync()),
+                Button(text.DeleteButtonLabel, DeleteMaster)
             ]);
 
-        var copy = Button("Copy →", () => _ = CopyMasterToCurrentAsync());
-        var copyBack = Button("Copy <-", () => _ = CopyCurrentToMasterAsync());
+        var copy = Button(text.CopyToCurrentButtonLabel, () => _ = CopyMasterToCurrentAsync());
+        var copyBack = Button(text.CopyToMasterButtonLabel, () => _ = CopyCurrentToMasterAsync());
         var centerPane = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
@@ -1098,9 +1068,9 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
             SourceManagementDialogPlanner.CurrentDocumentListLabel,
             _currentList,
             [
-                Button("Add...", () => _ = AddCurrentAsync()),
-                Button("Edit...", () => _ = EditCurrentAsync()),
-                Button("Delete", DeleteCurrent)
+                Button(text.AddButtonLabel, () => _ = AddCurrentAsync()),
+                Button(text.EditButtonLabel, () => _ = EditCurrentAsync()),
+                Button(text.DeleteButtonLabel, DeleteCurrent)
             ]);
 
         var lists = new StackPanel
@@ -1112,8 +1082,8 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
         lists.Children.Add(centerPane);
         lists.Children.Add(currentPane);
 
-        var ok = Button("OK", Accept, isDefault: true);
-        var cancel = Button("Cancel", () => Close(), isCancel: true);
+        var ok = Button(text.OkButtonLabel, Accept, isDefault: true);
+        var cancel = Button(text.CancelButtonLabel, () => Close(), isCancel: true);
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 12, 16, 14));
 
         var body = new StackPanel();

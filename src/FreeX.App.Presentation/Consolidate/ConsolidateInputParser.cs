@@ -21,7 +21,7 @@ public static class ConsolidateInputParser
         var parsedRanges = new List<GridRange>();
         invalidPart = null;
 
-        foreach (var part in SplitReferences(input))
+        foreach (var part in WorkbookRangeTextCodec.SplitReferences(input, allowSemicolon: true))
         {
             if (!WorkbookRangeTextCodec.TryParse(defaultSheetId, part, resolveSheetId, out var parsedRange))
             {
@@ -64,33 +64,4 @@ public static class ConsolidateInputParser
         return true;
     }
 
-    private static IEnumerable<string> SplitReferences(string input)
-    {
-        var start = 0;
-        var inQuotedSheetName = false;
-        for (var index = 0; index < input.Length; index++)
-        {
-            if (input[index] == '\'')
-            {
-                if (index + 1 < input.Length && input[index + 1] == '\'')
-                {
-                    index++;
-                    continue;
-                }
-
-                inQuotedSheetName = !inQuotedSheetName;
-            }
-            else if ((input[index] == ',' || input[index] == ';') && !inQuotedSheetName)
-            {
-                var segment = input[start..index].Trim();
-                if (segment.Length > 0)
-                    yield return segment;
-                start = index + 1;
-            }
-        }
-
-        var finalSegment = input[start..].Trim();
-        if (finalSegment.Length > 0)
-            yield return finalSegment;
-    }
 }

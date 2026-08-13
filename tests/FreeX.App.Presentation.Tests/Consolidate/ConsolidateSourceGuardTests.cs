@@ -15,7 +15,7 @@ public sealed class ConsolidateSourceGuardTests
             var source = File.ReadAllText(file);
 
             source.Should().NotContain("System.Windows");
-            source.Should().NotContain("Avalonia");
+            source.Should().NotContain("using Avalonia");
             source.Should().NotContain("FreeX.App.Host");
             source.Should().NotContain("FreeX.App.Avalonia");
         }
@@ -36,8 +36,9 @@ public sealed class ConsolidateSourceGuardTests
         source.Should().Contain("Height = ConsolidateDialogPlanner.CaptureHeight");
         source.Should().Contain("MinWidth = ConsolidateDialogPlanner.MinWidth");
         source.Should().Contain("MinHeight = ConsolidateDialogPlanner.ReferencesListHeight");
-        source.Should().Contain("ConsolidateDialogPlanner.TryPlanApply(");
-        source.Should().Contain("new ConsolidateCommand(");
+        source.Should().Contain("ConsolidateApplicationWorkflow.Plan(");
+        source.Should().Contain("ConsolidateApplicationWorkflow.Execute(");
+        source.Should().NotContain("new ConsolidateCommand(");
         source.Should().NotContain("ConsolidateShellPlanner");
         source.Should().NotContain("new EditCellsCommand(sheetId, edits)");
     }
@@ -47,20 +48,26 @@ public sealed class ConsolidateSourceGuardTests
     {
         var repoRoot = RepositoryFileLocator.FindDirectory("src");
         var hostRoot = Path.Combine(repoRoot, "FreeX.App.Host");
-        var planningSource = File.ReadAllText(Path.Combine(hostRoot, "ConsolidateDialog.Planning.cs"));
+        var compatibilityFacadePath = Path.Combine(hostRoot, "ConsolidateDialog.Planning.cs");
+        var dialogSource = File.ReadAllText(Path.Combine(hostRoot, "ConsolidateDialog.cs"));
 
         File.Exists(Path.Combine(hostRoot, "ConsolidateDialogPlanner.cs"))
             .Should()
             .BeFalse("WPF should consume the shared consolidate planner directly instead of keeping a pass-through facade");
-        planningSource.Should().Contain(
-            "SharedConsolidateDialogPlanner = FreeX.App.Presentation.Consolidate.ConsolidateDialogPlanner");
-        var dialogSource = File.ReadAllText(Path.Combine(hostRoot, "ConsolidateDialog.cs"));
+        File.Exists(compatibilityFacadePath)
+            .Should()
+            .BeFalse("WPF should not retain a partial-class compatibility facade");
 
         dialogSource.Should().Contain("Width = ConsolidateDialogPlanner.WpfWindowWidth");
         dialogSource.Should().Contain("Height = ConsolidateDialogPlanner.ReferencesListHeight");
-        planningSource.Should().Contain("SharedConsolidateDialogPlanner.TryAddReference(");
-        planningSource.Should().Contain("SharedConsolidateDialogPlanner.TryParse(");
-        planningSource.Should().Contain("ConsolidateDialogIssue");
-        planningSource.Should().Contain("UiText.Get(\"Consolidate_EnterValidDestinationCell\")");
+        dialogSource.Should().Contain("ConsolidateDialogPlanner.TryAddReference(");
+        dialogSource.Should().Contain("ConsolidateDialogPlanner.TryParse(");
+        dialogSource.Should().Contain("ConsolidateDialogPlanner.DescribeIssue(");
+        dialogSource.Should().NotContain("UiText.Get(\"Consolidate_EnterValidDestinationCell\")");
+
+        var commandSource = File.ReadAllText(Path.Combine(hostRoot, "MainWindow.DataCommands.cs"));
+        commandSource.Should().Contain("ConsolidateApplicationWorkflow.Plan(");
+        commandSource.Should().Contain("ConsolidateApplicationWorkflow.Execute(");
+        commandSource.Should().NotContain("new ConsolidateCommand(");
     }
 }

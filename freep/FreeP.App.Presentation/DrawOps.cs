@@ -58,7 +58,13 @@ public sealed class ResolvedRunSoftEdge
 /// </summary>
 public sealed class ResolvedRun
 {
-    public string Text { get; init; } = string.Empty;
+    private string _text = string.Empty;
+
+    public string Text
+    {
+        get => _text;
+        init => _text = value;
+    }
     public string FontFamily { get; init; } = "Calibri";
     public double FontSizePt { get; init; } = 18.0;
     public int? BaselineOffset { get; init; }
@@ -105,6 +111,14 @@ public sealed class ResolvedRun
 
     /// <summary>True when this run carries a math equation layout.</summary>
     public bool IsMathRun => MathLayout is not null;
+
+    /// <summary>Creates a text fragment while preserving all resolved run state.</summary>
+    public ResolvedRun WithText(string text)
+    {
+        var fragment = (ResolvedRun)MemberwiseClone();
+        fragment._text = text;
+        return fragment;
+    }
 }
 
 /// <summary>A resolved tab stop with position in DIP.</summary>

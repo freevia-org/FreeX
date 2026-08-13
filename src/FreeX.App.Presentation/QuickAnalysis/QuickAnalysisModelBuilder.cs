@@ -90,7 +90,7 @@ public static class QuickAnalysisModelBuilder
     /// </summary>
     private static IReadOnlyList<QuickAnalysisSuggestion> BuildTotals(QuickAnalysisSelectionDescription selection)
     {
-        if (!selection.HasNumericColumn || !selection.HasDataRows)
+        if (!selection.HasNumericColumn || !selection.HasDataRows || !selection.CanWriteAdjacentColumn)
             return [];
 
         var suggestions = QuickAnalysisCatalog.BuildSuggestions(
@@ -119,7 +119,9 @@ public static class QuickAnalysisModelBuilder
         if (!looksTabular)
             return [];
 
-        var suggestions = QuickAnalysisCatalog.BuildSuggestions(QuickAnalysisCommand.FormatAsTable).ToList();
+        var suggestions = selection.OverlapsStructuredTable
+            ? new List<QuickAnalysisSuggestion>()
+            : QuickAnalysisCatalog.BuildSuggestions(QuickAnalysisCommand.FormatAsTable).ToList();
 
         if (selection.HasHeaderRow)
         {
@@ -135,7 +137,10 @@ public static class QuickAnalysisModelBuilder
     /// </summary>
     private static IReadOnlyList<QuickAnalysisSuggestion> BuildSparklines(QuickAnalysisSelectionDescription selection)
     {
-        if (!selection.HasNumericColumn || !selection.HasDataRows || selection.NumericColumnCount < 2)
+        if (!selection.HasNumericColumn ||
+            !selection.HasDataRows ||
+            selection.NumericColumnCount < 2 ||
+            !selection.CanWriteAdjacentColumn)
             return [];
 
         return QuickAnalysisCatalog.BuildSuggestions(

@@ -1098,69 +1098,10 @@ public sealed class RichTextEditorTests
         var box = overlay.Children
             .OfType<System.Windows.Controls.RichTextBox>()
             .Single();
+        System.Windows.Automation.AutomationProperties.GetAutomationId(box).Should().Be(
+            PresentationSemanticIdentityCatalog.RichTextEditorInputAutomationId);
         box.Width.Should().BeApproximately(288, 0.1);
         box.Height.Should().BeApproximately(144, 0.1);
-    }
-
-    // ─── Round 133 remediation: in-place Copy/Cut surfaces OS-clipboard write failures ──
-    //
-    // WpfRichTextClipboardAdapter.TryCopy/TryCut is the single OS-clipboard write call shared by
-    // both InCanvasTextEditor (shape text, OnRichBoxPreviewKeyDown) and InCanvasTableCellEditor
-    // (table-cell text, OnCellTextBoxPreviewKeyDown). Before this fix, a failed
-    // Clipboard.SetDataObject call was swallowed -- TryCopy/TryCut just returned false with
-    // nothing for the caller to inspect, so the user believed the in-place copy succeeded and
-    // later pasted stale content. SetDataObjectForTests forces the write to fail deterministically
-    // without touching (and potentially leaving locked) the real OS clipboard on this shared
-    // interactive machine.
-
-    [StaFact]
-    public void WpfRichTextClipboardAdapter_TryCopy_ClipboardWriteFailure_ReportsErrorMessage()
-    {
-        var body = MakeTwoRunBody();
-        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
-        var box = new RichTextBox(doc);
-        box.SelectAll();
-
-        WpfRichTextClipboardAdapter.SetDataObjectForTests =
-            _ => throw new System.Runtime.InteropServices.COMException("clipboard locked");
-        try
-        {
-            var result = WpfRichTextClipboardAdapter.TryCopy(box, body, out var error);
-
-            result.Should().BeFalse();
-            error.Should().Be("clipboard locked");
-        }
-        finally
-        {
-            WpfRichTextClipboardAdapter.SetDataObjectForTests = null;
-        }
-    }
-
-    [StaFact]
-    public void WpfRichTextClipboardAdapter_TryCut_ClipboardWriteFailure_ReportsErrorAndPreservesText()
-    {
-        var body = MakeTwoRunBody();
-        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
-        var box = new RichTextBox(doc);
-        box.SelectAll();
-        var originalText = new TextRange(doc.ContentStart, doc.ContentEnd).Text;
-
-        WpfRichTextClipboardAdapter.SetDataObjectForTests =
-            _ => throw new System.Runtime.InteropServices.COMException("clipboard locked");
-        try
-        {
-            var result = WpfRichTextClipboardAdapter.TryCut(box, body, out var error);
-
-            result.Should().BeFalse();
-            error.Should().Be("clipboard locked");
-            new TextRange(doc.ContentStart, doc.ContentEnd).Text.Should().Be(
-                originalText,
-                "a failed cut must not delete the selection -- the user would lose the text with no copy to paste back");
-        }
-        finally
-        {
-            WpfRichTextClipboardAdapter.SetDataObjectForTests = null;
-        }
     }
 
     [StaFact]

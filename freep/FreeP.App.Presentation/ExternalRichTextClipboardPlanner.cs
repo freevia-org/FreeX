@@ -1,5 +1,6 @@
 using System.Text;
 using Free.Shared.AppServices;
+using Free.Shared.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -1460,8 +1461,9 @@ public static class ExternalRichTextClipboardPlanner
 
         private string ResolveObjectFileName()
         {
-            string name = Path.GetFileName(_objectName.ToString().Trim());
-            if (Path.GetExtension(name).Length > 0)
+            var rawName = _objectName.ToString().Trim();
+            var name = FilePathPolicy.FileNameOrPath(rawName);
+            if (FilePathPolicy.TryGetExtension(name, out _))
                 return name;
 
             string objectClass = _objectClass.ToString().Trim();

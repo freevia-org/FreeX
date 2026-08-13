@@ -638,14 +638,14 @@ internal static class XlsxSourceDrawingGeometryRewriter
             // bogus default-derived size on every save, turning a flat line diagonal.
             if (ParsesPositive(ext.Attribute("cx")))
             {
-                var localCxEmu = DrawingMlUnits.PixelsToEmu(widthPixels) / groupTransform.ScaleX;
-                changed |= SetExtentAttribute(ext, "cx", DrawingMlUnits.EmuToPixels(localCxEmu));
+                var localCxEmu = DrawingMlCoordinateUnits.PixelsToEmu(widthPixels) / groupTransform.ScaleX;
+                changed |= SetExtentAttribute(ext, "cx", DrawingMlCoordinateUnits.EmuToPixels(localCxEmu));
             }
 
             if (ParsesPositive(ext.Attribute("cy")))
             {
-                var localCyEmu = DrawingMlUnits.PixelsToEmu(heightPixels) / groupTransform.ScaleY;
-                changed |= SetExtentAttribute(ext, "cy", DrawingMlUnits.EmuToPixels(localCyEmu));
+                var localCyEmu = DrawingMlCoordinateUnits.PixelsToEmu(heightPixels) / groupTransform.ScaleY;
+                changed |= SetExtentAttribute(ext, "cy", DrawingMlCoordinateUnits.EmuToPixels(localCyEmu));
             }
         }
 
@@ -1009,7 +1009,7 @@ internal static class XlsxSourceDrawingGeometryRewriter
         if (element is null)
             return false;
 
-        var emu = DrawingMlUnits.PixelsToEmu(Math.Max(0, pixels)).ToString(CultureInfo.InvariantCulture);
+        var emu = DrawingMlCoordinateUnits.PixelsToEmu(Math.Max(0, pixels)).ToString(CultureInfo.InvariantCulture);
         if (string.Equals(element.Value, emu, StringComparison.Ordinal))
             return false;
 
@@ -1037,7 +1037,7 @@ internal static class XlsxSourceDrawingGeometryRewriter
         if (attribute is null)
             return false;
 
-        var emu = DrawingMlUnits.PixelsToEmu(Math.Max(0, pixels)).ToString(CultureInfo.InvariantCulture);
+        var emu = DrawingMlCoordinateUnits.PixelsToEmu(Math.Max(0, pixels)).ToString(CultureInfo.InvariantCulture);
         if (string.Equals(attribute.Value, emu, StringComparison.Ordinal))
             return false;
 

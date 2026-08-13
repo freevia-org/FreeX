@@ -4,6 +4,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Editing;
@@ -108,15 +109,23 @@ internal sealed class PageBox : Border
     internal DocumentView? FooterSubEditor { get; }
 
     /// <summary>
-    /// The model slot name that <see cref="HeaderSubEditor"/> belongs to (e.g. "header",
-    /// "first-header", "even-header"), so the commit coordinator can write back to the right slot.
+    /// The model slot that <see cref="HeaderSubEditor"/> belongs to, so the commit coordinator can
+    /// write back to the right section slot.
     /// </summary>
-    internal string? HeaderSlotName { get; }
+    internal HeaderFooterSlotKind? HeaderSlot { get; }
+
+    internal string? HeaderSlotName => HeaderSlot is { } slot
+        ? HeaderFooterDialogPlanner.SlotNameFor(slot)
+        : null;
 
     /// <summary>
-    /// The model slot name that <see cref="FooterSubEditor"/> belongs to.
+    /// The model slot that <see cref="FooterSubEditor"/> belongs to.
     /// </summary>
-    internal string? FooterSlotName { get; }
+    internal HeaderFooterSlotKind? FooterSlot { get; }
+
+    internal string? FooterSlotName => FooterSlot is { } slot
+        ? HeaderFooterDialogPlanner.SlotNameFor(slot)
+        : null;
 
     /// <summary>
     /// The <see cref="SectionHeadersFooters"/> that this page box's HEADER sub-editor should commit
@@ -165,7 +174,7 @@ internal sealed class PageBox : Border
     ///
     /// <para>
     /// <strong>Phase 4:</strong> <paramref name="headerSlot"/>, <paramref name="footerSlot"/>,
-    /// <paramref name="headerSlotName"/>, <paramref name="footerSlotName"/>, and
+    /// <paramref name="headerSlotKind"/>, <paramref name="footerSlotKind"/>, and
     /// <paramref name="sourceModel"/> drive the in-page editable sub-editors via the wrapper-document
     /// pattern.  Pass null slots to suppress the sub-editor for that region (the old placeholder strip
     /// is shown instead).
@@ -190,9 +199,9 @@ internal sealed class PageBox : Border
         IReadOnlyList<System.Windows.Documents.Block> pageBlocks,
         TextDocument? sourceModel = null,
         HeaderFooter? headerSlot = null,
-        string? headerSlotName = null,
+        HeaderFooterSlotKind? headerSlotKind = null,
         HeaderFooter? footerSlot = null,
-        string? footerSlotName = null,
+        HeaderFooterSlotKind? footerSlotKind = null,
         int pageCount = 1,
         string? pageNumberText = null,
         int sectionOrdinal = 1,
@@ -206,8 +215,8 @@ internal sealed class PageBox : Border
         PageNumberText = pageNumberText
             ?? pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
         PageGeometry = page;
-        HeaderSlotName = headerSlotName;
-        FooterSlotName = footerSlotName;
+        HeaderSlot = headerSlotKind;
+        FooterSlot = footerSlotKind;
         if (footnoteIds is { Count: > 0 }) FootnoteIds = footnoteIds;
         if (endnoteIds is { Count: > 0 })
             EndnoteIds = endnoteIds;
@@ -235,7 +244,7 @@ internal sealed class PageBox : Border
         stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(FooterHeightDip) });    // row 3: footer
 
         // ── Phase 4: header region ────────────────────────────────────────────────────────────────
-        if (sourceModel is not null && headerSlotName is not null)
+        if (sourceModel is not null && headerSlotKind is not null)
         {
             HeaderSubEditor = BuildHfSubEditor(
                 sourceModel, headerSlot, marginLeft, marginRight, isActivated: false,
@@ -314,7 +323,7 @@ internal sealed class PageBox : Border
         }
 
         // ── Phase 4: footer region (row 3) ───────────────────────────────────────────────────────
-        if (sourceModel is not null && footerSlotName is not null)
+        if (sourceModel is not null && footerSlotKind is not null)
         {
             FooterSubEditor = BuildHfSubEditor(
                 sourceModel, footerSlot, marginLeft, marginRight, isActivated: false,
@@ -452,7 +461,7 @@ internal sealed class PageBox : Border
     /// commit.</para>
     /// </summary>
     internal void CommitHeaderSlot(DocumentView helper, SectionHeadersFooters hf) =>
-        CommitOneSlot(HeaderSubEditor, HeaderSlotName, helper, hf);
+        CommitOneSlot(HeaderSubEditor, HeaderSlot, helper, hf);
 
     /// <summary>
     /// Commits the footer sub-editor back to the appropriate slot on <paramref name="hf"/> -- the real
@@ -461,15 +470,15 @@ internal sealed class PageBox : Border
     /// <see cref="CommitHeaderSlot"/> for the dedup contract.
     /// </summary>
     internal void CommitFooterSlot(DocumentView helper, SectionHeadersFooters hf) =>
-        CommitOneSlot(FooterSubEditor, FooterSlotName, helper, hf);
+        CommitOneSlot(FooterSubEditor, FooterSlot, helper, hf);
 
     private static void CommitOneSlot(
         DocumentView? subEditor,
-        string? slotName,
+        HeaderFooterSlotKind? slot,
         DocumentView helper,
         SectionHeadersFooters hf)
     {
-        if (subEditor is null || slotName is null)
+        if (subEditor is null || slot is null)
             return;
 
         // Flush sub-editor edits into its wrapper model.
@@ -497,16 +506,7 @@ internal sealed class PageBox : Border
                 hfOut.Paragraphs.Add(block);
         }
 
-        // Write back to the correct slot.
-        switch (slotName)
-        {
-            case "header":       hf.Header      = hfOut; break;
-            case "footer":       hf.Footer      = hfOut; break;
-            case "even-header":  hf.EvenHeader  = hfOut; break;
-            case "even-footer":  hf.EvenFooter  = hfOut; break;
-            case "first-header": hf.FirstHeader = hfOut; break;
-            case "first-footer": hf.FirstFooter = hfOut; break;
-        }
+        HeaderFooterDialogPlanner.SetSlot(hf, slot.Value, hfOut);
     }
 
     // ── cross-page caret routing ──────────────────────────────────────────────────────────────────

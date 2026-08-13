@@ -14,17 +14,53 @@ public sealed class WindowsRecordingCaptureBackendTests
         "ppt/media/freep-recordings/wpf");
 
     [Fact]
-    public void WindowsDeviceCatalog_MicrophonesAdvertiseWavPayloads()
+    public void DeviceAvailability_ProjectsAvailableMicrophoneAndCameraOnce()
     {
-        if (!OperatingSystem.IsWindows())
-            return;
+        var availability = WindowsRecordingDeviceAvailabilityPlanner.Detect(
+            new FakeDeviceCatalog(
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Microphone,
+                    "mic",
+                    "Microphone",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "audio/wav"),
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Camera,
+                    "camera",
+                    "Camera",
+                    IsDefault: true,
+                    IsAvailable: false,
+                    "video/mp4")));
 
-        var microphones = new WindowsRecordingDeviceCatalog()
-            .EnumerateDevices()
-            .Where(device => device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone)
-            .ToArray();
+        availability.Devices.Should().HaveCount(2);
+        availability.HasMicrophone.Should().BeTrue();
+        availability.HasCamera.Should().BeFalse();
+        availability.HasAvailableDevice.Should().BeTrue();
+        availability.DetectionFailure.Should().BeNull();
+    }
 
-        microphones.Should().OnlyContain(device => device.ContentType == "audio/wav");
+    [Fact]
+    public void DeviceAvailability_CapturesEnumerationFailureForAllConsumers()
+    {
+        var availability = WindowsRecordingDeviceAvailabilityPlanner.Detect(
+            new ThrowingDeviceCatalog());
+
+        availability.Devices.Should().BeEmpty();
+        availability.HasMicrophone.Should().BeFalse();
+        availability.HasCamera.Should().BeFalse();
+        availability.DetectionFailure.Should().Be("device catalog failed");
+    }
+
+    [Fact]
+    public void Readiness_WhenDeviceEnumerationFails_PreservesCaptureContext()
+    {
+        var backend = CreateBackend(
+            new ThrowingDeviceCatalog(),
+            new FakeCaptureEngine());
+
+        backend.AdapterReadiness.UnavailableReason.Should().Be(
+            "Windows recording device enumeration failed: device catalog failed");
     }
 
     [Fact]
@@ -269,54 +305,33 @@ public sealed class WindowsRecordingCaptureBackendTests
     }
 
     [Fact]
-    public void DefaultWindowsEngine_CameraCaptureDefersEncodedPayloadAfterHandoff()
+    public void UnavailableFactory_PreservesNonWindowsFallbackLifecycle()
     {
-        var engine = new WindowsRecordingCaptureEngine(WpfMetadata.AdapterName);
-        var device = new SlideShowRecordingCaptureDeviceDescriptor(
-            SlideShowRecordingCaptureDeviceKind.Camera,
-            "camera-0",
-            "Presenter camera",
-            IsDefault: true,
-            IsAvailable: true,
-            "video/mp4");
+        var backend = WindowsRecordingCaptureBackend.CreateUnavailable(WpfMetadata);
         var started = new DateTimeOffset(2026, 7, 14, 10, 0, 0, TimeSpan.Zero);
-        var packagePath = "ppt/media/freep-recordings/wpf/slide-001-camera.mp4";
 
-        engine.BeginCapture(new WindowsRecordingCaptureStartRequest(
-            device,
+        backend.AdapterReadiness.Devices.Should().BeEmpty();
+        backend.AdapterReadiness.CanCaptureNarration.Should().BeFalse();
+        backend.AdapterReadiness.CanCaptureCamera.Should().BeFalse();
+
+        backend.BeginCapture(new SlideShowRecordingCaptureStartRequest(
+            SlideShowRecordingMediaArtifactKind.NarrationAudio,
             SlideIndex: 0,
             started,
-            packagePath));
-        var result = engine.CompleteCapture(new WindowsRecordingCaptureRequest(
-            device,
+            "slide-001-narration.wav",
+            "audio/wav"));
+        var result = backend.CompleteCapture(new SlideShowRecordingCaptureRequest(
+            SlideShowRecordingMediaArtifactKind.NarrationAudio,
             SlideIndex: 0,
-            DurationMs: 1500,
-            packagePath));
+            started,
+            started.AddSeconds(1),
+            DurationMs: 1000,
+            "slide-001-narration.wav",
+            "audio/wav"));
 
         result.IsCaptured.Should().BeFalse();
-        result.StatusText.Should().Contain("camera device handoff reached");
-        result.StatusText.Should().Contain("video encoding is not implemented");
-        result.PayloadBytes.Should().BeEmpty();
-
-        var evidence = SlideShowRecordingHostAdapterParityPlanner.BuildCameraEncodingReadinessEvidence(
-            new[]
-            {
-                new SlideShowRecordingCameraEncodingReadinessRow(
-                    WpfMetadata.HostName,
-                    WpfMetadata.AdapterName,
-                    packagePath,
-                    "video/mp4",
-                    DeviceHandoffReached: result.StatusText.Contains("camera device handoff reached", StringComparison.Ordinal),
-                    result.IsCaptured,
-                    result.PayloadBytes.Length,
-                    RequiresPowerPointCom: false,
-                    SlideShowRecordingCameraEncodingEvidenceSource.LocalDefaultNoComEngine,
-                    result.StatusText)
-            });
-        evidence.HasWpfNoComHandoff.Should().BeTrue();
-        evidence.HasPackageTargets.Should().BeTrue();
-        evidence.HasLocalEncodedPayload.Should().BeFalse();
-        evidence.ClaimsPowerPointComBaseline.Should().BeFalse();
+        result.StatusText.Should().Contain(WpfMetadata.AdapterName);
+        result.StatusText.Should().Contain("No Windows microphone or camera devices");
     }
 
     [Fact]
@@ -388,8 +403,9 @@ public sealed class WindowsRecordingCaptureBackendTests
         avaloniaSource.Should().Contain("new WindowsNativeRecordingCaptureEngine(windowsMetadata.AdapterName)");
         avaloniaSource.Should().NotContain("new WindowsNativeRecordingCaptureEngine(metadata.AdapterName)");
         avaloniaSource.Should().Contain("new WindowsNativeRecordingDeviceCatalog()");
+        avaloniaSource.Should().Contain("WindowsRecordingCaptureBackend.CreateUnavailable(windowsMetadata)");
         wpfSource.Should().NotContain("LinuxNarrationCaptureBackend");
-        wpfSource.Should().Contain("new WindowsHostRecordingCaptureEngine(");
+        wpfSource.Should().Contain("new WindowsNativeRecordingCaptureEngine(");
         wpfSource.Should().Contain("new WindowsNativeRecordingDeviceCatalog()");
 
         Read(root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj")
@@ -403,6 +419,36 @@ public sealed class WindowsRecordingCaptureBackendTests
         Read(root, "freep", "FreeP.App.Recording.Windows", "FreeP.App.Recording.Windows.csproj")
             .Should().Contain("FrameworkReference Include=\"Microsoft.Windows.SDK.NET.Ref\"");
         AssertNoHostLocalRecordingSources(root, "FreeP.App.Avalonia");
+        AssertNoHostLocalRecordingSources(root, "FreeP.App.Host");
+    }
+
+    [Fact]
+    public void RecordingProjectBoundary_KeepsWindowsNativeCodeInWindowsAssembly()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var portableProject = Read(root, "freep", "FreeP.App.Recording", "FreeP.App.Recording.csproj");
+        var windowsProject = Read(root, "freep", "FreeP.App.Recording.Windows", "FreeP.App.Recording.Windows.csproj");
+        var portableSource = string.Join(
+            Environment.NewLine,
+            Directory.GetFiles(
+                    Path.Combine(root, "freep", "FreeP.App.Recording", "Recording"),
+                    "*.cs",
+                    SearchOption.AllDirectories)
+                .Select(File.ReadAllText));
+        var windowsEngineSource = Read(
+            root,
+            "freep",
+            "FreeP.App.Recording.Windows",
+            "WindowsRecordingCaptureEngine.cs");
+
+        portableProject.Should().NotContain("FreeP.App.Recording.Windows");
+        windowsProject.Should().Contain("FreeP.App.Recording\\FreeP.App.Recording.csproj");
+        portableSource.Should().NotContain("winmm.dll");
+        portableSource.Should().NotContain("setupapi.dll");
+        portableSource.Should().NotContain("class WindowsRecordingCaptureEngine");
+        portableSource.Should().NotContain("class WindowsRecordingDeviceCatalog");
+        windowsEngineSource.Should().Contain("class WindowsRecordingCaptureEngine");
+        windowsEngineSource.Should().Contain("mciSendStringW");
     }
 
     [Fact]
@@ -506,5 +552,11 @@ public sealed class WindowsRecordingCaptureBackendTests
                 request.PackagePath,
                 payload);
         }
+    }
+
+    private sealed class ThrowingDeviceCatalog : IWindowsRecordingDeviceCatalog
+    {
+        public IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices() =>
+            throw new InvalidOperationException("device catalog failed");
     }
 }

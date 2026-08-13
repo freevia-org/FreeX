@@ -1,5 +1,4 @@
 using System.Linq;
-using System.Reflection;
 using Free.Shared.Ribbon;
 using FluentAssertions;
 
@@ -8,24 +7,19 @@ namespace FreeX.App.Host.Tests;
 public class RibbonNativeRegistryTests
 {
     [Fact]
-    public void EveryGeneratedHandler_ResolvesToAMainWindowMethod()
+    public void GeneratedHandlers_AreTypedDelegatesWithSemanticIds()
     {
-        var type = typeof(MainWindow);
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
-
-        var missing = FreeXRibbonHandlerMap.Handlers
-            .Where(kv => type.GetMethod(kv.Value, flags) is null)
-            .Select(kv => $"{kv.Key} -> {kv.Value}")
-            .OrderBy(x => x)
-            .ToList();
-
-        missing.Should().BeEmpty("every generated ribbon handler must bind to a real MainWindow method");
+        MainWindow.FreeXRibbonHandlers.Should().NotBeEmpty();
+        MainWindow.FreeXRibbonHandlers.Values.Should().OnlyContain(binding => binding.Handler != null);
+        MainWindow.FreeXRibbonHandlers.Keys.Should().OnlyContain(id =>
+            !id.Contains('#', System.StringComparison.Ordinal) &&
+            !id.Contains("_Click", System.StringComparison.Ordinal));
     }
 
     [Fact]
     public void HandlerMap_CoversCoreHomeCommands()
     {
-        FreeXRibbonHandlerMap.Handlers.Keys.Should().Contain(new[]
+        MainWindow.FreeXRibbonHandlers.Keys.Should().Contain(new[]
         {
             "Paste", "Cut", "Copy", "Bold", "Italic", "Underline"
         });
@@ -48,7 +42,7 @@ public class RibbonNativeRegistryTests
             .SelectMany(EnumerateCommandIds)
             .Where(id => !comboIds.Contains(id))
             .Distinct(System.StringComparer.Ordinal)
-            .Where(id => !FreeXRibbonHandlerMap.Handlers.ContainsKey(id))
+            .Where(id => !MainWindow.FreeXRibbonHandlers.ContainsKey(id))
             .OrderBy(id => id, System.StringComparer.Ordinal)
             .ToArray();
 

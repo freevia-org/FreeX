@@ -21,8 +21,13 @@
   is out of scope for this pass (tracked to report/patch upstream, or to move each test to its own
   process by further splitting into per test .csproj files like the existing Batch2-6 projects).
 
-  Directly measured timing on a clean run: a healthy run completes in 4 to 5 seconds. When the leak
-  triggers, working set climbs roughly linearly and the process is forcibly OOM killed by the OS
+  The seven process-isolated projects are part of the same solution lane. Starting all seven headless
+  renderers alongside the rest of that lane can starve an otherwise healthy batch until this session
+  timeout expires. AvaloniaCaptureProcessLease therefore permits three capture testhosts at a time.
+  Its file leases are process-safe, cross-platform, and released automatically when a testhost exits;
+  the cap does not combine batches or weaken the per-process leak containment described above.
+
+  When the leak triggers, working set climbs roughly linearly and the process is forcibly OOM killed by the OS
   (or crashes on its own) within about 30 to 40 seconds of the leak becoming visible. A 5 minute
   timeout would not actually protect against that: the process would already be dead or have
   driven the machine to a few hundred MB of free RAM long before 300 seconds elapsed. 90000 ms

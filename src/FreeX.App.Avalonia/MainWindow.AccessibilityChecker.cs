@@ -188,40 +188,8 @@ public sealed partial class MainWindow
         };
 
         TreeViewItem? firstLeaf = null;
-        foreach (var section in plan.Sections)
-        {
-            var sectionNode = new TreeViewItem
-            {
-                Header = $"{section.Header} ({section.IssueCount})",
-                FontWeight = FontWeight.SemiBold,
-                IsExpanded = true,
-            };
-
-            foreach (var group in section.Groups)
-            {
-                var groupNode = new TreeViewItem
-                {
-                    Header = $"{group.Label} ({group.Items.Count})",
-                    IsExpanded = true,
-                    Tag = group,
-                };
-
-                foreach (var item in group.Items)
-                {
-                    var leaf = new TreeViewItem
-                    {
-                        Header = item.ObjectLabel,
-                        Tag = item,
-                    };
-                    firstLeaf ??= leaf;
-                    groupNode.Items.Add(leaf);
-                }
-
-                sectionNode.Items.Add(groupNode);
-            }
-
-            resultsTree.Items.Add(sectionNode);
-        }
+        foreach (var node in plan.TreeNodes)
+            resultsTree.Items.Add(CreateAccessibilityCheckerTreeNode(node, ref firstLeaf));
 
         var whyFixText = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
         var howToFixText = new TextBlock { TextWrapping = TextWrapping.Wrap };
@@ -407,13 +375,38 @@ public sealed partial class MainWindow
             var result = _session.GoToCell(target);
             if (!result.Success)
             {
-                ShowEditIssue(result.ErrorMessage ?? "Could not navigate to accessibility issue.");
+                ShowEditIssue(result.ErrorMessage ?? UiText.Get("AccessibilityChecker_NavigateFailed"));
                 return;
             }
 
             if (result.SelectedRange is { } selectedRange)
-                RefreshShell($"Selected {FormatRangeReference(selectedRange)} (accessibility issue)");
+                RefreshShell(UiText.Format(
+                    "MainLoc_SelectedX",
+                    FormatRangeReference(selectedRange)));
         }
+    }
+
+    private static TreeViewItem CreateAccessibilityCheckerTreeNode(
+        AccessibilityCheckerTreeNodePlan plan,
+        ref TreeViewItem? initialNode)
+    {
+        var node = new TreeViewItem
+        {
+            Header = plan.Header,
+            FontWeight = plan.Kind == AccessibilityCheckerTreeNodeKind.Section
+                ? FontWeight.SemiBold
+                : FontWeight.Normal,
+            IsExpanded = plan.IsExpanded,
+            Tag = plan.Item is not null ? plan.Item : plan.Group,
+        };
+
+        if (plan.IsInitialSelection)
+            initialNode = node;
+
+        foreach (var child in plan.Children)
+            node.Items.Add(CreateAccessibilityCheckerTreeNode(child, ref initialNode));
+
+        return node;
     }
 
     private static void ApplyAction(Button button, AccessibilityCheckerActionSpec action)

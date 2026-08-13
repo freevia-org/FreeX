@@ -76,13 +76,13 @@ internal static class AvaloniaPivotChartFieldContextMenu
 
     private static void AssignUniqueKeyTips(IEnumerable<MenuItem> items)
     {
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in items)
-        {
-            var keyTip = RibbonKeyTipText.CreateUniqueKeyTip(item.Header?.ToString(), used);
-            item.InputGesture = KeyGesture.Parse(keyTip);
-            used.Add(keyTip);
-        }
+        var menuItems = items.ToArray();
+        var assignments = MenuKeyTipAssignmentPlanner.AssignUnique(
+            menuItems
+                .Select(item => new MenuKeyTipAssignmentCandidate(item.Header?.ToString()))
+                .ToArray());
+        for (var index = 0; index < menuItems.Length; index++)
+            menuItems[index].InputGesture = KeyGesture.Parse(assignments[index]);
     }
 }
 

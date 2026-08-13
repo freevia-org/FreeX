@@ -34,6 +34,11 @@ public static class AppOptionsStore
         string? overridePath) =>
         AppStoragePathPlanner.ResolveOptionsFilePath(pathProvider, overridePath);
 
+    public static string ResolveStorePath(IApplicationDataPathProvider pathProvider) =>
+        ResolveStorePath(
+            pathProvider,
+            Environment.GetEnvironmentVariable(OptionsPathEnvironmentVariable));
+
     public static AppOptions Load() => LoadFromPath(StorePath);
 
     public static AppOptions Load(

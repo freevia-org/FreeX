@@ -10,19 +10,23 @@
     <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
     <ProjectReference Include="..\FreeW.Core.IO\FreeW.Core.IO.csproj" />
     <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Free.Shared.IO" />
+    <Using Include="Free.Shared.AppServices" />
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="..\FreeW.App.Host\Resources\thesaurus-en.txt"
+    <EmbeddedResource Include="Resources\thesaurus-en.txt"
                       LogicalName="FreeW.App.Presentation.Resources.thesaurus-en.txt" />
   </ItemGroup>
 

@@ -3,10 +3,8 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Model;
-using SharedAdvancedFilterOutputMode = FreeX.App.Presentation.Filtering.AdvancedFilterOutputMode;
-using SharedAdvancedFilterPlanError = FreeX.App.Presentation.Filtering.AdvancedFilterPlanError;
-using SharedAdvancedFilterPlanner = FreeX.App.Presentation.Filtering.AdvancedFilterPlanner;
 
 namespace FreeX.App.Host;
 
@@ -53,13 +51,13 @@ public sealed partial class AdvancedFilterDialog : Window
 
         _listRangeBox.Text = defaultListRange;
         AutomationProperties.SetName(_listRangeBox, UiText.Get("AdvancedFilter_ListRange"));
-        AutomationProperties.SetAutomationId(_listRangeBox, "AdvancedFilterListRangeBox");
+        AutomationProperties.SetAutomationId(_listRangeBox, FreeXAutomationIdCatalog.AdvancedFilter.ListRangeBox);
         AutomationProperties.SetHelpText(_listRangeBox, UiText.Get("AdvancedFilter_EnterTheListRangeToFilterIncludingColumnLabels"));
         AutomationProperties.SetName(_criteriaRangeBox, UiText.Get("AdvancedFilter_CriteriaRange"));
-        AutomationProperties.SetAutomationId(_criteriaRangeBox, "AdvancedFilterCriteriaRangeBox");
+        AutomationProperties.SetAutomationId(_criteriaRangeBox, FreeXAutomationIdCatalog.AdvancedFilter.CriteriaRangeBox);
         AutomationProperties.SetHelpText(_criteriaRangeBox, UiText.Get("AdvancedFilter_EnterTheCriteriaRangeIncludingCriteriaLabels"));
         AutomationProperties.SetName(_copyToBox, UiText.Get("AdvancedFilter_CopyTo"));
-        AutomationProperties.SetAutomationId(_copyToBox, "AdvancedFilterCopyToBox");
+        AutomationProperties.SetAutomationId(_copyToBox, FreeXAutomationIdCatalog.AdvancedFilter.CopyToBox);
         AutomationProperties.SetHelpText(_copyToBox, UiText.Get("AdvancedFilter_EnterTheDestinationCellOrOneRowHeaderRangeWhenCopyingFilteredRecords"));
         ApplyAutomationMetadata();
         var root = new DockPanel { Margin = new Thickness(12) };
@@ -106,15 +104,15 @@ public sealed partial class AdvancedFilterDialog : Window
     private void ApplyAutomationMetadata()
     {
         AutomationProperties.SetName(_filterInPlaceButton, UiText.Get("AdvancedFilter_FilterTheListInPlaceAutomationName"));
-        AutomationProperties.SetAutomationId(_filterInPlaceButton, "AdvancedFilterInPlaceButton");
+        AutomationProperties.SetAutomationId(_filterInPlaceButton, FreeXAutomationIdCatalog.AdvancedFilter.InPlaceButton);
         AutomationProperties.SetHelpText(_filterInPlaceButton, UiText.Get("AdvancedFilter_FilterTheListInItsCurrentLocation"));
 
         AutomationProperties.SetName(_copyToAnotherLocationButton, UiText.Get("AdvancedFilter_CopyToAnotherLocationAutomationName"));
-        AutomationProperties.SetAutomationId(_copyToAnotherLocationButton, "AdvancedFilterCopyToAnotherLocationButton");
+        AutomationProperties.SetAutomationId(_copyToAnotherLocationButton, FreeXAutomationIdCatalog.AdvancedFilter.CopyToAnotherLocationButton);
         AutomationProperties.SetHelpText(_copyToAnotherLocationButton, UiText.Get("AdvancedFilter_CopyFilteredRecordsToTheCopyToDestination"));
 
         AutomationProperties.SetName(_uniqueBox, UiText.Get("AdvancedFilter_UniqueRecordsOnlyAutomationName"));
-        AutomationProperties.SetAutomationId(_uniqueBox, "AdvancedFilterUniqueRecordsOnlyBox");
+        AutomationProperties.SetAutomationId(_uniqueBox, FreeXAutomationIdCatalog.AdvancedFilter.UniqueRecordsOnlyBox);
         AutomationProperties.SetHelpText(_uniqueBox, UiText.Get("AdvancedFilter_ShowOrCopyOnlyUniqueRecords"));
     }
 
@@ -159,7 +157,7 @@ public sealed partial class AdvancedFilterDialog : Window
 
     private void RequestRangeSelection(AdvancedFilterRangeSelectionTarget target, DialogReferencePickerRequest request)
     {
-        RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
+        RangeSelectionRequest = AdvancedFilterPlanner.CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
         FocusRangeSelectionInput(request.Target);
     }
@@ -205,9 +203,9 @@ public sealed partial class AdvancedFilterDialog : Window
             : Visibility.Visible;
     }
 
-    private void FocusInvalidRangeInput(SharedAdvancedFilterPlanError error)
+    private void FocusInvalidRangeInput(AdvancedFilterPlanError error)
     {
-        var focusTarget = SharedAdvancedFilterPlanner.FocusTargetForPlanError(error);
+        var focusTarget = AdvancedFilterPlanner.FocusTargetForPlanError(error);
         if (focusTarget == AdvancedFilterErrorFocusTarget.CopyTo)
         {
             _copyToAnotherLocationButton.IsChecked = true;
@@ -227,20 +225,24 @@ public sealed partial class AdvancedFilterDialog : Window
     private void Accept()
     {
         var outputMode = _copyToAnotherLocationButton.IsChecked == true
-            ? SharedAdvancedFilterOutputMode.CopyToAnotherLocation
-            : SharedAdvancedFilterOutputMode.FilterInPlace;
-        var planResult = CreateAdvancedFilterPlan(
-                _sheetId,
-                _listRangeBox.Text,
-                _criteriaRangeBox.Text,
-                _copyToBox.Text,
-                outputMode,
-                _uniqueBox.IsChecked == true,
-                _resolveSheetId);
+            ? AdvancedFilterOutputMode.CopyToAnotherLocation
+            : AdvancedFilterOutputMode.FilterInPlace;
+        var planResult = AdvancedFilterPlanner.CreatePlan(
+            _sheetId,
+            _listRangeBox.Text,
+            _criteriaRangeBox.Text,
+            _copyToBox.Text,
+            outputMode,
+            _uniqueBox.IsChecked == true,
+            _resolveSheetId);
 
-        if (!TryCreateDialogResult(planResult, out var result, out var error))
+        if (!AdvancedFilterPlanner.TryCreateDialogResult(planResult, out var result))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("AdvancedFilter_EnterValidFilterRanges"), Title);
+            var error = AdvancedFilterPlanner
+                .DescribeError(planResult)
+                .Message
+                .Resolve(UiText.Get, UiText.Format);
+            DialogMessageHelper.ShowWarning(this, error, Title);
             FocusInvalidRangeInput(planResult.Error);
             return;
         }

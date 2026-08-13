@@ -28,8 +28,13 @@
     <Using Remove="System.Drawing" />
     <Using Remove="System.Windows.Forms" />
     <Using Include="Free.Shared.Ribbon" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonMetadata" Alias="RibbonMetadata" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonMetadataRole" Alias="RibbonMetadataRole" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonCommandContentLayout" Alias="RibbonCommandContentLayout" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonTooltip" Alias="RibbonTooltip" />
     <Using Include="FreeX.Ribbon.Definitions" />
     <Using Include="FreeX.App.Services.Ribbon" />
+    <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 
   <ItemGroup>
@@ -96,9 +101,12 @@
     <Using Include="Free.Shared.Commands" />
     <Using Include="Free.Shared.AppServices" />
     <Using Include="Free.Shared.Shell" />
+    <Using Include="FreeX.App.Services" />
     <Using Include="FreeX.App.Presentation" />
+    <Using Include="FreeX.App.Presentation.Shell" />
     <Using Include="FreeX.App.Presentation.FormulaBar" />
     <Using Include="FreeX.App.Presentation.Charts" />
+    <Using Include="FreeX.App.Presentation.Charts.Editing" />
     <Using Include="FreeX.App.Presentation.PageLayout" />
     <Using Include="FreeX.App.Presentation.DrawingInteraction" />
     <Using Include="FreeX.App.Presentation.TextToColumns" />

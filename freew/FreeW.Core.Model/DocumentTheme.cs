@@ -12,7 +12,7 @@ namespace FreeW.Core.Model;
 /// <param name="BodyFont">Font family for Normal body text and the document default run.</param>
 /// <param name="PrimaryColorHex">Primary accent colour (RRGGBB hex) used for the Title style.</param>
 /// <param name="HeadingColorHex">Colour for Heading 1 / Heading 2 (RRGGBB hex).</param>
-/// <param name="HeadingAccentColorHex">A darker accent for Heading 3 (RRGGBB hex).</param>
+/// <param name="HeadingAccentColorHex">A darker accent for Heading 3 and deeper role headings (RRGGBB hex).</param>
 /// <param name="EffectSetName">DrawingML effect-set name serialised as the theme's <c>a:fmtScheme</c>.</param>
 public sealed record DocumentTheme(
     string Name,
@@ -118,9 +118,9 @@ public sealed record DocumentTheme(
     /// <list type="bullet">
     /// <item>The body font becomes the document default run's <see cref="RunFormatting.FontFamily"/> and
     /// the Normal style's run font (so body text reflows in the new face).</item>
-    /// <item>The heading font is set on the Title and every Heading* style.</item>
+    /// <item>The heading font is set on the Title and every registered role heading.</item>
     /// <item>Colours are taken from the palette: the Title gets the primary colour, Heading 1/2 the
-    /// heading colour, and Heading 3 the darker accent.</item>
+    /// heading colour, and Heading 3/4 the darker accent.</item>
     /// </list>
     /// Styles absent from the catalog are skipped (the method never adds styles). Font sizes, weights
     /// and paragraph formatting are preserved — only fonts and colours are rewritten.
@@ -134,15 +134,29 @@ public sealed record DocumentTheme(
 
         // Body font: document default run + the Normal style's run face.
         doc.DefaultRun = doc.DefaultRun with { FontFamily = theme.BodyFont };
-        SetRun(doc, "Normal", run => run with { FontFamily = theme.BodyFont });
-
-        // Title: primary accent colour + heading font.
-        SetRun(doc, "Title", run => run with { FontFamily = theme.HeadingFont, ColorHex = theme.PrimaryColorHex });
-
-        // Headings: heading font throughout, palette colours by level.
-        SetRun(doc, "Heading1", run => run with { FontFamily = theme.HeadingFont, ColorHex = theme.HeadingColorHex });
-        SetRun(doc, "Heading2", run => run with { FontFamily = theme.HeadingFont, ColorHex = theme.HeadingColorHex });
-        SetRun(doc, "Heading3", run => run with { FontFamily = theme.HeadingFont, ColorHex = theme.HeadingAccentColorHex });
+        foreach (var descriptor in BuiltInStyles.RoleCatalog)
+        {
+            switch (descriptor.Role)
+            {
+                case BuiltInStyleRole.Normal:
+                    SetRun(doc, descriptor, run => run with { FontFamily = theme.BodyFont });
+                    break;
+                case BuiltInStyleRole.Title:
+                    SetRun(doc, descriptor, run => run with
+                    {
+                        FontFamily = theme.HeadingFont,
+                        ColorHex = theme.PrimaryColorHex,
+                    });
+                    break;
+                case BuiltInStyleRole.Heading:
+                    SetRun(doc, descriptor, run => run with
+                    {
+                        FontFamily = theme.HeadingFont,
+                        ColorHex = HeadingColor(theme, descriptor),
+                    });
+                    break;
+            }
+        }
     }
 
     /// <summary>
@@ -161,16 +175,25 @@ public sealed record DocumentTheme(
             HeadingAccentColorHex = theme.HeadingAccentColorHex,
         };
 
-        SetRun(doc, "Title", run => run with { ColorHex = theme.PrimaryColorHex });
-        SetRun(doc, "Heading1", run => run with { ColorHex = theme.HeadingColorHex });
-        SetRun(doc, "Heading2", run => run with { ColorHex = theme.HeadingColorHex });
-        SetRun(doc, "Heading3", run => run with { ColorHex = theme.HeadingAccentColorHex });
+        foreach (var descriptor in BuiltInStyles.RoleCatalog)
+        {
+            if (descriptor.Role == BuiltInStyleRole.Title)
+                SetRun(doc, descriptor, run => run with { ColorHex = theme.PrimaryColorHex });
+            else if (descriptor.Role == BuiltInStyleRole.Heading)
+                SetRun(doc, descriptor, run => run with { ColorHex = HeadingColor(theme, descriptor) });
+        }
     }
 
+    private static string HeadingColor(DocumentTheme theme, BuiltInStyles.Descriptor descriptor) =>
+        descriptor.HeadingLevel is <= 2 ? theme.HeadingColorHex : theme.HeadingAccentColorHex;
+
     // Rewrite a single catalog style's run formatting in place, if the style exists.
-    private static void SetRun(TextDocument doc, string styleId, Func<RunFormatting, RunFormatting> transform)
+    private static void SetRun(
+        TextDocument doc,
+        BuiltInStyles.Descriptor descriptor,
+        Func<RunFormatting, RunFormatting> transform)
     {
-        if (doc.Styles.TryGetValue(styleId, out var style))
+        if (doc.Styles.TryGetValue(descriptor.Id, out var style))
             style.Run = transform(style.Run);
     }
 }

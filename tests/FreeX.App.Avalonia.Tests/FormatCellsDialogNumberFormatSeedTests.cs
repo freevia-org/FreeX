@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using FluentAssertions;
+using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -28,7 +29,7 @@ public sealed class FormatCellsDialogNumberFormatSeedTests
     public async Task FormatCells_NoEditOk_PreservesCustomNumberFormatCode_NotCoercedToPreset()
     {
         const string customFormat = "0.0000";
-        MainWindow.FormatCellsDialogResult? result = null;
+        FormatCellsCompactDialogPlan? result = null;
 
         await Session.Dispatch(async () =>
         {

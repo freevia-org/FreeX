@@ -4,6 +4,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.App.Presentation.Editing;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -18,12 +19,12 @@ namespace FreeX.App.Host.Tests;
 /// overwritten. <c>ExecuteUndo</c>/<c>ExecuteRedo</c> are exactly this kind of cell-content mutation
 /// (they change what a cell actually contains) but never touched the clipboard at all: an Undo that
 /// reverted a cell inside an already-copied range left the clipboard's cached
-/// <c>InternalClipboard.Cells</c> snapshot (a detached <c>Cell.Clone()</c> taken at Copy time) holding
+/// <c>WorkbookClipboardSnapshot.Cells</c> snapshot (a detached <c>Cell.Clone()</c> taken at Copy time) holding
 /// the pre-undo value, so a later Paste silently resurrected data the user had just explicitly undone.
 /// <para>
 /// These tests drive the REAL WPF entry points (TryExecuteEditCells, ExecuteCopy, ExecuteUndo,
 /// ExecuteRedo) via reflection, exactly as R112_CellAreaCtrlClickMultiSelectionTests and
-/// R124_UndoDeleteDrawingObjectSelectionTests already do -- never constructing InternalClipboard or a
+/// R124_UndoDeleteDrawingObjectSelectionTests already do -- never constructing a workbook clipboard snapshot or a
 /// CommandOutcome by hand.
 /// </para>
 /// </summary>
@@ -131,7 +132,7 @@ public sealed class R126_UndoRedoInvalidatesClipboardTests
         private readonly Action _executeUndo;
         private readonly Action _executeRedo;
         private readonly MethodInfo _tryExecuteEditCells;
-        private readonly FieldInfo _internalClipboardField;
+        private readonly FieldInfo _workbookClipboardSessionField;
 
         public Sheet Sheet { get; }
 
@@ -161,9 +162,9 @@ public sealed class R126_UndoRedoInvalidatesClipboardTests
                 .GetMethods(PrivateInstance)
                 .Single(m => m.Name == "TryExecuteEditCells" && m.GetParameters().Length == 2);
 
-            _internalClipboardField = typeof(MainWindow)
-                .GetField("_internalClipboard", PrivateInstance)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_internalClipboard");
+            _workbookClipboardSessionField = typeof(MainWindow)
+                .GetField("_workbookClipboardSession", PrivateInstance)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_workbookClipboardSession");
         }
 
         public void SelectRange(GridRange range) => _selectRange(range);
@@ -183,7 +184,8 @@ public sealed class R126_UndoRedoInvalidatesClipboardTests
             _tryExecuteEditCells.Invoke(_window, [edits, "Edit Cell"]);
         }
 
-        public object? InternalClipboard => _internalClipboardField.GetValue(_window);
+        public WorkbookClipboardSnapshot? InternalClipboard =>
+            ((WorkbookClipboardSession?)_workbookClipboardSessionField.GetValue(_window))?.Content;
 
         public GridRange? ClipboardRange => _window.SheetGrid.ClipboardRange;
 

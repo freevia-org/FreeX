@@ -11,10 +11,13 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests.Printing;
 
-public sealed class PrintLifecycleTests
+public sealed class PrintLifecycleTests : IDisposable
 {
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.PrintLifecycleTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public async Task MainWindow_GatesBackstagePrintByInjectedPlatformCapability()
@@ -42,6 +45,7 @@ public sealed class PrintLifecycleTests
                 restorePrintOwnerFocus: _ => restoreCalls++);
 
             await window.PrintAsync();
+            return true;
         }, CancellationToken.None);
 
         restoreCalls.Should().Be(1);
@@ -64,6 +68,7 @@ public sealed class PrintLifecycleTests
                 restorePrintOwnerFocus: _ => restoreCalls++);
 
             await window.PrintAsync();
+            return true;
         }, CancellationToken.None);
 
         dialogCalls.Should().Be(1);
@@ -114,6 +119,7 @@ public sealed class PrintLifecycleTests
             capability.FieldValue.Should().NotContain("operating-system printer dialog");
             capability.ActionDescription.Should().Contain("platform printer service");
             capability.ActionDescription.Should().NotContain("native");
+            return true;
         }, CancellationToken.None);
     }
 
@@ -134,6 +140,7 @@ public sealed class PrintLifecycleTests
             callbacks.Print.Should().BeNull();
             window.PrintStatusForTests.Should().Contain("No printers");
             window.PrintStatusForTests.Should().Contain("Create PDF");
+            return true;
         }, CancellationToken.None);
 
         restoreCalls.Should().Be(1);
@@ -143,7 +150,7 @@ public sealed class PrintLifecycleTests
     public async Task FinishMergePrinter_prints_selected_record_without_replacing_preview_or_session()
     {
         string? exportedText = null;
-        string? temporaryPdfPath = null;
+        string? printStatus = null;
         var printService = new FakePrintService(isSupported: true);
 
         await Session.Dispatch(async () =>
@@ -152,11 +159,10 @@ public sealed class PrintLifecycleTests
                 printService,
                 showPrintSelectionDialog: (_, _, _) =>
                     Task.FromResult<PrintSelection?>(new PrintSelection("Office")),
-                savePrintPdf: (view, path) =>
+                savePrintPdf: (view, stream) =>
                 {
                     exportedText = view.Document.PlainText;
-                    temporaryPdfPath = path;
-                    File.WriteAllText(path, "%PDF-1.4 test");
+                    stream.Write(System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 test"));
                 });
             var template = TextDocument.CreateEmpty();
             template.Blocks.Clear();
@@ -190,23 +196,24 @@ public sealed class PrintLifecycleTests
             engine.Session.Mapping.Should().BeSameAs(mapping);
             engine.Session.CurrentIndex.Should().Be(1);
             engine.Session.IsPreviewing.Should().BeTrue();
+            printStatus = window.PrintStatusForTests;
+            return true;
         }, CancellationToken.None);
 
-        printService.SubmittedFileExisted.Should().BeTrue();
-        printService.SubmittedPdfPath.Should().Be(temporaryPdfPath);
-        temporaryPdfPath.Should().NotBeNull();
-        File.Exists(temporaryPdfPath!).Should().BeFalse("PrintAsync cleans its temporary merged PDF");
+        printService.SubmitCalls.Should().Be(1, $"print status was '{printStatus}'");
+        printService.SubmittedPdfPath.Should().NotBeNull($"print status was '{printStatus}'");
+        printService.SubmittedFileExisted.Should().BeTrue($"print status was '{printStatus}'");
+        File.Exists(printService.SubmittedPdfPath!).Should().BeFalse("PrintAsync cleans its temporary merged PDF");
     }
 
-    private static MainWindow CreateWindow(
+    private MainWindow CreateWindow(
         IPlatformPrintService printService,
         Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>>? showPrintSelectionDialog = null,
         Action<IInputElement?>? restorePrintOwnerFocus = null,
-        Action<DocumentView, string>? savePrintPdf = null)
+        Action<DocumentView, Stream>? savePrintPdf = null)
     {
         var settingsPath = Path.Combine(
-            Path.GetTempPath(),
-            "FreeW.PrintLifecycleTests",
+            _temporaryDirectory.Path,
             Guid.NewGuid().ToString("N"),
             "settings.json");
         return new MainWindow(
@@ -226,6 +233,7 @@ public sealed class PrintLifecycleTests
         public bool IsSupported { get; } = isSupported;
         public string? SubmittedPdfPath { get; private set; }
         public bool SubmittedFileExisted { get; private set; }
+        public int SubmitCalls { get; private set; }
 
         public Task<PrinterDiscoveryResult> DiscoverAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(
@@ -242,6 +250,7 @@ public sealed class PrintLifecycleTests
             PrintSelection selection,
             CancellationToken cancellationToken = default)
         {
+            SubmitCalls++;
             SubmittedPdfPath = pdfPath;
             SubmittedFileExisted = File.Exists(pdfPath);
             return Task.FromResult(new PrintSubmissionResult(PrintSubmissionStatus.Submitted, selection.PrinterName));

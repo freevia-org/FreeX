@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Automation;
@@ -69,36 +68,45 @@ static async Task<int> Main(string[] args)
         {
             Console.Error.WriteLine($"avalonia {scenario.Id}: {ex.GetType().Name}: {ex.Message}");
         }
-        captures.Add(result ?? Unsupported(scenario, "The Avalonia adapter requires an app-owned route constructor or a temporary capture hook for this family."));
+        captures.Add(result ?? Unsupported(scenario, FreeWDialogEvidenceCatalog.CreateCapturePlan(
+            "avalonia", scenario.Id, scenario.RouteId, scenario.State, scenario.Tab).UnsupportedNote));
         File.AppendAllText(progressPath, $"complete {scenario.Id}{Environment.NewLine}");
     }
-    var manifest = new CaptureManifest("freew.dialog-capture-manifest.v1", 2, "avalonia", output, captures);
-    File.WriteAllText(Path.Combine(output, "avalonia_dialog_capture_manifest.json"), JsonSerializer.Serialize(manifest, JsonOptions()));
+    var manifest = new CaptureManifest(
+        FreeWDialogEvidenceCatalog.ManifestSchema,
+        FreeWDialogEvidenceCatalog.ManifestSchemaVersion("avalonia"),
+        "avalonia",
+        output,
+        captures);
+    File.WriteAllText(
+        Path.Combine(output, FreeWDialogEvidenceCatalog.ManifestFileName("avalonia")),
+        JsonSerializer.Serialize(manifest, JsonOptions()));
     Console.WriteLine($"avalonia scenarios: {captures.Count}; captured: {captures.Count(c => c.Status == "captured")}; unsupported: {captures.Count(c => c.Status != "captured")}");
     return captures.All(c => c.Status == "captured" && c.FullPixelContent?.PassesContentGate == true && c.TargetPixelContent?.PassesContentGate == true) ? 0 : 2;
 }
 
 static Capture? CaptureOne(Scenario scenario, string output, Capture? authorityCapture)
 {
+    var plan = FreeWDialogEvidenceCatalog.CreateCapturePlan(
+        "avalonia", scenario.Id, scenario.RouteId, scenario.State, scenario.Tab);
     var dialog = AvaloniaDialogRouteFactory.Create(scenario.RouteId, scenario.State, scenario.Tab);
     if (dialog is null) return null;
-    var useAuthoritySize = authorityCapture is { Status: "captured" }
-        && scenario.RouteId is "accessibility-report" or "font" or "paragraph" or "multilevel-list" or "paste-special" or "style" or "manage-styles";
+    var useAuthoritySize = authorityCapture is { Status: "captured" } && plan.UseWpfAuthoritySize;
     var width = useAuthoritySize
         ? authorityCapture!.LogicalWidth
         : Math.Max(560, (int)Math.Ceiling(dialog.MinWidth));
     var height = useAuthoritySize
         ? authorityCapture!.LogicalHeight
-        : Math.Max(TargetHeight(scenario), (int)Math.Ceiling(dialog.MinHeight));
-    var hasNativeFrame = scenario.RouteId != "screen-clip-overlay";
+        : Math.Max(plan.TargetHeight, (int)Math.Ceiling(dialog.MinHeight));
+    var hasNativeFrame = plan.HasNativeFrame;
     var clientWidth = hasNativeFrame ? width - WpfNonClientWidth : width;
     var clientHeight = hasNativeFrame ? height - WpfNonClientHeight : height;
-    if (scenario.RouteId == "multilevel-list")
+    if (plan.ClientWidthAdjustment != 0)
     {
         // The WPF RenderTargetBitmap retains one additional right-edge client pixel
         // for this static prompt. Preserve that authority width without changing the
         // shared native-frame compensation used by other routes.
-        clientWidth++;
+        clientWidth += plan.ClientWidthAdjustment;
     }
     dialog.Width = clientWidth;
     dialog.Height = clientHeight;
@@ -130,27 +138,28 @@ static Capture? CaptureOne(Scenario scenario, string output, Capture? authorityC
         dialog.Close();
         return Unsupported(scenario, $"Avalonia compositor output failed the visual-content gate: {fullContent.Failure ?? "zero-byte PNG"}.", "avalonia-invalid-rendered-content", semantics, fullContent, targetContent);
     }
-    var path = Path.Combine(output, "full", "avalonia", Safe(scenario.Id) + ".png");
-    var cropPath = Path.Combine(output, "crops", "avalonia", Safe(scenario.Id) + ".png");
+    var path = ResolveOutputPath(output, plan.FullPngPath);
+    var cropPath = ResolveOutputPath(output, plan.TargetPngPath);
     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
     Directory.CreateDirectory(Path.GetDirectoryName(cropPath)!);
     File.WriteAllBytes(path, bytes);
     File.WriteAllBytes(cropPath, bytes);
     dialog.Close();
-    return new Capture(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "captured", Relative(output, path), width, height, width, height, 96, 96, new Rect(0, 0, width, height), semantics, null, "Real app-owned Avalonia dialog rendered through CaptureRenderedFrame; full and target images passed pixel-content validation.", Relative(output, cropPath), fullContent, targetContent);
+    return new Capture(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "captured", plan.FullPngPath, width, height, width, height, 96, 96, new Rect(0, 0, width, height), semantics, null, plan.CapturedNote, plan.TargetPngPath, fullContent, targetContent);
 }
 
 static void Populate(Window dialog, Scenario scenario)
 {
     var state = scenario.State;
-    if (scenario.RouteId == "about")
+    var population = FreeWDialogEvidenceCatalog.GetRequired(scenario.RouteId).Population;
+    if (population == FreeWDialogPopulationKind.None)
     {
         // About has no editable or stateful fields. Keep initial and populated
         // captures on the same production presentation contract.
         FocusScenarioTarget(dialog, scenario);
         return;
     }
-    if (scenario.RouteId == "manual-hyphenation")
+    if (population == FreeWDialogPopulationKind.ManualHyphenation)
     {
         var choices = FindVisualChildren<ComboBox>(dialog).FirstOrDefault();
         if (choices is not null && state != "initial")
@@ -158,7 +167,7 @@ static void Populate(Window dialog, Scenario scenario)
         FocusScenarioTarget(dialog, scenario);
         return;
     }
-    if (scenario.RouteId == "style")
+    if (population == FreeWDialogPopulationKind.Style)
     {
         var styleTextBoxes = FindVisualChildren<TextBox>(dialog).ToArray();
         var combos = FindVisualChildren<ComboBox>(dialog).ToArray();
@@ -186,7 +195,7 @@ static void Populate(Window dialog, Scenario scenario)
         FocusScenarioTarget(dialog, scenario);
         return;
     }
-    if (scenario.RouteId == "footnote-endnote-options")
+    if (population == FreeWDialogPopulationKind.FootnoteEndnoteOptions)
     {
         var combos = FindVisualChildren<ComboBox>(dialog).ToArray();
         var routeTextBoxes = FindVisualChildren<TextBox>(dialog).ToArray();
@@ -211,8 +220,7 @@ static void Populate(Window dialog, Scenario scenario)
         else if (state == "validation-error" && routeTextBoxes.Length > 0)
         {
             routeTextBoxes[0].Text = "not-a-number";
-            dialog.GetType().GetMethod("ValidateForTest", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .Invoke(dialog, null);
+            ((FootnoteEndnoteOptionsDialog)dialog).ValidateForTest();
         }
         FocusScenarioTarget(dialog, scenario);
         return;
@@ -369,9 +377,8 @@ static IEnumerable<T> FindVisualChildren<T>(Visual root) where T : Visual
 sealed record RenderedFrame(byte[] Png, byte[] Pixels, int Width, int Height);
 static string Required(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : throw new ArgumentException($"Missing {option}."); }
 static string? Optional(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
-static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
-static string Safe(string value) => System.Text.RegularExpressions.Regex.Replace(value, "[^A-Za-z0-9._-]", "-");
-static int TargetHeight(Scenario scenario) => scenario.RouteId == "compare-documents" && scenario.Tab == "More" ? 720 : 600;
+static string ResolveOutputPath(string root, string relativePath) =>
+    Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
 static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 }
 

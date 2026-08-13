@@ -5,8 +5,6 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using System.Text.Json;
-using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -25,8 +23,8 @@ namespace FreeX.App.Avalonia;
 /// (<see cref="PivotHeaderDropdownMenuBuilder"/>). All mutations route through the shared pivot mutation
 /// commands (<see cref="ConfigurePivotTableLayoutCommand"/>/<see cref="ConfigurePivotTableViewCommand"/>) via
 /// the session's command path, then refresh the grid and the pane. The non-UI mapping (validated drop →
-/// command, menu action → command) lives in <see cref="PivotFieldLayoutCommandFactory"/> /
-/// <see cref="PivotHeaderMenuCommandFactory"/> so it can be unit-tested without a running app.
+/// command, menu action → command) lives in <see cref="PivotFieldLayoutPlanner"/> /
+/// <see cref="PivotHeaderCommandPlanner"/> so it can be unit-tested without a running app.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -45,10 +43,6 @@ public sealed partial class MainWindow
     private string? _pivotPaneSignature;
     private string _pivotPaneSearchText = string.Empty;
     private int _pivotFieldPaneBuildCount;
-
-    internal int PivotFieldPaneBuildCountForTest => _pivotFieldPaneBuildCount;
-
-    internal bool PivotFieldPaneVisibleForTest => _pivotFieldPaneHost.IsVisible;
 
     // The field currently being dragged within the pane (pointer-capture gesture), or null when idle.
     private PivotPaneDragItem? _pivotPaneDragItem;
@@ -88,7 +82,7 @@ public sealed partial class MainWindow
                 _pivotPaneSearchText = string.Empty;
             }
 
-            RecordPivotRuntimeEvidence("pane-hidden");
+            ObservePivotRuntimeState("pane-hidden");
             return;
         }
 
@@ -100,13 +94,13 @@ public sealed partial class MainWindow
         _pivotPaneSignature = signature;
         _pivotFieldPaneHost.Child = BuildPivotFieldPaneBody(pivot, headers);
         _pivotFieldPaneHost.IsVisible = true;
-        RecordPivotRuntimeEvidence("pane-visible");
+        ObservePivotRuntimeState("pane-visible");
     }
 
-    private void RecordPivotRuntimeEvidence(string stage)
+    private void ObservePivotRuntimeState(string stage)
     {
-        var path = FindPivotRuntimeEvidencePath(App.StartupArguments);
-        if (string.IsNullOrWhiteSpace(path))
+        var observer = _pivotRuntimeObserver;
+        if (observer is null)
             return;
 
         try
@@ -114,57 +108,36 @@ public sealed partial class MainWindow
             var sheet = _session.ActiveSheet;
             var activeCell = _session.ActiveCell;
             var pivot = PivotSourceContext.FindActivePivot(sheet, activeCell);
-            var payload = new
-            {
-                utc = DateTimeOffset.UtcNow,
+            observer(new PivotRuntimeObservation(
                 stage,
-                activeSheet = sheet.Name,
-                activeSheetId = sheet.Id.ToString(),
-                activeCellSheetId = activeCell.Sheet.ToString(),
-                activeCellRow = activeCell.Row,
-                activeCellColumn = activeCell.Col,
-                startupArguments = App.StartupArguments.ToArray(),
-                currentFilePath = _session.CurrentFilePath,
-                workbookName = _session.Workbook.Name,
-                workbookSheets = _session.Workbook.Sheets.Select(item => new
-                {
-                    item.Name,
-                    pivotCount = item.PivotTables.Count,
-                }).ToArray(),
-                sheetPivotCount = sheet.PivotTables.Count,
-                pivots = sheet.PivotTables.Select(item => new
-                {
-                    item.Name,
-                    targetStart = item.TargetRange.Start.ToA1(),
-                    targetEnd = item.TargetRange.End.ToA1(),
-                    renderedStart = item.LastRenderedRange?.Start.ToA1(),
-                    renderedEnd = item.LastRenderedRange?.End.ToA1(),
-                }).ToArray(),
-                resolvedPivot = pivot?.Name,
-                paneVisible = _pivotFieldPaneHost.IsVisible,
-                paneWidth = _pivotFieldPaneHost.Bounds.Width,
-                userHidden = _pivotFieldPaneUserHidden,
-            };
-            var directory = Path.GetDirectoryName(path);
-            if (!string.IsNullOrWhiteSpace(directory))
-                Directory.CreateDirectory(directory);
-            File.AppendAllText(path, JsonSerializer.Serialize(payload) + Environment.NewLine);
+                sheet.Name,
+                sheet.Id.ToString(),
+                activeCell.Sheet.ToString(),
+                activeCell.Row,
+                activeCell.Col,
+                _session.CurrentFilePath,
+                _session.Workbook.Name,
+                _session.Workbook.Sheets
+                    .Select(item => new PivotRuntimeSheetObservation(item.Name, item.PivotTables.Count))
+                    .ToArray(),
+                sheet.PivotTables.Count,
+                sheet.PivotTables
+                    .Select(item => new PivotRuntimeTableObservation(
+                        item.Name,
+                        item.TargetRange.Start.ToA1(),
+                        item.TargetRange.End.ToA1(),
+                        item.LastRenderedRange?.Start.ToA1(),
+                        item.LastRenderedRange?.End.ToA1()))
+                    .ToArray(),
+                pivot?.Name,
+                _pivotFieldPaneHost.IsVisible,
+                _pivotFieldPaneHost.Bounds.Width,
+                _pivotFieldPaneUserHidden));
         }
         catch
         {
-            // Evidence is opt-in and must never affect worksheet behavior.
+            // Optional observers must never affect worksheet behavior.
         }
-    }
-
-    private static string? FindPivotRuntimeEvidencePath(IReadOnlyList<string> arguments)
-    {
-        for (var index = 0; index + 1 < arguments.Count; index++)
-        {
-            if (string.Equals(arguments[index], "--freex-pivot-runtime-evidence", StringComparison.OrdinalIgnoreCase))
-                return arguments[index + 1];
-        }
-
-        return null;
     }
 
     // Identity + ordered field membership; a layout change (drag, sort) shifts the signature and rebuilds.
@@ -530,21 +503,27 @@ public sealed partial class MainWindow
             return;
 
         var validator = BuildPivotDragValidator(pivot);
-        var result = validator.Validate(pivot, headers, request);
-        if (!result.IsAllowed)
+        var dropPlan = PivotFieldLayoutPlanner.PlanDrop(
+            PivotFieldLayoutPlanner.Capture(pivot),
+            headers,
+            request,
+            validator);
+        if (!dropPlan.Result.IsAllowed)
         {
-            ShowEditIssue(result.RejectionReason ?? UiText.Get("PivotLoc_FieldMoveNotAllowed"));
+            ShowEditIssue(dropPlan.Result.RejectionReason ?? UiText.Get("PivotLoc_FieldMoveNotAllowed"));
             return;
         }
 
-        var command = PivotFieldLayoutCommandFactory.TryCreate(_session.ActiveSheet.Id, pivot, headers, result);
-        if (command is null)
+        if (dropPlan.Areas is not { } areas)
         {
             ShowEditIssue(UiText.Get("PivotLoc_NeedsValueField"));
             return;
         }
 
-        ExecutePivotCommand(command);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanLayout(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                areas));
     }
 
     // ── Header dropdown menu ──────────────────────────────────────────────────
@@ -657,7 +636,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        var result = PivotHeaderMenuCommandFactory.Create(
+        var result = PivotHeaderCommandPlanner.Create(
             _session.ActiveSheet.Id, pivot, headers, target, action, validator);
 
         if (result.IsDeferred)
@@ -669,7 +648,10 @@ public sealed partial class MainWindow
         if (result.IsNoOp || result.Command is null)
             return;
 
-        ExecutePivotCommand(result.Command);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanHeaderCommand(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                result));
     }
 
     // The pane chip carries a layout-area bucket; map it to the header-target the menu builder expects.
@@ -700,20 +682,6 @@ public sealed partial class MainWindow
 
     private PivotFieldDragValidator BuildPivotDragValidator(PivotTableModel pivot) =>
         new(sourceFieldIndex => PivotSourceContext.IsNumericSourceColumn(_session.Workbook, pivot, sourceFieldIndex));
-
-    private void ExecutePivotCommand(IWorkbookCommand command)
-    {
-        var result = _session.ExecuteReviewCommand(command);
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("PivotLoc_UpdateFailed"));
-            return;
-        }
-
-        // Force a pane rebuild on the next refresh regardless of signature drift timing.
-        _pivotPaneSignature = null;
-        RefreshShell(command.Label);
-    }
 
     private sealed record PivotPaneDragItem(
         int SourceFieldIndex,

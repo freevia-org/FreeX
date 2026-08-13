@@ -30,13 +30,7 @@ public static class DocumentMerge
     /// untouched. Returns a fresh list of fresh block instances, in document order.
     /// </summary>
     public static IReadOnlyList<Block> CloneBlocks(TextDocument source)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        var clones = new List<Block>(source.Blocks.Count);
-        foreach (var block in source.Blocks)
-            clones.Add(CloneBlock(block));
-        return clones;
-    }
+        => DocumentModelCloner.CloneBlocks(source, RevisionClonePolicy.Preserve);
 
     /// <summary>
     /// Clones source body blocks for insertion into <paramref name="target"/>, carrying every preserved package
@@ -99,279 +93,11 @@ public static class DocumentMerge
     }
 
     /// <summary>Deep-clone a single body block (paragraph or table). Unknown block kinds are passed through.</summary>
-    public static Block CloneBlock(Block block) => block switch
-    {
-        Paragraph p => CloneParagraph(p),
-        Table t => CloneTable(t),
-        AltChunkBlock altChunk => new AltChunkBlock(altChunk.PreservedPartName)
-        {
-            BlockContentControl = altChunk.BlockContentControl,
-            BlockCustomXml = altChunk.BlockCustomXml
-        },
-        _ => block
-    };
+    public static Block CloneBlock(Block block)
+        => DocumentModelCloner.CloneBlock(block, RevisionClonePolicy.Preserve);
 
     private static Paragraph CloneParagraph(Paragraph source)
-    {
-        var clone = new Paragraph
-        {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            StyleId = source.StyleId,
-            SpanningFieldStart = source.SpanningFieldStart,
-            SpanningFieldOwner = source.SpanningFieldOwner,
-            EndsSpanningField = source.EndsSpanningField,
-            DropCap = source.DropCap,
-            SectionBreak = source.SectionBreak is { } section ? CloneSection(section) : null,
-            PreservedNumbering = source.PreservedNumbering,
-            ParagraphFormatRevision = source.ParagraphFormatRevision,
-            MarkRevision = source.MarkRevision,
-            MarkRevisionAuthor = source.MarkRevisionAuthor,
-            MarkRevisionDateXml = source.MarkRevisionDateXml,
-        };
-        clone.BookmarkNames.AddRange(source.BookmarkNames);
-        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
-        foreach (var run in source.Runs)
-            clone.Runs.Add(CloneRun(run));
-        return clone;
-    }
-
-    private static Run CloneRun(Run source) => new(source.Text, source.Formatting)
-    {
-        Image = source.Image?.Clone(),
-        Equation = source.Equation?.Clone(),
-        Shape = source.Shape is { } shape ? CloneShape(shape) : null,
-        WordArt = source.WordArt?.Clone(),
-        SmartArt = source.SmartArt is { } smartArt ? SmartArtCommandCopy.Clone(smartArt) : null,
-        Chart = source.Chart?.Clone(),
-        EmbeddedObject = source.EmbeddedObject?.Clone(),
-        Ruby = source.Ruby?.Clone(),
-        PreservedDrawing = source.PreservedDrawing?.Duplicate(),
-        DrawingGroup = source.DrawingGroup is { } drawingGroup ? CloneDrawingGroup(drawingGroup) : null,
-        HyperlinkUrl = source.HyperlinkUrl,
-        HyperlinkAnchor = source.HyperlinkAnchor,
-        HyperlinkTooltip = source.HyperlinkTooltip,
-        SubDocument = source.SubDocument,
-        FieldKind = source.FieldKind,
-        TableFormula = source.TableFormula,
-        FootnoteId = source.FootnoteId,
-        EndnoteId = source.EndnoteId,
-        CommentId = source.CommentId,
-        IsCommentReference = source.IsCommentReference,
-        IsPageBreak = source.IsPageBreak,
-        IsColumnBreak = source.IsColumnBreak,
-        Revision = source.Revision,
-        Control = source.Control, // immutable record — safe to share
-        Citation = source.Citation, // immutable — safe to share
-        CrossReference = source.CrossReference, // immutable record — safe to share
-        ComplexField = source.ComplexField, // immutable record — safe to share
-        RevisionAuthor = source.RevisionAuthor,
-        RevisionDateXml = source.RevisionDateXml,
-        MoveRevisionId = source.MoveRevisionId,
-        FormatRevision = source.FormatRevision
-    };
-
-    private static Shape CloneShape(Shape source)
-    {
-        var clone = new Shape
-        {
-            Kind = source.Kind,
-            WidthPt = source.WidthPt,
-            HeightPt = source.HeightPt,
-            FillColorHex = source.FillColorHex,
-            OutlineColorHex = source.OutlineColorHex,
-            OutlineWidthPt = source.OutlineWidthPt,
-            OutlineDash = source.OutlineDash,
-            AltText = source.AltText,
-            TextDirection = source.TextDirection,
-            Placement = source.Placement?.Clone(),
-            ExtendedFill = source.ExtendedFill is { } fill ? CloneShapeFill(fill) : null,
-            Effects = source.Effects is { } effects ? CloneShapeEffects(effects) : null,
-            CustomGeometry = source.CustomGeometry is { } geometry ? CloneCustomGeometry(geometry) : null,
-            RotationAngle = source.RotationAngle,
-            FlipH = source.FlipH,
-            FlipV = source.FlipV
-        };
-        foreach (var paragraph in source.TextParagraphs)
-            clone.TextParagraphs.Add(CloneParagraph(paragraph));
-        return clone;
-    }
-
-    private static ShapeFill CloneShapeFill(ShapeFill source)
-    {
-        var clone = new ShapeFill
-        {
-            Kind = source.Kind,
-            GradientAngle = source.GradientAngle,
-            PatternPreset = source.PatternPreset,
-            PatternFgColorHex = source.PatternFgColorHex,
-            PatternBgColorHex = source.PatternBgColorHex
-        };
-        clone.GradientStops.AddRange(source.GradientStops);
-        return clone;
-    }
-
-    private static ShapeEffectLst CloneShapeEffects(ShapeEffectLst source) => new()
-    {
-        HasShadow = source.HasShadow,
-        ShadowBlurRad = source.ShadowBlurRad,
-        ShadowDist = source.ShadowDist,
-        ShadowDir = source.ShadowDir,
-        ShadowColorHex = source.ShadowColorHex,
-        ShadowAlpha = source.ShadowAlpha,
-        HasGlow = source.HasGlow,
-        GlowRad = source.GlowRad,
-        GlowColorHex = source.GlowColorHex,
-        GlowAlpha = source.GlowAlpha,
-        HasSoftEdge = source.HasSoftEdge,
-        SoftEdgeRad = source.SoftEdgeRad,
-        HasReflection = source.HasReflection,
-        ReflectionBlurRad = source.ReflectionBlurRad,
-        ReflectionStartAlpha = source.ReflectionStartAlpha,
-        ReflectionStartPosition = source.ReflectionStartPosition,
-        ReflectionEndAlpha = source.ReflectionEndAlpha,
-        ReflectionEndPosition = source.ReflectionEndPosition,
-        ReflectionDir = source.ReflectionDir,
-        ReflectionFadeDir = source.ReflectionFadeDir,
-        ReflectionScaleX = source.ReflectionScaleX,
-        ReflectionScaleY = source.ReflectionScaleY,
-        ReflectionSkewX = source.ReflectionSkewX,
-        ReflectionSkewY = source.ReflectionSkewY,
-        ReflectionAlignment = source.ReflectionAlignment,
-        ReflectionRotWithShape = source.ReflectionRotWithShape,
-        ReflectionDist = source.ReflectionDist,
-        HasBevel = source.HasBevel,
-        BevelW = source.BevelW,
-        BevelH = source.BevelH,
-        BevelPresetType = source.BevelPresetType
-    };
-
-    private static CustomGeometry CloneCustomGeometry(CustomGeometry source)
-    {
-        var clone = new CustomGeometry { Width = source.Width, Height = source.Height };
-        clone.Segments.AddRange(source.Segments);
-        return clone;
-    }
-
-    private static DrawingGroup CloneDrawingGroup(DrawingGroup source)
-    {
-        var clone = new DrawingGroup
-        {
-            Placement = source.Placement.Clone(),
-            WidthPt = source.WidthPt,
-            HeightPt = source.HeightPt,
-            RotationAngle = source.RotationAngle,
-            FlipH = source.FlipH,
-            FlipV = source.FlipV
-        };
-        foreach (var child in source.Children)
-            clone.Children.Add(CloneDrawingGroupChild(child));
-        clone.ChildOffsets.AddRange(source.ChildOffsets);
-        return clone;
-    }
-
-    private static object CloneDrawingGroupChild(object source) => source switch
-    {
-        InlineImage image => image.Clone(),
-        Shape shape => CloneShape(shape),
-        Chart chart => chart.Clone(),
-        SmartArt smartArt => SmartArtCommandCopy.Clone(smartArt),
-        WordArt wordArt => wordArt.Clone(),
-        DrawingGroup drawingGroup => CloneDrawingGroup(drawingGroup),
-        _ => source
-    };
-
-    private static Table CloneTable(Table source)
-    {
-        var clone = new Table
-        {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            TableStyleId = source.TableStyleId,
-            Borders = source.Borders,
-            PreferredWidthPt = source.PreferredWidthPt,
-            Alignment = source.Alignment,
-            IndentFromLeftPt = source.IndentFromLeftPt,
-            FloatingPosition = source.FloatingPosition,
-            FloatingTableAllowsOverlap = source.FloatingTableAllowsOverlap,
-            DefaultCellMargins = source.DefaultCellMargins,
-            CellSpacingPt = source.CellSpacingPt,
-            AutoFit = source.AutoFit,
-        };
-        clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
-        foreach (var row in source.Rows)
-        {
-            var rowClone = new TableRow
-            {
-                HeightPt = row.HeightPt,
-                HeightRule = row.HeightRule,
-                AllowBreakAcrossPages = row.AllowBreakAcrossPages,
-                RowRevision = row.RowRevision,
-                RowRevisionAuthor = row.RowRevisionAuthor,
-                RowRevisionDateXml = row.RowRevisionDateXml,
-            };
-            foreach (var cell in row.Cells)
-                rowClone.Cells.Add(CloneCell(cell));
-            clone.Rows.Add(rowClone);
-        }
-        return clone;
-    }
-
-    private static TableCell CloneCell(TableCell source)
-    {
-        var clone = new TableCell
-        {
-            ShadingColorHex = source.ShadingColorHex,
-            WidthPt = source.WidthPt,
-            GridSpan = source.GridSpan,
-            VerticalMerge = source.VerticalMerge,
-            VerticalAlignment = source.VerticalAlignment,
-            Margins = source.Margins,
-            Borders = source.Borders,
-            TextDirection = source.TextDirection,
-            WrapText = source.WrapText,
-            FitText = source.FitText,
-        };
-        // Nested tables are cloned exactly ONCE here. Two sessions independently added this loop --
-        // one before the paragraph loop, one after -- and because they landed on different lines git
-        // merged both without reporting a conflict, so every nested table was deep-copied twice and
-        // appeared duplicated inside the cell after Insert File / Combine Documents / Merge to New
-        // Document. Textually-disjoint duplicate fixes are invisible to a merge; if you are adding a
-        // NestedTables walk here, check whether one already exists rather than appending another.
-        foreach (var nestedTable in source.NestedTables)
-            clone.NestedTables.Add(CloneTable(nestedTable));
-        foreach (var paragraph in source.Paragraphs)
-            clone.Paragraphs.Add(CloneParagraph(paragraph));
-        return clone;
-    }
-
-    private static Section CloneSection(Section source) => new(source.Page.Clone(), source.BreakKind)
-    {
-        HeadersFooters = CloneSectionHeadersFooters(source.HeadersFooters)
-    };
-
-    private static SectionHeadersFooters CloneSectionHeadersFooters(SectionHeadersFooters source) => new()
-    {
-        Header = CloneHeaderFooter(source.Header),
-        Footer = CloneHeaderFooter(source.Footer),
-        EvenHeader = CloneHeaderFooter(source.EvenHeader),
-        EvenFooter = CloneHeaderFooter(source.EvenFooter),
-        FirstHeader = CloneHeaderFooter(source.FirstHeader),
-        FirstFooter = CloneHeaderFooter(source.FirstFooter)
-    };
-
-    private static HeaderFooter? CloneHeaderFooter(HeaderFooter? source)
-    {
-        if (source is null)
-            return null;
-
-        var clone = new HeaderFooter();
-        foreach (var paragraph in source.Paragraphs)
-            clone.Paragraphs.Add(CloneParagraph(paragraph));
-        return clone;
-    }
+        => DocumentModelCloner.CloneParagraph(source, RevisionClonePolicy.Preserve);
 
     private static IReadOnlyDictionary<string, string> TransferPreservedPartGraph(
         TextDocument target,
@@ -887,17 +613,17 @@ public static class DocumentMerge
         IEnumerable<Paragraph> paragraphs)
     {
         var sourceByTag = source.Sources
-            .Where(entry => NormalizedSourceTag(entry.Tag).Length > 0)
-            .GroupBy(entry => NormalizedSourceTag(entry.Tag), StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+            .Where(entry => SourceTagIdentity.HasIdentity(entry.Tag))
+            .GroupBy(entry => SourceTagIdentity.Canonicalize(entry.Tag), SourceTagIdentity.Comparer)
+            .ToDictionary(group => group.Key, group => group.First(), SourceTagIdentity.Comparer);
         if (sourceByTag.Count == 0)
             return;
 
         var usedTags = target.Sources
-            .Select(entry => NormalizedSourceTag(entry.Tag))
+            .Select(entry => SourceTagIdentity.Canonicalize(entry.Tag))
             .Where(tag => tag.Length > 0)
-            .ToHashSet(StringComparer.Ordinal);
-        var mappings = new Dictionary<string, string>(StringComparer.Ordinal);
+            .ToHashSet(SourceTagIdentity.Comparer);
+        var mappings = new Dictionary<string, string>(SourceTagIdentity.Comparer);
 
         foreach (var run in paragraphs.SelectMany(paragraph => paragraph.Runs))
         {
@@ -911,7 +637,9 @@ public static class DocumentMerge
             if (!mappings.TryGetValue(sourceTag, out var targetTag))
             {
                 var matchingTargetSources = target.Sources
-                    .Where(entry => string.Equals(NormalizedSourceTag(entry.Tag), sourceTag, StringComparison.Ordinal))
+                    .Where(entry => SourceTagIdentity.Comparer.Equals(
+                        SourceTagIdentity.Canonicalize(entry.Tag),
+                        sourceTag))
                     .ToList();
                 var equivalent = matchingTargetSources.FirstOrDefault(entry => Citations.SameSource(entry, sourceEntry));
                 if (equivalent is not null)
@@ -921,13 +649,13 @@ public static class DocumentMerge
                 else if (matchingTargetSources.Count == 0)
                 {
                     targetTag = sourceTag;
-                    target.Sources.Add(CloneSource(sourceEntry, targetTag));
+                    target.Sources.Add(sourceEntry.CloneWithTag(targetTag));
                     usedTags.Add(targetTag);
                 }
                 else
                 {
                     targetTag = AllocateSourceTag(sourceTag, usedTags);
-                    target.Sources.Add(CloneSource(sourceEntry, targetTag));
+                    target.Sources.Add(sourceEntry.CloneWithTag(targetTag));
                 }
 
                 mappings[sourceTag] = targetTag;
@@ -938,8 +666,6 @@ public static class DocumentMerge
         }
     }
 
-    private static string NormalizedSourceTag(string? tag) => tag?.Trim() ?? string.Empty;
-
     private static string AllocateSourceTag(string sourceTag, HashSet<string> usedTags)
     {
         for (var suffix = 1; ; suffix++)
@@ -949,62 +675,6 @@ public static class DocumentMerge
                 return candidate;
         }
     }
-
-    private static Source CloneSource(Source source, string tag) => new()
-    {
-        Tag = tag,
-        Type = source.Type,
-        Author = source.Author,
-        PersonalAuthors = source.PersonalAuthors.ToArray(),
-        CorporateAuthor = source.CorporateAuthor,
-        Editors = source.Editors.ToArray(),
-        Translators = source.Translators.ToArray(),
-        Title = source.Title,
-        BookTitle = source.BookTitle,
-        ConferenceName = source.ConferenceName,
-        Inventor = source.Inventor,
-        Interviewee = source.Interviewee,
-        Interviewer = source.Interviewer,
-        Artist = source.Artist,
-        Composer = source.Composer,
-        Conductor = source.Conductor,
-        Director = source.Director,
-        Performer = source.Performer,
-        ProducerName = source.ProducerName,
-        Writer = source.Writer,
-        Year = source.Year,
-        Month = source.Month,
-        Day = source.Day,
-        Institution = source.Institution,
-        Publisher = source.Publisher,
-        City = source.City,
-        Edition = source.Edition,
-        StandardNumber = source.StandardNumber,
-        ChapterNumber = source.ChapterNumber,
-        PatentNumber = source.PatentNumber,
-        CaseNumber = source.CaseNumber,
-        Court = source.Court,
-        Reporter = source.Reporter,
-        CountryRegion = source.CountryRegion,
-        StateProvince = source.StateProvince,
-        Medium = source.Medium,
-        SourceKind = source.SourceKind,
-        AlbumTitle = source.AlbumTitle,
-        ProductionCompany = source.ProductionCompany,
-        RecordingNumber = source.RecordingNumber,
-        Theater = source.Theater,
-        ShortTitle = source.ShortTitle,
-        Comments = source.Comments,
-        Journal = source.Journal,
-        Volume = source.Volume,
-        Issue = source.Issue,
-        Pages = source.Pages,
-        Url = source.Url,
-        Accessed = source.Accessed,
-        AccessedDay = source.AccessedDay,
-        AccessedMonth = source.AccessedMonth,
-        AccessedYear = source.AccessedYear,
-    };
 
     private static bool TryFindTopLevelComment(TextDocument source, int id, out Comment comment)
     {

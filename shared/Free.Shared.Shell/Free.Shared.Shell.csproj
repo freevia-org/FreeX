@@ -9,14 +9,7 @@
   <ItemGroup>
     <!-- BackstageRecentFileListPlanner consumes the neutral RecentFileEntry record. -->
     <ProjectReference Include="..\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Portable shell helpers exposed to their FreeX/FreeW consumers. ExportAtomicWriter is now
-         public (shared by both apps' PDF/XPS export paths); the rest stay internal-visible. -->
-    <InternalsVisibleTo Include="FreeX.App.Host" />
-    <InternalsVisibleTo Include="FreeX.App.Host.Tests" />
-    <InternalsVisibleTo Include="FreeX.App.Host.Logic.Tests" />
+    <ProjectReference Include="..\Free.Shared.Localization\Free.Shared.Localization.csproj" />
   </ItemGroup>
 
 </Project>

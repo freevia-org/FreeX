@@ -75,6 +75,48 @@ public sealed class CommentNavigationPlannerTests
     }
 
     [Fact]
+    public void CreateThreadedCommentRows_SortsAddressesAndFormatsThreadText()
+    {
+        var sheetId = SheetId.New();
+        var firstAddress = new CellAddress(sheetId, 1, 1);
+        var laterAddress = new CellAddress(sheetId, 3, 2);
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [laterAddress] = new("Later", "Quinn"),
+            [firstAddress] = new("First")
+            {
+                Replies = [new CommentReply("Reply", "Reviewer")],
+                IsResolved = true,
+            },
+        };
+
+        CommentNavigationPlanner.CreateThreadedCommentRows(threadedComments)
+            .Should()
+            .Equal(
+                new CommentListRowPlan(firstAddress, "A1", "FreeX: First | Reviewer: Reply | Resolved"),
+                new CommentListRowPlan(laterAddress, "B3", "Quinn: Later"));
+    }
+
+    [Fact]
+    public void CreateNoteRows_SortsAddressesAndKeepsPlainText()
+    {
+        var sheetId = SheetId.New();
+        var firstAddress = new CellAddress(sheetId, 1, 1);
+        var laterAddress = new CellAddress(sheetId, 3, 2);
+        var notes = new Dictionary<CellAddress, string>
+        {
+            [laterAddress] = "Later note",
+            [firstAddress] = "First note",
+        };
+
+        CommentNavigationPlanner.CreateNoteRows(notes)
+            .Should()
+            .Equal(
+                new CommentListRowPlan(firstAddress, "A1", "First note"),
+                new CommentListRowPlan(laterAddress, "B3", "Later note"));
+    }
+
+    [Fact]
     public void NextComment_WrapsForwardAndBackward()
     {
         var sheetId = SheetId.New();

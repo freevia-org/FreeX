@@ -10,6 +10,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FreeX.App.Avalonia;
+using FreeX.App.Services;
 using FluentAssertions;
 using FluentAssertions.Execution;
 
@@ -47,13 +48,16 @@ public sealed class FormatCellsBorderVisualParityTests
         source.Should().Contain("borderInsideHorizontalToggle.IsVisible = false");
         source.Should().Contain("borderInsideVerticalToggle.IsVisible = false");
         source.Should().NotContain("Children = { borderInsideHorizontalToggle, borderInsideVerticalToggle }");
+        source.Should().Contain("foreach (var entry in FormatCellsBorderPalettePlanner.ColorEntries)");
+        source.Should().Contain("FormatCellsBorderPalettePlanner.StyleChoices");
+        source.Should().NotContain("var wanted = new (byte R, byte G, byte B)[]");
     }
 
     [Fact]
     public void ParityCapture_RejectsStaleX11BoundsInsteadOfPaddingToRequestedSize()
     {
         var captureSource = File.ReadAllText(
-            RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+            RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         captureSource.Should().Contain(
             "dialog.MinHeight,");
         captureSource.Should().NotContain("ResolveParityDialogCaptureDimension");
@@ -121,6 +125,11 @@ public sealed class FormatCellsBorderVisualParityTests
                     var rightToggle = FindControl<ToggleButton>(viewport, "FormatCellsBorderRightToggle");
                     var bottomToggle = FindControl<ToggleButton>(viewport, "FormatCellsBorderBottomToggle");
                     var leftToggle = FindControl<ToggleButton>(viewport, "FormatCellsBorderLeftToggle");
+                    var paletteEntries = viewport.GetVisualDescendants()
+                        .OfType<Button>()
+                        .Select(button => button.Tag)
+                        .OfType<FormatCellsBorderColorEntry>()
+                        .ToArray();
 
                     using (new AssertionScope())
                     {
@@ -138,6 +147,7 @@ public sealed class FormatCellsBorderVisualParityTests
                         styleList.GetVisualDescendants().OfType<ListBoxItem>().Take(6)
                             .Select(item => item.Content?.ToString())
                             .Should().Equal("None", "Thin", "Medium", "Thick", "Dashed", "Dotted");
+                        paletteEntries.Should().Equal(FormatCellsBorderPalettePlanner.ColorEntries);
 
                         topToggle.Bounds.Size.Should().Be(new Size(144, 32));
                         bottomToggle.Bounds.Size.Should().Be(new Size(144, 32));
@@ -235,15 +245,8 @@ public sealed class FormatCellsBorderVisualParityTests
         }, CancellationToken.None);
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "src")))
-            directory = directory.Parent;
-
-        directory.Should().NotBeNull("the test must run inside the repository checkout");
-        return Path.Combine(new[] { directory!.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile("FreeX.slnx", parts);
 
     private static void AssertFullyInside(Control root, string automationId)
     {

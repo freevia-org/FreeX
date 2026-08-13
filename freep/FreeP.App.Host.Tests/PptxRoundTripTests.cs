@@ -14,15 +14,10 @@ namespace FreeP.App.Host.Tests;
 /// </summary>
 public sealed class PptxRoundTripTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.PptxTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.PptxTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public PptxRoundTripTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     // ─────────────────────────────────────────────────────────────────────────────
     // 1. Slide count and size
@@ -1829,7 +1824,7 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
-    public void RoundTrip_PointBasedDrawingMlUnits_PreservedInPptxIo()
+    public void RoundTrip_PointBasedDrawingMlCoordinateUnits_PreservedInPptxIo()
     {
         var pres = new Presentation();
         var slide = new Slide();
@@ -1963,7 +1958,7 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     private static string EmuText(double points) =>
-        DrawingMlUnits.PointsToEmu(points).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        DrawingMlCoordinateUnits.PointsToEmu(points).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Bug-fix regression tests (Q1–Q7)

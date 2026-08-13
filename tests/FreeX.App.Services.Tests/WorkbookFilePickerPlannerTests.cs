@@ -30,7 +30,7 @@ public sealed class WorkbookFilePickerPlannerTests
 
         plan.SuggestedFileName.Should().Be("Quarterly Budget");
         plan.DefaultExtensionWithDot.Should().Be(AppOptions.FreeXWorkbookDefaultFormat);
-        plan.FilterIndex.Should().Be(FileDialogFilterBuilder.FindSaveFilterIndex(adapters, ".fxl"));
+        plan.FilterIndex.Should().Be(FindSaveFilterIndex(adapters, ".fxl"));
         plan.Filter.Should().Contain("FreeX Workbook (*.fxl)|*.fxl");
     }
 
@@ -47,7 +47,7 @@ public sealed class WorkbookFilePickerPlannerTests
             preferredDefaultFormat: ".fxl");
 
         plan.DefaultExtensionWithDot.Should().Be(AppOptions.XlsxDefaultFormat);
-        plan.FilterIndex.Should().Be(FileDialogFilterBuilder.FindSaveFilterIndex(adaptersWithoutNative, ".xlsx"));
+        plan.FilterIndex.Should().Be(FindSaveFilterIndex(adaptersWithoutNative, ".xlsx"));
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class WorkbookFilePickerPlannerTests
     public void TryResolveSaveDialogTarget_UsesSelectedFilterWhenExtensionMatches()
     {
         var adapters = WorkbookFileAdapterCatalog.CreateDefaultAdapters();
-        var plainCsvFilterIndex = FileDialogFilterBuilder.FindSaveFilterIndex(adapters, ".csv");
+        var plainCsvFilterIndex = FindSaveFilterIndex(adapters, ".csv");
         var utf8CsvFilterIndex = plainCsvFilterIndex + 1;
 
         var resolved = WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(
@@ -144,4 +144,10 @@ public sealed class WorkbookFilePickerPlannerTests
             .SelectMany(adapter => adapter.Formats)
             .Where(predicate)
             .ToList();
+
+    private static int FindSaveFilterIndex(IEnumerable<IFileAdapter> adapters, string extension) =>
+        Free.Shared.IO.FileDialogFilterBuilder.FindSaveFilterIndex(
+            Free.Shared.IO.FileFormatDialogDescriptorAdapter.ToSaveDialogDescriptors(
+                adapters.SelectMany(adapter => adapter.Formats)),
+            extension);
 }

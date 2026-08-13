@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Windows.Controls;
 using FluentAssertions;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -33,7 +34,7 @@ public sealed class R88_NameManagerValueColumnTests
             {
                 var vm = GetListedNames(dialog).Single(v => v.Name == "TaxRate");
 
-                vm.RefersTo.Should().Be("1+38", "Refers To must keep showing the raw formula source text");
+                vm.RefersTo.Should().Be("=1+38", "Refers To must show the canonical formula source text");
                 vm.Value.Should().Be(
                     "39", "the Value column must show the name's live computed value, not just repeat Refers To");
             }
@@ -101,12 +102,15 @@ public sealed class R88_NameManagerValueColumnTests
         });
     }
 
-    private static List<NamedRangeViewModel> GetListedNames(NamedRangeDialog dialog) =>
+    private static List<DefinedNameRow> GetListedNames(NamedRangeDialog dialog) =>
         DialogSourceTestSupport.GetPrivateField<ListView>(dialog, "NamesList")
             .ItemsSource!
-            .Cast<NamedRangeViewModel>()
+            .Cast<DefinedNameRow>()
             .ToList();
 
-    private static ICommandBus CreateCommandBus(Workbook workbook) =>
-        new CommandBus(_ => new TestCommandContext(workbook));
+    private static Func<IWorkbookCommand, CommandOutcome> CreateCommandBus(Workbook workbook)
+    {
+        var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
+        return command => commandBus.Execute(workbook.Id, command);
+    }
 }

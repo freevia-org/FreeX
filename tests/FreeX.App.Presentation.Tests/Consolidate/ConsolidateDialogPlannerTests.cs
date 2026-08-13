@@ -8,6 +8,13 @@ namespace FreeX.App.Presentation.Tests.Consolidate;
 public sealed class ConsolidateDialogPlannerTests
 {
     [Fact]
+    public void SplitSourceRangeText_PreservesSeparatorsInsideQuotedSheetNames()
+    {
+        ConsolidateDialogPlanner.SplitSourceRangeText("'Q1, Actuals'!A1:B2; 'Bob''s; Sheet'!C3:D4")
+            .Should().Equal("'Q1, Actuals'!A1:B2", "'Bob''s; Sheet'!C3:D4");
+    }
+
+    [Fact]
     public void SizeContract_MatchesCommittedWpfLogicalCapture()
     {
         ConsolidateDialogPlanner.WpfWindowWidth.Should().Be(420);

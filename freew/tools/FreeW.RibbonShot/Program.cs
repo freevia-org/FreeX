@@ -1,6 +1,5 @@
 using System.IO;
 using System.Globalization;
-using System.Text.Json;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
@@ -106,7 +105,9 @@ static int Run(string outDir, string tabArg, double w, double h)
             PumpFrames(win.Dispatcher, TimeSpan.FromMilliseconds(700));
             var bmp0 = new RenderTargetBitmap((int)w, (int)h, 96, 96, PixelFormats.Pbgra32);
             bmp0.Render(win);
-            var suffix = backstageEntry is null ? string.Empty : "-" + SanitizeFileName(backstageEntry);
+            var suffix = backstageEntry is null
+                ? string.Empty
+                : "-" + VisualEvidenceTextPolicy.ToLowerSafeArtifactName(backstageEntry);
             var p0 = Path.Combine(outDir, $"backstage{suffix}.png");
             SavePng(bmp0, p0);
             captures.Add(RibbonShotCapture.Backstage(
@@ -260,9 +261,11 @@ static void WriteManifest(string outDir, string requestedMode, double width, dou
         CaptureCount: captures.Count,
         Captures: captures.ToArray());
 
-    var options = new JsonSerializerOptions { WriteIndented = true };
     var path = Path.Combine(outDir, "freew_ribbonshot_manifest.json");
-    File.WriteAllText(path, JsonSerializer.Serialize(manifest, options));
+    VisualEvidenceManifestIO.Write(
+        path,
+        manifest,
+        VisualEvidenceManifestIO.CreateJsonOptions(camelCase: false, stringEnums: false));
     Console.WriteLine($"manifest {path}");
 }
 
@@ -349,13 +352,6 @@ static IEnumerable<T> FindLogicalChildren<T>(DependencyObject root)
                 yield return descendant;
         }
     }
-}
-
-static string SanitizeFileName(string value)
-{
-    var invalid = Path.GetInvalidFileNameChars();
-    var chars = value.Select(ch => invalid.Contains(ch) || char.IsWhiteSpace(ch) ? '-' : char.ToLowerInvariant(ch)).ToArray();
-    return new string(chars).Trim('-');
 }
 
 // Concrete DialogWindow used only by the dialog-probe render mode.

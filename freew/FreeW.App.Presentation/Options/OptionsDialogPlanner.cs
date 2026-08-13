@@ -92,7 +92,11 @@ public static class OptionsDialogPlanner
                 ReplacementsLabel,
                 FormatAutoCorrectReplacements(autoCorrect.Replacements),
                 ReplacementsHelpText,
-                ReplacementsValidationMessage),
+                ReplacementsValidationMessage,
+                [
+                    new(OptionsDialogReplacementFieldKind.Replace, "Replace", 1),
+                    new(OptionsDialogReplacementFieldKind.With, "With", 2),
+                ]),
             new OptionsDialogAutoFormatSurfaceSpec(
                 AutoFormatTabHeader,
                 new OptionsDialogToggleSpec(
@@ -196,15 +200,14 @@ public static class OptionsDialogPlanner
         AutoFormatOptions autoFormat,
         AutoCorrectOptions autoCorrect)
     {
-        var result = new FreeWOptions
-        {
-            RecentFilesCap = recentFilesCap,
-            DefaultSaveFormat = string.IsNullOrWhiteSpace(format) ? FreeWOptions.DocxDefaultFormat : format!,
-            UiLanguage = uiLanguage ?? FreeWOptions.SystemDefaultLanguage,
-            AutoCorrectEnabled = autoCorrectEnabled,
-            AutoFormat = autoFormat ?? AutoFormatOptions.Default,
-            AutoCorrect = autoCorrect ?? AutoCorrectOptions.Default,
-        };
+        var result = BasicApplicationOptionsDialogSession<FreeWOptions>.BuildResult(
+            recentFilesCap,
+            format,
+            uiLanguage,
+            FreeWOptions.DocxDefaultFormat);
+        result.AutoCorrectEnabled = autoCorrectEnabled;
+        result.AutoFormat = autoFormat ?? AutoFormatOptions.Default;
+        result.AutoCorrect = autoCorrect ?? AutoCorrectOptions.Default;
         result.Normalize();
         return result;
     }
@@ -224,7 +227,27 @@ public sealed record OptionsDialogGeneralSurfaceSpec(
     string DefaultSaveFormatLabel,
     string UiLanguageLabel,
     string UiLanguageHint,
-    IReadOnlyList<OptionsDialogFormatChoice> FormatChoices);
+    IReadOnlyList<OptionsDialogFormatChoice> FormatChoices)
+{
+    public IReadOnlyList<OptionsDialogGeneralFieldSpec> Fields { get; } =
+    [
+        new(OptionsDialogGeneralFieldKind.RecentFilesCap, RecentFilesLabel),
+        new(OptionsDialogGeneralFieldKind.DefaultSaveFormat, DefaultSaveFormatLabel),
+        new(OptionsDialogGeneralFieldKind.UiLanguage, UiLanguageLabel, UiLanguageHint),
+    ];
+}
+
+public enum OptionsDialogGeneralFieldKind
+{
+    RecentFilesCap,
+    DefaultSaveFormat,
+    UiLanguage,
+}
+
+public sealed record OptionsDialogGeneralFieldSpec(
+    OptionsDialogGeneralFieldKind Kind,
+    string Label,
+    string? Hint = null);
 
 public sealed record OptionsDialogFormatChoice(string Label, string Extension)
 {
@@ -237,7 +260,19 @@ public sealed record OptionsDialogAutoCorrectSurfaceSpec(
     string ReplacementsLabel,
     string ReplacementsText,
     string ReplacementsHelpText,
-    string ReplacementsValidationMessage);
+    string ReplacementsValidationMessage,
+    IReadOnlyList<OptionsDialogReplacementColumnSpec> ReplacementColumns);
+
+public enum OptionsDialogReplacementFieldKind
+{
+    Replace,
+    With,
+}
+
+public sealed record OptionsDialogReplacementColumnSpec(
+    OptionsDialogReplacementFieldKind Kind,
+    string Header,
+    int WidthWeight);
 
 public sealed record OptionsDialogAutoFormatSurfaceSpec(
     string Header,

@@ -59,6 +59,9 @@ public static class ObjectFormatCommandPlanner
 {
     public const double MinimumShapeOutlineWidthPt = 0.75;
 
+    public static string ShapePositionDialogTitle(bool isGroupLocal) =>
+        isGroupLocal ? "Shape Position in Group" : "Shape Position";
+
     private static readonly IReadOnlyList<(string Suffix, ImageWrapping Wrapping)> WrapCatalog =
     [
         ("inline", ImageWrapping.Inline),

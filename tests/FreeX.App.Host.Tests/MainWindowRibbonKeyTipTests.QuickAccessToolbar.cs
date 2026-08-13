@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows.Input;
 using FluentAssertions;
 
@@ -167,13 +166,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
     [Fact]
     public void QuickAccessToolbarCatalogKeyTips_AreUniqueAndPrefixSafe()
     {
-        var formatter = typeof(MainWindow).GetMethod(
-            "FormatQuickAccessToolbarKeyTip",
-            BindingFlags.Static | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "FormatQuickAccessToolbarKeyTip");
-
         var keyTips = Enumerable.Range(1, QuickAccessToolbarCatalog.Commands.Count)
-            .Select(index => (string)formatter.Invoke(null, [index])!)
+            .Select(QuickAccessToolbarCatalog.FormatKeyTip)
             .ToList();
 
         keyTips.Should().OnlyHaveUniqueItems();

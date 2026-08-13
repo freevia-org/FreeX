@@ -1,6 +1,4 @@
-using System.Reflection;
 using System.Threading;
-using System.Threading.Tasks;
 using Avalonia.Headless;
 using FluentAssertions;
 
@@ -47,7 +45,7 @@ public sealed class R16_avalonia_mw_Tests
             SeedStaleCrossSheetFormula(window, refSheet, formSheet);
 
             window.Session.SelectSheet(deleteMeSheet.Id);
-            InvokePrivate(window, "DeleteActiveSheet");
+            window.DeleteActiveSheetForTest();
 
             formSheet.GetValue(new CellAddress(formSheet.Id, 1, 1)).Should().Be(new NumberValue(200),
                 "Delete Sheet must force a workbook recalculation (mirrors WPF host's " +
@@ -72,7 +70,7 @@ public sealed class R16_avalonia_mw_Tests
             SeedStaleCrossSheetFormula(window, refSheet, formSheet);
 
             window.Session.SelectSheet(dupMeSheet.Id);
-            InvokePrivate(window, "DuplicateActiveSheet");
+            window.DuplicateActiveSheetForTest();
 
             formSheet.GetValue(new CellAddress(formSheet.Id, 1, 1)).Should().Be(new NumberValue(200),
                 "Duplicate Sheet must force a workbook recalculation (mirrors WPF host's " +
@@ -98,7 +96,7 @@ public sealed class R16_avalonia_mw_Tests
 
             // moveMeSheet is the third (rightmost) sheet, so Move Left is a valid single-step move.
             window.Session.SelectSheet(moveMeSheet.Id);
-            InvokePrivate(window, "MoveActiveSheetLeft");
+            window.MoveActiveSheetLeftForTest();
 
             formSheet.GetValue(new CellAddress(formSheet.Id, 1, 1)).Should().Be(new NumberValue(200),
                 "Move Sheet Left must force a workbook recalculation, since reordering sheets can " +
@@ -124,7 +122,7 @@ public sealed class R16_avalonia_mw_Tests
 
             // refSheet is the first (leftmost) sheet, so Move Right is a valid single-step move.
             window.Session.SelectSheet(refSheet.Id);
-            InvokePrivate(window, "MoveActiveSheetRight");
+            window.MoveActiveSheetRightForTest();
 
             formSheet.GetValue(new CellAddress(formSheet.Id, 1, 1)).Should().Be(new NumberValue(200),
                 "Move Sheet Right must force a workbook recalculation, since reordering sheets can " +
@@ -183,14 +181,14 @@ public sealed class R16_avalonia_mw_Tests
 
             // First click merges (baseline sanity: not yet merged).
             window.Session.IsSelectedRangeMerged.Should().BeFalse();
-            await InvokePrivateAsync(window, "MergeAndCenterSelectedRangeAsync");
+            await window.MergeAndCenterSelectedRangeForTestAsync();
 
             sheet.MergedRegions.Should().Contain(range, "the first Merge & Center click must merge the selection");
             window.Session.IsSelectedRangeMerged.Should().BeTrue();
             window.StatusTextForTest.Text.Should().NotContain("failed");
 
             // Second click on the now-merged selection must UNMERGE (Excel/WPF toggle), not error.
-            await InvokePrivateAsync(window, "MergeAndCenterSelectedRangeAsync");
+            await window.MergeAndCenterSelectedRangeForTestAsync();
 
             sheet.MergedRegions.Should().NotContain(range,
                 "a second Merge & Center click on an already-merged selection must unmerge it (Excel toggle behavior)");
@@ -207,20 +205,4 @@ public sealed class R16_avalonia_mw_Tests
 
     // ── Shared helpers ─────────────────────────────────────────────────────────────────────────
 
-    private static void InvokePrivate(MainWindow window, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        method.Invoke(window, null);
-    }
-
-    private static async Task InvokePrivateAsync(MainWindow window, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        var task = (Task)method.Invoke(window, null)!;
-        await task;
-    }
 }

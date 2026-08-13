@@ -17,40 +17,44 @@ public sealed class BackstagePaneComposer
     private const string DirtySuffix = "  (unsaved changes)";
 
     private readonly BackstageVisualKit _kit;
+    private readonly BackstagePaneComposerProfile _profile;
 
-    public BackstagePaneComposer(BackstageVisualKit kit)
+    public BackstagePaneComposer(
+        BackstageVisualKit kit,
+        BackstagePaneComposerProfile? profile = null)
     {
         ArgumentNullException.ThrowIfNull(kit);
         _kit = kit;
+        _profile = profile ?? BackstagePaneComposerProfile.Default;
     }
 
     public UIElement BuildInfoPane(BackstageInfoPaneSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
 
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(_kit.HeadingText(BackstageInfoPaneText.Title));
-        panel.Children.Add(_kit.Field(
+        var panel = CreatePane(_profile.InfoPaneMaxWidth);
+        panel.Children.Add(Heading(BackstageInfoPaneText.Title));
+        panel.Children.Add(Field(
             spec.DocumentKindLabel,
             spec.DisplayName + (spec.IsDirty ? DirtySuffix : string.Empty)));
-        panel.Children.Add(_kit.Field(BackstageInfoPaneText.LocationLabel, spec.Location ?? BackstageInfoPaneText.NotSavedYet));
+        panel.Children.Add(Field(BackstageInfoPaneText.LocationLabel, spec.Location ?? BackstageInfoPaneText.NotSavedYet));
 
         if (spec.Properties.Count > 0)
         {
-            panel.Children.Add(_kit.SubHeading(BackstageInfoPaneText.PropertiesHeading));
+            panel.Children.Add(SubHeading(BackstageInfoPaneText.PropertiesHeading));
             AddFields(panel, spec.Properties);
         }
 
         if (!string.IsNullOrWhiteSpace(spec.EditPropertiesText) && spec.EditProperties is not null)
         {
             var edit = _kit.LinkButton(spec.EditPropertiesText, spec.EditProperties);
-            edit.Margin = new Thickness(0, 8, 0, 0);
+            edit.Margin = ToThickness(_profile.InfoEditActionMargin);
             panel.Children.Add(edit);
         }
 
         if (spec.Statistics.Count > 0)
         {
-            panel.Children.Add(_kit.SubHeading(BackstageInfoPaneText.StatisticsHeading));
+            panel.Children.Add(SubHeading(BackstageInfoPaneText.StatisticsHeading));
             AddFields(panel, spec.Statistics);
         }
 
@@ -64,8 +68,8 @@ public sealed class BackstagePaneComposer
     {
         ArgumentNullException.ThrowIfNull(spec);
 
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(_kit.HeadingText("Recent"));
+        var panel = CreatePane(_profile.RecentPaneMaxWidth);
+        panel.Children.Add(Heading("Recent"));
 
         if (spec.Paths.Count == 0)
         {
@@ -83,7 +87,7 @@ public sealed class BackstagePaneComposer
             var item = new StackPanel { Margin = new Thickness(0, 0, 0, 12), Cursor = Cursors.Hand };
             item.Children.Add(new TextBlock
             {
-                Text = Path.GetFileName(path),
+                Text = BackstageRecentActionRowsPlanner.FileNameOrPath(path),
                 Foreground = _kit.Link,
                 FontSize = 14
             });
@@ -129,22 +133,16 @@ public sealed class BackstagePaneComposer
     {
         ArgumentNullException.ThrowIfNull(spec);
 
-        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(_kit.HeadingText("Options"));
-        panel.Children.Add(new TextBlock
-        {
-            Text = spec.Description,
-            Foreground = _kit.Muted,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
-        });
+        var panel = CreatePane(_profile.OptionsPaneMaxWidth);
+        panel.Children.Add(Heading("Options"));
+        panel.Children.Add(Description(spec.Description));
 
         AddFields(panel, spec.Fields);
 
         if (!string.IsNullOrWhiteSpace(spec.EditText) && spec.Edit is not null)
         {
             var edit = _kit.LinkButton(spec.EditText, spec.Edit);
-            edit.Margin = new Thickness(0, 14, 0, 0);
+            edit.Margin = ToThickness(_profile.OptionsEditActionMargin);
             panel.Children.Add(edit);
         }
 
@@ -156,26 +154,23 @@ public sealed class BackstagePaneComposer
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(spec.Groups);
 
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(_kit.HeadingText(spec.Heading));
-        panel.Children.Add(new TextBlock
-        {
-            Text = spec.Description,
-            Foreground = _kit.Muted,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
-        });
+        var panel = CreatePane(_profile.AccountPaneMaxWidth);
+        panel.Children.Add(Heading(spec.Heading));
+        panel.Children.Add(Description(spec.Description));
 
         foreach (var group in spec.Groups)
         {
-            panel.Children.Add(_kit.SubHeading(group.Heading));
+            panel.Children.Add(SubHeading(group.Heading));
             AddFields(panel, group.Fields);
         }
 
         if (!string.IsNullOrWhiteSpace(spec.OptionsText) && spec.OpenOptions is not null)
         {
             var options = _kit.LinkButton(spec.OptionsText, spec.OpenOptions);
-            options.Margin = new Thickness(0, 18, 0, 0);
+            options.FontSize = _profile.AccountOptionsFontSize;
+            options.Margin = ToThickness(_profile.AccountOptionsMargin);
+            if (!string.IsNullOrWhiteSpace(spec.OptionsAutomationId))
+                AutomationProperties.SetAutomationId(options, spec.OptionsAutomationId);
             panel.Children.Add(options);
         }
 
@@ -183,7 +178,7 @@ public sealed class BackstagePaneComposer
     }
 
     public UIElement BuildActionPane(BackstageActionPaneSpec spec) =>
-        BuildActionPane(spec, ActionRow);
+        BuildActionPane(spec, _profile.UseLinkActionRows ? ExportActionRow : ActionRow);
 
     public UIElement BuildExportActionPane(BackstageActionPaneSpec spec) =>
         BuildActionPane(spec, ExportActionRow);
@@ -194,23 +189,17 @@ public sealed class BackstagePaneComposer
     {
         ArgumentNullException.ThrowIfNull(spec);
 
-        var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(_kit.HeadingText(spec.Heading));
+        var panel = CreatePane(_profile.ActionPaneMaxWidth);
+        panel.Children.Add(Heading(spec.Heading));
 
         if (!string.IsNullOrWhiteSpace(spec.Description))
         {
-            panel.Children.Add(new TextBlock
-            {
-                Text = spec.Description,
-                Foreground = _kit.Muted,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 16)
-            });
+            panel.Children.Add(Description(spec.Description));
         }
 
         foreach (var group in spec.Groups)
         {
-            panel.Children.Add(_kit.SubHeading(group.Heading));
+            panel.Children.Add(SubHeading(group.Heading));
             foreach (var action in group.Actions)
                 panel.Children.Add(actionRow(action));
         }
@@ -226,7 +215,7 @@ public sealed class BackstagePaneComposer
 
     private void AddActionGroup(Panel panel, BackstageActionGroup group)
     {
-        panel.Children.Add(_kit.SubHeading(group.Heading));
+        panel.Children.Add(SubHeading(group.Heading));
 
         foreach (var action in group.Actions)
             panel.Children.Add(ActionRow(action));
@@ -235,7 +224,7 @@ public sealed class BackstagePaneComposer
     private void AddFields(Panel panel, IReadOnlyList<BackstageFieldRow> fields)
     {
         foreach (var field in fields)
-            panel.Children.Add(_kit.Field(field.Label, field.Value));
+            panel.Children.Add(Field(field.Label, field.Value));
     }
 
     private UIElement ActionRow(BackstageActionRow action)
@@ -248,20 +237,23 @@ public sealed class BackstagePaneComposer
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Cursor = Cursors.Hand,
             FocusVisualStyle = null,
-            Margin = new Thickness(0, 0, 0, 10)
+            Margin = ToThickness(_profile.Metrics.ActionRowMargin)
         };
         button.Click += (_, _) => action.Invoke();
+        button.IsEnabled = action.IsEnabled;
         // The action label is the shared semantic contract. Keep it on the
         // button even though the visual content is a two-line StackPanel so
         // accessibility clients and the parity harness see the same action.
         AutomationProperties.SetName(button, action.Label);
+        if (!string.IsNullOrWhiteSpace(action.AutomationId))
+            AutomationProperties.SetAutomationId(button, action.AutomationId);
 
         var stack = new StackPanel();
         stack.Children.Add(new TextBlock
         {
             Text = action.Label,
             Foreground = _kit.Link,
-            FontSize = 14
+            FontSize = _profile.Metrics.ActionFontSize
         });
 
         if (!string.IsNullOrWhiteSpace(action.Description))
@@ -270,9 +262,9 @@ public sealed class BackstagePaneComposer
             {
                 Text = action.Description,
                 Foreground = _kit.Muted,
-                FontSize = BackstageVisualContract.Pane.ActionDescriptionFontSize,
+                FontSize = _profile.Metrics.ActionDescriptionFontSize,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = ToThickness(BackstageVisualContract.Pane.ActionDescriptionMargin)
+                Margin = ToThickness(_profile.Metrics.ActionDescriptionMargin)
             });
         }
 
@@ -282,10 +274,13 @@ public sealed class BackstagePaneComposer
 
     private UIElement ExportActionRow(BackstageActionRow action)
     {
-        var row = new StackPanel { Margin = ToThickness(BackstageVisualContract.Pane.ActionRowMargin) };
+        var row = new StackPanel { Margin = ToThickness(_profile.Metrics.ActionRowMargin) };
         var button = _kit.LinkButton(action.Label, action.Invoke);
-        button.FontSize = BackstageVisualContract.Pane.ActionFontSize;
+        button.FontSize = _profile.Metrics.ActionFontSize;
+        button.IsEnabled = action.IsEnabled;
         AutomationProperties.SetName(button, action.Label);
+        if (!string.IsNullOrWhiteSpace(action.AutomationId))
+            AutomationProperties.SetAutomationId(button, action.AutomationId);
         row.Children.Add(button);
 
         if (!string.IsNullOrWhiteSpace(action.Description))
@@ -294,45 +289,77 @@ public sealed class BackstagePaneComposer
             {
                 Text = action.Description,
                 Foreground = _kit.Muted,
-                FontSize = BackstageVisualContract.Pane.ActionDescriptionFontSize,
+                FontSize = _profile.Metrics.ActionDescriptionFontSize,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = ToThickness(BackstageVisualContract.Pane.ActionDescriptionMargin)
+                Margin = ToThickness(_profile.Metrics.ActionDescriptionMargin)
             });
         }
 
         return row;
     }
 
+    private StackPanel CreatePane(double maxWidth) => new()
+    {
+        MaxWidth = maxWidth,
+        HorizontalAlignment = HorizontalAlignment.Left,
+    };
+
+    private TextBlock Heading(string text) => new()
+    {
+        Text = text,
+        FontSize = _profile.Metrics.HeadingFontSize,
+        FontWeight = FontWeights.Light,
+        Foreground = _kit.Heading,
+        Margin = ToThickness(_profile.Metrics.HeadingMargin),
+    };
+
+    private TextBlock SubHeading(string text) => new()
+    {
+        Text = text,
+        FontSize = _profile.Metrics.SectionHeaderFontSize,
+        FontWeight = FontWeights.SemiBold,
+        Foreground = _kit.Heading,
+        Margin = ToThickness(_profile.Metrics.SectionHeaderMargin),
+    };
+
+    private TextBlock Description(string text) => new()
+    {
+        Text = text,
+        Foreground = _kit.Muted,
+        FontSize = _profile.Metrics.DescriptionFontSize,
+        TextWrapping = TextWrapping.Wrap,
+        Margin = ToThickness(_profile.DescriptionMargin),
+    };
+
+    private UIElement Field(string label, string value)
+    {
+        var metrics = _profile.Metrics;
+        var grid = new Grid { Margin = ToThickness(metrics.DetailGridMargin) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(metrics.DetailLabelColumnWidth) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var name = new TextBlock
+        {
+            Text = label,
+            Foreground = _kit.Muted,
+            FontSize = metrics.DetailFontSize,
+        };
+        Grid.SetColumn(name, 0);
+        grid.Children.Add(name);
+
+        var content = new TextBlock
+        {
+            Text = value,
+            Foreground = _kit.Heading,
+            FontSize = metrics.DetailFontSize,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        Grid.SetColumn(content, 1);
+        grid.Children.Add(content);
+        return grid;
+    }
+
     private static Thickness ToThickness(BackstageVisualThickness thickness) =>
         new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
 }
-
-public sealed record BackstageRecentPaneSpec(
-    IReadOnlyList<string> Paths,
-    string EmptyText,
-    Action<string> OpenPath);
-
-public sealed record BackstageTemplatePaneSpec(
-    string Heading,
-    string TileCaption,
-    string FooterText,
-    Action Create);
-
-public sealed record BackstageOptionsPaneSpec(
-    string Description,
-    IReadOnlyList<BackstageFieldRow> Fields,
-    string? EditText = null,
-    Action? Edit = null);
-
-public sealed record BackstageAccountPaneSpec(
-    string Heading,
-    string Description,
-    IReadOnlyList<SisterBackstageAccountFieldGroup> Groups,
-    string? OptionsText = null,
-    Action? OpenOptions = null);
-
-public sealed record BackstageActionPaneSpec(
-    string Heading,
-    string Description,
-    IReadOnlyList<BackstageActionGroup> Groups);
 

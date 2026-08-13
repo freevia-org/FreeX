@@ -26,9 +26,9 @@ public partial class MainWindow
 
     // Guards GetDataBtn_Click's background import so a concurrent File > Open (which can swap
     // _workbook/_workbookRef.Current and _currentSheetId out from under the awaited Task.Run) is
-    // detected: the import always captures its target workbook/sheet/destination before the await
-    // and executes the ImportSheetCommand directly against that captured workbook id, so the data
-    // never lands in a different (newly opened) workbook (R68-async-ordering-race-sweep-2).
+    // detected: the import always captures its target session/sheet/destination before the await
+    // and executes through that captured session, so the data never lands in a different (newly
+    // opened) workbook (R68-async-ordering-race-sweep-2).
     private bool _isImportingData;
 
     /// <summary>
@@ -42,8 +42,8 @@ public partial class MainWindow
     /// without remembering the prior extent, a second import from a SHRUNK source (fewer
     /// rows/columns than the first) left the first import's leftover cells behind with stale
     /// values, indistinguishable from freshly imported data. Fed into
-    /// <see cref="ImportSheetCommand"/>'s previousExtent parameter (the same 4-arg overload the
-    /// Avalonia shell already uses) so <c>Apply</c> can clear exactly that leftover rectangle.
+    /// <see cref="WorkbookImportWorkflow"/>, which constructs the shared import command with the
+    /// prior extent so <c>Apply</c> can clear exactly that leftover rectangle.
     /// Keyed by workbook id (not just sheet+destination) so a concurrent File > Open mid-import
     /// (R68-async-ordering-race-sweep-2) can never cause one workbook's remembered extent to bleed
     /// into another's.
@@ -76,7 +76,7 @@ public partial class MainWindow
         if (!result.Chosen) return;
 
         var ext = System.IO.Path.GetExtension(result.FileName!).ToLowerInvariant();
-        var adapter = FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format);
+        var adapter = FileFormatResolver.FindOpenAdapter(adapters, ext, out var format);
         if (adapter is null)
         {
             RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, null, "unsupported_extension"));
@@ -103,32 +103,19 @@ public partial class MainWindow
             // flight -- matching Excel's modal Get Data behavior.
             RootGrid.IsEnabled = false;
 
-            // Capture the target workbook/sheet/destination BEFORE the await: a concurrent File >
+            // Capture the target session/workbook/sheet/destination BEFORE the await: a concurrent File >
             // Open reachable via a keyboard shortcut (not gated by RootGrid.IsEnabled above) can
             // still swap _workbook/_workbookRef.Current and _currentSheetId out from under this
-            // await. Executing the import command directly against the captured workbook id below
-            // (instead of TryExecuteCommand, which always reads the CURRENT _workbook.Id) guarantees
+            // await. Executing through the captured session below (instead of the current session)
+            // guarantees
             // the imported data lands in the workbook Get Data was invoked on, never in a workbook
             // opened afterward (R68-async-ordering-race-sweep-2).
-            var targetWorkbook = _workbook;
+            SynchronizeWorkbookSessionSelection();
+            var targetSession = _session;
+            var targetWorkbook = targetSession.Workbook;
             var targetSheetId = _currentSheetId;
             var destination = SheetGrid.SelectedRange?.Start ?? new CellAddress(targetSheetId, 1, 1);
 
-            var imported = await Task.Run(() =>
-            {
-                using var stream = System.IO.File.OpenRead(importPath);
-                return adapter.Load(stream);
-            });
-
-            if (imported.Sheets.Count == 0)
-            {
-                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "empty_workbook", imported.Sheets.Count));
-                return;
-            }
-
-            // R134-io-getdata-refresh-shrink-wpf: reuse the previous import's extent at this exact
-            // anchor (same workbook, sheet and destination cell), if remembered, so ImportSheetCommand
-            // can clear leftover cells when this import's source has shrunk. See _lastImportExtent.
             (uint RowCount, uint ColCount)? previousExtent = null;
             if (_lastImportExtent is { } previousImport &&
                 previousImport.WorkbookId == targetWorkbook.Id &&
@@ -138,9 +125,43 @@ public partial class MainWindow
                 previousExtent = (previousImport.RowCount, previousImport.ColCount);
             }
 
-            var outcome = _commandBus.Execute(
-                targetWorkbook.Id,
-                new ImportSheetCommand(targetSheetId, destination, imported.Sheets[0], previousExtent));
+            var importResult = await WorkbookImportWorkflow.ImportPathAsync(
+                importPath,
+                ext,
+                adapter,
+                targetSheetId,
+                destination,
+                command => ToCommandOutcome(targetSession.ExecuteCommandPreservingSelection(command)),
+                previousExtent: previousExtent);
+
+            if (importResult.Outcome == WorkbookImportExecutionOutcome.EmptyWorkbook)
+            {
+                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(
+                    ext, format?.FormatName ?? adapter.FormatName, importResult.Reason, importResult.WorksheetCount));
+                return;
+            }
+
+            if (importResult.Outcome == WorkbookImportExecutionOutcome.Failed)
+            {
+                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(
+                    ext,
+                    format?.FormatName ?? adapter.FormatName,
+                    importResult.Reason,
+                    importResult.WorksheetCount,
+                    importResult.ErrorDetail));
+                ShowOwnedMessage(
+                    importResult.UserMessage ?? UiText.Get("GetData_ImportFailedMessage"),
+                    UiText.Get("MainWindowMessage_GetDataTitle"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return;
+            }
+
+            if (importResult.Outcome == WorkbookImportExecutionOutcome.Canceled)
+                return;
+
+            var outcome = importResult.CommandOutcome
+                ?? throw new InvalidOperationException("Import command did not produce a result.");
             RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
             {
                 ["command"] = "Get Data",
@@ -150,14 +171,15 @@ public partial class MainWindow
             {
                 if (ReferenceEquals(_workbook, targetWorkbook))
                     ShowCommandError(outcome, "Get Data");
-                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "command_failed", imported.Sheets.Count));
+                RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(
+                    ext, format?.FormatName ?? adapter.FormatName, importResult.Reason, importResult.WorksheetCount));
                 return;
             }
 
             // Remember this import's actual written extent (the source sheet's used range) for the
             // next Get Data into this same anchor, regardless of whether this window still shows
             // targetWorkbook (a concurrent File > Open does not invalidate what was actually written).
-            var importedUsedRange = imported.Sheets[0].GetUsedRange();
+            var importedUsedRange = importResult.ImportedWorkbook!.Sheets[0].GetUsedRange();
             _lastImportExtent = (
                 targetWorkbook.Id,
                 targetSheetId,
@@ -174,12 +196,10 @@ public partial class MainWindow
             {
                 if (!outcome.IsNoOp)
                 {
-                    MarkWorkbookDirty();
-                    InvalidateNavigationCaches();
-                    NotifyOtherWindowsOfWorkbookChange();
+                    ApplySuccessfulWorkbookSessionCommand();
+                    ApplyWorkbookSessionDocumentStateToRenderer();
                 }
 
-                RecalculateIfAutomatic(outcome.AffectedCells ?? []);
                 SetActiveCell(destination);
                 EnsureCellVisible(destination);
                 UpdateViewport();
@@ -187,11 +207,12 @@ public partial class MainWindow
                 RefreshStatusBar();
             }
 
-            RecordDiagnosticEvent("import_completed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, null, imported.Sheets.Count));
+            RecordDiagnosticEvent("import_completed", BuildImportDiagnosticProperties(
+                ext, format?.FormatName ?? adapter.FormatName, worksheetCount: importResult.WorksheetCount));
         }
         catch (Exception ex)
         {
-            var diagnostic = ImportFailureDiagnosticFactory.FromException(ext, ex);
+            var diagnostic = WorkbookImportFailurePlanner.FromException(ext, ex);
             RecordDiagnosticEvent(
                 "import_failed",
                 BuildImportDiagnosticProperties(
@@ -218,7 +239,7 @@ public partial class MainWindow
         var properties = new Dictionary<string, string?>
         {
             ["extension"] = extension,
-            ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(extension)
+            ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(extension)
         };
         if (!string.IsNullOrWhiteSpace(format))
             properties["format"] = format;
@@ -275,16 +296,11 @@ public partial class MainWindow
             return;
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(
-            _workbook.Id,
-            () => CreateTextToColumnsCommand(CurrentGroupedEditSheetIds(), currentRange, dialog.Result));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Text to Columns");
+        if (!TryExecuteRepeatableCommand(
+                () => CreateTextToColumnsCommand(CurrentGroupedEditSheetIds(), currentRange, dialog.Result),
+                "Text to Columns",
+                out _))
             return;
-        }
-
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         PruneCorrectedValidationCircles();
     }
@@ -318,31 +334,16 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         var columns = sheet is null
-            ? RemoveDuplicatesDialog.BuildColumnChoices(range)
-            : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range);
+            ? RemoveDuplicatesPlanner.BuildColumnChoices(range, RemoveDuplicatesText)
+            : RemoveDuplicatesPlanner.BuildColumnChoices(sheet, range, hasHeaders: true, RemoveDuplicatesText);
         var genericColumns = sheet is null
-            ? RemoveDuplicatesDialog.BuildColumnChoices(range)
-            : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range, hasHeaders: false);
-        var hasHeaders = sheet is not null && RemoveDuplicatesDialog.GuessHasHeaders(sheet, range);
-        var dialog = new RemoveDuplicatesDialog(columns, genericColumns, hasHeaders) { Owner = this };
+            ? RemoveDuplicatesPlanner.BuildColumnChoices(range, RemoveDuplicatesText)
+            : RemoveDuplicatesPlanner.BuildColumnChoices(sheet, range, hasHeaders: false, RemoveDuplicatesText);
+        var hasHeaders = sheet is not null && RemoveDuplicatesPlanner.GuessHasHeaders(sheet, range);
+        var dialog = new RemoveDuplicatesDialog(range, columns, genericColumns, hasHeaders) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
-        var currentRange = SheetGrid.SelectedRange ?? range;
-        var planResult = RemoveDuplicatesPlanner.CreatePlan(
-            currentRange,
-            dialog.Result.HasHeaders,
-            dialog.Result.SelectedColumnOffsets);
-        if (!planResult.IsReady || planResult.Plan is null)
-        {
-            ShowOwnedMessage(
-                planResult.StatusText,
-                UiText.Get("MainWindowMessage_RemoveDuplicatesTitle"),
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
-        }
-
-        var plan = planResult.Plan;
+        var plan = dialog.Result;
         RemoveDuplicateRowsCommand? activeSheetCommand = null;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Remove Duplicates",
@@ -363,6 +364,9 @@ public partial class MainWindow
         UpdateViewport();
         PruneCorrectedValidationCircles();
     }
+
+    private static RemoveDuplicatesPlannerText RemoveDuplicatesText =>
+        new(UiText.Get("RemoveDuplicates_ColumnLabel"));
 
     private void AdvancedFilterBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -389,19 +393,16 @@ public partial class MainWindow
     /// </summary>
     private void ApplyAdvancedFilterResult(AdvancedFilterDialogResult result)
     {
-        var outcome = _commandBus.ExecuteRepeatable(
-            _workbook.Id,
-            () => new AdvancedFilterCommand(
+        if (!TryExecuteRepeatableCommand(
+                () => new AdvancedFilterCommand(
                 result.ListRange,
                 result.CriteriaRange,
                 result.CopyToCell,
                 result.UniqueRecordsOnly,
-                result.CopyToRange));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Advanced Filter");
+                result.CopyToRange),
+                "Advanced Filter",
+                out _))
             return;
-        }
 
         // R72-commands-sort-filter-4-3: remember an IN-PLACE Advanced Filter (no "Copy to another
         // location" destination) so Data > Reapply (MainWindow.DataFilterCommands.cs
@@ -411,13 +412,13 @@ public partial class MainWindow
         // intentionally left unremembered (and does not clear a previously remembered in-place one).
         if (result.CopyToCell is null)
         {
-            _lastInPlaceAdvancedFilter = new AdvancedFilterReapplyState(
+            _filterWorkflowSession.RememberAdvancedFilter(
                 result.ListRange,
                 result.CriteriaRange,
-                result.UniqueRecordsOnly);
+                filterInPlace: true,
+                uniqueRecordsOnly: result.UniqueRecordsOnly);
         }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         if (result.CopyToCell is { } destinationCell)
             SetActiveCell(destinationCell);
         UpdateViewport();
@@ -470,14 +471,51 @@ public partial class MainWindow
             ResolveSheetIdByName) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
-        if (!TryExecuteRepeatableConsolidateCommand(dialog.Result, out var outcome))
+        var plan = ConsolidateApplicationWorkflow.Plan(_workbook, dialog.Result, overwriteConfirmed: false);
+        if (ShowConsolidateValidationIssue(plan))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
-        SetActiveCell(dialog.Result.DestinationCell);
-        EnsureCellVisible(dialog.Result.DestinationCell);
+        if (plan.Disposition == ConsolidateApplicationDisposition.ConfirmOverwrite)
+        {
+            var choice = ShowOwnedMessage(
+                ConsolidateApplicationWorkflow
+                    .DescribeOverwriteConfirmation(plan)
+                    .Resolve(UiText.Get, UiText.Format),
+                UiText.Get("Consolidate_Consolidate"),
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Warning);
+            if (choice != MessageBoxResult.OK)
+                return;
+
+            plan = ConsolidateApplicationWorkflow.Plan(_workbook, dialog.Result, overwriteConfirmed: true);
+            if (ShowConsolidateValidationIssue(plan))
+                return;
+        }
+
+        if (!TryExecuteRepeatableConsolidateCommand(plan, out var outcome))
+            return;
+
+        SetActiveCell(outcome.DestinationCell);
+        EnsureCellVisible(outcome.DestinationCell);
         UpdateViewport();
         PruneCorrectedValidationCircles();
+    }
+
+    private bool ShowConsolidateValidationIssue(ConsolidateApplicationPlan plan)
+    {
+        if (plan.Disposition != ConsolidateApplicationDisposition.Invalid)
+            return false;
+
+        var presentation = ConsolidateDialogPlanner.DescribeIssue(
+            plan.Issue,
+            ConsolidateDialogMessageContext.FinalValidation,
+            ConsolidateDialogTextProfile.Wpf);
+        ShowOwnedMessage(
+            presentation.Message.Resolve(UiText.Get, UiText.Format),
+            UiText.Get("Consolidate_Consolidate"),
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        return true;
     }
 
     private void CircleInvalidDataMenuItem_Click(object sender, RoutedEventArgs e)
@@ -719,37 +757,24 @@ public partial class MainWindow
     }
 
     private bool TryExecuteRepeatableConsolidateCommand(
-        ConsolidateDialogResult result,
-        out CommandOutcome outcome)
+        ConsolidateApplicationPlan plan,
+        out ConsolidateExecutionOutcome outcome)
     {
-        IWorkbookCommand CreateCommand() =>
-            new ConsolidateCommand(
-                result.SourceRanges,
-                result.DestinationCell,
-                result.Function,
-                result.UseTopRowLabels,
-                result.UseLeftColumnLabels,
-                result.CreateLinksToSourceData);
-
-        try
-        {
-            outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        }
-        catch (Exception ex)
-        {
-            outcome = new CommandOutcome(false, ex.Message);
-        }
+        CommandOutcome? commandOutcome = null;
+        outcome = ConsolidateApplicationWorkflow.Execute(
+            plan,
+            commandFactory =>
+            {
+                var success = TryExecuteRepeatableCommand(commandFactory, "Consolidate", out var result);
+                commandOutcome = result;
+                return new ConsolidateCommandAdapterResult(success, result.ErrorMessage);
+            });
 
         if (outcome.Success)
-        {
-            MarkWorkbookDirty();
-            _repeatPostAction = null;
-            InvalidateNavigationCaches();
-            NotifyOtherWindowsOfWorkbookChange();
             return true;
-        }
 
-        ShowCommandError(outcome, "Consolidate");
+        if (commandOutcome is null)
+            ShowCommandError(new CommandOutcome(false, outcome.ErrorMessage), "Consolidate");
         return false;
     }
 
@@ -805,7 +830,7 @@ public partial class MainWindow
         var dialog = new SubtotalDialog(SubtotalDialog.BuildColumnChoices(sheet, sourceRange), sheet.OutlineSummaryBelow ?? true) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
-        if (dialog.Result.Action == SubtotalDialogAction.RemoveAll)
+        if (dialog.Result.Action == SubtotalDialogPlanAction.RemoveAll)
         {
             if (!TryExecuteRepeatableGroupedSheetCommand(
                     "Remove Subtotals",
@@ -817,7 +842,6 @@ public partial class MainWindow
                     out var removeOutcome))
                 return;
 
-            RecalculateIfAutomatic(removeOutcome.AffectedCells ?? []);
             UpdateViewport();
             PruneCorrectedValidationCircles();
             return;
@@ -829,7 +853,6 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         SelectSubtotalResultRange(
             SubtotalPlanner.ExpandRangeForInsertedSubtotalRows(sourceRange, outcome.AffectedCells));
         UpdateViewport();
@@ -842,7 +865,7 @@ public partial class MainWindow
     /// subtotals" range-correction fix (R68-commands-group-outline-6-1) is directly testable without
     /// driving the real SubtotalDialog.
     /// </summary>
-    private IWorkbookCommand CreateSubtotalApplyCommand(SheetId sheetId, GridRange sheetRange, SubtotalDialogResult result)
+    private IWorkbookCommand CreateSubtotalApplyCommand(SheetId sheetId, GridRange sheetRange, SubtotalDialogPlanResult result)
     {
         if (!result.ReplaceCurrentSubtotals)
         {
@@ -949,13 +972,14 @@ public partial class MainWindow
         var changingCell = dlg.ChangingCell!.Value;
         var targetValue = dlg.TargetValue;
 
-        if (!TryValidateGoalSeekCells(setCell, changingCell, out var validationError))
+        var proposal = _session.FindGoalSeekProposal(new GoalSeekRequest(setCell, targetValue, changingCell));
+        if (!proposal.Success)
         {
-            _messageService.ShowWarning(validationError!, "Microsoft Excel");
+            _messageService.ShowWarning(proposal.ErrorMessage!, "Microsoft Excel");
             return;
         }
 
-        var result = GoalSeekService.Seek(_workbook, _recalcEngine, setCell, targetValue, changingCell);
+        var result = proposal.SeekResult!;
 
         var statusDialog = new GoalSeekStatusDialog(result, targetValue) { Owner = this };
         if (statusDialog.ShowDialog() == true && statusDialog.ApplyResult)
@@ -963,8 +987,6 @@ public partial class MainWindow
             var cmd = new GoalSeekCommand(changingCell, result.FoundValue);
             if (TryExecuteCommand(cmd, "Goal Seek"))
             {
-                RecalculateIfAutomatic([changingCell]);
-
                 // Excel always refreshes the set cell (and the rest of the dependency chain from
                 // the changing cell) once Goal Seek applies its result, even when the workbook is
                 // in Manual calculation mode -- Goal Seek's recalculation is a deliberate one-time
@@ -976,43 +998,11 @@ public partial class MainWindow
                 // Goal Seek command does not route through.
                 if (_workbook.CalculationMode is not (WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables))
                 {
-                    _recalcEngine.Recalculate(_workbook, [changingCell]);
+                    _session.RecalculateChangedCellsAlways([changingCell]);
                     InvalidateNavigationCaches();
                 }
             }
         }
-    }
-
-    /// <summary>
-    /// R121-app-host-goalseek-validation-gap: mirrors
-    /// <see cref="FreeX.App.Services.WorkbookCellEditService"/>'s private
-    /// <c>TryValidateGoalSeekRequest</c> content guards (R90-app-goalseek-whatif-5-1/5-2). The
-    /// dialog's own <c>GoalSeekInputParser</c>/<c>GoalSeekRequestParser</c> only validates
-    /// cell-reference SYNTAX and that Set/Changing differ -- it never checks what the two cells
-    /// actually CONTAIN. Without this, <see cref="GoalSeekCommand"/>.Apply (which only rejects a
-    /// protected sheet and a non-finite result) unconditionally overwrites the changing cell with a
-    /// plain <see cref="NumberValue"/> no matter what it held before, silently destroying a formula
-    /// the user pointed the By-changing-cell box at (by mistake, or because Set/Changing were
-    /// swapped), instead of refusing the operation the way Excel and the shared service both do.
-    /// Extracted as its own method (rather than inlined in <see cref="GoalSeekBtn_Click"/>) so it is
-    /// directly testable without driving the two modal dialogs that method also shows.
-    /// </summary>
-    private bool TryValidateGoalSeekCells(CellAddress setCell, CellAddress changingCell, out string? errorMessage)
-    {
-        if (string.IsNullOrEmpty(_workbook.GetSheet(setCell.Sheet)?.GetCell(setCell)?.FormulaText))
-        {
-            errorMessage = "The cell reference in the Set cell edit box must refer to a cell that contains a formula.";
-            return false;
-        }
-
-        if (!string.IsNullOrEmpty(_workbook.GetSheet(changingCell.Sheet)?.GetCell(changingCell)?.FormulaText))
-        {
-            errorMessage = "The cell reference in the By changing cell edit box must refer to a cell that does not contain a formula.";
-            return false;
-        }
-
-        errorMessage = null;
-        return true;
     }
 
     private void ApplyGoalSeekRangeSelection(
@@ -1087,26 +1077,15 @@ public partial class MainWindow
             request => ApplyDataTableRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null)
             return;
-        var formulaCell = dialog.Result.FormulaCell;
-        Func<GridRange, IWorkbookCommand> createCommand;
-        if (dialog.Result.Mode == DataTableMode.TwoVariable)
-        {
-            createCommand = currentRange => new TwoVariableDataTableCommand(currentRange, formulaCell, dialog.Result.RowInputCell!.Value, dialog.Result.ColumnInputCell!.Value);
-        }
-        else
-        {
-            var inputCell = dialog.Result.RowInputCell ?? dialog.Result.ColumnInputCell!.Value;
-            createCommand = currentRange => new OneVariableDataTableCommand(currentRange, formulaCell, inputCell, dialog.Result.Orientation);
-        }
+        var plan = DataTablePlanner.CreatePlan(range, dialog.Result);
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Data Table",
                 range,
-                createCommand,
+                plan.CreateCommand,
                 out var outcome))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         PruneCorrectedValidationCircles();
         RefreshStatusBar();

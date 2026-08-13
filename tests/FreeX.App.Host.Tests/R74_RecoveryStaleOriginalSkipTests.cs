@@ -1,6 +1,5 @@
 using System.IO;
 using System.IO.Compression;
-using System.Reflection;
 using FluentAssertions;
 using Free.Shared.AppServices;
 
@@ -10,26 +9,12 @@ namespace FreeX.App.Host.Tests;
 /// Regression coverage for R74-services-autosave-recovery-4-1: startup recovery must not offer a
 /// candidate whose ORIGINAL on-disk file was saved MORE RECENTLY than the crash snapshot itself.
 /// Accepting such a candidate would silently overwrite a newer manual save with stale recovered
-/// content. App.FilterCandidatesWithNewerOriginal drops (and deletes) any such candidate before
+/// content. AutosaveRecoveryCandidateProcessor drops (and deletes) any such candidate before
 /// OfferStartupRecovery ever offers it, while still offering a candidate whose original is older
 /// than the snapshot or missing entirely.
 /// </summary>
 public sealed class R74_RecoveryStaleOriginalSkipTests
 {
-    /// <summary>Self-contained temp directory helper (avoids relying on another test project's internal type).</summary>
-    private sealed class RecoveryTempDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
-
-        public RecoveryTempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
-
     // Real snapshots are OPC/ZIP packages; EnumerateCandidates validates that, so test snapshots
     // must be readable archives (matching AutosaveSnapshotStoreTests' WriteSnapshotZip pattern).
     private static void WriteSnapshotZip(string path)
@@ -60,20 +45,13 @@ public sealed class R74_RecoveryStaleOriginalSkipTests
     }
 
     private static IReadOnlyList<AutosaveRecoveryCandidate> InvokeFilter(
-        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
-    {
-        var method = typeof(App).GetMethod(
-            "FilterCandidatesWithNewerOriginal",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-
-        return (IReadOnlyList<AutosaveRecoveryCandidate>)method!.Invoke(null, [candidates])!;
-    }
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates) =>
+        AutosaveRecoveryCandidateProcessor.FilterSupersededByNewerOriginal(candidates);
 
     [Fact]
     public void Filter_DropsCandidateWhoseOriginalWasSavedAfterTheSnapshot()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R74.Recovery-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var originalPath = System.IO.Path.Combine(temp.Path, "Book1.fxl");
         File.WriteAllText(originalPath, "newer-manual-save");
@@ -95,7 +73,7 @@ public sealed class R74_RecoveryStaleOriginalSkipTests
     [Fact]
     public void Filter_KeepsCandidateWhoseOriginalIsOlderThanTheSnapshot()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R74.Recovery-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var originalPath = System.IO.Path.Combine(temp.Path, "Book2.fxl");
         File.WriteAllText(originalPath, "stale-on-disk-copy");
@@ -116,7 +94,7 @@ public sealed class R74_RecoveryStaleOriginalSkipTests
     [Fact]
     public void Filter_KeepsCandidateWhoseOriginalFileIsMissing()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R74.Recovery-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var missingOriginalPath = System.IO.Path.Combine(temp.Path, "DoesNotExist.fxl");
 
@@ -131,7 +109,7 @@ public sealed class R74_RecoveryStaleOriginalSkipTests
     [Fact]
     public void Filter_MixedList_OnlyDropsTheStaleOne()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R74.Recovery-");
         var store = new AutosaveSnapshotStore(temp.Path);
 
         var okOriginalPath = System.IO.Path.Combine(temp.Path, "Ok.fxl");

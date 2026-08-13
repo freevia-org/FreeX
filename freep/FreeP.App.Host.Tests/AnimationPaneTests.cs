@@ -522,29 +522,38 @@ public sealed class AnimationPaneTests
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "AnimationPane.cs");
 
-        source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
-        source.Should().Contain("AnimationPanePlanner.BuildWorkflowViewPlan(");
-        source.Should().Contain("AnimationPanePlanner.BuildWorkflowEvidencePlan(");
-        source.Should().Contain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
-        source.Should().Contain("AnimationPanePlanner.BuildPlaybackWorkflowEvidencePlan(");
+        source.Should().Contain("private readonly AnimationPaneSession _session;");
+        source.Should().Contain("_session.Refresh()");
+        source.Should().Contain("_session.ExecutePlayback(control.Kind)");
+        source.Should().Contain("_session.SelectAnimation(capturedIndex)");
         source.Should().Contain("plan.PlaybackControls");
-        source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");
         source.Should().Contain("var effectText = item.EffectText");
-        source.Should().Contain("item.EffectOptions.Options");
-        source.Should().Contain("item.EffectOptions.WheelSpokeOptions");
-        source.Should().Contain("AnimationPanePlanner.BuildEffectOptionMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.TryApplyEffectOptionMutation(");
-        source.Should().Contain("AnimationPanePlanner.BuildReorderMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.TryApplyReorderMutation(");
-        source.Should().Contain("AnimationPanePlanner.BuildRemoveMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.TryApplyRemoveMutation(");
-        source.Should().Contain("AnimationPanePlanner.TriggerLabels");
-        source.Should().Contain("Text              = item.DurationText");
-        source.Should().Contain("Text              = item.DelayText");
-        source.Should().Contain("AnimationPanePlanner.BuildTriggerMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.BuildDurationMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.BuildDelayMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.TryApplyTimingMutation(");
+        source.Should().Contain("_session.BuildItemControlPlan(item, _onEditMotionPath is not null)");
+        source.Should().Contain("controls.EffectOptions.Options");
+        source.Should().Contain("controls.WheelSpokes.Options");
+        source.Should().Contain("controls.EffectOptions.ResolveOptionId(");
+        source.Should().Contain("_session.ApplyEffectOption(animationIndex, optionId)");
+        source.Should().Contain("_session.MoveAnimation(animationIndex, offset)");
+        source.Should().Contain("_session.RemoveAnimation(animationIndex)");
+        source.Should().Contain("_session.ControlSchema.Heading");
+        source.Should().Contain("controls.Trigger.Options");
+        source.Should().Contain("controls.Repeat.Options");
+        source.Should().Contain("Text              = controls.Duration.Text");
+        source.Should().Contain("Text              = controls.Delay.Text");
+        source.Should().Contain("_session.ApplyTrigger(capturedIndex, triggerCombo.SelectedIndex)");
+        source.Should().Contain("_session.ApplyDuration(capturedIndex, durationBox.Text)");
+        source.Should().Contain("_session.ApplyDelay(capturedIndex, delayBox.Text)");
+        source.Should().Contain("_session.ApplyEasing(animationIndex, accelerationText, decelerationText)");
+        source.Should().NotContain("item.EffectOptions.Options");
+        source.Should().NotContain("item.EffectOptions.WheelSpokeOptions");
+        source.Should().NotContain("AnimationPanePlanner.FormatEasing(");
+        source.Should().NotContain("AnimationPanePlanner.FormatRepeat(");
+        source.Should().NotContain("AnimationPanePlanner.BuildParagraphBuildMutationPlan(");
+        source.Should().NotContain(".GetRequired(AnimationPaneControlKind.");
+        source.Should().NotContain("AnimationPanePlanner.");
+        source.Should().NotContain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
+        source.Should().NotContain("AnimationPanePlanner.TryApplyTimingMutation(");
+        source.Should().NotContain("AnimationPanePlanner.TryApplyEasingMutation(");
         source.Should().NotContain("updated.Trigger =");
         source.Should().NotContain("updated.DurationMs =");
         source.Should().NotContain("updated.DelayMs =");
@@ -622,24 +631,6 @@ public sealed class AnimationPaneTests
         return names;
     }
 
-    private static string ReadWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var parts = new string[relativeParts.Length + 1];
-            parts[0] = directory.FullName;
-            relativeParts.CopyTo(parts, 1);
-
-            var candidate = Path.Combine(parts);
-            if (File.Exists(candidate))
-                return File.ReadAllText(candidate);
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(
-            "Could not locate workspace file.",
-            Path.Combine(relativeParts));
-    }
+    private static string ReadWorkspaceFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

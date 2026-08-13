@@ -21,7 +21,8 @@ public sealed class MiscWorkflowPlannerDedupSourceTests
 
         File.Exists(Path.Combine(servicesDirectory, "FindReplaceDialogPlanner.cs")).Should().BeTrue();
         File.Exists(Path.Combine(servicesDirectory, "SpellCheckWorkflowPlanner.cs")).Should().BeTrue();
-        File.Exists(Path.Combine(servicesDirectory, "LocalAccountWorkflowPlanner.cs")).Should().BeTrue();
+        File.Exists(Path.Combine(servicesDirectory, "LocalAccountInfoPlanner.cs")).Should().BeTrue();
+        File.Exists(Path.Combine(servicesDirectory, "LocalAccountWorkflowPlanner.cs")).Should().BeFalse();
         File.Exists(Path.Combine(servicesDirectory, "CrashAnalyticsConsentWorkflowPlanner.cs")).Should().BeTrue();
         File.Exists(Path.Combine(presentationDirectory, "FormulaAuditSelectionPlanner.cs")).Should().BeTrue();
         File.Exists(Path.Combine(servicesDirectory, "ZoomSelectionPlanner.cs")).Should().BeTrue();
@@ -30,20 +31,21 @@ public sealed class MiscWorkflowPlannerDedupSourceTests
     [Fact]
     public void RemainingHostWorkflowPlannerFiles_AreDocumentedAdapters()
     {
-        DialogSourceTestSupport.ReadHostSources("LocalAccountPlanner.cs")
+        var hostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
+
+        File.Exists(Path.Combine(hostDirectory, "LocalAccountPlanner.cs")).Should().BeFalse();
+        DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs")
             .Should()
-            .Contain("Host adapter");
-        DialogSourceTestSupport.ReadHostSources("LocalAccountPlanner.cs")
-            .Should()
+            .Contain("LocalAccountInfoPlanner.Build(new LocalAccountInfoRequest(")
+            .And
             .Contain("FreeXBackstageAccountPanePlanner.Build(")
             .And
-            .NotContain("\"FreeX user name\"")
-            .And
-            .NotContain("\"Local OS account\"")
-            .And
-            .NotContain("\"Options file\"");
-        DialogSourceTestSupport.ReadHostSources("CrashAnalyticsConsentPlanner.cs")
+            .Contain("FreeXBackstageAccountPanePlanner.FormatMessageBody(");
+        File.Exists(Path.Combine(hostDirectory, "CrashAnalyticsConsentPlanner.cs"))
             .Should()
-            .Contain("Host adapter");
+            .BeFalse();
+        DialogSourceTestSupport.ReadHostSources("App.xaml.cs")
+            .Should()
+            .Contain("CrashAnalyticsConsentWorkflowPlanner.ShouldPrompt(");
     }
 }

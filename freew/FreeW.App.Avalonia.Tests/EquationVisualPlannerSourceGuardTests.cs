@@ -29,13 +29,7 @@ public sealed class EquationVisualPlannerSourceGuardTests
         source.Should().NotContain("hasInlineEquation");
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FreeW.slnx")))
-            dir = dir.Parent;
-
-        dir.Should().NotBeNull("tests run from inside the repository tree");
-        return Path.Combine(new[] { dir!.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeW.slnx", parts);
 }

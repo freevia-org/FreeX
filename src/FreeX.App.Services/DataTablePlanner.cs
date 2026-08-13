@@ -1,3 +1,5 @@
+using FreeX.App.Presentation;
+using FreeX.App.Presentation.DataTools;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -39,15 +41,17 @@ public sealed record DataTablePlan(
 
     public long OutputCellCount => OutputRange.CellCount;
 
-    public IWorkbookCommand CreateCommand() =>
+    public IWorkbookCommand CreateCommand() => CreateCommand(TableRange);
+
+    public IWorkbookCommand CreateCommand(GridRange tableRange) =>
         Mode == DataTablePlanMode.TwoVariable
             ? new TwoVariableDataTableCommand(
-                TableRange,
+                tableRange,
                 FormulaCell,
                 RowInputCell ?? throw new InvalidOperationException("Two-variable Data Table plan requires a row input cell."),
                 ColumnInputCell ?? throw new InvalidOperationException("Two-variable Data Table plan requires a column input cell."))
             : new OneVariableDataTableCommand(
-                TableRange,
+                tableRange,
                 FormulaCell,
                 GetOneVariableInputCell(),
                 Orientation);
@@ -86,6 +90,22 @@ public sealed record DataTablePlanResult(
 
 public static class DataTablePlanner
 {
+    public static DataTablePlan CreatePlan(GridRange tableRange, DataTableDialogResult dialogResult)
+    {
+        ArgumentNullException.ThrowIfNull(dialogResult);
+
+        return new DataTablePlan(
+            dialogResult.Mode == DataTableMode.TwoVariable
+                ? DataTablePlanMode.TwoVariable
+                : DataTablePlanMode.OneVariable,
+            tableRange,
+            dialogResult.FormulaCell,
+            dialogResult.Orientation,
+            dialogResult.RowInputCell,
+            dialogResult.ColumnInputCell,
+            GetOutputRange(tableRange));
+    }
+
     public static DataTablePlanResult CreatePlan(
         Workbook? workbook,
         SheetId currentSheetId,
@@ -215,7 +235,10 @@ public static class DataTablePlanner
         var orientation = hasRowInput && !hasColumnInput
             ? DataTableInputOrientation.Row
             : DataTableInputOrientation.Column;
-        var formulaCell = GetDefaultFormulaCell(tableRange, orientation, mode == DataTablePlanMode.TwoVariable);
+        var formulaCell = DataTableInputParser.GetDefaultFormulaCell(
+            tableRange,
+            orientation,
+            mode == DataTablePlanMode.TwoVariable);
         if (string.IsNullOrWhiteSpace(sheet.GetCell(formulaCell)?.FormulaText))
             return DataTablePlanResult.Invalid(
                 DataTablePlanStatus.FormulaCellMustContainFormula,
@@ -257,15 +280,6 @@ public static class DataTablePlanner
         plan = default!;
         return false;
     }
-
-    public static CellAddress GetDefaultFormulaCell(
-        GridRange range,
-        DataTableInputOrientation orientation,
-        bool twoVariable = false) =>
-        new(
-            range.Start.Sheet,
-            twoVariable || orientation == DataTableInputOrientation.Column ? range.Start.Row : range.Start.Row + 1,
-            twoVariable || orientation == DataTableInputOrientation.Row ? range.Start.Col : range.Start.Col + 1);
 
     public static bool TryParseRange(
         SheetId defaultSheetId,

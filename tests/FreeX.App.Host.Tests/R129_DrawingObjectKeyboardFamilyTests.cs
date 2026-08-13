@@ -37,7 +37,7 @@ public sealed class R129_DrawingObjectKeyboardFamilyTests
         {
             using var harness = DrawingObjectKeyboardHarness.Create();
             var sheet = harness.Sheet;
-            var activeCell = new CellAddress(sheet.Id, 0, 0);
+            var activeCell = new CellAddress(sheet.Id, 1, 1);
             harness.SetActiveCell(activeCell);
 
             var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 5, 5), Width = 100, Height = 60 };
@@ -232,7 +232,6 @@ public sealed class R129_DrawingObjectKeyboardFamilyTests
         private readonly MethodInfo _executeCommandShortcut;
         private readonly MethodInfo _nudgeSelectedDrawingObject;
         private readonly FieldInfo _selectionAnchorField;
-        private readonly FieldInfo _workbookField;
         private readonly Type _keyboardCommandShortcutType;
 
         private DrawingObjectKeyboardHarness(MainWindow window)
@@ -253,9 +252,6 @@ public sealed class R129_DrawingObjectKeyboardFamilyTests
             _selectionAnchorField = typeof(MainWindow)
                 .GetField("_selectionAnchorField", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_selectionAnchorField");
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
             _keyboardCommandShortcutType = typeof(KeyboardCommandShortcut);
         }
 
@@ -278,9 +274,7 @@ public sealed class R129_DrawingObjectKeyboardFamilyTests
             return new DrawingObjectKeyboardHarness(window);
         }
 
-        private Workbook LiveWorkbook =>
-            (Workbook)(_workbookField.GetValue(_window)
-                ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
+        private Workbook LiveWorkbook => _window.Session.Workbook;
 
         public Sheet Sheet => LiveWorkbook.Sheets[0];
 

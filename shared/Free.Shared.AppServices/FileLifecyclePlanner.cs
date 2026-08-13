@@ -102,7 +102,7 @@ public enum RecentFileRegistration
 /// <param name="Filter">
 ///   The format-filter string in the platform-conventional form (e.g. on Windows
 ///   <c>"Word documents (*.docx)|*.docx|All files (*.*)|*.*"</c>). Built by
-///   <see cref="FileDialogFilter"/>.
+///   <see cref="FileDialogFilterBuilder"/>.
 /// </param>
 /// <param name="DefaultExtension">The default extension (with leading dot), e.g. <c>".docx"</c>.</param>
 public sealed record FileOpenRequest(string Filter, string DefaultExtension);
@@ -118,6 +118,27 @@ public sealed record FileOpenRequest(string Filter, string DefaultExtension);
 /// </param>
 public sealed record FileSaveAsRequest(string Filter, string DefaultExtension, string SuggestedFileName);
 
+public enum FileDialogSelectionStatus
+{
+    Cancelled,
+    Chosen
+}
+
+/// <summary>
+/// Common path-selection semantics for native file dialogs. Toolkit adapters may carry additional
+/// metadata, but cancellation versus a usable local path is owned here.
+/// </summary>
+public readonly record struct FileDialogSelection(string? Path)
+{
+    public static FileDialogSelection Cancelled { get; } = new(null);
+
+    public FileDialogSelectionStatus Status => string.IsNullOrWhiteSpace(Path)
+        ? FileDialogSelectionStatus.Cancelled
+        : FileDialogSelectionStatus.Chosen;
+
+    public bool Chosen => Status == FileDialogSelectionStatus.Chosen;
+}
+
 /// <summary>The outcome of a native file dialog: a chosen path, or cancellation.</summary>
 /// <param name="Path">The chosen full path, or <c>null</c> when the user cancelled.</param>
 public sealed record FileDialogResult(string? Path)
@@ -125,8 +146,10 @@ public sealed record FileDialogResult(string? Path)
     /// <summary>The cancellation result (no path chosen).</summary>
     public static FileDialogResult Cancelled { get; } = new((string?)null);
 
+    public FileDialogSelection Selection => new(Path);
+
     /// <summary>True when the user chose a path.</summary>
-    public bool Chosen => !string.IsNullOrWhiteSpace(Path);
+    public bool Chosen => Selection.Chosen;
 }
 
 /// <summary>

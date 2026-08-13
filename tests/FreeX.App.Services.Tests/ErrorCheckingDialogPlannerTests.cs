@@ -51,7 +51,7 @@ public sealed class ErrorCheckingDialogPlannerTests
     {
         var sheetId = SheetId.New();
 
-        var issues = ErrorCheckingDialogPlanner.CreateParityIssues(sheetId);
+        var issues = ErrorCheckingParityFixture.CreateIssues(sheetId);
 
         issues.Should().HaveCount(2);
         issues.Should().AllSatisfy(issue => issue.SheetName.Should().Be("Sheet1"));

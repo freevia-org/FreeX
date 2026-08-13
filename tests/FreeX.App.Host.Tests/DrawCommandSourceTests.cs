@@ -16,7 +16,7 @@ public sealed class DrawCommandSourceTests
         insertSource.Should().Contain("private void ShapesBtn_Click(object sender, RoutedEventArgs e) => DrawRectBtn_Click(sender, e);");
         source.Should().Contain("private async void InsertPictureBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("PictureInsertionPlacementPlanner.CreateInsertPictureCommand(");
-        source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildPictureFormatCommands(");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildPictureFormatCommand(");
         source.Should().Contain("DrawRectBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("InsertDrawingShape(DrawingShapeKind.Rectangle)");
         source.Should().Contain("DrawEllipseBtn_Click(object sender, RoutedEventArgs e)");
@@ -45,7 +45,7 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("menuItem.IsChecked = preset == currentPreset;");
         source.Should().Contain("private void ShapeEffectPresetMenuItem_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("SetSelectedDrawingShapeEffect(preset);");
-        source.Should().Contain("var normalizedPreset = ShapeEffectsDialogPlanner.NormalizePreset(preset);");
+        source.Should().Contain("var normalizedPreset = ShapeEffectsPlanner.NormalizePreset(preset);");
         source.Should().NotContain("Enum.IsDefined(preset)");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildZOrderCommand(");
         source.Should().Contain("var target = GetTargetDrawingZOrderObject(sheetId, currentTarget.Kind);");
@@ -69,14 +69,14 @@ public sealed class DrawCommandSourceTests
         source.Should().NotContain("new SetDrawingShapeColorsCommand(");
         source.Should().NotContain("new SetTextBoxColorsCommand(");
         source.Should().Contain("new ShapeGradientDialog");
-        source.Should().Contain("new SetDrawingShapeGradientCommand(");
-        source.Should().Contain("new SetDrawingShapeEffectCommand(");
+        source.Should().Contain("ShapeGradientPlanner.BuildCommand(");
+        source.Should().Contain("ShapeEffectsPlanner.BuildCommand(");
         source.Should().NotContain("new ShapeEffectsDialog(shape.GetEffectiveEffectPreset())");
         source.Should().NotContain("dialog.Result.Preset");
         source.Should().NotContain("shape.GetEffectiveEffectPreset() == DrawingShapeEffectPreset.None");
         source.Should().Contain("EnterPictureCropMode(picture);");
         source.Should().Contain("private void PictureCropDialogMenuItem_Click(object sender, RoutedEventArgs e) =>");
-        source.Should().Contain("new SetPictureCropCommand(");
+        source.Should().Contain("PictureCropDialogPlanner.BuildCommand(");
         source.Should().Contain("DrawingTargetResolver.GetTargetDrawingObject(");
         source.Should().Contain("selectedObjectId");
     }
@@ -118,7 +118,7 @@ public sealed class DrawCommandSourceTests
         drawingSource.Should().Contain("private void OnPictureCropped");
         drawingSource.Should().Contain("EnterPictureCropMode(picture);");
         drawingSource.Should().NotContain("new PictureCropDialog(picture)");
-        drawingSource.Should().Contain("new SetPictureCropCommand(");
+        drawingSource.Should().Contain("PictureCropDialogPlanner.BuildCommand(");
         drawingSource.Should().Contain("TryExecuteCommand(");
         drawingSource.Should().Contain("SheetGrid.IsPictureCropMode = true;");
         drawingSource.Should().Contain("SheetGrid.Focus();");

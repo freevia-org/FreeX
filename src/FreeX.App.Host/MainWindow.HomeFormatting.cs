@@ -8,7 +8,9 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.SheetUI;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.TableUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -21,13 +23,6 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private enum MergeCellsWarningChoice
-    {
-        Cancel,
-        KeepFirstCell,
-        ConcatenateAllCells
-    }
-
     private enum RibbonBorderPreset
     {
         All,
@@ -162,19 +157,15 @@ public partial class MainWindow
     // must have Merge & Center / Merge Cells / Merge Across / Unmerge Cells act on EVERY disjoint area,
     // not just the active (last-clicked) one -- Excel merges/unmerges each selected block independently.
     // These four handlers used to key off SheetGrid.SelectedRange alone, silently dropping every area but
-    // the active one. Routed through the same GetCurrentSelectionRanges/TryExecuteRepeatableCurrentRangesCommand
-    // and TryExecuteRepeatableCurrentSelectionRangesCommand plumbing the R124 Group/Ungroup and Row-
-    // Height/AutoFit multi-area fixes use (MainWindow.CommandExecution.cs), instead of reading only
-    // SheetGrid.SelectedRange.
+    // the active one. Merge & Center delegates the operation to WorkbookSession, while the remaining
+    // variants use the shared range planner until their session APIs are available.
     private void MergeCenterBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryResolveMergeContentResolution(range, out var contentResolution)) return;
-        if (!TryExecuteRepeatableCurrentRangesCommand(
-                "Merge & Center",
-                range,
-                currentRange => CreateMergeAndCenterCommand(currentRange, contentResolution),
-                out _))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.MergeAndCenterSelectedRange(contentResolution),
+                "Merge & Center"))
             return;
 
         UpdateViewport();
@@ -189,7 +180,11 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Merge Cells",
                 range,
-                (sheetId, currentRange) => CreateMergeCellsCommand(sheetId, currentRange, contentResolution)))
+                (sheetId, currentRange) => CellMergePlanner.CreateMergeCellsCommand(
+                    _workbook.GetSheet(sheetId),
+                    sheetId,
+                    currentRange,
+                    contentResolution)))
             return;
 
         UpdateViewport();
@@ -204,7 +199,7 @@ public partial class MainWindow
         // MergeAcrossSelectedRangeAsync (MainWindow.MergePaste.cs), instead of silently dirtying the
         // workbook and pushing a phantom undo entry for a composite of no-ops. An area that is
         // individually single-column but sits alongside a wider area in the same multi-area selection
-        // is instead skipped per-area in CreateMergeAcrossCommand below, matching Excel merging every
+        // is instead skipped per-area in the shared planner, matching Excel merging every
         // area that qualifies rather than rejecting the whole action.
         var areas = GetCurrentSelectionRanges(range);
         if (areas.Count == 0 || areas.All(area => area.ColCount <= 1)) return;
@@ -212,7 +207,11 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Merge Across",
                 range,
-                (sheetId, currentRange) => CreateMergeAcrossCommand(sheetId, currentRange, contentResolution)))
+                (sheetId, currentRange) => CellMergePlanner.CreateMergeAcrossCommand(
+                    _workbook.GetSheet(sheetId),
+                    sheetId,
+                    currentRange,
+                    contentResolution)))
             return;
 
         UpdateViewport();
@@ -220,63 +219,11 @@ public partial class MainWindow
 
     private void UnmergeCellsMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
-                "Unmerge Cells",
-                range,
-                (sheetId, currentRange) => CreateUnmergeCellsCommand(sheetId, currentRange)))
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteWorksheetLayout(_session.UnmergeSelectedRange, "Unmerge Cells"))
             return;
 
         UpdateViewport();
-    }
-
-    private IWorkbookCommand CreateMergeAcrossCommand(
-        SheetId sheetId,
-        GridRange currentRange,
-        MergeCellContentResolution contentResolution)
-    {
-        // Mirrors the pre-multi-area ColCount<=1 guard in MergeAcrossMenuItem_Click, but per-area:
-        // a disjoint area that is itself single-column contributes nothing (CellMergePlanner treats
-        // each resulting per-row range as CellCount<=1, a no-op merge), so skip it here instead of
-        // building phantom per-row commands for it.
-        if (currentRange.ColCount <= 1)
-            return NoOpWorkbookCommand.Instance;
-
-        var commands = new List<IWorkbookCommand>();
-        for (var row = currentRange.Start.Row; row <= currentRange.End.Row; row++)
-        {
-            commands.Add(CreateMergeCellsCommand(
-                sheetId,
-                new GridRange(
-                    new CellAddress(sheetId, row, currentRange.Start.Col),
-                    new CellAddress(sheetId, row, currentRange.End.Col)),
-                contentResolution,
-                allowUnmergeToggle: false));
-        }
-
-        return commands.Count == 1
-            ? commands[0]
-            : new CompositeWorkbookCommand("Merge Across", commands);
-    }
-
-    // The selection is NOT auto-expanded to cover whole merges before this runs (SelectedRange may be a
-    // single cell inside a larger merge, or a block spanning several merges), so an exact-range
-    // UnmergeCellsCommand(range) would need SelectedRange to equal a stored merged region verbatim and
-    // would silently no-op otherwise. Mirror the Avalonia shell / Format-Cells dialog path
-    // (CellMergePlanner.CreateUnmergeCommands / WorkbookSession.UnmergeSelectedRange): unmerge every
-    // merged region that OVERLAPS the selection, one UnmergeCellsCommand per region.
-    private IWorkbookCommand CreateUnmergeCellsCommand(SheetId sheetId, GridRange range)
-    {
-        if (_workbook.GetSheet(sheetId) is not { } sheet)
-            return new UnmergeCellsCommand(sheetId, range);
-
-        var commands = CellMergePlanner.CreateUnmergeCommands(sheet, sheetId, range);
-        return commands.Count switch
-        {
-            0 => NoOpWorkbookCommand.Instance,
-            1 => commands[0],
-            _ => new CompositeWorkbookCommand("Unmerge Cells", commands)
-        };
     }
 
     private IWorkbookCommand CreateMergeAndCenterCommand(
@@ -297,28 +244,6 @@ public partial class MainWindow
         }
 
         return new CompositeWorkbookCommand("Merge & Center", commands);
-    }
-
-    private IWorkbookCommand CreateMergeCellsCommand(
-        SheetId sheetId,
-        GridRange range,
-        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell,
-        bool allowUnmergeToggle = true)
-    {
-        if (_workbook.GetSheet(sheetId) is not { } sheet)
-            return new MergeCellsCommand(sheetId, range);
-
-        var commands = CellMergePlanner.CreateFormatCellsMergeCommands(
-            sheet,
-            sheetId,
-            range,
-            mergeCells: true,
-            contentResolution,
-            allowUnmergeToggle);
-
-        return commands.Count == 1
-            ? commands[0]
-            : new CompositeWorkbookCommand("Merge Cells", commands);
     }
 
     // R127-homeformatting-multiarea-merge-2 (data-loss fix): `range` here is only the FALLBACK used when
@@ -343,44 +268,39 @@ public partial class MainWindow
         contentResolution = MergeCellContentResolution.KeepFirstCell;
 
         var ranges = GetCurrentSelectionRanges(range);
-        var targetSheetIds = CurrentGroupedEditSheetIds();
-        var sheetRanges = targetSheetIds
-            .Select(sheetId => _workbook.GetSheet(sheetId))
-            .Where(sheet => sheet is not null)
-            .Select(sheet => (
-                Sheet: sheet!,
-                Ranges: (IReadOnlyList<GridRange>)ranges
-                    .Select(r => GroupedSheetRangePlanner.RemapRangeToSheet(r, sheet!.Id))
-                    .ToList()))
-            .ToList();
-
-        var contentPlan = CellMergePlanner.AnalyzeContent(sheetRanges, perRow);
+        var contentPlan = CellMergePlanner.AnalyzeGroupedContent(
+            _workbook,
+            CurrentGroupedEditSheetIds(),
+            ranges,
+            perRow);
         if (!contentPlan.WouldLoseContent)
             return true;
 
-        var choice = ShowMergeCellsContentWarningDialog(contentPlan);
-        if (choice == MergeCellsWarningChoice.Cancel)
-            return false;
-
-        contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-            ? MergeCellContentResolution.ConcatenateAllCells
-            : MergeCellContentResolution.KeepFirstCell;
-        return true;
+        var decision = CellMergePlanner.ResolveContentChoice(ShowMergeCellsContentWarningDialog(contentPlan));
+        contentResolution = decision.Resolution;
+        return decision.ShouldProceed;
     }
 
-    private MergeCellsWarningChoice ShowMergeCellsContentWarningDialog(MergeCellContentPlan contentPlan)
+    private MergeCellContentChoice ShowMergeCellsContentWarningDialog(MergeCellContentPlan contentPlan)
     {
-        var choice = MergeCellsWarningChoice.Cancel;
+        var choice = MergeCellContentChoice.Cancel;
+        var presentation = MergeCellsContentWarningPlanner.Create(
+            contentPlan.Entries.Select(entry => entry.DisplayText).ToArray());
+        var keepFirstAction = presentation.Action(MergeCellsContentWarningAction.KeepFirstCell);
+        var concatenateAction = presentation.Action(MergeCellsContentWarningAction.ConcatenateAllCells);
+        var cancelAction = presentation.Action(MergeCellsContentWarningAction.Cancel);
         var dialog = new Window
         {
-            Title = "Merge Cells",
+            Title = presentation.Title,
             Width = 460,
             Height = 240,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ResizeMode = ResizeMode.NoResize,
             Owner = this
         };
-        AutomationProperties.SetAutomationId(dialog, "MergeCellsContentWarningDialog");
+        AutomationProperties.SetAutomationId(
+            dialog,
+            presentation.DialogAutomationId);
 
         var root = new StackPanel
         {
@@ -390,27 +310,23 @@ public partial class MainWindow
 
         root.Children.Add(new TextBlock
         {
-            Text = "Merging cells can discard cell contents.",
+            Text = presentation.PrimaryMessage,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         });
 
         root.Children.Add(new TextBlock
         {
-            Text = "Choose how to handle the selected cell contents.",
+            Text = presentation.CompactGuidanceMessage,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 12)
         });
 
-        var preview = string.Join(", ", contentPlan.Entries
-            .Select(entry => entry.DisplayText)
-            .Where(text => !string.IsNullOrWhiteSpace(text))
-            .Take(4));
-        if (!string.IsNullOrWhiteSpace(preview))
+        if (!string.IsNullOrWhiteSpace(presentation.PreviewText))
         {
             root.Children.Add(new TextBlock
             {
-                Text = preview,
+                Text = presentation.PreviewText,
                 TextWrapping = TextWrapping.Wrap,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(0, 0, 0, 14)
@@ -425,41 +341,47 @@ public partial class MainWindow
 
         var keepFirstButton = new Button
         {
-            Content = "Keep only first cell",
+            Content = keepFirstAction.Label,
             MinWidth = 136,
             Margin = new Thickness(0, 0, 8, 0),
-            IsDefault = true
+            IsDefault = keepFirstAction.IsDefault
         };
-        AutomationProperties.SetAutomationId(keepFirstButton, "MergeCellsKeepFirstButton");
+        AutomationProperties.SetAutomationId(
+            keepFirstButton,
+            keepFirstAction.AutomationId);
         keepFirstButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.KeepFirstCell;
+            choice = MergeCellContentChoice.KeepFirstCell;
             dialog.DialogResult = true;
         };
 
         var concatenateButton = new Button
         {
-            Content = "Concatenate all cells",
+            Content = concatenateAction.Label,
             MinWidth = 136,
             Margin = new Thickness(0, 0, 8, 0)
         };
-        AutomationProperties.SetAutomationId(concatenateButton, "MergeCellsConcatenateButton");
+        AutomationProperties.SetAutomationId(
+            concatenateButton,
+            concatenateAction.AutomationId);
         concatenateButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.ConcatenateAllCells;
+            choice = MergeCellContentChoice.ConcatenateAllCells;
             dialog.DialogResult = true;
         };
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = cancelAction.Label,
             MinWidth = 82,
-            IsCancel = true
+            IsCancel = cancelAction.IsCancel
         };
-        AutomationProperties.SetAutomationId(cancelButton, "MergeCellsCancelButton");
+        AutomationProperties.SetAutomationId(
+            cancelButton,
+            cancelAction.AutomationId);
         cancelButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.Cancel;
+            choice = MergeCellContentChoice.Cancel;
             dialog.DialogResult = false;
         };
 
@@ -1104,12 +1026,17 @@ public partial class MainWindow
     private void CfClearRulesMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
-                "Clear Conditional Formatting",
-                range,
-                (sheetId, currentRange) => new ClearConditionalFormatsCommand(sheetId, currentRange)))
+        IWorkbookCommand CreateCommand() =>
+            ConditionalFormatCommandPlanner.PlanClear(
+                CurrentGroupedEditSheetIds(),
+                GetCurrentSelectionRanges(range)).Command;
+
+        if (!TryExecuteRepeatableCommand(
+                CreateCommand,
+                ConditionalFormatCommandPlanner.ClearRulesCommandLabel,
+                out _))
             return;
-        UpdateViewport();
+        ApplyConditionalFormatRefresh(ConditionalFormatStateRefreshPolicy.WorksheetVisualState);
     }
     private void CfManageRulesMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -1140,17 +1067,13 @@ public partial class MainWindow
 
     private void ApplyManagedConditionalFormatRules(IReadOnlyList<ConditionalFormat> newRules)
     {
-        if (!TryExecuteGroupedSheetCommand(
-                "Manage Conditional Formatting Rules",
-                sheetId =>
-                {
-                    var remapped = newRules
-                        .Select(r => GroupedSheetRangePlanner.CloneConditionalFormatForSheet(r, sheetId))
-                        .ToList();
-                    return new ReplaceAllConditionalFormatsCommand(sheetId, remapped);
-                }))
+        var plan = ConditionalFormatCommandPlanner.PlanReplaceAll(
+            CurrentGroupedEditSheetIds(),
+            _currentSheetId,
+            newRules);
+        if (!TryExecuteCommand(plan.Command, plan.CommandLabel))
             return;
-        UpdateViewport();
+        ApplyConditionalFormatRefresh(plan.RefreshPolicy);
     }
 
     private void ShowCfDialog(string ruleType)
@@ -1204,23 +1127,23 @@ public partial class MainWindow
         if (ranges.Count == 0)
             return;
 
-        var command = SelectionStyleCommandPlanner.CreateRangeCommand(
+        var plan = ConditionalFormatCommandPlanner.PlanApplyRule(
             CurrentGroupedEditSheetIds(),
             ranges,
-            (sheetId, currentRange) =>
-            {
-                var sheetRule = GroupedSheetRangePlanner.CloneConditionalFormatForSheet(rule, sheetId);
-                sheetRule.AppliesTo = currentRange;
-                return new ApplyConditionalFormatCommand(sheetId, sheetRule);
-            },
-            "Conditional Formatting");
+            rule);
         if (!TryExecuteCommand(
-                command,
-                "Conditional Formatting",
+                plan.Command,
+                plan.CommandLabel,
                 out _))
             return;
 
-        UpdateViewport();
+        ApplyConditionalFormatRefresh(plan.RefreshPolicy);
+    }
+
+    private void ApplyConditionalFormatRefresh(ConditionalFormatStateRefreshPolicy policy)
+    {
+        if (policy == ConditionalFormatStateRefreshPolicy.WorksheetVisualState)
+            UpdateViewport();
     }
 
     private void PopulateConditionalFormatDataBarGallery(MenuItem menuItem)

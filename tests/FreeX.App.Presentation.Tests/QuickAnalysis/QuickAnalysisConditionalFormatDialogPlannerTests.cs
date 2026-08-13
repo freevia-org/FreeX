@@ -7,6 +7,42 @@ namespace FreeX.App.Presentation.Tests.QuickAnalysis;
 
 public sealed class QuickAnalysisConditionalFormatDialogPlannerTests
 {
+    [Fact]
+    public void PlanDialog_CarriesSharedCommandTitleAndEditorSeed()
+    {
+        var plan = QuickAnalysisConditionalFormatDialogPlanner.PlanDialog(
+            QuickAnalysisConditionalFormatCommand.Between);
+
+        plan.Command.Should().Be(QuickAnalysisConditionalFormatCommand.Between);
+        plan.Title.Should().Be("Between");
+        plan.Seed.RuleType.Should().Be(CfRuleType.CellValue);
+        plan.Seed.Operator.Should().Be(CfOperator.Between);
+    }
+
+    [Fact]
+    public void SharedCatalog_CoversEveryConditionalFormatCommand()
+    {
+        foreach (var command in Enum.GetValues<QuickAnalysisConditionalFormatCommand>())
+        {
+            var dialogPlan = QuickAnalysisConditionalFormatDialogPlanner.PlanDialog(command);
+
+            dialogPlan.Command.Should().Be(command);
+            dialogPlan.Title.Should().NotBeNullOrWhiteSpace();
+            QuickAnalysisConditionalFormatPresetPlanner.TryResolve(command, out _).Should().BeTrue();
+        }
+    }
+
+    [Fact]
+    public void SharedCatalog_RejectsUnknownConditionalFormatCommand()
+    {
+        var unknown = (QuickAnalysisConditionalFormatCommand)int.MaxValue;
+
+        var plan = () => QuickAnalysisConditionalFormatDialogPlanner.PlanDialog(unknown);
+
+        plan.Should().Throw<ArgumentOutOfRangeException>();
+        QuickAnalysisConditionalFormatPresetPlanner.TryResolve(unknown, out _).Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(QuickAnalysisConditionalFormatCommand.GreaterThan, CfRuleType.CellValue, CfOperator.GreaterThan, true, false)]
     [InlineData(QuickAnalysisConditionalFormatCommand.LessThan, CfRuleType.CellValue, CfOperator.LessThan, true, false)]
@@ -25,7 +61,7 @@ public sealed class QuickAnalysisConditionalFormatDialogPlannerTests
         bool isTop,
         bool isPercent)
     {
-        var seed = QuickAnalysisConditionalFormatDialogPlanner.Plan(command);
+        var seed = QuickAnalysisConditionalFormatDialogPlanner.PlanDialog(command).Seed;
 
         seed.RuleType.Should().Be(ruleType);
         seed.Operator.Should().Be(op);
@@ -43,18 +79,23 @@ public sealed class QuickAnalysisConditionalFormatDialogPlannerTests
         QuickAnalysisConditionalFormatCommand command,
         CfRuleType ruleType)
     {
-        QuickAnalysisConditionalFormatDialogPlanner.Plan(command).RuleType.Should().Be(ruleType);
+        QuickAnalysisConditionalFormatDialogPlanner.PlanDialog(command).Seed.RuleType.Should().Be(ruleType);
     }
 
     [Fact]
     public void Plan_PreservesTextAndDateDialogState()
     {
-        var text = QuickAnalysisConditionalFormatDialogPlanner.Plan(QuickAnalysisConditionalFormatCommand.TextContains);
-        var date = QuickAnalysisConditionalFormatDialogPlanner.Plan(QuickAnalysisConditionalFormatCommand.DateOccurring);
+        var text = QuickAnalysisConditionalFormatDialogPlanner
+            .PlanDialog(QuickAnalysisConditionalFormatCommand.TextContains)
+            .Seed;
+        var date = QuickAnalysisConditionalFormatDialogPlanner
+            .PlanDialog(QuickAnalysisConditionalFormatCommand.DateOccurring)
+            .Seed;
 
         text.RuleType.Should().Be(CfRuleType.ContainsText);
         text.Text.Should().BeEmpty();
         date.RuleType.Should().Be(CfRuleType.DateOccurring);
         date.DateOccurringPeriod.Should().Be("Today");
     }
+
 }

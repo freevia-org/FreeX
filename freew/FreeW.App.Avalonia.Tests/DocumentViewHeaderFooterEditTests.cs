@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Input;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -55,7 +56,7 @@ public sealed class DocumentViewHeaderFooterEditTests
     [Fact]
     public async Task PlaceCaretInHeaderFooter_sets_HeaderFooterCaretInfo_in_the_header()
     {
-        (int SectionIndex, bool IsFooter, string Slot, int ParaIdx, int Offset)? info = null;
+        (int SectionIndex, bool IsFooter, HeaderFooterSlotKind Slot, int ParaIdx, int Offset)? info = null;
         var ran = await OnUiThread(() =>
         {
             var (_, view) = MakeViewWithHeader("Header");
@@ -65,7 +66,7 @@ public sealed class DocumentViewHeaderFooterEditTests
         if (!ran) return;
         info.Should().NotBeNull("placing the caret in the header must report H/F caret info");
         info!.Value.IsFooter.Should().BeFalse();
-        info.Value.Slot.Should().Be("Header");
+        info.Value.Slot.Should().Be(HeaderFooterSlotKind.Header);
         info.Value.Offset.Should().Be(3);
     }
 
@@ -283,7 +284,7 @@ public sealed class DocumentViewHeaderFooterEditTests
     public async Task Click_inside_rendered_header_places_caret_in_that_header()
     {
         bool hit = false;
-        (int SectionIndex, bool IsFooter, string Slot, int ParaIdx, int Offset)? info = null;
+        (int SectionIndex, bool IsFooter, HeaderFooterSlotKind Slot, int ParaIdx, int Offset)? info = null;
         var ran = await OnUiThread(() =>
         {
             var (_, view) = MakeViewWithHeader("My Header");
@@ -297,7 +298,7 @@ public sealed class DocumentViewHeaderFooterEditTests
         if (!ran) return;
         hit.Should().BeTrue("a click inside the rendered header band must register an H/F hit");
         info.Should().NotBeNull();
-        info!.Value.Slot.Should().Be("Header");
+        info!.Value.Slot.Should().Be(HeaderFooterSlotKind.Header);
     }
 
     // ── Footer editing ────────────────────────────────────────────────────────────────────────────

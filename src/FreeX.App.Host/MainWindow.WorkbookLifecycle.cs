@@ -14,7 +14,7 @@ public partial class MainWindow
     {
         // Delegates to this document's WorkbookDocumentState (shared by its "New Window" views).
         // MarkDirty() increments DirtyGeneration and sets IsDirty = true in one atomic step.
-        _documentState.MarkDirty();
+        _session.MarkDirtyFromHost();
         UpdateTitleBar();
         // Fan out the title-bar refresh to this document's other views so they reflect
         // the dirty indicator without needing a full viewport refresh.
@@ -28,25 +28,47 @@ public partial class MainWindow
         // can detect when the stack returns to the save point and clear the dirty flag cleanly.
         // The version (not just the depth) guards against the stack having been trimmed and
         // refilled to the same depth with different entries — see TryMarkCleanIfAtSavePoint.
-        var undoDepth = _commandBus.GetUndoStackDepth(_workbook.Id);
-        var undoStackVersion = _commandBus.GetUndoStackVersion(_workbook.Id);
-        _documentState.MarkSavedAtUndoDepth(undoDepth, undoStackVersion);
+        _session.MarkSavedFromHost();
         UpdateTitleBar();
         // Fan out to this document's sibling views so they also reflect the saved (clean) state.
         _windowRegistry?.NotifyDocumentStateChanged(this);
         NotifyAutosaveSaved();
     }
 
+    /// <summary>
+    /// Replaces this window's document owner while preserving its WPF command/recalc adapters.
+    /// An outgoing shared session stays alive until its remaining sibling views close.
+    /// </summary>
+    private void ReplaceWorkbookSession(StartupWorkbookLoadResult source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var previousSession = _session;
+        _session = _documentContext.CreateHostOwnedSession(
+            _sessionFactory,
+            source,
+            _recalcEngine,
+            _viewportService,
+            _fileAdapters,
+            new Free.Shared.AppServices.WorkbookDocumentState(),
+            viewportHeight: Math.Max(1, SheetGrid?.ActualHeight ?? 1),
+            viewportWidth: Math.Max(1, SheetGrid?.ActualWidth ?? 1),
+            includeObjects: true);
+        _currentSheetId = _session.ActiveSheet.Id;
+        ConfigureWorkbookSessionRendererAdapters();
+        previousSession.Dispose();
+    }
+
     private async Task<SaveChangesConfirmation> ConfirmSaveBeforeDestructiveActionAsync(string message)
     {
-        return await WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(
+        return await _fileWorkflow.ConfirmBeforeDestructiveActionAsync(
             _workbookDirty,
             () => Task.FromResult(PromptSaveChangesBeforeDestructiveAction(message)),
             SaveResolvedAsync);
     }
 
     private Task<bool> CanProceedAfterSaveBeforeDestructiveActionAsync(string message) =>
-        WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
+        _fileWorkflow.CanProceedAfterDirtyGateWithCleanSaveAsync(
             _workbookDirty,
             () => Task.FromResult(PromptSaveChangesBeforeDestructiveAction(message)),
             SaveResolvedAsync,
@@ -57,7 +79,7 @@ public partial class MainWindow
     /// decision: an existing usable path saves directly to it; otherwise the Save-As dialog is shown.
     /// The concrete <see cref="FileSaveTarget"/> (path + adapter) is produced by FreeX's adapter-resolving
     /// <see cref="FileSavePlanner.TryResolveExistingPath"/> -- unless the session was marked read-only
-    /// by <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/>, in which case
+    /// by <see cref="ApplyWorkbookReadOnlyOpenPolicy"/>, in which case
     /// <see cref="ResolveExistingSaveTarget"/> withholds the existing path so this falls through to the
     /// Save-As dialog instead of silently overwriting the original file (Excel parity: Ctrl+S on a
     /// Read-Only-Recommended/write-reservation workbook is always forced through Save-As). Shared
@@ -65,7 +87,7 @@ public partial class MainWindow
     /// </summary>
     private async Task<bool> SaveResolvedAsync()
     {
-        return await WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
+        return await _fileWorkflow.SaveResolvedAsync(
             _workbookDirty,
             _currentFilePath,
             ResolveExistingSaveTarget,
@@ -75,15 +97,13 @@ public partial class MainWindow
 
     /// <summary>
     /// The existing-path save target, or <c>null</c> if there is none usable OR this session was
-    /// marked read-only by <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/> -- see
+    /// marked read-only by <see cref="ApplyWorkbookReadOnlyOpenPolicy"/> -- see
     /// <see cref="SaveResolvedAsync"/> for why a read-only session must never resolve back to its
     /// original path.
     /// </summary>
     private FileSaveTarget? ResolveExistingSaveTarget() =>
-        !_isWorkbookReadOnly &&
-        FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)
-            ? target
-            : null;
+        _workbookReadOnlySession.ResolveExistingSaveTarget(
+            () => _fileWorkflow.ResolveExistingSaveTarget(_currentFilePath));
 
     private SaveChangesPrompt PromptSaveChangesBeforeDestructiveAction(string message)
     {
@@ -206,19 +226,6 @@ public partial class MainWindow
         _sparklineValueCache.Clear();
         _toolbarVisualStateCache.Clear();
 
-        // This is definitively the last live window over the outgoing workbook (the
-        // IsFinalWorkbookWindowClose() check above returned true), so its sheets can never be
-        // recalculated again: release them from the shared app-lifetime RecalcEngine's
-        // volatile-cell tracking, dependency graph, and dependency-plan cache before dropping the
-        // reference, or that state leaks for the life of the app (see RecalcEngine.RetireWorkbook).
-        _recalcEngine.RetireWorkbook(_workbook);
-        var replacement = NewWorkbookFactory.Create(_options);
-        _workbook = replacement;
-        _workbookRef.Current = replacement;
-        _currentSheetId = replacement.Sheets[0].Id;
-        // If there are still sibling windows (unusual for a final-close path but
-        // possible if IsFinalWorkbookWindowClose() was incorrect), notify them.
-        NotifyOtherWindowsOfWorkbookChange();
     }
 
     private void ReleaseWorkbookUiStateForClose()
@@ -229,7 +236,7 @@ public partial class MainWindow
         CancelPendingViewportResizeRefresh();
         ClearFormulaReferenceHighlights();
         ClearClipboardVisualState();
-        _internalClipboard = null;
+        _workbookClipboardSession.Clear();
 
         if (_validationDropdown is not null)
         {

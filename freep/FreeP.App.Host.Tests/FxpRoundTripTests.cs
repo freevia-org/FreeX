@@ -11,15 +11,10 @@ namespace FreeP.App.Host.Tests;
 /// </summary>
 public sealed class FxpRoundTripTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.FxpTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.FxpTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public FxpRoundTripTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private static Presentation SamplePresentation()
     {

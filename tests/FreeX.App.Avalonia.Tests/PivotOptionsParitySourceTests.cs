@@ -8,8 +8,12 @@ public sealed class PivotOptionsParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotOptions.cs"));
 
         source.Should().Contain("PivotOptionsPlanner.CaptureDialogValues(pivot, cache)");
+        source.Should().Contain("PivotOptionsPlanner.CreateDialogValues(");
+        source.Should().Contain("PivotApplication.PlanDialogOptions(");
         source.Should().Contain("PivotStyleGalleryPlanner.GetStyleNames(values.StyleName)");
-        source.Should().Contain("MissingItemsLimitLabels");
+        source.Should().Contain("PivotOptionsPlanner.PageFieldLayouts");
+        source.Should().Contain("PivotOptionsPlanner.MissingItemsLimits");
+        source.Should().Contain("PivotOptionsPlanner.FindMissingItemsLimitIndex(values.MissingItemsLimit)");
         source.Should().Contain("TryParsePageWrap(pageWrapBox.Text");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(groupBox, PivotDialogChromeStyle);");
         source.Should().Contain("AvaloniaDisplayOptionSpacingCompensation");
@@ -34,25 +38,26 @@ public sealed class PivotOptionsParitySourceTests
 
         foreach (var argument in new[]
                  {
-                     "updateEmptyValueText: true",
-                     "refreshOnOpen: values.RefreshOnOpen",
-                     "saveSourceData: values.SaveSourceData",
-                     "enableRefresh: values.EnableRefresh",
-                     "preserveSourceSortFilter: values.PreserveSourceSortFilter",
-                     "updateMissingItemsLimit: true",
-                     "printTitles: values.PrintTitles",
-                     "printExpandCollapseButtons: values.PrintExpandCollapseButtons",
-                     "updateAltText: true",
-                     "autofitColumnsOnUpdate: values.AutofitColumnsOnUpdate",
-                     "preserveFormattingOnUpdate: values.PreserveFormattingOnUpdate",
-                     "showFieldHeaders: values.ShowFieldHeaders",
-                     "showContextualTooltips: values.ShowContextualTooltips",
-                     "showPropertiesInTooltips: values.ShowPropertiesInTooltips",
-                     "showClassicLayout: values.ShowClassicLayout",
-                     "showItemsWithNoDataOnRows: values.ShowItemsWithNoDataOnRows",
-                     "showItemsWithNoDataOnColumns: values.ShowItemsWithNoDataOnColumns",
-                     "errorCaption: values.ErrorValueText",
-                     "enableDrill: values.EnableDrill"
+                     "emptyValueText: emptyCellsBox.Text",
+                     "refreshOnOpen: refreshOnOpenBox.IsChecked == true",
+                     "saveSourceData: saveSourceDataBox.IsChecked == true",
+                     "enableRefresh: enableRefreshBox.IsChecked == true",
+                     "preserveSourceSortFilter: preserveSourceSortFilterBox.IsChecked == true",
+                     "missingItemsLimit: PivotOptionsPlanner.MissingItemsLimitFromIndex(missingItemsLimitBox.SelectedIndex)",
+                     "printTitles: printTitlesBox.IsChecked == true",
+                     "printExpandCollapseButtons: printExpandCollapseBox.IsChecked == true",
+                     "altTextTitle: altTextTitleBox.Text",
+                     "altTextDescription: altTextDescriptionBox.Text",
+                     "autofitColumnsOnUpdate: autofitColumnsBox.IsChecked == true",
+                     "preserveFormattingOnUpdate: preserveFormattingBox.IsChecked == true",
+                     "showFieldHeaders: fieldHeadersBox.IsChecked == true",
+                     "showContextualTooltips: contextualTooltipsBox.IsChecked == true",
+                     "showPropertiesInTooltips: propertiesInTooltipsBox.IsChecked == true",
+                     "showClassicLayout: classicLayoutBox.IsChecked == true",
+                     "showItemsWithNoDataOnRows: showItemsWithNoDataRowsBox.IsChecked == true",
+                     "showItemsWithNoDataOnColumns: showItemsWithNoDataColumnsBox.IsChecked == true",
+                     "errorValueText: errorValuesBox.Text",
+                     "enableDrill: enableShowDetailsBox.IsChecked == true"
                  })
             source.Should().Contain(argument);
     }
@@ -60,7 +65,7 @@ public sealed class PivotOptionsParitySourceTests
     [Fact]
     public void PivotOptionsParityFixture_SeedsDisplayStyleOptionsLikeWpf()
     {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var source = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         source.Should().Contain("StyleName = PivotStyleGalleryPlanner.DefaultStyleName,");
         source.Should().Contain("ShowRowStripes = true,");
@@ -104,15 +109,6 @@ public sealed class PivotOptionsParitySourceTests
             source.Should().Contain($"UiText.Get(\"{key}\")");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

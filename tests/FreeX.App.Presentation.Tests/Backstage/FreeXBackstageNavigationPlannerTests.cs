@@ -13,7 +13,7 @@ public sealed class FreeXBackstageNavigationPlannerTests
 
         entries.Select(EntryLabel).Should().Equal(
             "MainWindow_Text_Home",
-            "MainWindow_Text_New",
+            "Common_New",
             "MainWindow_Text_Open",
             "MainWindow_Text_Share",
             "|",

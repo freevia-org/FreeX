@@ -4,15 +4,10 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class FileCommandWorkflowTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeX.FileCommandWorkflowTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeX.FileCommandWorkflowTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public FileCommandWorkflowTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public void MarkDirty_NotifiesOnlyWhenTransitioningFromClean()

@@ -1,4 +1,5 @@
 using FreeX.Core.Calc;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -8,15 +9,29 @@ public sealed record WorkbookCellEditResult(
     string? ErrorMessage,
     IReadOnlyList<CellAddress> AffectedCells,
     RecalcReport? RecalcReport,
-    // R132-clipboard-cut-move-os-invalidation: true when this successful paste consumed a Cut
-    // FreeX-internal clipboard as a MOVE (WorkbookSession.PasteInternalClipboardAtActiveCell).
-    // The WPF host already invalidates the real OS clipboard once such a move completes
-    // (MainWindow.ClipboardCommands.InvalidateOsClipboardAfterCutMove) so a later Ctrl+V can't
-    // re-paste the already-moved content a second time via its external-clipboard fallback; the
-    // Avalonia shell has no such call and relies on this flag to know when to make the matching
-    // IClipboard.ClearAsync() call itself. Defaults to false so every pre-existing positional
-    // construction of this record (none of which cares about this signal) keeps compiling.
+    WorkbookCellEditFailure? Failure = null,
+    bool IsNoOp = false,
+    DrawingObjectSelectionHint? DrawingObjectSelection = null,
+    // True when a successful paste consumed an internal Cut clipboard as a move. Renderers use this
+    // signal to invalidate the matching OS clipboard payload so it cannot be pasted a second time.
     bool ClipboardCutMoveCompleted = false);
+
+public enum WorkbookCellEditFailureKind
+{
+    InvalidEntrySyntax,
+    DataValidationBlocked,
+    DataValidationDeclined
+}
+
+/// <summary>
+/// Structured edit failure details that let each renderer present native validation/formula UI
+/// without reimplementing portable entry parsing and validation policy.
+/// </summary>
+public sealed record WorkbookCellEditFailure(
+    WorkbookCellEditFailureKind Kind,
+    string? Title = null,
+    DvAlertStyle? AlertStyle = null,
+    UserMessageResult? PromptDecision = null);
 
 /// <summary>
 /// Describes a Warning/Information ("AskToContinue") data-validation alert that

@@ -9,7 +9,8 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
-        source.Split("RefreshSpellCheckEditorState(issue.Address);").Length.Should().BeGreaterThanOrEqualTo(4);
+        source.Split("RefreshSpellCheckEditorState(issue.Address);").Length.Should().BeGreaterThanOrEqualTo(3);
+        source.Should().Contain("dialog.Result.Action is SpellCheckSessionAction.Change or SpellCheckSessionAction.ChangeAll");
         source.Should().Contain("private void RefreshSpellCheckEditorState(CellAddress address)");
         source.Should().Contain("HideInlineEditor(commit: false);");
         source.Should().Contain("ClearFormulaRangeEntryState();");

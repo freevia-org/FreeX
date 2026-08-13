@@ -3,7 +3,6 @@ using System.Windows.Controls;
 using System.Linq;
 using System.Windows.Media;
 using System.Windows.Shapes;
-using Free.Shared.AppServices;
 using Free.Shared.Shell.Wpf;
 using Xunit;
 
@@ -114,33 +113,6 @@ public sealed class SisterAppWindowFrameBuilderTests
         Grid.GetRow(bottomPanel1).Should().Be(4);
         Grid.GetRow(bottomPanel2).Should().Be(5);
         Grid.GetRow(statusBar).Should().Be(6);
-    }
-
-    [Fact]
-    public void ClientFrameContractPlanner_DescribesSharedChromeWorkAreaStatusOrderAndIndexes()
-    {
-        var contract = SisterAppClientFrameContractPlanner.Plan(
-            topPanelsBelowChrome: 2,
-            bottomPanelsAboveStatus: 2);
-
-        contract.Slots.Should().Equal(
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.Chrome, 0),
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.TopPanelBelowChrome, 0),
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.TopPanelBelowChrome, 1),
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.WorkArea, 0),
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.BottomPanelAboveStatus, 0),
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.BottomPanelAboveStatus, 1),
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.StatusBar, 0));
-    }
-
-    [Fact]
-    public void ClientFrameContractPlanner_RejectsNegativePanelCounts()
-    {
-        Action negativeTop = () => SisterAppClientFrameContractPlanner.Plan(topPanelsBelowChrome: -1);
-        Action negativeBottom = () => SisterAppClientFrameContractPlanner.Plan(bottomPanelsAboveStatus: -1);
-
-        negativeTop.Should().Throw<ArgumentOutOfRangeException>();
-        negativeBottom.Should().Throw<ArgumentOutOfRangeException>();
     }
 
     [StaFact]

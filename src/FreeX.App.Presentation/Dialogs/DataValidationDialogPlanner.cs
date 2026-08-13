@@ -13,6 +13,25 @@ public sealed record DataValidationRangeSelectionRequest(
     string CurrentText,
     bool CollapseDialog = false);
 
+public sealed record DataValidationTypeChoice(DvType Type, string Label)
+{
+    public override string ToString() => Label;
+}
+
+public sealed record DataValidationOperatorChoice(DvOperator Operator, string Label)
+{
+    public override string ToString() => Label;
+}
+
+public sealed record DataValidationAlertStyleChoice(DvAlertStyle AlertStyle, string Label)
+{
+    public override string ToString() => Label;
+}
+
+public sealed record DataValidationFormulaFieldDescriptor(
+    string LabelResourceKey,
+    string HelpText);
+
 public enum DvRuleEditorFocusTarget
 {
     Formula1,
@@ -62,6 +81,66 @@ public sealed record DataValidationRuleEditorInput
 
 public static class DataValidationDialogPlanner
 {
+    private static readonly (DvType Type, string ResourceKey)[] TypeChoiceDescriptors =
+    [
+        (DvType.Any, "DataValidation_AnyValue"),
+        (DvType.WholeNumber, "DataValidation_WholeNumber"),
+        (DvType.Decimal, "DataValidation_Decimal"),
+        (DvType.List, "DataValidation_List"),
+        (DvType.Date, "DataValidation_Date"),
+        (DvType.Time, "DataValidation_Time"),
+        (DvType.TextLength, "DataValidation_TextLength"),
+        (DvType.Custom, "DataValidation_Custom")
+    ];
+
+    private static readonly (DvOperator Operator, string ResourceKey)[] OperatorChoiceDescriptors =
+    [
+        (DvOperator.Between, "DataValidation_Between"),
+        (DvOperator.NotBetween, "DataValidation_NotBetween"),
+        (DvOperator.Equal, "DataValidation_EqualTo"),
+        (DvOperator.NotEqual, "DataValidation_NotEqualTo"),
+        (DvOperator.GreaterThan, "DataValidation_GreaterThan"),
+        (DvOperator.LessThan, "DataValidation_LessThan"),
+        (DvOperator.GreaterThanOrEqual, "DataValidation_GreaterThanOrEqual"),
+        (DvOperator.LessThanOrEqual, "DataValidation_LessThanOrEqual")
+    ];
+
+    private static readonly (DvAlertStyle AlertStyle, string ResourceKey)[] AlertStyleChoiceDescriptors =
+    [
+        (DvAlertStyle.Stop, "DataValidation_Stop"),
+        (DvAlertStyle.Warning, "DataValidation_Warning"),
+        (DvAlertStyle.Information, "DataValidation_Information")
+    ];
+
+    public static IReadOnlyList<DataValidationTypeChoice> CreateTypeChoices(Func<string, string> getText) =>
+        ResolveChoices(TypeChoiceDescriptors, getText, item => new DataValidationTypeChoice(item.Value, item.Label));
+
+    public static IReadOnlyList<DataValidationOperatorChoice> CreateOperatorChoices(Func<string, string> getText) =>
+        ResolveChoices(OperatorChoiceDescriptors, getText, item => new DataValidationOperatorChoice(item.Value, item.Label));
+
+    public static IReadOnlyList<DataValidationAlertStyleChoice> CreateAlertStyleChoices(Func<string, string> getText) =>
+        ResolveChoices(AlertStyleChoiceDescriptors, getText, item => new DataValidationAlertStyleChoice(item.Value, item.Label));
+
+    public static DataValidationFormulaFieldDescriptor GetFormula1FieldDescriptor(DvFormula1Label label) =>
+        label switch
+        {
+            DvFormula1Label.Source => new(
+                "DataValidation_Source",
+                "List source range or comma-separated values."),
+            DvFormula1Label.Formula => new(
+                "DataValidation_Formula",
+                "Formula that must evaluate to TRUE (e.g. =A1>0)."),
+            DvFormula1Label.Value => new(
+                "DataValidation_Value",
+                "Value for the validation rule."),
+            _ => new(
+                "DataValidation_Minimum",
+                "Minimum value for the validation rule.")
+        };
+
+    public static DataValidationFormulaFieldDescriptor Formula2FieldDescriptor { get; } =
+        new("DataValidation_Maximum", "Maximum value for the validation rule.");
+
     public static DataValidation CreateDefaultRule(DvType type, GridRange selectedRange)
     {
         var op = DefaultOperatorForType(type);
@@ -318,4 +397,17 @@ public static class DataValidationDialogPlanner
         DvAlertStyle.Information => "Information",
         _ => "Stop"
     };
+
+    private static IReadOnlyList<TResult> ResolveChoices<TValue, TResult>(
+        IReadOnlyList<(TValue Value, string ResourceKey)> descriptors,
+        Func<string, string> getText,
+        Func<(TValue Value, string Label), TResult> createChoice)
+    {
+        ArgumentNullException.ThrowIfNull(getText);
+        ArgumentNullException.ThrowIfNull(createChoice);
+
+        return descriptors
+            .Select(descriptor => createChoice((descriptor.Value, getText(descriptor.ResourceKey))))
+            .ToArray();
+    }
 }

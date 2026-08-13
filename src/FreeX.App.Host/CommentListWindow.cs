@@ -11,11 +11,11 @@ namespace FreeX.App.Host;
 public sealed class CommentListWindow : Window
 {
     private readonly Action<CellAddress> _navigateTo;
-    private readonly ObservableCollection<CommentListWindowItem> _items = [];
+    private readonly ObservableCollection<CommentListRowPlan> _items = [];
     private readonly ListView _listView = new();
     private readonly Button _openButton = new();
 
-    public CommentListWindow(string title, IEnumerable<CommentListWindowItem> items, Action<CellAddress> navigateTo)
+    public CommentListWindow(string title, IEnumerable<CommentListRowPlan> items, Action<CellAddress> navigateTo)
     {
         _navigateTo = navigateTo;
 
@@ -85,13 +85,13 @@ public sealed class CommentListWindow : Window
                 {
                     Header = UiText.Get("ReviewCommentList_CellColumnHeader"),
                     Width = 80,
-                    DisplayMemberBinding = new System.Windows.Data.Binding(nameof(CommentListWindowItem.Cell))
+                    DisplayMemberBinding = new System.Windows.Data.Binding(nameof(CommentListRowPlan.Cell))
                 },
                 new GridViewColumn
                 {
                     Header = UiText.Get("ReviewCommentList_TextColumnHeader"),
                     Width = 390,
-                    DisplayMemberBinding = new System.Windows.Data.Binding(nameof(CommentListWindowItem.Text))
+                    DisplayMemberBinding = new System.Windows.Data.Binding(nameof(CommentListRowPlan.Text))
                 }
             }
         };
@@ -104,9 +104,9 @@ public sealed class CommentListWindow : Window
         Loaded += (_, _) => FocusInitialItem();
     }
 
-    public void Refresh(IEnumerable<CommentListWindowItem> items)
+    public void Refresh(IEnumerable<CommentListRowPlan> items)
     {
-        var selectedAddress = (_listView.SelectedItem as CommentListWindowItem)?.Address;
+        var selectedAddress = (_listView.SelectedItem as CommentListRowPlan)?.Address;
         _items.Clear();
         foreach (var item in items)
             _items.Add(item);
@@ -126,19 +126,12 @@ public sealed class CommentListWindow : Window
         UpdateOpenButtonState();
     }
 
-    public static IReadOnlyList<CommentListWindowItem> CreateThreadedCommentItems(
+    public static IReadOnlyList<CommentListRowPlan> CreateThreadedCommentItems(
         IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments) =>
-        CommentNavigationPlanner.OrderedThreadedCommentAddresses(threadedComments)
-            .Select(address => new CommentListWindowItem(
-                address,
-                address.ToA1(),
-                CommentNavigationPlanner.FormatThreadedComment(threadedComments[address])))
-            .ToList();
+        CommentNavigationPlanner.CreateThreadedCommentRows(threadedComments);
 
-    public static IReadOnlyList<CommentListWindowItem> CreateNoteItems(IReadOnlyDictionary<CellAddress, string> notes) =>
-        CommentNavigationPlanner.OrderedNoteAddresses(notes)
-            .Select(address => new CommentListWindowItem(address, address.ToA1(), notes[address]))
-            .ToList();
+    public static IReadOnlyList<CommentListRowPlan> CreateNoteItems(IReadOnlyDictionary<CellAddress, string> notes) =>
+        CommentNavigationPlanner.CreateNoteRows(notes);
 
     private void FocusInitialItem()
     {
@@ -149,7 +142,7 @@ public sealed class CommentListWindow : Window
 
     private void OpenSelectedItem()
     {
-        if (_listView.SelectedItem is not CommentListWindowItem item)
+        if (_listView.SelectedItem is not CommentListRowPlan item)
             return;
 
         _navigateTo(item.Address);
@@ -157,8 +150,6 @@ public sealed class CommentListWindow : Window
 
     private void UpdateOpenButtonState()
     {
-        _openButton.IsEnabled = _listView.SelectedItem is CommentListWindowItem;
+        _openButton.IsEnabled = _listView.SelectedItem is CommentListRowPlan;
     }
 }
-
-public sealed record CommentListWindowItem(CellAddress Address, string Cell, string Text);

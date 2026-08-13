@@ -1,13 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- R134 remediation: this project references FreeP.App.Avalonia (below), whose own TargetFramework
-         is conditionally net10.0-windows10.0.19041.0 on Windows / net10.0 elsewhere. Mirror that exact
-         condition (same pattern as FreeP.App.Avalonia.Tests.csproj) so the TFMs stay compatible on both
-         platforms instead of a plain net10.0 test project failing to reference a net10.0-windows one. -->
-    <FreePWindowsBuild Condition="'$(OS)' == 'Windows_NT' Or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win'))">true</FreePWindowsBuild>
-    <TargetFramework Condition="'$(FreePWindowsBuild)' == 'true'">net10.0-windows10.0.19041.0</TargetFramework>
-    <TargetFramework Condition="'$(FreePWindowsBuild)' != 'true'">net10.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
@@ -25,14 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeP.App.Rendering.Avalonia\FreeP.App.Rendering.Avalonia.csproj" />
+    <ProjectReference Include="..\FreeP.App.Rendering.Avalonia\FreeP.App.Rendering.Avalonia.csproj"
+                      AdditionalProperties="FreePRendererTestSupport=true" />
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
-    <!-- R134 remediation: FileExportImagesToFolderCore / BuildVideoFramePackageCore live on
-         FreeP.App.Avalonia.MainWindow (internal static; FreeP.App.Avalonia.csproj grants this project
-         InternalsVisibleTo), so this project drives the real production entry points under a real Skia
-         backend instead of re-implementing them. -->
-    <ProjectReference Include="..\FreeP.App.Avalonia\FreeP.App.Avalonia.csproj" />
   </ItemGroup>
 
   <ItemGroup>

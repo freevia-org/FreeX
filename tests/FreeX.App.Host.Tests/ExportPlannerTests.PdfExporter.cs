@@ -6,11 +6,13 @@ using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.Advanced;
 using PdfSharp.Pdf.IO;
+using SharedPdf = Free.Shared.Pdf;
 
 namespace FreeX.App.Host.Tests;
 
@@ -68,7 +70,7 @@ public partial class ExportPlannerTests
         {
             using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
-            var properties = new PdfDocumentProperties(
+            var properties = new SharedPdf.PdfDocumentProperties(
                 Title: "Quarterly Review",
                 Author: "Finance Team",
                 Subject: "Workbook export",
@@ -94,7 +96,7 @@ public partial class ExportPlannerTests
         {
             using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
-            var properties = new PdfDocumentProperties(
+            var properties = new SharedPdf.PdfDocumentProperties(
                 Title: "   ",
                 Author: "Finance Team",
                 Subject: "Workbook export",
@@ -642,7 +644,7 @@ public partial class ExportPlannerTests
         {
             using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
-            var properties = new PdfDocumentProperties(
+            var properties = new SharedPdf.PdfDocumentProperties(
                 Title: " ",
                 Author: null,
                 Subject: "",
@@ -666,7 +668,7 @@ public partial class ExportPlannerTests
         {
             using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
-            var properties = new PdfDocumentProperties(
+            var properties = new SharedPdf.PdfDocumentProperties(
                 Title: "  Quarterly Review  ",
                 Author: "\tFinance Team\t",
                 Subject: "  Workbook export",
@@ -683,28 +685,29 @@ public partial class ExportPlannerTests
     }
 
     [Fact]
-    public void PdfDocumentProperties_FromWorkbook_ReturnsNullUnlessOptionIsRequested()
+    public void PdfDocumentExporter_CreateProperties_ReturnsCanonicalMetadataOnlyWhenRequested()
     {
         var workbook = new Workbook("Budget Model");
 
-        PdfDocumentProperties.FromWorkbook(workbook, ExportOptions.ExcelLikeDefault)
+        PdfDocumentExporter.CreateProperties(workbook, ExportOptions.ExcelLikeDefault)
             .Should().BeNull();
 
-        PdfDocumentProperties.FromWorkbook(
+        PdfDocumentExporter.CreateProperties(
                 workbook,
                 new ExportOptions(
                     ExportContentScope.ActiveSheet,
                     IncludeDocumentProperties: true,
                     OpenAfterPublish: false))
-            .Should().Be(new PdfDocumentProperties(
+            .Should().Be(new SharedPdf.PdfDocumentProperties(
                 Title: "Budget Model",
                 Author: "FreeX",
                 Subject: "FreeX workbook export",
-                Keywords: "FreeX, spreadsheet"));
+                Keywords: "FreeX, spreadsheet",
+                Creator: "FreeX"));
     }
 
     [Fact]
-    public void PdfDocumentProperties_FromWorkbook_UsesWorkbookUserNameWhenAvailable()
+    public void PdfDocumentExporter_CreateProperties_UsesWorkbookUserNameWhenAvailable()
     {
         var workbook = new Workbook("Budget Model")
         {
@@ -714,29 +717,30 @@ public partial class ExportPlannerTests
             }
         };
 
-        PdfDocumentProperties.FromWorkbook(
+        PdfDocumentExporter.CreateProperties(
                 workbook,
                 new ExportOptions(
                     ExportContentScope.ActiveSheet,
                     IncludeDocumentProperties: true,
                     OpenAfterPublish: false))
-            .Should().Be(new PdfDocumentProperties(
+            .Should().Be(new SharedPdf.PdfDocumentProperties(
                 Title: "Budget Model",
                 Author: "Analyst",
                 Subject: "FreeX workbook export",
-                Keywords: "FreeX, spreadsheet"));
+                Keywords: "FreeX, spreadsheet",
+                Creator: "FreeX"));
     }
 
     [Fact]
-    public void XpsDocumentProperties_ApplyToPackageProperties_WhenOptionIsRequested()
+    public void XpsPackagePropertiesAdapter_AppliesCanonicalMetadataWhenRequested()
     {
         var workbook = new Workbook("Budget Model");
         using var stream = new MemoryStream();
         using var package = System.IO.Packaging.Package.Open(stream, FileMode.Create, FileAccess.ReadWrite);
 
-        XpsDocumentProperties.ApplyToPackage(
+        XpsPackagePropertiesAdapter.Apply(
             package,
-            XpsDocumentProperties.FromWorkbook(
+            ExportDocumentPropertiesPlanner.FromWorkbook(
                 workbook,
                 new ExportOptions(
                     ExportContentScope.ActiveSheet,
@@ -750,7 +754,7 @@ public partial class ExportPlannerTests
     }
 
     [Fact]
-    public void XpsDocumentProperties_FromWorkbook_UsesWorkbookUserNameWhenAvailable()
+    public void XpsPackagePropertiesAdapter_UsesWorkbookUserNameWhenAvailable()
     {
         var workbook = new Workbook("Budget Model")
         {
@@ -762,9 +766,9 @@ public partial class ExportPlannerTests
         using var stream = new MemoryStream();
         using var package = System.IO.Packaging.Package.Open(stream, FileMode.Create, FileAccess.ReadWrite);
 
-        XpsDocumentProperties.ApplyToPackage(
+        XpsPackagePropertiesAdapter.Apply(
             package,
-            XpsDocumentProperties.FromWorkbook(
+            ExportDocumentPropertiesPlanner.FromWorkbook(
                 workbook,
                 new ExportOptions(
                     ExportContentScope.ActiveSheet,
@@ -775,14 +779,14 @@ public partial class ExportPlannerTests
     }
 
     [Fact]
-    public void XpsDocumentProperties_TrimsAndSkipsBlankPackageProperties()
+    public void XpsPackagePropertiesAdapter_TrimsAndSkipsBlankPackageProperties()
     {
         using var stream = new MemoryStream();
         using var package = System.IO.Packaging.Package.Open(stream, FileMode.Create, FileAccess.ReadWrite);
 
-        XpsDocumentProperties.ApplyToPackage(
+        XpsPackagePropertiesAdapter.Apply(
             package,
-            new XpsDocumentProperties(
+            new ExportDocumentProperties(
                 Title: "  Quarterly Review  ",
                 Creator: "\tFinance Team\t",
                 Subject: "   ",

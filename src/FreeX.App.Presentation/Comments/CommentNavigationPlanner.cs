@@ -4,6 +4,8 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Comments;
 
+public sealed record CommentListRowPlan(CellAddress Address, string Cell, string Text);
+
 public static class CommentNavigationPlanner
 {
     public static List<CellAddress> OrderedCommentAddresses(IReadOnlyDictionary<CellAddress, string> comments) =>
@@ -20,6 +22,21 @@ public static class CommentNavigationPlanner
         IReadOnlyDictionary<CellAddress, string> comments,
         IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments) =>
         OrderAddresses(comments.Keys.Concat(threadedComments.Keys).Distinct());
+
+    public static IReadOnlyList<CommentListRowPlan> CreateThreadedCommentRows(
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments) =>
+        OrderedThreadedCommentAddresses(threadedComments)
+            .Select(address => new CommentListRowPlan(
+                address,
+                address.ToA1(),
+                FormatThreadedComment(threadedComments[address])))
+            .ToArray();
+
+    public static IReadOnlyList<CommentListRowPlan> CreateNoteRows(
+        IReadOnlyDictionary<CellAddress, string> notes) =>
+        OrderedNoteAddresses(notes)
+            .Select(address => new CommentListRowPlan(address, address.ToA1(), notes[address]))
+            .ToArray();
 
     public static CellAddress FindNext(IReadOnlyList<CellAddress> orderedComments, CellAddress current, bool previous)
     {

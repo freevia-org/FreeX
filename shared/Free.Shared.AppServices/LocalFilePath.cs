@@ -1,3 +1,5 @@
+using Free.Shared.IO;
+
 namespace Free.Shared.AppServices;
 
 public static class LocalFilePath
@@ -38,23 +40,7 @@ public static class LocalFilePath
             return true;
         }
 
-        try
-        {
-            normalizedPath = Path.GetFullPath(path);
-            return !string.IsNullOrWhiteSpace(normalizedPath);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            return false;
-        }
+        return FilePathPolicy.TryGetFullPath(path, out normalizedPath);
     }
 
     private static bool TryCreateExplicitUri(string candidate, out Uri uri)

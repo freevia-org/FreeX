@@ -3,26 +3,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
 
-public sealed record PageSetupHeaderFooterRequest
-{
-    public WorksheetHeaderFooter Header { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter Footer { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter FirstPageHeader { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter FirstPageFooter { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter EvenPageHeader { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter EvenPageFooter { get; init; } = new("", "", "");
-    public bool DifferentFirstPage { get; init; }
-    public bool DifferentOddEvenPages { get; init; }
-    public bool ScaleHeaderFooterWithDocument { get; init; } = true;
-    public bool AlignHeaderFooterWithMargins { get; init; } = true;
-    public WorksheetHeaderFooterPictureSet HeaderPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet FooterPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet FirstPageHeaderPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet FirstPageFooterPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet EvenPageHeaderPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet EvenPageFooterPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-}
-
 public sealed record PageSetupCommandRequest
 {
     /// <summary>
@@ -49,7 +29,7 @@ public sealed record PageSetupCommandRequest
     public int? PrintQualityDpi { get; init; }
     public WorksheetPrintErrorValue PrintErrorValue { get; init; } = WorksheetPrintErrorValue.Displayed;
     public WorksheetPrintComments PrintComments { get; init; } = WorksheetPrintComments.None;
-    public PageSetupHeaderFooterRequest HeaderFooter { get; init; } = new();
+    public HeaderFooterEditorState HeaderFooter { get; init; } = HeaderFooterEditorState.Empty;
 }
 
 public sealed record PageSetupCommandPlan(
@@ -101,7 +81,7 @@ public static class PageSetupCommandFactory
 
     public static SetHeaderFooterCommand BuildHeaderFooterCommand(
         SheetId targetSheetId,
-        PageSetupHeaderFooterRequest headerFooter)
+        HeaderFooterEditorState headerFooter)
     {
         ArgumentNullException.ThrowIfNull(headerFooter);
 
@@ -115,8 +95,8 @@ public static class PageSetupCommandFactory
             headerFooter.EvenPageFooter,
             headerFooter.DifferentFirstPage,
             headerFooter.DifferentOddEvenPages,
-            headerFooter.ScaleHeaderFooterWithDocument,
-            headerFooter.AlignHeaderFooterWithMargins,
+            headerFooter.ScaleWithDocument,
+            headerFooter.AlignWithMargins,
             headerFooter.HeaderPictures,
             headerFooter.FooterPictures,
             headerFooter.FirstPageHeaderPictures,

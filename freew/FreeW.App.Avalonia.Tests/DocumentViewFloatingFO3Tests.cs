@@ -40,20 +40,8 @@ public sealed class DocumentViewFloatingFO3Tests
         }
     }
 
-    private static string RepositoryFile(params string[] segments)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(segments).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(segments));
-    }
+    private static string RepositoryFile(params string[] segments) =>
+        TestWorkspaceFileLocator.Find(segments);
 
     [Fact]
     public void Floating_chart_and_smartart_render_data_use_shared_visual_planner()

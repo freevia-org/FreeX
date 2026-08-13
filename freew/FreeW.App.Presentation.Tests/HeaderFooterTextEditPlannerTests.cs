@@ -78,7 +78,7 @@ public sealed class HeaderFooterTextEditPlannerTests
         var document = TextDocument.CreateEmpty();
         document.FinalSectionHeadersFooters.Header = Story("Alpha", "Beta");
         var context = new TestCommandContext(document);
-        var edit = new EditHeaderFooterParagraphCommand(
+        var edit = new FreeW.App.Presentation.DocumentView.EditHeaderFooterParagraphCommand(
             sectionIndex: 0,
             useFinalSectionStore: true,
             slot: 0,
@@ -90,7 +90,7 @@ public sealed class HeaderFooterTextEditPlannerTests
         edit.Revert(context);
         document.FinalSectionHeadersFooters.Header.Paragraphs[0].PlainText.Should().Be("Alpha");
 
-        var splice = new SpliceHeaderFooterParagraphsCommand(
+        var splice = new FreeW.App.Presentation.DocumentView.SpliceHeaderFooterParagraphsCommand(
             sectionIndex: 0,
             useFinalSectionStore: true,
             slot: 0,

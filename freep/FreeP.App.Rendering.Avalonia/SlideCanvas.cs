@@ -34,14 +34,10 @@ namespace FreeP.App.Rendering.Avalonia;
 /// for interactive editing. The slide is scaled uniformly to fit the control's
 /// available size (letterboxed).
 /// </summary>
-public sealed class SlideCanvas : Control
+public sealed partial class SlideCanvas : Control
 {
     private const double PowerPointDefaultLineSpacingFactor = 1.18;
     private const double PowerPointFixedTextLineSpacingFactor = 1.20;
-    private const double ImportedRadarValueLabelAvaloniaYCompensation = 3.0;
-    private const double AvaloniaImportedRadarAgilityLabelOffsetX = 35.0;
-    private const double AvaloniaImportedRadarStaminaLabelOffsetX = -51.0;
-    private const double AvaloniaImportedRadarLowerLabelOffsetY = -2.0;
 
     // ── Styled / direct properties ──────────────────────────────────────────
 
@@ -84,13 +80,23 @@ public sealed class SlideCanvas : Control
     public Presentation? Presentation
     {
         get => _presentation;
-        set { SetAndRaise(PresentationProperty, ref _presentation, value); Refresh(); }
+        set
+        {
+            SetAndRaise(PresentationProperty, ref _presentation, value);
+            _canvasAutomation.ResetSelection(_slide, _editingSession?.SelectedShapeIds);
+            Refresh();
+        }
     }
 
     public Slide? Slide
     {
         get => _slide;
-        set { SetAndRaise(SlideProperty, ref _slide, value); Refresh(); }
+        set
+        {
+            SetAndRaise(SlideProperty, ref _slide, value);
+            _canvasAutomation.ResetSelection(_slide, _editingSession?.SelectedShapeIds);
+            Refresh();
+        }
     }
 
     /// <summary>Whether the compositor paints the slide background.</summary>
@@ -145,7 +151,8 @@ public sealed class SlideCanvas : Control
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
     private AvaloniaCanvasGestureHandler? _gestureHandler;
     private bool _editPointsEnabled = true;
-    private EditingSession? _editingSession;   // R134: tracked for SlideCanvasAutomationPeer
+    private EditingSession? _editingSession;
+    private readonly PresentationCanvasAutomationSession _canvasAutomation = new();
 
     /// <summary>
     /// Returns the custom UIA automation peer for the slide editing surface. Mirrors
@@ -195,6 +202,7 @@ public sealed class SlideCanvas : Control
         if (_editingSession is not null)
             _editingSession.SelectionChanged -= OnEditingSessionSelectionChangedForAutomation;
         _editingSession = handler.Editor;
+        _canvasAutomation.ResetSelection(Slide, handler.Editor.SelectedShapeIds);
         _editingSession.SelectionChanged += OnEditingSessionSelectionChangedForAutomation;
     }
 
@@ -205,8 +213,11 @@ public sealed class SlideCanvas : Control
     /// </summary>
     private void OnEditingSessionSelectionChangedForAutomation(object? sender, EventArgs e)
     {
+        var delta = _canvasAutomation.CaptureSelectionDelta(
+            Slide,
+            _editingSession?.SelectedShapeIds);
         if (ControlAutomationPeer.FromElement(this) is SlideCanvasAutomationPeer peer)
-            peer.NotifySelectionChanged();
+            peer.NotifySelectionChanged(delta);
     }
 
     // ── Slideshow entrance-animation suppression ──────────────────────────────
@@ -246,9 +257,6 @@ public sealed class SlideCanvas : Control
         InvalidateVisual();
     }
 
-    internal bool HasLiveTransformPreviewForTests =>
-        _liveTransformPreviewOps is { Count: > 0 };
-
     // ── Layout: maintain slide aspect ratio ──────────────────────────────────
 
     protected override Size MeasureOverride(Size availableSize)
@@ -257,14 +265,12 @@ public sealed class SlideCanvas : Control
         if (_slideWidthDip <= 0 || _slideHeightDip <= 0)
             return base.MeasureOverride(availableSize);
 
-        double ratio = _slideWidthDip / _slideHeightDip;
-        double w = double.IsInfinity(availableSize.Width)  ? _slideWidthDip  : availableSize.Width;
-        double h = double.IsInfinity(availableSize.Height) ? _slideHeightDip : availableSize.Height;
-
-        if (w / h > ratio) w = h * ratio;
-        else                h = w / ratio;
-
-        return new Size(Math.Max(1, w), Math.Max(1, h));
+        var fitted = SlideCanvasGeometryPlanner.FitAspectRatio(
+            _slideWidthDip,
+            _slideHeightDip,
+            availableSize.Width,
+            availableSize.Height);
+        return new Size(fitted.Width, fitted.Height);
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────
@@ -287,8 +293,14 @@ public sealed class SlideCanvas : Control
             * Matrix.CreateTranslation(CurrentTransform.OffsetX, CurrentTransform.OffsetY);
         using var _ = context.PushTransform(matrix);
 
-        foreach (var op in _cachedOps)
-            RenderOp(context, op);
+        foreach (var command in SlideRenderExecutionPlanner.Plan(
+                     _cachedOps,
+                     _liveTransformPreviewOps,
+                     SuppressedShapeIds,
+                     ActiveTextEditShapeId))
+        {
+            RenderCommand(context, command);
+        }
 
         if (RenderPrintMarkup && _presentation is not null && _slide is not null)
             RenderPrintCommentCallouts(context, _presentation, _slide);
@@ -296,74 +308,72 @@ public sealed class SlideCanvas : Control
 
     private static void RenderPrintCommentCallouts(DrawingContext dc, Presentation presentation, Slide slide)
     {
-        var fill = new SolidColorBrush(Color.FromRgb(255, 249, 196));
-        var border = new Pen(new SolidColorBrush(Color.FromRgb(192, 160, 0)), 1);
-        var marker = new SolidColorBrush(Color.FromRgb(220, 40, 40));
-
         foreach (var callout in SlidePrintMarkupPlanner.BuildCommentCallouts(presentation, slide))
         {
-            var card = new Rect(callout.CardX, callout.CardY, callout.CardWidth, callout.CardHeight);
+            var visual = callout.Visual;
+            var fill = new SolidColorBrush(Color.FromRgb(
+                visual.FillColor.R,
+                visual.FillColor.G,
+                visual.FillColor.B));
+            var border = new Pen(new SolidColorBrush(Color.FromRgb(
+                visual.BorderColor.R,
+                visual.BorderColor.G,
+                visual.BorderColor.B)), visual.BorderThickness);
+            var marker = new SolidColorBrush(Color.FromRgb(
+                visual.MarkerColor.R,
+                visual.MarkerColor.G,
+                visual.MarkerColor.B));
+            var card = new Rect(
+                visual.CardBounds.X,
+                visual.CardBounds.Y,
+                visual.CardBounds.Width,
+                visual.CardBounds.Height);
             dc.DrawRectangle(fill, border, card);
-            dc.DrawEllipse(marker, null, new Point(callout.AnchorX, callout.AnchorY), 3, 3);
-            DrawChartLabel(dc, callout.Author, new Rect(card.X + 6, card.Y + 3, card.Width - 12, 9),
-                isBold: true, fontSize: 8, align: TextAlignment.Left);
-            DrawChartLabel(dc, callout.Body, new Rect(card.X + 6, card.Y + 13, card.Width - 12, 11),
-                isBold: false, fontSize: 7, align: TextAlignment.Left);
+            dc.DrawEllipse(
+                marker,
+                null,
+                new Point(visual.AnchorCenter.X, visual.AnchorCenter.Y),
+                visual.MarkerRadius,
+                visual.MarkerRadius);
+            DrawChartLabel(dc, visual.Author.Text, ToAvaloniaRect(visual.Author.Bounds),
+                visual.Author.IsBold, visual.Author.FontSize, TextAlignment.Left);
+            DrawChartLabel(dc, visual.Body.Text, ToAvaloniaRect(visual.Body.Bounds),
+                visual.Body.IsBold, visual.Body.FontSize, TextAlignment.Left);
         }
     }
+
+    private static Rect ToAvaloniaRect(LayoutRect rect) =>
+        new(rect.X, rect.Y, rect.Width, rect.Height);
 
     private SlideTransformCore ComputeViewTransform(
         double renderW,
         double renderH,
         double slideWidthDip,
-        double slideHeightDip)
+        double slideHeightDip) =>
+        PresentationViewZoomPlanner.PlanStageTransform(
+            renderW,
+            renderH,
+            slideWidthDip,
+            slideHeightDip,
+            _viewZoomState);
+
+    private static void RenderCommand(DrawingContext dc, SlideRenderExecutionCommand command)
     {
-        var fit = SlideTransformCore.Compute(renderW, renderH, slideWidthDip, slideHeightDip);
-        var multiplier = PresentationViewZoomPlanner.StageScaleMultiplierFor(_viewZoomState);
-        if (Math.Abs(multiplier - 1.0) < 0.0001)
-            return fit;
-
-        var scale = fit.Scale * multiplier;
-        var offsetX = (renderW - slideWidthDip * scale) / 2.0;
-        var offsetY = (renderH - slideHeightDip * scale) / 2.0;
-        return new SlideTransformCore(scale, offsetX, offsetY, slideWidthDip, slideHeightDip);
-    }
-
-    private void RenderOp(DrawingContext dc, DrawOp op)
-    {
-        if (_liveTransformPreviewOps is not null
-            && CanvasTransformPreviewComposer.TryGetShapeId(op, out var shapeId)
-            && _liveTransformPreviewOps.TryGetValue(shapeId, out var preview))
-        {
-            RenderOpCore(dc, preview);
-            return;
-        }
-
-        RenderOpCore(dc, op);
-    }
-
-    private void RenderOpCore(DrawingContext dc, DrawOp op)
-    {
-        switch (op)
+        switch (command.Operation)
         {
             case DrawOp.Background bg:
                 RenderBackground(dc, bg);
                 break;
             case DrawOp.Shape shape:
-                // DA1: skip shapes that the slideshow has not yet revealed (entrance animation).
-                if (shape.ShapeId != 0 && SuppressedShapeIds.Contains(shape.ShapeId)) break;
-                RenderShape(dc, shape, shape.ShapeId != 0 && shape.ShapeId == ActiveTextEditShapeId);
+                RenderShape(dc, shape, command.SuppressShapeText);
                 break;
             case DrawOp.Picture pic:
-                if (pic.ShapeId != 0 && SuppressedShapeIds.Contains(pic.ShapeId)) break;
                 RenderPicture(dc, pic);
                 break;
             case DrawOp.Table table:
-                if (table.ShapeId != 0 && SuppressedShapeIds.Contains(table.ShapeId)) break;
                 RenderTableWithTransform(dc, table);
                 break;
             case DrawOp.Chart chartOp:
-                if (chartOp.ShapeId != 0 && SuppressedShapeIds.Contains(chartOp.ShapeId)) break;
                 RenderChart(dc, chartOp);
                 break;
         }
@@ -386,25 +396,17 @@ public sealed class SlideCanvas : Control
         if (shape.Geometry.Contours.Count == 0 && shape.Text is null
             && (shape.ElbowRouteDip is null || shape.ElbowRouteDip.Count < 2)) return;
 
-        var sourceBounds = shape.BoundsDip;
-        var bounds = ResolveShapeAutoFitBounds(shape);
-        bool grewForShapeAutoFit = bounds.Height > sourceBounds.Height + 0.5;
-        var renderTransform = grewForShapeAutoFit
-            ? ShapeAffineTransform.Identity
-            : ShapeTransformPlanner.PlanShapeRenderTransform(shape);
-        bool hasTransform = !renderTransform.IsIdentity;
+        var autoFitPlan = ResolveShapeAutoFitPlan(shape);
+        var bounds = autoFitPlan.Bounds;
+        bool hasTransform = !autoFitPlan.RenderTransform.IsIdentity;
 
         IDisposable? transformScope = null;
         if (hasTransform)
-            transformScope = dc.PushTransform(ToAvaloniaMatrix(renderTransform));
+            transformScope = dc.PushTransform(ToAvaloniaMatrix(autoFitPlan.RenderTransform));
 
         IDisposable? autoFitGeometryScope = null;
-        if (grewForShapeAutoFit && sourceBounds.Height > 0.001)
-        {
-            double scaleY = bounds.Height / sourceBounds.Height;
-            autoFitGeometryScope = dc.PushTransform(new Matrix(
-                1, 0, 0, scaleY, 0, bounds.Y - scaleY * sourceBounds.Y));
-        }
+        if (!autoFitPlan.GeometryTransform.IsIdentity)
+            autoFitGeometryScope = dc.PushTransform(ToAvaloniaMatrix(autoFitPlan.GeometryTransform));
 
         if (shape.Effects is not null)
             RenderShapeEffects(dc, shape);
@@ -466,35 +468,14 @@ public sealed class SlideCanvas : Control
         transformScope?.Dispose();
     }
 
-    private static LayoutRect ResolveShapeAutoFitBounds(DrawOp.Shape shape)
-    {
-        var text = shape.Text;
-        var bounds = shape.BoundsDip;
-        if (text is null || text.AutoFitKind != TextAutoFitKind.Shape || text.ColumnCount > 1
-            || text.VerticalType != TextVerticalType.Horizontal
-            || Math.Abs(shape.RotationDeg) > 0.001 || shape.FlipH || shape.FlipV)
-            return bounds;
-
-        var area = TextLayoutPlanner.GetTextArea(text, bounds);
-        var measures = new List<TextParagraphMeasure>();
-        for (int i = 0; i < text.Paragraphs.Count; i++)
-        {
-            var paragraph = text.Paragraphs[i];
-            if (paragraph.Runs.Count == 0) continue;
-            var formatted = BuildFormattedText(
-                paragraph,
-                area.Width,
-                text.Wrap,
-                text.AutoFitKind);
-            measures.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                formatted.Height,
-                paragraph.SpaceBeforePt,
-                paragraph.SpaceAfterPt));
-        }
-
-        return TextLayoutPlanner.PlanShapeAutoFitBounds(text, bounds, measures);
-    }
+    private static ShapeAutoFitRenderPlan ResolveShapeAutoFitPlan(DrawOp.Shape shape)
+        => ShapeAutoFitRenderPlanner.PlanRender(
+            shape,
+            request => BuildFormattedText(
+                request.Paragraph,
+                request.MaximumWidthDip,
+                request.Wrap,
+                request.AutoFitKind).Height);
 
     private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape)
     {
@@ -507,16 +488,10 @@ public sealed class SlideCanvas : Control
             var shadowGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
             if (shadowGeo is null) return;
 
-            bool isImportedEffectsShadowSignature = IsImportedEffectsShadowSignature(shape.Effects);
-            for (int passIndex = 0; passIndex < plan.ShadowPasses.Count; passIndex++)
+            foreach (var pass in plan.ShadowPasses)
             {
-                var pass = plan.ShadowPasses[passIndex];
-                byte alpha = isImportedEffectsShadowSignature
-                    && passIndex < plan.ShadowPasses.Count - 1
-                    ? (byte)Math.Round(pass.Alpha * 0.5)
-                    : pass.Alpha;
                 var shadowBrush = new SolidColorBrush(
-                    Color.FromArgb(alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
                 using var shadowScope = dc.PushTransform(Matrix.CreateTranslation(pass.OffsetX, pass.OffsetY));
                 dc.DrawGeometry(shadowBrush, null, shadowGeo);
             }
@@ -549,23 +524,6 @@ public sealed class SlideCanvas : Control
             }
         }
     }
-
-    // Wave 131: WPF's peripheral shadow-blur passes composite denser than PowerPoint's
-    // reference render for this exact imported-shadow signature (calibrated against the
-    // 08-effects.pptx fixture; see docs/parity/freep-wpf-imported-effects-shadow-halo-20260718.md).
-    // Ported here so both shells render the same imported deck identically instead of
-    // diverging only for this one signature. Other outer-shadow signatures are untouched
-    // in both renderers.
-    private static bool IsImportedEffectsShadowSignature(ResolvedShapeEffects? effects) =>
-        effects is not null
-        && effects.HasOuterShadow
-        && !effects.HasGlow
-        && !effects.HasSoftEdge
-        && effects.OuterShadowColor == new SrgbColor(0x40, 0x40, 0x40)
-        && effects.OuterShadowAlpha == 153
-        && Math.Abs(effects.OuterShadowBlurDip - 8) < 0.01
-        && Math.Abs(effects.OuterShadowDistDip - 11.31) < 0.01
-        && Math.Abs(effects.OuterShadowDirDeg - 45) < 0.01;
 
     private static void RenderImportedShapeDepth(
         DrawingContext dc,
@@ -724,42 +682,25 @@ public sealed class SlideCanvas : Control
     private static Point ToPoint(ChartPlanPoint point) =>
         new(point.X, point.Y);
 
-    private static ChartPlanPoint OffsetPoint(
-        ChartPlanPoint point,
-        ChartClassicThreeDDepthPlan depth) =>
-        new(point.X + depth.OffsetX, point.Y + depth.OffsetY);
-
-    private static ChartPathPrimitive OffsetPath(
-        ChartPathPrimitive path,
-        ChartClassicThreeDDepthPlan depth) =>
-        path with
-        {
-            Points = path.Points
-                .Select(point => OffsetPoint(point, depth))
-                .ToArray()
-        };
-
-    private static StreamGeometry ToGeometry(
-        ChartLinePathFigurePrimitive figure,
-        ChartClassicThreeDDepthPlan? depth = null)
+    private static StreamGeometry ToGeometry(ChartLinePathFigurePrimitive figure)
     {
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
-            ctx.BeginFigure(ToPoint(OffsetIfNeeded(figure.Start, depth)), isFilled: false);
+            ctx.BeginFigure(ToPoint(figure.Start), isFilled: false);
             foreach (var segment in figure.Segments)
             {
                 switch (segment.Kind)
                 {
                     case ChartLinePathSegmentKind.CubicBezier:
                         ctx.CubicBezierTo(
-                            ToPoint(OffsetIfNeeded(segment.Control1, depth)),
-                            ToPoint(OffsetIfNeeded(segment.Control2, depth)),
-                            ToPoint(OffsetIfNeeded(segment.End, depth)));
+                            ToPoint(segment.Control1),
+                            ToPoint(segment.Control2),
+                            ToPoint(segment.End));
                         break;
 
                     default:
-                        ctx.LineTo(ToPoint(OffsetIfNeeded(segment.End, depth)));
+                        ctx.LineTo(ToPoint(segment.End));
                         break;
                 }
             }
@@ -769,11 +710,6 @@ public sealed class SlideCanvas : Control
 
         return geometry;
     }
-
-    private static ChartPlanPoint OffsetIfNeeded(
-        ChartPlanPoint point,
-        ChartClassicThreeDDepthPlan? depth) =>
-        depth.HasValue ? OffsetPoint(point, depth.Value) : point;
 
     private static IBrush ToBrush(ChartFillPlan fill) =>
         fill.Fill switch
@@ -824,67 +760,55 @@ public sealed class SlideCanvas : Control
         _                          => null
     };
 
-    private static void DrawChartMarker(DrawingContext dc, ChartCirclePrimitive marker)
+    private static void DrawChartMarker(DrawingContext dc, ChartMarkerRenderPlan marker)
     {
-        var center = ToPoint(marker.Center);
-        var fill = marker.Fill.HasValue ? ToBrush(marker.Fill.Value) : null;
-        var stroke = marker.Stroke.HasValue ? ToPen(marker.Stroke.Value) : null;
-        var linePen = stroke ?? (marker.Fill.HasValue
-            ? ToPen(new ChartStrokePlan(marker.Fill.Value.Color, marker.Fill.Value.Alpha, Math.Max(0.75, marker.Radius / 3.0)))
-            : null);
-
-        switch (marker.Symbol)
+        foreach (var primitive in marker.Primitives)
         {
-            case ChartMarkerPrimitiveSymbol.Square:
-                dc.DrawRectangle(fill, stroke, new Rect(center.X - marker.Radius, center.Y - marker.Radius, marker.Radius * 2, marker.Radius * 2));
-                break;
-            case ChartMarkerPrimitiveSymbol.Diamond:
-                dc.DrawGeometry(fill, stroke, MarkerPolygonGeometry(
-                    new Point(center.X, center.Y - marker.Radius),
-                    new Point(center.X + marker.Radius, center.Y),
-                    new Point(center.X, center.Y + marker.Radius),
-                    new Point(center.X - marker.Radius, center.Y)));
-                break;
-            case ChartMarkerPrimitiveSymbol.Triangle:
-                dc.DrawGeometry(fill, stroke, MarkerPolygonGeometry(
-                    new Point(center.X, center.Y - marker.Radius),
-                    new Point(center.X + marker.Radius, center.Y + marker.Radius),
-                    new Point(center.X - marker.Radius, center.Y + marker.Radius)));
-                break;
-            case ChartMarkerPrimitiveSymbol.Dash:
-                if (linePen is not null)
-                    dc.DrawLine(linePen, new Point(center.X - marker.Radius, center.Y), new Point(center.X + marker.Radius, center.Y));
-                break;
-            case ChartMarkerPrimitiveSymbol.Plus:
-            case ChartMarkerPrimitiveSymbol.Star:
-                if (linePen is not null)
-                {
-                    dc.DrawLine(linePen, new Point(center.X - marker.Radius, center.Y), new Point(center.X + marker.Radius, center.Y));
-                    dc.DrawLine(linePen, new Point(center.X, center.Y - marker.Radius), new Point(center.X, center.Y + marker.Radius));
-                }
-                break;
-            case ChartMarkerPrimitiveSymbol.X:
-                if (linePen is not null)
-                {
-                    dc.DrawLine(linePen, new Point(center.X - marker.Radius, center.Y - marker.Radius), new Point(center.X + marker.Radius, center.Y + marker.Radius));
-                    dc.DrawLine(linePen, new Point(center.X + marker.Radius, center.Y - marker.Radius), new Point(center.X - marker.Radius, center.Y + marker.Radius));
-                }
-                break;
-            default:
-                dc.DrawEllipse(fill, stroke, center, marker.Radius, marker.Radius);
-                break;
+            switch (primitive)
+            {
+                case ChartMarkerRenderPrimitive.Ellipse ellipse:
+                    dc.DrawEllipse(
+                        ellipse.Fill is { } ellipseFill ? ToBrush(ellipseFill) : null,
+                        ellipse.Stroke is { } ellipseStroke ? ToPen(ellipseStroke) : null,
+                        ToPoint(ellipse.Center),
+                        ellipse.RadiusX,
+                        ellipse.RadiusY);
+                    break;
+                case ChartMarkerRenderPrimitive.Rectangle rectangle:
+                    dc.DrawRectangle(
+                        rectangle.Fill is { } rectangleFill ? ToBrush(rectangleFill) : null,
+                        rectangle.Stroke is { } rectangleStroke ? ToPen(rectangleStroke) : null,
+                        ToRect(rectangle.Bounds));
+                    break;
+                case ChartMarkerRenderPrimitive.Path path:
+                    dc.DrawGeometry(
+                        path.Geometry.Fill is { } pathFill ? ToBrush(pathFill) : null,
+                        path.Stroke is { } pathStroke ? ToPen(pathStroke) : null,
+                        ToMarkerGeometry(path.Geometry));
+                    break;
+                case ChartMarkerRenderPrimitive.Line line:
+                    dc.DrawLine(ToPen(line.Stroke), ToPoint(line.Start), ToPoint(line.End));
+                    break;
+            }
         }
     }
 
-    private static StreamGeometry MarkerPolygonGeometry(params Point[] points)
+    private static StreamGeometry ToMarkerGeometry(ChartPathPrimitive path)
     {
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
-            ctx.BeginFigure(points[0], isFilled: true);
-            for (int index = 1; index < points.Length; index++)
-                ctx.LineTo(points[index]);
-            ctx.EndFigure(isClosed: true);
+            for (int pointIndex = 0; pointIndex < path.Points.Count; pointIndex++)
+            {
+                var point = ToPoint(path.Points[pointIndex]);
+                if (pointIndex == 0)
+                    ctx.BeginFigure(point, isFilled: path.Fill.HasValue);
+                else
+                    ctx.LineTo(point);
+            }
+
+            if (path.Points.Count > 0)
+                ctx.EndFigure(isClosed: path.IsClosed);
         }
 
         return geometry;
@@ -989,19 +913,9 @@ public sealed class SlideCanvas : Control
         IDisposable? pictureTransformScope = null;
         IDisposable? alphaScope = null;
 
-        if (pic.RotationDeg != 0 || pic.FlipH || pic.FlipV)
-        {
-            double cx  = dest.Left + dest.Width  / 2;
-            double cy  = dest.Top  + dest.Height / 2;
-            double rad = pic.RotationDeg * Math.PI / 180.0;
-            var transform = Matrix.CreateTranslation(-cx, -cy);
-            if (pic.FlipH || pic.FlipV)
-                transform *= Matrix.CreateScale(pic.FlipH ? -1 : 1, pic.FlipV ? -1 : 1);
-            if (pic.RotationDeg != 0)
-                transform *= Matrix.CreateRotation(rad);
-            transform *= Matrix.CreateTranslation(cx, cy);
-            pictureTransformScope = dc.PushTransform(transform);
-        }
+        var pictureTransform = ShapeTransformPlanner.PlanPictureTransform(pic);
+        if (!pictureTransform.IsIdentity)
+            pictureTransformScope = dc.PushTransform(ToAvaloniaMatrix(pictureTransform));
 
         // Wave 26: draw outer shadow behind the picture when effects are set.
         // Route the shadow-direction/blur math through the shared renderer-neutral planner
@@ -1013,8 +927,12 @@ public sealed class SlideCanvas : Control
             var shadowDest = new Rect(dest.X + pass.OffsetX, dest.Y + pass.OffsetY, dest.Width, dest.Height);
             if (pic.HasFrameClip && pic.PictureFrameGeometry == "roundRect")
             {
-                double srx = Math.Min(dest.Width, dest.Height) * 0.18;
-                dc.DrawRectangle(shadowBrush, null, shadowDest, srx, srx);
+                dc.DrawRectangle(
+                    shadowBrush,
+                    null,
+                    shadowDest,
+                    plan.FrameCornerRadiusDip,
+                    plan.FrameCornerRadiusDip);
             }
             else if (pic.HasFrameClip && pic.PictureFrameGeometry == "ellipse")
             {
@@ -1028,9 +946,6 @@ public sealed class SlideCanvas : Control
 
         if (plan.HasReflection)
         {
-            double reflectionScale = Math.Abs(plan.ReflectionScaleY) < 0.001
-                ? -1.0
-                : plan.ReflectionScaleY;
             foreach (var blurPass in plan.ReflectionBlurPasses)
             {
                 var reflectionDest = new Rect(
@@ -1038,16 +953,15 @@ public sealed class SlideCanvas : Control
                     dest.Y + blurPass.OffsetYDip,
                     dest.Width,
                     dest.Height);
-                double pivotY = dest.Bottom + plan.ReflectionDistDip / 2.0;
                 var reflectionStops = new GradientStops
                 {
                     new AvGradientStop(
                         Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0),
                     new AvGradientStop(
                         Color.FromArgb(0, 255, 255, 255),
-                        Math.Clamp(plan.ReflectionEndPos, 0.001, 1.0)),
+                        plan.ReflectionEndPos),
                 };
-                if (plan.ReflectionEndPos < 0.999)
+                if (plan.ReflectionNeedsTerminalTransparentStop)
                     reflectionStops.Add(new AvGradientStop(Color.FromArgb(0, 255, 255, 255), 1));
                 var reflectionMask = new LinearGradientBrush
                 {
@@ -1056,13 +970,13 @@ public sealed class SlideCanvas : Control
                     GradientStops = reflectionStops,
                 };
                 using var transformScope = dc.PushTransform(
-                    Matrix.CreateTranslation(-(dest.Left + dest.Width / 2), -pivotY)
-                    * Matrix.CreateScale(1, reflectionScale)
-                    * Matrix.CreateTranslation(dest.Left + dest.Width / 2, pivotY));
+                    Matrix.CreateTranslation(-(dest.Left + dest.Width / 2), -plan.ReflectionPivotY)
+                    * Matrix.CreateScale(1, plan.ReflectionScaleY)
+                    * Matrix.CreateTranslation(dest.Left + dest.Width / 2, plan.ReflectionPivotY));
                 using var maskScope = dc.PushOpacityMask(
                     reflectionMask,
                     new Rect(reflectionDest.Left, reflectionDest.Bottom + plan.ReflectionDistDip,
-                        reflectionDest.Width, reflectionDest.Height * Math.Abs(reflectionScale)));
+                        reflectionDest.Width, reflectionDest.Height * Math.Abs(plan.ReflectionScaleY)));
                 using var opacityScope = dc.PushOpacity(blurPass.Opacity);
                 dc.DrawImage(renderBitmap, reflectionDest);
             }
@@ -1089,8 +1003,12 @@ public sealed class SlideCanvas : Control
             else
             {
                 // roundRect and other non-rect presets use a rounded rectangle
-                double rx = Math.Min(dest.Width, dest.Height) * 0.18;
-                clipGeom = new RectangleGeometry { Rect = dest, RadiusX = rx, RadiusY = rx };
+                clipGeom = new RectangleGeometry
+                {
+                    Rect = dest,
+                    RadiusX = plan.FrameCornerRadiusDip,
+                    RadiusY = plan.FrameCornerRadiusDip,
+                };
             }
             clipScope = dc.PushGeometryClip(clipGeom);
         }
@@ -1127,16 +1045,20 @@ public sealed class SlideCanvas : Control
                 }
                 else if (pic.HasFrameClip)
                 {
-                    double rx = Math.Min(dest.Width, dest.Height) * 0.18;
-                    dc.DrawRectangle(null, pen, dest, rx, rx);
+                    dc.DrawRectangle(
+                        null,
+                        pen,
+                        dest,
+                        plan.FrameCornerRadiusDip,
+                        plan.FrameCornerRadiusDip);
                 }
                 else
                     dc.DrawRectangle(null, pen, dest);
             }
         }
 
-        if (pic.IsMedia)
-            DrawPlayButtonOverlay(dc, dest);
+        if (plan.MediaPlayGlyph is { } playGlyph)
+            DrawPlayButtonOverlay(dc, playGlyph);
 
         pictureTransformScope?.Dispose();
     }
@@ -1211,23 +1133,26 @@ public sealed class SlideCanvas : Control
         return wb;
     }
 
-    private static void DrawPlayButtonOverlay(DrawingContext dc, Rect dest)
+    private static void DrawPlayButtonOverlay(
+        DrawingContext dc,
+        PictureMediaPlayGlyphPlan glyph)
     {
-        double cx = dest.Left + dest.Width  / 2;
-        double cy = dest.Top  + dest.Height / 2;
-        double r  = Math.Max(4, Math.Min(dest.Width, dest.Height) / 6);
-
         var circleBrush = new SolidColorBrush(Color.FromArgb(0xA0, 0, 0, 0));
-        dc.DrawEllipse(circleBrush, null, new Point(cx, cy), r, r);
+        dc.DrawEllipse(
+            circleBrush,
+            null,
+            new Point(glyph.CenterDip.X, glyph.CenterDip.Y),
+            glyph.RadiusDip,
+            glyph.RadiusDip);
 
-        double tx = cx - r * 0.3;
-        double ty = cy - r * 0.45;
         var triGeo = new StreamGeometry();
         using (var ctx = triGeo.Open())
         {
-            ctx.BeginFigure(new Point(tx,           ty),            isFilled: true);
-            ctx.LineTo(     new Point(tx + r * 0.8, cy));
-            ctx.LineTo(     new Point(tx,           cy + r * 0.45));
+            ctx.BeginFigure(
+                new Point(glyph.TriangleDip[0].X, glyph.TriangleDip[0].Y),
+                isFilled: true);
+            ctx.LineTo(new Point(glyph.TriangleDip[1].X, glyph.TriangleDip[1].Y));
+            ctx.LineTo(new Point(glyph.TriangleDip[2].X, glyph.TriangleDip[2].Y));
             ctx.EndFigure(isClosed: true);
         }
         dc.DrawGeometry(Brushes.White, null, triGeo);
@@ -1327,906 +1252,6 @@ public sealed class SlideCanvas : Control
 
     // ── Chart ────────────────────────────────────────────────────────────────
 
-    private static void RenderChart(DrawingContext dc, DrawOp.Chart chartOp)
-    {
-        var transform = ShapeTransformPlanner.PlanShapeTransform(
-            chartOp.BoundsDip,
-            chartOp.RotationDeg,
-            flipH: false,
-            flipV: false);
-        if (!transform.IsIdentity)
-        {
-            using var transformScope = dc.PushTransform(ToAvaloniaMatrix(transform));
-            RenderChartCore(dc, chartOp);
-            return;
-        }
-
-        RenderChartCore(dc, chartOp);
-    }
-
-    private static void RenderChartCore(DrawingContext dc, DrawOp.Chart chartOp)
-    {
-        var bounds = chartOp.BoundsDip;
-        var chart = chartOp.ChartShape;
-        var scene = ChartRenderPlanner.BuildScenePlan(
-            chart,
-            ToPlanRect(bounds),
-            chartOp.SeriesColors,
-            chartOp.FillPlans,
-            chartOp.ChartAreaFill,
-            chartOp.ChartAreaOutline,
-            chartOp.PlotAreaFill,
-            chartOp.PlotAreaOutline);
-
-        var frameRect = new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height);
-        var chartBrush = scene.ChartAreaFill is { } chartFill ? ToBrush(chartFill) : Brushes.White;
-        var chartPen = scene.ChartAreaOutline is { } chartOutline ? ToPen(chartOutline) : null;
-        if (scene.RoundedCorners)
-        {
-            var radius = Math.Min(ChartRenderPlanner.RoundedChartCornerRadius,
-                Math.Min(frameRect.Width, frameRect.Height) / 2.0);
-            dc.DrawRectangle(chartBrush, chartPen, frameRect, radius, radius);
-        }
-        else
-        {
-            dc.FillRectangle(chartBrush, frameRect);
-        }
-        if (scene.PlotAreaFill is { } plotFill)
-            dc.FillRectangle(ToBrush(plotFill), ToRect(scene.Frame.Plot));
-        if (!scene.RoundedCorners && scene.ChartAreaOutline is { } outline)
-            dc.DrawRectangle(ToPen(outline), frameRect);
-        if (scene.PlotAreaOutline is { } plotOutline)
-            dc.DrawRectangle(ToPen(plotOutline), ToRect(scene.Frame.Plot));
-
-        if (scene.Title is { } title)
-            DrawChartLabel(dc, title.Text, ToRect(title.Bounds), title.IsBold, title.FontSize, ToTextAlignment(title.Alignment), textColor: title.TextColor, fontFamily: title.FontFamily, maxLineCount: title.MaxLineCount);
-
-        if (!scene.Frame.HasPlot)
-            return;
-
-        if (scene.DrawFlatGrid && scene.GridLines.GridLines.Count > 0)
-        {
-            var gridPen = CreateChartGridLinePen(scene.GridLines);
-            foreach (var gridLine in scene.GridLines.GridLines)
-                dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
-        }
-
-        if (scene.DrawFlatGrid && scene.MinorGridLines.GridLines.Count > 0)
-        {
-            var minorGridPen = CreateChartGridLinePen(scene.MinorGridLines);
-            foreach (var gridLine in scene.MinorGridLines.GridLines)
-                dc.DrawLine(minorGridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
-        }
-
-        if (scene.DrawProjectedThreeDBarFrame)
-            RenderProjectedThreeDBarFrame(dc, scene);
-
-        switch (scene.GeometryKind)
-        {
-            case ChartSceneGeometryKind.Column:
-                RenderColumnChart(dc, scene);
-                break;
-            case ChartSceneGeometryKind.Surface:
-                RenderSurfaceChart(dc, scene);
-                break;
-            case ChartSceneGeometryKind.Bar:
-                RenderBarChart(dc, scene);
-                break;
-            case ChartSceneGeometryKind.Line:
-                RenderLineChart(dc, scene);
-                break;
-            case ChartSceneGeometryKind.Stock:
-                RenderStockChart(dc, scene);
-                break;
-            case ChartSceneGeometryKind.Pie:
-                RenderPieChart(dc, scene);
-                break;
-            case ChartSceneGeometryKind.Doughnut:
-                RenderDoughnutChart(dc, scene);
-                break;
-            case ChartSceneGeometryKind.Funnel:
-                RenderFunnelChart(dc, scene);
-                break;
-            case ChartSceneGeometryKind.Waterfall:
-                RenderColumnChart(dc, scene);
-                break;
-            case ChartSceneGeometryKind.Area:
-                RenderAreaChart(dc, scene);
-                break;
-            case ChartSceneGeometryKind.Scatter:
-                RenderScatterChart(dc, scene);
-                break;
-            case ChartSceneGeometryKind.Bubble:
-                RenderBubbleChart(dc, scene);
-                break;
-            case ChartSceneGeometryKind.Radar:
-                RenderRadarChart(dc, scene);
-                break;
-            default:
-                dc.FillRectangle(new SolidColorBrush(Color.FromArgb(30, 0, 0, 0)), ToRect(scene.Frame.Plot));
-                break;
-        }
-
-        if (scene.ComboLineSeries.Count > 0)
-            RenderComboOverrideSeries(dc, scene);
-
-        RenderTrendlines(dc, scene.Trendlines);
-        RenderErrorBars(dc, scene.ErrorBars);
-
-        foreach (var leaderLine in scene.DataLabelLeaderLines)
-            dc.DrawLine(ToPen(leaderLine.Stroke), ToPoint(leaderLine.Start), ToPoint(leaderLine.End));
-
-        if (scene.AxisTicks.CategoryTicks.Count > 0 || scene.AxisTicks.ValueTicks.Count > 0)
-        {
-            var tickPen = CreateChartAxisTickPen(scene.AxisTicks);
-            foreach (var tick in scene.AxisTicks.CategoryTicks)
-                dc.DrawLine(tickPen, ToPoint(tick.Start), ToPoint(tick.End));
-            foreach (var tick in scene.AxisTicks.ValueTicks)
-                dc.DrawLine(tickPen, ToPoint(tick.Start), ToPoint(tick.End));
-        }
-
-        foreach (var label in scene.DataLabels)
-        {
-            if (label.LegendKeyBounds is { } keyBounds && label.LegendKeyFill is { } keyFill)
-                dc.FillRectangle(ToBrush(keyFill), ToRect(keyBounds));
-
-            DrawChartLabel(dc, label.Text, ToRect(label.TextBounds ?? label.Bounds),
-                label.IsBold,
-                label.FontSize,
-                ToTextAlignment(label.Alignment),
-                isItalic: label.IsItalic,
-                textColor: label.TextColor,
-                fontFamily: label.FontFamily,
-                maxLineCount: label.WrapText ? 2 : 1);
-        }
-
-        RenderChartDataTable(dc, scene.DataTable);
-
-        var secondaryAxisPlan = scene.SecondaryAxis;
-        if (secondaryAxisPlan.Ticks.Count > 0 || secondaryAxisPlan.Labels.Count > 0)
-        {
-            var secondaryTickPen = CreateChartSecondaryAxisTickPen(secondaryAxisPlan);
-            foreach (var tick in secondaryAxisPlan.Ticks)
-                dc.DrawLine(secondaryTickPen, ToPoint(tick.Start), ToPoint(tick.End));
-            foreach (var label in secondaryAxisPlan.Labels)
-            {
-                DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
-                    label.IsBold,
-                    label.FontSize,
-                    ToTextAlignment(label.Alignment),
-                    textColor: label.TextColor);
-            }
-        }
-
-        if (secondaryAxisPlan.Title is { } secondaryAxisTitle)
-            DrawChartAxisTitle(dc, secondaryAxisTitle);
-
-        foreach (var label in scene.CategoryAxisLabels)
-        {
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
-                label.IsBold,
-                label.FontSize,
-                ToTextAlignment(label.Alignment),
-                textColor: label.TextColor);
-        }
-
-        foreach (var label in scene.ValueAxisLabels)
-        {
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
-                label.IsBold,
-                label.FontSize,
-                ToTextAlignment(label.Alignment),
-                textColor: label.TextColor);
-        }
-
-        foreach (var label in scene.SurfaceSeriesAxisLabels)
-        {
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
-                label.IsBold,
-                label.FontSize,
-                ToTextAlignment(label.Alignment),
-                textColor: label.TextColor);
-        }
-
-        foreach (var titlePlan in scene.AxisTitles)
-            DrawChartAxisTitle(dc, titlePlan);
-
-        foreach (var item in scene.LegendItems)
-        {
-            var swatch = ToRect(item.SwatchBounds);
-            if (item.IsLine)
-            {
-                double centerY = swatch.Top + swatch.Height / 2.0;
-                dc.DrawLine(
-                    ToPen(new ChartStrokePlan(
-                        item.Fill.Color,
-                        item.Fill.Alpha,
-                        ChartRenderPlanner.ImportedLineSeriesStrokeThickness)),
-                    new Point(swatch.Left, centerY),
-                    new Point(swatch.Right, centerY));
-                if (item.MarkerSymbol is { } markerSymbol)
-                {
-                    DrawChartMarker(
-                        dc,
-                        new ChartCirclePrimitive(
-                            -1,
-                            -1,
-                            new ChartPlanPoint(
-                                item.SwatchBounds.X + item.SwatchBounds.Width / 2.0,
-                                item.SwatchBounds.Y + item.SwatchBounds.Height / 2.0),
-                            Math.Min(item.SwatchBounds.Width, item.SwatchBounds.Height) / 2.0,
-                            markerSymbol,
-                            item.Fill,
-                            Stroke: null));
-                }
-                else if (!item.IsLineOnly)
-                {
-                    dc.DrawRectangle(
-                        ToBrush(item.Fill),
-                        null,
-                        new Rect(swatch.Left + swatch.Width / 2.0 - 4.0, centerY - 4.0, 8.0, 8.0));
-                }
-            }
-            else if (item.MarkerSymbol is { } markerSymbol)
-            {
-                DrawChartMarker(
-                    dc,
-                    new ChartCirclePrimitive(
-                        -1,
-                        -1,
-                        new ChartPlanPoint(
-                            item.SwatchBounds.X + item.SwatchBounds.Width / 2.0,
-                            item.SwatchBounds.Y + item.SwatchBounds.Height / 2.0),
-                        Math.Min(item.SwatchBounds.Width, item.SwatchBounds.Height) / 2.0,
-                        markerSymbol,
-                        item.Fill,
-                        Stroke: null));
-            }
-            else
-            {
-                dc.DrawRectangle(ToBrush(item.Fill), null, swatch);
-            }
-            DrawChartLabel(dc, item.Label.Text, ToRect(item.Label.Bounds),
-                item.Label.IsBold,
-                item.Label.FontSize,
-                ToTextAlignment(item.Label.Alignment),
-                textColor: item.Label.TextColor,
-                horizontalScale: item.Label.HorizontalScale);
-        }
-
-        foreach (var trendline in scene.Trendlines)
-        {
-            foreach (var label in trendline.Labels)
-            {
-                DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
-                    label.IsBold,
-                    label.FontSize,
-                    ToTextAlignment(label.Alignment),
-                    textColor: label.TextColor,
-                    fontFamily: label.FontFamily,
-                    horizontalScale: label.HorizontalScale);
-            }
-        }
-    }
-
-    private static void RenderColumnChart(DrawingContext dc, ChartScenePlan scene)
-    {
-        foreach (var primitive in scene.Rectangles)
-        {
-            if (primitive.Depth is { IsThreeD: true } depth)
-            {
-                RenderThreeDColumn(dc, primitive, depth);
-                continue;
-            }
-
-            dc.DrawRectangle(
-                ToBrush(primitive.Fill),
-                primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
-                ToRect(primitive.Bounds));
-        }
-
-        RenderDropLines(dc, scene.SeriesLines);
-        foreach (var connector in scene.WaterfallConnectorLines)
-            dc.DrawLine(ToPen(connector.Stroke), ToPoint(connector.Start), ToPoint(connector.End));
-    }
-
-    private static void RenderThreeDColumn(
-        DrawingContext dc,
-        ChartRectPrimitive primitive,
-        ChartBarDepthPlan depth)
-    {
-        var rect = primitive.Bounds;
-        double right = rect.Right;
-        double bottom = rect.Bottom;
-        var top = new[]
-        {
-            new ChartPlanPoint(rect.X, rect.Y),
-            new ChartPlanPoint(right, rect.Y),
-            new ChartPlanPoint(right + depth.OffsetX, rect.Y + depth.OffsetY),
-            new ChartPlanPoint(rect.X + depth.OffsetX, rect.Y + depth.OffsetY)
-        };
-        var side = new[]
-        {
-            new ChartPlanPoint(right, rect.Y),
-            new ChartPlanPoint(right + depth.OffsetX, rect.Y + depth.OffsetY),
-            new ChartPlanPoint(right + depth.OffsetX, bottom + depth.OffsetY),
-            new ChartPlanPoint(right, bottom)
-        };
-
-        dc.DrawGeometry(ToBrush(ShadeThreeDBarFill(primitive.Fill, 0.60)), null, ToPolygonGeometry(side));
-        dc.DrawGeometry(ToBrush(ShadeThreeDBarFill(primitive.Fill, 0.75)), null, ToPolygonGeometry(top));
-        dc.DrawRectangle(
-            ToBrush(primitive.Fill),
-            primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
-            ToRect(rect));
-    }
-
-    private static ChartFillPlan ShadeThreeDBarFill(ChartFillPlan fill, double factor) =>
-        new(
-            new SrgbColor(
-                ScaleThreeDBarChannel(fill.Color.R, factor),
-                ScaleThreeDBarChannel(fill.Color.G, factor),
-                ScaleThreeDBarChannel(fill.Color.B, factor)),
-            fill.Alpha);
-
-    private static byte ScaleThreeDBarChannel(byte channel, double factor) =>
-        (byte)Math.Round(Math.Clamp(channel * factor, 0, 255));
-
-    // Stock and surface specialized chart renderers.
-    private static void RenderSurfaceChart(DrawingContext dc, ChartScenePlan scene)
-    {
-        if (scene.Surface is not { } plan)
-            return;
-
-        var renderFacets = plan.RenderFacets.Count > 0 ? plan.RenderFacets : plan.Facets;
-        foreach (var segment in plan.FrameSegments)
-            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
-        foreach (var segment in plan.WireframeSegments)
-            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
-        if (renderFacets.Count > 0)
-        {
-            foreach (var facet in renderFacets)
-            {
-                dc.DrawGeometry(
-                    ToBrush(facet.Fill),
-                    ToPen(facet.Stroke),
-                    ToSurfaceFacetGeometry(facet));
-            }
-        }
-        else
-        {
-            foreach (var primitive in plan.Cells)
-            {
-                dc.DrawRectangle(
-                    ToBrush(primitive.Fill),
-                    ToPen(primitive.Stroke),
-                    ToRect(primitive.Bounds));
-            }
-        }
-
-        foreach (var segment in plan.ContourSegments)
-            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
-
-    }
-
-    private static void RenderStockChart(DrawingContext dc, ChartScenePlan scene)
-    {
-        if (scene.Stock is null)
-        {
-            RenderDropLines(dc, scene.DropLines);
-            foreach (var primitive in scene.LineSeries)
-                RenderLineSeriesPrimitive(dc, primitive);
-            return;
-        }
-
-        foreach (var primitive in scene.StockVolumes)
-        {
-            dc.DrawRectangle(
-                ToBrush(primitive.Fill),
-                primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
-                ToRect(primitive.Bounds));
-        }
-
-        foreach (var bar in scene.UpDownBars)
-        {
-            dc.FillRectangle(ToBrush(bar.Fill), ToRect(bar.Bounds));
-        }
-
-        var plan = scene.Stock.Value;
-        foreach (var segment in plan.HighLowLines)
-            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
-        foreach (var tick in plan.OpenTicks)
-            dc.DrawLine(ToPen(tick.Segment.Stroke), ToPoint(tick.Segment.Start), ToPoint(tick.Segment.End));
-        foreach (var tick in plan.CloseTicks)
-            dc.DrawLine(ToPen(tick.Segment.Stroke), ToPoint(tick.Segment.Start), ToPoint(tick.Segment.End));
-    }
-
-    // Combo-chart secondary series overlay.
-    /// <summary>
-    /// Renders series that carry a per-series <see cref="ChartSeries.OverrideChartType"/>
-    /// (set by the IO reader for combo charts). Only Line / LineMarkers overrides
-    /// are handled here; others are silently skipped.
-    /// </summary>
-    private static void RenderComboOverrideSeries(DrawingContext dc, ChartScenePlan scene)
-    {
-        foreach (var primitive in scene.ComboLineSeries)
-            RenderLineSeriesPrimitive(dc, primitive);
-    }
-
-    private static void RenderErrorBars(
-        DrawingContext dc,
-        IReadOnlyList<ChartErrorBarPrimitive> errorBars)
-    {
-        foreach (var errorBar in errorBars)
-        {
-            var pen = ToPen(errorBar.Stroke);
-            var center = ToPoint(errorBar.Center);
-            if (errorBar.MinusEnd is { } minus)
-            {
-                dc.DrawLine(pen, center, ToPoint(minus));
-                if (!errorBar.NoEndCap)
-                    DrawErrorBarCap(dc, pen, minus, errorBar.Direction);
-            }
-            if (errorBar.PlusEnd is { } plus)
-            {
-                dc.DrawLine(pen, center, ToPoint(plus));
-                if (!errorBar.NoEndCap)
-                    DrawErrorBarCap(dc, pen, plus, errorBar.Direction);
-            }
-        }
-    }
-
-    private static void RenderTrendlines(
-        DrawingContext dc,
-        IReadOnlyList<ChartTrendlinePrimitive> trendlines)
-    {
-        foreach (var trendline in trendlines)
-        {
-            foreach (var segment in trendline.Segments)
-                dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
-        }
-    }
-
-    private static void DrawErrorBarCap(
-        DrawingContext dc,
-        Pen pen,
-        ChartPlanPoint endpoint,
-        ChartErrorDirection direction)
-    {
-        const double capHalfLength = 3.0;
-        var point = ToPoint(endpoint);
-        if (direction == ChartErrorDirection.Y)
-            dc.DrawLine(pen, new Point(point.X - capHalfLength, point.Y), new Point(point.X + capHalfLength, point.Y));
-        else
-            dc.DrawLine(pen, new Point(point.X, point.Y - capHalfLength), new Point(point.X, point.Y + capHalfLength));
-    }
-
-    private static void RenderBarChart(DrawingContext dc, ChartScenePlan scene)
-    {
-        foreach (var primitive in scene.Rectangles)
-        {
-            dc.DrawRectangle(
-                ToBrush(primitive.Fill),
-                primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
-                ToRect(primitive.Bounds));
-        }
-
-        RenderDropLines(dc, scene.SeriesLines);
-    }
-
-    private static void RenderProjectedThreeDBarFrame(DrawingContext dc, ChartScenePlan scene)
-    {
-        var plot = scene.Frame.Plot;
-        int lineCount = scene.ValueAxisLabels.Count;
-        if (lineCount < 2)
-            return;
-
-        var pen = ToPen(scene.GridLines.Stroke);
-        double leftX = plot.X + 21.0;
-        double leftBaseline = plot.Bottom - (ChartRenderPlanner.ImportedThreeDBarBaseLift - 8.0);
-        double depthY = Math.Min(plot.Height * 0.18, 94.0);
-        double rightBaseline = leftBaseline + depthY;
-        double rightTop = plot.Y + depthY * 0.39;
-
-        for (int index = 0; index < lineCount; index++)
-        {
-            double fraction = index / (double)(lineCount - 1);
-            dc.DrawLine(
-                pen,
-                new Point(leftX, leftBaseline - (leftBaseline - plot.Y) * fraction),
-                new Point(plot.Right, rightBaseline - (rightBaseline - rightTop) * fraction));
-        }
-
-        dc.DrawLine(pen, new Point(leftX, leftBaseline), new Point(leftX, plot.Y));
-        double frontRightX = plot.Right - 49.0;
-        dc.DrawLine(pen, new Point(leftX, leftBaseline), new Point(frontRightX, rightBaseline));
-
-        int categoryCount = Math.Max(1, scene.CategoryAxisLabels.Count);
-        for (int index = 0; index <= categoryCount; index++)
-        {
-            double fraction = index / (double)categoryCount;
-            double x = leftX + (frontRightX - leftX) * fraction;
-            double y = leftBaseline + depthY * fraction;
-            dc.DrawLine(pen, new Point(x, y), new Point(x, y + 5.0));
-        }
-    }
-
-    private static void RenderLineChart(DrawingContext dc, ChartScenePlan scene)
-    {
-        foreach (var bar in scene.UpDownBars)
-            dc.FillRectangle(ToBrush(bar.Fill), ToRect(bar.Bounds));
-        RenderDropLines(dc, scene.DropLines);
-        foreach (var primitive in scene.LineSeries)
-            RenderLineSeriesPrimitive(dc, primitive);
-    }
-
-    private static void RenderDropLines(DrawingContext dc, IReadOnlyList<ChartLineSegmentPrimitive> lines)
-    {
-        foreach (var line in lines)
-            dc.DrawLine(ToPen(line.Stroke), ToPoint(line.Start), ToPoint(line.End));
-    }
-
-    private static void RenderLineSeriesPrimitive(
-        DrawingContext dc,
-        ChartLineSeriesPrimitive primitive)
-    {
-        if (primitive.Depth is { } depth)
-        {
-            foreach (var path in primitive.LinePaths)
-            {
-                var depthStroke = path.Stroke with { Alpha = depth.StrokeAlpha };
-                dc.DrawGeometry(
-                    null,
-                    ToPen(depthStroke),
-                    ToGeometry(path, depth));
-            }
-        }
-
-        foreach (var path in primitive.LinePaths)
-            dc.DrawGeometry(null, ToPen(path.Stroke), ToGeometry(path));
-
-        foreach (var marker in primitive.Markers)
-            DrawChartMarker(dc, marker);
-    }
-
-    private static void RenderPieChart(DrawingContext dc, ChartScenePlan scene)
-    {
-        foreach (var seriesLine in scene.OfPieSeriesLines)
-            dc.DrawLine(ToPen(seriesLine.Stroke), ToPoint(seriesLine.Start), ToPoint(seriesLine.End));
-
-        var borderPen = new Pen(Brushes.White, 0.8);
-        foreach (var primitive in scene.PieSlices.Concat(scene.OfPieSecondarySlices))
-        {
-            var fill = primitive.Fill!.Value;
-            if (primitive.DepthFill is { } depthFill)
-            {
-                if (primitive.DrawDepthSidewalls)
-                {
-                    foreach (var interval in GetPieDepthArcIntervals(primitive))
-                    {
-                        dc.DrawGeometry(
-                            ToBrush(ShadeImportedThreeDPieSidewall(
-                                depthFill,
-                                interval.Start,
-                                interval.End,
-                                primitive.PointIndex)),
-                            null,
-                            ToPieSliceDepthGeometry(primitive, interval.Start, interval.End));
-                    }
-                }
-                else
-                {
-                    dc.DrawGeometry(
-                        ToBrush(depthFill),
-                        null,
-                        ToPieSliceGeometry(primitive, primitive.DepthOffsetY));
-                }
-            }
-
-            var brush = ToBrush(fill);
-            var geo = ToPieSliceGeometry(primitive);
-            dc.DrawGeometry(brush, borderPen, geo);
-        }
-
-        if (scene.OfPieSecondaryType == OfPieType.Bar)
-            RenderColumnChart(dc, scene);
-    }
-
-    private static StreamGeometry ToPieSliceGeometry(ChartPieSlicePrimitive primitive, double offsetY = 0)
-    {
-        var center = new ChartPlanPoint(primitive.Center.X, primitive.Center.Y + offsetY);
-        var start = new ChartPlanPoint(primitive.OuterStart.X, primitive.OuterStart.Y + offsetY);
-        var end = new ChartPlanPoint(primitive.OuterEnd.X, primitive.OuterEnd.Y + offsetY);
-
-        var geo = new StreamGeometry();
-        using (var ctx = geo.Open())
-        {
-            ctx.BeginFigure(ToPoint(center), isFilled: true);
-            ctx.LineTo(ToPoint(start));
-            ctx.ArcTo(
-                ToPoint(end),
-                new Size(primitive.OuterRadius, primitive.OuterRadiusY),
-                0,
-                primitive.IsLargeArc,
-                SweepDirection.Clockwise);
-            ctx.EndFigure(isClosed: true);
-        }
-
-        return geo;
-    }
-
-    private static IEnumerable<(double Start, double End)> GetPieDepthArcIntervals(
-        ChartPieSlicePrimitive primitive)
-    {
-        for (int turn = -1; turn <= 1; turn++)
-        {
-            double frontStart = turn * 2 * Math.PI;
-            double frontEnd = frontStart + Math.PI;
-            double start = Math.Max(primitive.StartAngle, frontStart);
-            double end = Math.Min(primitive.EndAngle, frontEnd);
-            if (end - start > 1e-6)
-                yield return (start, end);
-        }
-    }
-
-    private static StreamGeometry ToPieSliceDepthGeometry(
-        ChartPieSlicePrimitive primitive,
-        double startAngle,
-        double endAngle)
-    {
-        var topStart = PointOnPieOuter(primitive, startAngle);
-        var topEnd = PointOnPieOuter(primitive, endAngle);
-        var bottomStart = new ChartPlanPoint(topStart.X, topStart.Y + primitive.DepthOffsetY);
-        var bottomEnd = new ChartPlanPoint(topEnd.X, topEnd.Y + primitive.DepthOffsetY);
-        var geo = new StreamGeometry();
-        using (var ctx = geo.Open())
-        {
-            ctx.BeginFigure(ToPoint(topStart), isFilled: true);
-            ctx.ArcTo(
-                ToPoint(topEnd),
-                new Size(primitive.OuterRadius, primitive.OuterRadiusY),
-                0,
-                isLargeArc: false,
-                SweepDirection.Clockwise);
-            ctx.LineTo(ToPoint(bottomEnd));
-            ctx.ArcTo(
-                ToPoint(bottomStart),
-                new Size(primitive.OuterRadius, primitive.OuterRadiusY),
-                0,
-                isLargeArc: false,
-                SweepDirection.CounterClockwise);
-            ctx.EndFigure(isClosed: true);
-        }
-        return geo;
-    }
-
-    private static ChartPlanPoint PointOnPieOuter(
-        ChartPieSlicePrimitive primitive,
-        double angle) =>
-        new(
-            primitive.Center.X + primitive.OuterRadius * Math.Cos(angle),
-            primitive.Center.Y + primitive.OuterRadiusY * Math.Sin(angle));
-
-    private static ChartFillPlan ShadeImportedThreeDPieSidewall(
-        ChartFillPlan fill,
-        double startAngle,
-        double endAngle,
-        int pointIndex)
-    {
-        double factor = ChartRenderPlanner.ResolveImportedThreeDPieSidewallFactor(
-            pointIndex,
-            startAngle,
-            endAngle);
-        return new ChartFillPlan(
-            new SrgbColor(
-                ScalePieSidewallChannel(fill.Color.R, factor),
-                ScalePieSidewallChannel(fill.Color.G, factor),
-                ScalePieSidewallChannel(fill.Color.B, factor)),
-            fill.Alpha);
-    }
-
-    private static byte ScalePieSidewallChannel(byte channel, double factor) =>
-        (byte)Math.Round(Math.Clamp(channel * factor, 0, 255));
-
-    private static void RenderAreaChart(DrawingContext dc, ChartScenePlan scene)
-    {
-        foreach (var primitive in scene.AreaSeries)
-        {
-            if (primitive.AreaPath.Fill is not { } fill)
-                continue;
-
-            if (primitive.Depth is { } depth)
-            {
-                var depthFill = fill.WithAlpha(depth.FillAlpha);
-                dc.DrawGeometry(ToBrush(depthFill), null, ToGeometry(OffsetPath(primitive.AreaPath, depth)));
-            }
-
-            var brush = ToBrush(fill);
-            var geo = ToGeometry(primitive.AreaPath);
-            dc.DrawGeometry(brush, null, geo);
-        }
-    }
-
-    // ── Doughnut chart ───────────────────────────────────────────────────────
-
-    private static void RenderFunnelChart(DrawingContext dc, ChartScenePlan scene)
-    {
-        foreach (var segment in scene.FunnelSegments)
-        {
-            if (segment.Path.Fill is not { } fill)
-                continue;
-
-            dc.DrawGeometry(ToBrush(fill), null, ToGeometry(segment.Path));
-        }
-    }
-
-    private static void RenderDoughnutChart(DrawingContext dc, ChartScenePlan scene)
-    {
-        var borderPen = new Pen(Brushes.White, 0.8);
-        foreach (var primitive in scene.DoughnutSlices)
-        {
-            var brush = ToBrush(primitive.Fill!.Value);
-
-            var geo = new StreamGeometry();
-            using (var ctx = geo.Open())
-            {
-                ctx.BeginFigure(ToPoint(primitive.OuterStart), isFilled: true);
-                ctx.ArcTo(
-                    ToPoint(primitive.OuterEnd),
-                    new Size(primitive.OuterRadius, primitive.OuterRadiusY),
-                    0,
-                    primitive.IsLargeArc,
-                    SweepDirection.Clockwise);
-                ctx.LineTo(ToPoint(primitive.InnerEnd));
-                ctx.ArcTo(
-                    ToPoint(primitive.InnerStart),
-                    new Size(primitive.InnerRadius, primitive.InnerRadiusY),
-                    0,
-                    primitive.IsLargeArc,
-                    SweepDirection.CounterClockwise);
-                ctx.EndFigure(isClosed: true);
-            }
-            dc.DrawGeometry(brush, borderPen, geo);
-        }
-    }
-
-    // ── Scatter chart ────────────────────────────────────────────────────────
-
-    private static void RenderScatterChart(DrawingContext dc, ChartScenePlan scene)
-    {
-        if (scene.Scatter is not { } plan)
-            return;
-        var gridPen = ToPen(plan.GridLineStroke);
-
-        foreach (var gridLine in plan.GridLines)
-            dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
-
-        foreach (var primitive in plan.Series)
-        {
-            foreach (var path in primitive.LinePaths)
-                dc.DrawGeometry(null, ToPen(path.Stroke), ToGeometry(path));
-
-            foreach (var marker in primitive.Markers)
-                DrawChartMarker(dc, marker);
-        }
-
-        foreach (var label in plan.XAxisLabels)
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
-        foreach (var label in plan.YAxisLabels)
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
-        foreach (var label in plan.DataLabels)
-        {
-            if (label.LegendKeyBounds is { } keyBounds && label.LegendKeyFill is { } keyFill)
-                dc.FillRectangle(ToBrush(keyFill), ToRect(keyBounds));
-
-            DrawChartLabel(dc, label.Text, ToRect(label.TextBounds ?? label.Bounds),
-                label.IsBold,
-                label.FontSize,
-                ToTextAlignment(label.Alignment),
-                isItalic: label.IsItalic,
-                textColor: label.TextColor,
-                fontFamily: label.FontFamily,
-                maxLineCount: label.WrapText ? 2 : 1);
-        }
-    }
-
-    // ── Bubble chart ─────────────────────────────────────────────────────────
-
-    private static void RenderBubbleChart(DrawingContext dc, ChartScenePlan scene)
-    {
-        if (scene.Bubble is not { } plan)
-            return;
-        var gridPen = ToPen(plan.GridLineStroke);
-
-        foreach (var gridLine in plan.GridLines)
-            dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
-
-        foreach (var primitive in plan.Bubbles)
-        {
-            dc.DrawEllipse(
-                ToBrush(primitive.Fill),
-                ToPen(primitive.Stroke),
-                ToPoint(primitive.Center),
-                primitive.Radius,
-                primitive.Radius);
-        }
-
-        foreach (var label in plan.XAxisLabels)
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
-        foreach (var label in plan.YAxisLabels)
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
-    }
-
-    // ── Radar chart ──────────────────────────────────────────────────────────
-
-    private static void RenderRadarChart(DrawingContext dc, ChartScenePlan scene)
-    {
-        if (scene.Radar is not { } plan)
-            return;
-
-        foreach (var ring in plan.Rings)
-            dc.DrawGeometry(null, ToPen(ring.Stroke), ToGeometry(ring.Path));
-
-        var spokePen = ToPen(plan.SpokeStroke);
-        foreach (var spoke in plan.Spokes)
-            dc.DrawLine(spokePen, ToPoint(spoke.Start), ToPoint(spoke.End));
-
-        foreach (var label in plan.ValueLabels)
-        {
-            var labelBounds = ToRect(label.Bounds);
-            if (plan.Rings.Count == 9 &&
-                plan.CategoryLabels.Count == 5 &&
-                plan.Series.Count == 2)
-            {
-                labelBounds = new Rect(
-                    labelBounds.X,
-                    labelBounds.Y + ImportedRadarValueLabelAvaloniaYCompensation,
-                    labelBounds.Width,
-                    labelBounds.Height);
-            }
-
-            DrawChartLabel(dc, label.Text, labelBounds, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
-        }
-
-        for (int labelIndex = 0; labelIndex < plan.CategoryLabels.Count; labelIndex++)
-        {
-            var label = plan.CategoryLabels[labelIndex];
-            var labelBounds = ToRect(label.Bounds);
-            if (plan.Rings.Count == 9 &&
-                plan.CategoryLabels.Count == 5 &&
-                plan.Series.Count == 2 &&
-                labelIndex is 2 or 3)
-            {
-                double horizontalOffset = labelIndex == 2
-                    ? AvaloniaImportedRadarAgilityLabelOffsetX
-                    : AvaloniaImportedRadarStaminaLabelOffsetX;
-                labelBounds = new Rect(
-                    labelBounds.X + horizontalOffset,
-                    labelBounds.Y + AvaloniaImportedRadarLowerLabelOffsetY,
-                    labelBounds.Width,
-                    labelBounds.Height);
-            }
-            DrawChartLabel(dc, label.Text, labelBounds, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
-        }
-
-        foreach (var primitive in plan.Series)
-        {
-            var pen = ToPen(primitive.Stroke);
-            foreach (var path in primitive.Paths)
-            {
-                dc.DrawGeometry(
-                    path.Fill.HasValue ? ToBrush(path.Fill.Value) : null,
-                    pen,
-                    ToGeometry(path));
-            }
-
-            foreach (var marker in primitive.Markers)
-                DrawChartMarker(dc, marker);
-        }
-    }
-
-    // ── Chart helpers ────────────────────────────────────────────────────────
-
     private static void DrawChartLabel(
         DrawingContext dc, string text, Rect rect,
         bool isBold, double fontSize, TextAlignment align,
@@ -2266,83 +1291,6 @@ public sealed class SlideCanvas : Control
     }
 
     // ── Text ─────────────────────────────────────────────────────────────────
-
-    private static void RenderChartDataTable(
-        DrawingContext dc,
-        ChartDataTablePrimitivePlan plan)
-    {
-        if (!plan.Bounds.HasPositiveArea)
-            return;
-
-        if (plan.BackgroundFill.HasValue)
-            dc.FillRectangle(ToBrush(plan.BackgroundFill.Value), ToRect(plan.Bounds));
-
-        var borderPen = ToPen(plan.BorderStroke);
-        foreach (var border in plan.HorizontalBorders)
-            dc.DrawLine(borderPen, ToPoint(border.Start), ToPoint(border.End));
-        foreach (var border in plan.VerticalBorders)
-            dc.DrawLine(borderPen, ToPoint(border.Start), ToPoint(border.End));
-        foreach (var border in plan.OutlineBorders)
-            dc.DrawLine(borderPen, ToPoint(border.Start), ToPoint(border.End));
-
-        foreach (var cell in plan.Cells)
-        {
-            using var clipScope = dc.PushClip(ToRect(cell.CellBounds));
-
-            if (cell.LegendKeyFill.HasValue && cell.LegendKeyBounds.HasValue)
-            {
-                dc.FillRectangle(
-                    ToBrush(cell.LegendKeyFill.Value),
-                    ToRect(cell.LegendKeyBounds.Value));
-            }
-
-            DrawChartLabel(
-                dc,
-                cell.Text,
-                ToRect(cell.Bounds),
-                cell.IsBold,
-                cell.FontSize,
-                ToTextAlignment(cell.Alignment),
-                cell.IsItalic,
-                cell.TextColor,
-                cell.FontFamily);
-        }
-    }
-
-    private static void DrawChartAxisTitle(DrawingContext dc, ChartAxisTitlePlan title)
-    {
-        var label = title.Label;
-        var rect = ToRect(label.Bounds);
-        if (title.Orientation == ChartAxisTitleOrientation.Horizontal)
-        {
-            DrawChartLabel(dc, label.Text, rect, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment), isItalic: label.IsItalic, textColor: label.TextColor, fontFamily: label.FontFamily);
-            return;
-        }
-
-        double angle = title.Orientation == ChartAxisTitleOrientation.VerticalClockwise
-            ? Math.PI / 2.0
-            : -Math.PI / 2.0;
-        double cx = rect.X + rect.Width * 0.5;
-        double cy = rect.Y + rect.Height * 0.5;
-        using var rotateScope = dc.PushTransform(
-            Matrix.CreateTranslation(-cx, -cy)
-            * Matrix.CreateRotation(angle)
-            * Matrix.CreateTranslation(cx, cy));
-        DrawChartLabel(
-            dc,
-            label.Text,
-            new Rect(
-                rect.X + (rect.Width - rect.Height) * 0.5,
-                rect.Y + (rect.Height - rect.Width) * 0.5,
-                rect.Height,
-                rect.Width),
-            label.IsBold,
-            label.FontSize,
-            ToTextAlignment(label.Alignment),
-            isItalic: label.IsItalic,
-            textColor: label.TextColor,
-            fontFamily: label.FontFamily);
-    }
 
     private static void RenderText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
@@ -2404,55 +1352,30 @@ public sealed class SlideCanvas : Control
         if (TryRenderContinuousColumnFlow(dc, text, bounds))
             return;
 
-        var initialColumnLayout = TextLayoutPlanner.GetColumnLayout(text, bounds);
-        var initialMeasured = new List<TextParagraphMeasure>();
-
-        for (int i = 0; i < text.Paragraphs.Count; i++)
-        {
-            var para = text.Paragraphs[i];
-            if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(
-                para, initialColumnLayout.ColumnWidthDip, text.Wrap, text.AutoFitKind);
-            initialMeasured.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                ft.Height,
-                para.SpaceBeforePt,
-                para.SpaceAfterPt));
-        }
-
-        var autoFitPlan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+        var plan = TextLayoutPlanner.PlanMeasuredColumns<FormattedText>(
             text,
-            TextLayoutPlanner.GetAutoFitCapacityHeight(initialColumnLayout),
-            initialMeasured);
-        var renderText = TextLayoutPlanner.ApplyAutoFitPlan(text, autoFitPlan);
-        var columnLayout = TextLayoutPlanner.GetColumnLayout(renderText, bounds, autoFitPlan);
-        var formatted = new Dictionary<int, FormattedText>();
-        var measured = new List<TextParagraphMeasure>();
-
-        for (int i = 0; i < renderText.Paragraphs.Count; i++)
-        {
-            var para = renderText.Paragraphs[i];
-            if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(
-                para, columnLayout.ColumnWidthDip, renderText.Wrap, renderText.AutoFitKind);
-            formatted[i] = ft;
-            measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                ft.Height,
-                para.SpaceBeforePt,
-                para.SpaceAfterPt,
-                columnLayout.LineSpacingScale));
-        }
-
-        var plan = TextLayoutPlanner.PlanColumns(renderText, columnLayout, measured);
-        foreach (var placement in plan.Paragraphs)
+            bounds,
+            request =>
+            {
+                var formattedText = BuildFormattedText(
+                    request.Paragraph,
+                    request.MaxWidthDip,
+                    request.Text.Wrap,
+                    request.Text.AutoFitKind);
+                return new TextNativeMeasurement<FormattedText>(
+                    formattedText,
+                    formattedText.Height,
+                    formattedText.Width);
+            });
+        var renderText = plan.RenderText;
+        foreach (var placement in plan.Layout.Paragraphs)
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
-            var ft = formatted[placement.ParagraphIndex];
+            var ft = plan.Artifacts[placement.ParagraphIndex];
             if (placement.Bullet is { } bullet)
                 DrawBulletPlacementAvalonia(dc, bullet);
 
-            switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
+            switch (placement.RenderRoute)
             {
                 case TextParagraphRenderRoute.Math:
                     RenderParaWithMath(dc, para, placement.X, placement.Y);
@@ -2480,135 +1403,34 @@ public sealed class SlideCanvas : Control
         ResolvedTextLayout text,
         LayoutRect bounds)
     {
-        if (text.AutoFitKind != TextAutoFitKind.None ||
-            text.HasStoredFontScale ||
-            text.Paragraphs.Any(para =>
-                para.Runs.Count != 1 ||
-                TextLayoutPlanner.PlanParagraphRenderRoute(para, text) != TextParagraphRenderRoute.Plain))
-        {
-            return false;
-        }
-
-        var layout = TextLayoutPlanner.GetColumnLayout(text, bounds);
-        var fragments = new Dictionary<(int ParagraphIndex, int LineIndex), ResolvedParagraph>();
-        var measures = new List<TextColumnLineMeasure>();
-
-        for (int paragraphIndex = 0; paragraphIndex < text.Paragraphs.Count; paragraphIndex++)
-        {
-            var paragraph = text.Paragraphs[paragraphIndex];
-            var run = paragraph.Runs[0];
-            var lines = SplitColumnText(paragraph, run, layout.ColumnWidthDip, text.Wrap);
-            for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
+        var plan = TextLayoutPlanner.PlanMeasuredContinuousColumnFlow<FormattedText>(
+            text,
+            bounds,
+            request =>
             {
-                var fragment = CloneParagraphWithText(paragraph, run, lines[lineIndex]);
-                var formatted = BuildFormattedText(fragment, layout.ColumnWidthDip, text.Wrap);
-                fragments[(paragraphIndex, lineIndex)] = fragment;
-                measures.Add(new TextColumnLineMeasure(
-                    paragraphIndex,
-                    lineIndex,
-                    formatted.Height,
-                    lineIndex == 0 ? TextLayoutPlanner.PointsToDip(paragraph.SpaceBeforePt) : 0,
-                    lineIndex == lines.Count - 1 ? TextLayoutPlanner.PointsToDip(paragraph.SpaceAfterPt) : 0,
-                    lineIndex == 0,
-                    lineIndex == lines.Count - 1));
-            }
-        }
+                var formattedText = BuildFormattedText(
+                    request.Paragraph,
+                    request.MaxWidthDip,
+                    request.Wrap);
+                return new TextNativeMeasurement<FormattedText>(
+                    formattedText,
+                    formattedText.Height,
+                    formattedText.Width);
+            });
+        if (!plan.IsApplicable)
+            return false;
 
-        foreach (var placement in TextLayoutPlanner.PlanColumnLines(text, layout, measures))
+        foreach (var line in plan.Lines)
         {
-            var fragment = fragments[(placement.ParagraphIndex, placement.LineIndex)];
-            var formatted = BuildFormattedText(fragment, placement.MaxWidthDip, text.Wrap);
-            if (placement.IsFirstLine && fragment.IndentDip > 0 && formatted.MaxTextWidth > 0)
+            var placement = line.Placement;
+            var formatted = line.Artifact;
+            if (placement.IsFirstLine && line.Paragraph.IndentDip > 0 && formatted.MaxTextWidth > 0)
                 formatted.MaxTextWidth = placement.MaxWidthDip;
             dc.DrawText(formatted, new Point(placement.X, placement.Y));
         }
 
         return true;
     }
-
-    private static IReadOnlyList<string> SplitColumnText(
-        ResolvedParagraph paragraph,
-        ResolvedRun run,
-        double maxWidth,
-        bool wrap)
-    {
-        if (!wrap || maxWidth <= 0)
-            return new[] { run.Text };
-
-        var words = run.Text.Replace('\r', ' ').Replace('\n', ' ')
-            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length == 0)
-            return new[] { string.Empty };
-
-        var lines = new List<string>();
-        string current = string.Empty;
-        foreach (var word in words)
-        {
-            string candidate = current.Length == 0 ? word : current + " " + word;
-            var measure = BuildFormattedText(
-                CloneParagraphWithText(paragraph, run, candidate),
-                0,
-                false);
-            if (current.Length > 0 && measure.Width > maxWidth)
-            {
-                lines.Add(current);
-                current = word;
-            }
-            else
-            {
-                current = candidate;
-            }
-        }
-
-        if (current.Length > 0)
-            lines.Add(current);
-        return lines;
-    }
-
-    private static ResolvedParagraph CloneParagraphWithText(
-        ResolvedParagraph paragraph,
-        ResolvedRun run,
-        string text) =>
-        new()
-        {
-            Runs = new[]
-            {
-                new ResolvedRun
-                {
-                    Text = text,
-                    FontFamily = run.FontFamily,
-                    FontSizePt = run.FontSizePt,
-                    BaselineOffset = run.BaselineOffset,
-                    Bold = run.Bold,
-                    Italic = run.Italic,
-                    Underline = run.Underline,
-                    Strikethrough = run.Strikethrough,
-                    Color = run.Color,
-                    TextFill = run.TextFill,
-                    TextOutline = run.TextOutline,
-                    TextShadow = run.TextShadow,
-                    TextReflection = run.TextReflection,
-                    TextGlow = run.TextGlow,
-                    TextSoftEdge = run.TextSoftEdge,
-                    MathLayout = run.MathLayout
-                }
-            },
-            Align = paragraph.Align,
-            RightToLeft = paragraph.RightToLeft,
-            Level = paragraph.Level,
-            BulletKind = paragraph.BulletKind,
-            BulletChar = paragraph.BulletChar,
-            BulletImage = paragraph.BulletImage,
-            SpaceBeforePt = paragraph.SpaceBeforePt,
-            SpaceAfterPt = paragraph.SpaceAfterPt,
-            TabStops = paragraph.TabStops,
-            BulletText = paragraph.BulletText,
-            BulletColor = paragraph.BulletColor,
-            BulletFontFamily = paragraph.BulletFontFamily,
-            BulletFontSizePt = paragraph.BulletFontSizePt,
-            IndentDip = paragraph.IndentDip,
-            HangingDip = paragraph.HangingDip
-        };
 
     private static void RenderTextCore(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
@@ -2619,74 +1441,48 @@ public sealed class SlideCanvas : Control
             return;
         }
 
-        var area = TextLayoutPlanner.GetTextArea(text, bounds);
-        var initialMeasured = new List<TextParagraphMeasure>();
-        for (int i = 0; i < text.Paragraphs.Count; i++)
-        {
-            var para = text.Paragraphs[i];
-            if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, area.Width, text.Wrap, text.AutoFitKind);
-            initialMeasured.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                ft.Height,
-                para.SpaceBeforePt,
-                para.SpaceAfterPt,
-                paragraphLineSpacingScale: TextLayoutPlanner.ResolveParagraphLineSpacingScale(para, ft.Height)));
-        }
-
-        var autoFitPlan = TextLayoutPlanner.PlanNormalAutoFitOverflow(text, area.Height, initialMeasured);
-        var renderText = TextLayoutPlanner.ApplyAutoFitPlan(text, autoFitPlan);
-        area = TextLayoutPlanner.GetTextArea(renderText, bounds);
-
-        var formatted = new Dictionary<int, FormattedText>();
-        var measured = new List<TextParagraphMeasure>();
-        for (int i = 0; i < renderText.Paragraphs.Count; i++)
-        {
-            var para = renderText.Paragraphs[i];
-            if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, area.Width, renderText.Wrap, renderText.AutoFitKind);
-            formatted[i] = ft;
-            measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                ft.Height,
-                para.SpaceBeforePt,
-                para.SpaceAfterPt,
-                paragraphLineSpacingScale: TextLayoutPlanner.ResolveParagraphLineSpacingScale(para, ft.Height)));
-        }
-
-        var plan = TextLayoutPlanner.PlanBodyText(renderText, bounds, measured, autoFitPlan);
-        double importedAptosBodyOriginOffsetY =
-            TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY(renderText);
-        foreach (var placement in plan.Paragraphs)
+        var plan = TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>(
+            text,
+            bounds,
+            request =>
+            {
+                var formattedText = BuildFormattedText(
+                    request.Paragraph,
+                    request.MaxWidthDip,
+                    request.Text.Wrap,
+                    request.Text.AutoFitKind);
+                return new TextNativeMeasurement<FormattedText>(
+                    formattedText,
+                    formattedText.Height,
+                    formattedText.Width);
+            });
+        var renderText = plan.RenderText;
+        foreach (var placement in plan.Layout.Paragraphs)
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
-            var ft = formatted[placement.ParagraphIndex];
-            double placementY = placement.Y - importedAptosBodyOriginOffsetY;
+            var ft = plan.Artifacts[placement.ParagraphIndex];
 
             if (placement.Bullet is { } bullet)
-            {
-                bullet = bullet with { Y = bullet.Y - importedAptosBodyOriginOffsetY };
                 DrawBulletPlacementAvalonia(dc, bullet);
-            }
 
-            switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
+            switch (placement.RenderRoute)
             {
                 case TextParagraphRenderRoute.Math:
-                    RenderParaWithMath(dc, para, placement.X, placementY);
+                    RenderParaWithMath(dc, para, placement.X, placement.Y);
                     break;
                 case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placementY, bounds, renderText);
+                    RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, renderText);
                     break;
                 case TextParagraphRenderRoute.Tabs:
-                    RenderParaWithTabs(dc, para, placement.X, placementY, para.TabStops);
+                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
                     break;
                 case TextParagraphRenderRoute.Baseline:
-                    RenderParaWithBaseline(dc, para, placement.X, placementY, placement.MaxWidthDip);
+                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
                     break;
                 default:
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
                         ft.MaxTextWidth = placement.MaxWidthDip;
-                    dc.DrawText(ft, new Point(placement.X, placementY));
+                    dc.DrawText(ft, new Point(placement.X, placement.Y));
                     break;
             }
         }
@@ -2789,29 +1585,23 @@ public sealed class SlideCanvas : Control
         double y,
         FlowDirection flowDirection)
     {
-        var glyph = TextLayoutPlanner.GetTabLeaderGlyph(leader);
-        double width = endX - startX;
-        if (glyph == '\0' || width < 1)
-            return;
-
-        var glyphText = BuildSingleRunFormattedTextAt(
-            run,
-            glyph.ToString(),
-            flowDirection: flowDirection);
-        double glyphWidth = glyphText.Width;
-        if (glyphWidth <= 0)
-            return;
-
-        int count = (int)Math.Floor(width / glyphWidth);
-        if (count <= 0)
+        var plan = TextLayoutPlanner.PlanTabLeaderFill(
+            leader,
+            startX,
+            endX,
+            glyph => BuildSingleRunFormattedTextAt(
+                run,
+                glyph.ToString(),
+                flowDirection: flowDirection).Width);
+        if (!plan.ShouldDraw)
             return;
 
         dc.DrawText(
             BuildSingleRunFormattedTextAt(
                 run,
-                new string(glyph, count),
+                plan.Text,
                 flowDirection: flowDirection),
-            new Point(startX, y));
+            new Point(plan.StartX, y));
     }
 
     /// <summary>
@@ -2845,38 +1635,33 @@ public sealed class SlideCanvas : Control
                     para.RightToLeft,
                     run.Text))))
             .ToArray();
-        double lineAscent = formatted.Length == 0 ? 0 : formatted.Max(ft => ft.Baseline);
-        double baselineY = ComputeBaselineY(startY, lineAscent);
         double totalWidth = widths.Sum();
         if (maxWidth > 0 && totalWidth > maxWidth)
         {
             RenderWrappedBaseline(dc, para, startX, startY, maxWidth);
             return;
         }
-        var placements = TextLayoutPlanner.PlanRunPlacements(
+
+        var line = TextLayoutPlanner.PlanInlineBaselineLine(
             para,
             startX,
+            startY,
             maxWidth,
-            (run, rightToLeft) => MeasureBaselineTextWidth(
-                run,
-                run.Text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                flowDirection: ToFlowDirection(rightToLeft)));
-        foreach (var placement in placements)
+            (runIndex, run, rightToLeft) => new TextInlineRunMeasure(
+                MeasureBaselineTextWidth(
+                    run,
+                    run.Text,
+                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                    flowDirection: ToFlowDirection(rightToLeft)),
+                formatted[runIndex].Baseline,
+                formatted[runIndex].Height));
+        foreach (var placement in line.Runs)
         {
             var run = para.Runs[placement.RunIndex];
             var ft = formatted[placement.RunIndex];
             double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(run.BaselineOffset, run.FontSizePt);
-            dc.DrawText(ft, new Point(placement.X, baselineY - ft.Baseline - offsetDip));
+            dc.DrawText(ft, new Point(placement.X, placement.Y - offsetDip));
         }
-    }
-
-    private sealed class BaselineLine
-    {
-        public List<(ResolvedRun Run, FormattedText Text, double Width)> Fragments { get; } = new();
-        public double Width { get; set; }
-        public double Ascent { get; set; }
-        public double Height { get; set; }
     }
 
     private static void RenderWrappedBaseline(
@@ -2886,140 +1671,45 @@ public sealed class SlideCanvas : Control
         double startY,
         double maxWidth)
     {
-        var lines = BuildBaselineLines(para, maxWidth);
-        double lineY = startY;
+        var lines = TextLayoutPlanner.PlanBaselineLines(
+            para,
+            startX,
+            startY,
+            maxWidth,
+            (run, text, rightToLeft) =>
+            {
+                var flowDirection = ToFlowDirection(rightToLeft);
+                double fontScale = run.BaselineOffset.HasValue
+                    ? TextLayoutPlanner.BaselineRunFontScale
+                    : 1.0;
+                var formatted = BuildSingleRunFormattedTextAt(
+                    run,
+                    text,
+                    fontScale,
+                    flowDirection);
+                return new TextBaselineFragmentMeasure(
+                    MeasureBaselineTextWidth(
+                        run,
+                        text,
+                        fontScale,
+                        formatted,
+                        flowDirection),
+                    formatted.Baseline,
+                    formatted.Height);
+            });
         foreach (var line in lines)
         {
-            if (line.Fragments.Count == 0)
+            foreach (var fragment in line.Fragments)
             {
-                lineY += Math.Max(1, line.Height);
-                continue;
-            }
-
-            double baselineY = ComputeBaselineY(lineY, line.Ascent);
-            var lineParagraph = new ResolvedParagraph
-            {
-                Runs = line.Fragments.Select(fragment => fragment.Run).ToArray(),
-                Align = para.Align,
-                RightToLeft = para.RightToLeft,
-            };
-            var placements = TextLayoutPlanner.PlanRunPlacements(
-                lineParagraph,
-                startX,
-                maxWidth,
-                (run, rightToLeft) => MeasureBaselineTextWidth(
+                var run = para.Runs[fragment.RunIndex];
+                var formatted = BuildSingleRunFormattedTextAt(
                     run,
-                    run.Text,
-                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                    flowDirection: ToFlowDirection(rightToLeft)));
-            foreach (var placement in placements)
-            {
-                var fragment = line.Fragments[placement.RunIndex];
-                double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(
-                    fragment.Run.BaselineOffset,
-                    fragment.Run.FontSizePt);
-                dc.DrawText(
                     fragment.Text,
-                    new Point(placement.X, baselineY - fragment.Text.Baseline - offsetDip));
-            }
-            lineY += Math.Max(1, line.Height);
-        }
-    }
-
-    private static List<BaselineLine> BuildBaselineLines(
-        ResolvedParagraph para,
-        double maxWidth)
-    {
-        var lines = new List<BaselineLine> { new() };
-
-        void NewLine() => lines.Add(new BaselineLine());
-
-        void AddMeasured(ResolvedRun run, string text)
-        {
-            var formatted = BuildSingleRunFormattedTextAt(
-                run,
-                text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                    para.RightToLeft,
-                    text)));
-            double width = MeasureBaselineTextWidth(
-                run,
-                text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                formatted,
-                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                    para.RightToLeft,
-                    text)));
-            var line = lines[^1];
-            if (line.Fragments.Count > 0 && line.Width + width > maxWidth)
-            {
-                NewLine();
-                line = lines[^1];
-            }
-            line.Fragments.Add((run, formatted, width));
-            line.Width += width;
-            line.Ascent = Math.Max(line.Ascent, formatted.Baseline);
-            line.Height = Math.Max(line.Height, formatted.Height);
-        }
-
-        foreach (var run in para.Runs)
-        {
-            for (int index = 0; index < run.Text.Length;)
-            {
-                char first = run.Text[index];
-                if (first is '\r' or '\n')
-                {
-                    if (first == '\r' && index + 1 < run.Text.Length && run.Text[index + 1] == '\n')
-                        index++;
-                    NewLine();
-                    index++;
-                    continue;
-                }
-
-                bool whitespace = char.IsWhiteSpace(first);
-                int end = index + 1;
-                while (end < run.Text.Length && run.Text[end] is not '\r' and not '\n' &&
-                       char.IsWhiteSpace(run.Text[end]) == whitespace)
-                    end++;
-
-                string token = run.Text[index..end];
-                var line = lines[^1];
-                var tokenText = BuildSingleRunFormattedTextAt(
-                    run,
-                    token,
                     run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                    ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                        para.RightToLeft,
-                        token)));
-                double tokenWidth = MeasureBaselineTextWidth(
-                    run,
-                    token,
-                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                    tokenText,
-                    ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                        para.RightToLeft,
-                        token)));
-                if (whitespace && (line.Fragments.Count == 0 || line.Width + tokenWidth > maxWidth))
-                {
-                    index = end;
-                    continue;
-                }
-
-                if (!whitespace && tokenWidth > maxWidth)
-                {
-                    foreach (char character in token)
-                        AddMeasured(run, character.ToString());
-                }
-                else
-                {
-                    AddMeasured(run, token);
-                }
-                index = end;
+                    ToFlowDirection(fragment.RightToLeft));
+                dc.DrawText(formatted, new Point(fragment.X, fragment.Y));
             }
         }
-
-        return lines;
     }
 
     /// <summary>
@@ -3051,11 +1741,9 @@ public sealed class SlideCanvas : Control
     /// <summary>
     /// Renders a paragraph that contains OMML math runs using the shared
     /// <see cref="MathBoxRenderPlanner"/> and Avalonia drawing primitives.
-    ///
-    /// HB4: math and text runs are BASELINE-aligned, not top-aligned (mirrors
-    /// the WPF SlideCanvas for parity). We measure every run's ascent (math box
-    /// Ascent, or FormattedText.Baseline for plain text) to find the line's
-    /// shared baseline, then draw every run's top at (baselineY - runAscent).
+    /// Inline baseline geometry comes from
+    /// <see cref="TextLayoutPlanner.PlanInlineBaselineLine"/>; Avalonia retains
+    /// native measurement, glyph construction, brushes, and draw calls.
     /// Marked internal (not private) so FreeP.App.Rendering.Avalonia.Tests can call it directly.
     /// </summary>
     internal static void RenderParaWithMath(
@@ -3063,75 +1751,61 @@ public sealed class SlideCanvas : Control
         ResolvedParagraph para,
         double startX, double startY)
     {
-        // Pass 1: measure each run's ascent to find the line's common baseline.
-        double lineAscent = 0;
         var formatted = new FormattedText?[para.Runs.Count];
         for (int i = 0; i < para.Runs.Count; i++)
         {
             var run = para.Runs[i];
-            if (run.IsMathRun && run.MathLayout is not null)
+            if (!run.IsMathRun && !string.IsNullOrEmpty(run.Text))
             {
-                lineAscent = Math.Max(lineAscent, run.MathLayout.Metrics.Ascent);
-            }
-            else if (!string.IsNullOrEmpty(run.Text))
-            {
-                var ft = BuildSingleRunFormattedTextAt(
+                formatted[i] = BuildSingleRunFormattedTextAt(
                     run,
                     run.Text,
                     flowDirection: ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
                         para.RightToLeft,
                         run.Text)));
-                formatted[i] = ft;
-                lineAscent = Math.Max(lineAscent, ft.Baseline);
             }
         }
 
-        double baselineY = ComputeBaselineY(startY, lineAscent);
-
-        // Pass 2: draw each run with its top placed so its ascent lands on baselineY.
-        var placements = TextLayoutPlanner.PlanRunPlacements(
+        var line = TextLayoutPlanner.PlanInlineBaselineLine(
             para,
             startX,
+            startY,
             0,
-            (run, rightToLeft) => run.IsMathRun && run.MathLayout is not null
-                ? run.MathLayout.Metrics.Width
-                : BuildSingleRunFormattedTextAt(
+            (runIndex, run, rightToLeft) =>
+            {
+                if (run.IsMathRun && run.MathLayout is not null)
+                {
+                    var metrics = run.MathLayout.Metrics;
+                    return new TextInlineRunMeasure(metrics.Width, metrics.Ascent, metrics.Height);
+                }
+
+                double width = BuildSingleRunFormattedTextAt(
                     run,
                     run.Text,
-                    flowDirection: ToFlowDirection(rightToLeft)).Width);
-        foreach (var placement in placements)
+                    flowDirection: ToFlowDirection(rightToLeft)).Width;
+                var text = formatted[runIndex];
+                return new TextInlineRunMeasure(
+                    width,
+                    text?.Baseline ?? 0,
+                    text?.Height ?? 0);
+            });
+        foreach (var placement in line.Runs)
         {
             var run = para.Runs[placement.RunIndex];
             if (run.IsMathRun && run.MathLayout is not null)
             {
-                double runY = ComputeRunTopY(baselineY, run.MathLayout.Metrics.Ascent);
                 var mathOps = MathBoxRenderPlanner.Plan(
-                    run.MathLayout, placement.X, runY, run.Color, run.FontFamily);
+                    run.MathLayout, placement.X, placement.Y, run.Color, run.FontFamily);
                 foreach (var op in mathOps)
                     DrawMathOpAvalonia(dc, op);
             }
             else if (!string.IsNullOrEmpty(run.Text))
             {
                 var ft = formatted[placement.RunIndex]!;
-                double runY = ComputeRunTopY(baselineY, ft.Baseline);
-                dc.DrawText(ft, new Point(placement.X, runY));
+                dc.DrawText(ft, new Point(placement.X, placement.Y));
             }
         }
     }
-
-    /// <summary>
-    /// HB4 pure helper: the shared line baseline (in slide-space DIP) given the
-    /// paragraph's top Y and the max ascent across all its runs (text or math).
-    /// Exposed internal so tests can validate the baseline math without needing
-    /// a live DrawingContext. Mirrors FreeP.App.Rendering.Wpf for parity.
-    /// </summary>
-    internal static double ComputeBaselineY(double startY, double lineAscent) => startY + lineAscent;
-
-    /// <summary>
-    /// HB4 pure helper: the top Y at which a run with the given ascent must be
-    /// drawn so its own baseline lands exactly on <paramref name="baselineY"/>.
-    /// </summary>
-    internal static double ComputeRunTopY(double baselineY, double runAscent) => baselineY - runAscent;
 
     /// <summary>
     /// Draws a single <see cref="MathDrawOp"/> as Avalonia primitives.
@@ -3256,7 +1930,7 @@ public sealed class SlideCanvas : Control
         ResolvedRun run,
         TextStackedGlyphPlacement glyph)
     {
-        var glyphRun = CopyRunWithText(run, glyph.Text);
+        var glyphRun = run.WithText(glyph.Text);
         var glyphParagraph = new ResolvedParagraph
         {
             Runs = new[] { glyphRun }
@@ -3270,26 +1944,6 @@ public sealed class SlideCanvas : Control
 
         dc.DrawText(BuildSingleRunFormattedTextAt(glyphRun, glyph.Text), new Point(glyph.X, glyph.Y));
     }
-
-    private static ResolvedRun CopyRunWithText(ResolvedRun run, string text) =>
-        new()
-        {
-            Text = text,
-            FontFamily = run.FontFamily,
-            FontSizePt = run.FontSizePt,
-            BaselineOffset = run.BaselineOffset,
-            Bold = run.Bold,
-            Italic = run.Italic,
-            Underline = run.Underline,
-            Strikethrough = run.Strikethrough,
-            Color = run.Color,
-            TextFill = run.TextFill,
-            TextOutline = run.TextOutline,
-            TextShadow = run.TextShadow,
-            TextReflection = run.TextReflection,
-            TextGlow = run.TextGlow,
-            TextSoftEdge = run.TextSoftEdge
-        };
 
     private static FormattedText BuildFormattedText(
         ResolvedParagraph para,
@@ -3394,20 +2048,27 @@ public sealed class SlideCanvas : Control
                     GradientOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
                     GradientStops  = BuildGradientStops(g),
                 },
-            ResolvedFill.Gradient g =>
-                new LinearGradientBrush
-                {
-                    StartPoint    = new RelativePoint(
-                        Math.Cos(g.AngleDegrees * Math.PI / 180) >= 0 ? 0 : 1,
-                        Math.Sin(g.AngleDegrees * Math.PI / 180) >= 0 ? 0 : 1,
-                        RelativeUnit.Relative),
-                    EndPoint      = new RelativePoint(
-                        Math.Cos(g.AngleDegrees * Math.PI / 180) >= 0 ? 1 : 0,
-                        Math.Sin(g.AngleDegrees * Math.PI / 180) >= 0 ? 1 : 0,
-                        RelativeUnit.Relative),
-                    GradientStops = BuildGradientStops(g),
-                },
+            ResolvedFill.Gradient g => MakeLinearGradientBrushForText(g),
             _ => Brushes.Black
+        };
+    }
+
+    private static LinearGradientBrush MakeLinearGradientBrushForText(ResolvedFill.Gradient gradient)
+    {
+        var endpoints = GradientFillRenderPlanner.PlanLinearEndpoints(
+            gradient.AngleDegrees,
+            GradientEndpointProfile.AvaloniaTextCorners);
+        return new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(
+                endpoints.Start.X,
+                endpoints.Start.Y,
+                RelativeUnit.Relative),
+            EndPoint = new RelativePoint(
+                endpoints.End.X,
+                endpoints.End.Y,
+                RelativeUnit.Relative),
+            GradientStops = BuildGradientStops(gradient),
         };
     }
 
@@ -3582,28 +2243,11 @@ public sealed class SlideCanvas : Control
     private static GradientStops BuildGradientStops(ResolvedFill.Gradient g, bool easePositions = false)
     {
         var stops = new GradientStops();
-        for (int index = 0; index < g.Stops.Count; index++)
+        foreach (var stop in GradientFillRenderPlanner.ExpandStops(g, easePositions))
         {
-            var start = g.Stops[index];
             stops.Add(new AvGradientStop(
-                Color.FromArgb(start.Alpha, start.Color.R, start.Color.G, start.Color.B),
-                start.Position));
-            if (index == g.Stops.Count - 1)
-                continue;
-
-            var end = g.Stops[index + 1];
-            for (int step = 1; step < 16; step++)
-            {
-                double fraction = step / 16.0;
-                var color = GradientColorInterpolation.InterpolateLinearLight(
-                    start.Color,
-                    end.Color,
-                    easePositions ? GradientColorInterpolation.EasePowerPointPosition(fraction) : fraction);
-                var alpha = (byte)Math.Round(start.Alpha + (end.Alpha - start.Alpha) * fraction);
-                stops.Add(new AvGradientStop(
-                    Color.FromArgb(alpha, color.R, color.G, color.B),
-                    start.Position + (end.Position - start.Position) * fraction));
-            }
+                Color.FromArgb(stop.Alpha, stop.Color.R, stop.Color.G, stop.Color.B),
+                stop.Position));
         }
         return stops;
     }
@@ -3616,13 +2260,17 @@ public sealed class SlideCanvas : Control
         // 180°  = flows west  (right → left):   Start=(1, 0.5), End=(0, 0.5)
         // 270°  = flows north (bottom → top):   Start=(0.5, 1), End=(0.5, 0)
         // Direction vector in screen coords (x right, y down): d = (cos θ, sin θ).
-        double angleRad = g.AngleDegrees * Math.PI / 180.0;
-        double dx = Math.Cos(angleRad);
-        double dy = Math.Sin(angleRad);
+        var endpoints = GradientFillRenderPlanner.PlanLinearEndpoints(g.AngleDegrees);
         return new LinearGradientBrush
         {
-            StartPoint    = new RelativePoint(0.5 - 0.5 * dx, 0.5 - 0.5 * dy, RelativeUnit.Relative),
-            EndPoint      = new RelativePoint(0.5 + 0.5 * dx, 0.5 + 0.5 * dy, RelativeUnit.Relative),
+            StartPoint = new RelativePoint(
+                endpoints.Start.X,
+                endpoints.Start.Y,
+                RelativeUnit.Relative),
+            EndPoint = new RelativePoint(
+                endpoints.End.X,
+                endpoints.End.Y,
+                RelativeUnit.Relative),
             GradientStops = BuildGradientStops(g, easePositions)
         };
     }
@@ -3659,94 +2307,22 @@ public sealed class SlideCanvas : Control
     {
         var fg = Color.FromRgb(pat.ForegroundColor.R, pat.ForegroundColor.G, pat.ForegroundColor.B);
         var bg = Color.FromRgb(pat.BackgroundColor.R, pat.BackgroundColor.G, pat.BackgroundColor.B);
-
-        int tileSize = pat.Preset == "cross" ? 8 : 6;
-        int S = tileSize;
-        var pixels = new byte[S * S * 4]; // BGRA layout
-
-        void FillAll(Color c)
+        var tile = (PatternFillRenderPlan.PixelTile)PatternFillRenderPlanner.Plan(
+            pat.Preset,
+            PatternFillRendererProfile.AvaloniaPixel);
+        var pixels = new byte[tile.Width * tile.Height * 4];
+        for (int index = 0; index < tile.Pixels.Count; index++)
         {
-            for (int i = 0; i < S * S; i++)
-            {
-                int idx = i * 4;
-                pixels[idx    ] = c.B;
-                pixels[idx + 1] = c.G;
-                pixels[idx + 2] = c.R;
-                pixels[idx + 3] = c.A;
-            }
-        }
-
-        void SetPixel(int x, int y, Color c)
-        {
-            if (x < 0 || x >= S || y < 0 || y >= S) return;
-            int idx = (y * S + x) * 4;
-            pixels[idx    ] = c.B;
-            pixels[idx + 1] = c.G;
-            pixels[idx + 2] = c.R;
-            pixels[idx + 3] = c.A;
-        }
-
-        FillAll(bg);
-
-        switch (pat.Preset)
-        {
-            case "horzStripe" or "ltHorz" or "dashHorz":
-                for (int x = 0; x < S; x++) { SetPixel(x, 2, fg); SetPixel(x, 3, fg); }
-                break;
-            case "vertStripe" or "ltVert" or "dashVert":
-                for (int y = 0; y < S; y++) { SetPixel(2, y, fg); SetPixel(3, y, fg); }
-                break;
-            case "pct50":
-                for (int x = 0; x < S; x++)
-                    for (int y = 0; y < S; y++)
-                        if ((x + y) % 2 == 0) SetPixel(x, y, fg);
-                break;
-            case "pct0":
-                FillAll(bg);
-                break;
-            case "pct100":
-                FillAll(fg);
-                break;
-            case "pct25" or "pct30" or "pct5" or "pct10" or "pct20":
-                for (int x = 0; x < S; x++)
-                    for (int y = 0; y < S; y++)
-                        if ((x * 2 + y * 3) % 4 == 0) SetPixel(x, y, fg);
-                break;
-            case "pct40":
-                for (int x = 0; x < S; x++)
-                    for (int y = 0; y < S; y++)
-                        if ((x + y) % 2 == 0) SetPixel(x, y, fg);
-                break;
-            case "pct75" or "pct60" or "pct90":
-                FillAll(fg);
-                for (int x = 0; x < S; x++)
-                    for (int y = 0; y < S; y++)
-                        if ((x + y) % 3 == 0) SetPixel(x, y, bg);
-                break;
-            case "diagStripe" or "ltDnDiag" or "dnDiag":
-                for (int i = 0; i < S; i++) SetPixel(i, i, fg);
-                break;
-            case "upDiag" or "ltUpDiag":
-                for (int i = 0; i < S; i++) SetPixel(i, S - 1 - i, fg);
-                break;
-            case "cross":
-                for (int x = 0; x < S; x++) SetPixel(x, 0, fg);
-                for (int y = 0; y < S; y++) SetPixel(0, y, fg);
-                break;
-            case "smGrid":
-                for (int x = 0; x < S; x++) SetPixel(x, 2, fg);
-                for (int y = 0; y < S; y++) SetPixel(2, y, fg);
-                break;
-            case "diagCross" or "smConfetti" or "wave" or "trellis":
-                for (int i = 0; i < S; i++) { SetPixel(i, i, fg); SetPixel(i, S - 1 - i, fg); }
-                break;
-            default:
-                FillAll(fg);
-                break;
+            var color = tile.Pixels[index] == PatternFillColorRole.Foreground ? fg : bg;
+            int offset = index * 4;
+            pixels[offset] = color.B;
+            pixels[offset + 1] = color.G;
+            pixels[offset + 2] = color.R;
+            pixels[offset + 3] = color.A;
         }
 
         var wb = new WriteableBitmap(
-            new PixelSize(S, S),
+            new PixelSize(tile.Width, tile.Height),
             new Vector(96, 96),
             PixelFormat.Bgra8888,
             AlphaFormat.Premul);
@@ -3758,8 +2334,8 @@ public sealed class SlideCanvas : Control
         {
             TileMode        = TileMode.Tile,
             Stretch         = Stretch.None,
-            SourceRect      = new RelativeRect(new Size(S, S), RelativeUnit.Absolute),
-            DestinationRect = new RelativeRect(new Size(S, S), RelativeUnit.Absolute),
+            SourceRect      = new RelativeRect(new Size(tile.Width, tile.Height), RelativeUnit.Absolute),
+            DestinationRect = new RelativeRect(new Size(tile.Width, tile.Height), RelativeUnit.Absolute),
         };
     }
 
@@ -3878,129 +2454,95 @@ public sealed class SlideCanvas : Control
     // shape's EMU bounds through the canvas's live CurrentTransform instead of reading a real
     // control's layout rect.
     //
-    // Scope delivered: the canvas's own name/role, each shape's name (falling back through
-    // Name -> AlternativeTextTitle -> AlternativeText -> a generic "Shape N"), a role hint
-    // derived from SlideShapeKind, selection state, and SelectionChanged notifications routed
-    // from EditingSession. NOT delivered (tracked as follow-up, same as GridView's own
-    // documented gaps): TextPattern-equivalent access to a shape's rich text runs, table cell
-    // structure inside a Table shape, and per-data-point structure inside a Chart shape.
+    // PresentationCanvasAutomationSession owns the virtual tree, identity, roles, selection
+    // snapshots, deltas, and focus intent. This peer only translates that contract to Avalonia
+    // providers/property notifications and maps presentation coordinates to top-level bounds.
     private sealed class SlideCanvasAutomationPeer(SlideCanvas owner) :
         ControlAutomationPeer(owner),
         ISelectionProvider
     {
         private readonly Dictionary<uint, SlideShapeAutomationPeer> _shapePeers = new();
-        private IReadOnlyList<uint> _lastNotifiedSelection = owner._editingSession?.SelectedShapeIds ?? Array.Empty<uint>();
 
         private SlideCanvas OwnerCanvas => (SlideCanvas)Owner;
 
-        public bool CanSelectMultiple => true;
+        public bool CanSelectMultiple => OwnerCanvas._canvasAutomation.CanSelectMultiple;
 
-        public bool IsSelectionRequired => false;
+        public bool IsSelectionRequired => OwnerCanvas._canvasAutomation.IsSelectionRequired;
 
         public IReadOnlyList<AutomationPeer> GetSelection()
         {
-            var slide = OwnerCanvas.Slide;
-            var session = OwnerCanvas._editingSession;
-            if (slide is null || session is null || session.SelectedShapeIds.Count == 0)
-                return Array.Empty<AutomationPeer>();
-
-            var selected = new List<AutomationPeer>();
-            foreach (var shapeId in session.SelectedShapeIds)
-            {
-                if (TryFindShape(slide, shapeId, out _))
-                    selected.Add(GetOrCreateShapePeer(shapeId));
-            }
-
-            return selected;
+            var descriptors = OwnerCanvas._canvasAutomation.ProjectSelection(
+                OwnerCanvas.Slide,
+                OwnerCanvas._editingSession?.SelectedShapeIds);
+            return descriptors
+                .Select(descriptor => (AutomationPeer)GetOrCreateShapePeer(descriptor.ShapeId!.Value))
+                .ToArray();
         }
 
         protected override IReadOnlyList<AutomationPeer> GetChildrenCore()
         {
-            var slide = OwnerCanvas.Slide;
-            if (slide is null || slide.Shapes.Count == 0)
-                return Array.Empty<AutomationPeer>();
-
-            var children = new List<AutomationPeer>(slide.Shapes.Count);
-            var liveIds = new HashSet<uint>();
-            foreach (var shape in slide.Shapes)
-            {
-                if (shape.IsHidden) continue;
-                liveIds.Add(shape.Id);
-                children.Add(GetOrCreateShapePeer(shape.Id));
-            }
-
-            // Evict peers for shapes that no longer exist on the current slide (deleted, or the
-            // slide itself changed) so the cache does not grow without bound across a long
-            // editing session, mirroring the WPF twin's eviction (itself mirroring
-            // GridViewAutomationPeer's viewport eviction).
-            foreach (var staleId in _shapePeers.Keys.Where(id => !liveIds.Contains(id)).ToList())
-                _shapePeers.Remove(staleId);
-
-            return children;
+            var descriptors = OwnerCanvas._canvasAutomation.ProjectShapes(
+                OwnerCanvas.Slide,
+                OwnerCanvas._editingSession?.SelectedShapeIds);
+            return PresentationAutomationPeerCache.Synchronize(
+                descriptors,
+                _shapePeers,
+                shapeId => new SlideShapeAutomationPeer(this, shapeId));
         }
 
-        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Pane;
+        protected override AutomationControlType GetAutomationControlTypeCore() =>
+            ToNativeRole(OwnerCanvas._canvasAutomation.ProjectCanvas(
+                OwnerCanvas.Presentation,
+                OwnerCanvas.Slide).Role);
 
-        protected override string GetClassNameCore() => nameof(SlideCanvas);
+        protected override string GetClassNameCore() =>
+            OwnerCanvas._canvasAutomation.ProjectCanvas(
+                OwnerCanvas.Presentation,
+                OwnerCanvas.Slide).ClassName;
 
-        protected override string GetNameCore()
-        {
-            var presentation = OwnerCanvas.Presentation;
-            var slide = OwnerCanvas.Slide;
-            if (presentation is not null && slide is not null)
-            {
-                var index = presentation.Slides.IndexOf(slide);
-                if (index >= 0)
-                    return $"Slide {index + 1} canvas";
-            }
-
-            return "Slide canvas";
-        }
+        protected override string GetNameCore() =>
+            OwnerCanvas._canvasAutomation.ProjectCanvas(
+                OwnerCanvas.Presentation,
+                OwnerCanvas.Slide).Name;
 
         protected override bool IsControlElementCore() => true;
 
         protected override bool IsContentElementCore() => true;
 
+        internal static AutomationControlType ToNativeRole(PresentationCanvasAutomationRole role) =>
+            role switch
+            {
+                PresentationCanvasAutomationRole.Canvas => AutomationControlType.Pane,
+                PresentationCanvasAutomationRole.Image => AutomationControlType.Image,
+                PresentationCanvasAutomationRole.DataGrid => AutomationControlType.DataGrid,
+                _ => AutomationControlType.Custom,
+            };
+
         private SlideShapeAutomationPeer GetOrCreateShapePeer(uint shapeId)
-        {
-            if (_shapePeers.TryGetValue(shapeId, out var peer))
-                return peer;
+            => PresentationAutomationPeerCache.GetOrCreate(
+                _shapePeers,
+                shapeId,
+                id => new SlideShapeAutomationPeer(this, id));
 
-            peer = new SlideShapeAutomationPeer(this, shapeId);
-            _shapePeers[shapeId] = peer;
-            return peer;
-        }
-
-        internal bool TryGetShape(uint shapeId, out SlideShape shape)
-        {
-            var slide = OwnerCanvas.Slide;
-            if (slide is not null && TryFindShape(slide, shapeId, out var found))
-            {
-                shape = found;
-                return true;
-            }
-
-            shape = null!;
-            return false;
-        }
-
-        private static bool TryFindShape(Slide slide, uint shapeId, out SlideShape shape)
-        {
-            foreach (var candidate in slide.Shapes)
-            {
-                if (candidate.Id == shapeId)
-                {
-                    shape = candidate;
-                    return true;
-                }
-            }
-
-            shape = null!;
-            return false;
-        }
+        internal bool TryGetShape(
+            uint shapeId,
+            out PresentationCanvasAutomationDescriptor descriptor) =>
+            OwnerCanvas._canvasAutomation.TryProjectShape(
+                OwnerCanvas.Slide,
+                shapeId,
+                OwnerCanvas._editingSession?.SelectedShapeIds,
+                out descriptor);
 
         internal bool IsShapeSelected(uint shapeId) =>
-            OwnerCanvas._editingSession?.SelectedShapeIds.Contains(shapeId) == true;
+            TryGetShape(shapeId, out var descriptor) && descriptor.IsSelected;
+
+        internal bool HasShapeKeyboardFocus(uint shapeId) =>
+            TryGetShape(shapeId, out var descriptor) && descriptor.HasKeyboardFocus;
+
+        internal void RequestSelectionMutation(
+            uint shapeId,
+            PresentationCanvasAutomationSelectionMutation mutation) =>
+            OwnerCanvas._canvasAutomation.RequestSelectionMutation(shapeId, mutation);
 
         /// <summary>
         /// Projects a shape's EMU bounds through the canvas's live slide→screen
@@ -4014,17 +2556,16 @@ public sealed class SlideCanvas : Control
         /// </summary>
         internal Rect GetShapeBoundingRectangle(uint shapeId)
         {
-            if (!TryGetShape(shapeId, out var shape))
+            if (!TryGetShape(shapeId, out var descriptor) ||
+                !OwnerCanvas._canvasAutomation.TryProjectLocalBounds(
+                    descriptor,
+                    OwnerCanvas.CurrentTransform,
+                    out var localBounds))
                 return default;
 
-            var transform = OwnerCanvas.CurrentTransform;
-            var (x1, y1) = transform.SlideToScreen(
-                SlideTransformCore.EmuToDip(shape.OffsetXEmu),
-                SlideTransformCore.EmuToDip(shape.OffsetYEmu));
-            var (x2, y2) = transform.SlideToScreen(
-                SlideTransformCore.EmuToDip(shape.OffsetXEmu + shape.ExtentCxEmu),
-                SlideTransformCore.EmuToDip(shape.OffsetYEmu + shape.ExtentCyEmu));
-            var localRect = new Rect(new Point(x1, y1), new Point(x2, y2));
+            var localRect = new Rect(
+                new Point(localBounds.Left, localBounds.Top),
+                new Point(localBounds.Right, localBounds.Bottom));
 
             var topLevel = TopLevel.GetTopLevel(OwnerCanvas);
             if (topLevel is null)
@@ -4045,22 +2586,18 @@ public sealed class SlideCanvas : Control
         /// <see cref="OnEditingSessionSelectionChangedForAutomation"/> whenever
         /// EditingSession.SelectionChanged fires.
         /// </summary>
-        internal void NotifySelectionChanged()
+        internal void NotifySelectionChanged(PresentationCanvasAutomationSelectionDelta delta)
         {
-            IReadOnlyList<uint> current = OwnerCanvas._editingSession?.SelectedShapeIds ?? Array.Empty<uint>();
-            var previous = _lastNotifiedSelection;
-            _lastNotifiedSelection = current;
-
-            if (current.SequenceEqual(previous))
+            if (!delta.HasChanges && delta.FocusIntent == PresentationCanvasAutomationFocusIntent.None)
                 return;
 
-            foreach (var removedId in previous.Except(current))
+            foreach (var removedId in delta.RemovedShapeIds)
             {
                 if (_shapePeers.TryGetValue(removedId, out var removedPeer))
                     removedPeer.RaisePropertyChangedEvent(SelectionItemPatternIdentifiers.IsSelectedProperty, true, false);
             }
 
-            foreach (var addedId in current.Except(previous))
+            foreach (var addedId in delta.AddedShapeIds)
             {
                 var addedPeer = GetOrCreateShapePeer(addedId);
                 addedPeer.RaisePropertyChangedEvent(SelectionItemPatternIdentifiers.IsSelectedProperty, false, true);
@@ -4076,41 +2613,33 @@ public sealed class SlideCanvas : Control
 
         public ISelectionProvider SelectionContainer => parent;
 
-        public void Select() =>
-            throw new InvalidOperationException("Shape selection is owned by the slide canvas's editing session.");
+        public void Select() => parent.RequestSelectionMutation(
+            shapeId,
+            PresentationCanvasAutomationSelectionMutation.Select);
 
-        public void AddToSelection() =>
-            throw new InvalidOperationException("Shape selection is owned by the slide canvas's editing session.");
+        public void AddToSelection() => parent.RequestSelectionMutation(
+            shapeId,
+            PresentationCanvasAutomationSelectionMutation.Add);
 
-        public void RemoveFromSelection() =>
-            throw new InvalidOperationException("Shape selection is owned by the slide canvas's editing session.");
+        public void RemoveFromSelection() => parent.RequestSelectionMutation(
+            shapeId,
+            PresentationCanvasAutomationSelectionMutation.Remove);
 
         protected override string GetNameCore()
-        {
-            if (!parent.TryGetShape(shapeId, out var shape))
-                return string.Empty;
-            if (!string.IsNullOrWhiteSpace(shape.Name))
-                return shape.Name;
-            if (!string.IsNullOrWhiteSpace(shape.AlternativeTextTitle))
-                return shape.AlternativeTextTitle;
-            if (!string.IsNullOrWhiteSpace(shape.AlternativeText))
-                return shape.AlternativeText;
-            return $"Shape {shapeId}";
-        }
+            => parent.TryGetShape(shapeId, out var descriptor) ? descriptor.Name : string.Empty;
 
         protected override AutomationControlType GetAutomationControlTypeCore() =>
-            parent.TryGetShape(shapeId, out var shape) ? ShapeKindToControlType(shape.Kind) : AutomationControlType.Custom;
+            parent.TryGetShape(shapeId, out var descriptor)
+                ? SlideCanvasAutomationPeer.ToNativeRole(descriptor.Role)
+                : AutomationControlType.Custom;
 
-        private static AutomationControlType ShapeKindToControlType(SlideShapeKind kind) => kind switch
-        {
-            SlideShapeKind.Picture => AutomationControlType.Image,
-            SlideShapeKind.Table   => AutomationControlType.DataGrid,
-            _                      => AutomationControlType.Custom
-        };
+        protected override string GetClassNameCore() =>
+            parent.TryGetShape(shapeId, out var descriptor)
+                ? descriptor.ClassName
+                : PresentationCanvasAutomationSession.ShapeClassName;
 
-        protected override string GetClassNameCore() => "SlideShape";
-
-        protected override string GetAutomationIdCore() => $"Shape_{shapeId}";
+        protected override string GetAutomationIdCore() =>
+            parent.TryGetShape(shapeId, out var descriptor) ? descriptor.AutomationId : string.Empty;
 
         protected override Rect GetBoundingRectangleCore() => parent.GetShapeBoundingRectangle(shapeId);
 
@@ -4138,7 +2667,7 @@ public sealed class SlideCanvas : Control
         protected override string GetAccessKeyCore() => string.Empty;
 
         protected override string GetHelpTextCore() =>
-            parent.TryGetShape(shapeId, out var shape) ? shape.AlternativeText : string.Empty;
+            parent.TryGetShape(shapeId, out var descriptor) ? descriptor.HelpText : string.Empty;
 
         protected override string GetItemStatusCore() => string.Empty;
 
@@ -4146,7 +2675,7 @@ public sealed class SlideCanvas : Control
 
         protected override AutomationPeer? GetLabeledByCore() => null;
 
-        protected override bool HasKeyboardFocusCore() => IsSelected;
+        protected override bool HasKeyboardFocusCore() => parent.HasShapeKeyboardFocus(shapeId);
 
         protected override bool IsContentElementCore() => true;
 

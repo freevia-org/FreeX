@@ -15,6 +15,7 @@ screenshots_file="$output/screenshot-names.txt"
 manifest="$output/results.json"
 owner_id=""
 owner_title=""
+. "$(dirname "${BASH_SOURCE[0]}")/ProbeScriptSupport.sh"
 required_ids=(
   "visible-window-discovery"
   "transformed-editor-entry-and-caret"
@@ -38,33 +39,6 @@ row = {"id": result_id, "category": "physical-x11-transformed-table-cell-edit", 
 with open(path, "a", encoding="utf-8") as handle:
     handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 PY
-}
-
-track_screenshot() { printf '%s\n' "$1" >> "$screenshots_file"; }
-capture() {
-  local name="$1"
-  command -v scrot >/dev/null 2>&1 || return 1
-  scrot -o "$output/$name" >/dev/null 2>&1 || return 1
-  [[ -s "$output/$name" ]] || return 1
-  track_screenshot "$name"
-}
-focus_owner() {
-  timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool windowactivate --sync "$owner_id" >/dev/null 2>&1 || true
-  timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool windowfocus "$owner_id" >/dev/null 2>&1 || true
-  sleep 0.12
-}
-send_owner_key() {
-  focus_owner
-  timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool key --clearmodifiers --delay "$input_delay_ms" "$@"
-  sleep "$settle_seconds"
-}
-capture_window_state() {
-  local name="$1"
-  {
-    printf 'owner-window-id=%s\nowner-window-title=%s\n' "$owner_id" "$owner_title"
-    printf 'active-window=%s\nfocus-window=%s\n' "$(xdotool getactivewindow 2>/dev/null || true)" "$(xdotool getwindowfocus 2>/dev/null || true)"
-    printf 'wmctrl-list-begin\n'; wmctrl -l 2>/dev/null || true; printf 'wmctrl-list-end\n'
-  } > "$output/$name"
 }
 
 inspect_pptx() {
@@ -115,7 +89,7 @@ PY
 save_checkpoint() {
   local prefix="$1" expected="$2"
   local temporary="$output/.$prefix.pptx.tmp" inspect="$output/.$prefix.json.tmp"
-  send_owner_key ctrl+s || return 1
+  probe_send_owner_key ctrl+s || return 1
   for _ in $(seq 1 "$save_attempts"); do
     if cp "$document_path" "$temporary" 2>"$output/$prefix-inspection-error.txt" &&
        inspect_pptx "$temporary" "$inspect" 2>>"$output/$prefix-inspection-error.txt" &&
@@ -174,9 +148,9 @@ if (( ${#visible_owner_ids[@]} == 0 )); then
   record "visible-window-discovery" "failed" "No visible FreeP owner matched the X11 precondition." window-discovery-error.txt
   exit 1
 fi
-owner_id="${visible_owner_ids[${#visible_owner_ids[@]}-1]}"; owner_title="$(xdotool getwindowname "$owner_id" 2>/dev/null || true)"; focus_owner
-capture baseline.png && baseline_capture=true || baseline_capture=false
-capture_window_state owner-discovery-state.txt
+owner_id="${visible_owner_ids[${#visible_owner_ids[@]}-1]}"; owner_title="$(xdotool getwindowname "$owner_id" 2>/dev/null || true)"; probe_focus_owner
+probe_capture baseline.png && baseline_capture=true || baseline_capture=false
+probe_capture_window_state owner-discovery-state.txt
 printf 'owner-window-id=%s\nowner-window-title=%s\nexpected-fixture-filename=%s\nbaseline-package-valid=%s\nbaseline-screenshot-captured=%s\n' "$owner_id" "$owner_title" "$expected_document_name" "$baseline_ok" "$baseline_capture" > "$output/visible-window-discovery-proof.txt"
 if $baseline_ok && $baseline_capture && [[ "$owner_title" == *"$expected_document_name"* ]]; then
   record "visible-window-discovery" "passed" "Focused visible FreeP window, deterministic transformed-table fixture title, screenshot, and exact baseline transform." visible-window-discovery-proof.txt owner-discovery-state.txt baseline.png baseline-package-inspection.json
@@ -195,14 +169,14 @@ entry_y=$((slide_y + (slide_height_px * entry_y_dip * 9525 + slide_height_emu / 
 commit_x=$((slide_x + slide_width_px - 24)); commit_y=$((slide_y + slide_height_px - 24))
 printf 'owner-geometry-begin\n%s\nowner-geometry-end\ntransformed-first-cell-entry-dip=%s,%s\nentry-outside-untransformed-top-left=true\n' "$geometry" "$entry_x_dip" "$entry_y_dip" > "$output/table-cell-pointer-calibration.txt"
 
-focus_owner; xdotool mousemove --sync "$entry_x" "$entry_y"; xdotool click --clearmodifiers --repeat 2 --delay 120 1; sleep "$settle_seconds"; capture transformed-editor-entry.png; capture_window_state transformed-editor-entry-state.txt
-send_owner_key ctrl+a; xdotool type --clearmodifiers --delay "$input_delay_ms" 'Typed transformed cell text'; sleep "$settle_seconds"; capture transformed-editor-input.png; capture_window_state transformed-editor-input-state.txt
+probe_focus_owner; xdotool mousemove --sync "$entry_x" "$entry_y"; xdotool click --clearmodifiers --repeat 2 --delay 120 1; sleep "$settle_seconds"; probe_capture transformed-editor-entry.png; probe_capture_window_state transformed-editor-entry-state.txt
+probe_send_owner_key ctrl+a; xdotool type --clearmodifiers --delay "$input_delay_ms" 'Typed transformed cell text'; sleep "$settle_seconds"; probe_capture transformed-editor-input.png; probe_capture_window_state transformed-editor-input-state.txt
 if [[ -s "$output/transformed-editor-entry.png" && -s "$output/transformed-editor-input.png" ]]; then record "transformed-editor-entry-and-caret" "passed" "Double-clicked a point inside the rotated/flipped first table cell; focused editor and selection/input screenshots captured." table-cell-pointer-calibration.txt transformed-editor-entry.png transformed-editor-entry-state.txt transformed-editor-input.png transformed-editor-input-state.txt; else record "transformed-editor-entry-and-caret" "failed" "Transformed table-cell editor entry or input capture was missing." table-cell-pointer-calibration.txt transformed-editor-entry-state.txt; fi
 
-xdotool mousemove --sync "$commit_x" "$commit_y"; xdotool click --clearmodifiers 1; sleep "$settle_seconds"; capture transformed-editor-committed.png; capture_window_state transformed-editor-committed-state.txt
+xdotool mousemove --sync "$commit_x" "$commit_y"; xdotool click --clearmodifiers 1; sleep "$settle_seconds"; probe_capture transformed-editor-committed.png; probe_capture_window_state transformed-editor-committed-state.txt
 if save_checkpoint after-commit 'Typed transformed cell text'; then record "transformed-editor-typing-selection-commit" "passed" "Real X11 selection replacement, typing, outside-pointer commit, and exact persisted transformed-cell text completed." transformed-editor-input.png transformed-editor-committed.png transformed-editor-committed-state.txt; record "saved-transformed-table-package" "passed" "Saved PPTX contains exact transformed-cell text, original table geometry, 30 degree rotation, and both flips." after-commit.json after-commit.pptx; else record "transformed-editor-typing-selection-commit" "failed" "Typing or outside-pointer commit did not produce exact transformed-cell text." transformed-editor-input.png transformed-editor-committed.png transformed-editor-committed-state.txt; record "saved-transformed-table-package" "failed" "Saved PPTX did not satisfy exact transformed table text/geometry/rotation/flip assertions." after-commit-inspection-error.txt; fi
 
-focus_owner; xdotool mousemove --sync "$entry_x" "$entry_y"; xdotool click --clearmodifiers --repeat 2 --delay 120 1; sleep "$settle_seconds"; send_owner_key ctrl+a; xdotool type --clearmodifiers --delay "$input_delay_ms" 'Discarded transformed text'; sleep "$settle_seconds"; capture transformed-editor-canceled.png
-timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$owner_id" Escape; sleep "$settle_seconds"; capture transformed-editor-after-escape.png; capture_window_state transformed-editor-cancel-state.txt
+probe_focus_owner; xdotool mousemove --sync "$entry_x" "$entry_y"; xdotool click --clearmodifiers --repeat 2 --delay 120 1; sleep "$settle_seconds"; probe_send_owner_key ctrl+a; xdotool type --clearmodifiers --delay "$input_delay_ms" 'Discarded transformed text'; sleep "$settle_seconds"; probe_capture transformed-editor-canceled.png
+timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$owner_id" Escape; sleep "$settle_seconds"; probe_capture transformed-editor-after-escape.png; probe_capture_window_state transformed-editor-cancel-state.txt
 if save_checkpoint after-cancel 'Typed transformed cell text'; then record "escape-cancels-and-preserves-package" "passed" "Second real transformed table-cell edit was canceled with Escape; exact committed text, geometry, rotation, and flips remained unchanged." transformed-editor-canceled.png transformed-editor-after-escape.png transformed-editor-cancel-state.txt after-cancel.json; else record "escape-cancels-and-preserves-package" "failed" "Escape did not preserve the exact committed transformed table package." transformed-editor-canceled.png transformed-editor-after-escape.png transformed-editor-cancel-state.txt after-cancel-inspection-error.txt; fi
 exit 0

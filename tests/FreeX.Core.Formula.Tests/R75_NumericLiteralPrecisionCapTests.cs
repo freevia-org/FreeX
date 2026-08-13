@@ -10,8 +10,8 @@ namespace FreeX.Core.Formula.Tests;
 /// sites was never capped to Excel's 15-significant-digit storage precision, so a literal over 15
 /// significant digits (e.g. 1234567890123456, 16 digits) stayed as the raw 16-digit double.Parse
 /// result instead of Excel's truncated-to-15-sig-digit storage value (1234567890123450). Fixed by
-/// capping every NumberNode literal via CapLiteralToExcel15SigDigits (Excel truncates -- zeroes --
-/// the excess low-order digits unconditionally, it does not round them).
+/// capping every NumberNode literal via <see cref="ExcelNumericPrecision"/> (Excel truncates --
+/// zeroes -- excess low-order integer digits unconditionally, it does not round them).
 /// </summary>
 public sealed class R75_NumericLiteralPrecisionCapTests
 {
@@ -50,6 +50,14 @@ public sealed class R75_NumericLiteralPrecisionCapTests
         var (workbook, sheet) = MakeSheet();
 
         _eval.Evaluate("=0.1", sheet, workbook).Should().Be(new NumberValue(0.1));
+    }
+
+    [Fact]
+    public void TinyLiteral_RemainsFiniteAndNonzero()
+    {
+        var (workbook, sheet) = MakeSheet();
+
+        _eval.Evaluate("=5E-200", sheet, workbook).Should().Be(new NumberValue(5e-200));
     }
 
     [Fact]

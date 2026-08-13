@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
 using Free.Shared.AppServices;
+using FreeX.App.Presentation.Editing;
 using FreeX.App.UI;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -153,7 +154,7 @@ public sealed class R54_ClipboardMarqueeAndCutMoveTests
 
     private sealed class MainWindowHarness : IDisposable
     {
-        private readonly FieldInfo _internalClipboardField;
+        private readonly FieldInfo _clipboardSessionField;
         private readonly MethodInfo _selectSingleSheetTab;
         private readonly MethodInfo _updateViewport;
         private readonly MethodInfo _tryExecuteEditCells;
@@ -187,9 +188,9 @@ public sealed class R54_ClipboardMarqueeAndCutMoveTests
             // handlers actually use.
             Workbook = workbookRef.Current;
 
-            _internalClipboardField = typeof(MainWindow)
-                .GetField("_internalClipboard", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_internalClipboard");
+            _clipboardSessionField = typeof(MainWindow)
+                .GetField("_workbookClipboardSession", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_workbookClipboardSession");
             _selectSingleSheetTab = typeof(MainWindow)
                 .GetMethod("SelectSingleSheetTab", BindingFlags.Instance | BindingFlags.NonPublic, [typeof(SheetId)])
                 ?? throw new MissingMethodException(nameof(MainWindow), "SelectSingleSheetTab");
@@ -207,7 +208,8 @@ public sealed class R54_ClipboardMarqueeAndCutMoveTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteClearSelection");
         }
 
-        public bool HasInternalClipboard => _internalClipboardField.GetValue(Window) is not null;
+        public bool HasInternalClipboard =>
+            ((WorkbookClipboardSession)_clipboardSessionField.GetValue(Window)!).HasContent;
 
         public void SetSelectedRange(GridRange range)
         {

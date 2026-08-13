@@ -10,6 +10,17 @@ public enum DropCapDialogPosition
     InMargin
 }
 
+public enum DropCapOptionsDialogField
+{
+    Position,
+    None,
+    Dropped,
+    InMargin,
+    Font,
+    LinesToDrop,
+    DistanceFromText,
+}
+
 public sealed record DropCapOptionsInitialState(
     int PositionIndex,
     int FontIndex,
@@ -46,6 +57,27 @@ public static class DropCapOptionsDialogPlanner
     public const string LinesToDropLabel = "Lines to drop (1-10):";
     public const string DistanceFromTextLabel = "Distance from text (pt):";
     public const string CurrentFontLabel = "(Current font)";
+    public const string AutomationId = "DropCapOptionsDialog";
+    public const string NoneAutomationId = "DropCapNone";
+    public const string DroppedAutomationId = "DropCapDropped";
+    public const string InMarginAutomationId = "DropCapInMargin";
+    public const string FontAutomationId = "DropCapFont";
+    public const string LinesAutomationId = "DropCapLines";
+    public const string DistanceAutomationId = "DropCapDistance";
+
+    public static DialogSurfaceSpec<DropCapOptionsDialogField> Surface { get; } = new(
+        Title,
+        AutomationId,
+        Title,
+        [
+            new(DropCapOptionsDialogField.Position, PositionLabel, "DropCapPositionGroup", "Drop cap position"),
+            new(DropCapOptionsDialogField.None, NoneLabel, NoneAutomationId, "No drop cap"),
+            new(DropCapOptionsDialogField.Dropped, DroppedLabel, DroppedAutomationId, "Dropped drop cap"),
+            new(DropCapOptionsDialogField.InMargin, InMarginLabel, InMarginAutomationId, "Drop cap in margin"),
+            new(DropCapOptionsDialogField.Font, FontLabel, FontAutomationId, "Drop cap font"),
+            new(DropCapOptionsDialogField.LinesToDrop, LinesToDropLabel, LinesAutomationId, "Lines to drop"),
+            new(DropCapOptionsDialogField.DistanceFromText, DistanceFromTextLabel, DistanceAutomationId, "Distance from text"),
+        ]);
 
     public static readonly IReadOnlyList<string> FontNames =
         [CurrentFontLabel, "Arial", "Calibri", "Times New Roman", "Georgia", "Cambria"];

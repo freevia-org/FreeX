@@ -1,0 +1,46 @@
+using System.IO;
+using FluentAssertions;
+
+namespace FreeX.App.Avalonia.Tests;
+
+public sealed class WorkbookApplicationCommandRoutingOwnershipTests
+{
+    [Fact]
+    public void AvaloniaQuickAccessWorksheetAndShortcutRoutesDelegateToPresentationRouter()
+    {
+        var quickAccess = File.ReadAllText(RepoFile("MainWindow.CatalogContextMenus.cs"));
+        var mainWindow = File.ReadAllText(RepoFile("MainWindow.cs"));
+        var bindings = File.ReadAllText(RepoFile("MainWindow.ApplicationCommandRouting.cs"));
+
+        quickAccess.Should().Contain("WorkbookApplicationCommandRouter.TryRouteQuickAccess");
+        quickAccess.Should().NotContain("case QuickAccessToolbarCommandIds.");
+        mainWindow.Should().Contain("WorkbookApplicationCommandRouter.TryRouteWorksheetContextMenu");
+        mainWindow.Should().Contain("WorkbookApplicationCommandRouter.TryRouteShortcut");
+        mainWindow.Should().NotContain("case WorksheetContextMenuAction.Cut:");
+        mainWindow.Should().NotContain("case WorkbookShortcutRoute.");
+        bindings.Should().Contain("WorkbookApplicationCommandBindingFactory.Create(");
+        bindings.Should().Contain("new WorkbookApplicationWorkareaCommandHandlers(");
+        bindings.Should().Contain("new WorkbookApplicationWorkareaCommandEndpointProfile");
+        bindings.Should().Contain("Undo = Handled(");
+        bindings.Should().NotContain("ExecuteWorkbookApplicationWorkareaCommandAsync");
+        bindings.Should().NotContain("WorkbookApplicationCommandIntent.");
+        bindings.Should().NotContain("bindings.Bind(WorkbookApplicationCommandIntent");
+        bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent");
+        bindings.Should().NotContain(".EnsureBound(");
+    }
+
+    [Fact]
+    public void AvaloniaApplicationFrameRoutesUseSharedBindingFactory()
+    {
+        var bindings = File.ReadAllText(RepoFile("MainWindow.ApplicationCommandRouting.cs"));
+
+        bindings.Should().Contain("WorkbookApplicationCommandBindingFactory.Create(");
+        bindings.Should().Contain("new WorkbookApplicationFrameCommandHandlers(");
+        bindings.Should().NotContain("WorkbookApplicationFrameCommandBinder.Bind(");
+        bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent.NewWorkbook");
+        bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent.OpenWorkbook");
+    }
+
+    private static string RepoFile(string fileName) =>
+        TestWorkspaceFileLocator.Find("src", "FreeX.App.Avalonia", fileName);
+}

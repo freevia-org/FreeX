@@ -29,54 +29,6 @@ $homeBordersDropdownOutDir = Join-Path $outDir "home-borders-dropdown-tour"
 $worksheetContextMenuOutDir = Join-Path $outDir "worksheet-context-menu-tour"
 $openWorkbookDialogOutDir = Join-Path $outDir "open-workbook-dialog-tour"
 $saveAsWorkbookDialogOutDir = Join-Path $outDir "save-as-workbook-dialog-tour"
-function Clear-AutoFilterFlyoutEvidenceArtifacts {
-    if (Test-Path -LiteralPath $autoFilterFlyoutOutDir -PathType Container) {
-        Get-ChildItem $autoFilterFlyoutOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
-            Remove-Item -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath (Join-Path $autoFilterFlyoutOutDir "excel_autofilter_flyout_tour_manifest.json") -Force -ErrorAction SilentlyContinue
-    }
-}
-
-function Clear-NumberFormatDropdownEvidenceArtifacts {
-    if (Test-Path -LiteralPath $numberFormatDropdownOutDir -PathType Container) {
-        Get-ChildItem $numberFormatDropdownOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
-            Remove-Item -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath (Join-Path $numberFormatDropdownOutDir "excel_home_number_format_dropdown_tour_manifest.json") -Force -ErrorAction SilentlyContinue
-    }
-}
-
-function Clear-HomeBordersDropdownEvidenceArtifacts {
-    if (Test-Path -LiteralPath $homeBordersDropdownOutDir -PathType Container) {
-        Get-ChildItem $homeBordersDropdownOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
-            Remove-Item -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath (Join-Path $homeBordersDropdownOutDir "excel_home_borders_dropdown_tour_manifest.json") -Force -ErrorAction SilentlyContinue
-    }
-}
-
-function Clear-WorksheetContextMenuEvidenceArtifacts {
-    if (Test-Path -LiteralPath $worksheetContextMenuOutDir -PathType Container) {
-        Get-ChildItem $worksheetContextMenuOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
-            Remove-Item -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath (Join-Path $worksheetContextMenuOutDir "excel_worksheet_context_menu_tour_manifest.json") -Force -ErrorAction SilentlyContinue
-    }
-}
-
-function Clear-OpenWorkbookDialogEvidenceArtifacts {
-    if (Test-Path -LiteralPath $openWorkbookDialogOutDir -PathType Container) {
-        Get-ChildItem $openWorkbookDialogOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
-            Remove-Item -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath (Join-Path $openWorkbookDialogOutDir "excel_open_workbook_dialog_tour_manifest.json") -Force -ErrorAction SilentlyContinue
-    }
-}
-
-function Clear-SaveAsWorkbookDialogEvidenceArtifacts {
-    if (Test-Path -LiteralPath $saveAsWorkbookDialogOutDir -PathType Container) {
-        Get-ChildItem $saveAsWorkbookDialogOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
-            Remove-Item -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath (Join-Path $saveAsWorkbookDialogOutDir "excel_save_as_workbook_dialog_tour_manifest.json") -Force -ErrorAction SilentlyContinue
-    }
-}
-
 $tabNames = @("Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help")
 $script:requestedTabNames = $tabNames
 $script:availableTabNames = @()
@@ -212,21 +164,6 @@ $script:ForegroundWindowOwnershipFailureAction = {
     param($operation, $expectedPid, $expectedTitle, $reason)
     Clear-ScreenshotEvidenceArtifacts
     Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle $reason
-}
-
-function Assert-ForegroundProcessOwnership($expectedPid, $operation = "capture") {
-    $foreground = [ScreenshotWin32]::GetForegroundWindow()
-    if ($foreground -eq [IntPtr]::Zero) {
-        throw "Blocked: no foreground window before $operation."
-    }
-
-    $actualPid = 0
-    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
-    if ($actualPid -ne $expectedPid) {
-        $title = New-Object System.Text.StringBuilder 512
-        [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
-        throw "Blocked: foreground window '$($title.ToString())' (PID $actualPid) does not belong to expected Excel PID $expectedPid before $operation."
-    }
 }
 
 function Set-ExcelForegroundWindow($excelHwnd, $excelPid, $expectedTitle, $operation) {
@@ -477,7 +414,7 @@ function Open-ExcelNativeSaveAsDialog($expectedPid, $expectedTitle) {
 
 function Invoke-ExcelAutoFilterFlyoutTour {
     New-Item -ItemType Directory -Force -Path $autoFilterFlyoutOutDir | Out-Null
-    Clear-AutoFilterFlyoutEvidenceArtifacts
+    Clear-ScreenshotTourEvidenceArtifacts -OutputDirectory $autoFilterFlyoutOutDir -ManifestFileName "excel_autofilter_flyout_tour_manifest.json"
 
     $excelApp = $null
     $workbook = $null
@@ -508,7 +445,7 @@ function Invoke-ExcelAutoFilterFlyoutTour {
 
         Click-ExcelAutoFilterHeaderDropdown $excelApp $worksheet "A1" $excelPid $excelTitle
         Start-Sleep -Milliseconds 900
-        Assert-ForegroundProcessOwnership $excelPid "Excel AutoFilter flyout capture"
+        Assert-ForegroundProcessOwnership $excelPid "Excel AutoFilter flyout capture" "Excel"
 
         $popup = Find-ExcelAutoFilterPopupWindow $excelPid $excelHwnd
         if ($null -eq $popup) {
@@ -541,7 +478,7 @@ function Invoke-ExcelAutoFilterFlyoutTour {
 
         $fileName = "interactive_table_autofilter_dropdown_opened.png"
         $path = Join-Path $autoFilterFlyoutOutDir $fileName
-        Assert-ForegroundProcessOwnership $excelPid "Excel AutoFilter flyout screen capture"
+        Assert-ForegroundProcessOwnership $excelPid "Excel AutoFilter flyout screen capture" "Excel"
         Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
 
         $manifestPath = Join-Path $autoFilterFlyoutOutDir "excel_autofilter_flyout_tour_manifest.json"
@@ -617,7 +554,7 @@ function Invoke-ExcelAutoFilterFlyoutTour {
 
 function Invoke-ExcelNumberFormatDropdownTour {
     New-Item -ItemType Directory -Force -Path $numberFormatDropdownOutDir | Out-Null
-    Clear-NumberFormatDropdownEvidenceArtifacts
+    Clear-ScreenshotTourEvidenceArtifacts -OutputDirectory $numberFormatDropdownOutDir -ManifestFileName "excel_home_number_format_dropdown_tour_manifest.json"
 
     $excelApp = $null
     $workbook = $null
@@ -659,7 +596,7 @@ function Invoke-ExcelNumberFormatDropdownTour {
 
         Expand-ExcelNumberFormatDropdown $excelPid $excelElement $excelTitle
         Start-Sleep -Milliseconds 900
-        Assert-ForegroundProcessOwnership $excelPid "Excel Number Format dropdown capture"
+        Assert-ForegroundProcessOwnership $excelPid "Excel Number Format dropdown capture" "Excel"
 
         $popup = Find-ExcelPopupWindow $excelPid $excelHwnd 120 120
         if ($null -eq $popup) {
@@ -690,7 +627,7 @@ function Invoke-ExcelNumberFormatDropdownTour {
 
         $fileName = "interactive_home_number_format_opened.png"
         $path = Join-Path $numberFormatDropdownOutDir $fileName
-        Assert-ForegroundProcessOwnership $excelPid "Excel Number Format dropdown screen capture"
+        Assert-ForegroundProcessOwnership $excelPid "Excel Number Format dropdown screen capture" "Excel"
         Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
 
         $manifestPath = Join-Path $numberFormatDropdownOutDir "excel_home_number_format_dropdown_tour_manifest.json"
@@ -762,7 +699,7 @@ function Invoke-ExcelNumberFormatDropdownTour {
 
 function Invoke-ExcelHomeBordersDropdownTour {
     New-Item -ItemType Directory -Force -Path $homeBordersDropdownOutDir | Out-Null
-    Clear-HomeBordersDropdownEvidenceArtifacts
+    Clear-ScreenshotTourEvidenceArtifacts -OutputDirectory $homeBordersDropdownOutDir -ManifestFileName "excel_home_borders_dropdown_tour_manifest.json"
 
     $excelApp = $null
     $workbook = $null
@@ -792,7 +729,7 @@ function Invoke-ExcelHomeBordersDropdownTour {
 
         Open-ExcelHomeBordersDropdown $excelPid $excelTitle
         Start-Sleep -Milliseconds 1800
-        Assert-ForegroundProcessOwnership $excelPid "Excel Home Borders dropdown capture"
+        Assert-ForegroundProcessOwnership $excelPid "Excel Home Borders dropdown capture" "Excel"
 
         $popup = Find-ExcelPopupWindow $excelPid $excelHwnd 120 160
         if ($null -eq $popup) {
@@ -817,7 +754,7 @@ function Invoke-ExcelHomeBordersDropdownTour {
 
         $fileName = "interactive_home_borders_opened.png"
         $path = Join-Path $homeBordersDropdownOutDir $fileName
-        Assert-ForegroundProcessOwnership $excelPid "Excel Home Borders dropdown screen capture"
+        Assert-ForegroundProcessOwnership $excelPid "Excel Home Borders dropdown screen capture" "Excel"
         Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
 
         $manifestPath = Join-Path $homeBordersDropdownOutDir "excel_home_borders_dropdown_tour_manifest.json"
@@ -886,7 +823,7 @@ function Invoke-ExcelHomeBordersDropdownTour {
 
 function Invoke-ExcelWorksheetContextMenuTour {
     New-Item -ItemType Directory -Force -Path $worksheetContextMenuOutDir | Out-Null
-    Clear-WorksheetContextMenuEvidenceArtifacts
+    Clear-ScreenshotTourEvidenceArtifacts -OutputDirectory $worksheetContextMenuOutDir -ManifestFileName "excel_worksheet_context_menu_tour_manifest.json"
 
     $excelApp = $null
     $workbook = $null
@@ -916,7 +853,7 @@ function Invoke-ExcelWorksheetContextMenuTour {
 
         Open-ExcelWorksheetContextMenu $excelPid $excelTitle
         Start-Sleep -Milliseconds 900
-        Assert-ForegroundProcessOwnership $excelPid "Excel worksheet context menu capture"
+        Assert-ForegroundProcessOwnership $excelPid "Excel worksheet context menu capture" "Excel"
 
         $popup = Find-ExcelPopupWindow $excelPid $excelHwnd 120 120
         if ($null -eq $popup) {
@@ -947,7 +884,7 @@ function Invoke-ExcelWorksheetContextMenuTour {
 
         $fileName = "interactive_worksheet_cell_context_menu_opened.png"
         $path = Join-Path $worksheetContextMenuOutDir $fileName
-        Assert-ForegroundProcessOwnership $excelPid "Excel worksheet context menu screen capture"
+        Assert-ForegroundProcessOwnership $excelPid "Excel worksheet context menu screen capture" "Excel"
         Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
 
         $manifestPath = Join-Path $worksheetContextMenuOutDir "excel_worksheet_context_menu_tour_manifest.json"
@@ -1019,7 +956,7 @@ function Invoke-ExcelWorksheetContextMenuTour {
 
 function Invoke-ExcelOpenWorkbookDialogTour {
     New-Item -ItemType Directory -Force -Path $openWorkbookDialogOutDir | Out-Null
-    Clear-OpenWorkbookDialogEvidenceArtifacts
+    Clear-ScreenshotTourEvidenceArtifacts -OutputDirectory $openWorkbookDialogOutDir -ManifestFileName "excel_open_workbook_dialog_tour_manifest.json"
 
     $excelApp = $null
     $workbook = $null
@@ -1049,7 +986,7 @@ function Invoke-ExcelOpenWorkbookDialogTour {
 
         Open-ExcelNativeOpenDialog $excelPid $excelTitle
         Start-Sleep -Milliseconds 1200
-        Assert-ForegroundProcessOwnership $excelPid "Excel native Open dialog capture"
+        Assert-ForegroundProcessOwnership $excelPid "Excel native Open dialog capture" "Excel"
 
         $dialog = Find-ExcelOpenWorkbookDialogWindow $excelPid $excelHwnd
         if ($null -eq $dialog) {
@@ -1080,7 +1017,7 @@ function Invoke-ExcelOpenWorkbookDialogTour {
 
         $fileName = "interactive_open_workbook_dialog_opened.png"
         $path = Join-Path $openWorkbookDialogOutDir $fileName
-        Assert-ForegroundProcessOwnership $excelPid "Excel native Open dialog screen capture"
+        Assert-ForegroundProcessOwnership $excelPid "Excel native Open dialog screen capture" "Excel"
         Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
 
         $manifestPath = Join-Path $openWorkbookDialogOutDir "excel_open_workbook_dialog_tour_manifest.json"
@@ -1149,7 +1086,7 @@ function Invoke-ExcelOpenWorkbookDialogTour {
 
 function Invoke-ExcelSaveAsWorkbookDialogTour {
     New-Item -ItemType Directory -Force -Path $saveAsWorkbookDialogOutDir | Out-Null
-    Clear-SaveAsWorkbookDialogEvidenceArtifacts
+    Clear-ScreenshotTourEvidenceArtifacts -OutputDirectory $saveAsWorkbookDialogOutDir -ManifestFileName "excel_save_as_workbook_dialog_tour_manifest.json"
 
     $excelApp = $null
     $workbook = $null
@@ -1179,7 +1116,7 @@ function Invoke-ExcelSaveAsWorkbookDialogTour {
 
         Open-ExcelNativeSaveAsDialog $excelPid $excelTitle
         Start-Sleep -Milliseconds 1200
-        Assert-ForegroundProcessOwnership $excelPid "Excel native Save As dialog capture"
+        Assert-ForegroundProcessOwnership $excelPid "Excel native Save As dialog capture" "Excel"
 
         $dialog = Find-ExcelSaveAsWorkbookDialogWindow $excelPid $excelHwnd
         if ($null -eq $dialog) {
@@ -1210,7 +1147,7 @@ function Invoke-ExcelSaveAsWorkbookDialogTour {
 
         $fileName = "interactive_save_as_workbook_dialog_opened.png"
         $path = Join-Path $saveAsWorkbookDialogOutDir $fileName
-        Assert-ForegroundProcessOwnership $excelPid "Excel native Save As dialog screen capture"
+        Assert-ForegroundProcessOwnership $excelPid "Excel native Save As dialog screen capture" "Excel"
         Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
 
         $manifestPath = Join-Path $saveAsWorkbookDialogOutDir "excel_save_as_workbook_dialog_tour_manifest.json"
@@ -1425,97 +1362,6 @@ function Resolve-ExcelAvailableRibbonTabs {
 
 Resolve-ExcelAvailableRibbonTabs
 
-function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
-    if ($null -eq $widthSpec.WindowLogicalWidth) {
-        [ScreenshotWin32]::ShowWindow($windowHandle, 3) | Out-Null
-        Set-ExcelForegroundWindow $windowHandle $wpid $expectedTitle "window resize capture setup"
-        return
-    }
-
-    $physicalWidth = [int]([Math]::Ceiling([double]$widthSpec.WindowLogicalWidth * $scale))
-    $physicalHeight = [int]([Math]::Ceiling($windowLogicalHeight * $scale))
-    [ScreenshotWin32]::ShowWindow($windowHandle, 1) | Out-Null
-    Start-Sleep -Milliseconds 200
-    [ScreenshotWin32]::SetWindowPos($windowHandle, [IntPtr]::Zero, 0, 0, $physicalWidth, $physicalHeight, 0) | Out-Null
-    Set-ExcelForegroundWindow $windowHandle $wpid $expectedTitle "window resize capture setup"
-}
-
-function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect, $captureLogicalHeight, $capturePhysicalHeight, $widths, $files, $expectedPid, $expectedTitle) {
-    $manifestPath = Join-Path $scriptOutDir "screenshot_manifest.json"
-    $plannedCaptureCount = $script:availableTabNames.Count * $widths.Count
-    if ($files.Count -ne $plannedCaptureCount) {
-        Clear-ScreenshotEvidenceArtifacts
-        throw "Blocked: captured $($files.Count) screenshot(s), expected $plannedCaptureCount. Discarded incomplete evidence matrix."
-    }
-
-    $skippedCaptures = @()
-    foreach ($widthSpec in $widths) {
-        foreach ($tabName in $script:skippedTabNames) {
-            $safe = $tabName -replace '[^a-zA-Z0-9_]','_'
-            $skippedCaptures += [pscustomobject]@{
-                CaptureKey = "ribbon:$($widthSpec.Label):$safe"
-                PairKey = "ribbon:$($widthSpec.Label):$safe"
-                EvidenceSubject = "excel"
-                CounterpartSubject = "freex"
-                CounterpartFileName = "ribbon_$($widthSpec.Label)_$safe.png"
-                Tab = $tabName
-                TabFileName = $safe
-                WidthLabel = $widthSpec.Label
-                WindowLogicalWidth = $widthSpec.WindowLogicalWidth
-                EvidencePurpose = $widthSpec.EvidencePurpose
-                CaptureStatus = "skipped-unavailable-excel-tab"
-                SkipReason = "The requested Excel ribbon tab was not exposed by this installed Excel UI/profile during preflight tab discovery."
-            }
-        }
-    }
-
-    [pscustomobject]@{
-        Tool = $toolName
-        EvidenceFamily = "ribbon"
-        EvidenceSubject = "excel"
-        EvidenceApp = "Microsoft Excel"
-        OutputDirectory = $scriptOutDir
-        OutputNaming = "excel_<WidthLabel>_<RibbonTab>.png"
-        CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
-        WidthSource = "RibbonScreenshotTourPlanner.DefaultWidths"
-        PlannedCaptureCount = $plannedCaptureCount
-        ActualCaptureCount = $files.Count
-        CaptureStatus = $(if ($script:skippedTabNames.Count -gt 0) { "complete-with-skipped-unavailable-tabs" } else { "complete" })
-        CaptureMethod = "CopyFromScreen-window-rectangle-top-band"
-        ForegroundGuard = [pscustomobject]@{
-            Required = $true
-            ExpectedProcessId = $expectedPid
-            ExpectedWindowTitle = $expectedTitle
-            Policy = "Abort and clear current PNG/manifest evidence unless the expected process and window title own the foreground window immediately before global input and screen capture."
-        }
-        Pairing = [pscustomobject]@{
-            PairKeyPattern = "ribbon:<WidthLabel>:<TabFileName>"
-            CounterpartSubject = "freex"
-            CounterpartTool = "screenshot_ribbon.ps1"
-            CounterpartOutputNaming = "ribbon_<WidthLabel>_<RibbonTab>.png"
-        }
-        WindowBounds = [pscustomobject]@{
-            Left = $windowRect.Left
-            Top = $windowRect.Top
-            Right = $windowRect.Right
-            Bottom = $windowRect.Bottom
-            Width = $windowRect.Right - $windowRect.Left
-            Height = $windowRect.Bottom - $windowRect.Top
-        }
-        CaptureLogicalHeight = $captureLogicalHeight
-        CapturePhysicalHeight = $capturePhysicalHeight
-        Widths = $widths
-        RequestedTabs = $script:requestedTabNames
-        Tabs = $script:availableTabNames
-        SkippedTabs = $script:skippedTabNames
-        SkippedCaptures = $skippedCaptures
-        Limitations = $captureLimitations
-        InteractiveCapturePlan = $interactiveCapturePlan
-        Captures = $files
-    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
-    Write-Host "Saved $manifestPath"
-}
-
 function Screenshot-Tab($tabName, $widthSpec) {
     $tabEl = Find-ExcelRibbonTab $tabName
     if ($tabEl -eq $null) {
@@ -1580,7 +1426,10 @@ function Screenshot-Tab($tabName, $widthSpec) {
 
 foreach ($widthSpec in $captureWidths) {
     Write-Host "Capturing Excel ribbon width '$($widthSpec.Label)' ($($widthSpec.EvidencePurpose))"
-    Set-CaptureWindowWidth $hwnd $widthSpec
+    Set-ScreenshotCaptureWindowWidth $hwnd $widthSpec $scale $windowLogicalHeight {
+        param($windowHandle)
+        Set-ExcelForegroundWindow $windowHandle $wpid $expectedTitle "window resize capture setup"
+    }
 
     foreach ($tabName in $script:availableTabNames) {
         Screenshot-Tab $tabName $widthSpec
@@ -1589,7 +1438,29 @@ foreach ($widthSpec in $captureWidths) {
 
 $finalRect = New-Object ScreenshotWin32+RECT
 [ScreenshotWin32]::GetWindowRect($hwnd, [ref]$finalRect) | Out-Null
-Write-ScreenshotEvidenceManifest "screenshot_excel.ps1" $outDir $finalRect 300 $captureH $captureWidths $script:capturedFiles $wpid $expectedTitle
+Write-RibbonScreenshotEvidenceManifest `
+    -ToolName "screenshot_excel.ps1" `
+    -OutputDirectory $outDir `
+    -WindowRect $finalRect `
+    -CaptureLogicalHeight 300 `
+    -CapturePhysicalHeight $captureH `
+    -Widths $captureWidths `
+    -Captures $script:capturedFiles `
+    -ExpectedProcessId $wpid `
+    -ExpectedWindowTitle $expectedTitle `
+    -EvidenceSubject "excel" `
+    -EvidenceApp "Microsoft Excel" `
+    -OutputNaming "excel_<WidthLabel>_<RibbonTab>.png" `
+    -CounterpartSubject "freex" `
+    -CounterpartTool "screenshot_ribbon.ps1" `
+    -CounterpartOutputNaming "ribbon_<WidthLabel>_<RibbonTab>.png" `
+    -RequestedTabs $script:requestedTabNames `
+    -Tabs $script:availableTabNames `
+    -SkippedTabs $script:skippedTabNames `
+    -SkippedCaptureStatus "skipped-unavailable-excel-tab" `
+    -SkippedCaptureReason "The requested Excel ribbon tab was not exposed by this installed Excel UI/profile during preflight tab discovery." `
+    -Limitations $captureLimitations `
+    -InteractiveCapturePlan $interactiveCapturePlan
 
 # Close Excel gracefully
 $xlProc = Get-Process -Id $wpid -ErrorAction SilentlyContinue

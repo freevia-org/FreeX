@@ -18,7 +18,6 @@ public static class ZoomObjectPropertiesPlanner
     public const double MaxFrameBorderEffectPoints = 4000d;
 
     public const string CommandId = "freep.zoom.format";
-    public const string DialogTitle = "Zoom Format";
     public const int DefaultTransitionDurationMs = 1000;
     public const string InvalidTransitionDurationMessage =
         "Transition duration must be a positive whole number of milliseconds.";
@@ -559,29 +558,27 @@ public static class ZoomObjectPropertiesPlanner
 
         if (!double.TryParse(alphaText?.Trim(), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var alphaPercent)
-            || !double.TryParse(distanceText?.Trim(), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var distancePoints)
+            || !TryParseFrameBorderEffectPoints(distanceText, out var distancePoints)
             || !double.TryParse(directionText?.Trim(), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var directionDegrees)
             || !double.TryParse(scaleText?.Trim(), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var scalePercent)
-            || !double.TryParse(blurText?.Trim(), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var blurPoints)
+            || !TryParseFrameBorderEffectPoints(blurText, out var blurPoints)
             || !double.TryParse(endPositionText?.Trim(), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var endPositionPercent)
-            || !double.IsFinite(alphaPercent) || !double.IsFinite(distancePoints)
+            || !double.IsFinite(alphaPercent)
             || !double.IsFinite(directionDegrees) || !double.IsFinite(scalePercent)
-            || !double.IsFinite(blurPoints) || !double.IsFinite(endPositionPercent)
-            || alphaPercent is < 0 or > 100 || distancePoints is < 0 or > MaxFrameBorderEffectPoints
-            || directionDegrees is < 0 or > 360 || blurPoints is < 0 or > MaxFrameBorderEffectPoints
+            || !double.IsFinite(endPositionPercent)
+            || alphaPercent is < 0 or > 100
+            || directionDegrees is < 0 or > 360
             || scalePercent is < -100 or > 100 || Math.Abs(scalePercent) < 0.01
             || endPositionPercent is < 0 or > 100)
             return false;
 
         normalized = new ZoomFrameBorderReflection(
             checked((int)Math.Round(alphaPercent * 1000d, MidpointRounding.AwayFromZero)),
-            checked((long)Math.Round(blurPoints * 12700d, MidpointRounding.AwayFromZero)),
-            checked((long)Math.Round(distancePoints * 12700d, MidpointRounding.AwayFromZero)),
+            FrameBorderEffectPointsToEmu(blurPoints),
+            FrameBorderEffectPointsToEmu(distancePoints),
             checked((int)Math.Round(directionDegrees * 60000d, MidpointRounding.AwayFromZero)),
             checked((int)Math.Round(scalePercent * 1000d, MidpointRounding.AwayFromZero)),
             checked((int)Math.Round(endPositionPercent * 1000d, MidpointRounding.AwayFromZero)));
@@ -627,24 +624,20 @@ public static class ZoomObjectPropertiesPlanner
         if (!TryNormalizeFrameBorderColor(colorText, out var color)
             || !double.TryParse(alphaText?.Trim(), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var alphaPercent)
-            || !double.TryParse(blurText?.Trim(), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var blurPoints)
-            || !double.TryParse(distanceText?.Trim(), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var distancePoints)
+            || !TryParseFrameBorderEffectPoints(blurText, out var blurPoints)
+            || !TryParseFrameBorderEffectPoints(distanceText, out var distancePoints)
             || !double.TryParse(directionText?.Trim(), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var directionDegrees)
-            || !double.IsFinite(alphaPercent) || !double.IsFinite(blurPoints)
-            || !double.IsFinite(distancePoints) || !double.IsFinite(directionDegrees)
+            || !double.IsFinite(alphaPercent) || !double.IsFinite(directionDegrees)
             || alphaPercent is < 0 or > 100
-            || blurPoints is < 0 or > MaxFrameBorderEffectPoints || distancePoints is < 0 or > MaxFrameBorderEffectPoints
             || directionDegrees is < 0 or > 360)
             return false;
 
         normalized = new ZoomFrameBorderShadow(
             color!,
             checked((int)Math.Round(alphaPercent * 1000d, MidpointRounding.AwayFromZero)),
-            checked((long)Math.Round(blurPoints * 12700d, MidpointRounding.AwayFromZero)),
-            checked((long)Math.Round(distancePoints * 12700d, MidpointRounding.AwayFromZero)),
+            FrameBorderEffectPointsToEmu(blurPoints),
+            FrameBorderEffectPointsToEmu(distancePoints),
             checked((int)Math.Round(directionDegrees * 60000d, MidpointRounding.AwayFromZero)));
         return true;
     }
@@ -681,16 +674,15 @@ public static class ZoomObjectPropertiesPlanner
         if (!TryNormalizeFrameBorderColor(colorText, out var color)
             || !double.TryParse(alphaText?.Trim(), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var alphaPercent)
-            || !double.TryParse(radiusText?.Trim(), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var radiusPoints)
-            || !double.IsFinite(alphaPercent) || !double.IsFinite(radiusPoints)
-            || alphaPercent is < 0 or > 100 || radiusPoints is < 0 or > MaxFrameBorderEffectPoints)
+            || !TryParseFrameBorderEffectPoints(radiusText, out var radiusPoints)
+            || !double.IsFinite(alphaPercent)
+            || alphaPercent is < 0 or > 100)
             return false;
 
         normalized = new ZoomFrameBorderGlow(
             color!,
             checked((int)Math.Round(alphaPercent * 1000d, MidpointRounding.AwayFromZero)),
-            checked((long)Math.Round(radiusPoints * 12700d, MidpointRounding.AwayFromZero)));
+            FrameBorderEffectPointsToEmu(radiusPoints));
         return true;
     }
 
@@ -703,16 +695,25 @@ public static class ZoomObjectPropertiesPlanner
         if (!enabled)
             return true;
 
-        if (!double.TryParse(radiusText?.Trim(), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var radiusPoints)
-            || !double.IsFinite(radiusPoints)
-            || radiusPoints is < 0 or > MaxFrameBorderEffectPoints)
+        if (!TryParseFrameBorderEffectPoints(radiusText, out var radiusPoints))
             return false;
 
         normalized = new ZoomFrameBorderSoftEdge(
-            checked((long)Math.Round(radiusPoints * 12700d, MidpointRounding.AwayFromZero)));
+            FrameBorderEffectPointsToEmu(radiusPoints));
         return true;
     }
+
+    private static bool TryParseFrameBorderEffectPoints(string? text, out double points) =>
+        double.TryParse(
+            text?.Trim(),
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out points)
+        && double.IsFinite(points)
+        && points is >= 0 and <= MaxFrameBorderEffectPoints;
+
+    private static long FrameBorderEffectPointsToEmu(double points) =>
+        checked((long)Math.Round(points * 12700d, MidpointRounding.AwayFromZero));
 
     public static string FormatFrameBorderPatternPreset(ZoomObjectProperties properties) =>
         properties.FrameBorderPattern?.Preset ?? FrameBorderPatternOptions[0];

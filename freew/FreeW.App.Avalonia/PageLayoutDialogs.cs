@@ -1,5 +1,6 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -73,6 +74,31 @@ internal static class PageLayoutDialogChrome
         window.ShowInTaskbar = false;
     }
 
+    internal static void Configure<TField>(
+        Window window,
+        DialogSurfaceSpec<TField> surface,
+        double width)
+        where TField : struct, Enum
+    {
+        Configure(window, surface.Title, width);
+        AutomationProperties.SetAutomationId(window, surface.AutomationId);
+        AutomationProperties.SetName(window, surface.AutomationName);
+    }
+
+    internal static void ApplySurface<TField>(Control control, DialogFieldSurfaceSpec<TField> field)
+        where TField : struct, Enum
+    {
+        AutomationProperties.SetAutomationId(control, field.AutomationId);
+        AutomationProperties.SetName(control, field.AutomationName);
+    }
+
+    internal static void ApplyValidation<TField>(Control control, DialogSurfaceSpec<TField> surface)
+        where TField : struct, Enum
+    {
+        if (surface.ValidationAutomationId is { } automationId)
+            AutomationProperties.SetAutomationId(control, automationId);
+    }
+
     internal static void WireEscape<TResult>(Window window)
     {
         window.KeyDown += (_, e) =>
@@ -119,31 +145,37 @@ internal static class PageLayoutDialogChrome
 public sealed class ColumnsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
+    private readonly ColumnsDialogSession _session;
     private readonly ComboBox _preset;
     private readonly TextBox _count;
     private readonly TextBox _spacing;
     private readonly CheckBox _lineBetween;
     private readonly TextBlock _status = PageLayoutDialogChrome.Status();
-    private readonly double _contentWidthPt;
 
     public ColumnsDialog(PageSettings page)
     {
         ArgumentNullException.ThrowIfNull(page);
-        PageLayoutDialogChrome.Configure(this, ColumnsDialogPlanner.Title, 340);
-        var state = ColumnsDialogPlanner.BuildInitialState(page, DialogCulture);
-        _contentWidthPt = state.ContentWidthPt;
-        _preset = PageLayoutDialogChrome.Combo(ColumnsDialogPlanner.Presets.Select(item => item.Label), state.PresetIndex);
+        var surface = ColumnsDialogPlanner.Surface;
+        _session = new ColumnsDialogSession(page, DialogCulture);
+        PageLayoutDialogChrome.Configure(this, surface, 340);
+        var state = _session.InitialState;
+        _preset = PageLayoutDialogChrome.Combo(_session.Presets.Select(item => item.Label), state.PresetIndex);
         _count = PageLayoutDialogChrome.NumberBox(state.CountText);
         _spacing = PageLayoutDialogChrome.NumberBox(state.SpacingText);
-        _lineBetween = new CheckBox { Content = ColumnsDialogPlanner.LineBetweenLabel, IsChecked = state.LineBetween, Margin = new Thickness(0, 8, 0, 0) };
+        _lineBetween = new CheckBox { Content = surface.Field(ColumnsDialogField.LineBetween).Label, IsChecked = state.LineBetween, Margin = new Thickness(0, 8, 0, 0) };
         AvaloniaCompactDialogChrome.ApplyCheckBox(_lineBetween, PageLayoutDialogChrome.Style);
+        PageLayoutDialogChrome.ApplySurface(_preset, surface.Field(ColumnsDialogField.Preset));
+        PageLayoutDialogChrome.ApplySurface(_count, surface.Field(ColumnsDialogField.Count));
+        PageLayoutDialogChrome.ApplySurface(_spacing, surface.Field(ColumnsDialogField.Spacing));
+        PageLayoutDialogChrome.ApplySurface(_lineBetween, surface.Field(ColumnsDialogField.LineBetween));
+        PageLayoutDialogChrome.ApplyValidation(_status, surface);
         _preset.SelectionChanged += (_, _) =>
-            _count.Text = ColumnsDialogPlanner.ColumnCountForPreset(_preset.SelectedIndex).ToString(DialogCulture);
+            _count.Text = _session.CountTextForPreset(_preset.SelectedIndex);
 
         var content = new StackPanel { Margin = new Thickness(16) };
-        content.Children.Add(PageLayoutDialogChrome.Row(ColumnsDialogPlanner.PresetsLabel, _preset));
-        content.Children.Add(PageLayoutDialogChrome.Row(ColumnsDialogPlanner.CountLabel, _count));
-        content.Children.Add(PageLayoutDialogChrome.Row(ColumnsDialogPlanner.SpacingLabel, _spacing));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(ColumnsDialogField.Preset).Label, _preset));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(ColumnsDialogField.Count).Label, _count));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(ColumnsDialogField.Spacing).Label, _spacing));
         content.Children.Add(_lineBetween);
         content.Children.Add(_status);
         content.Children.Add(PageLayoutDialogChrome.Actions(Accept, () => Close(null)));
@@ -155,18 +187,17 @@ public sealed class ColumnsDialog : FreeWDialogWindow
 
     private void Accept()
     {
-        var input = new ColumnsDialogInput(
+        var acceptance = _session.PlanAcceptance(
             _preset.SelectedIndex,
             _count.Text,
             _spacing.Text,
-            _lineBetween.IsChecked == true,
-            _contentWidthPt);
-        if (!ColumnsDialogPlanner.TryBuildResult(input, DialogCulture, out var result, out var error))
+            _lineBetween.IsChecked == true);
+        if (!acceptance.IsAccepted)
         {
-            PageLayoutDialogChrome.ShowError(_status, error ?? ColumnsDialogPlanner.ValidationMessage);
+            PageLayoutDialogChrome.ShowError(_status, acceptance.ValidationMessage!);
             return;
         }
-        Close(result);
+        Close(acceptance.Result);
     }
 
     public static void ApplyResult(DocumentView editor, ColumnsDialogResult result) =>
@@ -181,9 +212,10 @@ public sealed class ColumnsDialog : FreeWDialogWindow
     }
 }
 
-public sealed class CustomParagraphSpacingDialog : FreeWDialogWindow
+public sealed partial class CustomParagraphSpacingDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
+    private readonly CustomParagraphSpacingDialogSession _session;
     private readonly TextBox _before;
     private readonly TextBox _after;
     private readonly TextBox _line;
@@ -193,24 +225,30 @@ public sealed class CustomParagraphSpacingDialog : FreeWDialogWindow
 
     public CustomParagraphSpacingDialog(DocumentParagraphSpacingSet? current)
     {
-        PageLayoutDialogChrome.Configure(this, CustomParagraphSpacingDialogPlanner.Title, 380);
-        var state = CustomParagraphSpacingDialogPlanner.BuildInitialState(current, DialogCulture);
+        var surface = CustomParagraphSpacingDialogPlanner.Surface;
+        _session = new CustomParagraphSpacingDialogSession(current, DialogCulture);
+        PageLayoutDialogChrome.Configure(this, surface, 380);
+        var state = _session.InitialState;
         _before = PageLayoutDialogChrome.NumberBox(state.SpaceBeforeText);
         _after = PageLayoutDialogChrome.NumberBox(state.SpaceAfterText);
         _line = PageLayoutDialogChrome.NumberBox(state.LineSpacingText);
+        PageLayoutDialogChrome.ApplySurface(_before, surface.Field(CustomParagraphSpacingDialogField.SpaceBefore));
+        PageLayoutDialogChrome.ApplySurface(_after, surface.Field(CustomParagraphSpacingDialogField.SpaceAfter));
+        PageLayoutDialogChrome.ApplySurface(_line, surface.Field(CustomParagraphSpacingDialogField.LineSpacing));
+        PageLayoutDialogChrome.ApplyValidation(_status, surface);
 
         var content = new StackPanel { Margin = new Thickness(16) };
         content.Children.Add(new TextBlock
         {
-            Text = CustomParagraphSpacingDialogPlanner.Hint,
+            Text = surface.SupportingText,
             TextWrapping = TextWrapping.Wrap,
             FontSize = 11,
             Foreground = Brushes.Gray,
             Margin = new Thickness(0, 0, 0, 6)
         });
-        content.Children.Add(PageLayoutDialogChrome.Row(CustomParagraphSpacingDialogPlanner.SpaceBeforeLabel, _before));
-        content.Children.Add(PageLayoutDialogChrome.Row(CustomParagraphSpacingDialogPlanner.SpaceAfterLabel, _after));
-        content.Children.Add(PageLayoutDialogChrome.Row(CustomParagraphSpacingDialogPlanner.LineSpacingLabel, _line));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(CustomParagraphSpacingDialogField.SpaceBefore).Label, _before));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(CustomParagraphSpacingDialogField.SpaceAfter).Label, _after));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(CustomParagraphSpacingDialogField.LineSpacing).Label, _line));
         content.Children.Add(_status);
         content.Children.Add(PageLayoutDialogChrome.Actions(Accept, () => Close(null)));
         Content = content;
@@ -219,20 +257,18 @@ public sealed class CustomParagraphSpacingDialog : FreeWDialogWindow
         PageLayoutDialogChrome.WireEscape<DocumentParagraphSpacingSet?>(this);
     }
 
-    internal bool AcceptForTests() => TryAccept(closeOnSuccess: false);
-
     private void Accept() => TryAccept(closeOnSuccess: true);
 
     private bool TryAccept(bool closeOnSuccess)
     {
-        if (!CustomParagraphSpacingDialogPlanner.TryBuildResult(
-                new CustomParagraphSpacingDialogInput(_before.Text, _after.Text, _line.Text),
-                DialogCulture,
-                out var result,
-                out var validation))
+        var acceptance = _session.PlanAcceptance(
+            new CustomParagraphSpacingDialogInput(_before.Text, _after.Text, _line.Text));
+        if (!acceptance.IsAccepted)
         {
-            PageLayoutDialogChrome.ShowError(_status, validation?.Message ?? CustomParagraphSpacingDialogPlanner.LineSpacingValidationMessage);
-            var target = validation?.Field switch
+            PageLayoutDialogChrome.ShowError(
+                _status,
+                acceptance.Validation?.Message ?? CustomParagraphSpacingDialogPlanner.LineSpacingValidationMessage);
+            var target = acceptance.Validation?.Field switch
             {
                 CustomParagraphSpacingDialogField.SpaceAfter => _after,
                 CustomParagraphSpacingDialogField.LineSpacing => _line,
@@ -242,9 +278,9 @@ public sealed class CustomParagraphSpacingDialog : FreeWDialogWindow
             return false;
         }
 
-        Result = result;
+        Result = acceptance.Result;
         if (closeOnSuccess)
-            Close(result);
+            Close(acceptance.Result);
         return true;
     }
 
@@ -261,6 +297,7 @@ public sealed class CustomParagraphSpacingDialog : FreeWDialogWindow
 public sealed class DropCapOptionsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
+    private readonly DropCapOptionsDialogSession _session;
     private readonly RadioButton _none;
     private readonly RadioButton _dropped;
     private readonly RadioButton _inMargin;
@@ -270,27 +307,40 @@ public sealed class DropCapOptionsDialog : FreeWDialogWindow
 
     public DropCapOptionsDialog()
     {
-        PageLayoutDialogChrome.Configure(this, DropCapOptionsDialogPlanner.Title, 340);
-        var state = DropCapOptionsDialogPlanner.BuildInitialState(DialogCulture);
-        _none = PositionButton(DropCapOptionsDialogPlanner.NoneLabel);
-        _dropped = PositionButton(DropCapOptionsDialogPlanner.DroppedLabel);
-        _inMargin = PositionButton(DropCapOptionsDialogPlanner.InMarginLabel);
+        var surface = DropCapOptionsDialogPlanner.Surface;
+        _session = new DropCapOptionsDialogSession(DialogCulture);
+        PageLayoutDialogChrome.Configure(this, surface, 340);
+        var state = _session.InitialState;
+        _none = PositionButton(surface.Field(DropCapOptionsDialogField.None));
+        _dropped = PositionButton(surface.Field(DropCapOptionsDialogField.Dropped));
+        _inMargin = PositionButton(surface.Field(DropCapOptionsDialogField.InMargin));
         new[] { _none, _dropped, _inMargin }[state.PositionIndex].IsChecked = true;
-        _font = PageLayoutDialogChrome.Combo(DropCapOptionsDialogPlanner.FontNames, state.FontIndex, 170);
+        _font = PageLayoutDialogChrome.Combo(_session.FontNames, state.FontIndex, 170);
         _font.IsEditable = true;
         _lines = PageLayoutDialogChrome.NumberBox(state.LinesToDropText, 70);
         _distance = PageLayoutDialogChrome.NumberBox(state.DistanceFromTextText, 70);
+        PageLayoutDialogChrome.ApplySurface(_font, surface.Field(DropCapOptionsDialogField.Font));
+        PageLayoutDialogChrome.ApplySurface(_lines, surface.Field(DropCapOptionsDialogField.LinesToDrop));
+        PageLayoutDialogChrome.ApplySurface(_distance, surface.Field(DropCapOptionsDialogField.DistanceFromText));
 
         var positions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 8) };
         positions.Children.Add(_none);
         positions.Children.Add(_dropped);
         positions.Children.Add(_inMargin);
         var content = new StackPanel { Margin = new Thickness(16) };
-        content.Children.Add(new TextBlock { Text = DropCapOptionsDialogPlanner.PositionLabel, FontWeight = FontWeight.SemiBold });
+        var positionHeading = new TextBlock
+        {
+            Text = surface.Field(DropCapOptionsDialogField.Position).Label,
+            FontWeight = FontWeight.SemiBold,
+        };
+        PageLayoutDialogChrome.ApplySurface(
+            positionHeading,
+            surface.Field(DropCapOptionsDialogField.Position));
+        content.Children.Add(positionHeading);
         content.Children.Add(positions);
-        content.Children.Add(PageLayoutDialogChrome.Row(DropCapOptionsDialogPlanner.FontLabel, _font));
-        content.Children.Add(PageLayoutDialogChrome.Row(DropCapOptionsDialogPlanner.LinesToDropLabel, _lines));
-        content.Children.Add(PageLayoutDialogChrome.Row(DropCapOptionsDialogPlanner.DistanceFromTextLabel, _distance));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(DropCapOptionsDialogField.Font).Label, _font));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(DropCapOptionsDialogField.LinesToDrop).Label, _lines));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(DropCapOptionsDialogField.DistanceFromText).Label, _distance));
         content.Children.Add(PageLayoutDialogChrome.Actions(Accept, () => Close(null)));
         Content = content;
 
@@ -298,10 +348,11 @@ public sealed class DropCapOptionsDialog : FreeWDialogWindow
         PageLayoutDialogChrome.WireEscape<DropCapOptionsDialogResult?>(this);
     }
 
-    private static RadioButton PositionButton(string label)
+    private static RadioButton PositionButton(DialogFieldSurfaceSpec<DropCapOptionsDialogField> field)
     {
-        var button = new RadioButton { Content = label, GroupName = "DropCapPosition", Margin = new Thickness(0, 0, 14, 0) };
+        var button = new RadioButton { Content = field.Label, GroupName = "DropCapPosition", Margin = new Thickness(0, 0, 14, 0) };
         AvaloniaCompactDialogChrome.ApplyRadioButton(button, PageLayoutDialogChrome.Style);
+        PageLayoutDialogChrome.ApplySurface(button, field);
         return button;
     }
 
@@ -312,9 +363,8 @@ public sealed class DropCapOptionsDialog : FreeWDialogWindow
             : _inMargin.IsChecked == true
                 ? (int)DropCapDialogPosition.InMargin
                 : (int)DropCapDialogPosition.Dropped;
-        Close(DropCapOptionsDialogPlanner.BuildResult(
-            new DropCapOptionsDialogInput(index, _font.Text, _lines.Text, _distance.Text),
-            DialogCulture));
+        Close(_session.PlanAcceptance(
+            new DropCapOptionsDialogInput(index, _font.Text, _lines.Text, _distance.Text)));
     }
 
     public static void ApplyResult(DocumentView editor, DropCapOptionsDialogResult result)
@@ -337,6 +387,7 @@ public sealed class DropCapOptionsDialog : FreeWDialogWindow
 public sealed class HyphenationOptionsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
+    private readonly HyphenationOptionsDialogSession _session;
     private readonly CheckBox _automatic;
     private readonly TextBox _zone;
     private readonly TextBox _limit;
@@ -345,17 +396,24 @@ public sealed class HyphenationOptionsDialog : FreeWDialogWindow
 
     public HyphenationOptionsDialog(PageSettings page)
     {
-        PageLayoutDialogChrome.Configure(this, HyphenationOptionsDialogPlanner.Title, 410);
-        var state = HyphenationOptionsDialogPlanner.BuildInitialState(page, DialogCulture);
-        _automatic = Check(HyphenationOptionsDialogPlanner.AutomaticLabel, state.AutoHyphenation);
+        var surface = HyphenationOptionsDialogPlanner.Surface;
+        _session = new HyphenationOptionsDialogSession(page, DialogCulture);
+        PageLayoutDialogChrome.Configure(this, surface, 410);
+        var state = _session.InitialState;
+        _automatic = Check(surface.Field(HyphenationOptionsDialogField.Automatic).Label, state.AutoHyphenation);
         _zone = PageLayoutDialogChrome.NumberBox(state.ZoneText);
         _limit = PageLayoutDialogChrome.NumberBox(state.ConsecutiveLimitText);
-        _caps = Check(HyphenationOptionsDialogPlanner.HyphenateCapsLabel, state.HyphenateCaps);
+        _caps = Check(surface.Field(HyphenationOptionsDialogField.HyphenateCaps).Label, state.HyphenateCaps);
+        PageLayoutDialogChrome.ApplySurface(_automatic, surface.Field(HyphenationOptionsDialogField.Automatic));
+        PageLayoutDialogChrome.ApplySurface(_zone, surface.Field(HyphenationOptionsDialogField.Zone));
+        PageLayoutDialogChrome.ApplySurface(_limit, surface.Field(HyphenationOptionsDialogField.ConsecutiveLimit));
+        PageLayoutDialogChrome.ApplySurface(_caps, surface.Field(HyphenationOptionsDialogField.HyphenateCaps));
+        PageLayoutDialogChrome.ApplyValidation(_status, surface);
 
         var content = new StackPanel { Margin = new Thickness(16) };
         content.Children.Add(_automatic);
-        content.Children.Add(PageLayoutDialogChrome.Row(HyphenationOptionsDialogPlanner.ZoneLabel, _zone));
-        content.Children.Add(PageLayoutDialogChrome.Row(HyphenationOptionsDialogPlanner.ConsecutiveLimitLabel, _limit));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(HyphenationOptionsDialogField.Zone).Label, _zone));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(HyphenationOptionsDialogField.ConsecutiveLimit).Label, _limit));
         content.Children.Add(_caps);
         content.Children.Add(_status);
         content.Children.Add(PageLayoutDialogChrome.Actions(Accept, () => Close(null)));
@@ -379,12 +437,13 @@ public sealed class HyphenationOptionsDialog : FreeWDialogWindow
             _zone.Text,
             _limit.Text,
             _caps.IsChecked == true);
-        if (!HyphenationOptionsDialogPlanner.TryBuildResult(input, DialogCulture, out var result, out var error))
+        var acceptance = _session.PlanAcceptance(input);
+        if (!acceptance.IsAccepted)
         {
-            PageLayoutDialogChrome.ShowError(_status, error ?? HyphenationOptionsDialogPlanner.ValidationMessage);
+            PageLayoutDialogChrome.ShowError(_status, acceptance.ValidationMessage!);
             return;
         }
-        Close(result);
+        Close(acceptance.Result);
     }
 
     public static void ApplyResult(DocumentView editor, HyphenationOptionsDialogResult result) =>
@@ -402,27 +461,31 @@ public sealed class HyphenationOptionsDialog : FreeWDialogWindow
 
 public sealed class ManualHyphenationDialog : FreeWDialogWindow
 {
+    private readonly ManualHyphenationDialogSession _session;
     private readonly ComboBox _choices;
 
     public ManualHyphenationDialog(ManualHyphenationCandidate candidate)
     {
-        ArgumentNullException.ThrowIfNull(candidate);
-        PageLayoutDialogChrome.Configure(this, "Manual Hyphenation", 380);
+        var surface = ManualHyphenationPlanner.AvaloniaSurface;
+        _session = new ManualHyphenationDialogSession(candidate);
+        PageLayoutDialogChrome.Configure(this, surface, 380);
 
         _choices = new ComboBox { SelectedIndex = 0, MinWidth = 230 };
-        foreach (var option in candidate.Options)
-            _choices.Items.Add(new ComboBoxItem { Content = option.DisplayText, Tag = option });
+        foreach (var option in _session.Options)
+            _choices.Items.Add(option.DisplayText);
         AvaloniaCompactDialogChrome.ApplyComboBox(_choices, PageLayoutDialogChrome.Style);
+        PageLayoutDialogChrome.ApplySurface(
+            _choices,
+            surface.Field(ManualHyphenationDialogField.Choices));
 
-        var yes = Button("Yes", isDefault: true, () =>
+        var yes = Button(surface.Field(ManualHyphenationDialogField.Yes), isDefault: true, () =>
         {
-            if (_choices.SelectedItem is ComboBoxItem { Tag: ManualHyphenationOption option })
-                Close(new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Accept, option.BreakPoint));
+            var result = _session.PlanAcceptance(_choices.SelectedIndex);
+            if (result is not null)
+                Close(result);
         });
-        var no = Button("No", isDefault: false, () =>
-            Close(new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Skip)));
-        var cancel = Button("Cancel", isDefault: false, () =>
-            Close(new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Cancel)));
+        var no = Button(surface.Field(ManualHyphenationDialogField.No), isDefault: false, () => Close(_session.PlanSkip()));
+        var cancel = Button(surface.Field(ManualHyphenationDialogField.Cancel), isDefault: false, () => Close(_session.PlanCancel()));
         cancel.IsCancel = true;
 
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
@@ -430,9 +493,9 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
             new Thickness(0, 16, 0, 0));
 
         var content = new StackPanel { Margin = new Thickness(16) };
-        content.Children.Add(new TextBlock { Text = $"Word {candidate.Number}", Margin = new Thickness(0, 0, 0, 4) });
-        content.Children.Add(new TextBlock { Text = candidate.Word, FontWeight = FontWeight.SemiBold, FontSize = 16 });
-        content.Children.Add(new TextBlock { Text = "Hyphenate at:", Margin = new Thickness(0, 12, 0, 4) });
+        content.Children.Add(new TextBlock { Text = _session.CandidateLabel, Margin = new Thickness(0, 0, 0, 4) });
+        content.Children.Add(new TextBlock { Text = _session.Candidate.Word, FontWeight = FontWeight.SemiBold, FontSize = 16 });
+        content.Children.Add(new TextBlock { Text = surface.Field(ManualHyphenationDialogField.Choices).Label, Margin = new Thickness(0, 12, 0, 4) });
         content.Children.Add(_choices);
         content.Children.Add(buttons);
         Content = content;
@@ -441,16 +504,20 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
         {
             if (e.Key != Key.Escape)
                 return;
-            Close(new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Cancel));
+            Close(_session.PlanCancel());
             e.Handled = true;
         };
     }
 
-    private static Button Button(string label, bool isDefault, Action action)
+    private static Button Button(
+        DialogFieldSurfaceSpec<ManualHyphenationDialogField> field,
+        bool isDefault,
+        Action action)
     {
-        var button = new Button { Content = label, MinWidth = 72, IsDefault = isDefault };
+        var button = new Button { Content = field.Label, MinWidth = 72, IsDefault = isDefault };
         button.Click += (_, _) => action();
         AvaloniaCompactDialogChrome.ApplyButton(button, PageLayoutDialogChrome.Style, 72, isDefault);
+        PageLayoutDialogChrome.ApplySurface(button, field);
         return button;
     }
 
@@ -463,7 +530,7 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
         var session = ManualHyphenationPlanner.CreateSession(editor.Document);
         if (session.CandidateCount == 0)
         {
-            report("Manual hyphenation found no words to review.");
+            report(ManualHyphenationPlanner.NoCandidatesMessage);
             editor.Focus();
             return;
         }
@@ -481,9 +548,7 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
         }
 
         editor.ApplyManualHyphenation(session.Edits);
-        report(session.AcceptedCount == 0
-            ? "Manual hyphenation made no changes."
-            : $"Manual hyphenation inserted breaks in {session.AcceptedCount} word(s).");
+        report(ManualHyphenationPlanner.FormatSummary(session.AcceptedCount));
         editor.Focus();
     }
 }
@@ -491,6 +556,7 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
 public sealed class LineNumberOptionsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
+    private readonly LineNumberOptionsDialogSession _session;
     private readonly TextBox _startAt;
     private readonly TextBox _countBy;
     private readonly ComboBox _mode;
@@ -498,23 +564,22 @@ public sealed class LineNumberOptionsDialog : FreeWDialogWindow
 
     public LineNumberOptionsDialog(PageSettings page)
     {
-        PageLayoutDialogChrome.Configure(this, LineNumberOptionsDialogPlanner.Title, 340);
-        var initialMode = page.LineNumberMode == LineNumberMode.None
-            ? LineNumberMode.RestartEachPage
-            : page.LineNumberMode;
-        var state = LineNumberOptionsDialogPlanner.BuildInitialState(
-            page.LineNumberStartAt,
-            page.LineNumberCountBy,
-            initialMode,
-            DialogCulture);
+        var surface = LineNumberOptionsDialogPlanner.Surface;
+        _session = new LineNumberOptionsDialogSession(page, DialogCulture);
+        PageLayoutDialogChrome.Configure(this, surface, 340);
+        var state = _session.InitialState;
         _startAt = PageLayoutDialogChrome.NumberBox(state.StartAtText);
         _countBy = PageLayoutDialogChrome.NumberBox(state.CountByText);
-        _mode = PageLayoutDialogChrome.Combo(LineNumberOptionsDialogPlanner.ModeLabels, state.ModeIndex);
+        _mode = PageLayoutDialogChrome.Combo(_session.ModeLabels, state.ModeIndex);
+        PageLayoutDialogChrome.ApplySurface(_startAt, surface.Field(LineNumberOptionsDialogField.StartAt));
+        PageLayoutDialogChrome.ApplySurface(_countBy, surface.Field(LineNumberOptionsDialogField.CountBy));
+        PageLayoutDialogChrome.ApplySurface(_mode, surface.Field(LineNumberOptionsDialogField.Numbering));
+        PageLayoutDialogChrome.ApplyValidation(_status, surface);
 
         var content = new StackPanel { Margin = new Thickness(16) };
-        content.Children.Add(PageLayoutDialogChrome.Row(LineNumberOptionsDialogPlanner.StartAtLabel, _startAt));
-        content.Children.Add(PageLayoutDialogChrome.Row(LineNumberOptionsDialogPlanner.CountByLabel, _countBy));
-        content.Children.Add(PageLayoutDialogChrome.Row(LineNumberOptionsDialogPlanner.NumberingLabel, _mode));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(LineNumberOptionsDialogField.StartAt).Label, _startAt));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(LineNumberOptionsDialogField.CountBy).Label, _countBy));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(LineNumberOptionsDialogField.Numbering).Label, _mode));
         content.Children.Add(_status);
         content.Children.Add(PageLayoutDialogChrome.Actions(Accept, () => Close(null)));
         Content = content;
@@ -526,12 +591,13 @@ public sealed class LineNumberOptionsDialog : FreeWDialogWindow
     private void Accept()
     {
         var input = new LineNumberOptionsDialogInput(_startAt.Text, _countBy.Text, _mode.SelectedIndex);
-        if (!LineNumberOptionsDialogPlanner.TryBuildResult(input, DialogCulture, out var result, out var error))
+        var acceptance = _session.PlanAcceptance(input);
+        if (!acceptance.IsAccepted)
         {
-            PageLayoutDialogChrome.ShowError(_status, error ?? LineNumberOptionsDialogPlanner.StartAtValidationMessage);
+            PageLayoutDialogChrome.ShowError(_status, acceptance.ValidationMessage!);
             return;
         }
-        Close(result);
+        Close(acceptance.Result);
     }
 
     public static void ApplyResult(DocumentView editor, LineNumberOptionsDialogResult result) =>

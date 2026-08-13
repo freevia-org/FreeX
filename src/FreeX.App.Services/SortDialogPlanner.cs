@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using FreeX.App.Presentation;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using CoreSortKey = FreeX.Core.Commands.SortKey;
@@ -26,7 +28,21 @@ public sealed record SortIconChoice(string Label);
 public sealed record SortDialogOptions(
     bool CaseSensitive = false,
     bool LeftToRight = false,
-    string FirstKeySortOrder = "Normal");
+    string FirstKeySortOrder = SortOptionsDialogCatalog.NormalFirstKeySortOrder);
+
+public sealed record SortDialogCommandPlan(
+    IReadOnlyList<CoreSortKey> SortKeys,
+    SortOptions Options,
+    bool HasHeaders)
+{
+    public GridRange ResolveRange(GridRange selectedRange) =>
+        Options.LeftToRight
+            ? selectedRange
+            : SortDialogPlanner.ExcludeHeaderRow(selectedRange, HasHeaders);
+
+    public SortCommand CreateCommand(SheetId sheetId, GridRange selectedRange) =>
+        new(sheetId, ResolveRange(selectedRange), SortKeys, Options);
+}
 
 public sealed record SortDialogPlannerText(
     string SortOnCellValues,
@@ -193,6 +209,34 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>, INotifyProper
 
 public static class SortDialogPlanner
 {
+    public static SortDialogCommandPlan CreateCommandPlan(
+        IEnumerable<SortDialogLevel> levels,
+        SortDialogOptions options,
+        bool hasHeaders,
+        SortDialogPlannerText? text = null)
+    {
+        ArgumentNullException.ThrowIfNull(levels);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var sortKeys = SortOptionsPolicy.ApplyFirstKeySortOrder(
+            BuildSortKeys(levels, text),
+            options.FirstKeySortOrder);
+        return new SortDialogCommandPlan(
+            sortKeys,
+            SortOptionsPolicy.CreateCoreOptions(options),
+            hasHeaders);
+    }
+
+    public static SortDialogCommandPlan CreateCommandPlan(
+        IReadOnlyList<CoreSortKey> sortKeys,
+        SortOptions options,
+        bool hasHeaders)
+    {
+        ArgumentNullException.ThrowIfNull(sortKeys);
+        ArgumentNullException.ThrowIfNull(options);
+        return new SortDialogCommandPlan(sortKeys, options, hasHeaders);
+    }
+
     public static IReadOnlyList<CoreSortKey> BuildSortKeys(
         IEnumerable<SortDialogLevel> levels,
         SortDialogPlannerText? text = null)
@@ -659,7 +703,7 @@ public static class SortDialogPlanner
         if (sortOn is not SortOn.CellColor and not SortOn.FontColor)
             return null;
 
-        return TryParseColorText(text ?? "", out var color) ? color : null;
+        return ColorInputParser.TryParseColorText(text ?? "", out var color) ? color : null;
     }
 
     private static CfIconOverride? TargetIconFromText(string? text, SortOn sortOn)
@@ -676,7 +720,7 @@ public static class SortDialogPlanner
     /// Parses a "IconSet:IconId" token produced by <see cref="FormatIconToken"/> /
     /// <see cref="BuildIconChoices"/> back into a <see cref="CfIconOverride"/>. Returns
     /// <see langword="null"/> for the empty "(none)" choice or any malformed token, mirroring
-    /// <see cref="TryParseColorText"/>'s "unrecognized text means no target" behavior.
+    /// <see cref="ColorInputParser.TryParseColorText"/>'s "unrecognized text means no target" behavior.
     /// </summary>
     private static CfIconOverride? TryParseIconToken(string text)
     {
@@ -693,35 +737,6 @@ public static class SortDialogPlanner
         return int.TryParse(iconIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var iconId) && iconId >= 0
             ? new CfIconOverride(iconSet, iconId)
             : null;
-    }
-
-    private static bool TryParseColorText(string text, out CellColor color)
-    {
-        color = default;
-        var normalized = text.Trim();
-        if (normalized.StartsWith('#'))
-            normalized = normalized[1..];
-
-        if (normalized.Length == 6 &&
-            byte.TryParse(normalized[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) &&
-            byte.TryParse(normalized[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) &&
-            byte.TryParse(normalized[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
-        {
-            color = new CellColor(r, g, b);
-            return true;
-        }
-
-        var parts = text.Trim().Split(',', StringSplitOptions.TrimEntries);
-        if (parts.Length == 3 &&
-            byte.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out r) &&
-            byte.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out g) &&
-            byte.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out b))
-        {
-            color = new CellColor(r, g, b);
-            return true;
-        }
-
-        return false;
     }
 
     private static SortDialogPlannerText ResolveText(SortDialogPlannerText? text) =>

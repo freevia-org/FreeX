@@ -14,15 +14,10 @@ namespace FreeP.App.Host.Tests;
 /// </summary>
 public sealed class SmartArtTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.SmartArtTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.SmartArtTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public SmartArtTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -6874,19 +6869,9 @@ public sealed class SmartArtTests : IDisposable
         sa.Parts.Should().ContainKey("ppt/diagrams/data1.xml");
     }
 
-    private static string FindRenderCompareCorpusFile(string fileName)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus", fileName);
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException($"Could not locate the RenderCompare corpus deck '{fileName}'.");
-    }
+    private static string FindRenderCompareCorpusFile(string fileName) =>
+        TestWorkspaceFileLocator.FindFileFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus", fileName);
 
     private static void AddOuterShadowToDefaultDrawing(string path) =>
         RewriteDefaultDrawing(path, document =>

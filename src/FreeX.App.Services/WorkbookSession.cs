@@ -1,4 +1,8 @@
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.Editing;
+using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.QuickAnalysis;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -11,13 +15,6 @@ namespace FreeX.App.Services;
 
 public sealed class WorkbookSession : IDisposable
 {
-    private sealed record InternalClipboard(
-        GridRange SourceRange,
-        IReadOnlyList<(CellAddress Source, Cell Cell)> Cells,
-        IReadOnlyList<(CellAddress Source, PictureCellSnapshot Snapshot)> PictureCells,
-        string Text,
-        bool IsCut);
-
     private sealed class ReplaceSubtotalRowsCommand : IWorkbookCommand
     {
         private const string SubtotalFormulaPrefix = "SUBTOTAL(";
@@ -135,21 +132,20 @@ public sealed class WorkbookSession : IDisposable
     private readonly WorkbookCellEditService _cellEditService;
     private readonly WorkbookSheetSelectionService _sheetSelectionService;
     private readonly IViewportService _viewportService;
+    private readonly FindReplaceWorkflowSession _findReplaceWorkflow;
     private readonly bool _includeObjects;
     private readonly WorkbookSession? _sharedDocumentStateOwner;
+    private readonly WorkbookDocumentState _documentState;
     private int _siblingViewCount;
     private int _isDisposed;
     private int _documentRetired;
-    private string? _currentFilePath;
     private WorkbookFileAccessIdentity? _currentFileAccessIdentity;
     private XlsxFeatureReport? _currentXlsxFeatureReport;
-    private bool _isDirty;
-    private int _dirtyGeneration;
     private readonly WorkbookSelectionStatsCache _selectionStatsCache = new();
     private readonly WorksheetSelectionStore _worksheetSelections = new();
     private readonly HashSet<SheetId> _groupedSheetIds = [];
     private SheetId? _sheetGroupAnchor;
-    private InternalClipboard? _internalClipboard;
+    private readonly WorkbookClipboardSession _workbookClipboardSession = new();
 
     /// <summary>
     /// True while a Copy/Cut snapshot is still live (i.e. a Paste right now would honor it).
@@ -164,7 +160,7 @@ public sealed class WorkbookSession : IDisposable
     /// path that flows through that choke point inherits correct marquee-clearing automatically,
     /// with no new call site required.
     /// </summary>
-    public bool HasPendingClipboardMarquee => _internalClipboard is not null;
+    public bool HasPendingClipboardMarquee => _workbookClipboardSession.HasContent;
     private SheetId? _formatPainterSourceSheetId;
     private GridRange? _formatPainterSourceRange;
     private bool _formatPainterPersistent;
@@ -264,54 +260,6 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     private readonly Dictionary<SheetId, WorksheetViewMode> _viewModeOverrides = [];
     private ulong _selectionStatsRevision;
-    private string? _lastFindText;
-    private FindOptions? _lastFindOptions;
-    private bool _lastFindMatchCase;
-    private bool _lastFindMatchEntireCell;
-    private FindResult? _lastFindResult;
-    private FindResult? _lastReplaceResult;
-
-    /// <summary>
-    /// The undo-stack depth at the time the workbook was last saved, or <c>-1</c> when no save
-    /// point has been recorded yet (never saved this session). Mirrors the WPF host's
-    /// <c>WorkbookDocumentState.SavedUndoDepth</c> so <see cref="UndoLastEdit"/>/<see cref="RedoLastEdit"/>
-    /// can clear <see cref="IsDirty"/> when the stack returns to this depth, instead of leaving it
-    /// permanently true after any edit-then-undo-to-save-point sequence.
-    /// </summary>
-    private int _savedUndoDepth = -1;
-
-    /// <summary>
-    /// The undo stack's monotonic version token at the last save point, or <c>null</c> when no
-    /// save point has been recorded. Used alongside <see cref="_savedUndoDepth"/> as a robust
-    /// identity check immune to depth-cap trim/refill aliasing (mirrors
-    /// <c>WorkbookDocumentState.SavedUndoStackVersion</c>).
-    /// </summary>
-    private long? _savedUndoStackVersion;
-
-    private int SavedUndoDepth
-    {
-        get => _sharedDocumentStateOwner?.SavedUndoDepth ?? _savedUndoDepth;
-        set
-        {
-            if (_sharedDocumentStateOwner is { } owner)
-                owner.SavedUndoDepth = value;
-            else
-                _savedUndoDepth = value;
-        }
-    }
-
-    private long? SavedUndoStackVersion
-    {
-        get => _sharedDocumentStateOwner?.SavedUndoStackVersion ?? _savedUndoStackVersion;
-        set
-        {
-            if (_sharedDocumentStateOwner is { } owner)
-                owner.SavedUndoStackVersion = value;
-            else
-                _savedUndoStackVersion = value;
-        }
-    }
-
     internal WorkbookSession(
         StartupWorkbookLoadResult source,
         IReadOnlyList<IFileAdapter> adapters,
@@ -321,13 +269,16 @@ public sealed class WorkbookSession : IDisposable
         double viewportHeight,
         double viewportWidth,
         bool includeObjects,
-        WorkbookSession? sharedDocumentStateOwner = null)
+        WorkbookSession? sharedDocumentStateOwner = null,
+        WorkbookDocumentState? documentState = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(adapters);
         ArgumentNullException.ThrowIfNull(cellEditService);
         ArgumentNullException.ThrowIfNull(sheetSelectionService);
         ArgumentNullException.ThrowIfNull(viewportService);
+        if (sharedDocumentStateOwner is not null && documentState is not null)
+            throw new ArgumentException("A sibling session already supplies the shared document state.", nameof(documentState));
 
         _source = source;
         _adapters = adapters;
@@ -338,11 +289,12 @@ public sealed class WorkbookSession : IDisposable
         _viewportWidth = NormalizeViewportDimension(viewportWidth, fallback: 1);
         _includeObjects = includeObjects;
         _sharedDocumentStateOwner = sharedDocumentStateOwner;
+        _documentState = sharedDocumentStateOwner?._documentState ?? documentState ?? new WorkbookDocumentState();
 
         Workbook = source.Workbook;
         if (sharedDocumentStateOwner is null)
         {
-            CurrentFilePath = source.OpenedAsTemplate ? null : source.SourcePath;
+            _documentState.SetCurrentFilePath(source.OpenedAsTemplate ? null : source.SourcePath);
             CurrentFileAccessIdentity = ResolveCurrentFileAccessIdentity(source);
             CurrentXlsxFeatureReport = source.FeatureReport;
         }
@@ -358,7 +310,14 @@ public sealed class WorkbookSession : IDisposable
         SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
         SeedViewSplitAndFrozenOverrides();
         Viewport = BuildViewport();
+        _findReplaceWorkflow = new FindReplaceWorkflowSession(
+            () => Workbook,
+            () => ActiveCell,
+            GoToCell,
+            command => _cellEditService.ExecuteEditCommand(Workbook, command));
     }
+
+    public IReadOnlyList<IFileAdapter> FileAdapters => _adapters;
 
     /// <summary>
     /// Creates a view-local session over this session's document. Workbook, command history,
@@ -394,7 +353,7 @@ public sealed class WorkbookSession : IDisposable
 
     /// <summary>
     /// Releases this view's event subscriptions and, once every sibling view has
-    /// gone away, retires the shared workbook from the recalculation and XLSX
+    /// gone away, retires the shared workbook from command history, recalculation, and XLSX
     /// source-package state. Root and sibling sessions therefore have explicit,
     /// bounded ownership without allowing one window to invalidate another
     /// window's shared document.
@@ -690,14 +649,8 @@ public sealed class WorkbookSession : IDisposable
 
     public string? CurrentFilePath
     {
-        get => _sharedDocumentStateOwner?.CurrentFilePath ?? _currentFilePath;
-        private set
-        {
-            if (_sharedDocumentStateOwner is { } owner)
-                owner.CurrentFilePath = value;
-            else
-                _currentFilePath = value;
-        }
+        get => _documentState.CurrentFilePath;
+        private set => _documentState.SetCurrentFilePath(value);
     }
 
     public WorkbookFileAccessIdentity? CurrentFileAccessIdentity
@@ -724,34 +677,24 @@ public sealed class WorkbookSession : IDisposable
         }
     }
 
-    public bool IsDirty
+    public bool IsDirty => _documentState.IsDirty;
+
+    /// <summary>
+    /// Controls the next close prompt for this document. This belongs to the shared document
+    /// state so every renderer and every sibling view observes the same lifecycle decision.
+    /// </summary>
+    public bool SuppressClosePrompt
     {
-        get => _sharedDocumentStateOwner?.IsDirty ?? _isDirty;
-        private set
-        {
-            if (_sharedDocumentStateOwner is { } owner)
-                owner.IsDirty = value;
-            else
-                _isDirty = value;
-        }
+        get => _documentState.SuppressClosePrompt;
+        set => _documentState.SuppressClosePrompt = value;
     }
 
     /// <summary>
     /// Monotonically-increasing counter, incremented with every transition to dirty.
-    /// The async save path captures this before awaiting and compares afterwards to detect
-    /// edits that arrived mid-save — the same pattern used by <see cref="WorkbookDocumentState"/>.
+    /// The async save path captures the shared <see cref="WorkbookDocumentState"/> generation
+    /// before awaiting and compares afterwards to detect edits that arrived mid-save.
     /// </summary>
-    public int DirtyGeneration
-    {
-        get => _sharedDocumentStateOwner?.DirtyGeneration ?? _dirtyGeneration;
-        private set
-        {
-            if (_sharedDocumentStateOwner is { } owner)
-                owner.DirtyGeneration = value;
-            else
-                _dirtyGeneration = value;
-        }
-    }
+    public int DirtyGeneration => _documentState.DirtyGeneration;
 
     public bool IsFallback => _source.IsFallback;
 
@@ -842,7 +785,7 @@ public sealed class WorkbookSession : IDisposable
     public string SelectionStatsText =>
         WorkbookSelectionStatsFormatter.Format(SelectionStats);
 
-    public string LastFindText => _lastFindText ?? "";
+    public string LastFindText => _findReplaceWorkflow.LastFindText;
 
     public StyleDiff? CreateFormatDiffFromActiveCell() =>
         CreateFormatDiffFromCell(ActiveCell);
@@ -871,6 +814,28 @@ public sealed class WorkbookSession : IDisposable
     {
         ValidateSelectionRange(range, nameof(range));
         SelectRanges(range, [range]);
+    }
+
+    /// <summary>
+    /// Projects a range selected in a second formula-point workbook window into that source
+    /// window's portable selection state. Native hosts retain sheet-tab, grid, focus, and status
+    /// rendering after this transition.
+    /// </summary>
+    public bool SelectFormulaPointModeSourceRange(GridRange range)
+    {
+        if (!range.Start.Sheet.Equals(range.End.Sheet) ||
+            Workbook.GetSheet(range.Start.Sheet) is null)
+        {
+            return false;
+        }
+
+        if (!ActiveSheet.Id.Equals(range.Start.Sheet))
+            SelectSheet(range.Start.Sheet);
+        if (!ActiveSheet.Id.Equals(range.Start.Sheet))
+            return false;
+
+        SelectRange(range);
+        return true;
     }
 
     /// <summary>
@@ -935,6 +900,68 @@ public sealed class WorkbookSession : IDisposable
         ActiveSheet.ActiveCol = ActiveCell.Col;
         FormulaEditAddress = null;
         EnsureActiveCellVisible();
+    }
+
+    /// <summary>
+    /// Synchronizes selection state supplied by a renderer that still owns viewport scrolling.
+    /// Unlike the interactive selection methods, this does not scroll or rebuild the portable
+    /// viewport, so adopting the state cannot overwrite that renderer's per-window view origin.
+    /// </summary>
+    public void SynchronizeSelectionState(
+        SheetId sheetId,
+        GridRange primaryRange,
+        IReadOnlyList<GridRange> ranges,
+        CellAddress activeCell,
+        IReadOnlyCollection<SheetId>? groupedSheetIds = null,
+        SheetId? sheetGroupAnchor = null,
+        CellAddress? formulaEditAddress = null)
+    {
+        ThrowIfDisposed();
+        if (primaryRange.Start.Sheet != sheetId || primaryRange.End.Sheet != sheetId)
+            throw new ArgumentException("The primary range must belong to the synchronized sheet.", nameof(primaryRange));
+        if (ranges.Count == 0)
+            throw new ArgumentException("At least one selected range is required.", nameof(ranges));
+        foreach (var range in ranges)
+        {
+            if (range.Start.Sheet != sheetId || range.End.Sheet != sheetId)
+                throw new ArgumentException("Every selected range must belong to the synchronized sheet.", nameof(ranges));
+        }
+
+        if (!primaryRange.Contains(activeCell))
+            throw new ArgumentOutOfRangeException(nameof(activeCell), "The active cell must be inside the primary range.");
+        if (formulaEditAddress is { } editAddress &&
+            (!IsValidAddress(editAddress) || Workbook.GetSheet(editAddress.Sheet) is null))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(formulaEditAddress),
+                "The formula edit cell must belong to an existing worksheet and be inside the worksheet bounds.");
+        }
+
+        if (ActiveSheet.Id != sheetId)
+            RememberActiveWorksheetSelection();
+
+        if (groupedSheetIds is not null)
+        {
+            SetGroupedSheetIds(groupedSheetIds, sheetId);
+            _sheetGroupAnchor = sheetGroupAnchor is { } anchor && _groupedSheetIds.Contains(anchor)
+                ? anchor
+                : sheetId;
+        }
+
+        var selection = _sheetSelectionService.SelectSheet(Workbook, sheetId, _groupedSheetIds);
+        if (selection.Sheet.Id != sheetId)
+            throw new ArgumentOutOfRangeException(nameof(sheetId), "The synchronized sheet must be visible and selectable.");
+
+        ActiveSheet = selection.Sheet;
+        RefreshSheetTabsForActiveSheet();
+        ValidateSelectionRange(primaryRange, nameof(primaryRange));
+        foreach (var range in ranges)
+            ValidateSelectionRange(range, nameof(ranges));
+        SetSelectedRanges(primaryRange, ranges);
+        ActiveCell = activeCell;
+        ActiveSheet.ActiveRow = activeCell.Row;
+        ActiveSheet.ActiveCol = activeCell.Col;
+        FormulaEditAddress = formulaEditAddress;
     }
 
     /// <summary>
@@ -1183,7 +1210,7 @@ public sealed class WorkbookSession : IDisposable
     public ReviewWorkflowPlan GetReviewWorkflowPlan(
         IReadOnlySet<string>? customDictionary = null,
         ISet<string>? ignoredWords = null,
-        ISet<ReviewSpellingIssueKey>? ignoredIssues = null) =>
+        ISet<SpellingIssueKey>? ignoredIssues = null) =>
         ReviewWorkflowPlanner.CreatePlan(
             Workbook,
             ActiveSheet.Id,
@@ -1205,7 +1232,7 @@ public sealed class WorkbookSession : IDisposable
         ArgumentNullException.ThrowIfNull(command);
 
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
-        if (!result.Success)
+        if (!result.Success || result.IsNoOp)
             return result;
 
         ApplySuccessfulEditResult(result, fallbackAddress ?? ActiveCell);
@@ -1226,6 +1253,337 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
+    public QuickAnalysisWorkbookOperationResult ExecuteQuickAnalysisTotal(
+        QuickAnalysisHostOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var range = SelectedRange;
+        var title = operation.TotalCommandTitle ?? "Quick Analysis Total";
+        if (operation.Kind is not (
+                QuickAnalysisHostOperationKind.InsertAggregateTotalFormula or
+                QuickAnalysisHostOperationKind.InsertPercentTotalFormula or
+                QuickAnalysisHostOperationKind.InsertRunningTotalFormula) ||
+            !QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(operation, range, out var edits))
+        {
+            return QuickAnalysisOperationFailure(
+                range,
+                title,
+                QuickAnalysisWorkbookOperationFailure.InvalidOperation,
+                "The Quick Analysis operation is not a total formula operation.");
+        }
+
+        var result = ExecuteRepeatableCommandPreservingSelection(
+            () => new EditCellsCommand(ActiveSheet.Id, edits));
+        if (!result.Success || result.IsNoOp)
+        {
+            return new QuickAnalysisWorkbookOperationResult(
+                result,
+                result.Success
+                    ? QuickAnalysisWorkbookOperationFailure.None
+                    : QuickAnalysisWorkbookOperationFailure.CommandFailed,
+                AppliedItemCount: 0,
+                range,
+                SelectedCell: null,
+                title);
+        }
+
+        var selectedCell = edits[^1].Address;
+        SelectCell(selectedCell);
+        return new QuickAnalysisWorkbookOperationResult(
+            result,
+            QuickAnalysisWorkbookOperationFailure.None,
+            edits.Count,
+            range,
+            selectedCell,
+            title);
+    }
+
+    public QuickAnalysisWorkbookOperationResult ExecuteQuickAnalysisSparklines(
+        QuickAnalysisHostOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var range = SelectedRange;
+        const string title = "Quick Analysis Sparklines";
+        if (!QuickAnalysisHostOperationPlanner.TryBuildSparklineCommands(
+                operation,
+                ActiveSheet,
+                range,
+                out var commands))
+        {
+            return QuickAnalysisOperationFailure(
+                range,
+                title,
+                QuickAnalysisWorkbookOperationFailure.InvalidSparklineSelection,
+                "Quick Analysis sparklines require a supported multi-column selection.");
+        }
+
+        var appliedCount = 0;
+        foreach (var command in commands)
+        {
+            var result = ExecuteReviewCommand(command);
+            if (!result.Success)
+            {
+                return new QuickAnalysisWorkbookOperationResult(
+                    result,
+                    QuickAnalysisWorkbookOperationFailure.CommandFailed,
+                    appliedCount,
+                    range,
+                    SelectedCell: null,
+                    title);
+            }
+
+            if (!result.IsNoOp)
+                appliedCount++;
+        }
+
+        return new QuickAnalysisWorkbookOperationResult(
+            new WorkbookCellEditResult(
+                Success: true,
+                ErrorMessage: null,
+                AffectedCells: [],
+                RecalcReport: null,
+                IsNoOp: appliedCount == 0),
+            QuickAnalysisWorkbookOperationFailure.None,
+            appliedCount,
+            range,
+            SelectedCell: null,
+            title);
+    }
+
+    private static QuickAnalysisWorkbookOperationResult QuickAnalysisOperationFailure(
+        GridRange range,
+        string title,
+        QuickAnalysisWorkbookOperationFailure failure,
+        string errorMessage) =>
+        new(
+            new WorkbookCellEditResult(
+                Success: false,
+                ErrorMessage: errorMessage,
+                AffectedCells: [],
+                RecalcReport: null),
+            failure,
+            AppliedItemCount: 0,
+            range,
+            SelectedCell: null,
+            title);
+
+    /// <summary>
+    /// Executes an undoable workbook command while preserving the renderer-synchronized cell
+    /// selection. The session owns dependency maintenance, calculation policy, dirty state,
+    /// linked-picture refresh, and structural-sheet fallback; the renderer remains responsible
+    /// for command construction and native UI aftermath.
+    /// </summary>
+    public WorkbookCellEditResult ExecuteCommandPreservingSelection(IWorkbookCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var sheetIdsBefore = CaptureSheetIds();
+        var hiddenStatesBefore = CaptureSheetHiddenStates();
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        ApplySuccessfulPreservedSelectionCommandResult(result, sheetIdsBefore, hiddenStatesBefore);
+        return result;
+    }
+
+    /// <summary>
+    /// Executes a Custom Views command through the session-owned command history. Save/Delete
+    /// preserve the renderer-synchronized selection; Apply adopts the active sheet/cell restored
+    /// by the saved view instead of overwriting it with the pre-command selection.
+    /// </summary>
+    public WorkbookCellEditResult ExecuteCustomViewCommand(IWorkbookCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (command is not ApplyCustomViewCommand)
+            return ExecuteCommandPreservingSelection(command);
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success || result.IsNoOp)
+            return result;
+
+        var activeSheet = Workbook.ActiveSheetIndex is { } index &&
+            index >= 0 &&
+            index < Workbook.Sheets.Count &&
+            !Workbook.Sheets[index].IsHidden &&
+            !Workbook.Sheets[index].IsVeryHidden
+                ? Workbook.Sheets[index]
+                : ActiveSheet;
+
+        if (ActiveSheet.Id != activeSheet.Id)
+            RememberActiveWorksheetSelection();
+
+        var selection = _sheetSelectionService.SelectSheet(Workbook, activeSheet.Id, _groupedSheetIds);
+        ActiveSheet = selection.Sheet;
+        SelectSingleSheetGroup(ActiveSheet.Id);
+        RefreshSheetTabsForActiveSheet();
+
+        ActiveCell = new CellAddress(
+            ActiveSheet.Id,
+            Math.Clamp(ActiveSheet.ActiveRow ?? 1u, 1u, CellAddress.MaxRow),
+            Math.Clamp(ActiveSheet.ActiveCol ?? 1u, 1u, CellAddress.MaxCol));
+        SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+        FormulaEditAddress = null;
+        RefreshLinkedPicturesForEditedCells(result);
+        MarkDirty();
+        _selectionStatsRevision++;
+        foreach (var sheet in Workbook.Sheets)
+            InvalidateAllPerViewOverridesForSheet(sheet.Id);
+        RefreshViewport();
+        EnsureActiveCellVisible();
+        return result;
+    }
+
+    /// <summary>
+    /// Executes and records a repeatable workbook command while preserving the current selection.
+    /// The factory is re-evaluated by Repeat Last Action, so it may resolve live renderer state.
+    /// </summary>
+    public WorkbookCellEditResult ExecuteRepeatableCommandPreservingSelection(
+        Func<IWorkbookCommand> commandFactory)
+    {
+        ArgumentNullException.ThrowIfNull(commandFactory);
+
+        var sheetIdsBefore = CaptureSheetIds();
+        var hiddenStatesBefore = CaptureSheetHiddenStates();
+        var result = _cellEditService.ExecuteRepeatableEditCommand(Workbook, commandFactory);
+        ApplySuccessfulPreservedSelectionCommandResult(result, sheetIdsBefore, hiddenStatesBefore);
+        return result;
+    }
+
+    // Worksheet structure edits
+
+    public WorkbookWorksheetStructureResult InsertSelectedCells(InsertCellsShiftDirection direction) =>
+        ExecuteSelectedWorksheetStructureOperation(direction == InsertCellsShiftDirection.Right
+            ? WorkbookWorksheetStructureOperation.InsertCellsShiftRight
+            : WorkbookWorksheetStructureOperation.InsertCellsShiftDown);
+
+    public WorkbookWorksheetStructureResult DeleteSelectedCells(DeleteCellsShiftDirection direction) =>
+        ExecuteSelectedWorksheetStructureOperation(direction == DeleteCellsShiftDirection.Left
+            ? WorkbookWorksheetStructureOperation.DeleteCellsShiftLeft
+            : WorkbookWorksheetStructureOperation.DeleteCellsShiftUp);
+
+    public WorkbookWorksheetStructureResult InsertSelectedRows() =>
+        ExecuteSelectedWorksheetStructureOperation(WorkbookWorksheetStructureOperation.InsertRows);
+
+    public WorkbookWorksheetStructureResult InsertSelectedColumns() =>
+        ExecuteSelectedWorksheetStructureOperation(WorkbookWorksheetStructureOperation.InsertColumns);
+
+    public WorkbookWorksheetStructureResult DeleteSelectedRows() =>
+        ExecuteSelectedWorksheetStructureOperation(WorkbookWorksheetStructureOperation.DeleteRows);
+
+    public WorkbookWorksheetStructureResult DeleteSelectedColumns() =>
+        ExecuteSelectedWorksheetStructureOperation(WorkbookWorksheetStructureOperation.DeleteColumns);
+
+    public WorkbookWorksheetStructureResult InsertRows(uint beforeRow, uint count = 1) =>
+        ExecuteExplicitWorksheetStructureOperation(
+            WorkbookWorksheetStructureOperation.InsertRows,
+            CreateWholeRowRange(beforeRow, count));
+
+    public WorkbookWorksheetStructureResult InsertColumns(uint beforeColumn, uint count = 1) =>
+        ExecuteExplicitWorksheetStructureOperation(
+            WorkbookWorksheetStructureOperation.InsertColumns,
+            CreateWholeColumnRange(beforeColumn, count));
+
+    public WorkbookWorksheetStructureResult DeleteRows(uint startRow, uint count = 1) =>
+        ExecuteExplicitWorksheetStructureOperation(
+            WorkbookWorksheetStructureOperation.DeleteRows,
+            CreateWholeRowRange(startRow, count));
+
+    public WorkbookWorksheetStructureResult DeleteColumns(uint startColumn, uint count = 1) =>
+        ExecuteExplicitWorksheetStructureOperation(
+            WorkbookWorksheetStructureOperation.DeleteColumns,
+            CreateWholeColumnRange(startColumn, count));
+
+    private WorkbookWorksheetStructureResult ExecuteSelectedWorksheetStructureOperation(
+        WorkbookWorksheetStructureOperation operation)
+    {
+        var targetRange = SelectedRange;
+        var title = WorkbookWorksheetStructureResult.GetCommandTitle(operation);
+        var result = ExecuteRepeatableCommandPreservingSelection(
+            () => CreateGroupedSelectionRangeCommand(
+                title,
+                OrderStructuralRanges(operation, GetSelectionSizingRanges()),
+                (sheetId, range) => CreateWorksheetStructureCommand(operation, range, sheetId)));
+        return new WorkbookWorksheetStructureResult(result, operation, targetRange);
+    }
+
+    private static IReadOnlyList<GridRange> OrderStructuralRanges(
+        WorkbookWorksheetStructureOperation operation,
+        IReadOnlyList<GridRange> ranges) =>
+        operation is WorkbookWorksheetStructureOperation.InsertRows or
+            WorkbookWorksheetStructureOperation.DeleteRows or
+            WorkbookWorksheetStructureOperation.InsertCellsShiftDown or
+            WorkbookWorksheetStructureOperation.DeleteCellsShiftUp
+            ? ranges.OrderByDescending(range => range.Start.Row)
+                .ThenByDescending(range => range.Start.Col)
+                .ToArray()
+            : ranges.OrderByDescending(range => range.Start.Col)
+                .ThenByDescending(range => range.Start.Row)
+                .ToArray();
+
+    private WorkbookWorksheetStructureResult ExecuteExplicitWorksheetStructureOperation(
+        WorkbookWorksheetStructureOperation operation,
+        GridRange targetRange)
+    {
+        var result = ExecuteRepeatableCommandPreservingSelection(
+            () => CreateWorksheetStructureCommand(
+                operation,
+                RemapRangeToSheet(targetRange, ActiveSheet.Id)));
+        return new WorkbookWorksheetStructureResult(result, operation, targetRange);
+    }
+
+    private IWorkbookCommand CreateWorksheetStructureCommand(
+        WorkbookWorksheetStructureOperation operation,
+        GridRange range)
+    {
+        var title = WorkbookWorksheetStructureResult.GetCommandTitle(operation);
+        return CreateGroupedSheetCommand(
+            title,
+            sheetId => CreateWorksheetStructureCommand(
+                operation,
+                RemapRangeToSheet(range, sheetId),
+                sheetId));
+    }
+
+    private static IWorkbookCommand CreateWorksheetStructureCommand(
+        WorkbookWorksheetStructureOperation operation,
+        GridRange range,
+        SheetId sheetId) =>
+        operation switch
+        {
+            WorkbookWorksheetStructureOperation.InsertCellsShiftRight =>
+                new InsertCellsCommand(sheetId, range, InsertCellsShiftDirection.Right),
+            WorkbookWorksheetStructureOperation.InsertCellsShiftDown =>
+                new InsertCellsCommand(sheetId, range, InsertCellsShiftDirection.Down),
+            WorkbookWorksheetStructureOperation.InsertRows =>
+                new InsertRowsCommand(sheetId, range.Start.Row, range.RowCount),
+            WorkbookWorksheetStructureOperation.InsertColumns =>
+                new InsertColumnsCommand(sheetId, range.Start.Col, range.ColCount),
+            WorkbookWorksheetStructureOperation.DeleteCellsShiftLeft =>
+                new DeleteCellsCommand(sheetId, range, DeleteCellsShiftDirection.Left),
+            WorkbookWorksheetStructureOperation.DeleteCellsShiftUp =>
+                new DeleteCellsCommand(sheetId, range, DeleteCellsShiftDirection.Up),
+            WorkbookWorksheetStructureOperation.DeleteRows =>
+                new DeleteRowsCommand(sheetId, range.Start.Row, range.RowCount),
+            _ => new DeleteColumnsCommand(sheetId, range.Start.Col, range.ColCount),
+        };
+
+    private GridRange CreateWholeRowRange(uint startRow, uint count)
+    {
+        ArgumentOutOfRangeException.ThrowIfZero(count);
+        var endRow = checked(startRow + count - 1);
+        return new GridRange(
+            new CellAddress(ActiveSheet.Id, startRow, 1),
+            new CellAddress(ActiveSheet.Id, endRow, CellAddress.MaxCol));
+    }
+
+    private GridRange CreateWholeColumnRange(uint startColumn, uint count)
+    {
+        ArgumentOutOfRangeException.ThrowIfZero(count);
+        var endColumn = checked(startColumn + count - 1);
+        return new GridRange(
+            new CellAddress(ActiveSheet.Id, 1, startColumn),
+            new CellAddress(ActiveSheet.Id, CellAddress.MaxRow, endColumn));
+    }
     /// <summary>
     /// True for the Insert/Delete Rows/Columns/Cells family (and a composite made entirely of
     /// them, for multi-area edits) that must retire a pending Copy/Cut the same way an ordinary
@@ -1254,6 +1612,14 @@ public sealed class WorkbookSession : IDisposable
         ApplySuccessfulEditResult(result.EditResult, request.ChangingCell);
         return result;
     }
+
+    /// <summary>Calculates a Goal Seek proposal without applying it, for hosts with a confirmation step.</summary>
+    public GoalSeekResult FindGoalSeekSolution(GoalSeekRequest request) =>
+        _cellEditService.FindGoalSeekSolution(Workbook, request);
+
+    /// <summary>Validates and calculates a Goal Seek proposal without applying it.</summary>
+    public WorkbookGoalSeekProposal FindGoalSeekProposal(GoalSeekRequest request) =>
+        _cellEditService.FindGoalSeekProposal(Workbook, request);
 
     public WorkbookCellEditResult ExecuteDataTablePlan(DataTablePlan plan)
     {
@@ -1517,50 +1883,15 @@ public sealed class WorkbookSession : IDisposable
         bool matchCase = false,
         bool matchEntireCell = false)
     {
-        var text = searchText ?? _lastFindText ?? string.Empty;
-        // Excel allows a blank "Find what" as long as a Format criterion narrows the search (Find
-        // All by format only); only reject the empty search when no format criterion was supplied
-        // either (R64-commands-find-replace-6-1).
-        if (string.IsNullOrEmpty(text) && options?.RequiredFormat is null)
-            return WorkbookNavigationResult.Failed("Find text is required.");
+        var result = _findReplaceWorkflow.FindNext(searchText, options, matchCase, matchEntireCell);
+        if (!result.Success || result.SelectedMatch is not { } match || result.SelectedRange is null)
+            return WorkbookNavigationResult.Failed(result.ErrorMessage ?? "Find failed.");
 
-        if (searchText is null && options is null)
-        {
-            options = _lastFindOptions;
-            matchCase = _lastFindMatchCase;
-            matchEntireCell = _lastFindMatchEntireCell;
-        }
-
-        var effectiveOptions = ResolveFindOptions(options, FindLookIn.Formulas);
-
-        var sameSearch =
-            string.Equals(_lastFindText, text, StringComparison.Ordinal) &&
-            _lastFindOptions == effectiveOptions &&
-            _lastFindMatchCase == matchCase &&
-            _lastFindMatchEntireCell == matchEntireCell;
-
-        var results = FindReplaceService.Find(Workbook, text, effectiveOptions, matchCase, matchEntireCell);
-        RememberFindSearch(text, effectiveOptions, matchCase, matchEntireCell);
-
-        if (results.Count == 0)
-        {
-            ClearLastFindTargets();
-            return WorkbookNavigationResult.Failed($"No matches found for \"{text}\".");
-        }
-
-        var index = GetNextFindResultIndex(results, effectiveOptions.SearchOrder, sameSearch);
-        var result = results[index];
-        var navigation = GoToCell(result.Address);
-        if (!navigation.Success)
-            return navigation;
-
-        _lastFindResult = result;
-        _lastReplaceResult = null;
         return WorkbookNavigationResult.Found(
-            navigation.SelectedRange!.Value,
-            result.MatchedText,
-            index + 1,
-            results.Count);
+            result.SelectedRange.Value,
+            match.MatchedText,
+            result.SelectedIndex + 1,
+            result.Matches.Count);
     }
 
     public WorkbookFindAllResult FindAll(
@@ -1569,19 +1900,10 @@ public sealed class WorkbookSession : IDisposable
         bool matchCase = false,
         bool matchEntireCell = false)
     {
-        ArgumentNullException.ThrowIfNull(searchText);
-
-        // See FindNext: a blank search is allowed when a Format criterion narrows the results.
-        if (string.IsNullOrEmpty(searchText) && options?.RequiredFormat is null)
-            return WorkbookFindAllResult.Failed("Find text is required.");
-
-        var effectiveOptions = ResolveFindOptions(options, FindLookIn.Formulas);
-
-        var results = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
-        RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
-        ClearLastFindTargets();
-
-        return WorkbookFindAllResult.Found(results.Select(CreateFindAllMatch).ToList());
+        var result = _findReplaceWorkflow.FindAll(searchText, options, matchCase, matchEntireCell);
+        return result.Success
+            ? WorkbookFindAllResult.Found(result.Matches.Select(CreateFindAllMatch).ToList())
+            : WorkbookFindAllResult.Failed(result.ErrorMessage ?? "Find All failed.");
     }
 
     public WorkbookReplaceResult ReplaceAllValues(
@@ -1599,59 +1921,22 @@ public sealed class WorkbookSession : IDisposable
         bool matchEntireCell = false,
         StyleDiff? replacementFormat = null)
     {
-        ArgumentNullException.ThrowIfNull(searchText);
-        ArgumentNullException.ThrowIfNull(replaceText);
-
-        // See FindNext: a blank search is allowed when a Format criterion narrows the results.
-        if (string.IsNullOrEmpty(searchText) && options?.RequiredFormat is null)
-            return WorkbookReplaceResult.Failed("Find text is required.");
-
-        var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
-        RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
-        ClearLastFindTargets();
-
-        var matches = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
-        if (matches.Count == 0)
-            return WorkbookReplaceResult.Replaced(0);
-
-        var commands = new List<IWorkbookCommand>();
-        foreach (var match in matches)
-        {
-            var sheet = Workbook.GetSheet(match.Address.Sheet);
-            if (sheet is null)
-                continue;
-
-            if (FindReplaceService.TryCreateReplacementCommand(
-                    sheet,
-                    match,
-                    searchText,
-                    replaceText,
-                    matchCase,
-                    matchEntireCell,
-                    effectiveOptions.LookIn,
-                    replacementFormat,
-                    out var command,
-                    workbook: Workbook))
-            {
-                commands.Add(command);
-            }
-        }
-
-        var replacedCount = commands.Count;
-        if (commands.Count == 0)
-            return WorkbookReplaceResult.Replaced(0, matchCount: matches.Count);
-
         var selectedRange = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            ToCommand("Replace All", commands));
+        var result = _findReplaceWorkflow.ReplaceAll(
+            searchText,
+            replaceText,
+            options,
+            matchCase,
+            matchEntireCell,
+            replacementFormat);
         if (!result.Success)
             return WorkbookReplaceResult.Failed(result.ErrorMessage ?? "Replace All failed.");
+        if (result.EditResult is { } editResult)
+            ApplySuccessfulRangeEditResult(editResult, selectedRange);
 
-        ApplySuccessfulRangeEditResult(result, selectedRange);
         return WorkbookReplaceResult.Replaced(
-            replacedCount,
-            matchCount: matches.Count);
+            result.ReplacedCount,
+            matchCount: result.MatchCount);
     }
 
     public WorkbookReplaceResult ReplaceNextValue(
@@ -1669,74 +1954,26 @@ public sealed class WorkbookSession : IDisposable
         bool matchEntireCell = false,
         StyleDiff? replacementFormat = null)
     {
-        ArgumentNullException.ThrowIfNull(searchText);
-        ArgumentNullException.ThrowIfNull(replaceText);
-
-        // See FindNext: a blank search is allowed when a Format criterion narrows the results.
-        if (string.IsNullOrEmpty(searchText) && options?.RequiredFormat is null)
-            return WorkbookReplaceResult.Failed("Find text is required.");
-
-        var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
-        var sameSearchText =
-            string.Equals(_lastFindText, searchText, StringComparison.Ordinal) &&
-            _lastFindMatchCase == matchCase &&
-            _lastFindMatchEntireCell == matchEntireCell;
-        var sameSearch =
-            sameSearchText &&
-            (_lastFindOptions == effectiveOptions ||
-                HasLastFindTargetAtActiveCell());
-
-        var matches = FindReplaceService.Find(Workbook, searchText, effectiveOptions, matchCase, matchEntireCell);
-        RememberFindSearch(searchText, effectiveOptions, matchCase, matchEntireCell);
-
-        if (matches.Count == 0)
-        {
-            ClearLastFindTargets();
-            return WorkbookReplaceResult.Replaced(0);
-        }
-
-        var index = GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch);
-        var match = matches[index];
-        var navigation = GoToCell(match.Address);
-        if (!navigation.Success)
-            return WorkbookReplaceResult.Failed(navigation.ErrorMessage ?? "Replace failed.");
-
-        var sheet = Workbook.GetSheet(match.Address.Sheet);
-        if (sheet is null ||
-            !FindReplaceService.TryCreateReplacementCommand(
-                sheet,
-                match,
-                searchText,
-                replaceText,
-                matchCase,
-                matchEntireCell,
-                effectiveOptions.LookIn,
-                replacementFormat,
-                out var command,
-                workbook: Workbook))
-        {
-            ClearLastFindTargets();
-            return WorkbookReplaceResult.Replaced(
-                0,
-                navigation.SelectedRange,
-                index + 1,
-                matches.Count);
-        }
-
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            command);
+        var result = _findReplaceWorkflow.ReplaceNext(
+            searchText,
+            replaceText,
+            options,
+            matchCase,
+            matchEntireCell,
+            replacementFormat);
         if (!result.Success)
-        {
-            ClearLastFindTargets();
             return WorkbookReplaceResult.Failed(result.ErrorMessage ?? "Replace failed.");
-        }
+        if (result.EditResult is { } editResult && result.ReplacedMatch is { } replacedMatch)
+            ApplySuccessfulEditResult(editResult, replacedMatch.Address);
 
-        _lastFindResult = null;
-        _lastReplaceResult = match;
-        ApplySuccessfulEditResult(result, match.Address);
-        var replacedRange = new GridRange(match.Address, match.Address);
-        return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);
+        var replacedRange = result.ReplacedMatch is { } match
+            ? new GridRange(match.Address, match.Address)
+            : result.SelectedRange;
+        return WorkbookReplaceResult.Replaced(
+            result.ReplacedCount,
+            replacedRange,
+            result.MatchIndex,
+            result.MatchCount);
     }
 
     public void MoveActiveCell(int rowDelta, int colDelta)
@@ -2020,7 +2257,7 @@ public sealed class WorkbookSession : IDisposable
     {
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new AddSheetCommand(WorkbookSheetNameGenerator.GenerateUniqueSheetName(Workbook)));
+            new AddSheetCommand(SheetTabListPlanner.GenerateUniqueSheetName(Workbook)));
         if (!result.Success)
             return result;
 
@@ -2143,26 +2380,61 @@ public sealed class WorkbookSession : IDisposable
     public double GetSelectedColumnWidth() =>
         Ribbon.RowColumnSizingPlanner.GetColumnWidthDialogValue(ActiveSheet, SelectedRange);
 
-    /// <summary>
-    /// Applies an explicit height (points) to every row in every disjoint area of the selection,
-    /// undoably. R126-cellscmds-multiarea-rowheight-2: a Ctrl+click multi-area row-header selection
-    /// (e.g. rows 2 and 5) must resize EVERY selected area, matching both Excel and the WPF host's
-    /// R124 fix (MainWindow.CellsCommands.cs FormatRowHeightMenuItem_Click via
-    /// TryExecuteRepeatableCurrentSelectionRangesCommand) -- reading only the single active
-    /// <see cref="SelectedRange"/> silently dropped every area but the last-clicked one.
-    /// </summary>
+    /// <summary>Applies an explicit height (points) to every selected row on every grouped sheet.</summary>
     public WorkbookCellEditResult SetSelectedRowsHeight(double height) =>
-        ExecuteSizingCommand(
-            CreateSizingRangeCommand(
+        ExecuteRepeatableStructureCommand(() =>
+            CreateSelectionSizingCommand(
                 "Row Height",
-                range => Ribbon.RowColumnSizingPlanner.CreateRowHeightCommand(ActiveSheet.Id, range, height)));
+                (sheetId, range) => Ribbon.RowColumnSizingPlanner.CreateRowHeightCommand(
+                    sheetId,
+                    range,
+                    height)));
 
-    /// <summary>Column counterpart of <see cref="SetSelectedRowsHeight"/> above (R126-cellscmds-multiarea-rowheight-2).</summary>
+    /// <summary>Applies an explicit width (characters) to every selected column on every grouped sheet.</summary>
     public WorkbookCellEditResult SetSelectedColumnsWidth(double width) =>
-        ExecuteSizingCommand(
-            CreateSizingRangeCommand(
+        ExecuteRepeatableStructureCommand(() =>
+            CreateSelectionSizingCommand(
                 "Column Width",
-                range => Ribbon.RowColumnSizingPlanner.CreateColumnWidthCommand(ActiveSheet.Id, range, width)));
+                (sheetId, range) => Ribbon.RowColumnSizingPlanner.CreateColumnWidthCommand(
+                    sheetId,
+                    range,
+                    width)));
+
+    /// <summary>Commits a native row-header drag, whose measured size is already in model pixels.</summary>
+    public WorkbookCellEditResult SetRowsHeightPixels(uint startRow, uint endRow, double heightPixels) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Row Height",
+                sheetId => new SetRowHeightCommand(sheetId, startRow, endRow, heightPixels)));
+
+    /// <summary>Commits a native column-header drag after converting renderer pixels to model width.</summary>
+    public WorkbookCellEditResult SetColumnsWidthPixels(uint startColumn, uint endColumn, double widthPixels) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Column Width",
+                sheetId => new SetColumnWidthCommand(
+                    sheetId,
+                    startColumn,
+                    endColumn,
+                    ColumnWidthPixelMapper.PixelsToColumnWidth(widthPixels))));
+
+    public WorkbookCellEditResult SetSelectedRowsHidden(bool hidden) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateSelectionSizingCommand(
+                hidden ? "Hide Row" : "Unhide Row",
+                (sheetId, range) => Ribbon.RowColumnSizingPlanner.CreateRowsHiddenCommand(
+                    sheetId,
+                    range,
+                    hidden)));
+
+    public WorkbookCellEditResult SetSelectedColumnsHidden(bool hidden) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateSelectionSizingCommand(
+                hidden ? "Hide Column" : "Unhide Column",
+                (sheetId, range) => Ribbon.RowColumnSizingPlanner.CreateColumnsHiddenCommand(
+                    sheetId,
+                    range,
+                    hidden)));
 
     /// <summary>
     /// Sizes each selected row's height to its tallest cell content (content-based estimate via the
@@ -2173,17 +2445,12 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     public WorkbookCellEditResult AutoFitSelectedRowHeight()
     {
-        var command = CreateAutoFitRangeCommand(
-            "Auto Row Height",
-            range => Ribbon.RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(
-                ActiveSheet.Id,
-                Ribbon.RowColumnSizingPlanner.PlanAutoFitRowHeights(
-                    ActiveSheet,
-                    range,
-                    ActiveSheet.GetUsedRange(),
-                    GetAutoFitDisplayText,
-                    ActiveSheet.DefaultRowHeight)));
-        return command is null ? SucceededWithoutEdit() : ExecuteSizingCommand(command);
+        return ExecuteRepeatableStructureCommand(() =>
+            CreateSelectionSizingCommand(
+                "Auto Row Height",
+                (sheetId, range) => CreateAutoFitRowHeightCommand(
+                    sheetId,
+                    range)));
     }
 
     /// <summary>
@@ -2194,18 +2461,33 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     public WorkbookCellEditResult AutoFitSelectedColumnWidth()
     {
-        var command = CreateAutoFitRangeCommand(
-            "Auto Column Width",
-            range => Ribbon.RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(
-                ActiveSheet.Id,
-                Ribbon.RowColumnSizingPlanner.PlanAutoFitColumnWidths(
-                    ActiveSheet,
-                    range,
-                    ActiveSheet.GetUsedRange(),
-                    GetAutoFitDisplayText,
-                    ActiveSheet.DefaultColumnWidth)));
-        return command is null ? SucceededWithoutEdit() : ExecuteSizingCommand(command);
+        return ExecuteRepeatableStructureCommand(() =>
+            CreateSelectionSizingCommand(
+                "Auto Column Width",
+                (sheetId, range) => CreateAutoFitColumnWidthCommand(
+                    sheetId,
+                    range)));
     }
+
+    public WorkbookCellEditResult AutoFitRows(uint startRow, uint endRow) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Auto Row Height",
+                sheetId => CreateAutoFitRowHeightCommand(
+                    sheetId,
+                    new GridRange(
+                        new CellAddress(sheetId, startRow, 1),
+                        new CellAddress(sheetId, endRow, CellAddress.MaxCol)))));
+
+    public WorkbookCellEditResult AutoFitColumns(uint startColumn, uint endColumn) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateGroupedSheetCommand(
+                "Auto Column Width",
+                sheetId => CreateAutoFitColumnWidthCommand(
+                    sheetId,
+                    new GridRange(
+                        new CellAddress(sheetId, 1, startColumn),
+                        new CellAddress(sheetId, CellAddress.MaxRow, endColumn)))));
 
     /// <summary>
     /// Resolves the current selection into its disjoint areas (falling back to the single
@@ -2220,31 +2502,25 @@ public sealed class WorkbookSession : IDisposable
         return ranges.Count > 0 ? ranges : [SelectedRange];
     }
 
-    /// <summary>Builds one command per disjoint selected area via <paramref name="createCommand"/>, combining more than one into a <see cref="CompositeWorkbookCommand"/> (R126-cellscmds-multiarea-rowheight-2).</summary>
-    private IWorkbookCommand CreateSizingRangeCommand(string title, Func<GridRange, IWorkbookCommand> createCommand)
+    /// <summary>Builds one command per grouped sheet and disjoint selected area.</summary>
+    private IWorkbookCommand CreateSelectionSizingCommand(
+        string title,
+        Func<SheetId, GridRange, IWorkbookCommand> createCommand) =>
+        CreateGroupedSelectionRangeCommand(title, GetSelectionSizingRanges(), createCommand);
+
+    private IWorkbookCommand CreateGroupedSelectionRangeCommand(
+        string title,
+        IReadOnlyList<GridRange> ranges,
+        Func<SheetId, GridRange, IWorkbookCommand> createCommand)
     {
-        var commands = GetSelectionSizingRanges().Select(createCommand).ToList();
-        return commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand(title, commands);
-    }
+        var commands = new List<IWorkbookCommand>();
+        foreach (var sheetId in CurrentGroupedEditSheetIds())
+        {
+            commands.AddRange(ranges.Select(range =>
+                createCommand(sheetId, RemapRangeToSheet(range, sheetId))));
+        }
 
-    /// <summary>
-    /// AutoFit counterpart of <see cref="CreateSizingRangeCommand"/>: <paramref name="createCommand"/>
-    /// may return null for an area with nothing measurable (empty plan list), which is skipped rather
-    /// than propagated -- one empty area must not suppress AutoFit for the other selected areas.
-    /// Returns null only when every area produced nothing.
-    /// </summary>
-    private IWorkbookCommand? CreateAutoFitRangeCommand(string title, Func<GridRange, IWorkbookCommand?> createCommand)
-    {
-        var commands = GetSelectionSizingRanges()
-            .Select(createCommand)
-            .Where(command => command is not null)
-            .Select(command => command!)
-            .ToList();
-
-        if (commands.Count == 0)
-            return null;
-
-        return commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand(title, commands);
+        return ToCommand(title, commands);
     }
 
     /// <summary>
@@ -2254,26 +2530,44 @@ public sealed class WorkbookSession : IDisposable
     /// follow-up resize targets the same span -- including every disjoint area of a multi-area
     /// selection (R126-cellscmds-multiarea-rowheight-2), not just the active one.
     /// </summary>
-    private WorkbookCellEditResult ExecuteSizingCommand(IWorkbookCommand command)
-    {
-        var preservedRange = SelectedRange;
-        var preservedRanges = SelectedRanges;
-        var preservedActiveCell = ActiveCell;
-        var result = ExecuteReviewCommand(command);
-        if (result.Success)
-        {
-            if (preservedRanges.Count > 1)
-                SelectRanges(preservedRange, preservedRanges, preservedActiveCell);
-            else
-                SelectRange(preservedRange);
-        }
+    private WorkbookCellEditResult ExecuteRepeatableStructureCommand(Func<IWorkbookCommand> commandFactory) =>
+        ExecuteRepeatableCommandPreservingSelection(commandFactory);
 
-        return result;
+    private IWorkbookCommand CreateAutoFitRowHeightCommand(SheetId sheetId, GridRange range)
+    {
+        var sheet = Workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return new CompositeWorkbookCommand("Auto Row Height", []);
+
+        var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitRowHeights(
+            sheet,
+            range,
+            sheet.GetUsedRange(),
+            (row, col) => GetAutoFitDisplayText(sheet, row, col),
+            sheet.DefaultRowHeight);
+        return Ribbon.RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)
+            ?? new CompositeWorkbookCommand("Auto Row Height", []);
     }
 
-    private AutoFitCellText? GetAutoFitDisplayText(uint row, uint col)
+    private IWorkbookCommand CreateAutoFitColumnWidthCommand(SheetId sheetId, GridRange range)
     {
-        if (ActiveSheet.GetCell(row, col) is not { } cell)
+        var sheet = Workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return new CompositeWorkbookCommand("Auto Column Width", []);
+
+        var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitColumnWidths(
+            sheet,
+            range,
+            sheet.GetUsedRange(),
+            (row, col) => GetAutoFitDisplayText(sheet, row, col),
+            sheet.DefaultColumnWidth);
+        return Ribbon.RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)
+            ?? new CompositeWorkbookCommand("Auto Column Width", []);
+    }
+
+    private AutoFitCellText? GetAutoFitDisplayText(Sheet sheet, uint row, uint col)
+    {
+        if (sheet.GetCell(row, col) is not { } cell)
             return null;
 
         var style = Workbook.GetStyle(cell.StyleId);
@@ -2285,8 +2579,64 @@ public sealed class WorkbookSession : IDisposable
         return new AutoFitCellText(text, style.WrapText, TextRotation: style.TextRotation, FontSize: style.FontSize);
     }
 
-    private static WorkbookCellEditResult SucceededWithoutEdit() =>
-        new(true, null, [], RecalcReport: null);
+    public WorkbookCellEditResult GroupSelectedOutline() =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateSelectionSizingCommand(
+                "Group",
+                (sheetId, range) => CreateOutlineCommand(
+                    sheetId,
+                    sheet => WorksheetStructureCommandPlanner.CreateGroupCommand(
+                        sheet,
+                        range))));
+
+    public WorkbookCellEditResult UngroupSelectedOutline() =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateSelectionSizingCommand(
+                "Ungroup",
+                (sheetId, range) => CreateOutlineCommand(
+                    sheetId,
+                    sheet => WorksheetStructureCommandPlanner.CreateUngroupCommand(
+                        sheet,
+                        range))));
+
+    public WorkbookCellEditResult ClearActiveWorksheetOutline() =>
+        ExecuteCommandPreservingSelection(
+            CreateGroupedSheetCommand(
+                "Clear Outline",
+                sheetId => new ClearWorksheetOutlineCommand(sheetId)));
+
+    public WorkbookCellEditResult SetSelectedOutlineGroupsCollapsed(bool collapse) =>
+        ExecuteRepeatableStructureCommand(() =>
+            CreateSelectionSizingCommand(
+                collapse ? "Collapse Group" : "Expand Group",
+                (sheetId, range) => CreateOutlineCommand(
+                    sheetId,
+                    sheet => WorksheetStructureCommandPlanner.CreateSelectedOutlineVisibilityCommand(
+                        sheet,
+                        range,
+                        collapse))));
+
+    public WorkbookCellEditResult SetOutlineGroupCollapsed(
+        OutlineGroupingAxis axis,
+        uint start,
+        uint end,
+        int level,
+        bool collapse) =>
+        ExecuteRepeatableStructureCommand(() =>
+            WorksheetStructureCommandPlanner.CreateOutlineGroupToggleCommand(
+                ActiveSheet.Id,
+                axis,
+                start,
+                end,
+                level,
+                collapse));
+
+    private IWorkbookCommand CreateOutlineCommand(
+        SheetId sheetId,
+        Func<Sheet, IWorkbookCommand> createCommand) =>
+        Workbook.GetSheet(sheetId) is { } sheet
+            ? createCommand(sheet)
+            : new CompositeWorkbookCommand("Worksheet Outline", []);
 
     public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
     {
@@ -2434,6 +2784,43 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult UnfreezePanes() =>
         SetFreezePanes(frozenRows: 0, frozenCols: 0);
+
+    public WorkbookCellEditResult ToggleSplitPanesAtActiveCell(
+        IReadOnlyList<RowMetric>? viewportRows = null,
+        IReadOnlyList<ColMetric>? viewportColumns = null)
+    {
+        var wasSplit = GetEffectiveSplitRow() is not null || GetEffectiveSplitCol() is not null;
+        var rows = viewportRows ?? Viewport.RowMetrics;
+        var columns = viewportColumns ?? Viewport.ColMetrics;
+        var (splitRow, splitColumn) = WorksheetStructureCommandPlanner.ResolveSplitTarget(
+            ActiveCell.Row,
+            ActiveCell.Col,
+            wasSplit,
+            rows,
+            columns);
+        return SetSplitPanes(splitRow, splitColumn);
+    }
+
+    public WorkbookCellEditResult SetSplitPanes(uint? splitRow, uint? splitColumn)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var result = ExecuteCommandPreservingSelection(
+            CreateGroupedSheetCommand(
+                "Split",
+                sheetId => new SetSplitPanesCommand(sheetId, splitRow, splitColumn)));
+        if (!result.Success || result.IsNoOp)
+            return result;
+
+        foreach (var sheetId in targetSheetIds)
+        {
+            _viewSplitRowOverrides[sheetId] = splitRow;
+            _viewSplitColOverrides[sheetId] = splitColumn;
+        }
+
+        ResetSplitPaneOffsets();
+        RefreshViewport();
+        return result;
+    }
 
     public WorkbookCellEditResult HideActiveSheet()
     {
@@ -2698,45 +3085,21 @@ public sealed class WorkbookSession : IDisposable
         ArgumentNullException.ThrowIfNull(text);
 
         var address = FormulaEditAddress ?? ActiveCell;
-
-        Cell cell;
-        try
-        {
-            cell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle, Workbook);
-        }
-        catch (FormulaParseException ex)
-        {
-            // Matches Excel's own refusal to commit a genuinely malformed formula (e.g. an
-            // unbalanced "=SUM(A1"): reject the entry instead of silently persisting broken
-            // formula text (R91-formula-editing-assist-5-4).
-            return new WorkbookCellEditResult(false, ex.Message, [], RecalcReport: null);
-        }
-
-        // Enforce data validation the same way the WPF host's TryCreateCellFromEntryText does: a
-        // Stop-alert rule blocks the entry outright, while a Warning/Information ("AskToContinue")
-        // rule asks the host via DataValidationPromptResolver (Warning: Yes/No/Cancel;
-        // Information: OK/Cancel) -- Yes/OK still commits the invalid value, anything else does
-        // not. A host that hasn't wired DataValidationPromptResolver keeps this session's
-        // original pass-through behavior for AskToContinue rules (silently accepted).
-        var check = EvaluateDataValidationForEntry(cell, address);
-        if (check.Outcome == DataValidationEntryOutcome.Blocked)
-            return new WorkbookCellEditResult(false, check.Message, [], RecalcReport: null);
-
-        if (check.Outcome == DataValidationEntryOutcome.NeedsConfirmation &&
-            DataValidationPromptResolver is { } resolvePrompt)
-        {
-            var decision = resolvePrompt(new DataValidationPromptRequest(check.Message!, check.Title!, check.AlertStyle));
-            if (decision is not (UserMessageResult.Yes or UserMessageResult.Ok))
-                return new WorkbookCellEditResult(false, check.Message, [], RecalcReport: null);
-        }
+        var failure = TryBuildValidatedCellEntryEdits(
+            text,
+            [address],
+            useR1C1ReferenceStyle,
+            out var edits);
+        if (failure is not null)
+            return failure;
 
         // Formula point mode can leave the visible sheet on the reference target while the edit
         // belongs to the original source sheet. Build the command against the source sheet in that
         // case; using the visible ActiveSheet here would write the source address into the pointed
         // sheet and leave the real edit cell untouched.
         var editCommand = address.Sheet.Equals(ActiveSheet.Id)
-            ? CreateEditCellsCommand([(address, cell)])
-            : new EditCellsCommand(address.Sheet, [(address, cell)]);
+            ? CreateEditCellsCommand(edits)
+            : new EditCellsCommand(address.Sheet, edits);
         var result = _cellEditService.ExecuteEditCommand(Workbook, editCommand);
 
         if (!result.Success)
@@ -2749,6 +3112,123 @@ public sealed class WorkbookSession : IDisposable
     }
 
     /// <summary>
+    /// Commits one entry to every cell in the current single- or multi-area selection as one
+    /// undoable command while preserving the selection. Both desktop renderers use this for
+    /// Ctrl+Enter, so parsing, validation, grouped-sheet targeting, recalculation, and dirty-state
+    /// ownership stay in the application session.
+    /// </summary>
+    public WorkbookCellEditResult CommitCellTextAcrossSelection(
+        string text,
+        bool useR1C1ReferenceStyle = false)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var primaryRange = SelectedRange;
+        var selectedRanges = SelectedRanges.Count > 0
+            ? SelectedRanges.ToArray()
+            : [primaryRange];
+        var addresses = new List<CellAddress>();
+        var seenAddresses = new HashSet<CellAddress>();
+        foreach (var range in selectedRanges)
+        {
+            ValidateSelectionRange(range, nameof(SelectedRanges));
+            foreach (var address in range.AllCells())
+            {
+                if (seenAddresses.Add(address))
+                    addresses.Add(address);
+            }
+        }
+
+        if (addresses.Count == 0)
+            return new WorkbookCellEditResult(false, "The current selection contains no cells.", [], null);
+
+        var failure = TryBuildValidatedCellEntryEdits(
+            text,
+            addresses,
+            useR1C1ReferenceStyle,
+            out var edits);
+        if (failure is not null)
+            return failure;
+
+        var activeCell = ActiveCell;
+        var result = _cellEditService.ExecuteEditCommand(Workbook, CreateEditCellsCommand(edits));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulSelectionEditResult(result, primaryRange, selectedRanges, activeCell);
+        foreach (var address in addresses)
+            GrowRowHeightForAlreadyWrappedCellIfNeeded(address);
+        CancelPendingCutAfterMutatingEdit();
+        return result;
+    }
+
+    private WorkbookCellEditResult? TryBuildValidatedCellEntryEdits(
+        string text,
+        IReadOnlyList<CellAddress> addresses,
+        bool useR1C1ReferenceStyle,
+        out IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)
+    {
+        var plan = CellEntryCommitPlanner.BuildSelection(
+            text,
+            addresses,
+            useR1C1ReferenceStyle,
+            Workbook);
+        if (!plan.Success)
+        {
+            edits = [];
+            return new WorkbookCellEditResult(
+                false,
+                plan.ErrorMessage,
+                [],
+                RecalcReport: null,
+                new WorkbookCellEditFailure(WorkbookCellEditFailureKind.InvalidEntrySyntax));
+        }
+
+        foreach (var (address, cell) in plan.Edits)
+        {
+            var check = EvaluateDataValidationForEntry(cell, address);
+            if (check.Outcome == DataValidationEntryOutcome.Blocked)
+            {
+                edits = [];
+                return new WorkbookCellEditResult(
+                    false,
+                    check.Message,
+                    [],
+                    RecalcReport: null,
+                    new WorkbookCellEditFailure(
+                        WorkbookCellEditFailureKind.DataValidationBlocked,
+                        check.Title,
+                        check.AlertStyle));
+            }
+
+            if (check.Outcome != DataValidationEntryOutcome.NeedsConfirmation ||
+                DataValidationPromptResolver is not { } resolvePrompt)
+            {
+                continue;
+            }
+
+            var decision = resolvePrompt(new DataValidationPromptRequest(check.Message!, check.Title!, check.AlertStyle));
+            if (decision is UserMessageResult.Yes or UserMessageResult.Ok)
+                continue;
+
+            edits = [];
+            return new WorkbookCellEditResult(
+                false,
+                check.Message,
+                [],
+                RecalcReport: null,
+                new WorkbookCellEditFailure(
+                    WorkbookCellEditFailureKind.DataValidationDeclined,
+                    check.Title,
+                    check.AlertStyle,
+                    decision));
+        }
+
+        edits = plan.Edits;
+        return null;
+    }
+
+    /// <summary>
     /// Excel cancels an active Copy/Cut's marching-ants mode -- and with it, a subsequent Paste's
     /// ability to reuse the captured snapshot -- as soon as an ordinary edit or Clear Contents commits
     /// elsewhere on the sheet: for a Cut this prevents a later Paste from silently MOVING (and
@@ -2757,7 +3237,7 @@ public sealed class WorkbookSession : IDisposable
     /// semantics Excel uses regardless of which operation started it. Mirrors the WPF host's
     /// <c>MainWindow.CommandExecution.TryExecuteEditCells</c> (R54) and
     /// <c>MainWindow.CellsCommands.ClearClipboardMarqueeAfterStructuralEdit</c> (R75), which both clear
-    /// <c>_internalClipboard</c> unconditionally (no <c>IsCut</c> check) -- scoped here to the specific
+    /// the workbook clipboard session unconditionally (no <c>IsCut</c> check) -- scoped here to the specific
     /// "committed a mutating edit that is not the paste itself" call sites
     /// (<see cref="CommitCellText"/>, <see cref="ClearSelectedRangeContents"/>,
     /// <see cref="ClearActiveCellContents"/>, <see cref="UndoLastEdit"/>, <see cref="RedoLastEdit"/>,
@@ -2771,8 +3251,8 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     private void CancelPendingCutAfterMutatingEdit()
     {
-        if (_internalClipboard is not null)
-            _internalClipboard = null;
+        if (_workbookClipboardSession.HasContent)
+            _workbookClipboardSession.Clear();
     }
 
     /// <summary>
@@ -2801,7 +3281,7 @@ public sealed class WorkbookSession : IDisposable
             sheet,
             singleCellRange,
             usedRange: singleCellRange,
-            GetAutoFitDisplayText,
+            (row, col) => GetAutoFitDisplayText(sheet, row, col),
             sheet.DefaultRowHeight);
 
         if (plans.Count != 1)
@@ -2913,13 +3393,14 @@ public sealed class WorkbookSession : IDisposable
             // Excel copies a multiple selection only when its areas share the same rows or the
             // same columns; otherwise the command is rejected.
             if (!MultiRangeCopyPlanner.TryPlan(SelectedRanges, out var layout) || layout is null)
-                return WorkbookClipboardTextResult.Failed(CreateMultiRangeClipboardError("Copy"));
+                return WorkbookClipboardTextResult.Failed(
+                    ClipboardFeedbackPlanner.MultiRangeSelectionUnsupported(isCut: false).FallbackText);
 
             var blockText = SerializeMultiRangeCopy(layout);
             // The combined block is copied as concatenated values through the text path; clear any
             // FreeX-owned single-range clipboard so paste does not reuse a stale payload whose
             // formula/format rebasing would not match the gap-collapsed block.
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             return WorkbookClipboardTextResult.Succeeded(blockText);
         }
 
@@ -2933,8 +3414,9 @@ public sealed class WorkbookSession : IDisposable
         // selection regardless of what is currently scrolled into view.
         var fullRangeViewport = BuildFullRangeViewportForClipboard(SelectedRange);
         var text = ClipboardSerializer.Serialize(fullRangeViewport, SelectedRange);
-        _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: false, fullRangeViewport);
-        return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport);
+        var snapshot = _workbookClipboardSession.Capture(
+            CaptureInternalClipboard(SelectedRange, text, isCut: false, fullRangeViewport));
+        return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport, snapshot.Marker);
     }
 
     public string CutSelectedRangeText()
@@ -2948,16 +3430,20 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookClipboardTextResult TryCutSelectedRangeText()
     {
-        if (TryCreateMultiRangeClipboardTextResult("Cut", out var result))
-            return result;
+        if (SelectedRanges.Count > 1)
+        {
+            return WorkbookClipboardTextResult.Failed(
+                ClipboardFeedbackPlanner.MultiRangeSelectionUnsupported(isCut: true).FallbackText);
+        }
 
         // Same rationale as TryCopySelectedRangeText: use a full-range viewport, not the on-screen
         // Viewport, so cutting a selection taller/wider than the visible area does not blank out the
         // off-screen part of the clipboard payload (R14-clipboard-formats-deep-1).
         var fullRangeViewport = BuildFullRangeViewportForClipboard(SelectedRange);
         var text = ClipboardSerializer.Serialize(fullRangeViewport, SelectedRange);
-        _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: true, fullRangeViewport);
-        return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport);
+        var snapshot = _workbookClipboardSession.Capture(
+            CaptureInternalClipboard(SelectedRange, text, isCut: true, fullRangeViewport));
+        return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport, snapshot.Marker);
     }
 
     /// <summary>
@@ -2997,7 +3483,8 @@ public sealed class WorkbookSession : IDisposable
         string? text,
         bool preserveText = false,
         bool clipboardReadFailed = false,
-        string? html = null)
+        string? html = null,
+        string? clipboardMarker = null)
     {
         // Paste Special > Text / Unicode Text (preserveText: true — Excel semantics: paste the
         // clipboard's plain text only) must always go through the external-clipboard plain-text path
@@ -3006,26 +3493,29 @@ public sealed class WorkbookSession : IDisposable
         // text-equality check can't distinguish "explicitly asked for text" from "clipboard
         // unchanged") and silently performs a full formatted internal paste instead (review P44),
         // mirroring the WPF host's ExecutePaste externalTextAsText bypass.
-        if (!preserveText && _internalClipboard is { } internalClipboard)
+        if (!preserveText && _workbookClipboardSession.HasContent)
         {
-            var pastePlan = ClipboardPastePlanner.PlanPaste(internalClipboard.Text, text, clipboardReadFailed);
-            if (pastePlan == ClipboardPastePlan.ReadFailed)
+            var resolution = _workbookClipboardSession.ResolvePaste(
+                new WorkbookClipboardReadObservation(
+                    Available: true,
+                    Text: text,
+                    Marker: clipboardMarker,
+                    ReadFailed: clipboardReadFailed));
+            if (resolution.Plan == ClipboardPastePlan.ReadFailed)
             {
                 // A transient OS-clipboard read failure must never be silently reinterpreted as
                 // "clipboard unchanged" — that would risk pasting a stale internal copy over content
                 // the user just copied elsewhere. Surface it instead of guessing, mirroring the WPF
-                // host's ClipboardPastePlanner.PlanPaste guard.
+                // host's shared workbook clipboard-session guard.
                 return new WorkbookCellEditResult(
                     false,
-                    "The clipboard is busy. Try pasting again.",
+                    ClipboardFeedbackPlanner.ReadFailed.FallbackText,
                     [],
                     RecalcReport: null);
             }
 
-            if (pastePlan == ClipboardPastePlan.UseInternalClipboard)
+            if (resolution.Snapshot is { } internalClipboard)
                 return PasteInternalClipboardAtActiveCell(internalClipboard, PasteCellsMode.All, default);
-
-            _internalClipboard = null;
         }
 
         if (string.IsNullOrEmpty(text))
@@ -3065,18 +3555,18 @@ public sealed class WorkbookSession : IDisposable
             // surface it so the caller can tell the user and let them retry.
             return new WorkbookCellEditResult(
                 false,
-                "The clipboard is busy. Try pasting again.",
+                ClipboardFeedbackPlanner.ReadFailed.FallbackText,
                 [],
                 RecalcReport: null);
         }
 
-        if (_internalClipboard is not { } internalClipboard)
+        if (_workbookClipboardSession.Content is not { } internalClipboard)
         {
             // No FreeX-internal clipboard at all — fall back to an external-text Paste Special
             // instead of unconditionally rejecting, matching Excel (Paste Special on a copied
             // external TSV/CSV block still applies Transpose/Skip Blanks/Operation) and the WPF
             // host's PasteSpecialBtn_Click, which only routes to PasteSpecialAction.ExternalText
-            // when _internalClipboard is null at click time (review P46 — this shell used to reject
+            // when the workbook clipboard session is empty at click time (review P46 — this shell used to reject
             // with "Paste Special requires copied FreeX cells." for any external text, silently
             // dropping the selected options instead of honoring them).
             if (string.IsNullOrEmpty(text))
@@ -3095,14 +3585,14 @@ public sealed class WorkbookSession : IDisposable
         {
             // A FreeX-internal clipboard exists, but the live OS clipboard text no longer matches
             // it (another app/window changed the platform clipboard since the FreeX copy). Matching
-            // the WPF host's ExecutePaste (which treats ClipboardPastePlanner.PlanPaste's
+            // the WPF host's ExecutePaste (which treats the shared session's
             // UseExternalClipboardText result as "clipboard changed externally" and falls through to
             // CreateExternalTextPasteCommand with the selected options), clear the stale internal
             // clipboard and fall back to an external-text Paste Special instead of hard-rejecting, so
             // the live external text still gets the chosen Transpose/Skip Blanks/Operation options
             // applied (review P46 corollary — the null-internal-clipboard branch above already does
             // this; this branch used to unconditionally reject instead).
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             if (string.IsNullOrEmpty(text))
             {
                 return new WorkbookCellEditResult(
@@ -3127,10 +3617,10 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult PasteColumnWidthsFromClipboardAtActiveCell(string? text)
     {
-        if (_internalClipboard is not { } internalClipboard ||
+        if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             return new WorkbookCellEditResult(
                 false,
                 "Paste Column Widths requires copied FreeX cells.",
@@ -3163,10 +3653,10 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult PasteCommentsFromClipboardAtActiveCell(string? text, bool transpose = false)
     {
-        if (_internalClipboard is not { } internalClipboard ||
+        if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             return new WorkbookCellEditResult(
                 false,
                 "Paste Comments requires copied FreeX cells.",
@@ -3217,10 +3707,10 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult PasteDataValidationFromClipboardAtActiveCell(string? text, bool transpose = false)
     {
-        if (_internalClipboard is not { } internalClipboard ||
+        if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             return new WorkbookCellEditResult(
                 false,
                 "Paste Validation requires copied FreeX cells.",
@@ -3313,10 +3803,10 @@ public sealed class WorkbookSession : IDisposable
                 continue;
 
             var matches = sheet.DataValidations
-                .Where(candidate => HasSameDataValidationSettings(candidate, existingRule))
+                .Where(candidate => candidate.HasSameSettings(existingRule))
                 .Select(candidate => (IWorkbookCommand)new SetDataValidationCommand(
                     sheetId,
-                    CloneDataValidationForRanges(rule, candidate.AppliesTo, candidate.AdditionalRanges)))
+                    rule.CloneWithNewIdentity(candidate.AppliesTo, candidate.AdditionalRanges)))
                 .ToList();
 
             if (matches.Count == 0)
@@ -3331,7 +3821,7 @@ public sealed class WorkbookSession : IDisposable
                     .ToArray();
                 matches.Add(new SetDataValidationCommand(
                     sheetId,
-                    CloneDataValidationForRanges(rule, sheetRanges[0], sheetRanges.Skip(1))));
+                    rule.CloneWithNewIdentity(sheetRanges[0], sheetRanges.Skip(1))));
             }
 
             commands.AddRange(matches);
@@ -3351,10 +3841,10 @@ public sealed class WorkbookSession : IDisposable
         bool transpose = false,
         bool keepSourceColumnWidths = false)
     {
-        if (_internalClipboard is not { } internalClipboard ||
+        if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             return new WorkbookCellEditResult(
                 false,
                 "Paste Link requires copied FreeX cells.",
@@ -3408,10 +3898,10 @@ public sealed class WorkbookSession : IDisposable
         string? text,
         bool linkedPicture = false)
     {
-        if (_internalClipboard is not { } internalClipboard ||
+        if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             return new WorkbookCellEditResult(
                 false,
                 linkedPicture
@@ -3457,7 +3947,7 @@ public sealed class WorkbookSession : IDisposable
     {
         // A non-empty text read means the OS clipboard still holds text we could paste; never prefer
         // an image over it.
-        if (!string.IsNullOrWhiteSpace(text))
+        if (!WorkbookClipboardSession.ShouldPreferExternalImage(text))
             return false;
 
         // P45: otherwise the OS clipboard holds no text we can match against — either another app put
@@ -3493,7 +3983,7 @@ public sealed class WorkbookSession : IDisposable
         if (!result.Success)
             return result;
 
-        _internalClipboard = null;
+        _workbookClipboardSession.Clear();
         ApplySuccessfulEditResult(result, destination);
         return result;
     }
@@ -3519,9 +4009,8 @@ public sealed class WorkbookSession : IDisposable
     /// (<see cref="ClipboardSerializer.Deserialize"/>): that splitter treats every bare '\r'/'\n' as a
     /// new row, which misreads a source cell whose rendered text wraps across multiple lines (or
     /// contains a literal &lt;br&gt;) as a row break, shifting every subsequent pasted row down by one.
-    /// Mirrors the WPF host's <c>MainWindow.ClipboardCommands.TryGetClipboardHtml</c> /
-    /// <c>TryParseHtmlClipboardTableRows</c> preference (R39-io-external-clipboard-2-3), which the
-    /// Avalonia shell's clipboard paste never received (R57-services-clipboard-formats-5-1).
+    /// Uses the same <see cref="HtmlClipboardTableParser"/> as the WPF host so both renderer paths
+    /// preserve identical table and cell-text semantics.
     /// </summary>
     public WorkbookCellEditResult PasteExternalTextAtActiveCell(
         string text, bool preserveText, PasteSpecialOptions options, string? html)
@@ -3531,7 +4020,7 @@ public sealed class WorkbookSession : IDisposable
         var destination = ActiveCell;
         var destinationRange = GetSinglePasteDestinationRange(destination);
         IReadOnlyList<IReadOnlyList<string>> rows =
-            TryParseHtmlClipboardTableRows(html) is { Count: > 0 } htmlRows
+            HtmlClipboardTableParser.Parse(html) is { Count: > 0 } htmlRows
                 ? htmlRows
                 : ClipboardSerializer.Deserialize(text).Select(static row => (IReadOnlyList<string>)row).ToList();
         var sourceRowCount = (ulong)rows.Count;
@@ -3549,344 +4038,6 @@ public sealed class WorkbookSession : IDisposable
             Math.Max(pasteRowCount, destinationRange.RowCount),
             Math.Max(pasteColCount, destinationRange.ColCount));
         return result;
-    }
-
-    /// <summary>
-    /// Parses a CF_HTML clipboard payload's first &lt;table&gt; into rows of plain cell text (no
-    /// per-cell styling — a lighter-weight recovery than <see cref="FreeX.Core.IO"/>'s whole-file HTML
-    /// import), or <c>null</c> when <paramref name="html"/> is empty or contains no table markup. Only
-    /// the &lt;tr&gt;/&lt;td&gt;/&lt;th&gt; row/column boundaries are recovered here — this is enough to
-    /// stop a multi-line source cell's embedded line break from being misread as a row boundary the way
-    /// the plain-text tab/newline splitter does (R57-services-clipboard-formats-5-1), mirroring the WPF
-    /// host's <c>MainWindow.ClipboardCommands.TryParseHtmlClipboardTableRows</c>.
-    /// </summary>
-    private static List<IReadOnlyList<string>>? TryParseHtmlClipboardTableRows(string? html)
-    {
-        if (string.IsNullOrEmpty(html))
-            return null;
-
-        var fragment = ExtractHtmlClipboardFragment(html);
-        var tableInner = ExtractFirstHtmlTableInner(fragment);
-        if (tableInner is null)
-            return null;
-
-        // R86-app-clipboard-interop-5-1: track column occupancy from an active rowspan the same way
-        // the WPF host's own TryParseHtmlClipboardTableRows (MainWindow.ClipboardCommands.cs,
-        // R57-services-clipboard-formats-5-2) and FreeX.Core.IO.HtmlTableReader do, so a merged header
-        // cell (colspan) or a rowspan-ed cell keeps every column after it lined up with the right data
-        // column instead of shifting left. Keyed by 1-based column -> the last (0-based) row index it
-        // remains occupied through.
-        var rowSpanRemaining = new Dictionary<int, int>();
-        var rows = new List<List<string>>();
-        var rowIndex = -1;
-
-        foreach (var rowInner in EnumerateHtmlElements(tableInner, "tr"))
-        {
-            rowIndex++;
-            var cells = new List<string>();
-            var col = 0;
-
-            foreach (var cellInfo in EnumerateHtmlCells(rowInner))
-            {
-                col++;
-                while (rowSpanRemaining.TryGetValue(col, out var occupiedThroughRow) && occupiedThroughRow >= rowIndex)
-                {
-                    EnsureHtmlPasteColumn(cells, col);
-                    col++;
-                }
-
-                var text = DecodeHtmlCellText(cellInfo.InnerHtml);
-
-                // R86-app-clipboard-interop-5-1: a <td> carrying the "mso-number-format:'\@'" marker
-                // (written by ClipboardHtmlSerializer.RequiresTextFormatMarker for a Text-typed source
-                // cell, and by real Excel for the same reason) must round-trip through this
-                // HTML-preferred paste path with the identical leading-apostrophe escape the plain-text
-                // clipboard sibling already carries -- otherwise a Text-formatted "00501" silently
-                // becomes the number 501 whenever CF_HTML is present (the common case, since copy
-                // always places CF_HTML alongside plain text). Mirrors the WPF host's
-                // R78-services-clipboard-formats-5-1 fix.
-                if (cellInfo.IsTextFormat)
-                    text = ClipboardSerializer.EscapeTextCellForPaste(text);
-
-                var colSpan = Math.Max(1, cellInfo.ColSpan);
-                var rowSpan = Math.Max(1, cellInfo.RowSpan);
-                var endCol = col + colSpan - 1;
-
-                // The pasted grid has no merged-cell concept (unlike HtmlTableReader's
-                // AddMergedRegion), so repeat the spanned cell's text across every column it covers --
-                // this matches what a merged header cell visually represents, and keeps every
-                // subsequent column's data under its own header instead of shifting left by one per
-                // colspan.
-                for (var c = col; c <= endCol; c++)
-                {
-                    EnsureHtmlPasteColumn(cells, c);
-                    cells[c - 1] = text;
-                }
-
-                if (rowSpan > 1)
-                {
-                    for (var c = col; c <= endCol; c++)
-                        rowSpanRemaining[c] = rowIndex + rowSpan - 1;
-                }
-
-                col = endCol;
-            }
-
-            if (cells.Count > 0)
-                rows.Add(cells);
-        }
-
-        return rows.Count > 0 ? rows.Cast<IReadOnlyList<string>>().ToList() : null;
-    }
-
-    private static void EnsureHtmlPasteColumn(List<string> row, int col)
-    {
-        while (row.Count < col)
-            row.Add(string.Empty);
-    }
-
-    /// <summary>CF_HTML wraps the real markup between StartFragment/EndFragment comments after a small
-    /// header; falls back to the whole payload if the markers are absent (some non-Excel producers, e.g.
-    /// a browser's own copy, omit them).</summary>
-    private static string ExtractHtmlClipboardFragment(string html)
-    {
-        const string startMarker = "<!--StartFragment-->";
-        const string endMarker = "<!--EndFragment-->";
-        var start = html.IndexOf(startMarker, StringComparison.OrdinalIgnoreCase);
-        var end = html.IndexOf(endMarker, StringComparison.OrdinalIgnoreCase);
-        return start >= 0 && end > start
-            ? html[(start + startMarker.Length)..end]
-            : html;
-    }
-
-    private static string? ExtractFirstHtmlTableInner(string html)
-    {
-        int i = 0;
-        while (i < html.Length)
-        {
-            int lt = html.IndexOf('<', i);
-            if (lt < 0)
-                return null;
-            if (string.Equals(HtmlTagNameAt(html, lt), "table", StringComparison.OrdinalIgnoreCase))
-            {
-                int tagEnd = html.IndexOf('>', lt);
-                if (tagEnd < 0)
-                    return null;
-                int closeStart = FindMatchingHtmlClose(html, tagEnd + 1, "table");
-                return closeStart < 0 ? html[(tagEnd + 1)..] : html[(tagEnd + 1)..closeStart];
-            }
-            i = lt + 1;
-        }
-        return null;
-    }
-
-    private static IEnumerable<string> EnumerateHtmlElements(string html, string tag)
-    {
-        int i = 0;
-        while (i < html.Length)
-        {
-            int lt = html.IndexOf('<', i);
-            if (lt < 0)
-                break;
-            if (string.Equals(HtmlTagNameAt(html, lt), tag, StringComparison.OrdinalIgnoreCase))
-            {
-                int tagEnd = html.IndexOf('>', lt);
-                if (tagEnd < 0)
-                    break;
-                int closeStart = FindMatchingHtmlClose(html, tagEnd + 1, tag);
-                string inner = closeStart < 0 ? html[(tagEnd + 1)..] : html[(tagEnd + 1)..closeStart];
-                yield return inner;
-                i = closeStart < 0 ? html.Length : SkipHtmlClosingTag(html, closeStart);
-            }
-            else
-            {
-                i = lt + 1;
-            }
-        }
-    }
-
-    /// <summary>One &lt;td&gt;/&lt;th&gt; cell's inner HTML plus its colspan/rowspan (each defaulted to
-    /// 1 when absent or non-positive), used by <see cref="TryParseHtmlClipboardTableRows"/> to keep
-    /// merged-header columns aligned with their data (R86-app-clipboard-interop-5-1), plus whether the
-    /// cell's own style carries the "mso-number-format:'\@'" Text marker. Mirrors the WPF host's own
-    /// <c>HtmlCellSpan</c> (MainWindow.ClipboardCommands.cs).</summary>
-    private readonly record struct HtmlCellSpan(string InnerHtml, int ColSpan, int RowSpan, bool IsTextFormat);
-
-    /// <summary>Matches the "mso-number-format" Text (@) marker ClipboardHtmlSerializer writes for a
-    /// Text-typed source cell -- and that real Excel writes for the same reason -- regardless of which
-    /// quote style wraps the style attribute itself (single vs. double) or the format code inside it
-    /// (Excel emits <c>mso-number-format:"\@"</c>; FreeX's own writer emits
-    /// <c>mso-number-format:'\@'</c>). Searched directly against the tag's raw attribute text rather
-    /// than against an extracted "style" attribute value, since a simple quote-delimited attribute
-    /// extractor cannot reliably handle one quote style nested inside the other. Mirrors the WPF
-    /// host's own <c>MsoTextNumberFormatRegex</c>.</summary>
-    private static readonly System.Text.RegularExpressions.Regex MsoTextNumberFormatRegex = new(
-        @"mso-number-format\s*:\s*[""']\\?@[""']",
-        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
-    private static IEnumerable<HtmlCellSpan> EnumerateHtmlCells(string rowInner)
-    {
-        int i = 0;
-        while (i < rowInner.Length)
-        {
-            int lt = rowInner.IndexOf('<', i);
-            if (lt < 0)
-                break;
-            var name = HtmlTagNameAt(rowInner, lt);
-            if (name is "td" or "th")
-            {
-                int tagEnd = rowInner.IndexOf('>', lt);
-                if (tagEnd < 0)
-                    break;
-                var tagContent = rowInner[(lt + 1)..tagEnd];
-                var colSpan = ParseHtmlSpanAttribute(tagContent, "colspan");
-                var rowSpan = ParseHtmlSpanAttribute(tagContent, "rowspan");
-                var isTextFormat = MsoTextNumberFormatRegex.IsMatch(tagContent);
-                int closeStart = FindMatchingHtmlClose(rowInner, tagEnd + 1, name);
-                string inner = closeStart < 0 ? rowInner[(tagEnd + 1)..] : rowInner[(tagEnd + 1)..closeStart];
-                yield return new HtmlCellSpan(inner, colSpan, rowSpan, isTextFormat);
-                i = closeStart < 0 ? rowInner.Length : SkipHtmlClosingTag(rowInner, closeStart);
-            }
-            else
-            {
-                i = lt + 1;
-            }
-        }
-    }
-
-    /// <summary>Reads a numeric attribute (e.g. <c>colspan="2"</c>, <c>colspan=2</c>, or unquoted/single
-    /// quoted) from a tag's raw attribute text. Returns 1 (the "no span" default) if absent, malformed,
-    /// or non-positive. Mirrors the WPF host's own <c>ParseHtmlSpanAttribute</c>.</summary>
-    private static int ParseHtmlSpanAttribute(string tagContent, string attributeName)
-    {
-        var searchFrom = 0;
-        while (searchFrom < tagContent.Length)
-        {
-            var idx = tagContent.IndexOf(attributeName, searchFrom, StringComparison.OrdinalIgnoreCase);
-            if (idx < 0)
-                return 1;
-
-            var afterIdx = idx + attributeName.Length;
-            var boundaryOk = idx == 0 || char.IsWhiteSpace(tagContent[idx - 1]);
-            if (!boundaryOk)
-            {
-                searchFrom = afterIdx;
-                continue;
-            }
-
-            var p = afterIdx;
-            while (p < tagContent.Length && char.IsWhiteSpace(tagContent[p]))
-                p++;
-            if (p >= tagContent.Length || tagContent[p] != '=')
-            {
-                searchFrom = afterIdx;
-                continue;
-            }
-
-            p++;
-            while (p < tagContent.Length && char.IsWhiteSpace(tagContent[p]))
-                p++;
-            if (p < tagContent.Length && (tagContent[p] == '"' || tagContent[p] == '\''))
-                p++;
-
-            var digitsStart = p;
-            while (p < tagContent.Length && char.IsDigit(tagContent[p]))
-                p++;
-
-            return int.TryParse(
-                tagContent[digitsStart..p],
-                System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var value) && value > 0
-                ? value
-                : 1;
-        }
-
-        return 1;
-    }
-
-    /// <summary>The element name at a '&lt;' position, or null if it isn't a start/end tag name.</summary>
-    private static string? HtmlTagNameAt(string s, int ltIndex)
-    {
-        int i = ltIndex + 1;
-        if (i < s.Length && s[i] == '/')
-            i++;
-        int start = i;
-        while (i < s.Length && char.IsLetterOrDigit(s[i]))
-            i++;
-        return i > start ? s[start..i].ToLowerInvariant() : null;
-    }
-
-    /// <summary>Find the index of the matching &lt;/tag&gt;, honoring nesting. -1 if none.</summary>
-    private static int FindMatchingHtmlClose(string s, int from, string tag)
-    {
-        int depth = 0;
-        int i = from;
-        while (i < s.Length)
-        {
-            int lt = s.IndexOf('<', i);
-            if (lt < 0)
-                return -1;
-            bool isClose = lt + 1 < s.Length && s[lt + 1] == '/';
-            var name = HtmlTagNameAt(s, lt);
-            if (string.Equals(name, tag, StringComparison.OrdinalIgnoreCase))
-            {
-                if (isClose)
-                {
-                    if (depth == 0)
-                        return lt;
-                    depth--;
-                }
-                else if (!IsHtmlSelfClosing(s, lt))
-                {
-                    depth++;
-                }
-            }
-            i = lt + 1;
-        }
-        return -1;
-    }
-
-    private static bool IsHtmlSelfClosing(string s, int lt)
-    {
-        int gt = s.IndexOf('>', lt);
-        return gt > lt && s[gt - 1] == '/';
-    }
-
-    private static int SkipHtmlClosingTag(string s, int closeStart)
-    {
-        int gt = s.IndexOf('>', closeStart);
-        return gt < 0 ? s.Length : gt + 1;
-    }
-
-    /// <summary>Strips a &lt;td&gt;/&lt;th&gt; cell's inner HTML down to its plain text, turning
-    /// &lt;br&gt; into a newline (so a genuinely multi-line cell still round-trips as one pasted cell,
-    /// matching Excel's own within-cell wrap semantics) and HTML-decoding entities.</summary>
-    private static string DecodeHtmlCellText(string innerHtml)
-    {
-        var sb = new System.Text.StringBuilder(innerHtml.Length);
-        int i = 0;
-        while (i < innerHtml.Length)
-        {
-            char c = innerHtml[i];
-            if (c == '<')
-            {
-                var name = HtmlTagNameAt(innerHtml, i);
-                int gt = innerHtml.IndexOf('>', i);
-                if (gt < 0)
-                    break;
-                if (name is "br")
-                    sb.Append('\n');
-                i = gt + 1;
-            }
-            else
-            {
-                sb.Append(c);
-                i++;
-            }
-        }
-
-        return System.Net.WebUtility.HtmlDecode(sb.ToString()).Trim();
     }
 
     public WorkbookCellEditResult ClearSelectedRangeContents()
@@ -4252,12 +4403,17 @@ public sealed class WorkbookSession : IDisposable
         }
 
         var range = SelectedRange;
+        var sortPlan = QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell);
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             CreateRangeCommand(
-                range,
+                sortPlan.Range,
                 "Sort",
-                (sheetId, sheetRange) => new SortCommand(sheetId, sheetRange, sortByColOffset: 0, ascending)));
+                (sheetId, sheetRange) => new SortCommand(
+                    sheetId,
+                    sheetRange,
+                    sortPlan.SortByColOffset,
+                    ascending)));
         if (!result.Success)
             return result;
 
@@ -4269,6 +4425,13 @@ public sealed class WorkbookSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(sortKeys);
         ArgumentNullException.ThrowIfNull(options);
+
+        return SortSelectedRange(SortDialogPlanner.CreateCommandPlan(sortKeys, options, hasHeaders));
+    }
+
+    public WorkbookCellEditResult SortSelectedRange(SortDialogCommandPlan sortPlan)
+    {
+        ArgumentNullException.ThrowIfNull(sortPlan);
 
         if (TryCreateMultiAreaSortRejection(out var multiAreaRejection))
             return multiAreaRejection;
@@ -4283,15 +4446,12 @@ public sealed class WorkbookSession : IDisposable
         }
 
         var range = SelectedRange;
-        var sortRange = options.LeftToRight
-            ? range
-            : SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders);
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             CreateRangeCommand(
-                sortRange,
+                range,
                 "Sort",
-                (sheetId, sheetRange) => new SortCommand(sheetId, sheetRange, sortKeys, options)));
+                sortPlan.CreateCommand));
         if (!result.Success)
             return result;
 
@@ -4332,7 +4492,7 @@ public sealed class WorkbookSession : IDisposable
             CurrentGroupedEditSheetIds(),
             areas,
             (sheetId, sheetRange) => new FillCellsCommand(sheetId, sheetRange, direction),
-            GetFillCellsTitle(direction));
+            WorksheetCommandPresentationCatalog.DescribeFill(direction).CommandTitle);
 
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
@@ -4575,7 +4735,7 @@ public sealed class WorkbookSession : IDisposable
 
     private AutoFitCellText? GetAutoFitDisplayTextForPendingWrap(uint row, uint col, GridRange pendingWrapRange)
     {
-        if (GetAutoFitDisplayText(row, col) is not { } cellText)
+        if (GetAutoFitDisplayText(ActiveSheet, row, col) is not { } cellText)
             return null;
 
         return pendingWrapRange.Contains(new CellAddress(ActiveSheet.Id, row, col))
@@ -4739,9 +4899,7 @@ public sealed class WorkbookSession : IDisposable
         var range = SelectedRange;
         var areas = GetCurrentSelectedRanges();
         var areaCommands = areas.Select(area => CreateMergeAndCenterCommand(area, contentResolution)).ToList();
-        var command = areaCommands.Count == 1
-            ? areaCommands[0]
-            : new CompositeWorkbookCommand("Merge & Center", areaCommands);
+        var command = CellMergePlanner.WrapCommands("Merge & Center", areaCommands);
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;
@@ -4760,7 +4918,7 @@ public sealed class WorkbookSession : IDisposable
 
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            ToCommand("Unmerge Cells", commands));
+            CellMergePlanner.WrapCommands("Unmerge Cells", commands));
         if (!result.Success)
             return result;
 
@@ -4897,7 +5055,6 @@ public sealed class WorkbookSession : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
         var resolvedIdentity = ResolveSavedFileAccessIdentity(path, fileAccessIdentity);
-        IsDirty = false;
         CurrentFilePath = path;
         CurrentFileAccessIdentity = resolvedIdentity;
         CurrentXlsxFeatureReport = null;
@@ -4950,10 +5107,7 @@ public sealed class WorkbookSession : IDisposable
         ArgumentNullException.ThrowIfNull(plan);
 
         if (plan.MarkSaved)
-        {
-            IsDirty = false;
             RecordUndoSavePoint();
-        }
 
         if (plan.ApplyFileContext && plan.FileContext is { } fileContext)
         {
@@ -5008,6 +5162,15 @@ public sealed class WorkbookSession : IDisposable
     public void RecalculateWorkbook()
     {
         _cellEditService.RecalculateAll(Workbook);
+        _selectionStatsRevision++;
+        RefreshViewport();
+    }
+
+    /// <summary>Runs Calculate Now (F9) against the dirty dependency graph.</summary>
+    public void RecalculateDirtyCells()
+    {
+        _cellEditService.RecalculateDirty(Workbook);
+        _selectionStatsRevision++;
         RefreshViewport();
     }
 
@@ -5015,7 +5178,40 @@ public sealed class WorkbookSession : IDisposable
     public void RecalculateActiveSheet()
     {
         _cellEditService.RecalculateSheet(Workbook, ActiveSheet.Id);
+        _selectionStatsRevision++;
         RefreshViewport();
+    }
+
+    /// <summary>
+    /// Applies normal post-edit calculation policy to cells changed outside the command pipeline.
+    /// Prefer session command APIs for undoable mutations.
+    /// </summary>
+    public RecalcReport? RecalculateChangedCells(IReadOnlyList<CellAddress> changedCells)
+    {
+        ArgumentNullException.ThrowIfNull(changedCells);
+
+        var report = _cellEditService.RecalculateAfterChanges(Workbook, changedCells);
+        if (report is null)
+            return null;
+
+        RefreshLinkedPicturesForEditedCells(
+            new WorkbookCellEditResult(true, null, changedCells, report));
+        _selectionStatsRevision++;
+        RefreshViewport();
+        return report;
+    }
+
+    /// <summary>Forces a recalculation from changed cells regardless of calculation mode.</summary>
+    public RecalcReport RecalculateChangedCellsAlways(IReadOnlyList<CellAddress> changedCells)
+    {
+        ArgumentNullException.ThrowIfNull(changedCells);
+
+        var report = _cellEditService.RecalculateAlways(Workbook, changedCells);
+        RefreshLinkedPicturesForEditedCells(
+            new WorkbookCellEditResult(true, null, changedCells, report));
+        _selectionStatsRevision++;
+        RefreshViewport();
+        return report;
     }
 
     private HashSet<SheetId> CaptureSheetIds() =>
@@ -5507,7 +5703,7 @@ public sealed class WorkbookSession : IDisposable
     }
 
     private IWorkbookCommand CreateInternalPasteCommand(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         CellAddress destination,
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -5520,7 +5716,7 @@ public sealed class WorkbookSession : IDisposable
             keepSourceColumnWidths);
 
     private IWorkbookCommand CreateInternalPasteCommand(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         GridRange destinationRange,
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -5559,7 +5755,7 @@ public sealed class WorkbookSession : IDisposable
     }
 
     private IWorkbookCommand CreateInternalPasteCommand(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         IReadOnlyList<CellAddress> destinations,
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -5580,7 +5776,7 @@ public sealed class WorkbookSession : IDisposable
     }
 
     private IWorkbookCommand CreatePasteLinkCommand(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         string sourceSheetName,
         CellAddress destination,
         GridRange destinationRange,
@@ -5645,7 +5841,7 @@ public sealed class WorkbookSession : IDisposable
             var sheetRanges = selectedRanges
                 .Select(range => RemapRangeToSheet(range, sheetId))
                 .ToArray();
-            var sheetRule = CloneDataValidationForRanges(rule, sheetRanges[0], sheetRanges.Skip(1));
+            var sheetRule = rule.CloneWithNewIdentity(sheetRanges[0], sheetRanges.Skip(1));
             if (WouldSetDataValidationMutate(sheet, sheetRule))
                 commands.Add(new SetDataValidationCommand(sheetId, sheetRule));
         }
@@ -5768,23 +5964,8 @@ public sealed class WorkbookSession : IDisposable
     private static bool WouldSetDataValidationMutate(Sheet sheet, DataValidation rule)
     {
         var existing = FindMatchingDataValidationRule(sheet, rule);
-        return existing is null || !DataValidationRulesEqual(existing, rule);
+        return existing is null || !existing.HasSameDefinition(rule, includeNativeMetadata: true);
     }
-
-    private static bool HasSameDataValidationSettings(DataValidation left, DataValidation right) =>
-        left.Type == right.Type &&
-        left.Operator == right.Operator &&
-        string.Equals(left.Formula1, right.Formula1, StringComparison.Ordinal) &&
-        string.Equals(left.Formula2, right.Formula2, StringComparison.Ordinal) &&
-        left.AllowBlank == right.AllowBlank &&
-        left.ShowDropdown == right.ShowDropdown &&
-        left.AlertStyle == right.AlertStyle &&
-        left.ShowInputMessage == right.ShowInputMessage &&
-        left.ShowErrorMessage == right.ShowErrorMessage &&
-        string.Equals(left.ErrorTitle, right.ErrorTitle, StringComparison.Ordinal) &&
-        string.Equals(left.ErrorMessage, right.ErrorMessage, StringComparison.Ordinal) &&
-        string.Equals(left.PromptTitle, right.PromptTitle, StringComparison.Ordinal) &&
-        string.Equals(left.PromptMessage, right.PromptMessage, StringComparison.Ordinal);
 
     private static DataValidation? FindMatchingDataValidationRule(Sheet sheet, DataValidation rule)
     {
@@ -5822,88 +6003,6 @@ public sealed class WorkbookSession : IDisposable
         return false;
     }
 
-    private static DataValidation CloneDataValidationForRanges(
-        DataValidation source,
-        GridRange appliesTo,
-        IEnumerable<GridRange> additionalRanges)
-    {
-        var clone = new DataValidation
-        {
-            AppliesTo = appliesTo,
-            Type = source.Type,
-            Operator = source.Operator,
-            Formula1 = source.Formula1,
-            Formula2 = source.Formula2,
-            AllowBlank = source.AllowBlank,
-            ShowDropdown = source.ShowDropdown,
-            AlertStyle = source.AlertStyle,
-            ShowInputMessage = source.ShowInputMessage,
-            ShowErrorMessage = source.ShowErrorMessage,
-            ErrorTitle = source.ErrorTitle,
-            ErrorMessage = source.ErrorMessage,
-            PromptTitle = source.PromptTitle,
-            PromptMessage = source.PromptMessage,
-            NativeAttributes = source.NativeAttributes,
-            NativeChildXmls = source.NativeChildXmls,
-            NativeContainerAttributes = source.NativeContainerAttributes,
-            NativeContainerChildXmls = source.NativeContainerChildXmls
-        };
-        clone.AdditionalRanges.AddRange(additionalRanges);
-        return clone;
-    }
-
-    private static bool DataValidationRulesEqual(DataValidation left, DataValidation right) =>
-        left.AppliesTo == right.AppliesTo &&
-        left.AdditionalRanges.SequenceEqual(right.AdditionalRanges) &&
-        left.Type == right.Type &&
-        left.Operator == right.Operator &&
-        string.Equals(left.Formula1, right.Formula1, StringComparison.Ordinal) &&
-        string.Equals(left.Formula2, right.Formula2, StringComparison.Ordinal) &&
-        left.AllowBlank == right.AllowBlank &&
-        left.ShowDropdown == right.ShowDropdown &&
-        left.AlertStyle == right.AlertStyle &&
-        left.ShowInputMessage == right.ShowInputMessage &&
-        left.ShowErrorMessage == right.ShowErrorMessage &&
-        string.Equals(left.ErrorTitle, right.ErrorTitle, StringComparison.Ordinal) &&
-        string.Equals(left.ErrorMessage, right.ErrorMessage, StringComparison.Ordinal) &&
-        string.Equals(left.PromptTitle, right.PromptTitle, StringComparison.Ordinal) &&
-        string.Equals(left.PromptMessage, right.PromptMessage, StringComparison.Ordinal) &&
-        DictionaryEquals(left.NativeAttributes, right.NativeAttributes) &&
-        SequenceEquals(left.NativeChildXmls, right.NativeChildXmls) &&
-        DictionaryEquals(left.NativeContainerAttributes, right.NativeContainerAttributes) &&
-        SequenceEquals(left.NativeContainerChildXmls, right.NativeContainerChildXmls);
-
-    private static bool DictionaryEquals(
-        IReadOnlyDictionary<string, string>? left,
-        IReadOnlyDictionary<string, string>? right)
-    {
-        if (ReferenceEquals(left, right))
-            return true;
-        if (left is null || right is null || left.Count != right.Count)
-            return false;
-
-        foreach (var (key, value) in left)
-        {
-            if (!right.TryGetValue(key, out var rightValue) ||
-                !string.Equals(value, rightValue, StringComparison.Ordinal))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool SequenceEquals(IReadOnlyList<string>? left, IReadOnlyList<string>? right)
-    {
-        if (ReferenceEquals(left, right))
-            return true;
-        if (left is null || right is null)
-            return false;
-
-        return left.SequenceEqual(right, StringComparer.Ordinal);
-    }
-
     private static double GetFittingRowHeight(double fontSize) =>
         Math.Min(AutoFitSizingService.MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
 
@@ -5920,16 +6019,6 @@ public sealed class WorkbookSession : IDisposable
             .AllCells()
             .Any(address => BorderShortcutService.HasBorderChanges(CellBorderPresetPlanner.Plan(preset, range, address, borderStyle, borderColor)));
     }
-
-    private static string GetFillCellsTitle(FillCellsDirection direction) =>
-        direction switch
-        {
-            FillCellsDirection.Down => "Fill Down",
-            FillCellsDirection.Right => "Fill Right",
-            FillCellsDirection.Up => "Fill Up",
-            FillCellsDirection.Left => "Fill Left",
-            _ => "Fill"
-        };
 
     private static GridRange RemapRangeToSheet(GridRange range, SheetId sheetId) =>
         new(
@@ -6092,8 +6181,7 @@ public sealed class WorkbookSession : IDisposable
 
     private void MarkDirty()
     {
-        IsDirty = true;
-        DirtyGeneration++;
+        _documentState.MarkDirty();
         NotifyWorkbookChanged();
     }
 
@@ -6102,37 +6190,28 @@ public sealed class WorkbookSession : IDisposable
     /// <summary>Captures the undo stack's current depth/version as the "clean" save point.</summary>
     private void RecordUndoSavePoint()
     {
-        SavedUndoDepth = _cellEditService.GetUndoStackDepth(Workbook.Id);
-        SavedUndoStackVersion = _cellEditService.GetUndoStackVersion(Workbook.Id);
+        _documentState.MarkSavedAtUndoDepth(
+            _cellEditService.GetUndoStackDepth(Workbook.Id),
+            _cellEditService.GetUndoStackVersion(Workbook.Id));
     }
 
     /// <summary>
     /// If the undo stack has returned to the recorded save point (matching both depth and, when
-    /// recorded, version), clears <see cref="IsDirty"/> and returns <c>true</c>. Called after
-    /// Undo/Redo — which unconditionally routes through <see cref="MarkDirty"/> via
-    /// <see cref="ApplySuccessfulHistoryResult"/> — to restore the clean state the WPF host already
-    /// restores via <c>WorkbookDocumentState.TryMarkCleanIfAtSavePoint</c>. Leaves
-    /// <see cref="IsDirty"/> untouched (i.e. still <c>true</c>) when no save point was recorded or
-    /// the stack has not returned to it.
+    /// recorded, version), asks the shared document state to clear <see cref="IsDirty"/> and returns
+    /// <c>true</c>. Called after Undo/Redo, which routes through <see cref="MarkDirty"/> via
+    /// <see cref="ApplySuccessfulHistoryResult"/>. Leaves <see cref="IsDirty"/> untouched when no
+    /// save point was recorded or the stack has not returned to it.
     /// </summary>
-    private bool TryMarkCleanIfAtSavePoint()
+    public bool TryMarkCleanIfAtSavePoint()
     {
-        if (SavedUndoDepth < 0)
-            return false;
-
         var currentUndoDepth = _cellEditService.GetUndoStackDepth(Workbook.Id);
-        if (currentUndoDepth != SavedUndoDepth)
-            return false;
-
-        if (SavedUndoStackVersion is { } savedVersion &&
-            _cellEditService.GetUndoStackVersion(Workbook.Id) != savedVersion)
-            return false;
-
         var wasDirty = IsDirty;
-        IsDirty = false;
-        if (wasDirty)
+        var isAtSavePoint = _documentState.TryMarkCleanIfAtSavePoint(
+            currentUndoDepth,
+            _cellEditService.GetUndoStackVersion(Workbook.Id));
+        if (isAtSavePoint && wasDirty)
             NotifyWorkbookChanged();
-        return true;
+        return isAtSavePoint;
     }
 
     /// <summary>
@@ -6143,6 +6222,34 @@ public sealed class WorkbookSession : IDisposable
     /// document-state dirty-marking call for edits.
     /// </summary>
     public void MarkDirtyForRecovery() => MarkDirty();
+
+    /// <summary>
+    /// Records a mutation performed by a renderer that has not yet moved its command execution
+    /// into <see cref="WorkbookSession"/>. This is the migration boundary for the WPF host;
+    /// portable and Avalonia commands already call <see cref="MarkDirty"/> internally.
+    /// </summary>
+    public void MarkDirtyFromHost() => MarkDirty();
+
+    /// <summary>
+    /// Captures the current command-history position as the clean save point. Renderers should
+    /// call this only after a completed save or after adopting a freshly opened/new workbook.
+    /// </summary>
+    public void MarkSavedFromHost()
+    {
+        RecordUndoSavePoint();
+        NotifyWorkbookChanged();
+    }
+
+    /// <summary>
+    /// Associates a path with the current document without changing its dirty state. Recovery
+    /// and transitional renderer workflows use this when the file identity changes separately
+    /// from save completion.
+    /// </summary>
+    public void SetCurrentFilePathFromHost(string? path)
+    {
+        CurrentFilePath = path;
+        NotifyWorkbookChanged();
+    }
 
     private static CellAddress FirstAffectedCellOrDefault(
         IReadOnlyList<CellAddress> affectedCells,
@@ -6318,6 +6425,52 @@ public sealed class WorkbookSession : IDisposable
         EnsureActiveCellVisible();
     }
 
+    private void ApplySuccessfulSelectionEditResult(
+        WorkbookCellEditResult result,
+        GridRange primaryRange,
+        IReadOnlyList<GridRange> selectedRanges,
+        CellAddress activeCell)
+    {
+        ActiveCell = primaryRange.Contains(activeCell) ? activeCell : primaryRange.Start;
+        ActiveSheet.ActiveRow = ActiveCell.Row;
+        ActiveSheet.ActiveCol = ActiveCell.Col;
+        SetSelectedRanges(primaryRange, selectedRanges);
+        FormulaEditAddress = null;
+        RefreshLinkedPicturesForEditedCells(result);
+        MarkDirty();
+        _selectionStatsRevision++;
+        RefreshViewport();
+        EnsureActiveCellVisible();
+    }
+
+    private void ApplySuccessfulPreservedSelectionCommandResult(
+        WorkbookCellEditResult result,
+        IReadOnlySet<SheetId> sheetIdsBefore,
+        IReadOnlyDictionary<SheetId, bool> hiddenStatesBefore)
+    {
+        if (!result.Success || result.IsNoOp)
+            return;
+
+        var sheetStructureChanged = !sheetIdsBefore.SetEquals(CaptureSheetIds()) ||
+            hiddenStatesBefore.Any(pair =>
+                Workbook.GetSheet(pair.Key) is { } sheet && sheet.IsHidden != pair.Value);
+        if (sheetStructureChanged || Workbook.GetSheet(ActiveSheet.Id) is null)
+        {
+            ApplySuccessfulHistoryResult(result, sheetIdsBefore, hiddenStatesBefore);
+            return;
+        }
+
+        ActiveSheet.ActiveRow = ActiveCell.Row;
+        ActiveSheet.ActiveCol = ActiveCell.Col;
+        FormulaEditAddress = null;
+        RefreshLinkedPicturesForEditedCells(result);
+        MarkDirty();
+        _selectionStatsRevision++;
+        InvalidateAllPerViewOverridesForSheet(ActiveSheet.Id);
+        RefreshViewport();
+        EnsureActiveCellVisible();
+    }
+
     private WorkbookNavigationResult NavigateToRange(GridRange range)
     {
         if (!range.Start.Sheet.Equals(range.End.Sheet))
@@ -6336,78 +6489,6 @@ public sealed class WorkbookSession : IDisposable
 
         SelectRange(range);
         return WorkbookNavigationResult.Selected(range);
-    }
-
-    private int GetNextFindResultIndex(
-        IReadOnlyList<FindResult> results,
-        FindSearchOrder searchOrder,
-        bool sameSearch)
-    {
-        if (sameSearch && _lastFindResult is { } lastResult)
-        {
-            var lastIndex = FindResultIndex(results, lastResult);
-            if (lastIndex >= 0)
-                return (lastIndex + 1) % results.Count;
-        }
-
-        return FindFirstResultAfterActiveCell(results, searchOrder);
-    }
-
-    private int GetReplaceTargetIndex(
-        IReadOnlyList<FindResult> results,
-        FindSearchOrder searchOrder,
-        bool sameSearch)
-    {
-        if (sameSearch &&
-            _lastFindResult is { } lastFindResult &&
-            ActiveCell.Equals(lastFindResult.Address))
-        {
-            var lastIndex = FindResultIndex(results, lastFindResult);
-            if (lastIndex >= 0)
-                return lastIndex;
-        }
-
-        if (sameSearch &&
-            _lastReplaceResult is { } lastReplaceResult &&
-            ActiveCell.Equals(lastReplaceResult.Address))
-        {
-            var nextSameCellIndex = FindNextResultIndexAtSameAddress(results, lastReplaceResult);
-            if (nextSameCellIndex >= 0)
-                return nextSameCellIndex;
-        }
-
-        return FindFirstResultAfterActiveCell(results, searchOrder);
-    }
-
-    private bool HasLastFindTargetAtActiveCell() =>
-        (_lastFindResult is { } lastFindResult && ActiveCell.Equals(lastFindResult.Address)) ||
-        (_lastReplaceResult is { } lastReplaceResult && ActiveCell.Equals(lastReplaceResult.Address));
-
-    private FindOptions CreateActiveSheetFindOptions(FindLookIn lookIn) =>
-        new(
-            Within: FindWithin.Sheet,
-            CurrentSheetId: ActiveSheet.Id,
-            SearchOrder: FindSearchOrder.ByRows,
-            LookIn: lookIn);
-
-    private FindOptions ResolveFindOptions(FindOptions? options, FindLookIn defaultLookIn)
-    {
-        var effectiveOptions = options ?? CreateActiveSheetFindOptions(defaultLookIn);
-        if (effectiveOptions.Within == FindWithin.Sheet && effectiveOptions.CurrentSheetId is null)
-            effectiveOptions = effectiveOptions with { CurrentSheetId = ActiveSheet.Id };
-        return effectiveOptions;
-    }
-
-    private void RememberFindSearch(
-        string searchText,
-        FindOptions options,
-        bool matchCase,
-        bool matchEntireCell)
-    {
-        _lastFindText = searchText;
-        _lastFindOptions = options;
-        _lastFindMatchCase = matchCase;
-        _lastFindMatchEntireCell = matchEntireCell;
     }
 
     private WorkbookFindAllMatch CreateFindAllMatch(FindResult result)
@@ -6447,91 +6528,6 @@ public sealed class WorkbookSession : IDisposable
         return bestName ?? "";
     }
 
-    private int FindFirstResultAfterActiveCell(IReadOnlyList<FindResult> results, FindSearchOrder searchOrder)
-    {
-        for (var index = 0; index < results.Count; index++)
-        {
-            if (CompareFindOrder(results[index].Address, ActiveCell, searchOrder) > 0)
-                return index;
-        }
-
-        return 0;
-    }
-
-    private static int FindResultIndex(IReadOnlyList<FindResult> results, FindResult result)
-    {
-        for (var index = 0; index < results.Count; index++)
-        {
-            if (IsSameFindTarget(results[index], result))
-                return index;
-        }
-
-        return -1;
-    }
-
-    private static int FindNextResultIndexAtSameAddress(IReadOnlyList<FindResult> results, FindResult previous)
-    {
-        var previousIndex = FindResultIndex(results, previous);
-        if (previousIndex >= 0)
-            return (previousIndex + 1) % results.Count;
-
-        for (var index = 0; index < results.Count; index++)
-        {
-            if (results[index].Address.Equals(previous.Address) &&
-                CompareFindTargetOrder(results[index], previous) > 0)
-            {
-                return index;
-            }
-        }
-
-        return -1;
-    }
-
-    private static bool IsSameFindTarget(FindResult left, FindResult right) =>
-        left.Address.Equals(right.Address) &&
-        left.Target == right.Target &&
-        left.ReplyIndex == right.ReplyIndex;
-
-    private static int CompareFindTargetOrder(FindResult left, FindResult right)
-    {
-        var targetComparison = GetFindTargetOrder(left).CompareTo(GetFindTargetOrder(right));
-        return targetComparison != 0
-            ? targetComparison
-            : Nullable.Compare(left.ReplyIndex, right.ReplyIndex);
-    }
-
-    private static int GetFindTargetOrder(FindResult result) =>
-        result.Target switch
-        {
-            FindResultTarget.ThreadedComment => 0,
-            FindResultTarget.ThreadedCommentReply => 1 + Math.Max(0, result.ReplyIndex ?? 0),
-            _ => 0
-        };
-
-    private void ClearLastFindTargets()
-    {
-        _lastFindResult = null;
-        _lastReplaceResult = null;
-    }
-
-    private int CompareFindOrder(CellAddress left, CellAddress right, FindSearchOrder searchOrder)
-    {
-        var leftSheetIndex = FindSheetIndex(left.Sheet);
-        var rightSheetIndex = FindSheetIndex(right.Sheet);
-        var sheetComparison = leftSheetIndex.CompareTo(rightSheetIndex);
-        if (sheetComparison != 0)
-            return sheetComparison;
-
-        if (searchOrder == FindSearchOrder.ByColumns)
-        {
-            var colComparison = left.Col.CompareTo(right.Col);
-            return colComparison != 0 ? colComparison : left.Row.CompareTo(right.Row);
-        }
-
-        var rowComparison = left.Row.CompareTo(right.Row);
-        return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
-    }
-
     private int FindSheetIndex(SheetId sheetId, int notFoundIndex = int.MaxValue)
     {
         for (var index = 0; index < Workbook.Sheets.Count; index++)
@@ -6551,7 +6547,7 @@ public sealed class WorkbookSession : IDisposable
             ? GoToCell(target)
             : WorkbookNavigationResult.Failed(plan.ErrorMessage ?? "Review target was not found.");
 
-    private WorkbookCellEditResult SetFreezePanes(uint frozenRows, uint frozenCols)
+    public WorkbookCellEditResult SetFreezePanes(uint frozenRows, uint frozenCols)
     {
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
@@ -6603,7 +6599,7 @@ public sealed class WorkbookSession : IDisposable
         new(DoubleUnderline: enabled, Underline: enabled ? false : null, Strikethrough: enabled ? false : null);
 
     private WorkbookCellEditResult PasteInternalClipboardAtActiveCell(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         PasteCellsMode mode,
         PasteSpecialOptions options,
         bool keepSourceColumnWidths = false)
@@ -6672,12 +6668,12 @@ public sealed class WorkbookSession : IDisposable
 
         if (clipboard.IsCut)
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clipboard);
             // R132-clipboard-cut-move-os-invalidation: signal the completed Cut+Paste MOVE back to
             // the host shell so it can invalidate the real OS clipboard (mirrors the WPF host's
             // InvalidateOsClipboardAfterCutMove, called from this exact same IsCut branch of its
             // own ExecutePaste). Without this, a later Ctrl+V falls through to the
-            // external-clipboard path (since _internalClipboard is now null) and re-pastes the OS
+            // external-clipboard path (since the workbook clipboard session is now empty) and re-pastes the OS
             // clipboard's still-stale cut payload a second time.
             result = result with { ClipboardCutMoveCompleted = true };
         }
@@ -6685,7 +6681,7 @@ public sealed class WorkbookSession : IDisposable
     }
 
     private WorkbookCellEditResult PasteInternalClipboardToSelectedRanges(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         PasteCellsMode mode,
         PasteSpecialOptions options,
         bool keepSourceColumnWidths)
@@ -6796,7 +6792,7 @@ public sealed class WorkbookSession : IDisposable
         return (areas[^1].End.Row, sourceColumn);
     }
 
-    private InternalClipboard CaptureInternalClipboard(GridRange range, string text, bool isCut, ViewportModel viewport)
+    private WorkbookClipboardSnapshot CaptureInternalClipboard(GridRange range, string text, bool isCut, ViewportModel viewport)
     {
         var sheet = Workbook.GetSheet(range.Start.Sheet);
         var cells = new List<(CellAddress Source, Cell Cell)>();
@@ -6826,7 +6822,7 @@ public sealed class WorkbookSession : IDisposable
             }
         }
 
-        return new InternalClipboard(range, cells, pictureCells, text, isCut);
+        return new WorkbookClipboardSnapshot(range, cells, pictureCells, text, isCut);
     }
 
     private List<(CellAddress Source, PictureCellSnapshot Snapshot)> CapturePictureCells(
@@ -6869,20 +6865,6 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
-    private bool TryCreateMultiRangeClipboardTextResult(
-        string operation,
-        out WorkbookClipboardTextResult result)
-    {
-        if (SelectedRanges.Count <= 1)
-        {
-            result = WorkbookClipboardTextResult.Succeeded(string.Empty);
-            return false;
-        }
-
-        result = WorkbookClipboardTextResult.Failed(CreateMultiRangeClipboardError(operation));
-        return true;
-    }
-
     private bool TryCreateMultiRangeClipboardEditResult(
         string operation,
         out WorkbookCellEditResult result)
@@ -6905,7 +6887,7 @@ public sealed class WorkbookSession : IDisposable
         operation + MultiRangeClipboardErrorSuffix;
 
     private bool TryCreateCutMoveCommand(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         CellAddress destination,
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -7101,7 +7083,7 @@ public sealed class WorkbookSession : IDisposable
     }
 
     private static bool ShouldClearCutSourceAfterPaste(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         CellAddress destination,
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -7498,7 +7480,8 @@ public sealed record WorkbookClipboardTextResult(
     bool Success,
     string? Text,
     string? ErrorMessage,
-    ViewportModel? Viewport = null)
+    ViewportModel? Viewport = null,
+    string? ClipboardMarker = null)
 {
     /// <summary>
     /// Succeeds with the full-range viewport (see <c>WorkbookSession.BuildFullRangeViewportForClipboard</c>)
@@ -7507,8 +7490,11 @@ public sealed record WorkbookClipboardTextResult(
     /// re-reading the on-screen-only <see cref="WorkbookSession.Viewport"/> and truncating any part of
     /// the selection that is scrolled out of view (R14-clipboard-formats-deep-1).
     /// </summary>
-    public static WorkbookClipboardTextResult Succeeded(string text, ViewportModel viewport) =>
-        new(true, text, null, viewport);
+    public static WorkbookClipboardTextResult Succeeded(
+        string text,
+        ViewportModel viewport,
+        string? clipboardMarker = null) =>
+        new(true, text, null, viewport, clipboardMarker);
 
     public static WorkbookClipboardTextResult Succeeded(string text) =>
         new(true, text, null);

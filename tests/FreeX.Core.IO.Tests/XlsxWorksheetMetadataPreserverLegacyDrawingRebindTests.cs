@@ -61,7 +61,7 @@ public sealed class XlsxWorksheetMetadataPreserverLegacyDrawingRebindTests
         var context = XlsxSourcePackagePreservationContext.TryCreate(sourceArchive, targetArchive);
         context.Should().NotBeNull();
 
-        XlsxWorksheetMetadataPreserver.Preserve(sourceArchive, targetArchive, workbook, context);
+        XlsxWorksheetMetadataPreserver.Preserve(workbook, context);
 
         var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(targetArchive, "xl/worksheets/sheet1.xml");
         var legacyDrawing = worksheetXml.Root!.Element(WorkbookNs + "legacyDrawing");

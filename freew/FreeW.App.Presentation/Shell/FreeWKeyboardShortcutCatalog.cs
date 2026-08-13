@@ -1,3 +1,5 @@
+using Free.Shared.Shell;
+
 namespace FreeW.App.Presentation.Shell;
 
 [Flags]
@@ -94,31 +96,28 @@ public static class FreeWKeyboardShortcutCatalog
         new(FreeWKeyboardCommand.UpdateCurrentField, FreeWKeyboardKey.F9, FreeWKeyboardModifiers.None),
     ];
 
+    private static readonly ApplicationKeyboardShortcutCatalog<
+        FreeWKeyboardCommand,
+        FreeWKeyboardKey,
+        FreeWKeyboardModifiers> Resolver = new(
+            Shortcuts.Select(shortcut => new ApplicationKeyboardShortcut<
+                FreeWKeyboardCommand,
+                FreeWKeyboardKey,
+                FreeWKeyboardModifiers>(
+                    shortcut.Command,
+                    shortcut.Key,
+                    shortcut.Modifiers)));
+
     public static IReadOnlyList<FreeWKeyboardShortcut> All => Shortcuts;
 
     public static FreeWKeyboardCommand? Resolve(
         FreeWKeyboardKey key,
-        FreeWKeyboardModifiers modifiers)
-    {
-        foreach (var shortcut in Shortcuts)
-        {
-            if (shortcut.Key == key && shortcut.Modifiers == modifiers)
-                return shortcut.Command;
-        }
-
-        return null;
-    }
+        FreeWKeyboardModifiers modifiers) =>
+        Resolver.Resolve(key, modifiers);
 
     public static bool TryDispatch(
         FreeWKeyboardKey key,
         FreeWKeyboardModifiers modifiers,
-        Action<FreeWKeyboardCommand> dispatch)
-    {
-        ArgumentNullException.ThrowIfNull(dispatch);
-        if (Resolve(key, modifiers) is not { } command)
-            return false;
-
-        dispatch(command);
-        return true;
-    }
+        Action<FreeWKeyboardCommand> dispatch) =>
+        Resolver.TryDispatch(key, modifiers, dispatch);
 }

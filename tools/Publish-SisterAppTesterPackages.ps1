@@ -49,6 +49,7 @@ if ($Runtimes.Count -eq 0) {
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
+$testerReleaseSmokeProjectPath = Join-Path $repoRoot "tools\FreeX.Validation.Wpf\FreeX.Validation.Wpf.csproj"
 if (-not $OutputDir) {
     $OutputDir = Join-Path $repoRoot "artifacts\sister-tester-release-$Version"
 }
@@ -71,16 +72,20 @@ $config = switch ($App) {
         @{
             WpfProject = "freew\FreeW.App.Host\FreeW.App.Host.csproj"
             AvaloniaProject = "freew\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj"
+            AvaloniaValidationProject = "freew\TestSupport\Validation.Avalonia\FreeW.Validation.Avalonia.csproj"
             WpfHost = "FreeW.App.Host"
             AvaloniaHost = "FreeW"
+            AvaloniaValidationHost = "FreeW.Validation.Avalonia"
         }
     }
     "FreeP" {
         @{
             WpfProject = "freep\FreeP.App.Host\FreeP.App.Host.csproj"
             AvaloniaProject = "freep\FreeP.App.Avalonia\FreeP.App.Avalonia.csproj"
+            AvaloniaValidationProject = "freep\TestSupport\Validation.Avalonia\FreeP.Validation.Avalonia.csproj"
             WpfHost = "FreeP.App.Host"
             AvaloniaHost = "FreeP"
+            AvaloniaValidationHost = "FreeP.Validation.Avalonia"
         }
     }
 }
@@ -162,13 +167,62 @@ foreach ($runtime in $Runtimes) {
         throw "Publish output missing expected apphost '$expectedAppHost'."
     }
     $expectedExe = (Resolve-Path -LiteralPath $expectedAppHost).Path
+    $smokeExecutable = $expectedExe
+
+    if (-not $isWindowsRuntime -and $App -in @("FreeW", "FreeP")) {
+        $validationPublishDir = Join-Path $OutputDir "validation\$App-$runtime"
+        if (Test-Path -LiteralPath $validationPublishDir) {
+            Remove-Item -LiteralPath $validationPublishDir -Recurse -Force
+        }
+        New-Item -ItemType Directory -Force -Path $validationPublishDir | Out-Null
+
+        $validationProject = Join-Path $repoRoot $config.AvaloniaValidationProject
+        $validationPublishArgs = @(
+            "publish", $validationProject,
+            "--configuration", $Configuration,
+            "--framework", "net10.0",
+            "--runtime", $runtime,
+            "--self-contained", "true",
+            "-p:UseAppHost=true",
+            "-p:PublishSingleFile=false",
+            "-p:Version=$Version",
+            "-p:InformationalVersion=$Version+$shortSha",
+            "--output", $validationPublishDir
+        )
+        if ($App -eq "FreeP") {
+            $validationPublishArgs += "-p:FreePWindowsBuild=false"
+        }
+        & dotnet @validationPublishArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "dotnet publish failed for $App $runtime validation host with exit code $LASTEXITCODE."
+        }
+
+        $smokeExecutable = Join-Path $validationPublishDir $config.AvaloniaValidationHost
+        if (-not (Test-Path -LiteralPath $smokeExecutable)) {
+            throw "Validation publish output missing expected apphost '$smokeExecutable'."
+        }
+        $smokeExecutable = (Resolve-Path -LiteralPath $smokeExecutable).Path
+    }
 
     $smokeRan = $false
     if ($isWindowsRuntime -and $App -eq "FreeX") {
         $smokeRan = $true
         $smokeReportPath = Join-Path $OutputDir "$App-$runtime-tester-release-smoke.json"
+        $smokeToolDir = Join-Path $OutputDir "smoke\$runtime"
+        if (Test-Path -LiteralPath $smokeToolDir) {
+            Remove-Item -LiteralPath $smokeToolDir -Recurse -Force
+        }
+        & dotnet publish $testerReleaseSmokeProjectPath `
+            --configuration $Configuration `
+            --runtime $runtime `
+            --self-contained false `
+            --output $smokeToolDir
+        if ($LASTEXITCODE -ne 0) {
+            throw "$App $runtime tester-release smoke tool publish failed with exit code $LASTEXITCODE."
+        }
+        $smokeToolPath = Join-Path $smokeToolDir "FreeX.Validation.Wpf.exe"
         $smokeProcess = Start-Process `
-            -FilePath $expectedExe `
+            -FilePath $smokeToolPath `
             -ArgumentList @("--tester-release-smoke", $smokeReportPath) `
             -WindowStyle Hidden `
             -Wait `
@@ -181,6 +235,7 @@ foreach ($runtime in $Runtimes) {
         if ($smokeReport.Success -ne $true) {
             throw "$App $runtime tester-release smoke reported failure."
         }
+        Remove-Item -LiteralPath $smokeToolDir -Recurse -Force
     }
     elseif (-not $isWindowsRuntime) {
         $smokeRan = $true
@@ -191,7 +246,7 @@ foreach ($runtime in $Runtimes) {
             $smokeArguments += $smokeReportPath
         }
 
-        & $expectedExe @smokeArguments
+        & $smokeExecutable @smokeArguments
         if ($LASTEXITCODE -ne 0) {
             throw "$App $runtime packaging smoke failed with exit code $LASTEXITCODE."
         }

@@ -6,7 +6,7 @@ using System.IO.Compression;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed partial class OpenWorkbookLoaderTests
+public sealed partial class WorkbookOpenServiceTests
 {
     [Fact]
     public async Task LoadAsync_ReadsLoadsRecalculatesAndReportsProgress()
@@ -25,8 +25,8 @@ public sealed partial class OpenWorkbookLoaderTests
             sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromFormula("1+1"));
             return workbook;
         });
-        var progressUpdates = new List<OpenProgressUpdate>();
-        var loader = new OpenWorkbookLoader(recalculateAllFormulas: workbook =>
+        var progressUpdates = new List<WorkbookOpenProgressUpdate>();
+        var loader = new WorkbookOpenService(recalculateAllFormulas: workbook =>
         {
             workbook.Name.Should().Be("Loaded");
             recalculateCalled = true;
@@ -37,14 +37,15 @@ public sealed partial class OpenWorkbookLoaderTests
             adapter,
             ".fxjson",
             new FileFormatDescriptor(".fxjson", "Fake"),
-            new TestProgress<OpenProgressUpdate>(progressUpdates.Add));
+            new TestProgress<WorkbookOpenProgressUpdate>(progressUpdates.Add));
 
         result.Workbook.Name.Should().Be("Loaded");
         result.DisplayName.Should().Be(Path.GetFileNameWithoutExtension(tempPath));
         result.FeatureReport.Should().BeNull();
         result.OpenedAsTemplate.Should().BeFalse();
         recalculateCalled.Should().BeTrue();
-        progressUpdates.Should().Contain(update => update.Detail.StartsWith("Loading file (reading)", StringComparison.Ordinal));
+        progressUpdates.Should().Contain(update => WorkbookProgressTextFormatter
+            .FormatOpen(update, UiText.Get).Detail.StartsWith("Loading file (reading)", StringComparison.Ordinal));
         progressUpdates.Should().Contain(update => update.Percent == 16);
         progressUpdates.Should().Contain(update => update.Percent == 98);
     }
@@ -64,14 +65,14 @@ public sealed partial class OpenWorkbookLoaderTests
             return workbook;
         });
         var recalculateCalled = false;
-        var loader = new OpenWorkbookLoader(_ => recalculateCalled = true);
+        var loader = new WorkbookOpenService(_ => recalculateCalled = true);
 
         await loader.LoadAsync(
             tempPath,
             adapter,
             ".fxjson",
             new FileFormatDescriptor(".fxjson", "Fake"),
-            new TestProgress<OpenProgressUpdate>(_ => { }));
+            new TestProgress<WorkbookOpenProgressUpdate>(_ => { }));
 
         recalculateCalled.Should().BeFalse();
     }
@@ -90,14 +91,14 @@ public sealed partial class OpenWorkbookLoaderTests
         });
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
-        var loader = new OpenWorkbookLoader(_ => { });
+        var loader = new WorkbookOpenService(_ => { });
 
         var act = async () => await loader.LoadAsync(
             tempPath,
             adapter,
             ".fxjson",
             new FileFormatDescriptor(".fxjson", "Fake"),
-            new TestProgress<OpenProgressUpdate>(_ => { }),
+            new TestProgress<WorkbookOpenProgressUpdate>(_ => { }),
             cancellation.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -111,14 +112,14 @@ public sealed partial class OpenWorkbookLoaderTests
         var tempPath = Path.Combine(temp.Path, "cached-formulas.xlsx");
         await File.WriteAllBytesAsync(tempPath, CreateCachedFormulaXlsx());
         var recalculateCalled = false;
-        var loader = new OpenWorkbookLoader(_ => recalculateCalled = true);
+        var loader = new WorkbookOpenService(_ => recalculateCalled = true);
 
         var result = await loader.LoadAsync(
             tempPath,
             new XlsxFileAdapter(),
             ".xlsx",
             new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
-            new TestProgress<OpenProgressUpdate>(_ => { }));
+            new TestProgress<WorkbookOpenProgressUpdate>(_ => { }));
 
         recalculateCalled.Should().BeFalse();
         var formulaCell = result.Workbook.Sheets.Single().GetCell(1, 3);
@@ -145,7 +146,7 @@ public sealed partial class OpenWorkbookLoaderTests
                 forceFullCalculation,
                 sheetFullCalculationOnLoad));
         var recalculateCalled = false;
-        var loader = new OpenWorkbookLoader(workbook =>
+        var loader = new WorkbookOpenService(workbook =>
         {
             recalculateCalled = true;
             workbook.FullCalculationOnLoad.Should().Be(workbookFullCalculationOnLoad);
@@ -159,7 +160,7 @@ public sealed partial class OpenWorkbookLoaderTests
             new XlsxFileAdapter(),
             ".xlsx",
             new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
-            new TestProgress<OpenProgressUpdate>(_ => { }));
+            new TestProgress<WorkbookOpenProgressUpdate>(_ => { }));
 
         recalculateCalled.Should().BeTrue();
         result.Workbook.Sheets.Single().GetCell(1, 3)!.Value.Should().Be(new NumberValue(42));

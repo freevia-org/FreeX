@@ -9,6 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestSupport\HostAccessOwnershipAssertions.cs"
+             Link="TestSupport\HostAccessOwnershipAssertions.cs" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
     <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="coverlet.collector" />
@@ -21,10 +24,20 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
+    <Using Include="FreeW.App.Presentation.DocumentView" />
+    <Using Include="FreeW.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj" />
+    <ProjectReference Include="..\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj"
+                      AdditionalProperties="FreeWHostTestSupport=true" />
+    <ProjectReference Include="..\TestSupport\Validation.Avalonia\FreeW.Validation.Avalonia.csproj" />
+    <ProjectReference Include="..\tests\FreeW.VisualEvidence.TestSupport\FreeW.VisualEvidence.TestSupport.csproj" />
+    <ProjectReference Include="..\tools\FreeW.DialogVisualHarness\FreeW.DialogVisualHarness.csproj" Aliases="Harness" />
+    <Compile Include="..\tests\SharedTestInfrastructure\FreeWDialogEvidenceCatalogContractTests.cs"
+             Link="FreeWDialogEvidenceCatalogContractTests.cs" />
+    <Compile Include="..\..\tests\SharedTestInfrastructure\Avalonia\AvaloniaActionLabelInspector.cs"
+             Link="TestSupport\AvaloniaActionLabelInspector.cs" />
   </ItemGroup>
 
 </Project>

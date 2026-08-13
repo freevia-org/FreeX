@@ -6,15 +6,15 @@ using System.IO;
 namespace FreeX.App.Host.Tests;
 
 /// <summary>
-/// R91-io-file-recovery-autosave-5-1: SaveWorkbookWriter.SaveAsync forwarded no
+/// R91-io-file-recovery-autosave-5-1: WorkbookSaveService.SaveAsync forwarded no
 /// expectedLastWriteTimeUtc to WorkbookSaveService, so the externally-modified-file
 /// save-conflict guard could never fire on the real App.Host save path -- a save would
 /// silently overwrite a file another program had changed on disk since it was opened.
-/// These tests exercise SaveWorkbookWriter.SaveAsync itself (the real host save entry point),
+/// These tests exercise WorkbookSaveService.SaveAsync itself (the real host save entry point),
 /// not WorkbookSaveService directly, so they also guard against the parameter being dropped
 /// again at this exact choke point.
 /// </summary>
-public sealed class R91_SaveWorkbookWriterExternalModificationTests
+public sealed class R91_WorkbookSaveServiceExternalModificationTests
 {
     [Fact]
     public async Task SaveAsync_FileChangedSinceCapturedTimestamp_ThrowsAndPreservesOnDiskFile()
@@ -30,13 +30,13 @@ public sealed class R91_SaveWorkbookWriterExternalModificationTests
         workbook.AddSheet("Sheet1");
         var adapterInvoked = false;
         var adapter = new TestFileAdapter(save: (_, _) => adapterInvoked = true);
-        var saver = new SaveWorkbookWriter();
+        var saver = new WorkbookSaveService();
 
         var act = async () => await saver.SaveAsync(
             tempPath,
             adapter,
             workbook,
-            new TestProgress<SaveProgressUpdate>(_ => { }),
+            new TestProgress<WorkbookSaveProgressUpdate>(_ => { }),
             CancellationToken.None,
             staleExpectedWriteTimeUtc);
 
@@ -60,13 +60,13 @@ public sealed class R91_SaveWorkbookWriterExternalModificationTests
             using var writer = new StreamWriter(stream, leaveOpen: true);
             writer.Write("saved payload");
         });
-        var saver = new SaveWorkbookWriter();
+        var saver = new WorkbookSaveService();
 
         await saver.SaveAsync(
             tempPath,
             adapter,
             workbook,
-            new TestProgress<SaveProgressUpdate>(_ => { }),
+            new TestProgress<WorkbookSaveProgressUpdate>(_ => { }),
             CancellationToken.None,
             expectedWriteTimeUtc);
 
@@ -90,13 +90,13 @@ public sealed class R91_SaveWorkbookWriterExternalModificationTests
             using var writer = new StreamWriter(stream, leaveOpen: true);
             writer.Write("saved payload");
         });
-        var saver = new SaveWorkbookWriter();
+        var saver = new WorkbookSaveService();
 
         await saver.SaveAsync(
             tempPath,
             adapter,
             workbook,
-            new TestProgress<SaveProgressUpdate>(_ => { }));
+            new TestProgress<WorkbookSaveProgressUpdate>(_ => { }));
 
         (await File.ReadAllTextAsync(tempPath)).Should().Be("saved payload");
     }

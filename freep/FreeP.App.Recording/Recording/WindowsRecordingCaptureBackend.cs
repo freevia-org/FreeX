@@ -1,8 +1,5 @@
-using System.Globalization;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
-using System.Text;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Recording;
@@ -13,14 +10,6 @@ public sealed class WindowsRecordingCaptureBackend : ISlideShowRecordingCaptureB
 
     private readonly WindowsRecordingHostMetadata _metadata;
     private readonly IWindowsRecordingCaptureEngine _captureEngine;
-
-    public WindowsRecordingCaptureBackend(WindowsRecordingHostMetadata metadata)
-        : this(
-            metadata ?? throw new ArgumentNullException(nameof(metadata)),
-            new WindowsRecordingDeviceCatalog(),
-            new WindowsRecordingCaptureEngine(metadata.AdapterName))
-    {
-    }
 
     public WindowsRecordingCaptureBackend(
         WindowsRecordingHostMetadata metadata,
@@ -40,6 +29,12 @@ public sealed class WindowsRecordingCaptureBackend : ISlideShowRecordingCaptureB
     public SlideShowRecordingHostCapabilities Capabilities { get; }
 
     public SlideShowRecordingCaptureAdapterReadiness AdapterReadiness { get; }
+
+    public static WindowsRecordingCaptureBackend CreateUnavailable(WindowsRecordingHostMetadata metadata) =>
+        new(
+            metadata,
+            UnavailableWindowsRecordingDeviceCatalog.Instance,
+            UnavailableWindowsRecordingCaptureEngine.Instance);
 
     public void BeginCapture(SlideShowRecordingCaptureStartRequest request)
     {
@@ -106,47 +101,33 @@ public sealed class WindowsRecordingCaptureBackend : ISlideShowRecordingCaptureB
         WindowsRecordingHostMetadata metadata,
         IWindowsRecordingDeviceCatalog deviceCatalog)
     {
-        try
-        {
-            var devices = deviceCatalog.EnumerateDevices()
-                .Where(device => device.Kind is SlideShowRecordingCaptureDeviceKind.Microphone
-                    or SlideShowRecordingCaptureDeviceKind.Camera)
-                .ToArray();
-            return SlideShowRecordingCaptureAdapterReadiness.FromDevices(
-                metadata.HostName,
-                metadata.AdapterName,
-                devices,
-                requiresUserPermission: true,
-                devices.Any(device => device.IsAvailable) ? MissingDeviceReason(devices) : NoDevicesReason);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        var availability = WindowsRecordingDeviceAvailabilityPlanner.Detect(deviceCatalog);
+        if (availability.DetectionFailure is { } failure)
         {
             return SlideShowRecordingCaptureAdapterReadiness.FromDevices(
                 metadata.HostName,
                 metadata.AdapterName,
                 Array.Empty<SlideShowRecordingCaptureDeviceDescriptor>(),
                 requiresUserPermission: true,
-                $"Windows recording device enumeration failed: {ex.Message}");
+                $"Windows recording device enumeration failed: {failure}");
         }
+
+        return SlideShowRecordingCaptureAdapterReadiness.FromDevices(
+            metadata.HostName,
+            metadata.AdapterName,
+            availability.Devices,
+            requiresUserPermission: true,
+            availability.HasAvailableDevice ? MissingDeviceReason(availability) : NoDevicesReason);
     }
 
-    private static string MissingDeviceReason(IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> devices)
-    {
-        var hasMicrophone = devices.Any(device =>
-            device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone &&
-            device.IsAvailable);
-        var hasCamera = devices.Any(device =>
-            device.Kind == SlideShowRecordingCaptureDeviceKind.Camera &&
-            device.IsAvailable);
-
-        return (hasMicrophone, hasCamera) switch
+    private static string MissingDeviceReason(WindowsRecordingDeviceAvailability availability) =>
+        (availability.HasMicrophone, availability.HasCamera) switch
         {
             (true, true) => string.Empty,
             (true, false) => "No Windows camera devices were reported by the host OS.",
             (false, true) => "No Windows microphone devices were reported by the host OS.",
             _ => NoDevicesReason
         };
-    }
 
     private static SlideShowRecordingCaptureDeviceKind DeviceKind(SlideShowRecordingMediaArtifactKind kind) =>
         kind == SlideShowRecordingMediaArtifactKind.NarrationAudio
@@ -167,6 +148,26 @@ public sealed class WindowsRecordingCaptureBackend : ISlideShowRecordingCaptureB
         fileName = Path.ChangeExtension(fileName, extension);
 
         return $"{_metadata.PackageRoot}/{fileName}";
+    }
+
+    private sealed class UnavailableWindowsRecordingDeviceCatalog : IWindowsRecordingDeviceCatalog
+    {
+        public static UnavailableWindowsRecordingDeviceCatalog Instance { get; } = new();
+
+        public IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices() =>
+            Array.Empty<SlideShowRecordingCaptureDeviceDescriptor>();
+    }
+
+    private sealed class UnavailableWindowsRecordingCaptureEngine : IWindowsRecordingCaptureEngine
+    {
+        public static UnavailableWindowsRecordingCaptureEngine Instance { get; } = new();
+
+        public void BeginCapture(WindowsRecordingCaptureStartRequest request)
+        {
+        }
+
+        public WindowsRecordingCaptureResult CompleteCapture(WindowsRecordingCaptureRequest request) =>
+            WindowsRecordingCaptureResult.Deferred("Windows recording capture is unavailable on this platform.");
     }
 }
 
@@ -208,188 +209,4 @@ public interface IWindowsRecordingCaptureEngine
     void BeginCapture(WindowsRecordingCaptureStartRequest request);
 
     WindowsRecordingCaptureResult CompleteCapture(WindowsRecordingCaptureRequest request);
-}
-
-public sealed class WindowsRecordingCaptureEngine : IWindowsRecordingCaptureEngine
-{
-    private readonly Dictionary<(string DeviceId, int SlideIndex), ActiveCapture> _activeCaptures = new();
-    private readonly string _adapterName;
-
-    public WindowsRecordingCaptureEngine(string adapterName = "Windows recording capture adapter")
-    {
-        _adapterName = string.IsNullOrWhiteSpace(adapterName)
-            ? "Windows recording capture adapter"
-            : adapterName.Trim();
-    }
-
-    public void BeginCapture(WindowsRecordingCaptureStartRequest request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-
-        var key = Key(request.Device, request.SlideIndex);
-        if (_activeCaptures.TryGetValue(key, out var existing))
-        {
-            existing.Dispose();
-            _activeCaptures.Remove(key);
-        }
-
-        if (request.Device.Kind == SlideShowRecordingCaptureDeviceKind.Camera)
-        {
-            _activeCaptures[key] = new ActiveCapture(
-                string.Empty,
-                string.Empty,
-                request.PackagePath,
-                request.StartedAtUtc,
-                request.Device.Kind);
-            return;
-        }
-
-        if (!OperatingSystem.IsWindows())
-            return;
-
-        var alias = "freep_rec_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        var path = Path.Combine(Path.GetTempPath(), alias + ".wav");
-        try
-        {
-            MciSend($"open new type waveaudio alias {alias}");
-            MciSend($"set {alias} time format milliseconds");
-            MciSend($"set {alias} bitspersample 16 channels 1 samplespersec 16000");
-            MciSend($"record {alias}");
-            _activeCaptures[key] = new ActiveCapture(
-                alias,
-                path,
-                request.PackagePath,
-                request.StartedAtUtc,
-                request.Device.Kind);
-        }
-        catch
-        {
-            TryClose(alias);
-            TryDelete(path);
-        }
-    }
-
-    public WindowsRecordingCaptureResult CompleteCapture(WindowsRecordingCaptureRequest request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-
-        var key = Key(request.Device, request.SlideIndex);
-        if (!_activeCaptures.Remove(key, out var capture))
-        {
-            return WindowsRecordingCaptureResult.Deferred(
-                $"{_adapterName}: narration capture was not started for slide {request.SlideIndex + 1}");
-        }
-
-        try
-        {
-            if (capture.Kind == SlideShowRecordingCaptureDeviceKind.Camera)
-            {
-                return WindowsRecordingCaptureResult.Deferred(
-                    $"{_adapterName}: camera device handoff reached for {request.Device.DisplayName}, but local video encoding is not implemented in this no-COM adapter.");
-            }
-
-            MciSend($"stop {capture.Alias}");
-            MciSend($"save {capture.Alias} \"{capture.TempPath}\"");
-            MciSend($"close {capture.Alias}");
-            if (!File.Exists(capture.TempPath))
-            {
-                return WindowsRecordingCaptureResult.Deferred(
-                    $"{_adapterName}: Windows did not produce a narration file.");
-            }
-
-            var payload = File.ReadAllBytes(capture.TempPath);
-            if (payload.Length == 0)
-            {
-                return WindowsRecordingCaptureResult.Deferred(
-                    $"{_adapterName}: Windows produced an empty narration file.");
-            }
-
-            return WindowsRecordingCaptureResult.Captured(
-                $"{_adapterName}: narration captured from {request.Device.DisplayName} to {capture.PackagePath}",
-                capture.PackagePath,
-                payload);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            return WindowsRecordingCaptureResult.Deferred(
-                $"{_adapterName}: Windows narration capture failed: {ex.Message}");
-        }
-        finally
-        {
-            TryClose(capture.Alias);
-            TryDelete(capture.TempPath);
-        }
-    }
-
-    private static (string DeviceId, int SlideIndex) Key(
-        SlideShowRecordingCaptureDeviceDescriptor device,
-        int slideIndex) =>
-        (device.DeviceId, slideIndex);
-
-    private static void MciSend(string command)
-    {
-        var error = mciSendString(command, null, 0, IntPtr.Zero);
-        if (error != 0)
-        {
-            var message = new StringBuilder(256);
-            _ = mciGetErrorString(error, message, message.Capacity);
-            throw new InvalidOperationException(message.Length == 0 ? $"MCI error {error}" : message.ToString());
-        }
-    }
-
-    private static void TryClose(string alias)
-    {
-        if (string.IsNullOrWhiteSpace(alias))
-            return;
-
-        try
-        {
-            _ = mciSendString($"close {alias}", null, 0, IntPtr.Zero);
-        }
-        catch
-        {
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            return;
-
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch
-        {
-        }
-    }
-
-    [DllImport("winmm.dll", EntryPoint = "mciSendStringW", CharSet = CharSet.Unicode)]
-    private static extern uint mciSendString(
-        string command,
-        StringBuilder? returnValue,
-        int returnLength,
-        IntPtr callback);
-
-    [DllImport("winmm.dll", EntryPoint = "mciGetErrorStringW", CharSet = CharSet.Unicode)]
-    private static extern bool mciGetErrorString(
-        uint error,
-        StringBuilder errorText,
-        int errorTextLength);
-
-    private sealed record ActiveCapture(
-        string Alias,
-        string TempPath,
-        string PackagePath,
-        DateTimeOffset StartedAtUtc,
-        SlideShowRecordingCaptureDeviceKind Kind) : IDisposable
-    {
-        public void Dispose()
-        {
-            TryClose(Alias);
-            TryDelete(TempPath);
-        }
-    }
 }

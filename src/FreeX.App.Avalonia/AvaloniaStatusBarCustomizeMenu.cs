@@ -32,7 +32,7 @@ internal static class AvaloniaStatusBarCustomizeMenu
         registeredItems?.Clear();
 
         var menu = new ContextMenu();
-        AutomationProperties.SetName(menu, AvaloniaStatusBarSource.CustomizeHeader("StatusBar_CustomizeStatusBar"));
+        AutomationProperties.SetName(menu, UiText.Get("StatusBar_CustomizeStatusBar"));
 
         var items = new List<Control>();
         foreach (var command in StatusBarCustomizeContextMenuPlanner.BuildStatusBarCustomizeCommands())
@@ -53,7 +53,7 @@ internal static class AvaloniaStatusBarCustomizeMenu
 
         var menuItem = new MenuItem
         {
-            Header = AvaloniaStatusBarSource.CustomizeHeader(command.ResourceKey),
+            Header = UiText.Get(ResolveResourceKey(command.ResourceKey)),
             IsEnabled = command.IsEnabled,
         };
 
@@ -72,4 +72,9 @@ internal static class AvaloniaStatusBarCustomizeMenu
 
         return menuItem;
     }
+
+    private static string ResolveResourceKey(string resourceKey) =>
+        resourceKey == StatusBarCustomizeResourceKeys.Zoom
+            ? "MainWindow_Text_Zoom"
+            : resourceKey;
 }

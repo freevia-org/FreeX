@@ -1353,7 +1353,7 @@ public sealed class PptxPackageRetentionTests
                 .Attribute("val")!
                 .Value.Should().Be("FAF1D2");
             var savedLine = savedSpPr.Element(DrawingNs + "ln")!;
-            savedLine.Attribute("w")!.Value.Should().Be(DrawingMlUnits.PointsToEmu(1.25).ToString());
+            savedLine.Attribute("w")!.Value.Should().Be(DrawingMlCoordinateUnits.PointsToEmu(1.25).ToString());
             savedLine.Element(DrawingNs + "prstDash")!.Attribute("val")!.Value.Should().Be("dashDot");
             savedLine.Element(DrawingNs + "solidFill")!
                 .Element(DrawingNs + "srgbClr")!
@@ -1842,7 +1842,7 @@ public sealed class PptxPackageRetentionTests
                     new XElement(ChartNs + "showKeys", new XAttribute("val", "0")),
                     new XElement(ChartNs + "spPr",
                         new XElement(DrawingNs + "ln",
-                            new XAttribute("w", DrawingMlUnits.PointsToEmu(1.0)),
+                            new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(1.0)),
                             new XElement(DrawingNs + "gradFill",
                                 new XElement(DrawingNs + "gsLst",
                                     new XElement(DrawingNs + "gs",
@@ -1988,7 +1988,7 @@ public sealed class PptxPackageRetentionTests
                         new XElement(DrawingNs + "solidFill",
                             new XElement(DrawingNs + "srgbClr", new XAttribute("val", "FAF1D2"))),
                         new XElement(DrawingNs + "ln",
-                            new XAttribute("w", DrawingMlUnits.PointsToEmu(1.25)),
+                            new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(1.25)),
                             new XElement(DrawingNs + "solidFill",
                                 new XElement(DrawingNs + "srgbClr", new XAttribute("val", "123456"))),
                             new XElement(DrawingNs + "prstDash", new XAttribute("val", "dashDot")))),
@@ -3218,22 +3218,9 @@ public sealed class PptxPackageRetentionTests
         }
     }
 
-    private static string FindCorpusDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus");
-            if (Directory.Exists(candidate) &&
-                ExpectedCorpusDeckNames.All(name => File.Exists(Path.Combine(candidate, name))))
-            {
-                return candidate;
-            }
-        }
-
-        throw new DirectoryNotFoundException("Could not locate tools/FreeP.RenderCompare/corpus with all tracked PPTX decks.");
-    }
+    private static string FindCorpusDirectory() =>
+        TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus");
 
     private static bool RelationshipMatches(OpcRelationship actual, OpcRelationship expected) =>
         string.Equals(actual.Type, expected.Type, StringComparison.OrdinalIgnoreCase) &&

@@ -1,6 +1,8 @@
+extern alias ProductionWpf;
+
 using FluentAssertions;
-using FreeX.App.Host;
 using FreeX.App.Services;
+using AppInfo = ProductionWpf::FreeX.App.Host.AppInfo;
 
 namespace FreeX.App.Host.Tests;
 
@@ -32,8 +34,8 @@ public sealed class AppInfoTests
     [Fact]
     public void AboutText_UsesCurrentVersionAndDoesNotNameTooling()
     {
-        AppInfo.VersionText.Should().Be("Version 0.5 (Tester Release)");
-        AppInfo.ExactVersionText.Should().StartWith("Version 0.5.0");
+        AppInfo.VersionText.Should().Be(AppHelpInfo.GetVersionText(typeof(AppInfo).Assembly));
+        AppInfo.ExactVersionText.Should().Be(AppHelpInfo.GetBuildVersionText(typeof(AppInfo).Assembly));
         AppInfo.AboutText.Should().Contain(AppInfo.VersionText);
         AppInfo.AboutText.Should().Contain("A free spreadsheet app for XLSX editing with open-only legacy XLS/XLSB import.");
         AppInfo.AboutText.Should().Contain("Built with .NET 10, WPF, ClosedXML, OxyPlot.");

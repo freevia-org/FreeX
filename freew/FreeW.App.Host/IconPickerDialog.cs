@@ -1,10 +1,10 @@
-using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Free.Shared.Shell;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -16,53 +16,57 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private static readonly IconPickerSurfaceSpec Surface = IconPickerDialogPlanner.Surface;
     // ── State ─────────────────────────────────────────────────────────────────────────────────────
     private InlineImage? _result;
-    private ContentIconCatalog.IconEntry? _selected;
+    private readonly IconPickerDialogSession _session;
 
     // ── Controls ──────────────────────────────────────────────────────────────────────────────────
     private readonly ComboBox _categoryBox;
     private readonly TextBox  _searchBox;
     private readonly WrapPanel _grid;
-    private readonly ScrollViewer _scroll;
     private readonly TextBlock _statusBar;
 
     // ── Thumbnail geometry ────────────────────────────────────────────────────────────────────────
-    private const int ThumbSize   = 54;   // pixels (tile)
-    private const int IconSize    = 38;   // px for the rendered icon inside the tile
-    private const int TilesPerRow = 8;
-    private const double DialogW  = TilesPerRow * (ThumbSize + 4) + 32;
-
     // ── Constructor ───────────────────────────────────────────────────────────────────────────────
     private IconPickerDialog(Window? owner)
     {
         Owner = owner;
-        Title = "Insert Icon";
-        Width = DialogW;
-        Height = 480;
-        MinHeight = 320;
+        Title = Surface.Title;
+        Width = Surface.DialogWidth;
+        Height = Surface.DialogHeight;
+        MinHeight = Surface.MinDialogHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = false;
+        _session = new IconPickerDialogSession(
+            IconPickerCatalog.LoadFromBaseDirectory(AppContext.BaseDirectory));
 
-        var root = new DockPanel { Margin = new Thickness(10) };
+        var root = new DockPanel { Margin = new Thickness(Surface.RootMargin) };
 
         // ── Filter row ────────────────────────────────────────────────────────────────────────────
         var filterRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, Surface.FilterBottomMargin)
         };
+        var categoryField = Surface.Field(IconPickerFieldKind.Category);
+        var searchField = Surface.Field(IconPickerFieldKind.Search);
         filterRow.Children.Add(new TextBlock
         {
-            Text = "Category:",
+            Text = categoryField.Label,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0)
         });
 
-        _categoryBox = new ComboBox { MinWidth = 120, Margin = new Thickness(0, 0, 14, 0) };
-        _categoryBox.Items.Add(ContentIconCatalog.AllCategoriesLabel);
-        foreach (var cat in ContentIconCatalog.Categories)
+        _categoryBox = new ComboBox
+        {
+            MinWidth = categoryField.Width,
+            Margin = new Thickness(0, 0, Surface.CategoryTrailingMargin, 0)
+        };
+        AutomationProperties.SetAutomationId(_categoryBox, categoryField.AutomationId);
+        _categoryBox.Items.Add(IconPickerDialogPlanner.AllCategoriesLabel);
+        foreach (var cat in _session.Categories)
             _categoryBox.Items.Add(cat);
         _categoryBox.SelectedIndex = 0;
         _categoryBox.SelectionChanged += (_, _) => Refresh();
@@ -70,12 +74,17 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         filterRow.Children.Add(new TextBlock
         {
-            Text = "Search:",
+            Text = searchField.Label,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0)
         });
 
-        _searchBox = new TextBox { Width = 160, VerticalContentAlignment = VerticalAlignment.Center };
+        _searchBox = new TextBox
+        {
+            Width = searchField.Width,
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        AutomationProperties.SetAutomationId(_searchBox, searchField.AutomationId);
         _searchBox.TextChanged += (_, _) => Refresh();
         filterRow.Children.Add(_searchBox);
 
@@ -91,15 +100,15 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Margin = new Thickness(0, 4, 0, 4),
             VerticalAlignment = VerticalAlignment.Center
         };
-
-        // Reuse the shared OK/Cancel button row (localized content, accelerators, automation
-        // names; Cancel is IsCancel so Esc/Cancel closes). Single source of truth shared with
-        // FreeX/FreeW dialogs -- see DialogSharedHelperDedupTests.
-        var btnPanel = DialogButtonRowFactory.Create(Accept, buttonWidth: 72);
+        AutomationProperties.SetAutomationId(_statusBar, Surface.StatusAutomationId);
 
         var bottomRow = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
-        DockPanel.SetDock(btnPanel, Dock.Right);
-        bottomRow.Children.Add(btnPanel);
+        var buttons = DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: Surface.ActionButtonWidth,
+            rowMargin: new Thickness(0));
+        DockPanel.SetDock(buttons, Dock.Right);
+        bottomRow.Children.Add(buttons);
         bottomRow.Children.Add(_statusBar);
 
         DockPanel.SetDock(bottomRow, Dock.Bottom);
@@ -111,8 +120,9 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Left
         };
+        AutomationProperties.SetAutomationId(_grid, Surface.TilesAutomationId);
 
-        _scroll = new ScrollViewer
+        var scroll = new ScrollViewer
         {
             Content = _grid,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -121,7 +131,7 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             BorderBrush = SystemColors.ControlDarkBrush
         };
 
-        root.Children.Add(_scroll);
+        root.Children.Add(scroll);
         Content = root;
 
         // Initial population
@@ -133,35 +143,32 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void Refresh()
     {
         _grid.Children.Clear();
-        _selected = null;
 
         var category = _categoryBox.SelectedItem as string;
-        var search   = _searchBox.Text;
-        var entries  = ContentIconCatalog.Filter(category, search).ToList();
+        var search = _searchBox.Text;
+        var state = _session.ApplyFilter(category, search);
 
-        _statusBar.Text = entries.Count == 0 ? "No icons match." : $"{entries.Count} icons";
+        _statusBar.Text = state.StatusText;
 
-        foreach (var entry in entries)
-        {
-            var tile = MakeTile(entry);
-            _grid.Children.Add(tile);
-        }
+        foreach (var entry in state.VisibleEntries)
+            _grid.Children.Add(MakeTile(entry));
     }
 
-    private Border MakeTile(ContentIconCatalog.IconEntry entry)
+    private Border MakeTile(IconPickerEntry entry)
     {
+        var iconSize = (int)Surface.IconSize;
         // Load a small preview thumbnail: render the SVG at IconSize×IconSize.
         Image? preview = null;
         try
         {
-            var bmp = LoadThumbnail(entry.Path, IconSize);
+            var bmp = LoadThumbnail(entry.Path, iconSize);
             preview = new Image
             {
                 Source = bmp,
-                Width = IconSize,
-                Height = IconSize,
+                Width = Surface.IconSize,
+                Height = Surface.IconSize,
                 Stretch = Stretch.Uniform,
-                ToolTip = $"{entry.Name}\n({entry.Category})"
+                ToolTip = IconPickerDialogPlanner.ToolTipFor(entry)
             };
         }
         catch
@@ -171,15 +178,15 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var content = preview ?? (UIElement)new Border
         {
-            Width = IconSize,
-            Height = IconSize,
+            Width = Surface.IconSize,
+            Height = Surface.IconSize,
             Background = Brushes.LightGray
         };
 
         var tile = new Border
         {
-            Width = ThumbSize,
-            Height = ThumbSize,
+            Width = Surface.TileSize,
+            Height = Surface.TileSize,
             Margin = new Thickness(2),
             Padding = new Thickness(4),
             BorderThickness = new Thickness(1),
@@ -189,6 +196,8 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Cursor = Cursors.Hand,
             Tag = entry
         };
+        AutomationProperties.SetAutomationId(tile, IconPickerDialogPlanner.TileAutomationId(entry));
+        AutomationProperties.SetName(tile, entry.Name);
 
         tile.MouseLeftButtonUp += OnTileClick;
         // Border has no MouseDoubleClick — detect double-click via ClickCount on MouseLeftButtonDown.
@@ -232,7 +241,8 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         if (sender is Border tile)
         {
             SetSelected(tile, true);
-            _selected = tile.Tag as ContentIconCatalog.IconEntry;
+            if (tile.Tag is IconPickerEntry entry)
+                _session.Select(entry);
         }
     }
 
@@ -240,8 +250,11 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         if (sender is Border tile)
         {
-            _selected = tile.Tag as ContentIconCatalog.IconEntry;
-            Accept();
+            if (tile.Tag is IconPickerEntry entry)
+            {
+                _session.Select(entry);
+                Accept();
+            }
         }
     }
 
@@ -256,21 +269,24 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // ── Accept ────────────────────────────────────────────────────────────────────────────────────
     private void Accept()
     {
-        if (_selected is null)
+        var plan = _session.PlanAccept();
+        if (!plan.ShouldAccept)
         {
-            DialogMessageHelper.ShowWarning(this, "Select an icon first.", "Insert Icon");
+            DialogMessageHelper.ShowWarning(this, plan.WarningMessage!, Surface.Title);
             return;
         }
 
         try
         {
-            _result = SvgRasterizerHelper.RasterizeToInlineImage(_selected.Path);
+            _result = SvgRasterizerHelper.RasterizeToInlineImage(plan.Selection!.Path);
             Close();
         }
         catch (Exception ex)
         {
-            DialogMessageHelper.ShowError(this,
-                $"Could not rasterize the icon:\n{ex.Message}", "Insert Icon");
+            DialogMessageHelper.ShowError(
+                this,
+                IconPickerDialogPlanner.RasterizationErrorMessage(ex.Message),
+                Surface.Title);
         }
     }
 

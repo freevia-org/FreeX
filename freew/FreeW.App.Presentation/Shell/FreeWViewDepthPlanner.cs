@@ -32,6 +32,30 @@ public enum FreeWViewDepthSurfaceKind
     EditablePageView
 }
 
+public sealed record FreeWViewDepthCapabilities(
+    bool SupportsSplitPreview,
+    bool SupportsMultiplePagesPreview,
+    bool SupportsSideToSidePreview,
+    bool SupportsEditableSideToSide,
+    bool SupportsPagePairNavigation)
+{
+    public static FreeWViewDepthCapabilities FullDesktop { get; } = new(
+        SupportsSplitPreview: true,
+        SupportsMultiplePagesPreview: true,
+        SupportsSideToSidePreview: true,
+        SupportsEditableSideToSide: true,
+        SupportsPagePairNavigation: true);
+
+    public bool Supports(FreeWViewDepthMode mode) => mode switch
+    {
+        FreeWViewDepthMode.LiveEditor => true,
+        FreeWViewDepthMode.SplitPreview => SupportsSplitPreview,
+        FreeWViewDepthMode.MultiplePagesPreview => SupportsMultiplePagesPreview,
+        FreeWViewDepthMode.SideToSidePreview => SupportsSideToSidePreview,
+        _ => false,
+    };
+}
+
 public sealed record FreeWViewDepthState(FreeWViewDepthMode Mode)
 {
     public bool IsSplitActive => Mode == FreeWViewDepthMode.SplitPreview;
@@ -66,8 +90,12 @@ public sealed record FreeWViewDepthPagePairNavigationState(
 
 public static class FreeWViewDepthPlanner
 {
-    public static FreeWViewDepthPlan Plan(FreeWViewDepthState current, FreeWViewDepthCommand command)
+    public static FreeWViewDepthPlan Plan(
+        FreeWViewDepthState current,
+        FreeWViewDepthCommand command,
+        FreeWViewDepthCapabilities? capabilities = null)
     {
+        capabilities ??= FreeWViewDepthCapabilities.FullDesktop;
         var target = command switch
         {
             FreeWViewDepthCommand.RestoreLiveEditor => FreeWViewDepthMode.LiveEditor,
@@ -83,11 +111,19 @@ public static class FreeWViewDepthPlanner
             _ => FreeWViewDepthMode.LiveEditor
         };
 
-        return Build(target);
+        return Build(capabilities.Supports(target) ? target : current.Mode, capabilities);
     }
 
-    public static FreeWViewDepthPlan Build(FreeWViewDepthMode mode) => mode switch
+    public static FreeWViewDepthPlan Build(
+        FreeWViewDepthMode mode,
+        FreeWViewDepthCapabilities? capabilities = null)
     {
+        capabilities ??= FreeWViewDepthCapabilities.FullDesktop;
+        if (!capabilities.Supports(mode))
+            mode = FreeWViewDepthMode.LiveEditor;
+
+        return mode switch
+        {
         FreeWViewDepthMode.SplitPreview => new FreeWViewDepthPlan(
             mode,
             FreeWViewDepthSurfaceKind.SplitEditorWithReadOnlyPreview,
@@ -98,7 +134,7 @@ public static class FreeWViewDepthPlanner
             PagesAcross: 1,
             Layout: DocumentViewDepthLayoutPlanner.Build(mode),
             StatusText: "Split view active: live editor above, read-only paginated snapshot below.",
-            Limitation: "The Avalonia split preview is read-only in the secondary pane; dual live editing remains deferred."),
+            Limitation: "The secondary split pane is read-only; dual live editing is not available in this host."),
         FreeWViewDepthMode.MultiplePagesPreview => new FreeWViewDepthPlan(
             mode,
             FreeWViewDepthSurfaceKind.EditablePageView,
@@ -112,15 +148,21 @@ public static class FreeWViewDepthPlanner
             Limitation: null),
         FreeWViewDepthMode.SideToSidePreview => new FreeWViewDepthPlan(
             mode,
-            FreeWViewDepthSurfaceKind.EditablePageView,
+            capabilities.SupportsEditableSideToSide
+                ? FreeWViewDepthSurfaceKind.EditablePageView
+                : FreeWViewDepthSurfaceKind.ReadOnlyPagePreview,
             IsSplitActive: false,
             IsMultiplePagesActive: false,
             IsSideToSideActive: true,
-            UsesReadOnlySnapshot: false,
+            UsesReadOnlySnapshot: !capabilities.SupportsEditableSideToSide,
             PagesAcross: 2,
             Layout: DocumentViewDepthLayoutPlanner.Build(mode),
-            StatusText: "Side to Side view active: editable two-page horizontal-flow view with pair navigation.",
-            Limitation: null),
+            StatusText: capabilities.SupportsEditableSideToSide
+                ? "Side to Side view active: editable two-page horizontal-flow view with pair navigation."
+                : "Side to Side view active: read-only two-page horizontal-flow preview with pair navigation.",
+            Limitation: capabilities.SupportsEditableSideToSide
+                ? null
+                : "Editing is disabled because this host does not provide an editable side-to-side surface."),
         _ => new FreeWViewDepthPlan(
             FreeWViewDepthMode.LiveEditor,
             FreeWViewDepthSurfaceKind.LiveEditor,
@@ -132,7 +174,8 @@ public static class FreeWViewDepthPlanner
             Layout: DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor),
             StatusText: "Live editor active.",
             Limitation: null)
-    };
+        };
+    }
 
     public static double BuildPreviewScale(
         FreeWViewDepthMode mode,

@@ -1,3 +1,4 @@
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
 
@@ -6,6 +7,7 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class AutoFilterDropdownMenuPlannerHostResourceTests
 {
     private static readonly SheetId SheetId = SheetId.New();
+    private static readonly FreeXPlannerTextResources TextResources = new(UiText.Get, UiText.Format);
 
     private static bool TryGetAutoFilterRange(Sheet sheet, out GridRange range) =>
         AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out range);
@@ -19,14 +21,14 @@ public sealed partial class AutoFilterDropdownMenuPlannerHostResourceTests
         AutoFilterDropdownMenuPlanner.CreateChecklistItems(
             sheet,
             plan,
-            AutoFilterMenuResources.BlankDisplayText);
+            TextResources.AutoFilter.BlankDisplayText);
 
     private static AutoFilterMenuPlan CreateMenuPlan(Sheet sheet, AutoFilterDropdownPlan plan) =>
         AutoFilterDropdownMenuPlanner.CreateMenuPlan(
             sheet,
             plan,
-            AutoFilterMenuResources.TextProvider,
-            AutoFilterMenuResources.BlankDisplayText);
+            TextResources.AutoFilter,
+            TextResources.AutoFilter.BlankDisplayText);
 
     private static AutoFilterMenuPlan CreateMenuPlan(
         Workbook workbook,
@@ -36,6 +38,6 @@ public sealed partial class AutoFilterDropdownMenuPlannerHostResourceTests
             workbook,
             sheet,
             plan,
-            AutoFilterMenuResources.TextProvider,
-            AutoFilterMenuResources.BlankDisplayText);
+            TextResources.AutoFilter,
+            TextResources.AutoFilter.BlankDisplayText);
 }

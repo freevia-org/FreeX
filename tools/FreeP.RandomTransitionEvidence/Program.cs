@@ -1,56 +1,14 @@
 using System.Text;
+using Free.ToolsShared;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
-var root = FindRepositoryRoot();
-var outputPath = GetOption("--output") is { } configuredOutput
-    ? Path.GetFullPath(configuredOutput, Environment.CurrentDirectory)
-    : Path.Combine(root, "docs", "parity", "freep-random-transition-playback-20260720.md");
-var report = BuildReport();
-
-if (args.Contains("--check", StringComparer.Ordinal))
-{
-    if (!File.Exists(outputPath) ||
-        !string.Equals(File.ReadAllText(outputPath), report, StringComparison.Ordinal))
-    {
-        Console.Error.WriteLine($"Generated evidence is stale: {outputPath}");
-        Environment.ExitCode = 1;
-    }
-    else
-    {
-        Console.WriteLine($"Generated evidence is current: {outputPath}");
-    }
-
-    return;
-}
-
-Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-File.WriteAllText(outputPath, report, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-Console.WriteLine($"Generated evidence: {outputPath}");
-return;
-
-string? GetOption(string name)
-{
-    var index = Array.IndexOf(args, name);
-    if (index < 0)
-        return null;
-    if (index + 1 >= args.Length)
-        throw new ArgumentException($"Missing value after {name}.");
-    return args[index + 1];
-}
-
-static string FindRepositoryRoot()
-{
-    for (var current = new DirectoryInfo(AppContext.BaseDirectory);
-         current is not null;
-         current = current.Parent)
-    {
-        if (File.Exists(Path.Combine(current.FullName, "FreeP.slnx")))
-            return current.FullName;
-    }
-
-    throw new InvalidOperationException("Could not locate the repository root containing FreeP.slnx.");
-}
+return GeneratedEvidenceToolRunner.Run(
+    args,
+    new GeneratedEvidenceToolSpec(
+        "FreeP.slnx",
+        Path.Combine("docs", "parity", "freep-random-transition-playback-20260720.md"),
+        BuildReport));
 
 static string BuildReport()
 {

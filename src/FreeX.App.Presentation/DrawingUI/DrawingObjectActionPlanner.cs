@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.App.Presentation.DrawingInteraction;
 
 namespace FreeX.App.Presentation.DrawingUI;
 
@@ -70,6 +71,25 @@ public static class DrawingObjectActionPlanner
 
     public static DrawingObjectResourceText ResizeSuccess(ObjectSizeDialogSize size) =>
         new("InsertLoc_ResizedObject", [size.Width, size.Height]);
+
+    public static DrawingObjectResourceText DragCommitSuccess(ObjectDragCommitPlan plan) =>
+        plan.Kind switch
+        {
+            ObjectDragCommitKind.Move => new("DrawingInteract_Moved"),
+            ObjectDragCommitKind.Rotate => RotationSuccess(new FormatPicturePlanner.RotationResult(plan.RotationDegrees)),
+            ObjectDragCommitKind.Resize or ObjectDragCommitKind.ResizeWithAnchor =>
+                ResizeSuccess(new ObjectSizeDialogSize(plan.Width, plan.Height)),
+            _ => throw new ArgumentOutOfRangeException(nameof(plan), plan.Kind, "Drag plan has no success status."),
+        };
+
+    public static string DragCommitCommandTitle(ObjectDragCommitKind kind) =>
+        kind switch
+        {
+            ObjectDragCommitKind.Move => MoveObjectCommandTitle,
+            ObjectDragCommitKind.Rotate => RotateObjectCommandTitle,
+            ObjectDragCommitKind.Resize or ObjectDragCommitKind.ResizeWithAnchor => ResizeObjectCommandTitle,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Drag plan has no command title."),
+        };
 
     public static DrawingObjectResourceText AltTextSuccess(string? altText) =>
         new(string.IsNullOrWhiteSpace(altText) ? "InsertLoc_AltTextCleared" : "InsertLoc_AltTextUpdated");

@@ -5,6 +5,7 @@ using System.Windows.Input;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -71,7 +72,7 @@ public partial class MainWindow
 
     private void SheetGrid_MouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
     {
-        int notches = ViewportScrollCalculator.NormalizeWheelNotches(e.Delta);
+        int notches = WorkbookViewportScrollPlanner.NormalizeWheelNotches(e.Delta);
         var horizontal = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
         if (SheetGrid.Viewport is { } wheelViewport)
         {
@@ -112,7 +113,9 @@ public partial class MainWindow
         if (horizontal)
         {
             var sheet = _workbook.GetSheet(_currentSheetId);
-            var step = NormalizeWheelScrollLines(GetSystemWheelScrollLines(), HorizontalScroll.ViewportSize);
+            var step = WorkbookViewportScrollPlanner.NormalizeWheelScrollStep(
+                GetSystemWheelScrollLines(),
+                HorizontalScroll.ViewportSize);
             var (maximum, value) = CalculateWheelScroll(
                 HorizontalScroll.Value,
                 HorizontalScroll.Maximum,
@@ -126,7 +129,9 @@ public partial class MainWindow
         else
         {
             var sheet = _workbook.GetSheet(_currentSheetId);
-            var step = NormalizeWheelScrollLines(GetSystemWheelScrollLines(), VerticalScroll.ViewportSize);
+            var step = WorkbookViewportScrollPlanner.NormalizeWheelScrollStep(
+                GetSystemWheelScrollLines(),
+                VerticalScroll.ViewportSize);
             var (maximum, value) = CalculateWheelScroll(
                 VerticalScroll.Value,
                 VerticalScroll.Maximum,
@@ -140,45 +145,12 @@ public partial class MainWindow
         e.Handled = true;
     }
 
-    /// <summary>Default rows/cols scrolled per wheel notch when the OS setting is unavailable or invalid.</summary>
-    public const int DefaultWheelScrollLinesPerNotch = 3;
-
-    /// <summary>Upper bound on a single wheel notch's step, guarding against an absurd jump if the
-    /// OS setting (or the "one screen at a time" fallback below) resolves to something enormous.</summary>
-    private const int MaxWheelScrollLinesPerNotch = 100;
-
-    /// <summary>
-    /// R76-render-freeze-scroll-4-2: the mouse-wheel step was hardcoded to 3 rows/cols per notch,
-    /// ignoring the OS "Number of lines to scroll" setting Excel honors
-    /// (SystemParameters.WheelScrollLines). Pure/testable: takes the raw OS value (or the
-    /// <see cref="DefaultWheelScrollLinesPerNotch"/> fallback when it could not be read) plus the
-    /// current visible span, and resolves the actual per-notch step -- clamped to a sane range,
-    /// and mapping the Windows "-1 = scroll one screen at a time" sentinel to the visible span
-    /// itself (also clamped) rather than a negative/nonsensical step.
-    /// </summary>
-    public static int NormalizeWheelScrollLines(int wheelScrollLines, double visibleSpan)
-    {
-        if (wheelScrollLines < 0)
-            return (int)Math.Clamp(Math.Max(1, Math.Round(visibleSpan)), 1, MaxWheelScrollLinesPerNotch);
-
-        if (wheelScrollLines == 0)
-            return DefaultWheelScrollLinesPerNotch;
-
-        return Math.Clamp(wheelScrollLines, 1, MaxWheelScrollLinesPerNotch);
-    }
-
-    /// <summary>
-    /// Test-only override for <see cref="GetSystemWheelScrollLines"/>'s OS read (set via reflection
-    /// -- see R76_WheelScrollLinesTests), so a unit test can drive <c>SheetGrid_MouseWheel</c>
-    /// deterministically instead of depending on the real machine's live "Number of lines to
-    /// scroll" setting. Always null in production.
-    /// </summary>
-    private static int? _wheelScrollLinesTestOverride = null;
-
     private static int GetSystemWheelScrollLines()
     {
-        if (_wheelScrollLinesTestOverride is { } testOverride)
-            return testOverride;
+        int? externalLines = null;
+        TryGetExternalWheelScrollLines(ref externalLines);
+        if (externalLines is { } lines)
+            return lines;
 
         try
         {
@@ -188,7 +160,7 @@ public partial class MainWindow
         {
             // SystemParameters can throw in atypical hosting scenarios (e.g. no desktop session);
             // fall back to the previous hardcoded behavior rather than letting the wheel handler fail.
-            return DefaultWheelScrollLinesPerNotch;
+            return WorkbookViewportScrollPlanner.DefaultWheelScrollLinesPerNotch;
         }
     }
 
@@ -197,7 +169,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (request.HorizontalDirection != 0)
         {
-            var (maximum, value) = ViewportScrollCalculator.CalculateDragAutoScroll(
+            var (maximum, value) = WorkbookViewportScrollPlanner.CalculateDragAutoScroll(
                 HorizontalScroll.Value,
                 HorizontalScroll.Maximum,
                 request.HorizontalDirection,
@@ -210,7 +182,7 @@ public partial class MainWindow
 
         if (request.VerticalDirection != 0)
         {
-            var (maximum, value) = ViewportScrollCalculator.CalculateDragAutoScroll(
+            var (maximum, value) = WorkbookViewportScrollPlanner.CalculateDragAutoScroll(
                 VerticalScroll.Value,
                 VerticalScroll.Maximum,
                 request.VerticalDirection,
@@ -271,7 +243,7 @@ public partial class MainWindow
         if (vp == null) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
 
-        var plan = ViewportScrollCalculator.PlanCellReveal(
+        var plan = WorkbookViewportScrollPlanner.PlanCellReveal(
             vp,
             sheet,
             addr,
@@ -407,7 +379,7 @@ public partial class MainWindow
     /// ever reads the shared fields. Without this reconciliation, Ctrl+S from a window whose own
     /// view has diverged from the shared fields would silently persist whichever sibling window's
     /// view last touched them instead of this window's own. Call this once, right before handing
-    /// the workbook to <c>SaveWorkbookWriter</c>/<c>WorkbookSaveService</c>.
+    /// the workbook to <c>WorkbookSaveService</c>.
     /// </para>
     /// </summary>
     private void ReconcileViewStateForSave()
@@ -446,7 +418,7 @@ public partial class MainWindow
         double horizontalScrollValue)
     {
         var viewState = GetEffectiveViewState(sheet);
-        return ViewportScrollCalculator.CalculateViewportOrigin(
+        return WorkbookViewportScrollPlanner.CalculateViewportOrigin(
             viewState.FrozenRows,
             viewState.FrozenCols,
             verticalScrollValue,
@@ -455,7 +427,7 @@ public partial class MainWindow
 
     private void UpdateViewport()
     {
-        if (SheetGrid == null || _viewportService == null) return;
+        if (_workbookSessionDisposed || SheetGrid == null || _viewportService == null) return;
 
         // Dismiss the AutoFilter dropdown flyout if we've moved to a different sheet.
         CloseAutoFilterDropdownOnSheetChange();
@@ -472,6 +444,7 @@ public partial class MainWindow
             SyncPageLayoutScaleToFitControls(sheet);
         }
         EnsureActiveCellSelection(sheet);
+        SynchronizeWorkbookSessionSelection();
 
         var (topRow, leftCol) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
         topRow = ClampViewportOrigin(
@@ -518,18 +491,16 @@ public partial class MainWindow
         // ActiveAutoFilterColumns (a set of column offsets from AutoFilterRange.Start.Col) to decide
         // which header buttons draw the "active" glyph, but nothing in the WPF host ever populated it.
         SheetGrid.ActiveAutoFilterColumns = sheet is not null && autoFilterRange is { } activeFilterRange
-            ? BuildActiveAutoFilterColumns(sheet, activeFilterRange)
+            ? AutoFilterHeaderButtonPlanner.GetActiveColumnOffsets(sheet, activeFilterRange)
             : null;
         IReadOnlyList<PivotHeaderDropdownTarget> pivotHeaderDropdownTargets = sheet is null
             ? []
-            : PivotHeaderDropdownPlanner.BuildTargets(_workbook, sheet);
+            : PivotGridAdornmentPlanner.BuildHeaderTargets(_workbook, sheet);
         _pivotHeaderDropdownTargets = BuildPivotHeaderDropdownTargetLookup(pivotHeaderDropdownTargets);
-        SheetGrid.PivotHeaderDropdowns = pivotHeaderDropdownTargets
-            .Select(target => new FreeX.App.UI.PivotHeaderDropdownButton(target.HeaderCell, target.IsActive))
-            .ToList();
+        SheetGrid.PivotHeaderDropdowns = pivotHeaderDropdownTargets;
         SheetGrid.PivotRowLabelAdornments = sheet is null
             ? []
-            : PivotRowLabelAdornmentPlanner.BuildAdornments(_workbook, sheet);
+            : PivotGridAdornmentPlanner.BuildRowLabelAdornments(_workbook, sheet);
         SheetGrid.FormulaTraceSheetId = _currentSheetId;
         SheetGrid.FormulaTraceArrows = _formulaTraceArrows;
         SheetGrid.HyperlinkCells = sheet is null
@@ -539,11 +510,11 @@ public partial class MainWindow
                 .ToHashSet();
         SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch
         {
-            FreeXObjectDisplay.Placeholders => FreeX.App.UI.GridObjectDisplayMode.Placeholders,
-            FreeXObjectDisplay.Nothing => FreeX.App.UI.GridObjectDisplayMode.Nothing,
+            AppOptionsObjectDisplay.Placeholders => FreeX.App.UI.GridObjectDisplayMode.Placeholders,
+            AppOptionsObjectDisplay.Nothing => FreeX.App.UI.GridObjectDisplayMode.Nothing,
             _ => FreeX.App.UI.GridObjectDisplayMode.All
         };
-        var keepObjectData = _options.ObjectsDisplay != FreeXObjectDisplay.Nothing;
+        var keepObjectData = _options.ObjectsDisplay != AppOptionsObjectDisplay.Nothing;
         SheetGrid.Charts = keepObjectData ? sheet?.Charts : null;
         SheetGrid.TextBoxes = keepObjectData ? sheet?.TextBoxes : null;
         SheetGrid.DrawingShapes = keepObjectData ? sheet?.DrawingShapes : null;
@@ -551,13 +522,11 @@ public partial class MainWindow
         SheetGrid.Pictures = keepObjectData ? sheet?.Pictures : null;
         SheetGrid.DrawingObjectZOrder = keepObjectData ? sheet?.DrawingObjectZOrder : null;
         var nativeVisualFilters = keepObjectData && sheet is not null
-            ? SlicerTimelinePlanner.GetNativeVisualFilters(_workbook, sheet)
+            ? SlicerTimelinePanePlanner.GetNativeVisualFilters(_workbook, sheet)
             : null;
         if (nativeVisualFilters is { Slicers.Count: > 0 })
         {
-            // Resolve each slicer's available items (table-column distinct values or pivot cache shared
-            // items) into AvailableItems just before render, mirroring the form-control selected-text pass.
-            FreeX.Core.Commands.SlicerItemResolver.PopulateAvailableItems(_workbook);
+            new SlicerTimelineSourceSession(_workbook).PopulateAvailableItems(nativeVisualFilters.Slicers);
         }
         SheetGrid.NativeSlicers = nativeVisualFilters?.Slicers;
         SheetGrid.NativeTimelines = nativeVisualFilters?.Timelines;
@@ -681,15 +650,17 @@ public partial class MainWindow
     /// </summary>
     private void ShiftScrollOriginForRowEdit(uint editRow, int rowDelta)
     {
-        if (rowDelta == 0) return;
-
         var sheet = _workbook.GetSheet(_currentSheetId);
         var (topRow, _) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
-        if (editRow > topRow) return;
+        var newTopRow = WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
+            topRow,
+            editRow,
+            rowDelta,
+            CellAddress.MaxRow);
+        if (newTopRow is null) return;
 
         var frozenRows = GetEffectiveViewState(sheet).FrozenRows;
-        var newTopRow = (uint)Math.Clamp((long)topRow + rowDelta, 1, CellAddress.MaxRow);
-        var newVerticalValue = WorksheetIndexToScrollbarValue(newTopRow, frozenRows);
+        var newVerticalValue = WorksheetIndexToScrollbarValue(newTopRow.Value, frozenRows);
 
         // Bump Maximum first if needed so assigning Value below isn't silently clamped by a
         // range still sized for the pre-edit row count; UpdateViewport() (called next)
@@ -704,15 +675,17 @@ public partial class MainWindow
     /// </summary>
     private void ShiftScrollOriginForColEdit(uint editCol, int colDelta)
     {
-        if (colDelta == 0) return;
-
         var sheet = _workbook.GetSheet(_currentSheetId);
         var (_, leftCol) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
-        if (editCol > leftCol) return;
+        var newLeftCol = WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
+            leftCol,
+            editCol,
+            colDelta,
+            CellAddress.MaxCol);
+        if (newLeftCol is null) return;
 
         var frozenCols = GetEffectiveViewState(sheet).FrozenCols;
-        var newLeftCol = (uint)Math.Clamp((long)leftCol + colDelta, 1, CellAddress.MaxCol);
-        var newHorizontalValue = WorksheetIndexToScrollbarValue(newLeftCol, frozenCols);
+        var newHorizontalValue = WorksheetIndexToScrollbarValue(newLeftCol.Value, frozenCols);
 
         if (newHorizontalValue > HorizontalScroll.Maximum)
             HorizontalScroll.Maximum = newHorizontalValue;
@@ -727,43 +700,6 @@ public partial class MainWindow
             lookup[(target.HeaderCell.Row, target.HeaderCell.Col)] = target;
 
         return lookup;
-    }
-
-    /// <summary>
-    /// Resolves the set of columns (as 0-based offsets from <paramref name="range"/>'s own start
-    /// column) that currently carry an active AutoFilter criterion, for
-    /// <see cref="FreeX.App.UI.GridView.ActiveAutoFilterColumns"/>. Checks the worksheet-level
-    /// <see cref="Sheet.AutoFilter"/> first; when the effective AutoFilter range instead resolved to
-    /// a structured (Excel) table's own range (no worksheet-level &lt;autoFilter&gt;), a filtered
-    /// column's state lives in that table's own <c>FilterColumns</c>
-    /// (FilterCommand.ApplyToStructuredTableIfMatched), never in <c>sheet.AutoFilter</c> -- mirrors
-    /// the Avalonia shell's identical fallback (MainWindow.AutoFilter.cs
-    /// DecorateAutoFilterHeaderCell, R72-commands-sort-filter-4-2). Returns null when no column is
-    /// currently filtered.
-    /// </summary>
-    private static IReadOnlySet<uint>? BuildActiveAutoFilterColumns(Sheet sheet, GridRange range)
-    {
-        HashSet<uint>? active = null;
-        if (sheet.AutoFilter is { } autoFilter)
-        {
-            foreach (var column in autoFilter.FilterColumns)
-                (active ??= []).Add((uint)column.ColumnId);
-        }
-
-        if (active is null)
-        {
-            foreach (var table in sheet.StructuredTables)
-            {
-                if (!table.Range.Equals(range))
-                    continue;
-
-                foreach (var column in table.FilterColumns)
-                    (active ??= []).Add((uint)column.ColumnId);
-                break;
-            }
-        }
-
-        return active;
     }
 
     private void RefreshViewportValidationDropdown(Sheet? sheet)
@@ -927,7 +863,7 @@ public partial class MainWindow
             LeftCol: leftCol,
             AvailableHeight: (SheetGrid.ActualHeight - SheetGrid.EffectiveColHeaderHeight) / _zoomLevel,
             AvailableWidth: CalculateViewportAvailableWidth(SheetGrid.ActualWidth, rowHeaderWidth, _zoomLevel),
-            IncludeObjects: _options.ObjectsDisplay == FreeXObjectDisplay.All,
+            IncludeObjects: _options.ObjectsDisplay == AppOptionsObjectDisplay.All,
             SplitPaneOffsets: GetSplitPaneViewportOffsets(viewState, topRow, leftCol),
             FrozenRowsOverride: viewState.FrozenRows,
             FrozenColsOverride: viewState.FrozenCols,
@@ -1028,50 +964,50 @@ public partial class MainWindow
         Sheet? sheet,
         double verticalScrollValue,
         double horizontalScrollValue) =>
-        ViewportScrollCalculator.CalculateViewportOrigin(sheet, verticalScrollValue, horizontalScrollValue);
+        WorkbookViewportScrollPlanner.CalculateViewportOrigin(sheet, verticalScrollValue, horizontalScrollValue);
 
     public static uint ScrollbarValueToWorksheetIndex(
         double scrollbarValue,
         uint frozenCount,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.ScrollbarValueToWorksheetIndex(scrollbarValue, frozenCount, absoluteLimit);
+        WorkbookViewportScrollPlanner.ScrollbarValueToWorksheetIndex(scrollbarValue, frozenCount, absoluteLimit);
 
     public static uint WorksheetIndexToScrollbarValue(
         uint worksheetIndex,
         uint frozenCount) =>
-        ViewportScrollCalculator.WorksheetIndexToScrollbarValue(worksheetIndex, frozenCount);
+        WorkbookViewportScrollPlanner.WorksheetIndexToScrollbarValue(worksheetIndex, frozenCount);
 
     public static uint CalculateScrollableLimit(uint absoluteLimit, uint frozenCount)
-        => ViewportScrollCalculator.CalculateScrollableLimit(absoluteLimit, frozenCount);
+        => WorkbookViewportScrollPlanner.CalculateScrollableLimit(absoluteLimit, frozenCount);
 
     // R89-freeze-split-per-window-1: resolves against THIS window's effective Freeze Panes
     // count (GetEffectiveViewState), not the shared Sheet.FrozenRows/FrozenCols a sibling
     // "New Window" may have changed -- mirrors the ShowGridlines/ShowHeadings/ShowRulers
     // per-window pattern above (R87-order-guard-window-state-sweep-1). The plain
-    // Sheet-based ViewportScrollCalculator.GetScrollableRowLimit/GetScrollableColumnLimit
+    // Sheet-based WorkbookViewportScrollPlanner.GetScrollableRowLimit/GetScrollableColumnLimit
     // overloads are left untouched (ViewportOriginTests/ViewportScrollCalculatorTests still
     // exercise those directly against a bare Sheet).
     private uint GetScrollableRowLimit(Sheet? sheet) =>
-        ViewportScrollCalculator.GetScrollableRowLimit(GetEffectiveViewState(sheet).FrozenRows);
+        WorkbookViewportScrollPlanner.GetScrollableRowLimit(GetEffectiveViewState(sheet).FrozenRows);
 
     private uint GetScrollableColumnLimit(Sheet? sheet) =>
-        ViewportScrollCalculator.GetScrollableColumnLimit(GetEffectiveViewState(sheet).FrozenCols);
+        WorkbookViewportScrollPlanner.GetScrollableColumnLimit(GetEffectiveViewState(sheet).FrozenCols);
 
     public static uint ClampViewportOrigin(double rawValue, uint absoluteLimit, uint visibleSpan)
-        => ViewportScrollCalculator.ClampViewportOrigin(rawValue, absoluteLimit, visibleSpan);
+        => WorkbookViewportScrollPlanner.ClampViewportOrigin(rawValue, absoluteLimit, visibleSpan);
 
     public static double CalculateViewportAvailableWidth(
         double gridWidth,
         double rowHeaderWidth,
         double zoomLevel) =>
-        ViewportScrollCalculator.CalculateViewportAvailableWidth(gridWidth, rowHeaderWidth, zoomLevel);
+        WorkbookViewportScrollPlanner.CalculateViewportAvailableWidth(gridWidth, rowHeaderWidth, zoomLevel);
 
     public static uint CalculateOpenedWorksheetScrollValue(
         uint? savedTopLeftIndex,
         uint fallbackIndex,
         uint absoluteLimit,
         uint frozenCount = 0) =>
-        ViewportScrollCalculator.CalculateOpenedWorksheetScrollValue(
+        WorkbookViewportScrollPlanner.CalculateOpenedWorksheetScrollValue(
             savedTopLeftIndex,
             fallbackIndex,
             absoluteLimit,
@@ -1082,7 +1018,7 @@ public partial class MainWindow
         uint firstVisibleIndex,
         uint lastVisibleIndex,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateScrollValueToRevealCell(
+        WorkbookViewportScrollPlanner.CalculateScrollValueToRevealCell(
             targetIndex,
             firstVisibleIndex,
             lastVisibleIndex,
@@ -1094,7 +1030,7 @@ public partial class MainWindow
         uint lastVisibleIndex,
         uint absoluteLimit,
         uint visibleSpan) =>
-        ViewportScrollCalculator.CalculateScrollValueToRevealCell(
+        WorkbookViewportScrollPlanner.CalculateScrollValueToRevealCell(
             targetIndex,
             firstVisibleIndex,
             lastVisibleIndex,
@@ -1105,13 +1041,13 @@ public partial class MainWindow
         uint targetIndex,
         uint firstVisibleIndex,
         uint lastVisibleIndex) =>
-        ViewportScrollCalculator.CalculateScrollValueToRevealCell(targetIndex, firstVisibleIndex, lastVisibleIndex);
+        WorkbookViewportScrollPlanner.CalculateScrollValueToRevealCell(targetIndex, firstVisibleIndex, lastVisibleIndex);
 
     public static double CalculateScrollbarMaximumForKeyboardReveal(
         double currentMaximum,
         uint desiredScrollValue,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateScrollbarMaximumForKeyboardReveal(
+        WorkbookViewportScrollPlanner.CalculateScrollbarMaximumForKeyboardReveal(
             currentMaximum,
             desiredScrollValue,
             absoluteLimit);
@@ -1119,14 +1055,14 @@ public partial class MainWindow
     public static double CalculateScrollbarMaximumForKeyboardReveal(
         double currentMaximum,
         uint desiredScrollValue) =>
-        ViewportScrollCalculator.CalculateScrollbarMaximumForKeyboardReveal(currentMaximum, desiredScrollValue);
+        WorkbookViewportScrollPlanner.CalculateScrollbarMaximumForKeyboardReveal(currentMaximum, desiredScrollValue);
 
     public static (double Maximum, double Value) CalculateScrollbarArrowSmallIncrement(
         double currentValue,
         double currentMaximum,
         double smallChange,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateScrollbarArrowSmallIncrement(
+        WorkbookViewportScrollPlanner.CalculateScrollbarArrowSmallIncrement(
             currentValue,
             currentMaximum,
             smallChange,
@@ -1138,7 +1074,7 @@ public partial class MainWindow
         double smallChange,
         double visibleSpan,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateScrollbarArrowSmallIncrement(
+        WorkbookViewportScrollPlanner.CalculateScrollbarArrowSmallIncrement(
             currentValue,
             currentMaximum,
             smallChange,
@@ -1152,7 +1088,7 @@ public partial class MainWindow
         double stepPerNotch,
         double visibleSpan,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateWheelScroll(
+        WorkbookViewportScrollPlanner.CalculateWheelScroll(
             currentValue,
             currentMaximum,
             wheelNotches,
@@ -1167,7 +1103,7 @@ public partial class MainWindow
         double step,
         double visibleSpan,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateDragAutoScroll(
+        WorkbookViewportScrollPlanner.CalculateDragAutoScroll(
             currentValue,
             currentMaximum,
             direction,
@@ -1176,14 +1112,14 @@ public partial class MainWindow
             absoluteLimit);
 
     public static uint CalculateMaximumViewportOrigin(uint absoluteLimit, uint visibleSpan)
-        => ViewportScrollCalculator.CalculateMaximumViewportOrigin(absoluteLimit, visibleSpan);
+        => WorkbookViewportScrollPlanner.CalculateMaximumViewportOrigin(absoluteLimit, visibleSpan);
 
     public static uint CalculateScrollbarMaximumForUsedRange(
         uint usedMax,
         uint visibleSpan,
         uint currentScrollValue,
         uint absoluteLimit) =>
-        ViewportScrollCalculator.CalculateScrollbarMaximumForUsedRange(
+        WorkbookViewportScrollPlanner.CalculateScrollbarMaximumForUsedRange(
             usedMax,
             visibleSpan,
             currentScrollValue,

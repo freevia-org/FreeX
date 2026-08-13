@@ -1,5 +1,6 @@
 using System.Windows;
 using Free.Shared.AppServices;
+using Free.Shared.Theme;
 
 namespace Free.Shared.Shell;
 
@@ -42,13 +43,10 @@ public interface IWpfApplicationThemeStartupSpec
 }
 
 public sealed record WpfApplicationThemeStartupSpec<TTheme>(
-    string EnvironmentVariableName,
-    string AlternateThemeValue,
-    TTheme DefaultTheme,
-    TTheme AlternateTheme,
-    string ResourceKeyPrefix,
+    ApplicationThemeStartupPlan<TTheme> Plan,
     Action<Application, TTheme, string> ApplyTheme)
     : IWpfApplicationThemeStartupSpec
+    where TTheme : notnull
 {
     public Action<TTheme>? SetActiveTheme { get; init; }
 
@@ -56,20 +54,13 @@ public sealed record WpfApplicationThemeStartupSpec<TTheme>(
     {
         ArgumentNullException.ThrowIfNull(application);
         ArgumentNullException.ThrowIfNull(getEnvironmentVariable);
-        ArgumentException.ThrowIfNullOrEmpty(EnvironmentVariableName);
-        ArgumentException.ThrowIfNullOrEmpty(AlternateThemeValue);
-        ArgumentException.ThrowIfNullOrEmpty(ResourceKeyPrefix);
+        ArgumentNullException.ThrowIfNull(Plan);
         ArgumentNullException.ThrowIfNull(ApplyTheme);
 
-        var theme = string.Equals(
-            getEnvironmentVariable(EnvironmentVariableName),
-            AlternateThemeValue,
-            StringComparison.OrdinalIgnoreCase)
-            ? AlternateTheme
-            : DefaultTheme;
-
-        SetActiveTheme?.Invoke(theme);
-        ApplyTheme(application, theme, ResourceKeyPrefix);
+        Plan.Apply(
+            getEnvironmentVariable,
+            SetActiveTheme ?? (_ => { }),
+            (theme, resourceKeyPrefix) => ApplyTheme(application, theme, resourceKeyPrefix));
     }
 }
 

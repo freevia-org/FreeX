@@ -13,15 +13,10 @@ namespace FreeP.App.Host.Tests;
 /// </summary>
 public sealed class ChartTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.ChartTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.ChartTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public ChartTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     // ──────────────────────────────────────────────────────────────────────────
     // 1. Model — SlideShapeKind.Chart = 5
@@ -3301,23 +3296,9 @@ public sealed class ChartTests : IDisposable
     private static List<string> ExtractCellValues(XDocument sheetDoc) =>
         sheetDoc.Descendants(SheetNs + "v").Select(v => v.Value).ToList();
 
-    private static string FindCorpusDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus");
-            if (File.Exists(Path.Combine(candidate, "06-charts.pptx")) &&
-                File.Exists(Path.Combine(candidate, "18-chart-types.pptx")) &&
-                File.Exists(Path.Combine(candidate, "19-chart-labels.pptx")))
-            {
-                return candidate;
-            }
-        }
-
-        throw new DirectoryNotFoundException("Could not locate tools/FreeP.RenderCompare/corpus chart decks.");
-    }
+    private static string FindCorpusDirectory() =>
+        TestWorkspaceFileLocator.FindContainingDirectoryFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus", "06-charts.pptx");
 
     private static int CountNonEmptyChartFormulas(string deckPath)
     {

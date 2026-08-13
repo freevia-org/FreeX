@@ -1,8 +1,9 @@
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Free.Shared.AppServices;
+using FreeW.DialogVisualHarness;
 using SkiaSharp;
 
 const string InventorySchema = "freew.dialog-route-inventory.v1";
@@ -48,13 +49,15 @@ static int RunInventory(string[] args)
     var output = Path.GetFullPath(Required(args, "--output"));
     var check = args.Contains("--check", StringComparer.Ordinal);
     var inventory = BuildInventory(root);
-    var json = JsonSerializer.Serialize(inventory, JsonOptions());
+    var json = VisualEvidenceManifestIO.Serialize(inventory, JsonOptions());
     var markdown = BuildInventoryMarkdown(inventory);
     Directory.CreateDirectory(output);
     var jsonPath = Path.Combine(output, "freew_dialog_route_inventory.json");
     var scenariosPath = Path.Combine(output, "freew_dialog_evidence_inventory.json");
     var markdownPath = Path.Combine(output, "freew_dialog_inventory.md");
-    var scenarioJson = JsonSerializer.Serialize(new EvidenceInventory(inventory.Schema, inventory.GeneratedFromSha256, inventory.Scenarios), JsonOptions());
+    var scenarioJson = VisualEvidenceManifestIO.Serialize(
+        new EvidenceInventory(inventory.Schema, inventory.GeneratedFromSha256, inventory.Scenarios),
+        JsonOptions());
     if (check)
     {
         var fresh = File.Exists(jsonPath) && File.Exists(scenariosPath) && File.Exists(markdownPath)
@@ -64,8 +67,11 @@ static int RunInventory(string[] args)
         Console.WriteLine(fresh ? $"inventory current: {output}" : $"inventory stale: {output}");
         return fresh ? 0 : 1;
     }
-    File.WriteAllText(jsonPath, json, new UTF8Encoding(false));
-    File.WriteAllText(scenariosPath, scenarioJson, new UTF8Encoding(false));
+    VisualEvidenceManifestIO.Write(jsonPath, inventory, JsonOptions());
+    VisualEvidenceManifestIO.Write(
+        scenariosPath,
+        new EvidenceInventory(inventory.Schema, inventory.GeneratedFromSha256, inventory.Scenarios),
+        JsonOptions());
     File.WriteAllText(markdownPath, markdown, new UTF8Encoding(false));
     Console.WriteLine($"routes: {inventory.Routes.Count}");
     Console.WriteLine($"scenarios: {inventory.Scenarios.Count}");
@@ -127,18 +133,19 @@ static int RunCompare(string[] args)
             Kind: "canonical-inputs-only",
             Description: "Rows and counts cover only the inventory and WPF/Avalonia capture manifests supplied to this compare invocation.",
             RefreshInstruction: "Route-local evidence remains outside this aggregate until it is merged with --baseline and --refresh-route."));
-    var json = JsonSerializer.Serialize(report, JsonOptions());
+    var json = VisualEvidenceManifestIO.Serialize(report, JsonOptions());
     var markdown = BuildComparisonMarkdown(report);
     var html = BuildComparisonHtml(report);
     var jsonPath = Path.Combine(output, "freew_dialog_visual_comparison.json");
     var markdownPath = Path.Combine(output, "freew_dialog_visual_comparison.md");
     var htmlPath = Path.Combine(output, "freew_dialog_visual_comparison.html");
     var freshnessPath = Path.Combine(output, "freew_dialog_visual_freshness.json");
-    var freshness = JsonSerializer.Serialize(new Freshness(
+    var freshnessRecord = new Freshness(
         report.GeneratedFromSha256,
         Sha256(File.ReadAllText(inventoryPath)),
         Sha256(File.ReadAllText(wpfPath)),
-        Sha256(File.ReadAllText(avaloniaPath))), JsonOptions());
+        Sha256(File.ReadAllText(avaloniaPath)));
+    var freshness = VisualEvidenceManifestIO.Serialize(freshnessRecord, JsonOptions());
     if (check)
     {
         var fresh = File.Exists(jsonPath) && File.Exists(markdownPath) && File.Exists(htmlPath) && File.Exists(freshnessPath)
@@ -149,10 +156,10 @@ static int RunCompare(string[] args)
         Console.WriteLine(fresh ? $"comparison current: {output}" : $"comparison stale: {output}");
         return fresh ? 0 : 1;
     }
-    File.WriteAllText(jsonPath, json, new UTF8Encoding(false));
+    VisualEvidenceManifestIO.Write(jsonPath, report, JsonOptions());
     File.WriteAllText(markdownPath, markdown, new UTF8Encoding(false));
     File.WriteAllText(htmlPath, html, new UTF8Encoding(false));
-    File.WriteAllText(freshnessPath, freshness, new UTF8Encoding(false));
+    VisualEvidenceManifestIO.Write(freshnessPath, freshnessRecord, JsonOptions());
     Console.WriteLine($"scenarios: {report.InventoryScenarioCount}");
     Console.WriteLine($"wpf captured: {report.WpfCaptureCount}");
     Console.WriteLine($"avalonia captured: {report.AvaloniaCaptureCount}");
@@ -187,13 +194,18 @@ static RouteInventory BuildInventory(string root)
             var typeName = match.Groups["name"].Value;
             var host = path.Contains("FreeW.App.Avalonia", StringComparison.OrdinalIgnoreCase) ? "avalonia" : "wpf";
             var sourceRouteId = Kebab(typeName.EndsWith("Dialog", StringComparison.Ordinal) ? typeName[..^6] : typeName);
-            var routeId = CanonicalRoute(host, sourceRouteId);
+            var routeId = FreeWDialogEvidenceCatalog.CanonicalRoute(host, sourceRouteId);
             if (routes.Any(r => r.Host == host && r.RouteId == routeId)) continue;
             var classEnd = classIndex + 1 < classMatches.Count ? classMatches[classIndex + 1].Index : text.Length;
             var classText = text[match.Index..classEnd];
             var discoveredTabs = Regex.Matches(classText, "(?:Header\\s*=\\s*|Label\\s*=\\s*)[\\\"'](?<tab>[^\\\"']+)[\\\"']")
                 .Select(m => m.Groups["tab"].Value);
-            var tabs = ValidTabs(routeId, KnownTabs(routeId).Concat(discoveredTabs).Distinct(StringComparer.OrdinalIgnoreCase).Take(16)).ToArray();
+            var tabs = FreeWDialogEvidenceCatalog.ValidTabs(
+                routeId,
+                FreeWDialogEvidenceCatalog.KnownTabs(routeId)
+                    .Concat(discoveredTabs)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(16)).ToArray();
             var modalMode = text.Contains("ShowDialog", StringComparison.OrdinalIgnoreCase) || text.Contains("modal", StringComparison.OrdinalIgnoreCase)
                 ? "modal" : text.Contains("Show()", StringComparison.Ordinal) || text.Contains("modeless", StringComparison.OrdinalIgnoreCase)
                     ? "modeless" : "modal-or-modeless";
@@ -208,7 +220,17 @@ static RouteInventory BuildInventory(string root)
                     : typeName.EndsWith("Overlay", StringComparison.Ordinal)
                         ? "overlay"
                         : "dialog";
-            routes.Add(new Route(host, routeId, typeName, Relative(root, path), modalMode, tabs, limitation, surfaceKind, ValidStates(routeId, surfaceKind, tabs), sourceRouteId));
+            routes.Add(new Route(
+                host,
+                routeId,
+                typeName,
+                Relative(root, path),
+                modalMode,
+                tabs,
+                limitation,
+                surfaceKind,
+                FreeWDialogEvidenceCatalog.ValidStates(routeId, surfaceKind, tabs),
+                sourceRouteId));
         }
     }
     AddBackstageRoutes(routes);
@@ -217,13 +239,21 @@ static RouteInventory BuildInventory(string root)
     var scenarios = new List<Scenario>();
     foreach (var route in routes)
     {
-        foreach (var state in route.States ?? StateIds(route.SurfaceKind ?? "dialog", route.Tabs))
+        foreach (var state in route.States ?? FreeWDialogEvidenceCatalog.StateIds(route.SurfaceKind ?? "dialog", route.Tabs))
         {
             var tab = state.StartsWith("tab-", StringComparison.Ordinal)
                 ? route.Tabs.FirstOrDefault(candidate => $"tab-{Kebab(candidate)}".Equals(state, StringComparison.OrdinalIgnoreCase))
                 : null;
             var scenarioState = tab is null ? state : "relevant-tab";
-            scenarios.Add(new Scenario($"{route.Host}.{route.RouteId}.{state}", route.Host, route.RouteId, scenarioState, tab, tab is null ? StateDescription(state) : $"Selected tab: {tab}.", route.Limitation, route.SurfaceKind));
+            scenarios.Add(new Scenario(
+                $"{route.Host}.{route.RouteId}.{state}",
+                route.Host,
+                route.RouteId,
+                scenarioState,
+                tab,
+                tab is null ? FreeWDialogEvidenceCatalog.StateDescription(state) : $"Selected tab: {tab}.",
+                route.Limitation,
+                route.SurfaceKind));
         }
     }
     var inputHash = Sha256(string.Join("\n", sourceFiles.Select(File.ReadAllText)));
@@ -232,10 +262,23 @@ static RouteInventory BuildInventory(string root)
 
 static void AddBackstageRoutes(List<Route> routes)
 {
-    var entries = new[] { "home", "new", "open", "info", "share", "save-as", "print", "export", "account", "options" };
     foreach (var host in new[] { "wpf", "avalonia" })
-        foreach (var entry in entries)
-            routes.Add(new Route(host, $"backstage-{entry}", "BackstageView", host == "wpf" ? "freew/FreeW.App.Host/MainWindow.cs" : "freew/FreeW.App.Avalonia/Backstage/BackstageView.cs", "modeless", [], null, "backstage", ["open"], $"backstage-{entry}"));
+    {
+        foreach (var route in FreeWDialogEvidenceCatalog.Routes.Where(route => route.SurfaceKind == FreeWDialogSurfaceKind.Backstage))
+        {
+            routes.Add(new Route(
+                host,
+                route.RouteId,
+                route.ForHost(host == "wpf" ? FreeWDialogHost.Wpf : FreeWDialogHost.Avalonia)!.DialogTypeName,
+                host == "wpf" ? "freew/FreeW.App.Host/MainWindow.cs" : "freew/FreeW.App.Avalonia/Backstage/BackstageView.cs",
+                "modeless",
+                [],
+                null,
+                "backstage",
+                ["open"],
+                route.RouteId));
+        }
+    }
 }
 
 static void AddKnownAvaloniaRoutes(List<Route> routes)
@@ -327,7 +370,9 @@ static bool IsValidatedAvaloniaCapture(Capture capture) =>
     && capture.TargetPixelContent?.PassesContentGate == true;
 
 static string ResolveCapturePath(CaptureManifest manifest, string path) =>
-    Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(manifest.CaptureRoot, path.Replace('/', Path.DirectorySeparatorChar)));
+    VisualEvidencePathPolicy.ResolveDeclaredPath(
+        manifest.CaptureRoot,
+        path.Replace('/', Path.DirectorySeparatorChar));
 
 static string PairKey(Scenario scenario)
 {
@@ -376,55 +421,24 @@ static SKBitmap DecodeAndScale(string path, int width, int height)
     return result;
 }
 
-static T Read<T>(string path) => JsonSerializer.Deserialize<T>(File.ReadAllText(path), JsonOptions()) ?? throw new InvalidOperationException($"Invalid JSON: {path}");
+static T Read<T>(string path) where T : class =>
+    VisualEvidenceManifestIO.Read<T>(
+        path,
+        JsonOptions(),
+        invalidExceptionFactory: () => new InvalidOperationException($"Invalid JSON: {path}"));
 static string Required(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : throw new ArgumentException($"Missing {option}."); }
 static string? Optional(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
-static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
-static string Safe(string value) => Regex.Replace(value, "[^A-Za-z0-9._-]", "-");
+static string Relative(string root, string path) =>
+    VisualEvidencePathPolicy.NormalizeRelativePath(root, path);
+static string Safe(string value) => VisualEvidenceTextPolicy.ToAsciiSafeArtifactName(value);
 static string Kebab(string value)
 {
     var separated = Regex.Replace(value.Trim(), "([a-z0-9])([A-Z])", "$1-$2");
     return Regex.Replace(separated, "[^A-Za-z0-9]+", "-").Trim('-').ToLowerInvariant();
 }
-static string StateDescription(string state) => state switch { "initial" => "Default constructor state with initial keyboard focus.", "populated" => "Representative populated fields, selections, and checked options.", "validation-error" => "Representative validation or error state after invalid input.", "seeded" => "Seeded app-owned pane state after the route is opened.", "open" => "Opened app-owned overlay or Backstage pane state.", _ => $"Explicit route state: {state}." };
-static IReadOnlyList<string> StateIds(string surfaceKind, IReadOnlyList<string> tabs) => surfaceKind switch
-{
-    "pane" => ["seeded"],
-    "overlay" or "backstage" => ["open"],
-    _ => new[] { "initial", "populated", "validation-error" }.Concat(tabs.Select(tab => $"tab-{Kebab(tab)}")).ToArray(),
-};
-static string CanonicalRoute(string host, string routeId) => (host, routeId) switch
-{
-    ("wpf", "paragraph-breaks") or ("wpf", "paragraph-indent") => "paragraph",
-    ("wpf", "watermark-options") or ("avalonia", "watermark") => "watermark",
-    ("wpf", "statistics") => "word-count",
-    ("wpf", "about") or ("avalonia", "free-winfo") => "about",
-    _ => routeId,
-};
-static IReadOnlyList<string> KnownTabs(string routeId) => routeId switch
-{
-    "options" => ["General", "AutoCorrect", "AutoFormat As You Type"],
-    "page-setup" => ["Margins", "Paper", "Layout"],
-    _ => []
-};
-static IReadOnlyList<string> ValidTabs(string routeId, IEnumerable<string> discovered) => routeId switch
-{
-    "compare-documents" => ["More"],
-    "legal-notices" => ["Project License", "Legal Notices", "Privacy Notice", "Third-Party Notices", "Third-Party License Texts"],
-    "password-prompt" or "screen-clip-overlay" or "symbol-picker" or "table-formula" => [],
-    "table-properties" => ["Table", "Row", "Column", "Cell"],
-    _ => discovered.ToArray(),
-};
-static IReadOnlyList<string> ValidStates(string routeId, string surfaceKind, IReadOnlyList<string> tabs) => routeId switch
-{
-    "legal-notices" => new[] { "initial" }.Concat(tabs.Select(tab => $"tab-{Kebab(tab)}")).ToArray(),
-    "password-prompt" => ["initial", "populated"],
-    "screen-clip-overlay" => ["open"],
-    "symbol-picker" or "cell-shading" => ["initial"],
-    _ => StateIds(surfaceKind, tabs),
-};
-static string Sha256(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
-static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
+static string Sha256(string text) => VisualEvidenceHash.Sha256Text(text);
+static JsonSerializerOptions JsonOptions() =>
+    VisualEvidenceManifestIO.CreateJsonOptions(stringEnums: false);
 
 static string BuildInventoryMarkdown(RouteInventory inventory)
 {

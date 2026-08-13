@@ -1,98 +1,9 @@
-using System.IO;
-using System.Reflection;
-using System.Windows;
-using System.Windows.Automation;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
-using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
 public sealed partial class PivotWorkflowDialogTests
 {
-    [Fact]
-    public void PivotFieldGroupingDialog_CreateResult_TrimsFieldAndClampsNumberRangeInterval()
-    {
-        var result = PivotFieldGroupingDialog.CreateResult(
-            "  Order Date  ",
-            sourceFieldIndex: -3,
-            PivotFieldGrouping.NumberRange,
-            "  10  ",
-            "  90  ",
-            "  -5  ",
-            ungroup: false);
-
-        result.Should().Be(new PivotFieldGroupingDialogResult(
-            "Order Date",
-            0,
-            PivotFieldGrouping.NumberRange,
-            10,
-            90,
-            1,
-            false));
-    }
-
-    [Fact]
-    public void PivotFieldGroupingDialog_CreateResult_UngroupClearsGroupingSettings()
-    {
-        var result = PivotFieldGroupingDialog.CreateResult(
-            " Region ",
-            sourceFieldIndex: 2,
-            PivotFieldGrouping.Month,
-            "1",
-            "12",
-            "3",
-            ungroup: true);
-
-        result.Should().Be(new PivotFieldGroupingDialogResult(
-            "Region",
-            2,
-            PivotFieldGrouping.None,
-            null,
-            null,
-            null,
-            true));
-    }
-
-    [Fact]
-    public void PivotFieldGroupingDialog_FromPivotField_UsesCurrentFieldSettings()
-    {
-        var field = new PivotFieldModel(
-            SourceFieldIndex: 1,
-            Grouping: PivotFieldGrouping.Month,
-            GroupStart: 44562,
-            GroupEnd: 44927,
-            GroupInterval: 2);
-
-        PivotFieldGroupingDialog.FromPivotField(["Region", "Order Date"], field)
-            .Should()
-            .Be(new PivotFieldGroupingDialogResult(
-                "Order Date",
-                1,
-                PivotFieldGrouping.Month,
-                44562,
-                44927,
-                2,
-                false));
-    }
-
-    [Fact]
-    public void PivotFieldGroupingDialog_FromPivotField_DefaultsToFirstFieldWhenCurrentSettingsAreMissing()
-    {
-        PivotFieldGroupingDialog.FromPivotField(["Region", "Order Date"], currentField: null)
-            .Should()
-            .Be(new PivotFieldGroupingDialogResult(
-                "Region",
-                0,
-                PivotFieldGrouping.None,
-                null,
-                null,
-                null,
-                false));
-    }
-
     [Fact]
     public void PivotFieldGroupingDialog_ExposesExcelLikeGroupingSections()
     {
@@ -126,50 +37,11 @@ public sealed partial class PivotWorkflowDialogTests
             "public sealed class PivotFieldGroupingDialog",
             "");
 
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotFieldGrouping_EnterPositiveGroupingInterval\"), _intervalBox);");
+        source.Should().Contain("PivotGroupFieldPlanner.TryCreateSubmission(");
+        source.Should().Contain("PivotGroupFieldPlanner.InvalidIntervalMessage");
+        source.Should().Contain("UiText.Get(\"PivotFieldGrouping_EnterPositiveGroupingInterval\")");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
-        source.Should().Contain("string.IsNullOrWhiteSpace(value)");
-        source.Should().Contain("NumericInputParser.TryParseFiniteDouble(value.Trim(), CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out interval)");
-        source.Should().Contain("interval <= 0");
-    }
-
-    [Fact]
-    public void PivotFieldGroupingDialog_CreateResult_AcceptsCommaDecimalIntervalInCommaDecimalLocale()
-    {
-        using var _ = TestCultureScope.CurrentCulture("de-DE");
-
-        var result = PivotFieldGroupingDialog.CreateResult(
-            "Value",
-            sourceFieldIndex: 0,
-            PivotFieldGrouping.NumberRange,
-            "0,5",
-            "10,5",
-            "2,5",
-            ungroup: false);
-
-        result.GroupInterval.Should().Be(2.5);
-        result.GroupStart.Should().Be(0.5);
-        result.GroupEnd.Should().Be(10.5);
-    }
-
-    [Fact]
-    public void PivotFieldGroupingDialog_CreateResult_AcceptsDotDecimalAsInvariantFallbackInCommaDecimalLocale()
-    {
-        using var _ = TestCultureScope.CurrentCulture("de-DE");
-
-        var result = PivotFieldGroupingDialog.CreateResult(
-            "Value",
-            sourceFieldIndex: 0,
-            PivotFieldGrouping.NumberRange,
-            "0.5",
-            "10.5",
-            "2.5",
-            ungroup: false);
-
-        result.GroupInterval.Should().Be(2.5);
-        result.GroupStart.Should().Be(0.5);
-        result.GroupEnd.Should().Be(10.5);
     }
 
     [Fact]
@@ -180,10 +52,10 @@ public sealed partial class PivotWorkflowDialogTests
             "public sealed class PivotFieldGroupingDialog",
             "");
 
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotFieldGrouping_EnterValidStartingValue\"), _startBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotFieldGrouping_EnterValidEndingValue\"), _endBox);");
-        source.Should().Contain("TryParseOptionalFiniteDouble(_startBox.Text, out _)");
-        source.Should().Contain("TryParseOptionalFiniteDouble(_endBox.Text, out _)");
-        source.Should().Contain("NumericInputParser.TryParseFiniteDouble(value.Trim(), CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var parsed)");
+        source.Should().Contain("PivotGroupFieldPlanner.InvalidEndMessage");
+        source.Should().Contain("UiText.Get(\"PivotFieldGrouping_EnterValidStartingValue\")");
+        source.Should().Contain("UiText.Get(\"PivotFieldGrouping_EnterValidEndingValue\")");
+        source.Should().Contain("_ => (UiText.Get(\"PivotFieldGrouping_EnterValidStartingValue\"), _startBox)");
+        source.Should().NotContain("NumericInputParser.TryParseFiniteDouble");
     }
 }

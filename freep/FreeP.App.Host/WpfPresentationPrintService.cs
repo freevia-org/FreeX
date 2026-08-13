@@ -6,54 +6,39 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Free.Shared.Pdf.Skia;
+using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
-public sealed record WpfNativePrintCapability(
-    bool CanPrint,
-    string Reason)
-{
-    public static WpfNativePrintCapability Unavailable(string reason) =>
-        new(false, string.IsNullOrWhiteSpace(reason)
-            ? "No Windows printer queue is available for native printing."
-            : reason.Trim());
-}
-
-internal static class WpfNativePrintCapabilityDetector
-{
-    public static WpfNativePrintCapability Detect()
-    {
-        if (!OperatingSystem.IsWindows())
-            return WpfNativePrintCapability.Unavailable("Native WPF printing is available only on Windows.");
-
-        try
-        {
-            using var server = new LocalPrintServer();
-            var hasQueue = server.GetPrintQueues().Any();
-            return hasQueue
-                ? new WpfNativePrintCapability(true, "WPF native printer dialog is available.")
-                : WpfNativePrintCapability.Unavailable("Windows reported no available printer queue.");
-        }
-        catch (PrintSystemException ex)
-        {
-            return WpfNativePrintCapability.Unavailable(
-                $"Windows printer discovery failed: {ex.Message}");
-        }
-        catch (InvalidOperationException ex)
-        {
-            return WpfNativePrintCapability.Unavailable(
-                $"Windows printer discovery failed: {ex.Message}");
-        }
-    }
-}
-
 internal static class WpfPresentationPrintService
 {
+    public static PresentationNativePrintHandoffHostCapabilities DetectCapabilities()
+    {
+        var hostName = PresentationShellTextCatalog.Resolve(
+            PresentationShellTextCatalog.WpfPrintHostName);
+        if (!OperatingSystem.IsWindows())
+        {
+            return PresentationNativePrintHandoffHostCapabilities.Deferred(
+                hostName,
+                PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.WpfPrintWindowsOnlyStatus));
+        }
+
+        var discovery = WpfPrintQueueCatalog.Discover();
+        return discovery.HasQueues
+            ? PresentationNativePrintHandoffHostCapabilities.Available(hostName)
+            : PresentationNativePrintHandoffHostCapabilities.Deferred(
+                hostName,
+                discovery.FailureReason ?? PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.NoWindowsPrinterQueuesStatus));
+    }
+
     public static bool ShowPrintDialogAndPrint(
         Presentation presentation,
         PresentationPrintRequest request,
+        string suggestedPrintJobName,
         Window owner)
     {
         ArgumentNullException.ThrowIfNull(presentation);
@@ -72,7 +57,9 @@ internal static class WpfPresentationPrintService
         var pageWidth = Math.Max(1, dialog.PrintableAreaWidth);
         var pageHeight = Math.Max(1, dialog.PrintableAreaHeight);
         var paginator = new WpfRasterPagePaginator(source.Pages, new Size(pageWidth, pageHeight));
-        dialog.PrintDocument(paginator, BuildDocumentName(request));
+        dialog.PrintDocument(
+            paginator,
+            PresentationFileTextResources.NormalizePrintJobName(suggestedPrintJobName));
         return true;
     }
 
@@ -159,14 +146,6 @@ internal static class WpfPresentationPrintService
             firstPage.HeightPoints);
     }
 
-    private static string BuildDocumentName(PresentationPrintRequest request) =>
-        request.Layout switch
-        {
-            PresentationPrintLayoutKind.FullPageSlides => "FreeP slides",
-            PresentationPrintLayoutKind.NotesPages => "FreeP notes pages",
-            PresentationPrintLayoutKind.Handouts => "FreeP handouts",
-            _ => "FreeP presentation",
-        };
 }
 
 internal sealed record WpfPrintPageSource(

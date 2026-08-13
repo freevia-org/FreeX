@@ -36,17 +36,6 @@ public sealed class AvaloniaPageSetupDialogParitySourceTests
         source.Should().NotContain("var marginsBox = new TextBox");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var current = AppContext.BaseDirectory;
-        while (current is not null)
-        {
-            var candidate = Path.Combine(new[] { current }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-            current = Directory.GetParent(current)?.FullName;
-        }
-
-        throw new FileNotFoundException($"Could not locate repository file: {Path.Combine(parts)}");
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

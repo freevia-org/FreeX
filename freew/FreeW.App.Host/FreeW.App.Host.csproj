@@ -11,17 +11,83 @@
     <StartupObject>FreeW.App.Host.Program</StartupObject>
   </PropertyGroup>
 
+  <Import Project="..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Assets.props" />
+
+  <PropertyGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
+    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
+    <OutputPath>bin\DialogHarness\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\DialogHarness\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.TestAccess.cs"
+             Link="MainWindow.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\DocumentView.TestAccess.cs"
+             Link="Editing\DocumentView.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\AutosaveCoordinator.TestAccess.cs"
+             Link="AutosaveCoordinator.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\Dialogs.TestAccess.cs"
+             Link="Dialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\Backstage.TestAccess.cs"
+             Link="Backstage\Backstage.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\ScreenClipOverlay.TestAccess.cs"
+             Link="Editing\ScreenClipOverlay.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\OutlineView.TestAccess.cs"
+             Link="Editing\OutlineView.TestAccess.cs" />
+  </ItemGroup>
+
+  <ItemDefinitionGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeWHostTestSupport</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeWDialogHarnessSupport</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(FreeWRenderCompareSupport)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeWRenderCompareSupport</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
   <ItemGroup>
-    <!-- The on-demand DOCX visual-fidelity harness (tools/FreeW.RenderCompare) renders pages through the
-         same print/preview paginator (internal PrintLayout.BuildPaginator). -->
-    <InternalsVisibleTo Include="FreeW.RenderCompare" />
+    <Using Include="FreeW.App.Localization.LocalizedUiText" Alias="UiText" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
     <!-- Tests reach the internal print paginator (HeaderFooterPaginator) directly. -->
     <InternalsVisibleTo Include="FreeW.App.Host.Tests" />
     <!-- FidelityRender composite path uses internal overlay/chrome/column helpers. -->
     <InternalsVisibleTo Include="FreeW.FidelityRender" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(FreeWRenderCompareSupport)' == 'true'">
+    <!-- The on-demand DOCX visual-fidelity harness renders through the internal print paginator. -->
+    <InternalsVisibleTo Include="FreeW.RenderCompare" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Wpf\Dialogs.TestAccess.cs"
+             Link="Dialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\DialogHarness.TestAccess.cs"
+             Link="DialogHarness.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\Backstage.TestAccess.cs"
+             Link="Backstage\Backstage.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\ScreenClipOverlay.TestAccess.cs"
+             Link="Editing\ScreenClipOverlay.TestAccess.cs" />
+    <InternalsVisibleTo Include="FreeW.DialogVisualHarness.Wpf" />
+  </ItemGroup>
+
   <ItemGroup>
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Wpf\Free.Shared.Ribbon.Wpf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
@@ -54,6 +120,7 @@
     <Using Include="Free.Shared.Ribbon" />
     <Using Include="Free.Shared.AppServices" />
     <Using Include="Free.Shared.Shell" />
+    <Using Include="FreeW.App.Presentation.DocumentView" />
   </ItemGroup>
 
   <ItemGroup>
@@ -70,28 +137,11 @@
     <EmbeddedResource Include="..\..\docs\legal\privacy.md" LogicalName="FreeW.Legal.PrivacyNotice.md" />
     <EmbeddedResource Include="..\..\THIRD_PARTY_NOTICES.md" LogicalName="FreeW.Legal.ThirdPartyNotices.md" />
     <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeW.Legal.ThirdPartyLicenses.md" />
-    <!-- Bundled English thesaurus: compact Moby II derivative (~3 000 headwords, public domain).
-         Embedded so the lookup works with no file I/O and ships as a single DLL with no deploy steps. -->
-    <EmbeddedResource Include="Resources\thesaurus-en.txt" LogicalName="FreeW.App.Host.Resources.thesaurus-en.txt" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeW.ico"
              Link="Resources\FreeW.ico"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
-    <!-- FreeW's own icons: Word-specific artwork plus a few Word-unique glyphs. -->
-    <Content Include="Resources\CommandIconsSvg\**\*.svg"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
-    <!-- Insert > Icons content library: curated monochrome SVGs for document insertion (W20). -->
-    <Content Include="Resources\ContentIconsSvg\**\*.svg" CopyToOutputDirectory="PreserveNewest" />
-    <!-- Reuse FreeX's actual Office-quality icons wherever a command has a FreeX equivalent. A small
-         reviewed set has intentional FreeW-specific variants with the same slug; exclude those FreeX
-         items so publish has one deterministic source path and the FreeW artwork wins. -->
-    <Content Include="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
-             Exclude="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\arrange-all.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\breaks.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\eraser.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\new-window.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\paste-special.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\show-comments.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\show-notes.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\sort.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\strikethrough.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-colors.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-effects.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-fonts.svg"
-             Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

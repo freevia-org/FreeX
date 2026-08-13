@@ -13,6 +13,11 @@ public sealed record PivotGroupFieldLayout(
     IReadOnlyList<PivotFieldModel> ColumnFields,
     IReadOnlyList<PivotFieldModel> PageFields);
 
+public sealed record PivotGroupFieldSubmission(
+    string SourceFieldName,
+    PivotFieldModel Field,
+    bool Ungroup);
+
 /// <summary>
 /// Portable, UI-free planning for the "Group Field" / "Ungroup" PivotTable dialogs: the group-by catalog
 /// (None / Year / Quarter / Month / Day / Number range), capturing the current grouping off a source field,
@@ -64,6 +69,76 @@ public static class PivotGroupFieldPlanner
     /// <summary>The text box value for an optional grouping bound (blank when null).</summary>
     public static string FormatBound(double? value) =>
         value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
+
+    public static PivotGroupFieldSubmission CaptureSubmission(
+        IEnumerable<string> fieldNames,
+        PivotFieldModel? currentField)
+    {
+        ArgumentNullException.ThrowIfNull(fieldNames);
+        var fields = fieldNames.ToList();
+        var sourceFieldIndex = Math.Max(0, currentField?.SourceFieldIndex ?? 0);
+        var sourceFieldName = sourceFieldIndex < fields.Count
+            ? fields[sourceFieldIndex]
+            : fields.Count > 0 ? fields[0] : string.Empty;
+        var field = CreateField(
+            sourceFieldIndex,
+            currentField?.Grouping ?? PivotFieldGrouping.None,
+            ungroup: false,
+            currentField?.GroupStart,
+            currentField?.GroupEnd,
+            currentField?.GroupInterval);
+        return new PivotGroupFieldSubmission(sourceFieldName.Trim(), field, Ungroup: false);
+    }
+
+    public static PivotGroupFieldSubmission CreateSubmission(
+        string sourceFieldName,
+        int sourceFieldIndex,
+        PivotFieldGrouping grouping,
+        bool ungroup,
+        double? start,
+        double? end,
+        double? interval) =>
+        new(
+            (sourceFieldName ?? string.Empty).Trim(),
+            CreateField(sourceFieldIndex, grouping, ungroup, start, end, interval),
+            ungroup);
+
+    public static bool TryCreateSubmission(
+        string sourceFieldName,
+        int sourceFieldIndex,
+        PivotFieldGrouping grouping,
+        bool ungroup,
+        string? startText,
+        string? endText,
+        string? intervalText,
+        out PivotGroupFieldSubmission? submission,
+        out string? error)
+    {
+        if (!TryValidate(
+                grouping,
+                ungroup,
+                startText,
+                endText,
+                intervalText,
+                out var start,
+                out var end,
+                out var interval,
+                out error))
+        {
+            submission = null;
+            return false;
+        }
+
+        submission = CreateSubmission(
+            sourceFieldName,
+            sourceFieldIndex,
+            grouping,
+            ungroup,
+            start,
+            end,
+            interval);
+        return true;
+    }
 
     /// <summary>
     /// Finds the existing layout field for <paramref name="sourceFieldIndex"/> (row, then column, then page),

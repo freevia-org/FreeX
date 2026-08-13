@@ -12,8 +12,8 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 
 using FreeX.App.Presentation;
-using FreeX.App.Presentation.PageLayout;
-using FreeX.Core.Commands;
+using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -32,9 +32,9 @@ public sealed partial class MainWindow
         new("range.sparklines.location-range", "InsertSparklineDialog", "SparklineSelectLocationRangeButton", "SparklineLocationRangeBox", DialogRangeSelectionFormat.StartCell),
         new("range.consolidate.reference", "ConsolidateDialog", "ConsolidateBrowseReferenceButton", "ConsolidateReferenceBox", DialogRangeSelectionFormat.Range),
         new("range.consolidate.destination-cell", "ConsolidateDialog", "ConsolidateBrowseDestinationButton", "ConsolidateDestinationCellBox", DialogRangeSelectionFormat.StartCell),
-        new("range.advanced-filter.list-range", "AdvancedFilterCompactDialog", "AdvancedFilterSelectListRangeButton", "AdvancedFilterListRangeBox", DialogRangeSelectionFormat.Range),
-        new("range.advanced-filter.criteria-range", "AdvancedFilterCompactDialog", "AdvancedFilterSelectCriteriaRangeButton", "AdvancedFilterCriteriaRangeBox", DialogRangeSelectionFormat.Range),
-        new("range.advanced-filter.copy-to", "AdvancedFilterCompactDialog", "AdvancedFilterSelectCopyToButton", "AdvancedFilterCopyToBox", DialogRangeSelectionFormat.Range),
+        new("range.advanced-filter.list-range", FreeXAutomationIdCatalog.AdvancedFilter.Dialog, FreeXAutomationIdCatalog.AdvancedFilter.SelectListRangeButton, FreeXAutomationIdCatalog.AdvancedFilter.ListRangeBox, DialogRangeSelectionFormat.Range),
+        new("range.advanced-filter.criteria-range", FreeXAutomationIdCatalog.AdvancedFilter.Dialog, FreeXAutomationIdCatalog.AdvancedFilter.SelectCriteriaRangeButton, FreeXAutomationIdCatalog.AdvancedFilter.CriteriaRangeBox, DialogRangeSelectionFormat.Range),
+        new("range.advanced-filter.copy-to", FreeXAutomationIdCatalog.AdvancedFilter.Dialog, FreeXAutomationIdCatalog.AdvancedFilter.SelectCopyToButton, FreeXAutomationIdCatalog.AdvancedFilter.CopyToBox, DialogRangeSelectionFormat.Range),
         new("range.goal-seek.set-cell", "GoalSeekCompactDialog", "GoalSeekSetCellPickerButton", "GoalSeekSetCellBox", DialogRangeSelectionFormat.StartCell),
         new("range.goal-seek.changing-cell", "GoalSeekCompactDialog", "GoalSeekChangingCellPickerButton", "GoalSeekChangingCellBox", DialogRangeSelectionFormat.StartCell),
         new("range.chart-data-source.range", "SelectChartDataDialog", "SelectChartDataRangePickButton", "SelectChartDataRangeBox", DialogRangeSelectionFormat.Range),
@@ -52,8 +52,8 @@ public sealed partial class MainWindow
         new("range.named-ranges.definition-refers-to", "DefineNameDialog", "DefineNameRefersToPickerButton", "DefineNameRefersToBox", DialogRangeSelectionFormat.Range),
         new("range.pivot-create.source", "InsertPivotTableDialog", "InsertPivotTableSourceRangePickerButton", "InsertPivotTableSourceRangeBox", DialogRangeSelectionFormat.Range),
         new("range.pivot-create.destination", "InsertPivotTableDialog", "InsertPivotTableDestinationRangePickerButton", "InsertPivotTableDestinationRangeBox", DialogRangeSelectionFormat.StartCell),
-        new("range.scenario-manager.changing-cells", "ScenarioManagerCompactDialog", "ScenarioManagerChangingCellsPickerButton", "ScenarioManagerChangingCellsBox", DialogRangeSelectionFormat.Range),
-        new("range.scenario-manager.result-cells", "ScenarioManagerCompactDialog", "ScenarioManagerResultCellsPickerButton", "ScenarioManagerResultCellsBox", DialogRangeSelectionFormat.Range),
+        new("range.scenario-manager.changing-cells", FreeXAutomationIdCatalog.ScenarioManager.AvaloniaDialog, FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsPickerButton, FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsBox, DialogRangeSelectionFormat.Range),
+        new("range.scenario-manager.result-cells", FreeXAutomationIdCatalog.ScenarioManager.AvaloniaDialog, FreeXAutomationIdCatalog.ScenarioManager.ResultCellsPickerButton, FreeXAutomationIdCatalog.ScenarioManager.ResultCellsBox, DialogRangeSelectionFormat.Range),
         new("range.function-argument.reference", "FunctionArgumentsDialog", "FunctionArgumentReferencePicker0", "FunctionArgumentBox0", DialogRangeSelectionFormat.Range),
         new("range.conditional-format.applies-to", "ManageConditionalFormatsDialog", "ManageConditionalFormatsAppliesToPickerButton", "ManageConditionalFormatsAppliesToBox", DialogRangeSelectionFormat.Range),
         new("range.move-pivot.destination", "MovePivotDialog", "MovePivotDestinationPickerButton", "MovePivotDestinationBox", DialogRangeSelectionFormat.StartCell),
@@ -71,7 +71,7 @@ public sealed partial class MainWindow
             .Select(registration => registration.TargetId)
             .ToFrozenSet(StringComparer.Ordinal);
 
-    private DialogRangePickerSession? _dialogRangePickerSession;
+    private readonly DialogRangeSelectionController<DialogRangePickerContext> _dialogRangeSelectionController = new();
     private bool _isDialogRangeInteractionProbe;
     private readonly Dictionary<string, DialogRangeInteractionEvidence> _dialogRangeInteractionEvidence =
         new(StringComparer.Ordinal);
@@ -111,7 +111,7 @@ public sealed partial class MainWindow
                 _isDialogRangeInteractionProbe = true;
                 var originalText = target.Text ?? string.Empty;
                 picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent) { Source = picker });
-                if (_dialogRangePickerSession?.Registration.TargetId != registration.TargetId)
+                if (_dialogRangeSelectionController.Active?.Context.TargetId != registration.TargetId)
                 {
                     RecordRangeInteractionEvidence(registration, passed: false, "picker-click-did-not-start-session");
                     continue;
@@ -124,18 +124,18 @@ public sealed partial class MainWindow
                 _session.SelectRange(pointedRange);
                 RaiseDialogRangeValidationKey(Key.Enter);
                 var expected = FormatDialogRangeSelection(pointedRange, registration.Format);
-                if (_dialogRangePickerSession is not null || !string.Equals(target.Text, expected, StringComparison.Ordinal))
+                if (_dialogRangeSelectionController.IsActive || !string.Equals(target.Text, expected, StringComparison.Ordinal))
                 {
                     RecordRangeInteractionEvidence(
                         registration,
                         passed: false,
-                        $"apply-failed:expected={expected},actual={target.Text},sessionActive={_dialogRangePickerSession is not null}");
+                        $"apply-failed:expected={expected},actual={target.Text},sessionActive={_dialogRangeSelectionController.IsActive}");
                     CancelDialogRangeSelection(restoreDialog: true, restoreOriginalText: true);
                     continue;
                 }
 
                 picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent) { Source = picker });
-                if (_dialogRangePickerSession?.Registration.TargetId != registration.TargetId)
+                if (_dialogRangeSelectionController.Active?.Context.TargetId != registration.TargetId)
                 {
                     RecordRangeInteractionEvidence(registration, passed: false, "second-picker-click-did-not-start-session");
                     continue;
@@ -145,14 +145,14 @@ public sealed partial class MainWindow
                     new CellAddress(sheet.Id, 4, 4),
                     new CellAddress(sheet.Id, 5, 5)));
                 RaiseDialogRangeValidationKey(Key.Escape);
-                var cancelRestored = _dialogRangePickerSession is null &&
+                var cancelRestored = !_dialogRangeSelectionController.IsActive &&
                     string.Equals(target.Text, expected, StringComparison.Ordinal);
                 RecordRangeInteractionEvidence(
                     registration,
                     cancelRestored,
                     cancelRestored
                         ? $"picker-click; enter-apply={expected}; escape-restore={expected}; original={originalText}"
-                        : $"cancel-failed:expected={expected},actual={target.Text},sessionActive={_dialogRangePickerSession is not null}");
+                        : $"cancel-failed:expected={expected},actual={target.Text},sessionActive={_dialogRangeSelectionController.IsActive}");
             }
             catch (Exception ex)
             {
@@ -191,25 +191,6 @@ public sealed partial class MainWindow
         string evidence) =>
         _dialogRangeInteractionEvidence[registration.TargetId] =
             new DialogRangeInteractionEvidence(registration.TargetId, passed, evidence);
-
-    internal IReadOnlyList<InteractionValidationResult> BuildObservedDialogRangeInteractionResults()
-    {
-        var results = new List<InteractionValidationResult>(DialogRangePickerRegistrations.Length);
-        foreach (var registration in DialogRangePickerRegistrations)
-        {
-            if (!_dialogRangeInteractionEvidence.TryGetValue(registration.TargetId, out var evidence))
-                continue;
-            results.Add(new InteractionValidationResult(
-                Id: registration.TargetId,
-                Category: "range-selection",
-                Status: evidence.Passed ? "passed" : "failed",
-                EvidenceLevel: "production-picker-apply-cancel",
-                Evidence: evidence.Evidence,
-                Note: "Production dialog picker was clicked; worksheet pointing was applied with Enter and cancelled with Escape."));
-        }
-
-        return results;
-    }
 
     static MainWindow()
     {
@@ -297,7 +278,9 @@ public sealed partial class MainWindow
 
         var picker = CreateDialogRangePickerButton(
             registration.PickerAutomationId,
-            $"Select worksheet range for {AutomationProperties.GetName(target) ?? "input"}");
+            UiText.Format(
+                "FunctionArguments_SelectWorksheetReferenceAutomationNameFormat",
+                AutomationProperties.GetName(target) ?? UiText.Get("Common_Input")));
         parent.Children.RemoveAt(index);
         parent.Children.Insert(index, BuildDialogRangePickerRow(target, picker));
         return picker;
@@ -352,17 +335,19 @@ public sealed partial class MainWindow
         TextBox target,
         DialogRangePickerRegistration registration)
     {
-        CancelDialogRangeSelection(restoreDialog: true, restoreOriginalText: true);
-        var session = new DialogRangePickerSession(
-            dialog,
-            target,
-            registration,
-            target.Text ?? string.Empty,
+        var session = _dialogRangeSelectionController.Begin(
+            new DialogRangePickerContext(
+                dialog,
+                target,
+                registration.TargetId,
+                dialog.Position,
+                dialog.Opacity,
+                dialog.IsHitTestVisible),
+            target.Text,
+            registration.Format,
+            collapseDialog: true,
             IsEnabled || dialog.IsDialog,
-            dialog.Position,
-            dialog.Opacity,
-            dialog.IsHitTestVisible);
-        _dialogRangePickerSession = session;
+            FinishDialogRangeSelectionTransition);
         _sheetGridHost.AddHandler(
             InputElement.PointerReleasedEvent,
             DialogRangePickerPointerReleased,
@@ -383,7 +368,7 @@ public sealed partial class MainWindow
 
     private void DialogRangePickerPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_dialogRangePickerSession is null || e.InitialPressMouseButton != MouseButton.Left)
+        if (!_dialogRangeSelectionController.IsActive || e.InitialPressMouseButton != MouseButton.Left)
             return;
 
         Dispatcher.UIThread.Post(
@@ -393,19 +378,18 @@ public sealed partial class MainWindow
 
     private void DialogRangePickerKeyDown(object? sender, KeyEventArgs e)
     {
-        if (_dialogRangePickerSession is null)
+        var result = _dialogRangeSelectionController.HandleKey(e.Key switch
+        {
+            Key.Escape => DialogRangeSelectionKey.Escape,
+            Key.Enter => DialogRangeSelectionKey.Enter,
+            _ => DialogRangeSelectionKey.Other,
+        }, _session.SelectedRange);
+        if (!result.Handled)
             return;
 
-        if (e.Key == Key.Escape)
-        {
-            CompleteDialogRangeSelection(applySelection: false);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Enter)
-        {
-            CompleteDialogRangeSelection(applySelection: true);
-            e.Handled = true;
-        }
+        if (result.Transition is { } transition)
+            FinishDialogRangeSelectionTransition(transition);
+        e.Handled = true;
     }
 
     private void DialogRangePickerDialogClosed(object? sender, EventArgs e) =>
@@ -413,62 +397,58 @@ public sealed partial class MainWindow
 
     private void CompleteDialogRangeSelection(bool applySelection)
     {
-        var session = _dialogRangePickerSession;
-        if (session is null)
-            return;
-
-        CancelDialogRangeSelection(restoreDialog: false, restoreOriginalText: false);
-        try
-        {
-            session.Target.Text = applySelection
-                ? FormatDialogRangeSelection(_session.SelectedRange, session.Registration.Format)
-                : session.OriginalText;
-        }
-        finally
-        {
-            RestoreDialogAfterRangeSelection(session);
-        }
+        if (_dialogRangeSelectionController.Complete(_session.SelectedRange, applySelection) is { } transition)
+            FinishDialogRangeSelectionTransition(transition);
     }
 
     private void CancelDialogRangeSelection(bool restoreDialog, bool restoreOriginalText)
     {
-        var session = _dialogRangePickerSession;
-        if (session is null)
-            return;
-
-        _dialogRangePickerSession = null;
-        _sheetGridHost.RemoveHandler(InputElement.PointerReleasedEvent, DialogRangePickerPointerReleased);
-        RemoveHandler(InputElement.KeyDownEvent, DialogRangePickerKeyDown);
-        session.Dialog.Closed -= DialogRangePickerDialogClosed;
-        if (restoreOriginalText)
-            session.Target.Text = session.OriginalText;
-        if (restoreDialog)
-            RestoreDialogAfterRangeSelection(session);
+        if (_dialogRangeSelectionController.Cancel(restoreDialog, restoreOriginalText) is { } transition)
+            FinishDialogRangeSelectionTransition(transition);
     }
 
-    private void RestoreDialogAfterRangeSelection(DialogRangePickerSession session)
+    private void FinishDialogRangeSelectionTransition(
+        DialogRangeSelectionTransition<DialogRangePickerContext> transition) =>
+        _dialogRangeSelectionController.FinishTransition(
+            transition,
+            DetachDialogRangeSelection,
+            (state, selectedRange) =>
+                state.Context.Target.Text = FormatDialogRangeSelection(selectedRange, state.Format),
+            state => state.Context.Target.Text = state.OriginalText,
+            RestoreDialogAfterRangeSelection);
+
+    private void DetachDialogRangeSelection(DialogRangePickerContext context)
     {
+        _sheetGridHost.RemoveHandler(InputElement.PointerReleasedEvent, DialogRangePickerPointerReleased);
+        RemoveHandler(InputElement.KeyDownEvent, DialogRangePickerKeyDown);
+        context.Dialog.Closed -= DialogRangePickerDialogClosed;
+    }
+
+    private void RestoreDialogAfterRangeSelection(
+        DialogRangeSelectionState<DialogRangePickerContext> session)
+    {
+        var context = session.Context;
         IsEnabled = session.OwnerWasEnabled;
-        SetPlatformWindowEnabled(session.Dialog.IsVisible && session.Dialog.IsDialog
+        SetPlatformWindowEnabled(context.Dialog.IsVisible && context.Dialog.IsDialog
             ? false
             : session.OwnerWasEnabled);
-        session.Dialog.Opacity = session.DialogOpacity;
-        session.Dialog.IsHitTestVisible = session.DialogIsHitTestVisible;
+        context.Dialog.Opacity = context.DialogOpacity;
+        context.Dialog.IsHitTestVisible = context.DialogIsHitTestVisible;
 
-        if (!session.Dialog.IsVisible)
+        if (!context.Dialog.IsVisible)
             return;
 
         if (!_isDialogRangeInteractionProbe)
-            session.Dialog.Position = session.DialogPosition;
+            context.Dialog.Position = context.DialogPosition;
 
         void ActivateDialogAndRestoreTargetFocus()
         {
-            if (!session.Dialog.IsVisible || _dialogRangePickerSession is not null)
+            if (!context.Dialog.IsVisible || _dialogRangeSelectionController.IsActive)
                 return;
 
-            session.Dialog.Activate();
-            session.Target.Focus();
-            session.Target.SelectAll();
+            context.Dialog.Activate();
+            context.Target.Focus();
+            context.Target.SelectAll();
         }
 
         ActivateDialogAndRestoreTargetFocus();
@@ -488,79 +468,46 @@ public sealed partial class MainWindow
             SetPlatformWindowEnabledMethod?.Invoke(platformImpl, [isEnabled]);
     }
 
-    private void CollapseDialogForRangeSelection(DialogRangePickerSession session)
+    private void CollapseDialogForRangeSelection(
+        DialogRangeSelectionState<DialogRangePickerContext> session)
     {
+        var context = session.Context;
         // The automated contract selects cells through the live session rather than a pointer. Keeping
         // the modal at its native X11 position avoids an Openbox recenter/offscreen geometry loop while
         // still exercising the production picker click, owner enablement, and Enter/Escape handlers.
         if (_isDialogRangeInteractionProbe)
         {
-            session.Dialog.Opacity = 0;
-            session.Dialog.IsHitTestVisible = false;
+            context.Dialog.Opacity = 0;
+            context.Dialog.IsHitTestVisible = false;
             return;
         }
 
-        var width = EffectiveDialogRangeSelectionDimension(session.Dialog.Bounds.Width, session.Dialog.Width, 420);
-        var height = EffectiveDialogRangeSelectionDimension(session.Dialog.Bounds.Height, session.Dialog.Height, 560);
-        var screens = session.Dialog.Screens.All;
+        var width = DialogRangeSelectionGeometryPlanner.ResolveDimension(
+            context.Dialog.Bounds.Width,
+            context.Dialog.Width,
+            420);
+        var height = DialogRangeSelectionGeometryPlanner.ResolveDimension(
+            context.Dialog.Bounds.Height,
+            context.Dialog.Height,
+            560);
+        var screens = context.Dialog.Screens.All;
         var virtualLeft = screens.Count > 0 ? screens.Min(screen => screen.Bounds.X) : -10000;
         var virtualTop = screens.Count > 0 ? screens.Min(screen => screen.Bounds.Y) : -10000;
-        session.Dialog.Opacity = 0;
-        session.Dialog.IsHitTestVisible = false;
-        session.Dialog.Position = new PixelPoint(
+        context.Dialog.Opacity = 0;
+        context.Dialog.IsHitTestVisible = false;
+        context.Dialog.Position = new PixelPoint(
             virtualLeft - (int)Math.Ceiling(width) - 32,
             virtualTop - (int)Math.Ceiling(height) - 32);
     }
 
-    private static double EffectiveDialogRangeSelectionDimension(double actual, double configured, double fallback)
-    {
-        if (!double.IsNaN(actual) && actual > 0)
-            return actual;
-        if (!double.IsNaN(configured) && configured > 0)
-            return configured;
-        return fallback;
-    }
-
     private string FormatDialogRangeSelection(GridRange range, DialogRangeSelectionFormat format) =>
-        format switch
-        {
-            DialogRangeSelectionFormat.StartCell =>
-                SpreadsheetDisplayFormatter.FormatCellReference(range.Start, useR1C1ReferenceStyle: false),
-            DialogRangeSelectionFormat.DataValidationFormula =>
-                DataValidationService.FormatListSourceRange(
-                    range,
-                    _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
-                    _session.ActiveSheet.Name),
-            DialogRangeSelectionFormat.PageSetupPrintArea =>
-                PageSetupRangeSelectionFormatter.Format(
-                    PageSetupRangeSelectionTarget.PrintArea,
-                    range,
-                    UseR1C1ReferenceStyle),
-            DialogRangeSelectionFormat.PageSetupRepeatRows =>
-                PageSetupRangeSelectionFormatter.Format(
-                    PageSetupRangeSelectionTarget.RepeatRows,
-                    range,
-                    UseR1C1ReferenceStyle),
-            DialogRangeSelectionFormat.PageSetupRepeatColumns =>
-                PageSetupRangeSelectionFormatter.Format(
-                    PageSetupRangeSelectionTarget.RepeatColumns,
-                    range,
-                    UseR1C1ReferenceStyle),
-            _ => SpreadsheetDisplayFormatter.FormatRangeReference(
-                range.Start,
-                range.End,
-                useR1C1ReferenceStyle: false),
-        };
-
-    private enum DialogRangeSelectionFormat
-    {
-        Range,
-        StartCell,
-        DataValidationFormula,
-        PageSetupPrintArea,
-        PageSetupRepeatRows,
-        PageSetupRepeatColumns,
-    }
+        DialogRangeSelectionFormatter.Format(
+            range,
+            format,
+            new DialogRangeSelectionFormatContext(
+                _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
+                _session.ActiveSheet.Name,
+                UseR1C1ReferenceStyle));
 
     private sealed record DialogRangePickerRegistration(
         string TargetId,
@@ -570,12 +517,10 @@ public sealed partial class MainWindow
         DialogRangeSelectionFormat Format,
         bool CreatePickerWhenMissing = false);
 
-    private sealed record DialogRangePickerSession(
+    private sealed record DialogRangePickerContext(
         Window Dialog,
         TextBox Target,
-        DialogRangePickerRegistration Registration,
-        string OriginalText,
-        bool OwnerWasEnabled,
+        string TargetId,
         PixelPoint DialogPosition,
         double DialogOpacity,
         bool DialogIsHitTestVisible);

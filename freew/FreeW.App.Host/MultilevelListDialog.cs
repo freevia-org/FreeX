@@ -1,65 +1,15 @@
 using System.Windows;
 using System.Windows.Controls;
-using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
 
 /// <summary>
-/// A predefined multilevel-list format applied by the Multilevel List dropdown gallery.
-/// </summary>
-internal sealed record MultilevelListPreset(string Name, string Description, Action<DocumentView> Apply);
-
-/// <summary>
-/// The per-level configuration captured by the "Define New Multilevel List" dialog.
-/// </summary>
-/// <summary>
 /// A small "Define New Multilevel List" dialog for the backed FreeW multilevel options.
 /// </summary>
 internal static class MultilevelListDialog
 {
-    /// <summary>
-    /// The catalog of predefined multilevel-list formats shown in the Multilevel List dropdown gallery.
-    /// </summary>
-    public static readonly MultilevelListPreset[] Presets =
-    [
-        new(
-            "Outline: 1. / 1.1. / 1.1.1.",
-            "Decimal outline using the standard FreeW multilevel list.",
-            view =>
-            {
-                view.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
-                    MultiLevelListFormat.LevelCount,
-                    null,
-                    null,
-                    MultiLevelListFormat.DecimalNumberFormats));
-            }),
-        new(
-            "Outline: 1. / a. / i.",
-            "Decimal + lower-letter + lower-roman per-level numbering.",
-            view =>
-            {
-                view.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
-                    MultiLevelListFormat.LevelCount,
-                    null,
-                    null,
-                    MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats));
-            }),
-        new(
-            "Outline (Headings): link to Heading styles",
-            "Apply multilevel list and map each level to Heading 1-3 styles.",
-            view =>
-            {
-                view.ApplyMultiLevelListDefinition(new MultilevelListDefinition(
-                    MultiLevelListFormat.LevelCount,
-                    null,
-                    null,
-                    MultiLevelListFormat.DecimalNumberFormats,
-                    LinkToHeadingStyles: true));
-            }),
-    ];
-
     /// <summary>
     /// Show the "Define New Multilevel List" dialog seeded with the current selection. Returns the chosen
     /// definition, or null if cancelled.
@@ -70,10 +20,13 @@ internal static class MultilevelListDialog
     {
         MultilevelListDefinition? result = null;
 
+        MultilevelListDialogSession session = MultilevelListDialogPlanner.CreateSession(
+            currentNumberFormats,
+            System.Globalization.CultureInfo.CurrentCulture);
         var dialog = new Window
         {
-            Title = "Define New Multilevel List",
-            Width = 380,
+            Title = MultilevelListDialogPlanner.Title,
+            Width = MultilevelListDialogPlanner.DialogWidth,
             SizeToContent = SizeToContent.Height,
             ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
@@ -81,58 +34,72 @@ internal static class MultilevelListDialog
             ShowInTaskbar = false,
         };
 
-        var state = MultilevelListDialogPlanner.BuildInitialState(
-            currentNumberFormats,
-            System.Globalization.CultureInfo.CurrentCulture);
-        var levelsBox = new ComboBox { MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
-        for (var i = 1; i <= 9; i++)
-            levelsBox.Items.Add(i.ToString());
+        var state = session.InitialState;
+        var levelsBox = new ComboBox
+        {
+            MinWidth = MultilevelListDialogPlanner.LevelsMinWidth,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        foreach (var choice in session.LevelChoices)
+            levelsBox.Items.Add(choice);
         levelsBox.SelectedIndex = state.LevelsIndex;
 
-        var startAt0Box = new TextBox { Text = state.Level0StartAtText, MinWidth = 60, Margin = new Thickness(0, 0, 0, 8), ToolTip = "Start-at for level 1 (1-based)" };
-        var startAt1Box = new TextBox { Text = state.Level1StartAtText, MinWidth = 60, Margin = new Thickness(0, 0, 0, 8), ToolTip = "Start-at for level 2 (1-based)" };
-        var level0FormatBox = NumberFormatBox(state.Level0FormatIndex);
-        var level1FormatBox = NumberFormatBox(state.Level1FormatIndex);
-        var level2FormatBox = NumberFormatBox(state.Level2FormatIndex);
+        var startAt0Box = new TextBox { Text = state.Level0StartAtText, MinWidth = MultilevelListDialogPlanner.StartAtMinWidth, Margin = new Thickness(0, 0, 0, 8), ToolTip = MultilevelListDialogPlanner.Level0StartAtToolTip };
+        var startAt1Box = new TextBox { Text = state.Level1StartAtText, MinWidth = MultilevelListDialogPlanner.StartAtMinWidth, Margin = new Thickness(0, 0, 0, 8), ToolTip = MultilevelListDialogPlanner.Level1StartAtToolTip };
+        var level0FormatBox = NumberFormatBox(session.NumberFormatChoices, state.Level0FormatIndex);
+        var level1FormatBox = NumberFormatBox(session.NumberFormatChoices, state.Level1FormatIndex);
+        var level2FormatBox = NumberFormatBox(session.NumberFormatChoices, state.Level2FormatIndex);
+        levelsBox.SelectionChanged += (_, _) => session.UpdateLevels(levelsBox.SelectedIndex);
+        startAt0Box.TextChanged += (_, _) => session.UpdateLevel0StartAt(startAt0Box.Text);
+        startAt1Box.TextChanged += (_, _) => session.UpdateLevel1StartAt(startAt1Box.Text);
+        level0FormatBox.SelectionChanged += (_, _) => session.UpdateLevel0Format(level0FormatBox.SelectedIndex);
+        level1FormatBox.SelectionChanged += (_, _) => session.UpdateLevel1Format(level1FormatBox.SelectedIndex);
+        level2FormatBox.SelectionChanged += (_, _) => session.UpdateLevel2Format(level2FormatBox.SelectedIndex);
 
-        var panel = new StackPanel { Margin = new Thickness(14) };
+        var panel = new StackPanel { Margin = new Thickness(MultilevelListDialogPlanner.OuterMargin) };
         panel.Children.Add(new TextBlock
         {
-            Text = "Configure multilevel list levels.",
+            Text = MultilevelListDialogPlanner.Description,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10),
         });
 
-        AddRow(panel, "Number of levels (1-9):", levelsBox);
-        AddRow(panel, "Level 1 start at:",        startAt0Box);
-        AddRow(panel, "Level 2 start at:",        startAt1Box);
-        AddRow(panel, "Level 1 number style:",    level0FormatBox);
-        AddRow(panel, "Level 2 number style:",    level1FormatBox);
-        AddRow(panel, "Level 3 number style:",    level2FormatBox);
+        AddRow(panel, MultilevelListDialogPlanner.LevelsLabel, levelsBox);
+        AddRow(panel, MultilevelListDialogPlanner.Level0StartAtLabel, startAt0Box);
+        AddRow(panel, MultilevelListDialogPlanner.Level1StartAtLabel, startAt1Box);
+        AddRow(panel, MultilevelListDialogPlanner.Level0NumberStyleLabel, level0FormatBox);
+        AddRow(panel, MultilevelListDialogPlanner.Level1NumberStyleLabel, level1FormatBox);
+        AddRow(panel, MultilevelListDialogPlanner.Level2NumberStyleLabel, level2FormatBox);
 
         void Accept()
         {
-            if (!MultilevelListDialogPlanner.TryBuildResult(
-                    new MultilevelListDialogInput(
-                        levelsBox.SelectedIndex,
-                        startAt0Box.Text,
-                        startAt1Box.Text,
-                        level0FormatBox.SelectedIndex,
-                        level1FormatBox.SelectedIndex,
-                        level2FormatBox.SelectedIndex),
-                    System.Globalization.CultureInfo.CurrentCulture,
-                    out result,
-                    out var validation))
+            SynchronizeSession();
+            var acceptance = session.PlanAcceptance();
+            if (!acceptance.IsAccepted)
             {
-                DialogMessageHelper.ShowWarning(dialog, validation?.Message ?? MultilevelListDialogPlanner.PositiveStartAtMessage);
-                var target = validation?.Field == MultilevelListDialogField.Level1StartAt ? startAt1Box : startAt0Box;
+                DialogMessageHelper.ShowWarning(dialog, acceptance.Validation?.Message ?? MultilevelListDialogPlanner.PositiveStartAtMessage);
+                var target = acceptance.Validation?.Field == MultilevelListDialogField.Level1StartAt ? startAt1Box : startAt0Box;
                 DialogFocus.FocusAndSelect(target);
                 return;
             }
+            result = acceptance.Definition;
             dialog.DialogResult = true;
         }
 
-        panel.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
+        void SynchronizeSession()
+        {
+            session.UpdateLevels(levelsBox.SelectedIndex);
+            session.UpdateLevel0StartAt(startAt0Box.Text);
+            session.UpdateLevel1StartAt(startAt1Box.Text);
+            session.UpdateLevel0Format(level0FormatBox.SelectedIndex);
+            session.UpdateLevel1Format(level1FormatBox.SelectedIndex);
+            session.UpdateLevel2Format(level2FormatBox.SelectedIndex);
+        }
+
+        panel.Children.Add(DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: MultilevelListDialogPlanner.ButtonWidth,
+            rowMargin: new Thickness(0, 12, 0, 0)));
         dialog.Content = panel;
         levelsBox.Focus();
         return dialog.ShowDialog() == true ? result : null;
@@ -146,10 +113,16 @@ internal static class MultilevelListDialog
         panel.Children.Add(field);
     }
 
-    private static ComboBox NumberFormatBox(int selectedIndex)
+    private static ComboBox NumberFormatBox(
+        IReadOnlyList<MultilevelListNumberFormatChoice> choices,
+        int selectedIndex)
     {
-        var box = new ComboBox { MinWidth = 130, Margin = new Thickness(0, 0, 0, 8) };
-        foreach (var choice in MultilevelListDialogPlanner.NumberFormatChoices)
+        var box = new ComboBox
+        {
+            MinWidth = MultilevelListDialogPlanner.NumberFormatMinWidth,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        foreach (var choice in choices)
             box.Items.Add(choice);
         box.SelectedIndex = selectedIndex;
         return box;

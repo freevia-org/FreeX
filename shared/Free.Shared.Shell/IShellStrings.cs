@@ -11,6 +11,8 @@ public interface IShellStrings
 {
     string Ok { get; }
     string Cancel { get; }
+    string Yes => "_Yes";
+    string No => "_No";
     string ErrorTitle { get; }
     string WarningTitle { get; }
     string InformationTitle { get; }

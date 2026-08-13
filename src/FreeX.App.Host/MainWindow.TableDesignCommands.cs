@@ -158,7 +158,7 @@ public partial class MainWindow
         var sourceSheet = _workbook.GetSheet(dialogSourceRange.Start.Sheet) ?? sheet;
         var layout = PivotCreatePlanner.CreateDefaultLayout(sourceSheet, dialogSourceRange);
         var name = PivotCreatePlanner.SuggestName(_workbook);
-        if (dialog.Result.DestinationKind == PivotTableDestinationKind.NewWorksheet)
+        if (dialog.Result.DestinationKind == PivotDestinationKind.NewWorksheet)
         {
             var command = PivotCreatePlanner.BuildNewWorksheetCommand(
                 dialogSourceRange,
@@ -314,10 +314,6 @@ public partial class MainWindow
 
         AttachTableDesignStyleGalleryContextMenu();
     }
-
-    /// <summary>Test hook: builds + attaches the Table Styles gallery to the rendered button, mirroring
-    /// what happens when the contextual Table Design button is engaged.</summary>
-    internal void PopulateTableDesignStyleGalleryMenuForTest() => PopulateTableDesignStyleGalleryMenu();
 
     /// <summary>Attaches the imperatively-built Table Styles gallery menu to the rendered declarative
     /// "Table Styles" button. No-op until both the menu and the rendered button exist; the rendered

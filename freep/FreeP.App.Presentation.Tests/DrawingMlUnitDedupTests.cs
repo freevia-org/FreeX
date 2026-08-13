@@ -22,7 +22,7 @@ public sealed class DrawingMlUnitDedupTests
     }
 
     [Fact]
-    public void FreePPresentationUnitConsumers_UseSharedDrawingMlUnits()
+    public void FreePPresentationUnitConsumers_UseSharedDrawingMlCoordinateUnits()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var appFiles = new[]
@@ -52,10 +52,33 @@ public sealed class DrawingMlUnitDedupTests
 
         Read(root, "freep", "FreeP.Core.IO", "PptxPackageWriter.cs")
             .Should()
-            .Contain("DrawingMlUnits.EmuPerInch * 15 / 2")
-            .And.Contain("DrawingMlUnits.EmuPerInch * 10")
+            .Contain("DrawingMlCoordinateUnits.EmuPerInch * 15 / 2")
+            .And.Contain("DrawingMlCoordinateUnits.EmuPerInch * 10")
             .And.NotContain("6858000")
             .And.NotContain("9144000");
+    }
+
+    [Fact]
+    public void SlideShowAnimationPlanner_OwnsSharedDrawingMlRgbParsing()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var planner = Read(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowAnimationRendererSession.cs");
+        var renderers = new[]
+        {
+            Read(root, "freep", "FreeP.App.Host", "SlideShowWindow.cs"),
+            Read(root, "freep", "FreeP.App.Avalonia", "SlideShowWindow.cs"),
+        };
+
+        planner.Should().Contain("DrawingMlRgbColor.TryParseHexRgb");
+        foreach (var renderer in renderers)
+        {
+            renderer.Should().NotContain("DrawingMlRgbColor.TryParseHexRgb")
+                .And.NotContain("NumberStyles.HexNumber");
+        }
     }
 
     private static string Read(string root, params string[] relativeParts) =>

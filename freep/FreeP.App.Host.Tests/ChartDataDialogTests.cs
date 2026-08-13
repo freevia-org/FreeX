@@ -15,15 +15,10 @@ namespace FreeP.App.Host.Tests;
 /// </summary>
 public sealed class ChartDataDialogTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.ChartDataDialogTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.ChartDataDialogTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public ChartDataDialogTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -130,17 +125,24 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart.ChartType = ChartType.Stock;
 
         var dialog = new ChartDisplayOptionsDialog(sess);
-        dialog.SetTitleOverlayForTests(true);
-        dialog.SetTitlePositionForTests(ChartExTitlePosition.Right);
-        dialog.SetTitleAlignmentForTests(ChartExTitleAlignment.Far);
-        dialog.SetPlotVisibleOnlyForTests(false);
-        dialog.SetRoundedCornersForTests(true);
-        dialog.SetVaryColorsForTests(true);
-        dialog.SetLegendOverlayForTests(true);
-        dialog.SetHighLowLinesForTests(false);
-        dialog.SetStyleIdForTests(102);
-        dialog.SetBubbleSizeLabelsForTests(true);
-        dialog.SetLabelTextStyleForTests("Aptos", 9, true, false, "#2F5496");
+        dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+        {
+            TitleOverlay = true,
+            TitlePosition = ChartExTitlePosition.Right,
+            TitleAlignment = ChartExTitleAlignment.Far,
+            PlotVisibleOnly = false,
+            RoundedCorners = true,
+            VaryColors = true,
+            LegendOverlay = true,
+            HighLowLines = false,
+            StyleId = 102,
+            ShowBubbleSize = true,
+            LabelFontFamily = "Aptos",
+            LabelFontSizePt = 9,
+            LabelBold = true,
+            LabelItalic = false,
+            LabelColor = "#2F5496",
+        });
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -173,7 +175,10 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart.ShowWaterfallConnectorLines = true;
 
         var dialog = new ChartDisplayOptionsDialog(sess);
-        dialog.SetWaterfallConnectorLinesForTests(false);
+        dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+        {
+            WaterfallConnectorLines = false,
+        });
 
         dialog.BuildCommitPlanForTests().ShowWaterfallConnectorLines.Should().BeFalse();
     }
@@ -187,8 +192,11 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart.ShowUpDownBars = false;
 
         var dialog = new ChartDisplayOptionsDialog(sess);
-        dialog.SetDropLinesForTests(false);
-        dialog.SetUpDownBarsForTests(true);
+        dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+        {
+            DropLines = false,
+            UpDownBars = true,
+        });
         var options = dialog.BuildCommitPlanForTests();
 
         options.ShowDropLines.Should().BeFalse();
@@ -203,7 +211,10 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart.SeriesLinesSpecified = true;
 
         var dialog = new ChartDisplayOptionsDialog(sess);
-        dialog.SetSeriesLinesForTests(false);
+        dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+        {
+            SeriesLines = false,
+        });
 
         dialog.BuildCommitPlanForTests().ShowSeriesLines.Should().BeFalse();
     }
@@ -293,14 +304,15 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart.Series[1].SmoothLine = true;
 
         var dialog = new ChartSeriesOptionsDialog(sess);
-        dialog.SetOptionsForTests(0, false, false, 2.25, ChartMarkerSymbol.Diamond, 7, "#4472C4", "#1F4E79", OutlineDash.DashDot, true,
+        dialog.SetOptionsForTests(new ChartSeriesOptionsDialogTestSettings(
+            0, false, false, 2.25, ChartMarkerSymbol.Diamond, 7, "#4472C4", "#1F4E79", OutlineDash.DashDot, true,
             true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
-            "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, errorBars: true,
-            showLeaderLines: true,
-            trendline: true, trendlineType: ChartTrendlineType.Polynomial, trendlineOrder: 3,
-            trendlineForward: 1.5, trendlineBackward: 0.5,
-            trendlineEquation: true, trendlineRSquared: true, overrideChartType: ChartType.LineMarkers,
-            invertIfNegative: true);
+            "Aptos", 9, true, false, "#2F5496", ShowBubbleSize: true, ErrorBars: true,
+            ShowLeaderLines: true,
+            Trendline: true, TrendlineType: ChartTrendlineType.Polynomial, TrendlineOrder: 3,
+            TrendlineForward: 1.5, TrendlineBackward: 0.5,
+            TrendlineEquation: true, TrendlineRSquared: true, OverrideChartType: ChartType.LineMarkers,
+            InvertIfNegative: true));
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -376,10 +388,11 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var (sess, _) = MakeSession();
         var dialog = new ChartPointOptionsDialog(sess);
-        dialog.SetOptionsForTests(1, 2, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
+        dialog.SetOptionsForTests(new ChartPointOptionsDialogTestSettings(
+            1, 2, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
             true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
-            "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, explosionPercent: 35,
-            showLeaderLines: true);
+            "Aptos", 9, true, false, "#2F5496", ShowBubbleSize: true, ExplosionPercent: 35,
+            ShowLeaderLines: true));
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -411,7 +424,10 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var (sess, _) = MakeSession();
         var dialog = new ChartLayoutOptionsDialog(sess);
-        dialog.SetOptionsForTests(ChartLayoutTarget.PlotArea, "inner", ChartManualLayoutMode.Edge, ChartManualLayoutMode.Factor, ChartManualLayoutMode.Factor, ChartManualLayoutMode.Edge, 12, 0.1, 0.8, 20);
+        dialog.SetOptionsForTests(new ChartLayoutOptionsDialogTestSettings(
+            ChartLayoutTarget.PlotArea, "inner", ChartManualLayoutMode.Edge,
+            ChartManualLayoutMode.Factor, ChartManualLayoutMode.Factor,
+            ChartManualLayoutMode.Edge, 12, 0.1, 0.8, 20));
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -467,7 +483,8 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart!.ChartType = ChartType.Bubble;
 
         var dialog = new ChartBubbleOptionsDialog(sess);
-        dialog.SetOptionsForTests(225, BubbleSizeRepresentation.Width, true);
+        dialog.SetOptionsForTests(new ChartBubbleOptionsDialogTestSettings(
+            225, BubbleSizeRepresentation.Width, true));
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -483,7 +500,7 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart.DoughnutHolePercent = 45;
 
         var dialog = new ChartPieOptionsDialog(sess);
-        dialog.SetOptionsForTests(225, 68);
+        dialog.SetOptionsForTests(new ChartPieOptionsDialogTestSettings(225, 68));
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -497,7 +514,8 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart!.ChartType = ChartType.OfPie;
 
         var dialog = new ChartPieOptionsDialog(sess);
-        dialog.SetOfPieOptionsForTests(OfPieType.Bar, OfPieSplitType.Custom, 2, 75, "1, 2", 120, true);
+        dialog.SetOfPieOptionsForTests(new ChartOfPieOptionsDialogTestSettings(
+            OfPieType.Bar, OfPieSplitType.Custom, 2, 75, "1, 2", 120, true));
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -519,7 +537,8 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart.RadarStyle = RadarStyle.Standard;
 
         var dialog = new ChartPlotStyleOptionsDialog(sess);
-        dialog.SetOptionsForTests(ScatterStyle.SmoothMarker, RadarStyle.Filled);
+        dialog.SetOptionsForTests(new ChartPlotStyleOptionsDialogTestSettings(
+            ScatterStyle.SmoothMarker, RadarStyle.Filled));
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -556,7 +575,8 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var (sess, _) = MakeSession();
         var dialog = new ChartAreaOptionsDialog(sess);
-        dialog.SetOptionsForTests(ChartAreaFormattingTarget.PlotArea, null, null, null, true, true);
+        dialog.SetOptionsForTests(new ChartAreaOptionsDialogTestSettings(
+            ChartAreaFormattingTarget.PlotArea, null, null, null, true, true));
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -579,12 +599,12 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var (sess, _) = MakeSession();
         var dialog = new ChartAreaOptionsDialog(sess);
-        dialog.SetOptionsForTests(
+        dialog.SetOptionsForTests(new ChartAreaOptionsDialogTestSettings(
             ChartAreaFormattingTarget.ChartArea,
             "#4472C4",
             null,
             null,
-            fillTransparency: 40);
+            FillTransparency: 40));
 
         var options = dialog.BuildCommitPlanForTests();
         var fill = options.Fill.Should().BeOfType<ShapeFill.Solid>().Subject;
@@ -600,7 +620,8 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart.ChartDataProtected = false;
 
         var dialog = new ChartProtectionOptionsDialog(sess);
-        dialog.SetOptionsForTests(false, null, true, false);
+        dialog.SetOptionsForTests(new ChartProtectionOptionsDialogTestSettings(
+            false, null, true, false));
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -608,25 +629,24 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [Fact]
-    public void ChartDisplayOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    public void ChartDisplayOptionsDialog_UsesPortableDialogSession()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDisplayOptionsDialog.cs");
 
-        source.Should().Contain("ChartDisplayOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartDisplayOptions");
+        source.Should().Contain("new ChartDisplayOptionsDialogSession(editor)");
+        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().NotContain("_editor.ApplyChartDisplayOptions");
         source.Should().NotContain("new SetChartDisplayOptionsCommand");
     }
 
     [Fact]
-    public void ChartAxisOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    public void ChartAxisOptionsDialog_UsesPortableDialogSession()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartAxisOptionsDialog.cs");
 
-        source.Should().Contain("ChartAxisOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("ChartAxisOptionsPlanner.AxisOptions");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartAxisOptions");
+        source.Should().Contain("new ChartAxisOptionsDialogSession(editor, initialAxis)");
+        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().NotContain("_editor.ApplyChartAxisOptions");
         source.Should().NotContain("new SetChartAxisOptionsCommand");
     }
 
@@ -635,9 +655,10 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartSeriesOptionsDialog.cs");
 
-        source.Should().Contain("ChartSeriesOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartSeriesOptions");
+        source.Should().Contain("new ChartSeriesOptionsDialogSession(");
+        source.Should().Contain("_session.TryCommit(");
+        source.Should().NotContain("_planner.");
+        source.Should().NotContain("_editor.ApplyChartSeriesOptions");
         source.Should().NotContain("new SetChartSeriesOptionsCommand");
     }
 
@@ -646,9 +667,10 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartPointOptionsDialog.cs");
 
-        source.Should().Contain("ChartPointOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartPointOptions");
+        source.Should().Contain("new ChartPointOptionsDialogSession(");
+        source.Should().Contain("_session.TryCommit(");
+        source.Should().NotContain("_planner.");
+        source.Should().NotContain("_editor.ApplyChartPointOptions");
         source.Should().NotContain("new SetChartPointOptionsCommand");
     }
 
@@ -657,9 +679,10 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartLayoutOptionsDialog.cs");
 
-        source.Should().Contain("ChartLayoutOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartLayoutOptions");
+        source.Should().Contain("new ChartLayoutOptionsDialogSession(editor)");
+        source.Should().Contain("_session.TryCommit(");
+        source.Should().NotContain("_planner.");
+        source.Should().NotContain("_editor.ApplyChartLayoutOptions");
         source.Should().NotContain("new SetChartLayoutOptionsCommand");
     }
 
@@ -668,11 +691,10 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDataTableOptionsDialog.cs");
 
-        source.Should().Contain("ChartDataTableOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartDataTableOptions");
-        source.Should().Contain("_planner.SetBackgroundColor");
-        source.Should().Contain("_planner.SetFontSize");
+        source.Should().Contain("new ChartDataTableOptionsDialogSession(editor)");
+        source.Should().Contain("_session.TryCommit(");
+        source.Should().NotContain("_planner.");
+        source.Should().NotContain("_editor.ApplyChartDataTableOptions");
         source.Should().NotContain("new SetChartDataTableOptionsCommand");
     }
 
@@ -681,9 +703,10 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "Chart3DViewOptionsDialog.cs");
 
-        source.Should().Contain("Chart3DViewOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChart3DViewOptions");
+        source.Should().Contain("new Chart3DViewOptionsDialogSession(editor");
+        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().NotContain("_planner");
+        source.Should().NotContain("_editor");
         source.Should().NotContain("new SetChart3DViewOptionsCommand");
     }
 
@@ -744,7 +767,7 @@ public sealed class ChartDataDialogTests : IDisposable
     [Fact]
     public void Chart3DAndTextOptions_AreReachableThroughHostSourceRoutes()
     {
-        var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
+        var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");
         var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
 
         ribbonSource.Should().Contain("Chart3DViewOptionsPlanner.CommandId");
@@ -757,12 +780,13 @@ public sealed class ChartDataDialogTests : IDisposable
     public void ChartBubbleOptionsDialog_UsesSharedPlannerAndSessionCommand()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartBubbleOptionsDialog.cs");
-        var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
+        var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");
         var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
 
-        source.Should().Contain("ChartBubbleOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartBubbleOptions");
+        source.Should().Contain("new ChartBubbleOptionsDialogSession(editor");
+        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().NotContain("_planner");
+        source.Should().NotContain("_editor");
         source.Should().NotContain("new SetChartBubbleOptionsCommand");
         ribbonSource.Should().Contain("ChartBubbleOptionsPlanner.CommandId");
         windowSource.Should().Contain("OpenChartBubbleOptionsDialog");
@@ -772,12 +796,13 @@ public sealed class ChartDataDialogTests : IDisposable
     public void ChartPieOptionsDialog_UsesSharedPlannerAndSessionCommand()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartPieOptionsDialog.cs");
-        var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
+        var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");
         var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
 
-        source.Should().Contain("ChartPieOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartPieOptions");
+        source.Should().Contain("new ChartPieOptionsDialogSession(editor)");
+        source.Should().Contain("_session.TryCommit(");
+        source.Should().NotContain("_planner.");
+        source.Should().NotContain("_editor.ApplyChartPieOptions");
         source.Should().NotContain("new SetChartPieOptionsCommand");
         ribbonSource.Should().Contain("ChartPieOptionsPlanner.CommandId");
         windowSource.Should().Contain("OpenChartPieOptionsDialog");
@@ -787,12 +812,13 @@ public sealed class ChartDataDialogTests : IDisposable
     public void ChartPlotStyleOptionsDialog_UsesSharedPlannerAndSessionCommand()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartPlotStyleOptionsDialog.cs");
-        var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
+        var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");
         var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
 
-        source.Should().Contain("ChartPlotStyleOptionsPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartPlotStyleOptions");
+        source.Should().Contain("new ChartPlotStyleOptionsDialogSession(editor");
+        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().NotContain("_planner");
+        source.Should().NotContain("_editor");
         source.Should().NotContain("new SetChartPlotStyleOptionsCommand");
         ribbonSource.Should().Contain("ChartPlotStyleOptionsPlanner.CommandId");
         windowSource.Should().Contain("OpenChartPlotStyleOptionsDialog");
@@ -803,31 +829,35 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartTextOptionsDialog.cs");
 
-        source.Should().Contain("ChartTextOptionsPlanner.FromChart(chart, target)");
-        source.Should().Contain("_planner.BuildCommitPlan()");
-        source.Should().Contain("_editor.ApplyChartTextOptions");
+        source.Should().Contain("new ChartTextOptionsDialogSession(editor, target)");
+        source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().NotContain("_planner");
+        source.Should().NotContain("_editor");
         source.Should().NotContain("new SetChartTextOptionsCommand");
     }
 
     [Fact]
-    public void ChartDataDialog_UsesSharedPlannerForPolicy()
+    public void ChartDataDialog_UsesSharedSessionForWorkflow()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDataDialog.cs");
 
-        source.Should().Contain("ChartDataDialogPlanner.FromChart(chart)");
-        source.Should().Contain("_planner.BuildTableProjection()");
+        source.Should().Contain("new ChartDataDialogSession(editor)");
+        source.Should().Contain("_session.BuildTableProjection()");
         source.Should().Contain("new ChartRowViewModel(row)");
         source.Should().Contain("MakeEditableHeader(seriesColumn)");
-        source.Should().Contain("_planner.BuildCommitPlan(ReadCategoryEditsFromGrid())");
-        source.Should().Contain("commit.ChartType");
-        source.Should().Contain("_planner.AddSeries()");
-        source.Should().Contain("_planner.AddCategory()");
-        source.Should().Contain("_planner.RemoveSeriesAt(seriesIndex)");
-        source.Should().Contain("_planner.RemoveCategoryAt(categoryIndex)");
-        source.Should().Contain("_planner.MoveCategory(categoryIndex, categoryIndex + delta)");
-        source.Should().Contain("_planner.SwitchRowsAndColumns()");
+        source.Should().Contain("_session.TryApplyEdits(");
+        source.Should().Contain("_session.TryCommit(");
+        source.Should().Contain("_session.AddSeries()");
+        source.Should().Contain("_session.AddCategory()");
+        source.Should().Contain("_session.RemoveActiveSeries()");
+        source.Should().Contain("_session.RemoveActiveCategory()");
+        source.Should().Contain("_session.MoveActiveCategory(delta)");
+        source.Should().Contain("_session.SwitchRowsAndColumns()");
         source.Should().Contain("ChartDataDialogPlanner.FormatCellValue(");
         source.Should().Contain("ChartDataDialogPlanner.ParseCellValue(");
+        source.Should().NotContain("ChartDataDialogPlanner.FromChart(");
+        source.Should().NotContain("_planner.");
+        source.Should().NotContain("ReplaceChartData(");
         source.Should().NotContain("private readonly List<string>       _categories");
         source.Should().NotContain("private readonly List<string>       _seriesNames");
         source.Should().NotContain("private readonly List<List<double?>> _values");
@@ -846,19 +876,28 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [Fact]
-    public void MainWindow_ChartDialogsRespectImportedProtectionPolicy()
+    public void MainWindow_ChartDialogsDelegateImportedProtectionPolicyToSharedLaunchPlanner()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+        var planner = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationDomainDialogLaunchPlanner.cs");
 
-        source.Should().Contain("if (!Editor.CanEditSelectedChartData) return;");
-        source.Should().Contain("if (!Editor.CanEditSelectedChartFormatting) return;");
+        source.Should().Contain(
+            "_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartData)");
+        source.Should().Contain(
+            "_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDisplayOptions)");
+        planner.Should().Contain(
+            "PresentationDomainDialogKind.ChartData => editor.CanEditSelectedChartData");
+        planner.Should().Contain("editor.CanEditSelectedChartFormatting");
     }
 
     [Fact]
     public void MainWindow_ChartProtectionDialogRouteIsAvailableForSelectedCharts()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
-        var ribbon = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
+        var ribbon = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");
 
         source.Should().Contain("OpenChartProtectionOptionsDialog");
         ribbon.Should().Contain("ChartProtectionOptionsPlanner.CommandId");
@@ -1067,24 +1106,6 @@ public sealed class ChartDataDialogTests : IDisposable
             .Should().BeNull("W7: original Feb gap must be null after undo, not 0.0");
     }
 
-    private static string ReadWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var parts = new string[relativeParts.Length + 1];
-            parts[0] = directory.FullName;
-            relativeParts.CopyTo(parts, 1);
-
-            var candidate = Path.Combine(parts);
-            if (File.Exists(candidate))
-                return File.ReadAllText(candidate);
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(
-            "Could not locate workspace file.",
-            Path.Combine(relativeParts));
-    }
+    private static string ReadWorkspaceFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

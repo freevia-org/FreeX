@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 
 namespace Free.Shared.AppServices;
 
@@ -9,6 +10,18 @@ public interface INormalizableApplicationOptions
 {
     /// <summary>Clamps and defaults the option model into its valid runtime shape.</summary>
     void Normalize();
+}
+
+/// <summary>
+/// Common persisted values exposed by the sister apps' basic Options surfaces.
+/// </summary>
+public interface IBasicApplicationOptions : INormalizableApplicationOptions
+{
+    int RecentFilesCap { get; set; }
+
+    string DefaultSaveFormat { get; set; }
+
+    string UiLanguage { get; set; }
 }
 
 /// <summary>
@@ -42,6 +55,22 @@ public static class ApplicationOptionsNormalizer
         cap = 0;
         return false;
     }
+}
+
+/// <summary>
+/// Storage boundary for a normalized application-options model. Production hosts use the JSON-backed
+/// implementation while isolated windows and tests can use the shared in-memory implementation.
+/// </summary>
+public interface IApplicationOptionsStore<T>
+    where T : class, INormalizableApplicationOptions, new()
+{
+    string StorePath { get; }
+
+    string? LastError { get; }
+
+    T Load();
+
+    bool Save(T options);
 }
 
 /// <summary>
@@ -86,7 +115,7 @@ public sealed class NormalizingJsonSettingsStore<T>
 /// Shared facade for app-specific options models. The model stays app-owned; the file name, product-folder
 /// resolution, safe load, normalization, and atomic save ceremony are common to the sister apps.
 /// </summary>
-public sealed class ApplicationOptionsStore<T>
+public sealed class ApplicationOptionsStore<T> : IApplicationOptionsStore<T>
     where T : class, INormalizableApplicationOptions, new()
 {
     public const string DefaultFileName = "settings.json";
@@ -117,4 +146,71 @@ public sealed class ApplicationOptionsStore<T>
 
     /// <summary>Normalizes then atomically saves; returns false (with <see cref="LastError"/>) on failure.</summary>
     public bool Save(T options) => _store.Save(options);
+}
+
+/// <summary>
+/// Process-local application-options storage for isolated hosts and tests. Values use a JSON snapshot so
+/// callers observe the same save/load boundary as the persistent store without creating any files.
+/// </summary>
+public sealed class InMemoryApplicationOptionsStore<T> : IApplicationOptionsStore<T>
+    where T : class, INormalizableApplicationOptions, new()
+{
+    private byte[] _snapshot;
+
+    public InMemoryApplicationOptionsStore(T? initialOptions = null, string? storePath = null)
+    {
+        StorePath = storePath ?? $"in-memory://{typeof(T).Name}/{Guid.NewGuid():N}";
+        var options = initialOptions ?? new T();
+        options.Normalize();
+        _snapshot = JsonSerializer.SerializeToUtf8Bytes(options);
+    }
+
+    public string StorePath { get; }
+
+    public string? LastError { get; private set; }
+
+    public static InMemoryApplicationOptionsStore<T> ForProductFile(
+        IApplicationDataPathProvider? pathProvider = null,
+        string? overridePath = null,
+        string fileName = ApplicationOptionsStore<T>.DefaultFileName) =>
+        new(
+            storePath: JsonSettingsStore<T>
+                .ForProductFile(fileName, pathProvider, overridePath)
+                .StorePath);
+
+    public T Load()
+    {
+        try
+        {
+            var options = JsonSerializer.Deserialize<T>(_snapshot) ?? new T();
+            options.Normalize();
+            LastError = null;
+            return options;
+        }
+        catch (Exception ex)
+        {
+            LastError = $"Failed to load options from memory: {ex.Message}";
+            var options = new T();
+            options.Normalize();
+            return options;
+        }
+    }
+
+    public bool Save(T options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        options.Normalize();
+
+        try
+        {
+            _snapshot = JsonSerializer.SerializeToUtf8Bytes(options);
+            LastError = null;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LastError = $"Failed to save options to memory: {ex.Message}";
+            return false;
+        }
+    }
 }

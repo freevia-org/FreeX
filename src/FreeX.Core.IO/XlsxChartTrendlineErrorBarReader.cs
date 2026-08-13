@@ -186,7 +186,7 @@ internal static class XlsxChartTrendlineErrorBarReader
             return;
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-            chart.TrendlineThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0.5, 10);
+            chart.TrendlineThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0.5, 10);
 
         chart.TrendlineDashStyle = FromXlsxPresetDash(line.Element(DrawingNs + "prstDash")?.Attribute("val")?.Value);
 
@@ -238,7 +238,7 @@ internal static class XlsxChartTrendlineErrorBarReader
             return;
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-            chart.TrendlineLabelBorderThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
+            chart.TrendlineLabelBorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         var lineFill = line.Element(DrawingNs + "solidFill");
         if (lineFill is null)
@@ -308,7 +308,7 @@ internal static class XlsxChartTrendlineErrorBarReader
             return;
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-            setThickness(Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0.5, 10));
+            setThickness(Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0.5, 10));
 
         setDashStyle(FromXlsxPresetDash(line.Element(DrawingNs + "prstDash")?.Attribute("val")?.Value));
 
@@ -362,7 +362,7 @@ internal static class XlsxChartTrendlineErrorBarReader
             return;
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-            setBorderThickness(Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0, 10));
+            setBorderThickness(Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10));
 
         var lineFill = line.Element(DrawingNs + "solidFill");
         if (lineFill is null)

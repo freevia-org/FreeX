@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Free.Shared.AppServices;
+using Free.Shared.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -141,8 +143,10 @@ public static class OleActivationService
 
     public static string ResolveExtension(InlineOleObjectInfo inlineObject)
     {
-        var extension = NormalizeExtension(Path.GetExtension(inlineObject.FileName));
-        if (extension != "bin") return extension;
+        var extension = NormalizeExtension(FilePathPolicy.GetExtensionOrEmpty(inlineObject.FileName));
+        if (extension != "bin")
+            return extension;
+
         return inlineObject.ClassName?.Trim().ToLowerInvariant() switch
         {
             "excel.sheet.12" => "xlsx", "excel.sheetmacroenabled.12" => "xlsm", "excel.sheet.8" => "xls",
@@ -184,11 +188,18 @@ public static class OleActivationService
         {
             var root = Path.Combine(Path.GetTempPath(), "FreeP", "Ole");
             CleanupStale(root);
-            var directory = Path.Combine(root, Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(directory);
-            var path = Path.Combine(directory, plan.FileName);
-            File.WriteAllBytes(path, plan.Payload);
-            return new DefaultTempFile(path, directory);
+            var directory = TemporaryDirectoryLease.Create(string.Empty, root);
+            try
+            {
+                var path = Path.Combine(directory.Path, plan.FileName);
+                File.WriteAllBytes(path, plan.Payload);
+                return new DefaultTempFile(path, directory);
+            }
+            catch
+            {
+                directory.Dispose();
+                throw;
+            }
         }
 
         private static void CleanupStale(string root)
@@ -212,30 +223,20 @@ public static class OleActivationService
 
     private sealed class DefaultTempFile : IOleActivationTempFile
     {
-        private readonly string _directory;
-        public DefaultTempFile(string path, string directory) { Path = path; _directory = directory; }
+        private readonly TemporaryDirectoryLease _directory;
+        public DefaultTempFile(string path, TemporaryDirectoryLease directory) { Path = path; _directory = directory; }
         public string Path { get; }
         public byte[] ReadAllBytes() => File.ReadAllBytes(Path);
-        public void Dispose() { try { Directory.Delete(_directory, true); } catch { } }
+        public void Dispose() => _directory.Dispose();
     }
 
     private sealed class DefaultLauncher : IOleActivationLauncher
     {
         public IOleActivationProcess Launch(string path)
         {
-            var info = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-                ? new ProcessStartInfo { FileName = path, UseShellExecute = true }
-                : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-                    ? new ProcessStartInfo { FileName = "open", UseShellExecute = false }
-                : new ProcessStartInfo
-                {
-                    FileName = "xdg-open",
-                    UseShellExecute = false,
-                };
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                info.ArgumentList.Add("-W");
-            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                info.ArgumentList.Add(path);
+            var info = DesktopPathLauncher.CreateOpenFileProcessStartInfo(
+                path,
+                waitForApplicationExit: RuntimeInformation.IsOSPlatform(OSPlatform.OSX));
             var process = Process.Start(info) ?? throw new InvalidOperationException("The host OS file service did not start.");
             return new DefaultProcess(
                 process,

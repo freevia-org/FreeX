@@ -10,9 +10,3 @@ public sealed record Theme(
     ThemeTypography Typography,
     ThemeMetrics Metrics,
     string IconSetId);
-
-/// <summary>Optional: supply the active theme dynamically.</summary>
-public interface IThemeProvider
-{
-    Theme Current { get; }
-}

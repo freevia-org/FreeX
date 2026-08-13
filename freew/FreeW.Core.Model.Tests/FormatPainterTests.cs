@@ -2,6 +2,13 @@ namespace FreeW.Core.Model.Tests;
 
 public class FormatPainterTests
 {
+    private sealed class ManualTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = now;
+
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     private static RunFormatting SourceRun() => new()
     {
         Bold = true,
@@ -99,5 +106,32 @@ public class FormatPainterTests
 
         clipboard.Run.Should().Be(run);
         clipboard.Paragraph.Should().Be(paragraph);
+    }
+
+    [Fact]
+    public void ActivationSession_UsesInjectedClockForDoubleClickBoundary()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-08-06T10:00:00Z"));
+        var session = new FormatPainterActivationSession(clock);
+
+        session.Activate().Should().BeFalse();
+        clock.Now += TimeSpan.FromMilliseconds(500);
+        session.Activate().Should().BeTrue();
+        clock.Now += TimeSpan.FromMilliseconds(501);
+        session.Activate().Should().BeFalse();
+    }
+
+    [Fact]
+    public void ActivationSession_ResetAndBackwardClockMovementStartNewGesture()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-08-06T10:00:00Z"));
+        var session = new FormatPainterActivationSession(clock);
+
+        session.Activate().Should().BeFalse();
+        clock.Now -= TimeSpan.FromSeconds(1);
+        session.Activate().Should().BeFalse();
+        clock.Now += TimeSpan.FromMilliseconds(100);
+        session.Reset();
+        session.Activate().Should().BeFalse();
     }
 }

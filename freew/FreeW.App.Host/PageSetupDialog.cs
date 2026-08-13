@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -22,37 +23,15 @@ namespace FreeW.App.Host;
 /// </list>
 ///
 /// <para>
-/// The dialog only produces a <see cref="Result"/>; the ribbon command applies it through
+/// The dialog only produces a <see cref="PageSetupDialogResult"/>; the ribbon command applies it through
 /// <see cref="FreeW.App.Host.Editing.DocumentView.ApplyPageSettings"/> — the same single commit + re-render path
 /// every other FreeW page-setup command uses — so all the edited values round-trip through the existing w:sectPr /
 /// settings.xml writers (pgSz, pgMar gutter/header/footer, vAlign, titlePg, mirrorMargins, evenAndOddHeaders).
 /// Measurements are shown in points, matching FreeW's other page-setup dialogs (Columns, Hyphenation Options).
 /// </para>
 /// </summary>
-internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPageSetupDialogControlSource
 {
-    /// <summary>Which paper-size tab the dialog should open on (Margins by default).</summary>
-    internal enum Tab { Margins, Paper, Layout }
-
-    /// <summary>The settings the dialog produces, applied onto the active section's <see cref="PageSettings"/>.</summary>
-    internal sealed record Result(
-        double MarginTopPt,
-        double MarginBottomPt,
-        double MarginLeftPt,
-        double MarginRightPt,
-        double GutterPt,
-        bool GutterAtTop,
-        bool Landscape,
-        bool MirrorMargins,
-        double WidthPt,
-        double HeightPt,
-        SectionBreakKind SectionStart,
-        bool DifferentFirstPage,
-        bool DifferentOddEvenPages,
-        double HeaderDistancePt,
-        double FooterDistancePt,
-        PageVerticalAlignment VerticalAlignment);
-
     // Margins tab.
     private readonly TextBox _top;
     private readonly TextBox _bottom;
@@ -79,35 +58,38 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ComboBox _vAlign;
 
     private readonly Window? _owner;
-    private Result? _result;
-    private bool _lineNumbersRequested;
-    private bool _bordersRequested;
+    private readonly PageSetupDialogSession _session;
+    private PageSetupDialogResult? _result;
+    private PageSetupDialogFollowUp _acceptedFollowUp;
 
     /// <summary>True when the user clicked the Line Numbers… launcher and accepted the dialog.</summary>
-    public bool LineNumbersRequested => _lineNumbersRequested;
+    public bool LineNumbersRequested => _acceptedFollowUp == PageSetupDialogFollowUp.LineNumbers;
 
     /// <summary>True when the user clicked the Borders… launcher and accepted the dialog.</summary>
-    public bool BordersRequested => _bordersRequested;
+    public bool BordersRequested => _acceptedFollowUp == PageSetupDialogFollowUp.Borders;
 
-    private PageSetupDialog(Window? owner, PageSettings page, SectionBreakKind sectionStart, Tab initialTab)
+    private PageSetupDialog(
+        Window? owner,
+        PageSettings page,
+        SectionBreakKind sectionStart,
+        PageSetupDialogTabKind initialTab)
     {
         var metrics = PageSetupDialogPlanner.PresentationMetrics;
-        var validation = metrics.Validation;
+        var surface = PageSetupDialogPlanner.Surface;
         _owner = owner;
         Owner = owner;
-        Title = PageSetupDialogPlanner.Title;
+        Title = surface.Title;
         Width = metrics.WindowWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var state = PageSetupDialogPlanner.BuildInitialState(
+        _session = PageSetupDialogPlanner.CreateSession(
             page,
             sectionStart,
-            PageSetupDialogPlanner.HostPaperOptions,
-            validation.GeometryMode,
             CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
 
         _top = NumberBox(state.MarginTopText);
         _bottom = NumberBox(state.MarginBottomText);
@@ -121,22 +103,26 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _width = NumberBox(state.WidthText);
         _height = NumberBox(state.HeightText);
-        _paperSize = Combo(PageSetupDialogPlanner.HostPaperOptions.Select(p => p.HostLabel).ToArray(), state.PaperSizeIndex);
+        _paperSize = Combo(_session.PaperOptions.Select(p => p.HostLabel).ToArray(), state.PaperSizeIndex);
+        ApplyEnabledState(_session.EnabledState);
         _paperSize.SelectionChanged += (_, _) => ApplyPaperPreset();
         _width.TextChanged += (_, _) => SyncPaperToCustom();
         _height.TextChanged += (_, _) => SyncPaperToCustom();
 
         _sectionStart = Combo(PageSetupDialogPlanner.SectionStartNames.ToArray(), state.SectionStartIndex);
-        _differentFirstPage = new CheckBox { Content = PageSetupDialogPlanner.DifferentFirstPageLabel, IsChecked = state.DifferentFirstPage };
-        _differentOddEven = new CheckBox { Content = PageSetupDialogPlanner.DifferentOddEvenLabel, IsChecked = state.DifferentOddEvenPages, Margin = ToThickness(metrics.SecondCheckMargin) };
+        _differentFirstPage = new CheckBox { Content = surface.LayoutToggles[0].Label, IsChecked = state.DifferentFirstPage };
+        _differentOddEven = new CheckBox { Content = surface.LayoutToggles[1].Label, IsChecked = state.DifferentOddEvenPages, Margin = ToThickness(metrics.SecondCheckMargin) };
         _headerDistance = NumberBox(state.HeaderDistanceText);
         _footerDistance = NumberBox(state.FooterDistanceText);
         _vAlign = Combo(PageSetupDialogPlanner.VerticalAlignmentNames.ToArray(), state.VerticalAlignmentIndex);
 
         var tabs = new TabControl { Margin = ToThickness(metrics.TabMargin) };
-        tabs.Items.Add(new TabItem { Header = metrics.TabNames[0], Content = BuildMarginsTab() });
-        tabs.Items.Add(new TabItem { Header = metrics.TabNames[1], Content = BuildPaperTab() });
-        tabs.Items.Add(new TabItem { Header = metrics.TabNames[2], Content = BuildLayoutTab() });
+        foreach (var tabSpec in surface.Tabs)
+        {
+            var tab = new TabItem { Header = tabSpec.Header, Content = BuildTab(tabSpec) };
+            AutomationProperties.SetAutomationId(tab, tabSpec.AutomationId);
+            tabs.Items.Add(tab);
+        }
         tabs.SelectedIndex = (int)initialTab;
 
         // Reuse the shared OK/Cancel button row (accelerators, automation names, shell strings; Cancel is
@@ -149,70 +135,62 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         root.Children.Add(tabs);
         Content = root;
 
-        DialogFocus.FocusAndSelect(_top);
+        ApplyFocus(_session.InitialFocusPlan);
     }
 
-    private UIElement BuildMarginsTab()
+    private UIElement BuildTab(PageSetupDialogTabSpec tab)
     {
-        var grid = TwoColumnGrid(8);
-        AddRow(grid, 0, PageSetupDialogPlanner.TopMarginLabel, _top);
-        AddRow(grid, 1, PageSetupDialogPlanner.BottomMarginLabel, _bottom);
-        AddRow(grid, 2, PageSetupDialogPlanner.LeftMarginLabel, _left);
-        AddRow(grid, 3, PageSetupDialogPlanner.RightMarginLabel, _right);
-        AddRow(grid, 4, PageSetupDialogPlanner.GutterLabel, _gutter);
-        AddRow(grid, 5, PageSetupDialogPlanner.GutterPositionLabel, _gutterPosition);
-        AddRow(grid, 6, PageSetupDialogPlanner.OrientationLabel, _orientation);
-        AddRow(grid, 7, PageSetupDialogPlanner.MultiplePagesLabel, _multiplePages);
-        // "Apply to" is shown on every tab in Word; here it lives at the foot of the Margins tab.
-        var applyGrid = TwoColumnGrid(1);
-        AddRow(applyGrid, 0, PageSetupDialogPlanner.ApplyToLabel, _applyTo);
-        var stack = new StackPanel { Margin = ToThickness(PageSetupDialogPlanner.PresentationMetrics.TabContentMargin) };
-        stack.Children.Add(grid);
-        stack.Children.Add(applyGrid);
-        return stack;
-    }
-
-    private UIElement BuildPaperTab()
-    {
-        var grid = TwoColumnGrid(3);
-        AddRow(grid, 0, PageSetupDialogPlanner.PaperSizeLabel, _paperSize);
-        AddRow(grid, 1, PageSetupDialogPlanner.CustomWidthLabel, _width);
-        AddRow(grid, 2, PageSetupDialogPlanner.CustomHeightLabel, _height);
-        return new StackPanel { Margin = ToThickness(PageSetupDialogPlanner.PresentationMetrics.TabContentMargin), Children = { grid } };
-    }
-
-    private UIElement BuildLayoutTab()
-    {
-        var grid = TwoColumnGrid(4);
-        AddRow(grid, 0, PageSetupDialogPlanner.SectionStartLabel, _sectionStart);
-        AddRow(grid, 1, PageSetupDialogPlanner.VerticalAlignmentLabel, _vAlign);
-        AddRow(grid, 2, PageSetupDialogPlanner.HeaderDistanceLabel, _headerDistance);
-        AddRow(grid, 3, PageSetupDialogPlanner.FooterDistanceLabel, _footerDistance);
-
+        var grid = TwoColumnGrid(tab.Rows.Count);
+        for (var index = 0; index < tab.Rows.Count; index++)
+            AddRow(grid, index, tab.Rows[index].Label, ControlFor(tab.Rows[index].Kind));
         var metrics = PageSetupDialogPlanner.PresentationMetrics;
+        var stack = new StackPanel { Margin = ToThickness(metrics.TabContentMargin) };
+        stack.Children.Add(grid);
+        if (tab.Kind != PageSetupDialogTabKind.Layout)
+            return stack;
+
         var checks = new StackPanel { Margin = new Thickness(0, metrics.CheckGroupTopSpacing, 0, 0) };
         checks.Children.Add(_differentFirstPage);
         checks.Children.Add(_differentOddEven);
+        stack.Children.Add(checks);
 
-        // Line Numbers… / Borders… launchers, matching Word's Layout tab. Each sets a flag and accepts the
-        // dialog so the ribbon command can open the corresponding existing FreeW feature afterwards.
-        var lineNumbers = new Button { Content = "_" + PageSetupDialogPlanner.LineNumbersLabel, MinWidth = metrics.LauncherButtonWidth, Margin = new Thickness(0, 0, metrics.LauncherSpacing, 0) };
-        lineNumbers.Click += (_, _) => { _lineNumbersRequested = true; Accept(); };
-        var borders = new Button { Content = "_" + PageSetupDialogPlanner.BordersLabel, MinWidth = metrics.LauncherButtonWidth };
-        borders.Click += (_, _) => { _bordersRequested = true; Accept(); };
         var launchers = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, metrics.LauncherTopSpacing, 0, 0),
-            Children = { lineNumbers, borders }
         };
-
-        var stack = new StackPanel { Margin = ToThickness(metrics.TabContentMargin) };
-        stack.Children.Add(grid);
-        stack.Children.Add(checks);
+        foreach (var launcher in PageSetupDialogPlanner.Surface.LayoutLaunchers)
+        {
+            var button = new Button { Content = "_" + launcher.Label, MinWidth = metrics.LauncherButtonWidth };
+            if (launchers.Children.Count == 0)
+                button.Margin = new Thickness(0, 0, metrics.LauncherSpacing, 0);
+            button.Click += (_, _) => Accept(launcher.FollowUp);
+            launchers.Children.Add(button);
+        }
         stack.Children.Add(launchers);
         return stack;
     }
+
+    private UIElement ControlFor(PageSetupDialogControlKind kind) => kind switch
+    {
+        PageSetupDialogControlKind.MarginTop => _top,
+        PageSetupDialogControlKind.MarginBottom => _bottom,
+        PageSetupDialogControlKind.MarginLeft => _left,
+        PageSetupDialogControlKind.MarginRight => _right,
+        PageSetupDialogControlKind.Gutter => _gutter,
+        PageSetupDialogControlKind.GutterPosition => _gutterPosition,
+        PageSetupDialogControlKind.Orientation => _orientation,
+        PageSetupDialogControlKind.MultiplePages => _multiplePages,
+        PageSetupDialogControlKind.ApplyTo => _applyTo,
+        PageSetupDialogControlKind.PaperSize => _paperSize,
+        PageSetupDialogControlKind.PageWidth => _width,
+        PageSetupDialogControlKind.PageHeight => _height,
+        PageSetupDialogControlKind.SectionStart => _sectionStart,
+        PageSetupDialogControlKind.VerticalAlignment => _vAlign,
+        PageSetupDialogControlKind.HeaderDistance => _headerDistance,
+        PageSetupDialogControlKind.FooterDistance => _footerDistance,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
 
     private static Grid TwoColumnGrid(int rows)
     {
@@ -271,17 +249,7 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // Fills width/height from the chosen named preset (Custom leaves them as typed).
     private void ApplyPaperPreset()
     {
-        var preset = PageSetupDialogPlanner.ApplyPaperPreset(
-            PageSetupDialogPlanner.HostPaperOptions,
-            _paperSize.SelectedIndex,
-            CultureInfo.CurrentCulture);
-        if (preset is null)
-            return;
-
-        _suppressPaperSync = true;
-        _width.Text = preset.Value.WidthText;
-        _height.Text = preset.Value.HeightText;
-        _suppressPaperSync = false;
+        ApplyPaperProjection(_session.PlanPaperSelection(_paperSize.SelectedIndex));
     }
 
     // When the user edits width/height by hand, switch the dropdown to "Custom" (unless a preset was just applied).
@@ -289,109 +257,95 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         if (_suppressPaperSync)
             return;
-        if (TryParse(_width.Text, out var w) && TryParse(_height.Text, out var h))
-            _paperSize.SelectedIndex = PageSetupDialogPlanner.PaperIndexFor(PageSetupDialogPlanner.HostPaperOptions, w, h);
+
+        var plan = _session.PlanDimensionEdit(_width.Text, _height.Text, _paperSize.SelectedIndex);
+        ApplyEnabledState(plan.EnabledState);
+        if (plan.UpdatePaperSize)
+            _paperSize.SelectedIndex = plan.PaperSizeIndex;
     }
 
     private void Accept()
     {
-        var validation = PageSetupDialogPlanner.PresentationMetrics.Validation;
-        var input = new PageSetupDialogInput(
-            MarginTopText: _top.Text,
-            MarginBottomText: _bottom.Text,
-            MarginLeftText: _left.Text,
-            MarginRightText: _right.Text,
-            GutterText: _gutter.Text,
-            OrientationIndex: _orientation.SelectedIndex,
-            MultiplePagesIndex: _multiplePages.SelectedIndex,
-            WidthText: _width.Text,
-            HeightText: _height.Text,
-            PaperSizeIndex: _paperSize.SelectedIndex,
-            SectionStartIndex: _sectionStart.SelectedIndex,
-            DifferentFirstPage: _differentFirstPage.IsChecked == true,
-            DifferentOddEvenPages: _differentOddEven.IsChecked == true,
-            HeaderDistanceText: _headerDistance.Text,
-            FooterDistanceText: _footerDistance.Text,
-            VerticalAlignmentIndex: _vAlign.SelectedIndex,
-            UseSelectedPaperPreset: validation.UseSelectedPaperPreset,
-            GeometryMode: validation.GeometryMode,
-            ValidationProfile: validation.ValidationProfile,
-            GutterPositionIndex: _gutterPosition.SelectedIndex);
+        Accept(PageSetupDialogFollowUp.None);
+    }
 
-        if (!PageSetupDialogPlanner.TryBuildResult(
-                input,
-                PageSetupDialogPlanner.HostPaperOptions,
-                CultureInfo.CurrentCulture,
-                out var planned,
-                out var error))
+    private void Accept(PageSetupDialogFollowUp followUp)
+    {
+        var acceptance = _session.PlanAcceptance(this, followUp);
+        if (!acceptance.IsAccepted)
         {
-            DialogMessageHelper.ShowWarning(this, error ?? validation.Message);
+            DialogMessageHelper.ShowWarning(this, acceptance.ErrorMessage!);
+            ApplyFocus(acceptance.FocusPlan!);
             return;
         }
 
-        _result = ToHostResult(planned!);
+        _result = acceptance.Result!;
+        _acceptedFollowUp = acceptance.FollowUp;
         Close();
     }
 
-    private static bool TryParse(string text, out double value) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value);
+    private void ApplyFocus(PageSetupDialogFocusPlan plan)
+    {
+        var target = plan.Field switch
+        {
+            PageSetupDialogField.MarginTop => _top,
+            PageSetupDialogField.MarginBottom => _bottom,
+            PageSetupDialogField.MarginLeft => _left,
+            PageSetupDialogField.MarginRight => _right,
+            PageSetupDialogField.Gutter => _gutter,
+            PageSetupDialogField.PageWidth => _width,
+            PageSetupDialogField.PageHeight => _height,
+            PageSetupDialogField.HeaderDistance => _headerDistance,
+            PageSetupDialogField.FooterDistance => _footerDistance,
+            _ => _top,
+        };
+
+        if (plan.SelectAllOnFocus)
+            DialogFocus.FocusAndSelect(target);
+        else
+            DialogFocus.Focus(target);
+    }
+
+    private void ApplyPaperProjection(PageSetupPaperSelectionPlan plan)
+    {
+        ApplyEnabledState(plan.EnabledState);
+        if (!plan.UpdateDimensions)
+            return;
+
+        _suppressPaperSync = true;
+        _width.Text = plan.WidthText!;
+        _height.Text = plan.HeightText!;
+        _suppressPaperSync = false;
+    }
+
+    private void ApplyEnabledState(PageSetupDialogEnabledState state)
+    {
+        _width.IsEnabled = state.WidthEnabled;
+        _height.IsEnabled = state.HeightEnabled;
+    }
 
     private static Thickness ToThickness(PageSetupDialogThickness value) =>
         new(value.Left, value.Top, value.Right, value.Bottom);
 
-    private static Result ToHostResult(PageSetupDialogResult result) => new(
-        MarginTopPt: result.MarginTopPt,
-        MarginBottomPt: result.MarginBottomPt,
-        MarginLeftPt: result.MarginLeftPt,
-        MarginRightPt: result.MarginRightPt,
-        GutterPt: result.GutterPt,
-        GutterAtTop: result.GutterAtTop,
-        Landscape: result.Landscape,
-        MirrorMargins: result.MirrorMargins,
-        WidthPt: result.WidthPt,
-        HeightPt: result.HeightPt,
-        SectionStart: result.SectionStart,
-        DifferentFirstPage: result.DifferentFirstPage,
-        DifferentOddEvenPages: result.DifferentOddEvenPages,
-        HeaderDistancePt: result.HeaderDistancePt,
-        FooterDistancePt: result.FooterDistancePt,
-        VerticalAlignment: result.VerticalAlignment);
+    internal static PageSetupDialogResult ToPresentationResult(PageSetupDialogResult result) => result;
 
-    internal static PageSetupDialogResult ToPresentationResult(Result result) => new(
-        MarginTopPt: result.MarginTopPt,
-        MarginBottomPt: result.MarginBottomPt,
-        MarginLeftPt: result.MarginLeftPt,
-        MarginRightPt: result.MarginRightPt,
-        GutterPt: result.GutterPt,
-        GutterAtTop: result.GutterAtTop,
-        Landscape: result.Landscape,
-        MirrorMargins: result.MirrorMargins,
-        WidthPt: result.WidthPt,
-        HeightPt: result.HeightPt,
-        SectionStart: result.SectionStart,
-        DifferentFirstPage: result.DifferentFirstPage,
-        DifferentOddEvenPages: result.DifferentOddEvenPages,
-        HeaderDistancePt: result.HeaderDistancePt,
-        FooterDistancePt: result.FooterDistancePt,
-        VerticalAlignment: result.VerticalAlignment);
-
-    /// <summary>
-    /// Test seam: builds a non-modal dialog instance seeded from <paramref name="page"/> so unit tests can
-    /// exercise the control wiring (seeding, the paper-preset / orientation mapping) without a modal loop.
-    /// </summary>
-    internal static PageSetupDialog CreateForTest(PageSettings page, Tab initialTab = Tab.Margins) =>
-        new(owner: null, page, SectionBreakKind.NextPage, initialTab);
-
-    /// <summary>
-    /// Test seam: validates the current control values and returns the <see cref="Result"/> they describe
-    /// (or null when validation fails), without closing the window — the same mapping <see cref="Accept"/>
-    /// performs.
-    /// </summary>
-    internal Result? AcceptForTest()
-    {
-        Accept();
-        return _result;
-    }
+    string? IPageSetupDialogControlSource.MarginTopText => _top.Text;
+    string? IPageSetupDialogControlSource.MarginBottomText => _bottom.Text;
+    string? IPageSetupDialogControlSource.MarginLeftText => _left.Text;
+    string? IPageSetupDialogControlSource.MarginRightText => _right.Text;
+    string? IPageSetupDialogControlSource.GutterText => _gutter.Text;
+    int IPageSetupDialogControlSource.GutterPositionIndex => _gutterPosition.SelectedIndex;
+    int IPageSetupDialogControlSource.OrientationIndex => _orientation.SelectedIndex;
+    int IPageSetupDialogControlSource.MultiplePagesIndex => _multiplePages.SelectedIndex;
+    string? IPageSetupDialogControlSource.WidthText => _width.Text;
+    string? IPageSetupDialogControlSource.HeightText => _height.Text;
+    int IPageSetupDialogControlSource.PaperSizeIndex => _paperSize.SelectedIndex;
+    int IPageSetupDialogControlSource.SectionStartIndex => _sectionStart.SelectedIndex;
+    bool IPageSetupDialogControlSource.DifferentFirstPage => _differentFirstPage.IsChecked == true;
+    bool IPageSetupDialogControlSource.DifferentOddEvenPages => _differentOddEven.IsChecked == true;
+    string? IPageSetupDialogControlSource.HeaderDistanceText => _headerDistance.Text;
+    string? IPageSetupDialogControlSource.FooterDistanceText => _footerDistance.Text;
+    int IPageSetupDialogControlSource.VerticalAlignmentIndex => _vAlign.SelectedIndex;
 
     /// <summary>
     /// Show the Page Setup dialog seeded with the active section's <paramref name="page"/> settings (and its
@@ -399,8 +353,11 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     /// settings plus the dialog instance (so the caller can inspect the Line Numbers… / Borders… launcher
     /// flags), or null if cancelled.
     /// </summary>
-    public static (Result Settings, bool LineNumbers, bool Borders)? Prompt(
-        Window? owner, PageSettings page, SectionBreakKind sectionStart = SectionBreakKind.NextPage, Tab initialTab = Tab.Margins)
+    public static (PageSetupDialogResult Settings, bool LineNumbers, bool Borders)? Prompt(
+        Window? owner,
+        PageSettings page,
+        SectionBreakKind sectionStart = SectionBreakKind.NextPage,
+        PageSetupDialogTabKind initialTab = PageSetupDialogTabKind.Margins)
     {
         var dialog = new PageSetupDialog(owner, page, sectionStart, initialTab);
         dialog.ShowDialog();

@@ -5,6 +5,14 @@ namespace FreeW.App.Presentation.Dialogs;
 
 public sealed record ColumnsDialogPreset(string Label, int ColumnCount, bool UsesUnequalWidths);
 
+public enum ColumnsDialogField
+{
+    Preset,
+    Count,
+    Spacing,
+    LineBetween,
+}
+
 public sealed record ColumnsDialogInitialState(
     int PresetIndex,
     string CountText,
@@ -34,6 +42,23 @@ public static class ColumnsDialogPlanner
     public const string LineBetweenLabel = "Line between";
     public const string ValidationMessage =
         "Enter 1-12 columns and a non-negative spacing in points.";
+    public const string AutomationId = "ColumnsDialog";
+    public const string PresetAutomationId = "ColumnsPreset";
+    public const string CountAutomationId = "ColumnsCount";
+    public const string SpacingAutomationId = "ColumnsSpacing";
+    public const string LineBetweenAutomationId = "ColumnsLineBetween";
+
+    public static DialogSurfaceSpec<ColumnsDialogField> Surface { get; } = new(
+        Title,
+        AutomationId,
+        Title,
+        [
+            new(ColumnsDialogField.Preset, PresetsLabel, PresetAutomationId, "Column preset"),
+            new(ColumnsDialogField.Count, CountLabel, CountAutomationId, "Number of columns"),
+            new(ColumnsDialogField.Spacing, SpacingLabel, SpacingAutomationId, "Column spacing"),
+            new(ColumnsDialogField.LineBetween, LineBetweenLabel, LineBetweenAutomationId, "Line between columns"),
+        ],
+        ValidationAutomationId: "ColumnsValidationMessage");
 
     public static readonly IReadOnlyList<ColumnsDialogPreset> Presets =
     [
@@ -58,8 +83,8 @@ public static class ColumnsDialogPlanner
 
         return new ColumnsDialogInitialState(
             PresetIndex: PresetIndexFor(page),
-            CountText: FormatPoints(Math.Max(1, page.ColumnCount), culture),
-            SpacingText: FormatPoints(page.ColumnSpacingPt, culture),
+            CountText: DialogNumericTextPolicy.FormatPoints(Math.Max(1, page.ColumnCount), culture),
+            SpacingText: DialogNumericTextPolicy.FormatPoints(page.ColumnSpacingPt, culture),
             LineBetween: page.ColumnsLineBetween,
             ContentWidthPt: ContentWidthFor(page));
     }
@@ -90,7 +115,7 @@ public static class ColumnsDialogPlanner
         errorMessage = null;
 
         if (!TryParseCount(input.CountText, culture, out var count) ||
-            !TryParseSpacing(input.SpacingText, culture, out var spacing))
+            !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.SpacingText, culture, out var spacing))
         {
             errorMessage = ValidationMessage;
             return false;
@@ -123,21 +148,10 @@ public static class ColumnsDialogPlanner
         return Math.Max(MinimumContentWidthPt, page.WidthPt - page.MarginLeftPt - page.MarginRightPt);
     }
 
-    public static string FormatPoints(double value, CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-        return value.ToString("0.##", culture);
-    }
-
     private static bool TryParseCount(string? text, CultureInfo culture, out int value)
     {
         var t = (text ?? string.Empty).Trim();
         return int.TryParse(t, NumberStyles.Integer, culture, out value) && value is >= 1 and <= 12;
     }
 
-    private static bool TryParseSpacing(string? text, CultureInfo culture, out double value)
-    {
-        var t = (text ?? string.Empty).Trim();
-        return double.TryParse(t, NumberStyles.Float, culture, out value) && value >= 0;
-    }
 }

@@ -18,7 +18,6 @@ public partial class MainWindow : IAutosaveWorkbookSource
     private readonly Guid _autosaveWindowId = Guid.NewGuid();
     private AutosaveService? _autosaveService;
     private DispatcherTimer? _autosaveTimer;
-    private string _autosaveSnapshotId = string.Empty;
 
     // ── IAutosaveWorkbookSource ───────────────────────────────────────────────
 
@@ -42,15 +41,8 @@ public partial class MainWindow : IAutosaveWorkbookSource
         // (e.g. on startup and crash-recovery paths). The registry IndexOf returns -1 before
         // the Loaded handler fires, which previously caused all windows to share "w0" and
         // overwrite each other's autosave.
-        // Include the per-launch GUID so a recycled OS PID never clobbers a prior session's
-        // unrecovered snapshot. The GUID is stable for the lifetime of this process.
-        var launchTag = AutosaveSnapshotStore.LaunchId.ToString("N")[..8];
-        var windowTag = _autosaveWindowId.ToString("N")[..8];
-        _autosaveSnapshotId = FormattableString.Invariant(
-            $"recovery-{Environment.ProcessId}-{launchTag}-{windowTag}");
-
         _autosaveService = service;
-        _autosaveService.Attach(this, _autosaveSnapshotId);
+        _autosaveService.Attach(this, _autosaveWindowId);
 
         _autosaveTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
         {

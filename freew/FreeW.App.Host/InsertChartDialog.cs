@@ -25,49 +25,54 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // ── Constructor ──────────────────────────────────────────────────────────────────────────────
     private InsertChartDialog(Window? owner, Chart? seed)
     {
+        var surface = InsertChartDialogPlanner.BuildSurface(UiText.Get);
         Owner = owner;
-        Title = "Insert Chart";
+        Title = surface.Title;
         Width = 500;
         MinHeight = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         var state = InsertChartDialogPlanner.BuildInitialState(seed, CultureInfo.CurrentCulture);
 
         var panel = new StackPanel { Margin = new Thickness(14) };
 
         // ── Chart type picker ────────────────────────────────────────────────────────────────────
-        panel.Children.Add(new TextBlock { Text = "Chart type:", Margin = new Thickness(0, 0, 0, 4) });
+        panel.Children.Add(new TextBlock { Text = surface.Field(InsertChartDialogField.ChartType).Label, Margin = new Thickness(0, 0, 0, 4) });
         _kindBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
         foreach (ChartKind kind in Enum.GetValues<ChartKind>())
             _kindBox.Items.Add(kind.ToString());
         _kindBox.SelectedItem = state.Kind.ToString();
+        WpfDialogSurfaceSemantics.Apply(_kindBox, surface.Field(InsertChartDialogField.ChartType));
         panel.Children.Add(_kindBox);
 
         // ── Chart title ──────────────────────────────────────────────────────────────────────────
-        panel.Children.Add(new TextBlock { Text = "Title (optional):", Margin = new Thickness(0, 0, 0, 4) });
+        panel.Children.Add(new TextBlock { Text = surface.Field(InsertChartDialogField.Title).Label, Margin = new Thickness(0, 0, 0, 4) });
         _titleBox = new TextBox
         {
             Text = state.Title,
             Margin = new Thickness(0, 0, 0, 10)
         };
+        WpfDialogSurfaceSemantics.Apply(_titleBox, surface.Field(InsertChartDialogField.Title));
         panel.Children.Add(_titleBox);
 
         // ── Data grid ────────────────────────────────────────────────────────────────────────────
         panel.Children.Add(new TextBlock
         {
-            Text = "Chart data  (first column = category labels, remaining columns = series values):",
+            Text = surface.Field(InsertChartDialogField.Data).Label,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 4)
         });
 
         _dataGrid = BuildDataGrid(state);
+        WpfDialogSurfaceSemantics.Apply(_dataGrid, surface.Field(InsertChartDialogField.Data));
         panel.Children.Add(_dataGrid);
 
         // ── OK / Cancel ──────────────────────────────────────────────────────────────────────────
-        var actionPlans = InsertChartDialogPlanner.ActionButtons;
+        var actionPlans = InsertChartDialogPlanner.BuildActionButtons(UiText.Get);
         var buttons = DialogButtonRowFactory.Create(
             Accept,
             buttonWidth: 72,
@@ -102,7 +107,7 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // Category column
         grid.Columns.Add(new DataGridTextColumn
         {
-            Header = "Category",
+            Header = InsertChartDialogPlanner.ResolveText(UiText.Get).CategoryColumnHeader,
             Binding = new System.Windows.Data.Binding("Category") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged },
             Width = 100
         });
@@ -137,10 +142,13 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 seriesNames,
                 rows.Select(row => new InsertChartDialogRow(row.Category, row.SeriesValues)),
                 CultureInfo.CurrentCulture,
+                UiText.Get,
                 out var chart,
                 out var errorMessage))
         {
-            DialogMessageHelper.ShowWarning(this, errorMessage ?? InsertChartDialogPlanner.EmptyRowsValidationMessage);
+            DialogMessageHelper.ShowWarning(
+                this,
+                errorMessage ?? InsertChartDialogPlanner.ResolveText(UiText.Get).EmptyRowsValidationMessage);
             return;
         }
 

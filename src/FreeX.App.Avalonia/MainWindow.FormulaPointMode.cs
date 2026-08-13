@@ -10,47 +10,32 @@ public sealed partial class MainWindow
 {
     public string WorkbookName => _session.Workbook.Name;
 
-    public bool HasActiveFormulaPointMode =>
-        GetFormulaRangeEntryEditor() is not null &&
-        _formulaRangeEntryMode &&
-        _session.FormulaEditAddress is not null;
+    public bool HasActiveFormulaPointMode => _formulaRangeEditingSession.IsPointModeActive(
+        GetFormulaRangeEntryEditor() is not null,
+        _session.FormulaEditAddress is not null);
 
-    public bool AcceptFormulaPointModeSelection(
-        FormulaPointModeSelection selection,
-        bool append,
-        bool extendSelection)
-    {
-        if (!HasActiveFormulaPointMode)
-            return false;
-
-        var externalWorkbookName = selection.WorkbookId == _session.Workbook.Id
-            ? null
-            : selection.WorkbookName;
-        if (append)
-        {
-            return TryAppendDisjointFormulaPointRange(
-                selection.Range,
-                selection.SheetName,
-                externalWorkbookName);
-        }
-
-        return TryApplyFormulaRangeSelection(
-            selection.Range,
-            selection.Range.Start,
-            selection.Range.End,
-            selection.SheetName,
-            externalWorkbookName);
-    }
+    public bool AcceptFormulaPointModeSelection(FormulaPointModeEditSelection selection) =>
+        _formulaRangeEditingSession.TryApplyPointModeSelection(
+            selection,
+            GetFormulaRangeEntryEditor() is not null,
+            _session.FormulaEditAddress is not null,
+            append => TryAppendDisjointFormulaPointRange(
+                append.Range,
+                append.SheetName,
+                append.ExternalWorkbookName),
+            replace => TryApplyFormulaRangeSelection(
+                replace.Range,
+                replace.Range.Start,
+                replace.Range.End,
+                replace.SheetName,
+                replace.ExternalWorkbookName));
 
     public void ShowFormulaPointModeSourceSelection(GridRange range)
     {
-        if (_session.Workbook.GetSheet(range.Start.Sheet) is null)
+        if (!_session.SelectFormulaPointModeSourceRange(range))
             return;
 
-        if (_session.ActiveSheet.Id != range.Start.Sheet)
-            _session.SelectSheet(range.Start.Sheet);
-        _session.SelectRange(range);
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
     }
 
     public bool CommitOwnedFormulaPointModeEdit()
@@ -77,7 +62,7 @@ public sealed partial class MainWindow
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();
         ClearInlineCellEditorState();
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         FocusShellRegion(ShellFocusTarget.Worksheet);
         return true;
     }
@@ -88,12 +73,7 @@ public sealed partial class MainWindow
             return false;
 
         var editor = GetFormulaRangeEntryEditor();
-        if (editor is null)
-            return false;
-
-        var args = new KeyEventArgs { Key = Key.F4, KeyModifiers = KeyModifiers.None };
-        TryHandleFormulaEditorModeOrReferenceCycle(editor, args);
-        return args.Handled;
+        return editor is not null && TryCycleFormulaReference(editor);
     }
 
     private bool TryRouteFormulaPointModeSelection(
@@ -101,35 +81,30 @@ public sealed partial class MainWindow
         bool append = false,
         bool extendSelection = false)
     {
-        var sheet = _session.Workbook.GetSheet(range.Start.Sheet);
-        if (sheet is null)
+        if (!FormulaPointModeWorkbookResolver.TryCreateSelection(
+                _session.Workbook,
+                range,
+                out var selection))
             return false;
 
         return FormulaPointModeWorkbookResolver.TryRouteSelection(
             WindowRegistry.FormulaPointModeWindows,
             this,
-            new FormulaPointModeSelection(_session.Workbook.Id, _session.Workbook.Name, sheet.Name, range),
+            selection,
             append,
             extendSelection);
     }
 
     private bool TryRouteFormulaPointModeKey(Key key)
     {
-        if (HasActiveFormulaPointMode)
-            return false;
-
-        return key == Key.F4
-            ? FormulaPointModeWorkbookResolver.TryRouteReferenceCycle(WindowRegistry.FormulaPointModeWindows, this)
-            : key == Key.Escape
-            ? FormulaPointModeWorkbookResolver.TryRouteCancel(WindowRegistry.FormulaPointModeWindows, this)
-            : key == Key.Enter
-                ? FormulaPointModeWorkbookResolver.TryRouteCommit(WindowRegistry.FormulaPointModeWindows, this)
-                : false;
+        var command = _formulaRangeEditingSession.GetRoutedPointModeCommand(
+            FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(key),
+            GetFormulaRangeEntryEditor() is not null,
+            _session.FormulaEditAddress is not null);
+        return command is { } routedCommand &&
+               FormulaPointModeWorkbookResolver.TryRouteCommand(
+                   WindowRegistry.FormulaPointModeWindows,
+                   this,
+                   routedCommand);
     }
-
-    internal bool RouteFormulaPointSelectionForTest(
-        GridRange range,
-        bool append = false,
-        bool extendSelection = false) =>
-        TryRouteFormulaPointModeSelection(range, append, extendSelection);
 }

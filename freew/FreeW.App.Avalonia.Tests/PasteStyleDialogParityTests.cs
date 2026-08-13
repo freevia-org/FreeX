@@ -40,14 +40,7 @@ public sealed class PasteStyleDialogParityTests
     {
         await Session.Dispatch(() =>
         {
-            var dialog = Create<StyleDialog>(
-                "New Style",
-                new Dictionary<string, string>(),
-                null,
-                null,
-                RunFormatting.Default,
-                ParagraphFormatting.Default,
-                null);
+            var dialog = CreateNewStyleDialog();
             try
             {
                 dialog.Show();
@@ -84,14 +77,7 @@ public sealed class PasteStyleDialogParityTests
     {
         await Session.Dispatch(() =>
         {
-            var dialog = Create<StyleDialog>(
-                "New Style",
-                new Dictionary<string, string>(),
-                null,
-                null,
-                RunFormatting.Default,
-                ParagraphFormatting.Default,
-                null);
+            var dialog = CreateNewStyleDialog();
             var textBox = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
             var combos = dialog.GetLogicalDescendants().OfType<ComboBox>().ToArray();
 
@@ -141,10 +127,8 @@ public sealed class PasteStyleDialogParityTests
             "Program.cs"));
 
         source.Should().Contain("--wpf-authority");
-        source.Should().Contain("scenario.RouteId is \"accessibility-report\" or \"font\" or \"paragraph\"");
-        source.Should().Contain("or \"style\" or \"manage-styles\"");
-        source.Should().Contain("authorityCapture!.LogicalWidth");
-        source.Should().Contain("authorityCapture!.LogicalHeight");
+        source.Should().Contain("FreeWDialogEvidenceCatalog.CreateCapturePlan(");
+        source.Should().Contain("plan.UseWpfAuthoritySize");
         source.Should().Contain("if (button is ToggleButton or RepeatButton)");
         source.Should().Contain("scenario.RouteId == \"style\"");
         source.Should().Contain("Sample Style");
@@ -156,7 +140,7 @@ public sealed class PasteStyleDialogParityTests
             "tools",
             "FreeW.DialogVisualHarness.Wpf",
             "Program.cs"));
-        wpfSource.Should().Contain("scenario.RouteId is \"font\" or \"paragraph\" or \"style\"");
+        wpfSource.Should().Contain("FreeWDialogEvidenceCatalog.CreateCapturePlan(");
         wpfSource.Should().Contain("Sample Style");
     }
 
@@ -166,6 +150,9 @@ public sealed class PasteStyleDialogParityTests
             .Single(candidate => candidate.GetParameters().Length == arguments.Length);
         return (T)constructor.Invoke(arguments);
     }
+
+    private static StyleDialog CreateNewStyleDialog() =>
+        Create<StyleDialog>(StyleDialogPlanner.CreateNewSession(new TextDocument(), defaultBasedOnId: null));
 
     private static Button[] Buttons(Window dialog) =>
         dialog.GetLogicalDescendants().OfType<Button>().Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton).ToArray();

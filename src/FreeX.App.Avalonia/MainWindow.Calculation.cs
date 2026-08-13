@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.Calculation;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -21,12 +22,9 @@ namespace FreeX.App.Avalonia;
 /// </para>
 ///
 /// <para>
-/// Forcing a recalculation ("Calculate Now" / F9, and "Calculate Sheet" / Shift+F9) is exposed
-/// by <c>WorkbookSession.RecalculateWorkbook()</c> and <c>WorkbookSession.RecalculateActiveSheet()</c>,
-/// which drive <c>RecalcEngine.RecalculateAllFormulas</c> / <c>RecalcEngine.RecalculateSheetFormulas</c>
-/// (via <c>WorkbookCellEditService</c>) the same way the WPF host's <c>CalcNowBtn_Click</c> /
-/// <c>CalcSheetBtn_Click</c> do. Both keyboard shortcuts are wired in <c>MainWindow.cs</c>'s
-/// <c>MainWindow_KeyDownAsync</c>.
+/// Forced calculation delegates to <see cref="CalculationCommandPolicy"/> for dirty-workbook,
+/// full-workbook, and active-sheet scope. The shell maps that plan onto <c>WorkbookSession</c>
+/// recalculation methods and retains native keyboard/ribbon routing.
 /// </para>
 /// </summary>
 public sealed partial class MainWindow
@@ -36,7 +34,7 @@ public sealed partial class MainWindow
     // ExtraCommands dictionary hands us a parameterless Action with no anchor control,
     // so we toggle and report the resulting mode like the other dropdown-parent buttons).
     private bool CalculationModeIsManual =>
-        _session.Workbook.CalculationMode == WorkbookCalculationMode.Manual;
+        CalculationCommandPolicy.IsManual(_session.Workbook.CalculationMode);
 
     /// <summary>
     /// Handler for <c>formulas.calcOptions</c> ("Calculation Options"). Toggles the workbook
@@ -45,11 +43,7 @@ public sealed partial class MainWindow
     /// </summary>
     private void ToggleCalculationMode()
     {
-        var nextMode = CalculationModeIsManual
-            ? WorkbookCalculationMode.Automatic
-            : WorkbookCalculationMode.Manual;
-
-        SetCalculationMode(nextMode);
+        SetCalculationMode(CalculationCommandPolicy.ToggleTarget(_session.Workbook.CalculationMode));
     }
 
     /// <summary>
@@ -75,40 +69,24 @@ public sealed partial class MainWindow
 
     private void SetCalculationMode(WorkbookCalculationMode mode)
     {
-        if (_session.Workbook.CalculationMode == mode)
-        {
-            RefreshShell(UiText.Format("ShellLoc_CalculationAlreadySet", DescribeCalculationMode(mode)));
-            return;
-        }
-
-        var result = _session.ExecuteReviewCommand(new SetCalculationModeCommand(mode));
-        if (!result.Success)
-        {
-            RefreshShell(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotChangeCalcMode"));
-            return;
-        }
-
-        // Switching to either Automatic variant recalculates any values left stale while in
-        // Manual mode (mirrors the Windows host, which recalcs on both the Automatic and
-        // Automatic-Except-Data-Tables transitions).
-        if (mode is WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables)
-            _session.RecalculateWorkbook();
-
-        RefreshShell(UiText.Format("ShellLoc_CalculationSet", DescribeCalculationMode(mode)));
+        ApplyCalculationWorkflowOutcome(CalculationWorkflow.ChangeMode(mode));
     }
 
     /// <summary>
-    /// Handler for <c>formulas.calcNow</c> ("Calculate Now", F9). Recalculates every formula
-    /// in the workbook.
+    /// Handler for <c>formulas.calcNow</c> ("Calculate Now", F9). Recalculates dirty and volatile
+    /// formulas through the existing dependency graph.
     /// </summary>
     /// <remarks>
-    /// Forces a full recalc via <c>WorkbookSession.RecalculateWorkbook()</c> (which drives
-    /// <c>RecalcEngine.RecalculateAllFormulas</c>), then refreshes the shell.
+    /// Uses <c>WorkbookSession.RecalculateDirtyCells()</c>, then refreshes the shell.
     /// </remarks>
     private void CalculateNow()
     {
-        _session.RecalculateWorkbook();
-        RefreshShell(UiText.Get("ShellLoc_RecalculatedAllFormulas"));
+        ExecuteCalculationAction(CalculationCommandAction.CalculateNow);
+    }
+
+    private void CalculateFull()
+    {
+        ExecuteCalculationAction(CalculationCommandAction.CalculateFull);
     }
 
     /// <summary>
@@ -117,12 +95,58 @@ public sealed partial class MainWindow
     /// </summary>
     private void CalculateActiveSheet()
     {
-        _session.RecalculateActiveSheet();
-        RefreshShell(UiText.Get("ShellLoc_RecalculatedAllFormulas"));
+        ExecuteCalculationAction(CalculationCommandAction.CalculateActiveSheet);
     }
 
-    private static string DescribeCalculationMode(WorkbookCalculationMode mode) =>
-        mode == WorkbookCalculationMode.Manual
-            ? UiText.Get("ShellLoc_CalcModeManual")
-            : UiText.Get("ShellLoc_CalcModeAutomatic");
+    private CalculationWorkflowSession CalculationWorkflow =>
+        new(
+            _session.Workbook,
+            (command, _) =>
+            {
+                var result = _session.ExecuteReviewCommand(command);
+                return new CalculationCommandExecutionResult(
+                    result.Success,
+                    result.ErrorMessage,
+                    result.IsNoOp);
+            },
+            new CalculationRecalculationOperations(
+                _session.RecalculateDirtyCells,
+                _session.RecalculateWorkbook,
+                _session.RecalculateActiveSheet));
+
+    private void ExecuteCalculationAction(CalculationCommandAction action)
+    {
+        ApplyCalculationWorkflowOutcome(CalculationWorkflow.Execute(action));
+    }
+
+    private void ApplyCalculationWorkflowOutcome(CalculationWorkflowOutcome outcome)
+    {
+        if (!outcome.Success)
+        {
+            ApplyCalculationRefresh(
+                CalculationStateRefreshPolicy.CommandSurface,
+                outcome.ErrorMessage ?? UiText.Get(
+                    outcome.FailureResourceKey ?? CalculationCommandPolicy.FailureResourceKey));
+            return;
+        }
+
+        ApplyCalculationRefresh(
+            outcome.RefreshPolicy,
+            ResolveCalculationStatus(outcome.Status));
+    }
+
+    private void ApplyCalculationRefresh(CalculationStateRefreshPolicy policy, string status)
+    {
+        if (policy != CalculationStateRefreshPolicy.None)
+            RefreshShell(status);
+    }
+
+    private static string ResolveCalculationStatus(CalculationStatusPlan status)
+    {
+        if (status.ArgumentResourceKey is not { } argumentKey)
+            return UiText.Get(status.ResourceKey);
+
+        var argument = UiText.Get(argumentKey).Replace("_", string.Empty, StringComparison.Ordinal);
+        return UiText.Format(status.ResourceKey, argument);
+    }
 }

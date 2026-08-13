@@ -4,7 +4,12 @@ public sealed record TableInsertionPickerChoice(
     int Rows,
     int Columns,
     string Label,
-    bool IsDefault);
+    bool IsDefault)
+{
+    public string DisplayLabel => IsDefault ? $"{Label} (default)" : Label;
+
+    public string AutomationId => $"table-{Rows}x{Columns}";
+}
 
 public sealed record TableInsertionPickerPlan(
     int MaxRows,

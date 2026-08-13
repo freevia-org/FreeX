@@ -129,6 +129,8 @@ public sealed class Wave104_SplitPanePointerWorkflowTests
             "src", "FreeX.App.Avalonia", "MainWindow.SplitPanePointer.cs"));
         var windowSource = File.ReadAllText(FindRepositoryFile(
             "src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(FindRepositoryFile(
+            "src", "FreeX.App.Services", "WorkbookSession.cs"));
 
         source.Should().Contain("InputElement.PointerPressedEvent");
         source.Should().Contain("args.Pointer.Capture(_sheetGridHost)");
@@ -137,7 +139,9 @@ public sealed class Wave104_SplitPanePointerWorkflowTests
         source.Should().Contain("PanViewport(delta, 0)");
         source.Should().NotContain("SetSplitPaneTopRightLeftCol");
         source.Should().NotContain("SetSplitPaneBottomLeftTopRow");
-        source.Should().Contain("ResetSplitPaneOffsets");
+        source.Should().Contain("_session.SetSplitPanes(");
+        source.Should().NotContain("ResetSplitPaneOffsets");
+        sessionSource.Should().Contain("ResetSplitPaneOffsets();");
         windowSource.Should().Contain("SplitPanePointerPlanner.ResolveWheelTarget");
         windowSource.Should().Contain("CanScrollSplitPane(target.Region, target.Horizontal)");
         windowSource.Should().Contain("PanViewport(rowDelta * step, colDelta * step)");
@@ -190,13 +194,6 @@ public sealed class Wave104_SplitPanePointerWorkflowTests
                 ],
                 [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64)]));
 
-    private static string FindRepositoryFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "src")))
-            directory = directory.Parent;
-
-        directory.Should().NotBeNull("the focused source guard must run from the repository test output");
-        return Path.Combine(new[] { directory!.FullName }.Concat(parts).ToArray());
-    }
+    private static string FindRepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile("FreeX.slnx", parts);
 }

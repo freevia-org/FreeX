@@ -10,8 +10,12 @@ using FreeP.Core.IO;
 
 namespace FreeP.App.Compositor.Tests;
 
-public sealed class PresentationExportPlannerTests
+public sealed class PresentationExportPlannerTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.PresentationExportPlannerTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
     private static readonly byte[] TinyPng =
     [
         0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
@@ -692,6 +696,27 @@ public sealed class PresentationExportPlannerTests
         callout.CardY.Should().BeLessThan(deck.SlideSizeCyEmu / DrawingMlCoordinateUnits.EmuPerPixel);
         callout.Author.Should().Be("Reviewer");
         callout.Body.Should().Be("Check this slide");
+        callout.Visual.AnchorCenter.Should().Be(new LayoutPoint(callout.AnchorX, callout.AnchorY));
+        callout.Visual.CardBounds.Should().Be(new LayoutRect(
+            callout.CardX,
+            callout.CardY,
+            callout.CardWidth,
+            callout.CardHeight));
+        callout.Visual.FillColor.Should().Be(new SrgbColor(255, 249, 196));
+        callout.Visual.BorderColor.Should().Be(new SrgbColor(192, 160, 0));
+        callout.Visual.BorderThickness.Should().Be(1);
+        callout.Visual.MarkerColor.Should().Be(new SrgbColor(220, 40, 40));
+        callout.Visual.MarkerRadius.Should().Be(3);
+        callout.Visual.Author.Should().Be(new SlidePrintCommentTextPlan(
+            "Reviewer",
+            new LayoutRect(callout.CardX + 6, callout.CardY + 3, callout.CardWidth - 12, 9),
+            IsBold: true,
+            FontSize: 8));
+        callout.Visual.Body.Should().Be(new SlidePrintCommentTextPlan(
+            "Check this slide",
+            new LayoutRect(callout.CardX + 6, callout.CardY + 13, callout.CardWidth - 12, 11),
+            IsBold: false,
+            FontSize: 7));
     }
 
     [Fact]
@@ -935,7 +960,7 @@ public sealed class PresentationExportPlannerTests
                 Collate: false),
             (_, _, _, _) => throw new InvalidOperationException("Handout route must stay shared."),
             _ => throw new InvalidOperationException("Handout route must stay shared."));
-        var targetPath = Path.Combine(Path.GetTempPath(), $"freep-print-package-{Guid.NewGuid():N}.pdf");
+        var targetPath = Path.Combine(_temporaryDirectory.Path, "print-package.pdf");
 
         try
         {
@@ -994,7 +1019,7 @@ public sealed class PresentationExportPlannerTests
             new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides),
             slideCount: 1);
         var package = new PresentationPrintOutputPackage(packagePlan, Encoding.ASCII.GetBytes("not a pdf"));
-        var targetPath = Path.Combine(Path.GetTempPath(), $"freep-invalid-print-package-{Guid.NewGuid():N}.pdf");
+        var targetPath = Path.Combine(_temporaryDirectory.Path, "invalid-print-package.pdf");
 
         var result = PresentationPrintOutputPackageExecutor.MaterializePackageForHandoff(
             package,
@@ -1745,7 +1770,7 @@ public sealed class PresentationExportPlannerTests
     public void NotesPagePdfRenderPlan_AllSlidesRange_ExportsOneNotesPagePerSlideForWholeDeck()
     {
         // IA1: the Avalonia notes-page PDF export must cover the whole deck (AllSlides), matching
-        // the WPF host, which passes no range (null) to FileCommands.ExportNotesPagePdf and so
+        // the WPF host, which passes no range (null) to ExportNotesPagePdfAsync and so
         // defaults to AllSlides via PresentationExportPlanner.BuildSlideRangePlan. Both requests
         // must therefore produce the same number of pages for the same deck.
         var deck = BuildNotesDeck();
@@ -1914,6 +1939,41 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void NotesPagePdfRenderPlan_InheritedMarkersHonorSuppressionAndRestartNumbering()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Inherited note lists" });
+        var notes = new TextBody
+        {
+            LstStyle = new TextStyleLevels
+            {
+                [0] = new TextStyleLevel
+                {
+                    BulletKind = BulletKind.Auto,
+                    AutoNumType = AutoNumType.ArabicPeriod,
+                },
+            },
+        };
+        notes.Paragraphs.Add(MakeParagraph("Fourth", paragraph =>
+        {
+            paragraph.AutoNumStartAt = 4;
+            paragraph.AutoNumStartAtSpecified = true;
+        }));
+        notes.Paragraphs.Add(MakeParagraph("Suppressed", paragraph =>
+            paragraph.BulletSuppressed = true));
+        notes.Paragraphs.Add(MakeParagraph("Restarted"));
+        presentation.Slides[0].Notes = notes;
+
+        var preview = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+
+        preview.NoteLines.Should().Equal(
+            "4. Fourth",
+            "Suppressed",
+            "1. Restarted");
+    }
+
+    [Fact]
     public void NotesPagePdfRenderPlan_RichSpeakerNoteRuns_PreserveStyledFacesAndColor()
     {
         var presentation = Presentation.CreateEmpty();
@@ -2076,6 +2136,24 @@ public sealed class PresentationExportPlannerTests
         current.DisplayName.Should().Be("Slide 3");
         empty.SlideNumbers.Should().BeEmpty();
         empty.DisplayName.Should().Be("No slides");
+    }
+
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(4, 5)]
+    [InlineData(-1, 0)]
+    public void CurrentSlideRangeRequest_ProjectsZeroBasedEditorIndex(
+        int currentSlideIndex,
+        int expectedSlideNumber)
+    {
+        var request = PresentationExportPlanner.BuildCurrentSlideRangeRequest(currentSlideIndex);
+
+        request.Kind.Should().Be(PresentationSlideRangeKind.CurrentSlide);
+        request.CurrentSlideNumber.Should().Be(expectedSlideNumber);
+        request.StartSlideNumber.Should().BeNull();
+        request.EndSlideNumber.Should().BeNull();
+        request.SelectedSlideNumbers.Should().BeNull();
+        request.CustomRangeText.Should().BeNull();
     }
 
     [Fact]
@@ -2413,7 +2491,7 @@ public sealed class PresentationExportPlannerTests
                 UseRecordedTimings: false,
                 IncludeNarration: false),
             (_, _, _, _) => TinyPng.ToArray());
-        var targetPath = Path.Combine(Path.GetTempPath(), $"freep-video-encoder-input-{Guid.NewGuid():N}.zip");
+        var targetPath = Path.Combine(_temporaryDirectory.Path, "video-encoder-input.zip");
 
         try
         {
@@ -2474,8 +2552,8 @@ public sealed class PresentationExportPlannerTests
             BuildHandoutDeck(1),
             request: null,
             (_, _, _, _) => TinyPng.ToArray());
-        var emptyTargetPath = Path.Combine(Path.GetTempPath(), $"freep-empty-video-encoder-input-{Guid.NewGuid():N}.zip");
-        var invalidTargetPath = Path.Combine(Path.GetTempPath(), $"freep-invalid-video-encoder-input-{Guid.NewGuid():N}.zip");
+        var emptyTargetPath = Path.Combine(_temporaryDirectory.Path, "empty-video-encoder-input.zip");
+        var invalidTargetPath = Path.Combine(_temporaryDirectory.Path, "invalid-video-encoder-input.zip");
         var emptyPackage = validPackage with { Bytes = [] };
         var invalidPackage = validPackage with { Bytes = Encoding.ASCII.GetBytes("not a zip") };
 
@@ -2601,8 +2679,7 @@ public sealed class PresentationExportPlannerTests
     [Fact]
     public void ImageExportExecutor_ExportsSelectedSlidesWithSharedNamingAndHostRenderCallback()
     {
-        var outputDirectory = Path.Combine(Path.GetTempPath(), $"freep-image-export-{Guid.NewGuid():N}");
-        try
+        var outputDirectory = Path.Combine(_temporaryDirectory.Path, "image-export");
         {
             var presentation = Presentation.CreateEmpty();
             presentation.Slides.Clear();
@@ -2640,18 +2717,12 @@ public sealed class PresentationExportPlannerTests
             foreach (var exported in result.ExportedSlides)
                 File.ReadAllBytes(exported.Path).Should().HaveCount(5);
         }
-        finally
-        {
-            if (Directory.Exists(outputDirectory))
-                Directory.Delete(outputDirectory, recursive: true);
-        }
     }
 
     [Fact]
     public void ImageExportExecutor_EmptyDeckCreatesNoImagesButReturnsImplementedPlan()
     {
-        var outputDirectory = Path.Combine(Path.GetTempPath(), $"freep-image-export-empty-{Guid.NewGuid():N}");
-        try
+        var outputDirectory = Path.Combine(_temporaryDirectory.Path, "image-export-empty");
         {
             var presentation = Presentation.CreateEmpty();
             presentation.Slides.Clear();
@@ -2666,11 +2737,6 @@ public sealed class PresentationExportPlannerTests
             result.Plan.SlideRange.DisplayName.Should().Be("No slides");
             result.ExportedSlides.Should().BeEmpty();
             Directory.EnumerateFiles(outputDirectory).Should().BeEmpty();
-        }
-        finally
-        {
-            if (Directory.Exists(outputDirectory))
-                Directory.Delete(outputDirectory, recursive: true);
         }
     }
 
@@ -2723,19 +2789,9 @@ public sealed class PresentationExportPlannerTests
         return paragraph;
     }
 
-    private static string FindCorpusDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus");
-            if (File.Exists(Path.Combine(candidate, "21-comments-notes.pptx")))
-                return candidate;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate tools/FreeP.RenderCompare/corpus.");
-    }
+    private static string FindCorpusDirectory() =>
+        TestWorkspaceFileLocator.FindContainingDirectoryFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus", "21-comments-notes.pptx");
 
     private static string ReadZipText(ZipArchive archive, string path)
     {

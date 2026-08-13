@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -92,14 +91,12 @@ public sealed class GoalSeekStatusDialog : Window
         CreateMessage(result, result.ActualResult);
 
     public static string CreateMessage(GoalSeekResult result, double targetValue)
-    {
-        var target = targetValue.ToString("G10", CultureInfo.InvariantCulture);
-        var currentValue = result.ActualResult.ToString("G10", CultureInfo.InvariantCulture);
-        var changingCellValue = result.FoundValue.ToString("G10", CultureInfo.InvariantCulture);
-        return result.Converged
-            ? UiText.Format("GoalSeekStatus_SuccessSummary", target, currentValue, changingCellValue)
-            : UiText.Format("GoalSeekStatus_FailureSummary", target, currentValue, changingCellValue);
-    }
+        => GoalSeekStatusDialogPlanner.DescribeStatus(
+            result.Converged,
+            targetValue,
+            result.ActualResult,
+            result.FoundValue,
+            GoalSeekPresentationProfile.Wpf).Resolve(UiText.Get, UiText.Format);
 
     private void FocusInitialKeyboardTarget()
     {

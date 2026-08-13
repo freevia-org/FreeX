@@ -1,8 +1,9 @@
 using FreeX.Core.Model;
+using Free.Shared.Localization;
 
 namespace FreeX.App.Presentation.ScenarioManager;
 
-public enum ScenarioManagerDialogAction
+public enum ScenarioManagerAction
 {
     Add,
     Edit,
@@ -10,7 +11,8 @@ public enum ScenarioManagerDialogAction
     Show,
     Delete,
     List,
-    Report
+    Report,
+    Merge
 }
 
 public enum ScenarioManagerDialogValidationField
@@ -56,7 +58,7 @@ public sealed record ScenarioManagerDialogSelectionFields(
     bool Hidden);
 
 public sealed record ScenarioManagerDialogAcceptResult(
-    ScenarioManagerDialogAction Action,
+    ScenarioManagerAction Action,
     string? SelectedScenarioName,
     string NewScenarioName,
     string ChangingCellsText,
@@ -71,6 +73,42 @@ public sealed record ScenarioManagerDialogValidationFailure(
 
 public static class ScenarioManagerDialogPlanner
 {
+    public static LocalizedTextDescriptor Title { get; } =
+        LocalizedTextDescriptor.Resource("MainWindowMessage_ScenarioManagerTitle");
+
+    public static LocalizedTextDescriptor MergeDialogTitle { get; } =
+        LocalizedTextDescriptor.Resource("ScenarioManager_MergeScenariosDialogTitle");
+
+    public static LocalizedTextDescriptor MergeOpenFailedMessage { get; } =
+        LocalizedTextDescriptor.Resource("ScenarioManager_MergeOpenFailedMessage");
+
+    public static LocalizedTextDescriptor? DescribeValidationError(
+        ScenarioManagerDialogValidationError error) =>
+        error switch
+        {
+            ScenarioManagerDialogValidationError.None => null,
+            ScenarioManagerDialogValidationError.EnterScenarioName =>
+                LocalizedTextDescriptor.Resource("ScenarioManager_EnterScenarioName"),
+            ScenarioManagerDialogValidationError.EnterValidChangingCellsReference =>
+                LocalizedTextDescriptor.Resource("ScenarioManager_EnterValidChangingCellsReference"),
+            ScenarioManagerDialogValidationError.EnterValidResultCellsReference =>
+                LocalizedTextDescriptor.Resource("ScenarioManager_EnterValidResultCellsReference"),
+            _ => LocalizedTextDescriptor.Resource("ScenarioManager_EnterScenarioDetails"),
+        };
+
+    public static ValidationPresentationDescriptor<ScenarioManagerDialogValidationField> DescribeValidationFailure(
+        ScenarioManagerDialogValidationFailure failure)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+        return new(
+            DescribeValidationError(failure.Error) ??
+            LocalizedTextDescriptor.Resource(
+                failure.Field == ScenarioManagerDialogValidationField.ResultCells
+                    ? "ScenarioManager_EnterScenarioResultCells"
+                    : "ScenarioManager_EnterScenarioDetails"),
+            failure.Field);
+    }
+
     public static IReadOnlyList<ScenarioManagerDialogItem> BuildItems(Workbook workbook)
     {
         ArgumentNullException.ThrowIfNull(workbook);
@@ -84,10 +122,10 @@ public static class ScenarioManagerDialogPlanner
             scenario.Locked)).ToList();
     }
 
-    public static bool RequiresScenarioName(ScenarioManagerDialogAction action) =>
-        action is ScenarioManagerDialogAction.Add
-            or ScenarioManagerDialogAction.Edit
-            or ScenarioManagerDialogAction.Save;
+    public static bool RequiresScenarioName(ScenarioManagerAction action) =>
+        action is ScenarioManagerAction.Add
+            or ScenarioManagerAction.Edit
+            or ScenarioManagerAction.Save;
 
     public static ScenarioManagerDialogValidation ValidateScenarioName(string? name) =>
         string.IsNullOrWhiteSpace(name)
@@ -210,7 +248,7 @@ public static class ScenarioManagerDialogPlanner
     }
 
     public static ScenarioManagerDialogValidationFailure? ValidateAcceptRequest(
-        ScenarioManagerDialogAction action,
+        ScenarioManagerAction action,
         string? scenarioName,
         string? changingCellsText,
         string? resultCellsText,
@@ -240,7 +278,7 @@ public static class ScenarioManagerDialogPlanner
             resultCellsText,
             currentSheetId,
             resolveSheetIdByName);
-        if (action is ScenarioManagerDialogAction.Report && !resultCellsValidation.IsValid)
+        if (action is ScenarioManagerAction.Report && !resultCellsValidation.IsValid)
         {
             return new ScenarioManagerDialogValidationFailure(
                 resultCellsValidation.Error,
@@ -251,7 +289,7 @@ public static class ScenarioManagerDialogPlanner
     }
 
     public static ScenarioManagerDialogAcceptResult ProjectAcceptResult(
-        ScenarioManagerDialogAction action,
+        ScenarioManagerAction action,
         ScenarioManagerDialogItem? selected,
         string newScenarioName,
         string changingCellsText,

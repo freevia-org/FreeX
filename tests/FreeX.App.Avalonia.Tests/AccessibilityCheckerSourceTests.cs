@@ -42,10 +42,13 @@ public sealed class AccessibilityCheckerSourceTests
     public void AccessibilityCheckerDialog_IsWiredToMenuAndParityCapture()
     {
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var parityCaptureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var routingSource = File.ReadAllText(RepoFile(
+            "src", "FreeX.App.Avalonia", "MainWindow.ApplicationCommandRouting.cs"));
+        var parityCaptureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         mainSource.Should().Contain("_checkAccessibilityMenuItem.Click += async (_, _) => await ShowAccessibilityCheckerDialogAsync();");
-        mainSource.Should().Contain("[\"review.checkAccessibility\"] = () => _ = ShowAccessibilityCheckerDialogAsync(),");
+        mainSource.Should().Contain("[\"Check Accessibility\"] = () => _ = ShowAccessibilityCheckerDialogAsync(),");
+        routingSource.Should().Contain("CheckAccessibility = Handled<WorkbookApplicationCommandInvocation>");
         parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerParityDialogAsync()),");
     }
 
@@ -54,7 +57,7 @@ public sealed class AccessibilityCheckerSourceTests
     {
         var avaloniaSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AccessibilityChecker.cs"));
         var wpfSource = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
 
         avaloniaSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog);");
         avaloniaSource.Should().Contain("AvaloniaCompactDialogChrome.WindowsStyle");
@@ -69,15 +72,6 @@ public sealed class AccessibilityCheckerSourceTests
         captureSource.Should().Contain("AccessibilityCheckerDialogMetrics.ActionButtonSpacing");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

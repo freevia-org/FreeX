@@ -40,9 +40,9 @@ public partial class MainWindow
         WorkbookSelectionStats? stats = sheet is null
             ? null
             : selectedRanges is { Count: > 0 }
-                ? StatusBarCalculator.ToShared(_statusBarStatsCache.GetOrCalculate(sheet, selectedRanges, _navigationCacheRevision))
+                ? _statusBarStatsCache.GetOrCalculate(sheet, selectedRanges, _navigationCacheRevision)
                 : selectedRange is { } range
-                    ? StatusBarCalculator.ToShared(_statusBarStatsCache.GetOrCalculate(sheet, range, _navigationCacheRevision))
+                    ? _statusBarStatsCache.GetOrCalculate(sheet, range, _navigationCacheRevision)
                     : null;
 
         var plan = StatusBarRefreshPlanner.Build(
@@ -51,10 +51,8 @@ public partial class MainWindow
             stats,
             IsFileOperationProgressVisible(),
             zoomPercent: 0,
-            StatusBarCalculator.TextProvider,
+            WpfResourceKeyTextResolver.StatusBarTextProvider,
             sheet is null ? null : GetEffectiveViewState(sheet).ViewMode,
-            // R128-status-bar-calculate-indicator: drives Excel's "Calculate" cell-mode indicator in
-            // place of "Ready" -- see Workbook.HasPendingManualRecalculation.
             isManualCalculationMode: _workbook.CalculationMode == WorkbookCalculationMode.Manual,
             hasPendingRecalculation: _workbook.HasPendingManualRecalculation);
         ApplyStatusBarRefreshPlan(plan);
@@ -104,8 +102,7 @@ public partial class MainWindow
         if (_lastStatusBarDisplayState == state && IsStatusBarDisplayStateApplied(state))
             return;
 
-        var plan = BuildStatusBarPresentationPlan(state);
-        var rendererPlan = StatusBarPresentationPlanner.BuildRendererPlan(plan);
+        var rendererPlan = BuildStatusBarRendererPlan(state);
         ApplyStatusBarRendererPlan(state, rendererPlan);
         _lastStatusBarDisplayState = state;
     }
@@ -114,13 +111,11 @@ public partial class MainWindow
 
     private bool IsStatusBarDisplayStateApplied(Free.Shared.AppServices.StatusBarViewModel state)
     {
-        var plan = BuildStatusBarPresentationPlan(state);
-        var rendererPlan = StatusBarPresentationPlanner.BuildRendererPlan(plan);
-        return IsStatusBarRendererPlanApplied(rendererPlan);
+        return IsStatusBarRendererPlanApplied(BuildStatusBarRendererPlan(state));
     }
 
-    private StatusBarPresentationPlan BuildStatusBarPresentationPlan(Free.Shared.AppServices.StatusBarViewModel state) =>
-        StatusBarPresentationPlanner.Build(
+    private StatusBarRendererPlan BuildStatusBarRendererPlan(Free.Shared.AppServices.StatusBarViewModel state) =>
+        FreeXStatusBarRendererPlanner.BuildRendererPlan(
             state,
             GetStatusBarOptionVisibility(),
             hasPageNumberText: !string.IsNullOrEmpty(StatusPageNumberText.Text),
@@ -132,8 +127,7 @@ public partial class MainWindow
             _statusBarDisplayStateCache.GetReady(
                 GetCurrentStatusBarViewMode(),
                 zoomPercent: 0);
-        ApplyStatusBarInteractiveDisplayState(
-            StatusBarPresentationPlanner.BuildRendererPlan(BuildStatusBarPresentationPlan(state)));
+        ApplyStatusBarInteractiveDisplayState(BuildStatusBarRendererPlan(state));
     }
 
     private void ApplyStatusBarInteractiveDisplayState(StatusBarRendererPlan rendererPlan)
@@ -252,14 +246,18 @@ public partial class MainWindow
         if (sender is not MenuItem menuItem || menuItem.Tag is not string option)
             return;
 
-        var isChecked = menuItem.IsChecked;
-        if (!StatusBarOptionVisibilityStore.TrySetOption(_options, option, isChecked))
+        var result = StatusBarOptionUpdateWorkflow.ApplyToRuntimeSession(
+            _optionsRuntimeSession,
+            option,
+            menuItem.IsChecked);
+        _options = _optionsRuntimeSession.LiveOptions;
+        if (!result.IsRecognized)
             return;
 
-        if (!_options.Save())
+        if (!result.IsPersisted)
         {
             ShowOwnedMessage(
-                _options.LastPersistenceError ?? "Failed to save status bar customization.",
+                result.PersistenceError ?? UiText.Get("StatusBar_CustomizationSaveFailed"),
                 UiText.Get("StatusBar_CustomizeStatusBar"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -411,13 +409,9 @@ public partial class MainWindow
             ? (snap.StartIndex, snap.EndIndex)
             : GetColumnResizeRange(sheet, col);
         var restoredPreview = RestoreColumnResizePreview(sheet);
-        if (!TryExecuteGroupedSheetCommand(
-                "Column Width",
-                sheetId => new SetColumnWidthCommand(
-                    sheetId,
-                    startCol,
-                    endCol,
-                    ColumnWidthPixelMapper.PixelsToColumnWidth(newWidthPx))))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SetColumnsWidthPixels(startCol, endCol, newWidthPx),
+                "Column Width"))
         {
             if (restoredPreview)
                 UpdateViewport();
@@ -433,11 +427,9 @@ public partial class MainWindow
             return;
 
         var (startCol, endCol) = GetColumnResizeRange(sheet, col);
-        var range = new GridRange(
-            new CellAddress(_currentSheetId, 1, startCol),
-            new CellAddress(_currentSheetId, CellAddress.MaxRow, endCol));
-
-        if (!TryExecuteGroupedSheetCommand("Auto Column Width", sheetId => CreateAutoFitColumnWidthCommand(sheetId, range)))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.AutoFitColumns(startCol, endCol),
+                "Auto Column Width"))
             return;
 
         UpdateViewport();
@@ -464,11 +456,9 @@ public partial class MainWindow
             return;
 
         var (startRow, endRow) = GetRowResizeRange(sheet, row);
-        var range = new GridRange(
-            new CellAddress(_currentSheetId, startRow, 1),
-            new CellAddress(_currentSheetId, endRow, CellAddress.MaxCol));
-
-        if (!TryExecuteGroupedSheetCommand("Auto Row Height", sheetId => CreateAutoFitRowHeightCommand(sheetId, range)))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.AutoFitRows(startRow, endRow),
+                "Auto Row Height"))
             return;
 
         UpdateViewport();
@@ -482,7 +472,9 @@ public partial class MainWindow
             ? (snap.StartIndex, snap.EndIndex)
             : GetRowResizeRange(sheet, row);
         var restoredPreview = RestoreRowResizePreview(sheet);
-        if (!TryExecuteGroupedSheetCommand("Row Height", sheetId => new SetRowHeightCommand(sheetId, startRow, endRow, newHeightPx)))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SetRowsHeightPixels(startRow, endRow, newHeightPx),
+                "Row Height"))
         {
             if (restoredPreview)
                 UpdateViewport();

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 namespace FreeW.App.Host.Tests;
 
@@ -19,88 +20,88 @@ public sealed class BackstagePaneDedupSourceTests
 
         source.Should().Contain("BackstagePaneComposer");
         source.Should().Contain("SisterBackstageTheme.");
-        source.Should().Contain("SisterBackstagePaneSpecPlanner");
         source.Should().Contain("SisterBackstagePaneResources");
-        source.Should().Contain("SisterBackstagePaneResources.ForApp(");
-        source.Should().Contain($"SisterBackstageAppKind.{(appFolder == "freew" ? "FreeW" : "FreeP")}");
+        source.Should().Contain($"{(appFolder == "freew" ? "FreeW" : "FreeP")}BackstagePaneTextCatalog.BuildTextSpec(");
         source.Should().Contain("BackstageStrings.Current.Get");
         source.Should().Contain("SisterBackstageHostController");
         source.Should().Contain("new SisterBackstageHostSpec(");
         source.Should().Contain("Chrome = BackstageRibbonChrome.Create()");
         source.Should().Contain("public void Show() => _backstage.Show();");
         source.Should().Contain("public void Hide() => _backstage.Hide();");
-        source.Should().Contain("backstage.FrameCommand(_actions.New)");
-        source.Should().Contain("_backstage.HideThen");
-        source.Should().Contain("Panes.BuildInfoPane(");
-        source.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
-        source.Should().Contain("Panes.BuildRecentPane(");
-        source.Should().Contain("PaneSpecs.BuildRecentPaneSpec(");
-        source.Should().Contain("Panes.BuildTemplatePane(");
-        source.Should().Contain("PaneSpecs.BuildNewPaneSpec(");
-        source.Should().Contain("Panes.BuildOptionsPane(");
-        source.Should().Contain("PaneSpecs.BuildOptionsPaneSpec(");
-
         if (appFolder == "freew")
         {
+            source.Should().Contain("new FreeWBackstageSession(");
+            source.Should().Contain("BackstageActionBinder.DismissBefore(Hide)");
+            source.Should().Contain("SisterBackstagePaneSpecPlanner");
+            source.Should().Contain("Panes.BuildInfoPane(");
+            source.Should().Contain("_session.BuildInfoPane()");
+            source.Should().Contain("Panes.BuildRecentPane(");
+            source.Should().Contain("_session.BuildRecentPaneSpec(PaneSpecs)");
+            source.Should().Contain("Panes.BuildTemplatePane(");
+            source.Should().Contain("_session.BuildNewPaneSpec(PaneSpecs)");
+            source.Should().Contain("Panes.BuildOptionsPane(");
+            source.Should().Contain("_session.BuildOptionsPaneSpec(PaneSpecs)");
             source.Should().Contain("BuildHomePane = BuildHomePane");
             source.Should().Contain("UseNewPane = true");
-            source.Should().Contain("Close = backstage.FrameCommand(_actions.Close)");
-            source.Should().Contain("BackstagePaneSurfacePlanner.BuildHomePane(");
+            source.Should().Contain("Close = backstage.FrameCommand(_callbacks.CloseDocument)");
+            source.Should().Contain("_session.BuildHomePane(");
             source.Should().Contain("var metrics = surface.VisualMetrics");
             source.Should().Contain("HomeActionRow(action, metrics)");
             source.Should().Contain("AutomationProperties.NameProperty");
             source.Should().Contain("return Kit.Scroll(panel)");
-            source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenPane(");
-            source.Should().Contain("BackstagePaneSurfacePlanner.BuildSaveAsPane(");
-            source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");
-            source.Should().Contain("BackstagePaneSurfacePlanner.BuildExportPane(");
+            source.Should().Contain("_session.BuildOpenPane(");
+            source.Should().Contain("_session.BuildSaveAsPane(");
+            source.Should().Contain("_session.BuildSharePane(");
+            source.Should().Contain("_session.BuildExportPane(");
             source.Should().Contain("BackstageExportPaneSurfaceText.FromDescriptor(");
-            source.Should().Contain("_file.SaveFormats");
             source.Should().Contain("BuildOpenPane = BuildOpenPane");
             source.Should().Contain("BuildOpenSurface(");
-            source.Should().Contain("_file.RecentEntries");
             source.Should().Contain("surface.Search.AutomationName");
             source.Should().Contain("surface.Tabs.DocumentsTabLabel");
             source.Should().Contain("surface.Tabs.FoldersTabLabel");
-            source.Should().Contain("OpenFolder");
             source.Should().Contain("BuildSharePane = BuildSharePane");
-            source.Should().Contain("OpenContainingFolder");
             source.Should().Contain("BuildSaveAsPane = BuildSaveAsPane");
             source.Should().Contain("BuildSaveAsInlineEditor");
-            source.Should().Contain("SaveAsSuggested");
+            source.Should().Contain("_session.SaveInline(");
             source.Should().Contain("inline.FileNameHeading");
             source.Should().Contain("inline.SaveAsTypeHeading");
             source.Should().Contain("BuildPrintPane = BuildPrintPane");
-            source.Should().Contain("BackstagePaneSurfacePlanner.BuildPrintPane(");
+            source.Should().Contain("_session.BuildPrintPane(");
             source.Should().Contain("SurfaceActionRow(action)");
             source.Should().Contain("BuildPrintEvidenceSection(surface.Evidence)");
+            source.Should().Contain("BackstagePrintEvidenceTextFormatter.Format(row)");
             source.Should().Contain("BackstageViewTextResources.EvidenceSection");
-            source.Should().Contain("BackstageViewTextResources.EvidenceRequirementsLabel");
-            source.Should().Contain("FormatPrintEvidenceRequirement");
             source.Should().Contain("PrintEvidence_");
-            source.Should().Contain("PrintPreview");
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
-            source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
-            source.Should().Contain("BackstagePaneRenderer.BuildAccountPane(Kit, surface)");
+            source.Should().Contain("_session.BuildAccountPane(");
+            source.Should().Contain("Panes.BuildAccountPane(surface.ToPaneSpec())");
             source.Should().Contain("HideRecentPane = true");
-            source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
-            source.Should().Contain("document: model");
-            source.Should().Contain("ToActionGroups(safetySurface.SafetyGroups)");
-            source.Should().Contain("MarkAsFinal");
-            source.Should().Contain("RestrictEditing");
-            source.Should().Contain("InspectDocument");
-            source.Should().Contain("CheckAccessibility");
-            source.Should().Contain("BackstagePaneRenderer.BuildActionPane(Kit, surface)");
+            source.Should().Contain("Panes.BuildActionPane(surface.ToPaneSpec())");
+            source.Should().Contain("Panes.BuildExportActionPane(surface.ToPaneSpec())");
             source.Should().Contain("_backstage.ShowPane(\"Open\")");
-            source.Should().Contain("RecoverUnsaved");
+            source.Should().NotContain("BackstagePaneRenderer.");
+            source.Should().NotContain("BackstagePaneSurfacePlanner.Build");
+            source.Should().NotContain("SisterBackstageInfoPanePlanner.Build(");
+            source.Should().NotContain("PrintEvidenceKindLabel(");
+            source.Should().NotContain("PrintEvidenceStatusLabel(");
+            source.Should().NotContain("FormatPrintEvidenceRequirement(");
         }
         else
         {
+            source.Should().Contain("backstage.FrameCommand(_endpoints.New)");
+            source.Should().Contain("_backstage.HideThen");
             source.Should().NotContain("BuildHomePane = BuildHomePane");
             source.Should().NotContain("UseNewPane = true");
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
-            source.Should().Contain("PaneSpecs.BuildAccountPaneSpec(");
-            source.Should().Contain("PaneSpecs.BuildExportPaneSpec(");
+            source.Should().Contain("PresentationBackstagePanePlanner");
+            source.Should().Contain("PresentationBackstagePrintSession");
+            source.Should().NotContain("PresentationBackstagePrintSurfacePlanner.Build(");
+            source.Should().Contain("PanePlans.BuildAccountPane(");
+            source.Should().Contain("PanePlans.BuildExportPane(");
+            source.Should().Contain("PanePlans.BuildInfoPane(");
+            source.Should().Contain("PanePlans.BuildRecentPane(");
+            source.Should().Contain("PanePlans.BuildNewPane(");
+            source.Should().Contain("PanePlans.BuildOptionsPane(");
             source.Should().Contain("Panes.BuildAccountPane(");
         }
 
@@ -118,6 +119,7 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().NotContain("new BackstageAccountPaneSpec(");
         source.Should().NotContain("SisterBackstagePaneTextSpec.FreeW");
         source.Should().NotContain("SisterBackstagePaneTextSpec.FreeP");
+        source.Should().NotContain("SisterBackstageAppKind.");
         source.Should().NotContain("SisterBackstageAccountPanePlanner.Build(");
         source.Should().NotContain("BackstagePrintPanePlanner.Build(");
         source.Should().NotContain("BackstageInfoSafetyPanePlanner.Build(");
@@ -143,6 +145,65 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().NotContain("TextTrimming = TextTrimming.CharacterEllipsis");
         source.Should().NotContain("Path.GetFileName(path)");
         source.Should().NotContain("var gallery = new WrapPanel");
+    }
+
+    [Fact]
+    public void SharedBackstageTextInfrastructure_IsProductNeutral()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var sharedFiles = new[]
+        {
+            Path.Combine(root, "shared", "Free.Shared.AppServices", "SisterBackstagePaneTextResources.cs"),
+            Path.Combine(root, "shared", "Free.Shared.Shell", "SisterBackstagePaneSpecPlanner.cs"),
+            Path.Combine(root, "shared", "Free.Shared.Shell.Wpf", "SisterBackstagePaneResources.cs"),
+        };
+
+        var source = string.Join(Environment.NewLine, sharedFiles.Select(File.ReadAllText));
+
+        source.Should().NotContain("FreeW_");
+        source.Should().NotContain("FreeP_");
+        source.Should().NotContain("FreeW application");
+        source.Should().NotContain("FreeP application");
+        source.Should().NotContain("SisterBackstageAppKind");
+    }
+
+    [Fact]
+    public void SharedPrintEvidenceFormatter_OwnsRendererNeutralEvidenceText()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            "freew",
+            "FreeW.App.Presentation",
+            "Backstage",
+            "BackstagePrintEvidenceTextFormatter.cs"));
+
+        source.Should().Contain("BackstageViewTextResources.EvidenceScenariosLabel");
+        source.Should().Contain("BackstageViewTextResources.EvidenceRequirementsLabel");
+        source.Should().Contain("BackstagePrintEvidenceKind.PrintPreviewFidelity");
+        source.Should().Contain("BackstagePrintEvidenceStatus.HostBacked");
+        source.Should().Contain("FormatRequirement");
+    }
+
+    [Fact]
+    public void FreeW_Avalonia_UsesPortableStandardPaneAndAccountSpecs()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            "freew",
+            "FreeW.App.Avalonia",
+            "Backstage",
+            "BackstageView.cs"));
+
+        source.Should().Contain("SisterBackstagePaneSpecPlanner");
+        source.Should().Contain("_session.BuildNewPaneSpec(PaneSpecs)");
+        source.Should().Contain("_session.BuildOptionsPaneSpec(PaneSpecs)");
+        source.Should().Contain("_session.BuildAccountPane(");
+        source.Should().NotContain("ApplicationOptionsSummaryPlanner.Build(");
+        source.Should().NotContain("new SisterBackstageAccountPaneContext(");
+        source.Should().NotContain("SafeEnvironment(");
+        source.Should().NotContain("SisterBackstageAccountPaneContextPlanner.BuildLocal(");
+        source.Should().NotContain("PaneText.TemplateHeading");
+        source.Should().NotContain("PaneText.OptionsDescription");
     }
 
     [Fact]

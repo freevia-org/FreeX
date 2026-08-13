@@ -2752,7 +2752,9 @@ public static class PptxPackageReader
                 // Infer content type and extension from path
                 var ext = embRel.Target.Split('.').LastOrDefault() ?? "bin";
                 ole.EmbeddedExtension = ext;
-                ole.EmbeddedContentType = OleExtensionToContentType(ext);
+                ole.EmbeddedContentType = OpcMediaTypes.GetContentTypeForFileNameOrExtension(
+                    ext,
+                    OpcMediaContentTypeProfile.OfficeEmbeddedObjectPackageRead);
 
                 // Capture the rel type for round-trip (package vs oleObject vs other)
                 ole.RelType = string.IsNullOrWhiteSpace(embRel.Type)
@@ -2827,18 +2829,6 @@ public static class PptxPackageReader
             ContentType = OpcMediaTypes.GetDrawingMediaContentType(imgPath)
         };
     }
-
-    /// <summary>Derives an IANA content type from an embedded-object file extension.</summary>
-    private static string OleExtensionToContentType(string ext) =>
-        ext.ToLowerInvariant() switch
-        {
-            "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "xlsm" => "application/vnd.ms-excel.sheet.macroEnabled.12",
-            "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            "bin"  => "application/vnd.ms-office.activeX+xml",
-            _      => "application/octet-stream"
-        };
 
     private static SmartArtQuickStyleMetadata? ReadSmartArtQuickStyleMetadata(SmartArtShape smart)
     {
@@ -3032,14 +3022,12 @@ public static class PptxPackageReader
 
     private static SrgbColor? ParseHexColor(string? hex)
     {
-        if (string.IsNullOrWhiteSpace(hex)) return null;
-        hex = hex.Trim().TrimStart('#');
-        if (hex.Length != 6) return null;
-
-        if (!byte.TryParse(hex[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r)) return null;
-        if (!byte.TryParse(hex.Substring(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g)) return null;
-        if (!byte.TryParse(hex.Substring(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)) return null;
-        return new SrgbColor(r, g, b);
+        return RgbColorTextCodec.TryParse(
+            hex,
+            RgbColorTextProfile.DrawingMl,
+            out var rgb)
+            ? new SrgbColor(rgb.R, rgb.G, rgb.B)
+            : null;
     }
 
     /// <summary>
@@ -4726,10 +4714,10 @@ public static class PptxPackageReader
         if (tcPr is not null)
         {
             // Insets (EMU -> points)
-            if (ParseLongNullable(tcPr.Attribute("marL")?.Value) is { } ml) cell.InsetLeftPt   = DrawingMlUnits.EmuToPoints(ml);
-            if (ParseLongNullable(tcPr.Attribute("marR")?.Value) is { } mr) cell.InsetRightPt  = DrawingMlUnits.EmuToPoints(mr);
-            if (ParseLongNullable(tcPr.Attribute("marT")?.Value) is { } mt) cell.InsetTopPt    = DrawingMlUnits.EmuToPoints(mt);
-            if (ParseLongNullable(tcPr.Attribute("marB")?.Value) is { } mb) cell.InsetBottomPt = DrawingMlUnits.EmuToPoints(mb);
+            if (ParseLongNullable(tcPr.Attribute("marL")?.Value) is { } ml) cell.InsetLeftPt   = DrawingMlCoordinateUnits.EmuToPoints(ml);
+            if (ParseLongNullable(tcPr.Attribute("marR")?.Value) is { } mr) cell.InsetRightPt  = DrawingMlCoordinateUnits.EmuToPoints(mr);
+            if (ParseLongNullable(tcPr.Attribute("marT")?.Value) is { } mt) cell.InsetTopPt    = DrawingMlCoordinateUnits.EmuToPoints(mt);
+            if (ParseLongNullable(tcPr.Attribute("marB")?.Value) is { } mb) cell.InsetBottomPt = DrawingMlCoordinateUnits.EmuToPoints(mb);
 
             // Vertical anchor
             cell.Anchor = tcPr.Attribute("anchor")?.Value switch
@@ -5126,7 +5114,7 @@ public static class PptxPackageReader
             return true;
         }
 
-        return GetCaptionTrackExtension(normalized) is "vtt" or "ttml" or "dfxp" or "srt";
+        return OpcMediaTypes.GetSourceExtension(normalized) is "vtt" or "ttml" or "dfxp" or "srt";
     }
 
     private static bool IsExternalCaptionTrackTarget(string target)
@@ -5149,7 +5137,7 @@ public static class PptxPackageReader
             }
         }
 
-        var extension = GetCaptionTrackExtension(source);
+        var extension = OpcMediaTypes.GetSourceExtension(source);
         if (extension.Length > 0 &&
             defaultContentTypes.TryGetValue(extension, out var defaultContentType) &&
             !string.IsNullOrWhiteSpace(defaultContentType))
@@ -5157,30 +5145,9 @@ public static class PptxPackageReader
             return defaultContentType;
         }
 
-        return extension switch
-        {
-            "vtt" => "text/vtt",
-            "ttml" or "dfxp" => "application/ttml+xml",
-            "srt" => "application/x-subrip",
-            _ => string.Empty
-        };
-    }
-
-    private static string GetCaptionTrackExtension(string source)
-    {
-        var end = source.AsSpan();
-        var queryIndex = source.IndexOfAny(['?', '#']);
-        if (queryIndex >= 0)
-        {
-            end = source.AsSpan(0, queryIndex);
-        }
-
-        var slashIndex = end.LastIndexOf('/');
-        var fileName = slashIndex >= 0 ? end[(slashIndex + 1)..] : end;
-        var dotIndex = fileName.LastIndexOf('.');
-        return dotIndex >= 0 && dotIndex < fileName.Length - 1
-            ? fileName[(dotIndex + 1)..].ToString().ToLowerInvariant()
-            : string.Empty;
+        return OpcMediaTypes.GetContentTypeForFileNameOrExtension(
+            extension,
+            OpcMediaContentTypeProfile.PresentationCaptionTrack);
     }
 
     private static string ReadCaptionTrackLanguage(XElement? metadata)
@@ -5922,10 +5889,10 @@ public static class PptxPackageReader
                 _ => (VerticalAnchor?)null
             };
 
-            if (ParseLongNullable(bodyPr.Attribute("lIns")?.Value) is { } li) body.InsetLeftPt = DrawingMlUnits.EmuToPoints(li);
-            if (ParseLongNullable(bodyPr.Attribute("rIns")?.Value) is { } ri) body.InsetRightPt = DrawingMlUnits.EmuToPoints(ri);
-            if (ParseLongNullable(bodyPr.Attribute("tIns")?.Value) is { } ti) body.InsetTopPt = DrawingMlUnits.EmuToPoints(ti);
-            if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = DrawingMlUnits.EmuToPoints(bi);
+            if (ParseLongNullable(bodyPr.Attribute("lIns")?.Value) is { } li) body.InsetLeftPt = DrawingMlCoordinateUnits.EmuToPoints(li);
+            if (ParseLongNullable(bodyPr.Attribute("rIns")?.Value) is { } ri) body.InsetRightPt = DrawingMlCoordinateUnits.EmuToPoints(ri);
+            if (ParseLongNullable(bodyPr.Attribute("tIns")?.Value) is { } ti) body.InsetTopPt = DrawingMlCoordinateUnits.EmuToPoints(ti);
+            if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = DrawingMlCoordinateUnits.EmuToPoints(bi);
             body.Wrap = bodyPr.Attribute("wrap")?.Value != "none";
             var normAf = bodyPr.Element(A + "normAutofit");
             var spAf   = bodyPr.Element(A + "spAutoFit");
@@ -6624,8 +6591,8 @@ public static class PptxPackageReader
                         alpha = (byte)Math.Clamp((int)Math.Round(av / 100000.0 * 255), 0, 255);
                 }
                 double blurPt = 2.0, distPt = 2.0, dirDeg = 45.0;
-                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlUnits.EmuToPoints(blurEmu);
-                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    out var distEmu)) distPt = DrawingMlUnits.EmuToPoints(distEmu);
+                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlCoordinateUnits.EmuToPoints(blurEmu);
+                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    out var distEmu)) distPt = DrawingMlCoordinateUnits.EmuToPoints(distEmu);
                 if (long.TryParse(outerShdw.Attribute("dir")?.Value,     out var dirRaw))  dirDeg = dirRaw  / 60000.0;
                 run.TextShadow = new RunTextShadow
                 {
@@ -6650,8 +6617,8 @@ public static class PptxPackageReader
                     alpha = (byte)Math.Clamp((int)Math.Round(stA / 100000.0 * 255), 0, 255);
 
                 double blurPt = 0, distPt = 0, dirDeg = 90.0, scaleY = -1.0, endPos = 1.0;
-                if (long.TryParse(reflection.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlUnits.EmuToPoints(blurEmu);
-                if (long.TryParse(reflection.Attribute("dist")?.Value, out var distEmu)) distPt = DrawingMlUnits.EmuToPoints(distEmu);
+                if (long.TryParse(reflection.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlCoordinateUnits.EmuToPoints(blurEmu);
+                if (long.TryParse(reflection.Attribute("dist")?.Value, out var distEmu)) distPt = DrawingMlCoordinateUnits.EmuToPoints(distEmu);
                 if (long.TryParse(reflection.Attribute("dir")?.Value, out var dirRaw)) dirDeg = dirRaw / 60000.0;
                 if (long.TryParse(reflection.Attribute("sy")?.Value, out var syRaw) && syRaw != 0) scaleY = syRaw / 100000.0;
                 if (long.TryParse(reflection.Attribute("endPos")?.Value, out var endPosRaw)) endPos = Math.Clamp(endPosRaw / 100000.0, 0.0, 1.0);
@@ -6673,7 +6640,7 @@ public static class PptxPackageReader
             {
                 double radiusPt = 0;
                 if (long.TryParse(glow.Attribute("rad")?.Value, out var radEmu))
-                    radiusPt = DrawingMlUnits.EmuToPoints(radEmu);
+                    radiusPt = DrawingMlCoordinateUnits.EmuToPoints(radEmu);
 
                 byte alpha = 0xA0;
                 var glowColorEl = glow.Elements().FirstOrDefault();
@@ -6695,7 +6662,7 @@ public static class PptxPackageReader
             {
                 double radiusPt = 0;
                 if (long.TryParse(softEdge.Attribute("rad")?.Value, out var radEmu))
-                    radiusPt = DrawingMlUnits.EmuToPoints(radEmu);
+                    radiusPt = DrawingMlCoordinateUnits.EmuToPoints(radEmu);
 
                 run.TextSoftEdge = new RunTextSoftEdge
                 {

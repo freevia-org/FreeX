@@ -23,22 +23,29 @@ using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Globalization;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.DataTools;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.FormulaBar;
+using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
+using FreeX.Ribbon.Definitions;
 using FreeX.App.Presentation.QuickAnalysis;
+using FreeX.App.Presentation.Rendering;
 using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.SparklineUI;
+using FreeX.App.Presentation.Sparklines;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
@@ -46,6 +53,8 @@ using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell.Avalonia;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -68,6 +77,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 {
+    private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeX;
+
     private const string ApplicationTitle = "FreeX";
     private const string GroupTitleSuffix = " [Group]";
     private const string DirtyTitleSuffix = " *";
@@ -84,13 +95,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Cancel,
         Save,
         Discard
-    }
-
-    private enum MergeCellsWarningChoice
-    {
-        Cancel,
-        KeepFirstCell,
-        ConcatenateAllCells
     }
 
     private enum FindDialogAction
@@ -139,100 +143,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         bool MatchEntireCell,
         StyleDiff? ReplacementFormat);
 
-    private sealed record FindOptionsControls(
+    internal sealed record FindOptionsControls(
         ComboBox WithinBox,
         ComboBox SearchBox,
         ComboBox LookInBox,
         CheckBox MatchCaseBox,
         CheckBox MatchEntireCellBox,
         Control Panel);
-    private sealed record FindDialogSmokeProbe(
-        Window Dialog,
-        TextBox FindBox,
-        Button FindNextButton,
-        Button FindAllButton,
-        Button CancelButton,
-        FindOptionsControls OptionsControls,
-        Button ChooseFormatButton,
-        Button ClearFormatButton);
-    private sealed record ReplaceDialogSmokeProbe(
-        Window Dialog,
-        TextBox FindBox,
-        TextBox ReplaceBox,
-        Button ReplaceButton,
-        Button ReplaceAllButton,
-        Button CancelButton,
-        FindOptionsControls OptionsControls,
-        Button ChooseFindFormatButton,
-        Button ClearFindFormatButton,
-        Button ChooseReplaceFormatButton,
-        Button ClearReplaceFormatButton);
-    private sealed record SingleInputDialogSmokeProbe(
-        Window Dialog,
-        TextBox InputBox,
-        Button AcceptButton,
-        Button CancelButton);
-    private sealed record GoToDialogSmokeProbe(
-        Window Dialog,
-        ListBox HistoryList,
-        TextBox InputBox,
-        Button SpecialButton,
-        Button AcceptButton,
-        Button CancelButton);
     private sealed record GoToDialogResult(
         string? Reference,
         GoToSpecialKind? SpecialKind,
         GoToSpecialOptions? SpecialOptions);
-    private sealed record GoToSpecialDialogSmokeProbe(
-        Window Dialog,
-        Control KindBox,
-        CheckBox NumbersBox,
-        CheckBox TextBox,
-        CheckBox LogicalsBox,
-        CheckBox ErrorsBox,
-        Button OkButton,
-        Button CancelButton);
     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
-    private sealed record SortDialogSmokeProbe(
-        Window Dialog,
-        CheckBox HeadersCheckBox,
-        Control LevelsGrid,
-        ComboBox SortOnBox,
-        ComboBox ColorBox,
-        Button AddLevelButton,
-        Button DeleteLevelButton,
-        Button CopyLevelButton,
-        Button MoveUpButton,
-        Button MoveDownButton,
-        Button OptionsButton,
-        Button OkButton,
-        Button CancelButton);
     private sealed record DataValidationDialogResult(
         DataValidationDialogAction Action,
         DataValidation? Rule,
         bool ApplyToSameSettings = false);
-    private sealed record DataValidationDialogSmokeProbe(
-        Window Dialog,
-        TextBlock SummaryText,
-        ComboBox TypeBox,
-        ComboBox OperatorBox,
-        TextBox Formula1Box,
-        TextBox Formula2Box,
-        CheckBox AllowBlankBox,
-        CheckBox ShowDropdownBox,
-        CheckBox ShowInputMessageBox,
-        TextBox PromptTitleBox,
-        TextBox PromptMessageBox,
-        CheckBox ShowErrorMessageBox,
-        ComboBox AlertStyleBox,
-        TextBox ErrorTitleBox,
-        TextBox ErrorMessageBox,
-        Button ApplyButton,
-        Button ClearButton,
-        Button CancelButton);
-    private sealed record SubtotalDialogResult(
-        SubtotalDialogPlanAction Action,
-        SubtotalInputOptions? Options);
     private sealed record SortDialogResult(
         IReadOnlyList<SortDialogLevel> Levels,
         bool HasHeaders,
@@ -241,42 +167,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         public override string ToString() => Label;
     }
-    private sealed record DataValidationTypeChoice(DvType Type, string Label)
-    {
-        public override string ToString() => Label;
-    }
-    private sealed record DataValidationOperatorChoice(DvOperator Operator, string Label)
-    {
-        public override string ToString() => Label;
-    }
-    private sealed record DataValidationAlertStyleChoice(DvAlertStyle AlertStyle, string Label)
-    {
-        public override string ToString() => Label;
-    }
-    internal sealed record FormatCellsDialogResult(
-        FormatCellsCompactRequest Request,
-        CellBorderPreset? BorderPreset,
-        BorderStyle BorderStyle,
-        CellColor? BorderColor);
     internal sealed record FormatCellsNullableChoice<T>(string Label, T? Value)
         where T : struct
     {
         public override string ToString() => Label;
     }
-    internal sealed record FormatCellsDialogSmokeProbe(
-        Window Dialog,
-        TabControl TabStrip,
-        TabItem NumberTab,
-        TabItem AlignmentTab,
-        TabItem FontTab,
-        TabItem FillTab,
-        TabItem BorderTab,
-        TabItem ProtectionTab,
-        ListBox NumberCategoryList,
-        ComboBox NumberFormatBox,
-        TextBlock NumberPreview,
-        Button OkButton,
-        Button CancelButton);
     private sealed class FormatCellsDialogWindow : Window
     {
         internal void ResizeClient(Size size) => ClientSize = size;
@@ -326,10 +221,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private const uint PortablePdfRowsPerPage = 28;
     private const string WorkbookShareSheetLabel = "macOS Share Sheet";
     private const string NativeWorkbookExtension = ".fxl";
-    private const string SheetTabContextHelpText = "Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush TitleBarSurface =
-        ResolveTokenBrush("FreeXTitleBarBrush") ?? Brush(23, 50, 77);
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.TitleBarBrush) ?? Brush(23, 50, 77);
     private static readonly IBrush HeaderBackground = Brush(242, 242, 242);
     private static readonly IBrush HeaderForeground = Brushes.Black;
     private static readonly IBrush GridLine = Brush(231, 231, 231);
@@ -367,21 +261,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ListBoxItemMinHeight = 22,
         };
 
-    // Shell chrome surface — shared by the toolbar and the sheet-tabs/status bar so the window chrome reads
-    // as one cohesive light surface (the same #F5F6F7 the ribbon theme uses). Exposed for tests.
-    // WS-G token: FreeXChromeSurfaceBrush (#F7F8F8) — byte-identical to the literal; falls back to the
-    // literal when no Application is running (e.g. unit-test environments).
-    internal static readonly global::Avalonia.Media.Color ChromeSurfaceColor =
-        ResolveTokenColor("FreeXChromeSurfaceColor", global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
     private static readonly IBrush ChromeSurface =
-        ResolveTokenBrush("FreeXChromeSurfaceBrush") ?? new ImmutableSolidColorBrush(global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("ChromeSurface"))
+        ?? new ImmutableSolidColorBrush(global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
     private static readonly IBrush StatusBarSurface = Brush(23, 50, 77);
     // WS-G token: FreeXAccentBrush (#0F6D8C) — byte-identical to the literal.
     private static readonly IBrush SheetTabContourBrush =
-        ResolveTokenBrush("FreeXAccentBrush") ?? Brush(15, 109, 140);
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("Accent")) ?? Brush(15, 109, 140);
     // WS-G token: FreeXAccentSoftBrush (#E6F6FA) — byte-identical to the literal.
     private static readonly IBrush CheckedCommandBackground =
-        ResolveTokenBrush("FreeXAccentSoftBrush") ?? Brush(230, 246, 250);
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("AccentSoft")) ?? Brush(230, 246, 250);
     private static readonly FuncControlTemplate<ToggleButton> StatusBarViewButtonTemplate = new((button, _) =>
     {
         var presenter = new ContentPresenter();
@@ -406,7 +295,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // / zoom texts so the status bar reads consistently (was scattered inline 73,80,93 magic values).
     // WS-G token: FreeXWhiteBrush (#FFFFFF) — byte-identical to the literal.
     private static readonly IBrush StatusBarForeground =
-        ResolveTokenBrush("FreeXWhiteBrush") ?? Brushes.White;
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.WhiteBrush) ?? Brushes.White;
 
     // Toolbar/chrome ink tokens — the primary (title text, glyph rules) and secondary (detail text) inks,
     // named so the chrome typography stays consistent instead of repeating inline 25,31,40 / 94,103,116.
@@ -452,15 +341,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private readonly WorkbookSessionFactory _sessionFactory = new();
     private readonly WorkbookOpenService _openService = new();
     private readonly WorkbookSaveService _saveService = new();
+    private readonly WorkbookFileWorkflow _fileWorkflow;
     private readonly IWorkbookShareSheetService _workbookShareSheetService;
     private readonly IWorkbookFileAccessService _workbookFileAccessService;
-    private readonly IPlatformPrinter _platformPrinter;
+    private readonly IPlatformPrintService _printService;
+    private readonly IPlatformClipboard _platformClipboard;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
-    private int _sheetGridBuildCount;
-    // R82-render-scroll-viewport-5-1: test-only counter proving a pure viewport pan (scrollbar drag /
-    // mouse wheel) no longer rebuilds the sheet-tab strip -- see RefreshShellForViewportPan.
-    private int _sheetTabsBuildCount;
     // The active cell's Border from the most recent BuildSheetGrid pass. Cells are plain Borders
     // rebuilt on every RefreshShell (see CreateInteractiveCellBorder), so this is refreshed each
     // pass and used to move REAL keyboard focus onto the active cell (see MoveFocusToActiveCellBorder)
@@ -525,21 +412,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // WPF host's _applyingCellValueAutoCompleteSuggestion (MainWindow.Editing.cs).
     private bool _applyingInlineCellValueAutoCompleteSuggestion;
 
-    // Set for one TextChanged pass when Backspace/Delete just removed a live suggestion, so that pass
-    // doesn't instantly re-offer the very completion the user just rejected -- mirrors the WPF host's
-    // _suppressNextCellValueAutoCompleteSuggestion.
-    private bool _suppressNextInlineCellValueAutoCompleteSuggestion;
     private CellAddress? _lastCellPointerPressAddress;
     private long _lastCellPointerPressTimestamp;
     private CellAddress? _pivotDetailsDoubleClickHandledAddress;
     private long _pivotDetailsDoubleClickHandledTimestamp;
-    private CellAddress? _formulaRangeSelectionAnchor;
-    private CellAddress? _formulaRangeSelectionCursor;
-    private FormulaSheetSpanEntryState _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
-    private bool _formulaRangeEntryMode;
-    private ExcelSelectionMode _formulaRangeEntrySelectionMode = ExcelSelectionMode.Normal;
-    private int? _formulaReferenceStart;
-    private int? _formulaReferenceLength;
+    private readonly FormulaRangeEditingSession _formulaRangeEditingSession = new();
     private readonly TextBlock _formulaReferenceTextOverlay = new();
     private Canvas? _formulaReferenceGridOverlay;
 
@@ -549,9 +426,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // so typing "=SU" shows the SUM/SUMIF/... dropdown here too, not only on Windows.
     private Popup? _functionAutocompletePopup;
     private ListBox? _functionAutocompleteListBox;
-    private IReadOnlyList<string> _functionAutocompleteCandidates = [];
-    private int _functionAutocompleteTokenStart;
-    private int _functionAutocompleteTokenLength;
     private bool FunctionAutocompleteIsOpen => _functionAutocompletePopup?.IsOpen == true;
     private Popup? _cellAddressAutocompletePopup;
     private ListBox? _cellAddressAutocompleteListBox;
@@ -568,11 +442,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private const double FormulaReferenceGripHitSize = 18;
     private readonly List<Border> _formulaReferenceGripVisuals = [];
     private readonly List<Border> _formulaReferenceGripPreviewVisuals = [];
-    private bool _formulaReferenceDragActive;
     private IPointer? _formulaReferenceDragPointer;
     private Border? _formulaReferenceDragGrip;
     private Border? _formulaReferenceDragPreviewVisual;
-    private FormulaReferenceHighlight? _formulaReferenceDragHighlight;
     private TextBox? _formulaReferenceDragEditor;
     private readonly Border _formulaBarHost = new();
     private readonly Button _formulaExpandButton = new();
@@ -741,7 +613,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private readonly NativeMenuItem _boldMenuItem = new();
     private readonly NativeMenuItem _italicMenuItem = new();
     private readonly NativeMenuItem _underlineMenuItem = new();
-    private MacOsLaunchSmokeLiveCommandKeySnapshot _launchSmokeLiveCommandKeySnapshot = MacOsLaunchSmokeLiveCommandKeySnapshot.Empty;
     private readonly NativeMenuItem _doubleUnderlineMenuItem = new();
     private readonly NativeMenuItem _strikethroughMenuItem = new();
     private readonly NativeMenuItem _increaseFontSizeMenuItem = new();
@@ -830,362 +701,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private WorkbookSession _session;
     private string _windowTitleSuffix = string.Empty;
 
-    /// <summary>
-    /// Test-only accessor for the active <see cref="WorkbookSession"/> so headless regression tests
-    /// (e.g. Format Cells number-format seeding) can set up cell state before driving dialog methods
-    /// directly. Not used by production code paths.
-    /// </summary>
-    internal WorkbookSession Session => _session;
-
-    internal static AvaloniaWorkbookWindowRegistry WindowRegistryForTest => WindowRegistry;
-
-    internal RibbonContextState RibbonContextStateForTest => _ribbonContextSource.Current;
-
-    internal static IReadOnlySet<string> InteractiveValidationKeyboardShortcutScenarioIds { get; } =
-        FreeX.App.Presentation.InteractionValidation.InteractiveValidationInventory.KeyboardShortcuts
-            .Select(scenario => scenario.Id)
-            .ToFrozenSet(StringComparer.Ordinal);
-
-    /// <summary>
-    /// Test-only seam that rebuilds the worksheet grid (as <see cref="RefreshShell"/> does on every
-    /// scroll/edit/zoom) and returns the resulting visual, so headless regression tests can mutate
-    /// <see cref="Session"/> state (merges, freeze panes, selection, viewport origin) and then inspect
-    /// the actual rendered <see cref="Control"/> tree rather than only asserting on source text. Not
-    /// used by production code paths.
-    /// </summary>
-    internal Control RebuildSheetGridForTest() => BuildSheetGrid();
-
-    internal int SheetGridBuildCountForTest => _sheetGridBuildCount;
-
-    /// <summary>Test-only counter of <see cref="BuildSheetTabs"/> calls (see RefreshShellForViewportPan).</summary>
-    internal int SheetTabsBuildCountForTest => _sheetTabsBuildCount;
-
-    /// <summary>
-    /// Test-only driver that reproduces a full mouse cell-selection drag from <paramref name="anchor"/>
-    /// (the pressed cell) to <paramref name="cursor"/>, then the release. It mirrors the real gesture:
-    /// <c>BeginCellSelectionDrag</c> records the pressed cell as the transient anchor,
-    /// <c>ContinueCellSelectionDrag</c> extends to the cursor via <c>SelectRangeFromAnchor</c>, and
-    /// <c>EndCellSelectionDragAsync</c> clears the transient anchor/cursor fields -- the exact sequence
-    /// that used to discard the true anchor before View &gt; Split / Freeze Panes could read it. Not
-    /// used by production code paths.
-    /// </summary>
-    internal void RaiseCellSelectionDragForTest(CellAddress anchor, CellAddress cursor)
-    {
-        _cellDragSelectionAnchor = anchor;
-        SelectRangeFromAnchor(anchor, cursor);
-        _cellDragSelectionAnchor = null;
-        _selectionExtensionAnchor = null;
-        _selectionExtensionCursor = null;
-    }
-
-    /// <summary>
-    /// Test-only entry point for the View &gt; Split ribbon command (<c>SplitPanesAtActiveCell</c>),
-    /// which is otherwise reached only through the ribbon command map (<c>["view.split"]</c>). Not used
-    /// by production code paths.
-    /// </summary>
-    internal void InvokeSplitPanesAtActiveCellForTest() => SplitPanesAtActiveCell();
-
-    /// <summary>
-    /// Test-only accessor for the persistent worksheet grid host (survives RefreshShell/
-    /// BuildSheetGrid rebuilds — see its field comment), so headless accessibility regression tests
-    /// can move real keyboard focus onto it before driving navigation, exactly as a screen-reader
-    /// user tabbing into the grid would. Not used by production code paths.
-    /// </summary>
-    internal Control SheetGridHostForTest => _sheetGridHost;
-
-    /// <summary>
-    /// R119-avalonia-drag-preview: test-only accessor for the sheet grid host's CURRENT hosted
-    /// content (as last assigned by RefreshShell/RefreshShellForViewportPan/RefreshShellForGridPreview/
-    /// BuildSheetGrid), distinct from <see cref="RebuildSheetGridForTest"/> (which forces a brand
-    /// new rebuild). Lets a test prove that a given call -- e.g. ContinueAutofillDrag -- already
-    /// rebuilt the hosted content itself, without the test performing its own separate rebuild that
-    /// would mask a missing rebuild call in production code. Not used by production code paths.
-    /// </summary>
-    internal Control? SheetGridHostContentForTest => _sheetGridHost.Content as Control;
-
-    /// <summary>
-    /// Test-only accessor for the active cell's real Border control (see
-    /// <see cref="_activeCellBorder"/>/<see cref="MoveFocusToActiveCellBorder"/>), so headless
-    /// accessibility regression tests can assert which control keyboard focus actually lands on
-    /// after grid navigation, and read its AutomationProperties Name/AutomationId. Not used by
-    /// production code paths.
-    /// </summary>
-    internal Control? ActiveCellBorderForTest => _activeCellBorder;
-    internal bool DataValidationDropdownOpenForTest =>
-        _activeDataValidationDropdown?.IsDropDownOpen == true;
-
-    /// <summary>
-    /// Test-only accessor for the Name Box's current text (K23 regression coverage), so headless
-    /// tests can seed typed input before driving <see cref="RaiseCellAddressBoxKeyDownForTest"/> and
-    /// assert the box's resulting displayed text. Not used by production code paths.
-    /// </summary>
-    internal string? CellAddressBoxTextForTest
-    {
-        get => _cellAddressText.Text;
-        set => _cellAddressText.Text = value;
-    }
-
-    /// <summary>
-    /// Test-only seam that drives the real Name Box KeyDown handling (Enter-to-navigate,
-    /// define-name-by-typing, Escape-to-restore) with a caller-supplied <see cref="KeyEventArgs"/>,
-    /// so assertions can run against the resulting <see cref="Session"/>/box-text state rather than
-    /// only a source-string proxy. Not used by production code paths.
-    /// </summary>
-    internal void RaiseCellAddressBoxKeyDownForTest(KeyEventArgs e) => CellAddressBox_KeyDown(_cellAddressText, e);
-
-    /// <summary>
-    /// Test-only seam exposing the Name Box's basic-autocomplete name list (the same list the
-    /// dropdown chevron's flyout populates on open), so headless tests can assert its contents
-    /// without needing to open a real Avalonia flyout. Not used by production code paths.
-    /// </summary>
-    internal IReadOnlyList<string> CellAddressAutocompleteNamesForTest() => BuildCellAddressAutocompleteNames();
-
-    internal bool CellAddressAutocompleteOpenForTest => _cellAddressAutocompletePopup?.IsOpen == true;
-
-    internal bool CellAddressBoxHasPendingEditForTest => _cellAddressBoxHasPendingEdit;
-
-    internal SelectionPaneObjectKind? SelectedDrawingObjectKindForTest => _selectedDrawingObjectKind;
-
-    internal Guid? SelectedDrawingObjectIdForTest => _selectedDrawingObjectId;
-
-    internal bool SelectCellAddressBoxItemForTest(NameBoxNavigationItem item) =>
-        SelectCellAddressBoxItem(item);
-
-    internal NameBoxNavigationItem? SelectCellAddressAutocompleteKeyboardForTest(params Key[] keys)
-    {
-        ShowCellAddressAutocompletePopup();
-        foreach (var key in keys)
-        {
-            var item = key == Key.Enter
-                ? GetSelectedCellAddressAutocompleteItem()
-                : null;
-            _cellAddressAutocompleteListBox!.RaiseEvent(new KeyEventArgs
-            {
-                RoutedEvent = InputElement.KeyDownEvent,
-                Key = key,
-                Source = _cellAddressAutocompleteListBox,
-                Handled = key == Key.Enter,
-            });
-            if (key == Key.Enter)
-                return item;
-        }
-
-        return GetSelectedCellAddressAutocompleteItem();
-    }
-
-    /// <summary>
-    /// Test-only accessor for the Formula Bar's current text, so headless tests can seed typed
-    /// input before driving <see cref="RaiseFormulaBoxKeyDownForTest"/>. Not used by production
-    /// code paths.
-    /// </summary>
-    internal string? FormulaBoxTextForTest
-    {
-        get => _formulaBox.Text;
-        set => _formulaBox.Text = value;
-    }
-
-    /// <summary>
-    /// Test-only seam that drives the real Formula Bar KeyDown handling (Enter/Tab commit-and-move,
-    /// line-break insertion) with a caller-supplied <see cref="KeyEventArgs"/>, so assertions can run
-    /// against the resulting <see cref="Session"/> state rather than only a source-string proxy. Not
-    /// used by production code paths.
-    /// </summary>
-    internal void RaiseFormulaBoxKeyDownForTest(KeyEventArgs e) => FormulaBox_KeyDown(_formulaBox, e);
-
-    internal void BeginFormulaEditForTest(CellAddress address, string? initialText = null) =>
-        BeginFormulaEdit(address, initialText);
-
-    /// <summary>
-    /// Test-only seam that starts a Formula Bar edit through the same first-character path as a
-    /// user typing <c>=</c>, then replaces the still-live formula text with the requested suffix.
-    /// This keeps point mode active for tests that need to exercise worksheet reference selection.
-    /// </summary>
-    internal void BeginFormulaPointModeEditForTest(CellAddress address, string formulaText)
-    {
-        if (!FormulaEditInteractionPlanner.IsFormulaText(formulaText))
-            throw new ArgumentException("Formula point-mode text must start with '='.", nameof(formulaText));
-
-        BeginFormulaEdit(address, "=");
-        _formulaBox.Text = formulaText;
-        MoveFormulaBoxCaretToEnd();
-    }
-
-    internal int FormulaReferenceGripCountForTest => _formulaReferenceGripVisuals.Count;
-
-    internal bool RaiseFormulaReferenceGripDragForTest(int highlightIndex, CellAddress target)
-    {
-        var editor = GetFormulaReferenceHighlightEditor();
-        IReadOnlyList<FormulaReferenceHighlight> highlights = editor is null
-            ? []
-            : GetFormulaReferenceHighlights(editor.Text ?? "");
-        if (editor is null || highlightIndex < 0 || highlightIndex >= highlights.Count ||
-            highlights[highlightIndex].Range is not { } originalRange ||
-            originalRange.Start.Sheet != target.Sheet)
-        {
-            return false;
-        }
-
-        var newRange = FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, target);
-        return TryApplyFormulaReferenceResize(editor, highlights[highlightIndex], newRange);
-    }
-
-    /// <summary>
-    /// Test-only seam for the production sheet-tab route. Existing formulas are edited in Edit
-    /// mode, so this intentionally exercises <see cref="SelectSheet"/> rather than the lower-level
-    /// session transition directly.
-    /// </summary>
-    internal bool SelectFormulaReferenceSheetForTest(SheetId sheetId)
-    {
-        if (GetFormulaReferenceHighlightEditor() is null)
-            return false;
-
-        SelectSheet(sheetId, selectRange: false, toggle: false);
-        return _session.ActiveSheet.Id == sheetId && _session.FormulaEditAddress is not null;
-    }
-
-    internal bool FormulaPointModeForTest => _formulaRangeEntryMode;
-
-    internal ExcelSelectionMode FormulaRangeEntrySelectionModeForTest => _formulaRangeEntrySelectionMode;
-
-    /// <summary>
-    /// R92-meta-2 test seam: whether the function-name AutoComplete popup is currently open, and the
-    /// candidate list it is showing. Not used by production code paths.
-    /// </summary>
-    internal bool FunctionAutocompleteOpenForTest => FunctionAutocompleteIsOpen;
-
-    internal IReadOnlyList<string> FunctionAutocompleteCandidatesForTest => _functionAutocompleteCandidates;
-
-    /// <summary>
-    /// R93-formula-editing-assist-5-2 test seam: whether the live argument-signature tooltip is
-    /// currently open, and the text it renders (function name plus its bracketed-optional argument
-    /// list, e.g. "VLOOKUP(lookup_value, table_array, col_index_num, [range_lookup])"). Not used by
-    /// production code paths.
-    /// </summary>
-    internal bool SignatureHelpOpenForTest => _signatureHelpPopup?.IsOpen == true;
-
-    internal string SignatureHelpTextForTest => _signatureHelpTextBlock?.Inlines is { } inlines
-        ? string.Concat(inlines.OfType<Run>().Select(run => run.Text))
-        : "";
-
-    /// <summary>
-    /// R93-formula-editing-assist-5-2 test seam: the 0-based index (within
-    /// <see cref="SignatureHelpTextForTest"/>'s argument list) of the run currently rendered bold
-    /// (the argument the caret sits inside), or -1 when the tooltip is closed.
-    /// </summary>
-    internal int SignatureHelpBoldArgumentIndexForTest
-    {
-        get
-        {
-            if (_signatureHelpTextBlock?.Inlines is not { } inlines)
-                return -1;
-
-            var argumentIndex = -1;
-            foreach (var run in inlines.OfType<Run>().Skip(1))
-            {
-                var text = run.Text ?? "";
-                if (text is ", " or ")")
-                    continue;
-
-                argumentIndex++;
-                if (run.FontWeight == FontWeight.Bold)
-                    return argumentIndex;
-            }
-
-            return -1;
-        }
-    }
-
-    /// <summary>
-    /// R92-meta-2 test seam: drives the Formula Bar's real TextChanged handling with the Text and
-    /// CaretIndex already at their post-keystroke values (native Avalonia TextBox typing -- the
-    /// Formula Bar has no custom TextInput interception -- updates both atomically before raising
-    /// TextChanged, unlike a bare property assignment), so headless tests can exercise
-    /// RefreshFormulaFunctionAutocomplete via the exact FormulaBox_TextChanged production path
-    /// instead of only calling it directly. Not used by production code paths.
-    /// </summary>
-    internal void SimulateFormulaBoxTypedTextForTest(string text, int caretIndex)
-    {
-        _formulaBox.Text = text;
-        var clamped = Math.Clamp(caretIndex, 0, text.Length);
-        _formulaBox.CaretIndex = clamped;
-        _formulaBox.SelectionStart = clamped;
-        _formulaBox.SelectionEnd = clamped;
-        FormulaBox_TextChanged(_formulaBox, null!);
-    }
-
-    /// <summary>
-    /// R92-meta-2 test seam: drives the in-cell inline editor's real TextInput handling
-    /// (<see cref="InlineCellEditor_TextInput"/> -&gt; TryApplyInlineCellTextInput -&gt;
-    /// ApplyTextBoxEdit -&gt; RefreshFormulaFunctionAutocomplete), the same method a genuine keystroke
-    /// invokes, so headless tests exercise the production entry point rather than a source-string
-    /// proxy. Not used by production code paths.
-    /// </summary>
-    internal void RaiseInlineCellEditorTextInputForTest(string text)
-    {
-        if (_inlineCellEditor is not { } editor || _inlineCellEditAddress is not { } address)
-            throw new InvalidOperationException("No inline cell editor is active.");
-
-        InlineCellEditor_TextInput(
-            address,
-            editor,
-            new TextInputEventArgs { RoutedEvent = InputElement.TextInputEvent, Source = editor, Text = text });
-    }
-
-    internal string? InlineCellEditorTextForTest => _inlineCellEditor?.Text ?? _inlineCellEditText;
-
-    /// <summary>
-    /// R78-render-inplace-editor-5-2 test seam: whether the in-cell editor's own reference-highlight
-    /// overlay (mirroring the formula bar's <c>_formulaReferenceTextOverlay</c>) is currently showing
-    /// colored reference runs over the cell being edited in place.
-    /// </summary>
-    internal bool InlineCellReferenceOverlayVisibleForTest => _inlineCellReferenceTextOverlay?.IsVisible ?? false;
-
-    internal int InlineCellReferenceOverlayRunCountForTest => _inlineCellReferenceTextOverlay?.Inlines?.Count ?? 0;
-
-    internal IBrush? InlineCellEditorForegroundForTest => _inlineCellEditor?.Foreground;
-
-    internal void BeginInlineCellEditForTest(CellAddress address, string text, int caretIndex)
-    {
-        BeginInlineCellEdit(address, text, caretIndex);
-        if (_inlineCellEditor is { } editor)
-        {
-            var caret = Math.Clamp(caretIndex, 0, editor.Text?.Length ?? 0);
-            editor.CaretIndex = caret;
-            editor.SelectionStart = caret;
-            editor.SelectionEnd = caret;
-            _pendingInlineCellCaretIndex = null;
-        }
-    }
-
-    internal void RaiseInlineCellEditorKeyDownForTest(KeyEventArgs e)
-    {
-        if (_inlineCellEditor is not { } editor || _inlineCellEditAddress is not { } address)
-            throw new InvalidOperationException("No inline cell editor is active.");
-
-        InlineCellEditor_KeyDown(address, editor, e);
-    }
-
-    internal void SetFormulaBoxSelectionForTest(int start, int length)
-    {
-        var textLength = _formulaBox.Text?.Length ?? 0;
-        _formulaBox.SelectionStart = Math.Clamp(start, 0, textLength);
-        _formulaBox.SelectionEnd = Math.Clamp(start + Math.Max(0, length), 0, textLength);
-        _formulaBox.CaretIndex = _formulaBox.SelectionEnd;
-    }
-
-    /// <summary>
-    /// Test-only seam that drives the real worksheet pointer-wheel handling (row/column panning,
-    /// Ctrl+wheel zoom) with a caller-supplied <see cref="PointerWheelEventArgs"/>, so assertions can
-    /// run against the resulting <see cref="Session"/> state rather than only a source-string proxy.
-    /// Not used by production code paths.
-    /// </summary>
-    internal void RaisePointerWheelChangedForTest(PointerWheelEventArgs e) => SheetScrollViewer_PointerWheelChanged(_sheetGridHost, e);
-
     private readonly RecentColorsStore _recentColors = new();
-    private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
     private CellAddress? _cellDragSelectionAnchor;
-    private bool _cellDragAddsAdditionalRange;
     // Set whenever SelectRangeFromAnchor switches the Name Box to the live "{rows}R x {cols}C"
     // dimension readout during a plain mouse-drag selection, so the drag-end handlers know to
     // revert it back to the plain range address (R69-render-active-cell-selection-6-2).
@@ -1209,15 +727,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private GridRange? _selectionMovePreviewRange;
     private CellAddress _selectionMoveStartCell;
 
-    /// <summary>
-    /// Test-only override for the border-drag-move overwrite confirmation
-    /// (<see cref="ConfirmSelectionMoveOverwriteAsync"/>), which otherwise shows a real modal
-    /// <see cref="Window"/> that headless tests cannot answer. Null (the production default) uses
-    /// the real dialog; tests set this to a canned Yes/No so
-    /// <see cref="CommitSelectionMoveDragAsync"/> can be exercised deterministically. Not used by
-    /// production code paths.
-    /// </summary>
-    internal Func<Task<bool>>? ConfirmSelectionMoveOverwriteOverrideForTest;
     private IReadOnlyDictionary<(uint Row, uint Col), SparklineCellEntry> _sparklinesByCell =
         new Dictionary<(uint Row, uint Col), SparklineCellEntry>();
     // Set by BuildSheetGrid for the sheet just rendered. When true, CreateCell must NOT paint an
@@ -1235,11 +744,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private bool _isApplyingFormulaBoxText;
     private bool _isOpening;
     private bool _isSaving;
-    // R119-avalonia-file-op-cancel: live CancellationTokenSource for whichever open/save is
-    // currently in flight, so the status-bar Cancel button (_fileOperationCancelButton) can abort
-    // it -- mirrors the WPF host's _fileOperationCancellation (MainWindow.Backstage.cs). Null
-    // whenever _isOpening/_isSaving are both false. See BeginFileOperationCancellation.
-    private CancellationTokenSource? _fileOperationCancellation;
+    // Shared lifetime policy for the cancellable open/save currently exposed by the status bar.
+    private readonly FileOperationCancellationSession _fileOperationCancellationSession = new();
+    private readonly WorkbookReadOnlySession _workbookReadOnlySession = new();
     // Write-time snapshot of the file this session was opened from
     // (WorkbookOpenResult.SourceLastWriteTimeUtc, set in OpenWorkbookFromTargetAsync and reset to
     // null by ReplaceSession for every new/opened document). Threaded into
@@ -1250,14 +757,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // new on-disk write time after every successful save to this path so the save's own write is
     // never mistaken for an external modification next time.
     private DateTime? _currentFileSourceLastWriteTimeUtc;
-    // Set after opening a workbook whose FileSharing.ReadOnlyRecommended/ReservationPassword
-    // prompted the user and they accepted opening it read-only -- see
-    // ApplyReadOnlyRecommendedPromptIfNeeded (R75-services-protection-security-4-2).
-    // SaveCurrentWorkbookAsync reads this flag on every Save to force Save-over-original through
-    // the Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1).
-    // Mirrors the WPF host's field of the same name in MainWindow.xaml.cs. Individual edit commands
-    // are not yet blocked -- that remains out of scope.
-    private bool _isWorkbookReadOnly;
     private bool _allowCloseWithoutDirtyPrompt;
     private bool _isDirtyCloseDialogOpen;
     private Task? _pendingDirtyWorkbookGate;
@@ -1309,17 +808,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             startupArguments,
             WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
             WorkbookFileAccessServiceFactory.Create(App.Diagnostics),
-            new CupsPlatformPrinter())
+            CreatePlatformPrintService())
     {
     }
 
-    internal MainWindow(IReadOnlyList<string> startupArguments, WorkbookSession sharedSession)
+    internal MainWindow(IReadOnlyList<string> startupArguments, bool deferStartupFileOpen)
         : this(
             startupArguments,
             WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
             WorkbookFileAccessServiceFactory.Create(App.Diagnostics),
-            new CupsPlatformPrinter(),
-            sharedSession)
+            CreatePlatformPrintService(),
+            sharedSession: null,
+            platformClipboard: null,
+            deferStartupFileOpen: deferStartupFileOpen)
+    {
+    }
+
+    internal MainWindow(
+        IReadOnlyList<string> startupArguments,
+        WorkbookSession sharedSession,
+        FreeXOptionsRuntimeSession? optionsRuntimeSession = null)
+        : this(
+            startupArguments,
+            WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
+            WorkbookFileAccessServiceFactory.Create(App.Diagnostics),
+            CreatePlatformPrintService(),
+            sharedSession,
+            optionsRuntimeSession: optionsRuntimeSession)
     {
     }
 
@@ -1327,13 +842,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<string> startupArguments,
         IWorkbookShareSheetService workbookShareSheetService,
         IWorkbookFileAccessService workbookFileAccessService,
-        IPlatformPrinter platformPrinter)
+        IPlatformPrintService printService,
+        IPlatformClipboard? platformClipboard = null)
         : this(
             startupArguments,
             workbookShareSheetService,
             workbookFileAccessService,
-            platformPrinter,
-            sharedSession: null)
+            printService,
+            sharedSession: null,
+            platformClipboard: platformClipboard)
     {
     }
 
@@ -1341,16 +858,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<string> startupArguments,
         IWorkbookShareSheetService workbookShareSheetService,
         IWorkbookFileAccessService workbookFileAccessService,
-        IPlatformPrinter platformPrinter,
-        WorkbookSession? sharedSession)
+        IPlatformPrintService printService,
+        WorkbookSession? sharedSession,
+        IPlatformClipboard? platformClipboard = null,
+        bool deferStartupFileOpen = false,
+        FreeXOptionsRuntimeSession? optionsRuntimeSession = null)
     {
         ArgumentNullException.ThrowIfNull(workbookShareSheetService);
         ArgumentNullException.ThrowIfNull(workbookFileAccessService);
-        ArgumentNullException.ThrowIfNull(platformPrinter);
+        ArgumentNullException.ThrowIfNull(printService);
 
+        _optionsRuntimeSession = optionsRuntimeSession ?? new FreeXOptionsRuntimeSession();
+        _statusBarOptionVisibility = StatusBarOptionVisibilityStore
+            .ToVisibility(_optionsRuntimeSession.LiveOptions)
+            .ToDictionary();
         _workbookShareSheetService = workbookShareSheetService;
         _workbookFileAccessService = workbookFileAccessService;
-        _platformPrinter = platformPrinter;
+        _printService = printService;
+        _platformClipboard = platformClipboard ?? new AvaloniaPlatformClipboard(
+            () => TopLevel.GetTopLevel(this)?.Clipboard,
+            new AvaloniaPlatformClipboardOptions(FallBackToText: true));
         // The headless --parity-capture and --parity-grid modes both render against the fixed parity demo
         // workbook (the same content the WPF host adopts) so the startup grid reflects only rendering
         // differences, not the built-in macOS-preview demo.  --parity-grid then swaps the session to the
@@ -1361,24 +888,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             _session = sharedSession;
         }
-        else if (App.ParityCaptureOptions is not null ||
-                 App.GridCaptureOptions is not null ||
-                 App.InteractionValidationOptions is not null)
+        else if (App.ExternalStartupSessionFactory is { } externalStartupSessionFactory)
         {
-            _session = _sessionFactory.CreateParityDemo(InitialViewportHeight, InitialViewportWidth, includeObjects: true);
+            _session = externalStartupSessionFactory(
+                _sessionFactory,
+                InitialViewportHeight,
+                InitialViewportWidth,
+                true);
         }
         else
         {
-            // StartupWorkbookLoader's own catch filter only covers IOException/InvalidDataException/
-            // NotSupportedException/UnauthorizedAccessException/WorkbookTooLargeException, so a
-            // password-protected workbook (WorkbookPasswordProtectedException) or any other startup-time
-            // failure would otherwise propagate out of this constructor and crash the whole app before
-            // _statusText (built by BuildContent below) even exists. Fall back to the sample workbook with
-            // a status message instead, matching the WPF host's broad startup catch and Avalonia's own
-            // File > Open catch (ShowOpenIssue).
+            // Interactive app startup defers command-line files until crash recovery has completed;
+            // direct MainWindow construction retains the loader path used by focused tests and native
+            // child-window scenarios. Keep a final guard here so construction can always fall back to a
+            // usable workbook before _statusText exists.
             try
             {
-                source = new StartupWorkbookLoader().Load(startupArguments);
+                source = new StartupWorkbookLoader().Load(
+                    deferStartupFileOpen ? [] : startupArguments);
             }
             catch (Exception ex)
             {
@@ -1388,23 +915,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
         }
 
+        _fileWorkflow = new WorkbookFileWorkflow(
+            _session.FileAdapters,
+            _openService,
+            request => RecentFileRegistrationService.RegisterIfNeeded(_recentFiles, request),
+            recentFilesChanged: () => RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving),
+            validateSaveTarget: target => WorkbookSaveTargetPolicy.BlockUnsupportedXlsxFeatures(
+                target,
+                _session.CurrentXlsxFeatureReport));
+
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
         _session.WorkbookChanged += Session_WorkbookChanged;
 
-        if (startupArguments.Any(argument => string.Equals(
-                argument,
-                InteractionValidationOptions.NameBoxDropdownPhysicalFixtureArgument,
-                StringComparison.OrdinalIgnoreCase)))
-        {
-            SeedNameBoxDropdownPhysicalFixture();
-        }
-        if (startupArguments.Any(argument => string.Equals(
-                argument,
-                InteractionValidationOptions.NameBoxDropdownParityPhysicalFixtureArgument,
-                StringComparison.OrdinalIgnoreCase)))
-        {
-            SeedNameBoxDropdownParityFixture();
-        }
+        PrepareOptionalStartupState(startupArguments);
 
         Title = FormatWindowWorkbookTitle();
         ApplyWindowIcon();
@@ -1414,13 +937,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         MinHeight = 520;
         Background = WindowBackground;
         Content = BuildContent();
-        if (startupArguments.Any(argument => string.Equals(
-                argument,
-                InteractionValidationOptions.NameBoxDropdownPhysicalFixtureArgument,
-                StringComparison.OrdinalIgnoreCase)))
-        {
-            InitializeNameBoxDropdownPhysicalEvidence();
-        }
+        CompleteOptionalStartupState(startupArguments);
         ConfigureNativeMenu();
         if (source is not null)
             RecordStartupRecentWorkbook(source);
@@ -1442,6 +959,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShell(_session.StartupStatus);
     }
 
+    private static IPlatformPrintService CreatePlatformPrintService() =>
+        PlatformPrintServiceSelector.Select(
+            windowsFactory: null,
+            cupsFactory: static () => new CupsPrintService(
+                discoveryMode: CupsPrinterDiscoveryMode.DestinationNames));
+
     private Control BuildContent()
     {
         var ribbonCallbacks = new FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHostCallbacks
@@ -1451,7 +974,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 OpenConsolidate = Consolidate,
                 InsertTable = () => _ = InsertTableFromSelectionAsync(),
                 ConditionalFormatting = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
-                QuickAnalysis = () => _ = ShowQuickAnalysisDialogAsync(),
                 InsertPivotTable = () => _ = ShowInsertPivotTableDialogAsync(),
                 InsertPicture = () => _ = InsertPictureFromFileAsync(),
                 InsertShape = InsertShapeAtActiveCell,
@@ -1480,93 +1002,72 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 SetNumberFormat = ApplyRibbonNumberFormat,
                 ExtraCommands = new Dictionary<string, Action>(StringComparer.Ordinal)
                 {
-                    // Number Format dropdown items.
-                    ["home.fmtGeneral"] = () => ApplySelectedRangeNumberFormat(GeneralNumberFormat, "Applied General format to", "Number format failed."),
-                    ["home.fmtNumber"] = () => ApplySelectedRangeNumberFormat("0.00", "Applied Number format to", "Number format failed."),
-                    ["home.fmtCurrency"] = ApplySelectedRangeCurrencyFormat,
-                    ["home.fmtDate"] = () => ApplySelectedRangeNumberFormat("m/d/yyyy", "Applied Date format to", "Number format failed."),
-                    ["home.fmtPercent"] = ApplySelectedRangePercentFormat,
-                    // Fill Color dropdown items.
-                    ["home.fillNone"] = ClearSelectedRangeFill,
-                    ["home.fillYellow"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
-                    ["home.fillGreen"] = () => ApplySelectedRangeFillColor(new CellColor(198, 239, 206)),
                     // Borders dropdown items.
-                    ["home.bordersAll"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
-                    ["home.bordersOutside"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Outside),
-                    ["home.bordersNone"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
+                    ["All Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
+                    ["Outside Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Outside),
+                    ["No Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
                     // Paste split-button menu items.
-                    ["home.pasteValues"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Values, default, "Values"),
-                    ["home.pasteFormat"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formats, default, "Formatting"),
+                    ["Paste Values"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Values, default, "Values"),
+                    ["Paste Formatting"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formats, default, "Formatting"),
                     // Formulas tab.
-                    ["formulas.insertFunction"] = InsertFunction,
-                    ["formulas.autoSum"] = () => InsertAutoSumFormula("SUM"),
-                    ["formulas.nameManager"] = NameManager,
-                    ["formulas.defineName"] = DefineName,
-                    ["formulas.createFromSelection"] = CreateNamesFromSelection,
+                    [FreeXRibbonCommandIds.FormulasAutoSum] = () => InsertAutoSumFormula("SUM"),
+                    ["Name Manager"] = NameManager,
+                    ["Define Name"] = DefineName,
+                    ["Create from Selection"] = CreateNamesFromSelection,
                     ["Use in Formula"] = PasteNames,
                     // Review tab.
-                    ["review.spelling"] = () => _ = ShowSpellingDialogAsync(),
-                    ["review.checkAccessibility"] = () => _ = ShowAccessibilityCheckerDialogAsync(),
-                    ["review.protectSheet"] = () => _ = ShowProtectSheetDialogAsync(),
-                    ["review.protectWorkbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
+                    ["Spelling"] = () => _ = ShowSpellingDialogAsync(),
+                    ["Check Accessibility"] = () => _ = ShowAccessibilityCheckerDialogAsync(),
+                    [FreeXRibbonCommandIds.ReviewProtectSheet] = () => _ = ShowProtectSheetDialogAsync(),
+                    ["Protect Workbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
                     ["Allow Users to Edit Ranges"] = AllowEditRanges,
                     // View tab.
                     ["Custom Views"] = () => RunGuarded(OpenCustomViewsDialogAsync),
-                    ["view.gridlines"] = ToggleShowGridlines,
-                    ["view.headings"] = ToggleShowHeadings,
-                    ["view.zoom"] = () => _ = ShowZoomDialogAsync(),
-                    ["view.zoom100"] = ZoomTo100Percent,
-                    ["view.zoomToSelection"] = ZoomToSelection,
-                    ["view.freezePanes"] = FreezePanesAtActiveCell,
-                    ["view.pageBreakPreview"] = TogglePageBreakPreview,
-                    ["view.formulaBar"] = ToggleFormulaBarVisibility,
-                    ["view.pageLayoutView"] = SetPageLayoutView,
+                    ["Gridlines"] = ToggleShowGridlines,
+                    ["Headings"] = ToggleShowHeadings,
+                    ["Zoom"] = () => _ = ShowZoomDialogAsync(),
+                    [FreeXRibbonCommandIds.ViewZoom100] = ZoomTo100Percent,
+                    ["Zoom to Selection"] = ZoomToSelection,
+                    [FreeXRibbonCommandIds.ViewFreezePanes] = FreezePanesAtActiveCell,
+                    ["Page Break Preview"] = TogglePageBreakPreview,
+                    ["Formula Bar"] = ToggleFormulaBarVisibility,
+                    ["Page Layout"] = SetPageLayoutView,
                     // Home tab merge variants + Paste Special.
-                    ["home.mergeCells"] = () => _ = MergeSelectedRangeAsync(),
-                    ["home.mergeAcross"] = () => _ = MergeAcrossSelectedRangeAsync(),
-                    ["home.unmerge"] = UnmergeSelectedRange,
-                    ["home.pasteSpecial"] = () => _ = ShowPasteSpecialDialogAsync(),
-                    // Home tab "More Colors..." pickers.
-                    ["home.fillMore"] = ShowMoreFillColorDialog,
-                    ["home.fontColorMore"] = ShowMoreFontColorDialog,
+                    ["Merge Cells"] = () => _ = MergeSelectedRangeAsync(),
+                    ["Merge Across"] = () => _ = MergeAcrossSelectedRangeAsync(),
+                    ["Unmerge Cells"] = UnmergeSelectedRange,
+                    ["Paste Special"] = () => _ = ShowPasteSpecialDialogAsync(),
                     // Data tab tools.
-                    ["data.reapply"] = ReapplyCurrentFilterSort,
-                    ["data.circleInvalid"] = CircleInvalidData,
-                    ["data.clearCircles"] = ClearValidationCircles,
-                    ["data.getData"] = GetDataFromText,
+                    ["Reapply"] = ReapplyCurrentFilterSort,
+                    [FreeXRibbonCommandIds.DataValidationCircleInvalid] = CircleInvalidData,
+                    [FreeXRibbonCommandIds.DataValidationClearCircles] = ClearValidationCircles,
+                    ["Get Data"] = GetDataFromText,
                     // Data ▸ Connections ▸ Refresh All: re-import the remembered file source in place; with
                     // no remembered source there is nothing to refresh (no external DB/web connection engine).
-                    ["data.refresh"] = RefreshImportedData,
+                    ["Refresh All"] = RefreshImportedData,
                     // Review ▸ Show Notes toggles all legacy note boxes, matching the WPF host.
-                    ["review.showNotes"] = ToggleAllNotesVisibility,
                     // Insert ▸ PivotChart (charts the active pivot's result range).
-                    ["insert.pivotChart"] = InsertPivotChart,
                     // View ▸ Window group (multi-window).
-                    ["view.newWindow"] = NewWindow,
-                    ["view.arrangeAll"] = ArrangeAllWindows,
+                    ["New Window"] = NewWindow,
+                    ["Arrange All"] = ArrangeAllWindows,
                     // View ▸ Window ▸ Arrange All submenu (canonical menu ids from the shared ribbon
                     // definition). Each positions every visible window via the shared layout planner.
-                    ["Tiled"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Tiled),
-                    ["Horizontal#ArrangeAllMenuItem_Click"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Horizontal),
-                    ["Vertical"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Vertical),
-                    ["Cascade"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Cascade),
-                    ["view.hide"] = HideActiveWindow,
+                    [FreeXRibbonCommandIds.ViewArrangeTiled] = () => ArrangeAllWindows(WorkbookWindowArrangement.Tiled),
+                    [FreeXRibbonCommandIds.ViewArrangeHorizontal] = () => ArrangeAllWindows(WorkbookWindowArrangement.Horizontal),
+                    [FreeXRibbonCommandIds.ViewArrangeVertical] = () => ArrangeAllWindows(WorkbookWindowArrangement.Vertical),
+                    [FreeXRibbonCommandIds.ViewArrangeCascade] = () => ArrangeAllWindows(WorkbookWindowArrangement.Cascade),
+                    ["Hide"] = HideActiveWindow,
                     // View ▸ Window ▸ Side by Side + Synchronous Scrolling.
                     ["View Side by Side"] = ToggleViewSideBySide,
                     ["Synchronous Scrolling"] = ToggleSynchronousScrolling,
-                    // Review proofing (built-in thesaurus / offline-honest translate) + Insert equation/object.
-                    ["review.thesaurus"] = () => _ = ShowThesaurusDialogAsync(),
-                    ["review.translate"] = () => _ = ShowTranslateDialogAsync(),
-                    ["insert.equation"] = () => _ = ShowEquationDialogAsync(),
-                    ["insert.object"] = () => _ = ShowInsertObjectDialogAsync(),
                     // Home tab (Editing group).
-                    ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
-                    ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
-                    ["home.clear"] = ClearSelectedRangeContents,
-                    ["home.findSelect"] = () => _ = ShowFindDialogAsync(),
+                    ["AutoSum"] = () => InsertAutoSumFormula("SUM"),
+                    ["Fill"] = () => FillSelectedRange(FillCellsDirection.Down),
+                    ["Clear"] = ClearSelectedRangeContents,
+                    ["Find & Select"] = () => _ = ShowFindDialogAsync(),
                     // Home ▸ Editing ▸ Fill dropdown items (canonical menu ids from HomeRibbonMenus.Fill).
-                    // The split-button face is wired above (home.fillDown); these are its menu entries, which
-                    // otherwise stay on the NoOp seed. "Flash Fill" shares its canonical id with data.flashFill
+                    // The split-button face is wired above; these are its menu entries, which otherwise stay
+                    // on the NoOp seed. "Flash Fill" shares its canonical id with the Data-tab command
                     // (already wired), so it is not repeated here.
                     ["Down"] = () => FillSelectedRange(FillCellsDirection.Down),
                     ["Right"] = () => FillSelectedRange(FillCellsDirection.Right),
@@ -1583,11 +1084,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // Formulas-tab AutoSum picker shares these ids, so this covers both). Split-button face is
                     // wired above (home.autoSum). Mirrors the native AutoSum submenu handlers.
                     ["Sum"] = () => InsertAutoSumFormula("SUM"),
+                    [FreeXRibbonCommandIds.FormulasAutoSumSum] = () => InsertAutoSumFormula("SUM"),
                     ["Average"] = () => InsertAutoSumFormula("AVERAGE"),
+                    [FreeXRibbonCommandIds.FormulasAutoSumAverage] = () => InsertAutoSumFormula("AVERAGE"),
                     ["Count Numbers"] = () => InsertAutoSumFormula("COUNT"),
+                    [FreeXRibbonCommandIds.FormulasAutoSumCountNumbers] = () => InsertAutoSumFormula("COUNT"),
                     ["Count All"] = () => InsertAutoSumFormula("COUNTA"),
+                    [FreeXRibbonCommandIds.FormulasAutoSumCountAll] = () => InsertAutoSumFormula("COUNTA"),
                     ["Max"] = () => InsertAutoSumFormula("MAX"),
+                    [FreeXRibbonCommandIds.FormulasAutoSumMax] = () => InsertAutoSumFormula("MAX"),
                     ["Min"] = () => InsertAutoSumFormula("MIN"),
+                    [FreeXRibbonCommandIds.FormulasAutoSumMin] = () => InsertAutoSumFormula("MIN"),
                     ["More Functions"] = InsertFunction,
                     // Home ▸ Editing ▸ Find & Select dropdown items (canonical ids from HomeRibbonMenus.FindSelect).
                     // Split-button face is wired above (home.findSelect). "Conditional Formatting" is intentionally
@@ -1614,12 +1121,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["More Borders"] = () => _ = ShowFormatCellsDialogAsync(),
                     // Home ▸ Font ▸ Orientation dropdown items (canonical ids from HomeRibbonMenus.Orientation).
                     // Same rotation values as the native Format ▸ Orientation flyout.
-                    ["Horizontal"] = () => ApplySelectedRangeTextRotation(0, "Set horizontal text for", "Horizontal Text failed."),
-                    ["Angle Counterclockwise"] = () => ApplySelectedRangeTextRotation(45, "Angled text counterclockwise for", "Angle Counterclockwise failed."),
-                    ["Angle Clockwise"] = () => ApplySelectedRangeTextRotation(-45, "Angled text clockwise for", "Angle Clockwise failed."),
-                    ["Vertical Text"] = () => ApplySelectedRangeTextRotation(255, "Set vertical text for", "Vertical Text failed."),
-                    ["Rotate Text Up"] = () => ApplySelectedRangeTextRotation(90, "Rotated text up for", "Rotate Text Up failed."),
-                    ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, "Rotated text down for", "Rotate Text Down failed."),
+                    ["Horizontal"] = () => ApplySelectedRangeTextRotation(0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                    ["Angle Counterclockwise"] = () => ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_CounterclockwiseSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                    ["Angle Clockwise"] = () => ApplySelectedRangeTextRotation(-45, UiText.Get("TextRotation_ClockwiseSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                    ["Vertical Text"] = () => ApplySelectedRangeTextRotation(255, UiText.Get("TextRotation_VerticalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                    ["Rotate Text Up"] = () => ApplySelectedRangeTextRotation(90, UiText.Get("TextRotation_UpSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                    ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, UiText.Get("TextRotation_DownSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
                     // Home ▸ Cells ▸ Insert / Delete / Format dropdown items that map to existing handlers
                     // (canonical ids from HomeRibbonMenus.Insert/Delete/Format). The lock-cell item stays NoOp
                     // until that operation exists in the shell.
@@ -1651,101 +1158,95 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Greater Than"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightGreaterThan),
                     ["Top 10 Items"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Top10),
                     // Insert tab (Links / Text groups).
-                    ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
+                    ["Insert Link"] = () => _ = ShowInsertHyperlinkDialogAsync(),
                     // Home Font group (added buttons).
-                    ["home.strikethrough"] = ToggleSelectedRangeStrikethrough,
-                    ["home.increaseFont"] = IncreaseSelectedRangeFontSize,
-                    ["home.decreaseFont"] = DecreaseSelectedRangeFontSize,
-                    ["home.fontColorAuto"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
-                    ["home.fontColorRed"] = () => ApplySelectedRangeFontColor(new CellColor(255, 0, 0)),
-                    ["home.fontColorGreen"] = () => ApplySelectedRangeFontColor(new CellColor(0, 128, 0)),
-                    ["home.fontColorBlue"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 255)),
+                    ["Strikethrough"] = ToggleSelectedRangeStrikethrough,
+                    ["Increase Font Size"] = IncreaseSelectedRangeFontSize,
+                    ["Decrease Font Size"] = DecreaseSelectedRangeFontSize,
                     // Home Alignment group (added buttons).
-                    ["home.alignTop"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Top),
-                    ["home.alignMiddle"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Center),
-                    ["home.alignBottom"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom),
-                    ["home.increaseIndent"] = IncreaseSelectedRangeIndent,
-                    ["home.decreaseIndent"] = DecreaseSelectedRangeIndent,
+                    ["Top Align"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Top),
+                    ["Middle Align"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Center),
+                    ["Bottom Align"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom),
+                    ["Increase Indent"] = IncreaseSelectedRangeIndent,
+                    ["Decrease Indent"] = DecreaseSelectedRangeIndent,
                     // Home Number group (added buttons).
-                    ["home.increaseDecimal"] = IncreaseSelectedRangeDecimalPlaces,
-                    ["home.decreaseDecimal"] = DecreaseSelectedRangeDecimalPlaces,
+                    ["Increase Decimal Places"] = IncreaseSelectedRangeDecimalPlaces,
+                    ["Decrease Decimal Places"] = DecreaseSelectedRangeDecimalPlaces,
                     // Home Alignment Orientation + Cells Format → existing handlers.
-                    ["home.orientation"] = () => ApplySelectedRangeTextRotation(45, "Rotated text for", "Orientation failed."),
-                    ["home.formatCells"] = () => _ = ShowFormatCellsDialogAsync(),
+                    ["Orientation"] = () => ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_GenericSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                    ["Format"] = () => _ = ShowFormatCellsDialogAsync(),
                     // View tab (Window group) + Formulas tab.
-                    ["view.unhide"] = () => RunGuarded(ShowUnhideWindowDialogAsync),
-                    ["formulas.showFormulas"] = ToggleShowFormulas,
+                    ["Unhide"] = () => RunGuarded(ShowUnhideWindowDialogAsync),
+                    ["Show Formulas"] = ToggleShowFormulas,
                     // Formulas Function Library category buttons open the function picker.
-                    ["formulas.lookupReference"] = InsertFunction,
-                    ["formulas.mathTrig"] = InsertFunction,
-                    ["formulas.moreFunctions"] = InsertFunction,
-                    ["formulas.recentlyUsed"] = InsertFunction,
+                    ["Lookup & Reference"] = InsertFunction,
+                    ["Math & Trig"] = InsertFunction,
+                    [FreeXRibbonCommandIds.FormulasMoreFunctions] = InsertFunction,
+                    ["Recently Used"] = InsertFunction,
                     // Data tab (Sort & Filter / Tools / Forecast / Outline groups).
-                    ["data.advancedFilter"] = () => _ = ShowAdvancedFilterDialogAsync(),
-                    ["data.flashFill"] = FlashFillSelectedRange,
-                    ["data.removeDuplicates"] = () => _ = ShowRemoveDuplicatesDialogAsync(),
-                    ["data.whatIf"] = () => _ = ShowGoalSeekDialogAsync(),
-                    ["data.forecastSheet"] = () => _ = ShowForecastSheetDialogAsync(),
-                    ["data.subtotal"] = () => _ = ShowSubtotalDialogAsync(),
+                    ["Advanced"] = () => _ = ShowAdvancedFilterDialogAsync(),
+                    ["Flash Fill"] = FlashFillSelectedRange,
+                    [FreeXRibbonCommandIds.DataRemoveDuplicates] = () => _ = ShowRemoveDuplicatesDialogAsync(),
+                    ["What-If Analysis"] = () => _ = ShowGoalSeekDialogAsync(),
+                    ["Forecast Sheet"] = () => _ = ShowForecastSheetDialogAsync(),
+                    ["Subtotal"] = () => _ = ShowSubtotalDialogAsync(),
                     // --- Parity pass: wire remaining no-op ribbon buttons to existing handlers ---
                     // Formula Library category buttons open the function picker (like the others).
-                    ["formulas.financial"] = InsertFunction,
-                    ["formulas.logical"] = InsertFunction,
-                    ["formulas.text"] = InsertFunction,
-                    ["formulas.dateTime"] = InsertFunction,
+                    ["Financial"] = InsertFunction,
+                    ["Logical Functions"] = InsertFunction,
+                    ["Text Functions"] = InsertFunction,
+                    ["Date & Time"] = InsertFunction,
                     // Dropdown parent buttons apply a sensible default (their menu items remain individually wired).
-                    ["home.borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
-                    ["home.accounting"] = ApplySelectedRangeCurrencyFormat,
+                    ["Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
+                    ["Accounting Number Format"] = ApplySelectedRangeCurrencyFormat,
                     ["Accounting Number Format US Dollar"] = () => ApplySelectedRangeAccountingFormat("$"),
                     ["Accounting Number Format Euro"] = () => ApplySelectedRangeAccountingFormat("\u20AC"),
                     ["Accounting Number Format British Pound"] = () => ApplySelectedRangeAccountingFormat("\u00A3"),
                     ["Accounting Number Format Japanese Yen"] = () => ApplySelectedRangeAccountingFormat("\u00A5"),
-                    ["home.fontColor"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
-                    ["home.fillColor"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
+                    ["Font Color"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
+                    ["Fill Color"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
                     // Review: New Note / New Comment on the active cell.
-                    ["review.newNote"] = () => _ = ShowNewNoteDialogAsync(),
-                    ["review.newComment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
+                    ["New Note"] = () => _ = ShowNewNoteDialogAsync(),
+                    ["New Comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
                     // Insert: Sparklines — open the insert dialog (or edit, when the active cell already
                     // anchors a sparkline) with the chosen kind preselected.
-                    ["insert.sparklineLine"] = () => InsertOrEditSparkline(SparklineKind.Line),
-                    ["insert.sparklineColumn"] = () => InsertOrEditSparkline(SparklineKind.Column),
-                    ["insert.sparklineWinLoss"] = () => InsertOrEditSparkline(SparklineKind.WinLoss),
+                    ["Line Sparkline"] = () => InsertOrEditSparkline(SparklineKind.Line),
+                    ["Column Sparkline"] = () => InsertOrEditSparkline(SparklineKind.Column),
+                    ["Win/Loss Sparkline"] = () => InsertOrEditSparkline(SparklineKind.WinLoss),
                     // Data: Outline Group / Ungroup.
-                    ["data.group"] = GroupSelectedRows,
-                    ["data.ungroup"] = UngroupSelection,
+                    [FreeXRibbonCommandIds.DataOutlineGroup] = GroupSelectedRows,
+                    [FreeXRibbonCommandIds.DataOutlineUngroup] = UngroupSelection,
                     // Home ▸ Cells: Insert / Delete Cells (with shift-direction prompt).
-                    ["home.insertCells"] = () => _ = ShowInsertCellsDialogAsync(),
-                    ["home.deleteCells"] = () => _ = ShowDeleteCellsDialogAsync(),
+                    ["Insert"] = () => _ = ShowInsertCellsDialogAsync(),
+                    ["Delete"] = () => _ = ShowDeleteCellsDialogAsync(),
                     // Home ▸ Styles: Cell Styles gallery.
-                    ["home.cellStyles"] = () => _ = ShowCellStylesGalleryAsync(),
+                    ["Cell Styles"] = () => _ = ShowCellStylesGalleryAsync(),
                     // Review ▸ Delete Comment; View ▸ Split / Normal.
-                    ["review.deleteComment"] = DeleteActiveCellThreadedComment,
-                    ["view.split"] = SplitPanesAtActiveCell,
-                    ["view.normal"] = SetNormalView,
+                    ["Delete Comment"] = DeleteActiveCellThreadedComment,
+                    ["Split"] = SplitPanesAtActiveCell,
+                    [FreeXRibbonCommandIds.ViewNormal] = SetNormalView,
                     // Insert ▸ Comment (reuse New Comment); Insert ▸ Header & Footer (Page Setup).
-                    ["insert.comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
-                    ["insert.headerFooter"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
+                    ["Header & Footer"] = () => _ = ShowPageSetupDialogAsync(),
                     // Page Layout ▸ Themes (Office / Colorful / Grayscale picker).
-                    ["pageLayout.themes"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeColors"] = () => _ = ShowThemeColorsGalleryAsync(),
-                    ["pageLayout.themeFonts"] = () => _ = ShowThemeFontsGalleryAsync(),
-                    ["pageLayout.themeEffects"] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    ["Themes"] = () => _ = ShowThemesGalleryAsync(),
+                    ["Theme Colors"] = () => _ = ShowThemeColorsGalleryAsync(),
+                    ["Theme Fonts"] = () => _ = ShowThemeFontsGalleryAsync(),
+                    ["Theme Effects"] = () => _ = ShowThemeEffectsGalleryAsync(),
                     // Insert ▸ Symbol.
-                    ["insert.symbol"] = () => _ = ShowSymbolPickerAsync(),
-                    // Insert ▸ Slicer / Timeline (field picker → AddSlicerCommand / AddTimelineCommand).
-                    ["insert.slicer"] = InsertSlicer,
-                    ["insert.timeline"] = InsertTimeline,
+                    ["Symbol"] = () => _ = ShowSymbolPickerAsync(),
                     // Formulas ▸ Error Checking.
-                    ["formulas.errorChecking"] = () => _ = CheckFormulaErrorsAsync(),
+                    ["Error Checking"] = () => _ = CheckFormulaErrorsAsync(),
+                    [FreeXRibbonCommandIds.FormulasErrorCheckingRun] = () => _ = CheckFormulaErrorsAsync(),
                     // Formulas ▸ Evaluate Formula (read-only diagnostics dialog).
-                    ["formulas.evaluateFormula"] = () => _ = ShowEvaluateFormulaDialogAsync(),
+                    ["Evaluate Formula"] = () => _ = ShowEvaluateFormulaDialogAsync(),
                     // Formulas ▸ Formula Auditing trace arrows.
-                    ["formulas.tracePrecedents"] = TraceFormulaPrecedents,
-                    ["formulas.traceDependents"] = TraceFormulaDependents,
-                    ["formulas.removeArrows"] = RemoveFormulaTraceArrows,
+                    ["Trace Precedents"] = TraceFormulaPrecedents,
+                    ["Trace Dependents"] = TraceFormulaDependents,
+                    [FreeXRibbonCommandIds.FormulasRemoveArrows] = RemoveFormulaTraceArrows,
                     // Formulas ▸ Calculation group.
-                    ["formulas.calcOptions"] = ToggleCalculationMode,
-                    ["formulas.calcNow"] = CalculateNow,
+                    ["Calculation Options"] = ToggleCalculationMode,
+                    ["Calculate Now"] = CalculateNow,
 
                     // ─────────────────────────────────────────────────────────────────────────────
                     // Ribbon dropdown / split-button menu items that were inert (canonical ids never
@@ -1835,32 +1336,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
                     // Formulas ▸ Formula Auditing ▸ Watch Window / Remove Arrows submenu.
                     ["Watch Window"] = () => _ = ShowWatchWindowDialogAsync(),
-                    ["Remove Precedent Arrows"] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Precedent),
-                    ["Remove Dependent Arrows"] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Dependent),
+                    [FreeXRibbonCommandIds.FormulasRemovePrecedentArrows] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Precedent),
+                    [FreeXRibbonCommandIds.FormulasRemoveDependentArrows] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Dependent),
 
                     // Formulas ▸ Error Checking ▸ Error Checking Options.
-                    ["Error Checking Options"] = () => _ = ShowOptionsDialogAsync(),
+                    [FreeXRibbonCommandIds.FormulasErrorCheckingOptions] = () => _ = ShowOptionsDialogAsync(),
 
                     // Formulas ▸ Calculation ▸ Calculate Sheet + Calculation Options menu items.
                     ["Calculate Sheet"] = CalculateSheet,
-                    ["Automatic"] = SetCalculationModeAutomatic,
-                    ["Manual"] = SetCalculationModeManual,
-                    ["Automatic Except Data Tables"] = SetCalculationModeAutomaticExceptDataTables,
+                    [FreeXRibbonCommandIds.FormulasCalculationAutomatic] = SetCalculationModeAutomatic,
+                    [FreeXRibbonCommandIds.FormulasCalculationManual] = SetCalculationModeManual,
+                    [FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables] = SetCalculationModeAutomaticExceptDataTables,
 
                     // Data ▸ Sort & Filter ▸ Sort button (canonical id "Sort", no dotted prefix).
                     ["Sort"] = () => _ = ShowSortDialogAsync(),
 
                     // Data ▸ Data Tools ▸ What-If Analysis dropdown.
-                    ["Goal Seek"] = () => _ = ShowGoalSeekDialogAsync(),
-                    ["Scenario Manager"] = () => _ = ShowScenarioManagerDialogAsync(),
-                    ["Data Table"] = () => _ = ShowDataTableDialogAsync(),
+                    [FreeXRibbonCommandIds.DataWhatIfGoalSeek] = () => _ = ShowGoalSeekDialogAsync(),
+                    [FreeXRibbonCommandIds.DataWhatIfScenarioManager] = () => _ = ShowScenarioManagerDialogAsync(),
+                    [FreeXRibbonCommandIds.DataWhatIfDataTable] = () => _ = ShowDataTableDialogAsync(),
 
                     // Data ▸ Outline ▸ Show / Hide Detail, Clear Outline, Group / Ungroup submenu items.
                     ["Show Detail"] = ShowOutlineDetail,
                     ["Hide Detail"] = HideOutlineDetail,
-                    ["Clear Outline"] = ClearWorksheetOutline,
-                    ["Group#GroupRowsMenuItem_Click"] = GroupSelectedRows,
-                    ["Ungroup#UngroupRowsMenuItem_Click"] = UngroupSelection,
+                    [FreeXRibbonCommandIds.DataOutlineClear] = ClearWorksheetOutline,
+                    [FreeXRibbonCommandIds.DataOutlineGroupRows] = GroupSelectedRows,
+                    [FreeXRibbonCommandIds.DataOutlineUngroupRows] = UngroupSelection,
 
                     // Review ▸ Proofing / Comments / Notes / Share.
                     ["Workbook Statistics"] = () => _ = ShowWorkbookStatisticsDialogAsync(),
@@ -1881,19 +1382,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
                     // View ▸ Window ▸ Freeze Panes split-button menu items. The "Freeze Panes" menu item
                     // keeps its handler suffix in the canonical id.
-                    ["Freeze Panes#FreezeAtSelectionMenuItem_Click"] = FreezePanesAtActiveCell,
-                    ["Freeze Top Row"] = FreezeTopRow,
-                    ["Freeze First Column"] = FreezeFirstColumn,
-                    ["Unfreeze Panes"] = UnfreezePanes,
+                    [FreeXRibbonCommandIds.ViewFreezeAtSelection] = FreezePanesAtActiveCell,
+                    [FreeXRibbonCommandIds.ViewFreezeTopRow] = FreezeTopRow,
+                    [FreeXRibbonCommandIds.ViewFreezeFirstColumn] = FreezeFirstColumn,
+                    [FreeXRibbonCommandIds.ViewUnfreezePanes] = UnfreezePanes,
 
                     // View ▸ Zoom split-button preset menu items. The "100%" menu item keeps its handler
                     // suffix in the canonical id.
-                    ["200%"] = () => ApplyZoomPercentPreset(200),
-                    ["100%#ZoomPresetMenuItem_Click"] = () => ApplyZoomPercentPreset(100),
-                    ["75%"] = () => ApplyZoomPercentPreset(75),
-                    ["50%"] = () => ApplyZoomPercentPreset(50),
-                    ["25%"] = () => ApplyZoomPercentPreset(25),
-                    ["More"] = () => _ = ShowZoomDialogAsync(),
+                    [FreeXRibbonCommandIds.ViewZoomPreset200] = () => ApplyZoomPercentPreset(200),
+                    [FreeXRibbonCommandIds.ViewZoomPreset100] = () => ApplyZoomPercentPreset(100),
+                    [FreeXRibbonCommandIds.ViewZoomPreset75] = () => ApplyZoomPercentPreset(75),
+                    [FreeXRibbonCommandIds.ViewZoomPreset50] = () => ApplyZoomPercentPreset(50),
+                    [FreeXRibbonCommandIds.ViewZoomPreset25] = () => ApplyZoomPercentPreset(25),
+                    [FreeXRibbonCommandIds.ViewZoomCustom] = () => _ = ShowZoomDialogAsync(),
 
                     // ─────────────────────────────────────────────────────────────────────────────
                     // Re-keyed from allowlist: formerly served via native menus / parent buttons only.
@@ -1901,35 +1402,35 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // ─────────────────────────────────────────────────────────────────────────────
 
                     // Page Layout ▸ Themes preset submenu ids + customize entries.
-                    ["Office#ThemeOfficeMenuItem_Click"] = () => _ = ShowThemesGalleryAsync(),
-                    ["Office#ThemeColorsOfficeMenuItem_Click"] = () => _ = ShowThemeColorsGalleryAsync(),
-                    ["Office#ThemeFontsOfficeMenuItem_Click"] = () => _ = ShowThemeFontsGalleryAsync(),
-                    ["Office#ThemeEffectsOfficeMenuItem_Click"] = () => _ = ShowThemeEffectsGalleryAsync(),
-                    ["Grayscale#ThemeGrayscaleMenuItem_Click"] = () => _ = ShowThemesGalleryAsync(),
-                    ["Grayscale#ThemeColorsGrayscaleMenuItem_Click"] = () => _ = ShowThemeColorsGalleryAsync(),
-                    ["FreeX Colorful#ThemeColorfulMenuItem_Click"] = () => _ = ShowThemesGalleryAsync(),
-                    ["FreeX Colorful#ThemeColorsColorfulMenuItem_Click"] = () => _ = ShowThemeColorsGalleryAsync(),
-                    ["Customize"] = () => _ = ShowThemesGalleryAsync(),
-                    ["Customize Colors"] = () => _ = ShowThemeColorsGalleryAsync(),
-                    ["Customize Fonts"] = () => _ = ShowThemeFontsGalleryAsync(),
-                    ["Customize Effects"] = () => _ = ShowThemeEffectsGalleryAsync(),
-                    ["Arial"] = () => _ = ShowThemeFontsGalleryAsync(),
-                    ["Times New Roman"] = () => _ = ShowThemeFontsGalleryAsync(),
-                    ["Subtle"] = () => _ = ShowThemeEffectsGalleryAsync(),
-                    ["Refined"] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeOffice] = () => _ = ShowThemesGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsOffice] = () => _ = ShowThemeColorsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsOffice] = () => _ = ShowThemeFontsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsOffice] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeGrayscale] = () => _ = ShowThemesGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsGrayscale] = () => _ = ShowThemeColorsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorful] = () => _ = ShowThemesGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsColorful] = () => _ = ShowThemeColorsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeCustomize] = () => _ = ShowThemesGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsCustomize] = () => _ = ShowThemeColorsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsCustomize] = () => _ = ShowThemeFontsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsCustomize] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsArial] = () => _ = ShowThemeFontsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsTimesNewRoman] = () => _ = ShowThemeFontsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsSubtle] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsRefined] = () => _ = ShowThemeEffectsGalleryAsync(),
 
                     // Shape Format ▸ Shape Effects submenu items (also wired via BuildPictureShapeTabCommands;
                     // declared here so the hygiene guard finds them in this file's ExtraCommands block).
-                    ["3-D Rotation"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.ThreeDRotation),
-                    ["Bevel"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Bevel),
-                    ["Glow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Glow),
-                    ["Inner Shadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.InnerShadow),
-                    ["Reflection"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Reflection),
-                    ["Soft Edges"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.SoftEdges),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectThreeDRotation] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.ThreeDRotation),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectBevel] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Bevel),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectGlow] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Glow),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectInnerShadow] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.InnerShadow),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectReflection] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Reflection),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectSoftEdges] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.SoftEdges),
 
                     // Picture Format ▸ Crop submenu items (also wired via BuildPictureShapeTabCommands).
-                    ["Crop"] = () => RunGuarded(OpenPictureCropDialogAsync),
-                    ["Reset Crop"] = () => ResetSelectedPictureCrop(),
+                    [FreeXRibbonCommandIds.DrawingCrop] = () => RunGuarded(OpenPictureCropDialogAsync),
+                    [FreeXRibbonCommandIds.DrawingResetCrop] = () => ResetSelectedPictureCrop(),
 
                     // Home ▸ Clipboard ▸ Paste menu items not previously wired by canonical id.
                     ["Keep Source Column Widths"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.All, default, "Keep Source Column Widths", keepSourceColumnWidths: true),
@@ -1940,55 +1441,55 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Sort & Filter"] = ToggleAutoFilter,
 
                     // Review ▸ Notes ▸ Next / Previous Note.
-                    ["review.convertNotesToComments"] = ConvertNotesToComments,
+                    ["Convert to Comments"] = ConvertNotesToComments,
                     ["Next Note"] = () => NavigateReviewNote(previous: false),
                     ["Previous Note"] = () => NavigateReviewNote(previous: true),
 
                     // Menu-item variants: AutoSum "More Functions", Remove-all-arrows, Data Clear-filter.
-                    ["More Functions#AutoSumMoreMenuItem_Click"] = InsertFunction,
-                    ["Remove Arrows#RemoveAllArrowsMenuItem_Click"] = RemoveFormulaTraceArrows,
-                    ["Clear#ClearFilterButton_Click"] = ClearActiveSheetFilters,
+                    [FreeXRibbonCommandIds.FormulasAutoSumMoreFunctions] = InsertFunction,
+                    [FreeXRibbonCommandIds.FormulasRemoveAllArrows] = RemoveFormulaTraceArrows,
+                    [FreeXRibbonCommandIds.DataClearFilter] = ClearActiveSheetFilters,
                 },
                 ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>(StringComparer.Ordinal)
                 {
-                    ["view.gridlines"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),
-                    ["view.headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
+                    ["Gridlines"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),
+                    ["Headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
                     ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),
-                    ["view.formulaBar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
-                    ["pageLayout.width"] = () => new RibbonCommandState(
+                    ["Formula Bar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
+                    ["Scale Width"] = () => new RibbonCommandState(
                         Value: PageLayoutInputParser.FormatScalePages(_session.ActiveSheet.ScaleToFit.FitToPagesWide)),
-                    ["pageLayout.height"] = () => new RibbonCommandState(
+                    ["Scale Height"] = () => new RibbonCommandState(
                         Value: PageLayoutInputParser.FormatScalePages(_session.ActiveSheet.ScaleToFit.FitToPagesTall)),
-                    ["pageLayout.scale"] = () => new RibbonCommandState(
+                    ["Scale Percent"] = () => new RibbonCommandState(
                         Value: PageLayoutInputParser.FormatScalePercent(_session.ActiveSheet.ScaleToFit.ScalePercent)),
-                    ["pictureFormat.crop"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.CropPicture),
-                    ["shapeFormat.shapeGradient"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeGradient),
-                    ["shapeFormat.shapeEffects"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeEffects),
+                    ["Crop Picture"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.CropPicture),
+                    ["Shape Gradient"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeGradient),
+                    ["Shape Effects"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeEffects),
                     // View ▸ Window ▸ Side by Side + Synchronous Scrolling toggle states.
                     ["View Side by Side"] = GetSideBySideRibbonState,
                     ["Synchronous Scrolling"] = GetSynchronousScrollingRibbonState,
                     // Table Design ▸ Style Options toggle checked-state (mirrors the WPF host's
                     // _ribbonState.SetChecked calls in RefreshTableContextualTab): each toggle reports
                     // whether the active cell's table currently has that flag on.
-                    ["tableDesign.totalRow"] = () => GetTableStyleOptionRibbonState(t => t.TotalsRowShown),
-                    ["tableDesign.firstColumn"] = () => GetTableStyleOptionRibbonState(t => t.ShowFirstColumn),
-                    ["tableDesign.lastColumn"] = () => GetTableStyleOptionRibbonState(t => t.ShowLastColumn),
-                    ["tableDesign.bandedRows"] = () => GetTableStyleOptionRibbonState(t => t.ShowRowStripes),
-                    ["tableDesign.bandedColumns"] = () => GetTableStyleOptionRibbonState(t => t.ShowColumnStripes),
-                    ["tableDesign.filterButton"] = () => GetTableStyleOptionRibbonState(t => t.HasAutoFilter),
+                    ["Total Row"] = () => GetTableStyleOptionRibbonState(t => t.TotalsRowShown),
+                    ["First Column"] = () => GetTableStyleOptionRibbonState(t => t.ShowFirstColumn),
+                    ["Last Column"] = () => GetTableStyleOptionRibbonState(t => t.ShowLastColumn),
+                    [FreeXRibbonCommandIds.TableBandedRows] = () => GetTableStyleOptionRibbonState(t => t.ShowRowStripes),
+                    [FreeXRibbonCommandIds.TableBandedColumns] = () => GetTableStyleOptionRibbonState(t => t.ShowColumnStripes),
+                    ["Filter Button"] = () => GetTableStyleOptionRibbonState(t => t.HasAutoFilter),
                     // Review ▸ Comments/Notes enablement (mirrors WPF's RefreshReviewCommentNoteCommandStates):
                     // Delete/navigation/Convert commands grey out when the active cell or sheet has nothing
                     // to act on, instead of staying permanently clickable.
-                    ["review.newComment"] = GetReviewNewCommentRibbonState,
-                    ["review.deleteComment"] = GetReviewDeleteCommentRibbonState,
+                    ["New Comment"] = GetReviewNewCommentRibbonState,
+                    ["Delete Comment"] = GetReviewDeleteCommentRibbonState,
                     ["Next Comment"] = GetReviewNavigateCommentRibbonState,
                     ["Previous Comment"] = GetReviewNavigateCommentRibbonState,
-                    ["review.newNote"] = GetReviewNewNoteRibbonState,
+                    ["New Note"] = GetReviewNewNoteRibbonState,
                     ["Edit Note"] = GetReviewNoteAtSelectionRibbonState,
                     ["Delete Note"] = GetReviewNoteAtSelectionRibbonState,
                     ["Next Note"] = GetReviewNavigateNoteRibbonState,
                     ["Previous Note"] = GetReviewNavigateNoteRibbonState,
-                    ["review.convertNotesToComments"] = GetReviewConvertNotesToCommentsRibbonState,
+                    ["Convert to Comments"] = GetReviewConvertNotesToCommentsRibbonState,
                 },
             };
 
@@ -2108,8 +1609,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Control BuildWorksheetViewportChrome()
     {
         _sheetGridHost.Focusable = true;
-        AutomationProperties.SetName(_sheetGridHost, "Worksheet");
-        AutomationProperties.SetHelpText(_sheetGridHost, "Shows the active workbook sheet.");
+        AutomationProperties.SetName(_sheetGridHost, UiText.Get("MainWindow_AutomationName_Worksheet"));
+        AutomationProperties.SetHelpText(
+            _sheetGridHost,
+            UiText.Get("MainWindow_AutomationHelpText_SpreadsheetGridUseArrowKeysToNavigateCellsF2ToEditAndTabEnterToMoveFocus"));
         _sheetGridHost.PointerMoved += SheetGridHost_PointerMoved;
         _sheetGridHost.PointerExited += (_, _) => _sheetGridHost.Cursor = Cursor.Default;
         AttachSplitPanePointerHandlers();
@@ -2167,8 +1670,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _newSheetButton.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
         _newSheetButton.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         _newSheetButton.Click += (_, _) => AddNewSheet();
-        AutomationProperties.SetName(_newSheetButton, "New Sheet");
-        AutomationProperties.SetHelpText(_newSheetButton, "Adds a worksheet to the current workbook.");
+        AutomationProperties.SetName(_newSheetButton, UiText.Get("AvaloniaNativeMenu_NewSheet"));
+        AutomationProperties.SetHelpText(
+            _newSheetButton,
+            UiText.Get("MainWindow_AutomationHelpText_AddANewSheetToTheWorkbook"));
         _sheetTabsHost.Content = BuildSheetTabs();
 
         _horizontalWorksheetScrollBar.Orientation = Orientation.Horizontal;
@@ -2181,7 +1686,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _updateReadyIndicator.Content = new TextBlock
         {
-            Text = "↻ Update ready",
+            Text = UiText.Get("MainWindow_Content_UpdateReady"),
             FontSize = 11,
             Opacity = 0.75,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
@@ -2192,8 +1697,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _updateReadyIndicator.IsVisible = false;
         _updateReadyIndicator.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _updateReadyIndicator.Click += UpdateReadyIndicator_Click;
-        AutomationProperties.SetAutomationId(_updateReadyIndicator, "UpdateReadyIndicator");
-        AutomationProperties.SetName(_updateReadyIndicator, "Update ready");
+        AutomationProperties.SetAutomationId(
+            _updateReadyIndicator,
+            FreeXAutomationIdCatalog.RibbonShellUpdateReadyIndicator);
+        AutomationProperties.SetName(_updateReadyIndicator, UiText.Get("MainWindow_AutomationName_UpdateReady"));
         AutomationProperties.SetHelpText(
             _updateReadyIndicator,
             "A new version of FreeX has been downloaded. Click to restart and update.");
@@ -2517,11 +2024,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void UpdateReadyIndicator_Click(object? sender, RoutedEventArgs e)
     {
-        var versionSuffix = string.IsNullOrWhiteSpace(_stagedUpdateVersion)
-            ? string.Empty
-            : $" {_stagedUpdateVersion}";
-        RefreshShell(UiText.Format("MainLoc_RestartingToInstall", versionSuffix));
-        _updateService?.ApplyAndRestart();
+        if (_updateService is null)
+            return;
+
+        var plan = FreeXSynchronousPromptCatalog.ForUpdateReady(_stagedUpdateVersion);
+        if (!plan.ShouldApply(ShowSynchronousPrompt(plan.Confirmation)))
+            return;
+
+        RefreshShell(plan.ApplyingStatus.Resolve(UiText.Get, UiText.Format));
+        _updateService.ApplyAndRestart();
     }
 
     private void ConfigureNativeMenu()
@@ -2743,11 +2254,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _clearHyperlinksMenuItem.Click += (_, _) => RemoveSelectedRangeHyperlinks();
 
-        _boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);
+        _boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold();
 
-        _italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);
+        _italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic();
 
-        _underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);
+        _underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline();
 
         _doubleUnderlineMenuItem.Click += (_, _) => ToggleSelectedRangeDoubleUnderline();
 
@@ -2770,22 +2281,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formatCellsMenuItem.Click += async (_, _) => await ShowFormatCellsDialogAsync();
 
         _horizontalTextMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(0, "Set horizontal text for", "Horizontal Text failed.");
+            ApplySelectedRangeTextRotation(0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
 
         _angleCounterclockwiseMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(45, "Angled text counterclockwise for", "Angle Counterclockwise failed.");
+            ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_CounterclockwiseSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
 
         _angleClockwiseMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(-45, "Angled text clockwise for", "Angle Clockwise failed.");
+            ApplySelectedRangeTextRotation(-45, UiText.Get("TextRotation_ClockwiseSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
 
         _verticalTextMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(255, "Set vertical text for", "Vertical Text failed.");
+            ApplySelectedRangeTextRotation(255, UiText.Get("TextRotation_VerticalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
 
         _rotateTextUpMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(90, "Rotated text up for", "Rotate Text Up failed.");
+            ApplySelectedRangeTextRotation(90, UiText.Get("TextRotation_UpSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
 
         _rotateTextDownMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(-90, "Rotated text down for", "Rotate Text Down failed.");
+            ApplySelectedRangeTextRotation(-90, UiText.Get("TextRotation_DownSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
 
         _currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();
 
@@ -2885,11 +2396,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _pageBreakPreviewMenuItem.ToggleType = MenuItemToggleType.CheckBox;
         _pageBreakPreviewMenuItem.Click += (_, _) => TogglePageBreakPreview();
 
-        _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
+        _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"));
 
-        _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback");
+        _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"));
 
-        _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates");
+        _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"));
 
         _aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();
 
@@ -3364,8 +2875,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _statusText.TextTrimming = TextTrimming.CharacterEllipsis;
         _statusText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         AutomationProperties.SetAutomationId(_statusText, "StatusText");
-        AutomationProperties.SetName(_statusText, "Status");
-        AutomationProperties.SetHelpText(_statusText, "Shows the current workbook status.");
+        AutomationProperties.SetName(_statusText, UiText.Get("Toolbar_StatusAutomationName"));
+        AutomationProperties.SetHelpText(_statusText, UiText.Get("Toolbar_StatusHelpText"));
 
         _selectionStatsText.FontSize = 12;
         _selectionStatsText.Foreground = StatusBarForeground;
@@ -3373,8 +2884,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
         _selectionStatsText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         AutomationProperties.SetAutomationId(_selectionStatsText, "SelectionStatsText");
-        AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
-        AutomationProperties.SetHelpText(_selectionStatsText, "Shows statistics for the current selection.");
+        AutomationProperties.SetName(_selectionStatsText, UiText.Get("Toolbar_SelectionStatisticsAutomationName"));
+        AutomationProperties.SetHelpText(_selectionStatsText, UiText.Get("Toolbar_SelectionStatisticsHelpText"));
 
         // CAPS LOCK / NUM LOCK warning indicators (parity with the WPF host's StatusCapsLockText /
         // StatusNumLockText): hidden until RefreshKeyLockIndicators finds the corresponding key toggled on.
@@ -3384,7 +2895,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _statusCapsLockText.Margin = new Thickness(0, 0, 10, 0);
         _statusCapsLockText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _statusCapsLockText.IsVisible = false;
-        AutomationProperties.SetAutomationId(_statusCapsLockText, "StatusCapsLockText");
+        AutomationProperties.SetAutomationId(
+            _statusCapsLockText,
+            FreeXAutomationIdCatalog.RibbonShellStatusCapsLockText);
         AutomationProperties.SetName(_statusCapsLockText, UiText.Get("StatusBar_CapsLock"));
 
         _statusNumLockText.FontSize = 12;
@@ -3393,7 +2906,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _statusNumLockText.Margin = new Thickness(0, 0, 10, 0);
         _statusNumLockText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _statusNumLockText.IsVisible = false;
-        AutomationProperties.SetAutomationId(_statusNumLockText, "StatusNumLockText");
+        AutomationProperties.SetAutomationId(
+            _statusNumLockText,
+            FreeXAutomationIdCatalog.RibbonShellStatusNumLockText);
         AutomationProperties.SetName(_statusNumLockText, UiText.Get("StatusBar_NumLock"));
 
         _zoomText.FontSize = 12;
@@ -3403,55 +2918,55 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _zoomText.TextAlignment = TextAlignment.Right;
         _zoomText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _zoomText.Focusable = true;
-        AutomationProperties.SetName(_zoomText, "Zoom");
-        AutomationProperties.SetHelpText(_zoomText, "Shows the active worksheet zoom.");
+        AutomationProperties.SetName(_zoomText, UiText.CreateAutomationName(UiText.Get("Common_Zoom")));
+        AutomationProperties.SetHelpText(_zoomText, UiText.Get("Toolbar_ZoomHelpText"));
 
-        _openButton.Content = "Open";
+        _openButton.Content = UiText.Get("MainWindow_Text_Open");
         _openButton.Padding = new Thickness(10, 4);
         _openButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _openButton.Click += OpenButton_Click;
 
-        _saveButton.Content = "Save";
+        _saveButton.Content = UiText.Get("MainWindow_AutomationName_Save");
         _saveButton.Padding = new Thickness(10, 4);
         _saveButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _saveButton.Click += SaveButton_Click;
 
-        _saveAsButton.Content = "Save As";
+        _saveAsButton.Content = UiText.Get("MainWindow_TooltipTitle_SaveAs");
         _saveAsButton.Padding = new Thickness(10, 4);
         _saveAsButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _saveAsButton.Click += SaveAsButton_Click;
 
-        _undoButton.Content = "Undo";
+        _undoButton.Content = UiText.Get("MainWindow_TooltipTitle_Undo");
         _undoButton.Padding = new Thickness(10, 4);
         _undoButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _undoButton.Click += UndoButton_Click;
 
-        _redoButton.Content = "Redo";
+        _redoButton.Content = UiText.Get("MainWindow_AutomationName_Redo");
         _redoButton.Padding = new Thickness(10, 4);
         _redoButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _redoButton.Click += RedoButton_Click;
 
-        _cutButton.Content = "Cut";
+        _cutButton.Content = UiText.Get("MainWindow_Content_Cut");
         _cutButton.Padding = new Thickness(10, 4);
         _cutButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _cutButton.Click += CutButton_Click;
 
-        _copyButton.Content = "Copy";
+        _copyButton.Content = UiText.Get("MainWindow_Content_Copy");
         _copyButton.Padding = new Thickness(10, 4);
         _copyButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _copyButton.Click += CopyButton_Click;
 
-        _pasteButton.Content = "Paste";
+        _pasteButton.Content = UiText.Get("MainWindow_Text_Paste");
         _pasteButton.Padding = new Thickness(10, 4);
         _pasteButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _pasteButton.Click += PasteButton_Click;
 
-        _pasteSpecialButton.Content = "Paste Special";
+        _pasteSpecialButton.Content = UiText.Get("PasteSpecial_PasteSpecial");
         _pasteSpecialButton.Padding = new Thickness(10, 4);
         _pasteSpecialButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _pasteSpecialButton.Flyout = CreatePasteSpecialFlyout();
 
-        _formatPainterButton.Content = "Format Painter";
+        _formatPainterButton.Content = UiText.Get("MainWindow_TooltipTitle_FormatPainter");
         _formatPainterButton.Padding = new Thickness(10, 4);
         _formatPainterButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _formatPainterButton.Click += FormatPainterButton_Click;
@@ -3461,82 +2976,84 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             args.Handled = true;
         };
         AutomationProperties.SetAutomationId(_formatPainterButton, "HomeFormatPainterButton");
-        AutomationProperties.SetName(_formatPainterButton, "Format Painter");
-        AutomationProperties.SetHelpText(_formatPainterButton, "Copy formatting from the selection and apply it to another range.");
+        AutomationProperties.SetName(_formatPainterButton, UiText.CreateAutomationName(UiText.Get("MainWindow_TooltipTitle_FormatPainter")));
+        AutomationProperties.SetHelpText(
+            _formatPainterButton,
+            UiText.Get("MainWindow_TooltipDescription_CopyFormattingFromOnePlaceAndApplyItToAnother"));
 
-        _autoSumButton.Content = "AutoSum";
+        _autoSumButton.Content = UiText.Get("MainWindow_Content_AutoSum");
         _autoSumButton.Padding = new Thickness(10, 4);
         _autoSumButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _autoSumButton.Click += AutoSumButton_Click;
         _autoSumButton.Flyout = CreateAutoSumFlyout();
         AutomationProperties.SetAutomationId(_autoSumButton, "HomeAutoSumButton");
-        AutomationProperties.SetName(_autoSumButton, "AutoSum");
-        AutomationProperties.SetHelpText(_autoSumButton, "Insert a formula using nearby numeric cells.");
+        AutomationProperties.SetName(_autoSumButton, UiText.CreateAutomationName(UiText.Get("MainWindow_TooltipTitle_AutoSum")));
+        AutomationProperties.SetHelpText(_autoSumButton, UiText.Get("Toolbar_AutoSumHelpText"));
 
-        _autoSumSumFlyoutItem.Header = "Sum";
+        _autoSumSumFlyoutItem.Header = UiText.Get("MainWindow_Header_Sum");
         _autoSumSumFlyoutItem.Click += (_, _) => InsertAutoSumFormula("SUM");
 
-        _autoSumAverageFlyoutItem.Header = "Average";
+        _autoSumAverageFlyoutItem.Header = UiText.Get("MainWindow_Header_Average");
         _autoSumAverageFlyoutItem.Click += (_, _) => InsertAutoSumFormula("AVERAGE");
 
-        _autoSumCountNumbersFlyoutItem.Header = "Count Numbers";
+        _autoSumCountNumbersFlyoutItem.Header = UiText.Get("MainWindow_Header_CountNumbers");
         _autoSumCountNumbersFlyoutItem.Click += (_, _) => InsertAutoSumFormula("COUNT");
 
-        _autoSumCountAllFlyoutItem.Header = "Count All";
+        _autoSumCountAllFlyoutItem.Header = UiText.Get("MainWindow_Header_CountAll");
         _autoSumCountAllFlyoutItem.Click += (_, _) => InsertAutoSumFormula("COUNTA");
 
-        _autoSumMaxFlyoutItem.Header = "Max";
+        _autoSumMaxFlyoutItem.Header = UiText.Get("MainWindow_Header_Max");
         _autoSumMaxFlyoutItem.Click += (_, _) => InsertAutoSumFormula("MAX");
 
-        _autoSumMinFlyoutItem.Header = "Min";
+        _autoSumMinFlyoutItem.Header = UiText.Get("MainWindow_Header_Min");
         _autoSumMinFlyoutItem.Click += (_, _) => InsertAutoSumFormula("MIN");
 
-        _fillCellsButton.Content = "Fill Cells";
+        _fillCellsButton.Content = UiText.Get("Toolbar_FillCells");
         _fillCellsButton.Padding = new Thickness(10, 4);
         _fillCellsButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _fillCellsButton.Flyout = CreateFillCellsFlyout();
         AutomationProperties.SetAutomationId(_fillCellsButton, "HomeFillCellsButton");
-        AutomationProperties.SetName(_fillCellsButton, "Fill Cells");
-        AutomationProperties.SetHelpText(_fillCellsButton, "Copy the edge cells across the selected range.");
+        AutomationProperties.SetName(_fillCellsButton, UiText.Get("Toolbar_FillCells"));
+        AutomationProperties.SetHelpText(_fillCellsButton, UiText.Get("Toolbar_FillCellsHelpText"));
 
-        _fillDownFlyoutItem.Header = "Down";
+        _fillDownFlyoutItem.Header = UiText.Get("MainWindow_Header_Down");
         _fillDownFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Down);
 
-        _fillRightFlyoutItem.Header = "Right";
+        _fillRightFlyoutItem.Header = UiText.Get("MainWindow_Header_Right");
         _fillRightFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Right);
 
-        _fillUpFlyoutItem.Header = "Up";
+        _fillUpFlyoutItem.Header = UiText.Get("MainWindow_Header_Up");
         _fillUpFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Up);
 
-        _fillLeftFlyoutItem.Header = "Left";
+        _fillLeftFlyoutItem.Header = UiText.Get("MainWindow_Header_Left");
         _fillLeftFlyoutItem.Click += (_, _) => FillSelectedRange(FillCellsDirection.Left);
 
-        _fillSeriesFlyoutItem.Header = "Series...";
+        _fillSeriesFlyoutItem.Header = UiText.Get("MainWindow_Header_Series");
         AutomationProperties.SetAutomationId(_fillSeriesFlyoutItem, "HomeFillSeriesMenuItem");
         _fillSeriesFlyoutItem.Click += (_, _) => FillSeries();
 
-        _clearButton.Content = "Clear";
+        _clearButton.Content = UiText.Get("Common_Clear");
         _clearButton.Padding = new Thickness(10, 4);
         _clearButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _clearButton.Flyout = CreateClearFlyout();
         _clearButton.Click += ClearButton_Click;
         AutomationProperties.SetAutomationId(_clearButton, "HomeClearButton");
-        AutomationProperties.SetName(_clearButton, "Clear");
-        AutomationProperties.SetHelpText(_clearButton, "Clear contents, formatting, comments, hyperlinks, or all cell state from the selected range.");
+        AutomationProperties.SetName(_clearButton, UiText.CreateAutomationName(UiText.Get("Common_Clear")));
+        AutomationProperties.SetHelpText(_clearButton, UiText.Get("Toolbar_ClearHelpText"));
 
-        _clearAllFlyoutItem.Header = "Clear All";
+        _clearAllFlyoutItem.Header = UiText.Get("MainWindow_Header_ClearAll");
         _clearAllFlyoutItem.Click += (_, _) => ClearSelectedRangeAll();
 
-        _clearFormatsFlyoutItem.Header = "Clear Formats";
+        _clearFormatsFlyoutItem.Header = UiText.Get("MainWindow_Header_ClearFormats");
         _clearFormatsFlyoutItem.Click += (_, _) => ClearSelectedRangeFormats();
 
-        _clearContentsFlyoutItem.Header = "Clear Contents";
+        _clearContentsFlyoutItem.Header = UiText.Get("MainWindow_Header_ClearContents");
         _clearContentsFlyoutItem.Click += (_, _) => ClearSelectedRangeContents();
 
-        _clearCommentsFlyoutItem.Header = "Clear Comments and Notes";
+        _clearCommentsFlyoutItem.Header = UiText.Get("MainWindow_Header_ClearCommentsAndNotes");
         _clearCommentsFlyoutItem.Click += (_, _) => ClearSelectedRangeComments();
 
-        _clearHyperlinksFlyoutItem.Header = "Clear Hyperlinks";
+        _clearHyperlinksFlyoutItem.Header = UiText.Get("MainWindow_Header_ClearHyperlinks");
         _clearHyperlinksFlyoutItem.Click += (_, _) => RemoveSelectedRangeHyperlinks();
 
         _boldButton.Content = "B";
@@ -3607,7 +3124,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _decreaseFontSizeButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _decreaseFontSizeButton.Click += DecreaseFontSizeButton_Click;
 
-        _fillColorButton.Content = "Fill";
+        _fillColorButton.Content = UiText.Get("MainWindow_Content_Fill");
         _fillColorButton.Padding = new Thickness(10, 4);
         _fillColorButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _fillColorButton.Flyout = CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
@@ -3617,20 +3134,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _fontColorButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _fontColorButton.Flyout = CreateColorPaletteFlyout(ColorPaletteTarget.Font, includeClearFill: false);
 
-        _bordersButton.Content = "Borders";
+        _bordersButton.Content = UiText.Get("FormatCells_Borders");
         _bordersButton.Padding = new Thickness(10, 4);
         _bordersButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _bordersButton.Flyout = CreateBorderPresetFlyout();
         AutomationProperties.SetAutomationId(_bordersButton, "HomeBordersButton");
-        AutomationProperties.SetName(_bordersButton, "Borders");
-        AutomationProperties.SetHelpText(_bordersButton, "Apply or change borders on the selected cells.");
+        AutomationProperties.SetName(_bordersButton, UiText.CreateAutomationName(UiText.Get("FormatCells_Borders")));
+        AutomationProperties.SetHelpText(_bordersButton, UiText.Get("MainWindow_TooltipDescription_ApplyOrChangeBordersOnTheSelectedCells"));
 
-        _cellStylesButton.Content = "Styles";
+        _cellStylesButton.Content = UiText.Get("MainWindow_Content_Styles");
         _cellStylesButton.Padding = new Thickness(10, 4);
         _cellStylesButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _cellStylesButton.Flyout = CreateCellStylesFlyout();
 
-        _orientationButton.Content = "Orient";
+        _orientationButton.Content = UiText.Get("Toolbar_OrientationShort");
         _orientationButton.Padding = new Thickness(10, 4);
         _orientationButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _orientationButton.Flyout = CreateTextRotationFlyout();
@@ -3660,58 +3177,58 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _decreaseDecimalButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _decreaseDecimalButton.Click += DecreaseDecimalButton_Click;
 
-        _alignTopButton.Content = "Top";
+        _alignTopButton.Content = UiText.Get("Toolbar_AlignTopShort");
         _alignTopButton.Padding = new Thickness(10, 4);
         _alignTopButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _alignTopButton.Click += AlignTopButton_Click;
 
-        _alignMiddleButton.Content = "Mid";
+        _alignMiddleButton.Content = UiText.Get("Toolbar_AlignMiddleShort");
         _alignMiddleButton.Padding = new Thickness(10, 4);
         _alignMiddleButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _alignMiddleButton.Click += AlignMiddleButton_Click;
 
-        _alignBottomButton.Content = "Bot";
+        _alignBottomButton.Content = UiText.Get("Toolbar_AlignBottomShort");
         _alignBottomButton.Padding = new Thickness(10, 4);
         _alignBottomButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _alignBottomButton.Click += AlignBottomButton_Click;
 
-        _wrapTextButton.Content = "Wrap";
+        _wrapTextButton.Content = UiText.Get("MainWindow_Text_Wrap");
         _wrapTextButton.Padding = new Thickness(10, 4);
         _wrapTextButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _wrapTextButton.Click += WrapTextButton_Click;
         AutomationProperties.SetAutomationId(_wrapTextButton, "HomeWrapTextButton");
-        AutomationProperties.SetName(_wrapTextButton, "Wrap Text");
-        AutomationProperties.SetHelpText(_wrapTextButton, "Wrap text within the selected cells.");
+        AutomationProperties.SetName(_wrapTextButton, UiText.CreateAutomationName(UiText.Get("MainWindow_TooltipTitle_WrapText")));
+        AutomationProperties.SetHelpText(_wrapTextButton, UiText.Get("Toolbar_WrapTextHelpText"));
 
-        _mergeAndCenterButton.Content = "Merge & Center";
+        _mergeAndCenterButton.Content = UiText.Get("MainWindow_Text_MergeCenter");
         _mergeAndCenterButton.Padding = new Thickness(10, 4);
         _mergeAndCenterButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _mergeAndCenterButton.Click += MergeAndCenterButton_Click;
         AutomationProperties.SetAutomationId(_mergeAndCenterButton, "HomeMergeAndCenterButton");
-        AutomationProperties.SetName(_mergeAndCenterButton, "Merge & Center");
-        AutomationProperties.SetHelpText(_mergeAndCenterButton, "Merge and center the selected cells.");
+        AutomationProperties.SetName(_mergeAndCenterButton, UiText.CreateAutomationName(UiText.Get("MainWindow_Text_MergeCenter")));
+        AutomationProperties.SetHelpText(_mergeAndCenterButton, UiText.Get("Toolbar_MergeCenterHelpText"));
 
-        _decreaseIndentButton.Content = "Out";
+        _decreaseIndentButton.Content = UiText.Get("Toolbar_DecreaseIndentShort");
         _decreaseIndentButton.Padding = new Thickness(10, 4);
         _decreaseIndentButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _decreaseIndentButton.Click += DecreaseIndentButton_Click;
 
-        _increaseIndentButton.Content = "In";
+        _increaseIndentButton.Content = UiText.Get("Toolbar_IncreaseIndentShort");
         _increaseIndentButton.Padding = new Thickness(10, 4);
         _increaseIndentButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _increaseIndentButton.Click += IncreaseIndentButton_Click;
 
-        _alignLeftButton.Content = "L";
+        _alignLeftButton.Content = UiText.Get("Toolbar_AlignLeftShort");
         _alignLeftButton.Padding = new Thickness(10, 4);
         _alignLeftButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _alignLeftButton.Click += AlignLeftButton_Click;
 
-        _alignCenterButton.Content = "C";
+        _alignCenterButton.Content = UiText.Get("Toolbar_AlignCenterShort");
         _alignCenterButton.Padding = new Thickness(10, 4);
         _alignCenterButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _alignCenterButton.Click += AlignCenterButton_Click;
 
-        _alignRightButton.Content = "R";
+        _alignRightButton.Content = UiText.Get("Toolbar_AlignRightShort");
         _alignRightButton.Padding = new Thickness(10, 4);
         _alignRightButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _alignRightButton.Click += AlignRightButton_Click;
@@ -3733,8 +3250,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellAddressText.LostFocus += CellAddressBox_LostFocus;
         _cellAddressText.KeyDown += CellAddressBox_KeyDown;
         AutomationProperties.SetAutomationId(_cellAddressText, "CellAddressText");
-        AutomationProperties.SetName(_cellAddressText, "Cell address");
-        AutomationProperties.SetHelpText(_cellAddressText, "Shows the active cell address.");
+        AutomationProperties.SetName(_cellAddressText, UiText.Get("Toolbar_CellAddressAutomationName"));
+        AutomationProperties.SetHelpText(_cellAddressText, UiText.Get("Toolbar_CellAddressHelpText"));
 
         var collapsedFormulaBarPlan = FormulaBarChromePlanner.BuildExpansion(expanded: false);
         _formulaBox.MinWidth = 320;
@@ -3791,8 +3308,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
         AutomationProperties.SetAutomationId(_cellAddressDropDownButton, "CellAddressDropDownButton");
-        AutomationProperties.SetName(_cellAddressDropDownButton, "Name Box list");
-        AutomationProperties.SetHelpText(_cellAddressDropDownButton, "Shows defined names to navigate to.");
+        AutomationProperties.SetName(_cellAddressDropDownButton, UiText.Get("Toolbar_NameBoxListAutomationName"));
+        AutomationProperties.SetHelpText(_cellAddressDropDownButton, UiText.Get("Toolbar_NameBoxListHelpText"));
         DockPanel.SetDock(_cellAddressDropDownButton, Dock.Right);
         cellAddressChrome.Children.Add(_cellAddressDropDownButton);
         cellAddressChrome.Children.Add(_cellAddressText);
@@ -4045,14 +3562,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 }
             }
 
-            ApplyZoomPercent(inputPlan.ZoomPercent, "Zoom failed.");
+            ApplyZoomPercent(inputPlan.ZoomPercent, UiText.Get("InsertLoc_ZoomFailed"));
         };
-        AutomationProperties.SetName(_statusZoomSlider, "Zoom slider");
-        AutomationProperties.SetHelpText(_statusZoomSlider, "Adjusts the worksheet zoom from 10 to 400 percent.");
+        AutomationProperties.SetName(_statusZoomSlider, UiText.Get("MainWindow_AutomationName_ZoomSlider"));
+        AutomationProperties.SetHelpText(
+            _statusZoomSlider,
+            UiText.Get("MainWindow_AutomationHelpText_AdjustWorksheetZoomFrom10To400"));
         // Resolve status-bar text font-size from the token (FreeXStatusBarTextFontSize = 12).
         // Falls back to the captured literal (12) so tests and unstyled environments are safe.
         // Token and fallback are byte-identical for the default theme.
-        var statusBarTextFontSize = ResolveTokenDouble("FreeXStatusBarTextFontSize", 12.0);
+        var statusBarTextFontSize = AvaloniaThemeResourceResolver.ResolveOr(ThemeResources.StatusBarTextFontSize, 12.0);
         _statusText.FontSize = statusBarTextFontSize;
         _statusText.Foreground = StatusBarForeground;
         _selectionStatsText.FontSize = statusBarTextFontSize;
@@ -4067,15 +3586,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // R119-avalonia-file-op-cancel: status-bar Cancel button for the in-flight open/save --
         // hidden by default (UpdateSaveButton reveals it only while _isOpening/_isSaving is true),
         // mirroring the WPF host's StatusSaveProgressCancelButton visibility toggle.
-        _fileOperationCancelButton.Content = "Cancel";
+        _fileOperationCancelButton.Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel"));
         _fileOperationCancelButton.Padding = new Thickness(8, 2);
         _fileOperationCancelButton.FontSize = statusBarTextFontSize;
         _fileOperationCancelButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _fileOperationCancelButton.IsVisible = false;
         _fileOperationCancelButton.Click += FileOperationCancelButton_Click;
         AutomationProperties.SetAutomationId(_fileOperationCancelButton, "FileOperationCancelButton");
-        AutomationProperties.SetName(_fileOperationCancelButton, "Cancel");
-        AutomationProperties.SetHelpText(_fileOperationCancelButton, "Cancels the current open or save operation.");
+        AutomationProperties.SetName(
+            _fileOperationCancelButton,
+            UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
+        AutomationProperties.SetHelpText(_fileOperationCancelButton, UiText.Get("Toolbar_FileOperationCancelHelpText"));
 
         var leftPanel = new StackPanel
         {
@@ -4105,19 +3626,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ConfigureStatusBarViewButton(
             _statusNormalViewButton,
             RibbonCommandIconKind.Grid,
-            "Normal view",
+            UiText.Get("InsertLoc_NormalView"),
             SetNormalView,
             new Thickness(0));
         ConfigureStatusBarViewButton(
             _statusPageLayoutViewButton,
             RibbonCommandIconKind.Page,
-            "Page layout view",
+            UiText.Get("MainWindow_Content_PageLayout"),
             SetPageLayoutView,
             new Thickness(2, 0, 0, 0));
         ConfigureStatusBarViewButton(
             _statusPageBreakPreviewButton,
             RibbonCommandIconKind.PageBreak,
-            "Page break preview",
+            UiText.Get("MainWindow_Content_PageBreakPreview"),
             TogglePageBreakPreview,
             new Thickness(2, 0, 0, 0));
         viewButtons.Children.Add(_statusNormalViewButton);
@@ -4154,9 +3675,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // falling back to the hardcoded surface color so tests and unstyled environments are safe.
         // When FREEX_THEME=midnight the token brush carries the midnight StatusSurface value;
         // for the default theme the token and the hardcoded value are byte-identical (#17324D).
-        var statusBarBackground = ResolveTokenBrush("FreeXStatusSurfaceBrush") ?? StatusBarSurface;
+        var statusBarBackground = AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.StatusSurfaceBrush) ?? StatusBarSurface;
         // Resolve height from token (FreeXStatusBarHeight = 28); falls back to captured literal.
-        var statusBarHeight = ResolveTokenDouble("FreeXStatusBarHeight", 28.0);
+        var statusBarHeight = AvaloniaThemeResourceResolver.ResolveOr(ThemeResources.StatusBarHeight, 28.0);
         return SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
             Background: statusBarBackground,
             LeftContent: leftPanel,
@@ -4168,55 +3689,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     /// <summary>
-    /// Looks up a named brush from the Application's resource registry (populated by
-    /// <see cref="Free.Shared.Theme.Avalonia.AvaloniaThemeApplier.BuildResources"/> at startup).
-    /// Returns <c>null</c> when no Application is available (e.g. unit-test environments that
-    /// do not boot the full Avalonia application).
-    /// </summary>
-    private static IBrush? ResolveTokenBrush(string key)
-    {
-        var app = global::Avalonia.Application.Current;
-        if (app is null)
-            return null;
-        return app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
-               value is IBrush brush
-            ? brush
-            : null;
-    }
-
-    /// <summary>
     /// Looks up a named <see cref="double"/> metric from the Application's resource registry
     /// (populated by <see cref="Free.Shared.Theme.Avalonia.AvaloniaThemeApplier.BuildResources"/> at startup).
     /// Returns <paramref name="fallback"/> when no Application is available or the key is not present.
     /// </summary>
     private static double ResolveTokenDouble(string key, double fallback)
-    {
-        var app = global::Avalonia.Application.Current;
-        if (app is null)
-            return fallback;
-        return app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
-               value is double d
-            ? d
-            : fallback;
-    }
-
-    /// <summary>
-    /// Looks up a named <see cref="global::Avalonia.Media.Color"/> from the Application's resource registry
-    /// (populated by <see cref="Free.Shared.Theme.Avalonia.AvaloniaThemeApplier.BuildResources"/> at startup).
-    /// Returns <paramref name="fallback"/> when no Application is available or the key is not present.
-    /// Used for static field initializers — the fallback literal is byte-identical to the token value for
-    /// the default theme, so appearance is unchanged when no app is running (e.g. unit-test environments).
-    /// </summary>
-    private static global::Avalonia.Media.Color ResolveTokenColor(string key, global::Avalonia.Media.Color fallback)
-    {
-        var app = global::Avalonia.Application.Current;
-        if (app is null)
-            return fallback;
-        return app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
-               value is global::Avalonia.Media.Color c
-            ? c
-            : fallback;
-    }
+        => AvaloniaThemeResourceResolver.ResolveOr(new ThemeResourceDescriptor(key), fallback);
 
     private Control BuildStatusZoomSliderHost()
     {
@@ -4510,7 +3988,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// ribbon's toggle states -- none of which a pan can affect, since panning never moves the active
     /// cell or selection. Re-running that whole chain on EVERY scroll tick (as both
     /// WorksheetScrollBar_ValueChanged and SheetScrollViewer_PointerWheelChanged used to, via an
-    /// unconditional RefreshShell("Ready")) was pure per-tick overhead layered on top of BuildSheetGrid's
+    /// unconditional ready-state refresh was pure per-tick overhead layered on top of BuildSheetGrid's
     /// own per-cell control allocation cost (BuildSheetGrid itself still rebuilds the grid content on
     /// every call -- Avalonia has no container-recycling viewport here yet -- but this at least stops
     /// also tearing down and rebuilding everything else around it on every notch of a continuous scroll).
@@ -4629,16 +4107,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void UpdateSaveButton()
     {
         var isIdle = !_isOpening && !_isSaving;
-        // R119-avalonia-file-op-cancel: visibility is driven directly off the live token rather than
-        // _isOpening/_isSaving -- BeginFileOperationCancellation/ClearFileOperationCancellation
-        // already bracket the exact lifetime of the in-flight open/save (including test seams that
-        // call OpenWorkbookFromTargetAsync/SaveWorkbookToTargetAsync directly, bypassing the
-        // higher-level entry points that own those two flags), so this is both simpler and more
-        // precise than re-deriving it from isIdle. Also disable it once Cancel has already been
-        // clicked (_fileOperationCancellation is non-null but its Cancel() was already requested)
-        // so a double-click can't fault on an already-canceled source.
-        _fileOperationCancelButton.IsVisible = _fileOperationCancellation is not null;
-        _fileOperationCancelButton.IsEnabled = _fileOperationCancellation is { IsCancellationRequested: false };
+        // The session brackets the exact lifetime even for direct test seams that bypass the
+        // higher-level entry points owning _isOpening/_isSaving.
+        _fileOperationCancelButton.IsVisible = _fileOperationCancellationSession.IsActive;
+        _fileOperationCancelButton.IsEnabled = _fileOperationCancellationSession.CanCancel;
         _openButton.IsEnabled = isIdle && StorageProvider.CanOpen;
         _saveButton.IsEnabled = isIdle && _session.CanSaveCurrentSource(out _);
         _saveButton.Content = _session.IsDirty ? "Save*" : "Save";
@@ -4706,36 +4178,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     /// <summary>
-    /// Starts a new cancellable file operation (open or save): disposes any stale leftover token
-    /// source (there should never be one -- ClearFileOperationCancellation always runs first via
-    /// the caller's finally -- but disposing defensively matches the WPF host's
-    /// BeginFileOperationCancellation) and installs a fresh one as the live
-    /// <see cref="_fileOperationCancellation"/> so <see cref="FileOperationCancelButton_Click"/>
-    /// has something to cancel. Callers must dispose the returned source (via `using`) and call
-    /// <see cref="ClearFileOperationCancellation"/> in a finally block, mirroring
-    /// MainWindow.Backstage.cs's OpenFileAsync/SaveWorkbookToTargetAsync (R119-avalonia-file-op-cancel).
-    /// </summary>
-    private CancellationTokenSource BeginFileOperationCancellation()
-    {
-        _fileOperationCancellation?.Dispose();
-        var cancellation = new CancellationTokenSource();
-        _fileOperationCancellation = cancellation;
-        return cancellation;
-    }
-
-    /// <summary>
-    /// Clears <see cref="_fileOperationCancellation"/> once the operation it was guarding has
-    /// finished, but only if it is STILL that same source -- guards against a pathological
-    /// reentrant call clearing a newer, unrelated in-flight operation's token (mirrors the WPF
-    /// host's ClearFileOperationCancellation).
-    /// </summary>
-    private void ClearFileOperationCancellation(CancellationTokenSource operationCancellation)
-    {
-        if (ReferenceEquals(_fileOperationCancellation, operationCancellation))
-            _fileOperationCancellation = null;
-    }
-
-    /// <summary>
     /// Status-bar Cancel button handler (R119-avalonia-file-op-cancel): requests cancellation of
     /// whichever open/save is currently in flight and immediately disables the button so a second
     /// click can't re-cancel an already-canceled source -- mirrors the WPF host's
@@ -4743,8 +4185,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// </summary>
     private void FileOperationCancelButton_Click(object? sender, RoutedEventArgs e)
     {
-        _fileOperationCancellation?.Cancel();
-        _fileOperationCancelButton.IsEnabled = false;
+        _fileOperationCancellationSession.CancelCurrent();
+        _fileOperationCancelButton.IsEnabled = _fileOperationCancellationSession.CanCancel;
     }
 
     private void ApplyNativeFileMenuAvailability(bool isIdle)
@@ -4850,9 +4292,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return -1;
     }
 
+    partial void RecordSheetTabsBuilt();
+
+    partial void RecordSheetGridBuilt();
+
     private Control BuildSheetTabs()
     {
-        _sheetTabsBuildCount++;
+        RecordSheetTabsBuilt();
         var panel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -4924,7 +4370,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             button.KeyDown += (_, args) => HandleSheetTabKeyDown(tab.Id, button, args);
             button.Click += (_, _) => CompleteSheetTabClick(tab.Id);
             AutomationProperties.SetName(button, tab.Name);
-            AutomationProperties.SetHelpText(button, SheetTabContextHelpText);
+            AutomationProperties.SetHelpText(button, UiText.Get("SheetTabs_ContextHelpText"));
             panel.Children.Add(button);
         }
 
@@ -4952,25 +4398,39 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle, int sheetTabIndex)
     {
-        yield return CreateSheetTabContextMenuItem(tab, "Rename...", async () => await RenameActiveSheetAsync(), isIdle);
-        yield return CreateSheetTabContextMenuItem(tab, "Insert Sheet", AddNewSheet, isIdle);
-        yield return CreateSheetTabContextMenuItem(tab, "Duplicate", DuplicateActiveSheet, isIdle);
-        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MoveCopySheet_MenuItem"), ShowMoveOrCopySheetDialog, isIdle);
-        yield return CreateSheetTabContextMenuItem(tab, "Delete Sheet", DeleteActiveSheet, isIdle);
+        var commonCommands = SheetTabContextMenuPlanner.BuildSheetTabCommands(
+                new SheetTabContextMenuState(
+                    CanDeleteSheet: _session.SheetTabs.Count > 1,
+                    CanHideSheet: _session.SheetTabs.Count > 1,
+                    CanUnhideSheet: _session.HiddenSheets.Count > 0,
+                    CanSelectAllSheets: _session.SheetTabs.Count > 1,
+                    CanUngroupSheets: _session.IsWorkbookGrouped))
+            .Where(command => !command.IsSeparator)
+            .ToDictionary(command => command.Action);
+
+        SheetTabContextMenuCommand Common(SheetTabContextMenuAction action) => commonCommands[action];
+        string Header(SheetTabContextMenuAction action) => UiText.Get(Common(action).ResourceKey);
+        bool Enabled(SheetTabContextMenuAction action) => isIdle && Common(action).IsEnabled;
+
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.InsertSheet), AddNewSheet, Enabled(SheetTabContextMenuAction.InsertSheet));
+        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_Duplicate"), DuplicateActiveSheet, isIdle);
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.MoveOrCopy), ShowMoveOrCopySheetDialog, Enabled(SheetTabContextMenuAction.MoveOrCopy));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.DeleteSheet), DeleteActiveSheet, Enabled(SheetTabContextMenuAction.DeleteSheet));
         yield return new Separator();
-        yield return CreateSheetTabContextMenuItem(tab, "Hide", HideActiveSheet, isIdle && _session.SheetTabs.Count > 1);
-        yield return CreateSheetTabContextMenuItem(tab, "Unhide...", async () => await UnhideSheetAsync(), isIdle && _session.HiddenSheets.Count > 0);
-        yield return CreateSheetTabColorContextMenuItem(tab, isIdle);
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Hide), HideActiveSheet, Enabled(SheetTabContextMenuAction.Hide));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Unhide), async () => await UnhideSheetAsync(), Enabled(SheetTabContextMenuAction.Unhide));
+        yield return CreateSheetTabColorContextMenuItem(tab, Header(SheetTabContextMenuAction.TabColor), Enabled(SheetTabContextMenuAction.TabColor));
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, UiText.Get("OutlineSettings_MenuItem"), ShowOutlineSettingsDialog, isIdle);
         yield return new Separator();
-        yield return CreateSheetTabContextMenuItem(tab, "Select All Sheets", SelectAllVisibleSheets, isIdle && _session.SheetTabs.Count > 1);
-        yield return CreateSheetTabContextMenuItem(tab, "Ungroup Sheets", UngroupSheets, isIdle && _session.IsWorkbookGrouped);
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.SelectAllSheets), SelectAllVisibleSheets, Enabled(SheetTabContextMenuAction.SelectAllSheets));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.UngroupSheets), UngroupSheets, Enabled(SheetTabContextMenuAction.UngroupSheets));
         yield return new Separator();
-        yield return CreateSheetTabContextMenuItem(tab, "Move Left", MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
+        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_MoveLeft"), MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
         yield return CreateSheetTabContextMenuItem(
             tab,
-            "Move Right",
+            UiText.Get("MainWindow_Header_MoveRight"),
             MoveActiveSheetRight,
             isIdle && sheetTabIndex >= 0 && sheetTabIndex < _session.SheetTabs.Count - 1);
     }
@@ -5009,11 +4469,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return menuItem;
     }
 
-    private MenuItem CreateSheetTabColorContextMenuItem(WorkbookSheetTab tab, bool isEnabled)
+    private MenuItem CreateSheetTabColorContextMenuItem(WorkbookSheetTab tab, string header, bool isEnabled)
     {
         var menuItem = new MenuItem
         {
-            Header = "Tab Color",
+            Header = header,
             IsEnabled = isEnabled,
             ItemsSource = CreateSheetTabColorContextMenuItems(tab).ToArray(),
         };
@@ -5022,7 +4482,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private IEnumerable<MenuItem> CreateSheetTabColorContextMenuItems(WorkbookSheetTab tab)
     {
-        var clearColorItem = new MenuItem { Header = "No Color" };
+        var clearColorItem = new MenuItem { Header = UiText.Get("RibbonWire_TabColorNone") };
         clearColorItem.Click += (_, _) =>
         {
             if (SelectSheetForContextCommand(tab.Id))
@@ -5048,7 +4508,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private Control BuildSheetGrid()
     {
-        _sheetGridBuildCount++;
+        RecordSheetGridBuilt();
         _formulaReferenceGridOverlay = null;
         _cellAffordanceOverlay = null;
         _formulaReferenceGridHighlightVisuals.Clear();
@@ -5116,13 +4576,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // span the full merged rectangle (Grid.RowSpan/ColumnSpan) instead of rendering as separate
         // 1x1 slots. Non-anchor member cells are skipped entirely below — the anchor's spanned
         // Border paints over their slots, which suppresses inner gridlines/borders for free.
-        var rowIndexByRow = new Dictionary<uint, int>(rowMetrics.Count);
-        for (var i = 0; i < rowMetrics.Count; i++)
-            rowIndexByRow[rowMetrics[i].Row] = i;
-        var colIndexByCol = new Dictionary<uint, int>(colMetrics.Count);
-        for (var i = 0; i < colMetrics.Count; i++)
-            colIndexByCol[colMetrics[i].Col] = i;
-
         for (var rowIndex = 0; rowIndex < rowMetrics.Count; rowIndex++)
         {
             var rowMetric = rowMetrics[rowIndex];
@@ -5154,7 +4607,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // showing the merge's content/fill in whatever portion remains visible. Resolve
                     // the topmost/leftmost *visible* member as a substitute anchor in that case, so
                     // the merge still paints (and still carries the true anchor's content/style).
-                    var isVisibleAnchor = ResolveVisibleMergeAnchor(merge, rowIndexByRow, colIndexByCol) is { } visibleAnchor
+                    var isVisibleAnchor = ViewportGeometryPlanner.ResolveVisibleMergeAnchor(merge, rowMetrics, colMetrics) is { } visibleAnchor
                         && visibleAnchor.Row == row && visibleAnchor.Col == col;
                     if (!isVisibleAnchor)
                     {
@@ -5186,8 +4639,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 var colSpan = 1;
                 if (mergeRegion is { } anchorMerge)
                 {
-                    (rowSpan, colSpan, rowHeight, colWidth) = ResolveVisibleMergeSpan(
-                        anchorMerge, rowIndex, colIndex, rowIndexByRow, colIndexByCol, rowMetrics, colMetrics, zoomFactor, rowHeight, colWidth);
+                    var mergeSpan = ViewportGeometryPlanner.CalculateVisibleMergeSpan(
+                        anchorMerge,
+                        rowIndex,
+                        colIndex,
+                        rowMetrics,
+                        colMetrics,
+                        CreateAvaloniaViewportGeometrySettings(viewport, showHeadings, zoomFactor));
+                    (rowSpan, colSpan, rowHeight, colWidth) =
+                        (mergeSpan.RowSpan, mergeSpan.ColumnSpan, mergeSpan.Height, mergeSpan.Width);
                 }
 
                 var cellControl = CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight, mergeRegion);
@@ -5407,26 +4867,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// </summary>
     private static IReadOnlyList<RowMetric> CombineSplitRowMetrics(ViewportModel viewport)
     {
-        var topRows = viewport.SplitPanes?.TopRows;
-        if (topRows is not { Count: > 0 })
-            return viewport.RowMetrics;
-
-        // The main (BottomRight) pane's own scroll position (sheet.ViewTopRow) is tracked
-        // independently of the split row and can still point above it (e.g. right after Window ▸
-        // Split is first applied at the active cell, before the user scrolls the bottom pane down).
-        // Excel always keeps the scrollable pane's first visible row at or below the split line, so
-        // defensively drop any main-pane row already covered by the pinned block — otherwise the same
-        // row number would appear twice (once pinned, once scrollable) and collide in rowIndexByRow.
-        var lastPinnedRow = topRows[^1].Row;
-        var combined = new List<RowMetric>(topRows.Count + viewport.RowMetrics.Count);
-        combined.AddRange(topRows);
-        foreach (var metric in viewport.RowMetrics)
-        {
-            if (metric.Row > lastPinnedRow)
-                combined.Add(metric);
-        }
-
-        return combined;
+        return ViewportGeometryPlanner.ProjectRows(viewport);
     }
 
     /// <summary>
@@ -5436,22 +4877,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// </summary>
     private static IReadOnlyList<ColMetric> CombineSplitColumnMetrics(ViewportModel viewport)
     {
-        var leftColumns = viewport.SplitPanes?.LeftColumns;
-        if (leftColumns is not { Count: > 0 })
-            return viewport.ColMetrics;
-
-        // See CombineSplitRowMetrics for why the main pane's own columns are filtered against the
-        // pinned block rather than simply concatenated.
-        var lastPinnedCol = leftColumns[^1].Col;
-        var combined = new List<ColMetric>(leftColumns.Count + viewport.ColMetrics.Count);
-        combined.AddRange(leftColumns);
-        foreach (var metric in viewport.ColMetrics)
-        {
-            if (metric.Col > lastPinnedCol)
-                combined.Add(metric);
-        }
-
-        return combined;
+        return ViewportGeometryPlanner.ProjectColumns(viewport);
     }
 
     /// <summary>
@@ -5502,96 +4928,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     /// <summary>
-    /// Computes how far a merge's rendered anchor cell (the true top-left anchor, or — when that
-    /// anchor has scrolled out of the viewport — the topmost/leftmost visible substitute resolved
-    /// by <see cref="ResolveVisibleMergeAnchor"/>) should span in grid rows/columns, clipped to the
-    /// portion of the merge that is actually contiguous and visible in the current viewport (a
-    /// merge can be partially scrolled off, or straddle the frozen/scrollable boundary where row
-    /// indices are not contiguous — in either case we only span as far as metrics are present and
-    /// consecutive). Spanning always starts from the rendered row/col (not necessarily the merge's
-    /// true Start), since a substitute anchor renders at its own row/col but must still span the
-    /// remaining visible extent of the merge. Returns the resolved span plus the summed
-    /// height/width across that span so the anchor's content (text alignment, ShrinkToFit
-    /// measurement) lays out against the full visible rectangle rather than just one row/column.
-    /// </summary>
-    private static (int RowSpan, int ColSpan, double Height, double Width) ResolveVisibleMergeSpan(
-        GridRange merge,
-        int rowIndex,
-        int colIndex,
-        Dictionary<uint, int> rowIndexByRow,
-        Dictionary<uint, int> colIndexByCol,
-        IReadOnlyList<RowMetric> rowMetrics,
-        IReadOnlyList<ColMetric> colMetrics,
-        double zoomFactor,
-        double anchorHeight,
-        double anchorWidth)
-    {
-        var renderedRow = rowMetrics[rowIndex].Row;
-        var renderedCol = colMetrics[colIndex].Col;
-
-        var rowSpan = 1;
-        var height = anchorHeight;
-        for (var r = renderedRow + 1; r <= merge.End.Row; r++)
-        {
-            if (!rowIndexByRow.TryGetValue(r, out var nextRowIndex) || nextRowIndex != rowIndex + rowSpan)
-                break;
-            height += GetDisplayedRowHeight(rowMetrics[nextRowIndex], zoomFactor);
-            rowSpan++;
-        }
-
-        var colSpan = 1;
-        var width = anchorWidth;
-        for (var c = renderedCol + 1; c <= merge.End.Col; c++)
-        {
-            if (!colIndexByCol.TryGetValue(c, out var nextColIndex) || nextColIndex != colIndex + colSpan)
-                break;
-            width += GetDisplayedColumnWidth(colMetrics[nextColIndex], zoomFactor);
-            colSpan++;
-        }
-
-        return (rowSpan, colSpan, height, width);
-    }
-
-    /// <summary>
-    /// Resolves the cell that should render a merged region's spanned Border in the current
-    /// viewport: the merge's true anchor (top-left cell) when it is visible, or — when the anchor's
-    /// own row/col has scrolled out of view — the topmost/leftmost row/col of the merge that IS
-    /// present in the viewport metrics. This mirrors Excel, which keeps showing a merged cell's
-    /// content/fill in whatever portion of the merge remains visible rather than leaving a blank
-    /// gap once the anchor itself scrolls past the top/left edge. Returns null only if no part of
-    /// the merge is present in the viewport at all (shouldn't happen for a merge we were asked to
-    /// resolve an anchor for, since the caller only calls this for a cell known to be in the merge).
-    /// </summary>
-    private static CellAddress? ResolveVisibleMergeAnchor(
-        GridRange merge,
-        Dictionary<uint, int> rowIndexByRow,
-        Dictionary<uint, int> colIndexByCol)
-    {
-        uint? visibleRow = null;
-        for (var r = merge.Start.Row; r <= merge.End.Row; r++)
-        {
-            if (!rowIndexByRow.ContainsKey(r))
-                continue;
-            visibleRow = r;
-            break;
-        }
-
-        uint? visibleCol = null;
-        for (var c = merge.Start.Col; c <= merge.End.Col; c++)
-        {
-            if (!colIndexByCol.ContainsKey(c))
-                continue;
-            visibleCol = c;
-            break;
-        }
-
-        if (visibleRow is not { } r2 || visibleCol is not { } c2)
-            return null;
-
-        return new CellAddress(merge.Start.Sheet, r2, c2);
-    }
-
-    /// <summary>
     /// Builds a minimal <see cref="DisplayCell"/> straight from the live <see cref="Sheet"/>/
     /// <see cref="Workbook"/> for an address the engine's viewport scan never produced a DisplayCell
     /// for — specifically a merge's true anchor that has scrolled outside RowMetrics/ColMetrics (see
@@ -5613,7 +4949,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var displayText = cell.HasFormula && cell.FormulaText is not null
             ? "=" + cell.FormulaText
-            : FormatScalarValue(cell.Value);
+            : SpreadsheetDisplayFormatter.FormatScalarValue(
+                cell.Value,
+                SpreadsheetScalarFormatProfile.InvariantScalar);
         var style = _session.Workbook.GetStyle(cell.StyleId);
         return new DisplayCell(address.Row, address.Col, cell.Value, displayText, cell.FormulaText, cell.StyleId, Error: null, Style: style);
     }
@@ -5686,7 +5024,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         foreach (var renderPlan in DrawingObjectRenderPlanner.Plan(viewport))
         {
             var drawingObject = renderPlan.Bounds;
-            if (_textBoxInlineEditingId == drawingObject.Id &&
+            if (_textBoxInlineEditSession.IsEditing(drawingObject.Id) &&
                 drawingObject.Kind == SelectionPaneObjectKind.TextBox)
             {
                 continue;
@@ -5904,7 +5242,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Child = panel,
         };
         AutomationProperties.SetAutomationId(border, "WorksheetDvInputMessagePopup");
-        AutomationProperties.SetName(border, "Data validation input message");
+        AutomationProperties.SetName(border, UiText.Get("DataValidation_InputMessage"));
 
         Canvas.SetLeft(border, left);
         Canvas.SetTop(border, top);
@@ -5927,10 +5265,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Cursor = new Cursor(StandardCursorType.Hand)
         };
 
-        ToolTip.SetTip(dropdown, "Pick from list");
+        ToolTip.SetTip(dropdown, UiText.Get("DataValidation_SelectAValueFromList"));
         AutomationProperties.SetAutomationId(dropdown, "WorksheetDataValidationDropdown");
-        AutomationProperties.SetName(dropdown, "Data validation list");
-        AutomationProperties.SetHelpText(dropdown, "Pick a permitted value for the active cell.");
+        AutomationProperties.SetName(dropdown, UiText.Get("DataValidation_List"));
+        AutomationProperties.SetHelpText(dropdown, UiText.Get("DataValidation_SelectAValueFromList"));
         dropdown.SelectionChanged += DataValidationDropdown_SelectionChanged;
         return dropdown;
     }
@@ -5981,9 +5319,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 : null;
 
         AutomationProperties.SetAutomationId(container, $"DrawingObject{drawingObject.Kind}{drawingObject.Id:N}");
-        AutomationProperties.SetName(container, $"{FormatDrawingObjectKind(drawingObject.Kind)} {drawingObject.DisplayName}");
-        AutomationProperties.SetHelpText(container, "Selects this drawing object preview in the workbook viewport.");
-        AutomationProperties.SetItemStatus(container, selected ? "Selected" : "Not selected");
+        AutomationProperties.SetName(
+            container,
+            UiText.Format(
+                "RecentFile_AutomationNameFormat",
+                FormatDrawingObjectKind(drawingObject.Kind),
+                drawingObject.DisplayName));
+        AutomationProperties.SetHelpText(container, UiText.Get("DrawingObject_PreviewHelpText"));
+        AutomationProperties.SetItemStatus(
+            container,
+            UiText.Get(selected ? "Automation_Selected" : "Automation_NotSelected"));
 
         container.PointerPressed += (_, args) =>
         {
@@ -6048,7 +5393,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         if (IsTextBoxInlineEditorVisible &&
             (drawingObject.Kind != SelectionPaneObjectKind.TextBox ||
-             drawingObject.Id != _textBoxInlineEditingId) &&
+             !_textBoxInlineEditSession.IsEditing(drawingObject.Id)) &&
             !HideTextBoxInlineEditor(commit: true))
         {
             return;
@@ -6069,7 +5414,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _ribbonContextSource.OnDrawingObjectSelected(drawingObject.Kind);
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
-        RefreshShell($"Selected {FormatDrawingObjectKind(drawingObject.Kind)}: {drawingObject.DisplayName}");
+        RefreshShell(UiText.Format(
+            "MainLoc_SelectedX",
+            UiText.Format(
+                "RecentFile_AutomationNameFormat",
+                FormatDrawingObjectKind(drawingObject.Kind),
+                drawingObject.DisplayName)));
     }
 
     private bool IsSelectedDrawingObject(DrawingObjectBounds drawingObject) =>
@@ -6967,23 +6317,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         out double width,
         out double height)
     {
-        left = 0;
-        top = 0;
-        width = 0;
-        height = 0;
-
-        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, address.Col, zoomFactor, out var columnLeft) ||
-            !TryGetDisplayedRowTop(viewport.RowMetrics, address.Row, zoomFactor, out var rowTop))
+        if (!ViewportGeometryPlanner.TryGetCellBounds(
+                viewport,
+                address.Row,
+                address.Col,
+                CreateAvaloniaViewportGeometrySettings(viewport, showHeadings, zoomFactor),
+                out var bounds))
         {
+            left = top = width = height = 0;
             return false;
         }
 
-        var columnMetric = viewport.ColMetrics.First(metric => metric.Col == address.Col);
-        var rowMetric = viewport.RowMetrics.First(metric => metric.Row == address.Row);
-        left = (showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0) + columnLeft;
-        top = (showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0) + rowTop;
-        width = GetDisplayedColumnWidth(columnMetric, zoomFactor);
-        height = GetDisplayedRowHeight(rowMetric, zoomFactor);
+        (left, top, width, height) = (bounds.Left, bounds.Top, bounds.Width, bounds.Height);
         return true;
     }
 
@@ -6997,92 +6342,42 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         out double width,
         out double height)
     {
-        left = 0;
-        top = 0;
-        width = 0;
-        height = 0;
-
-        var startCol = Math.Min(range.Start.Col, range.End.Col);
-        var endCol = Math.Max(range.Start.Col, range.End.Col);
-        var startRow = Math.Min(range.Start.Row, range.End.Row);
-        var endRow = Math.Max(range.Start.Row, range.End.Row);
-        var visibleColumns = viewport.ColMetrics
-            .Where(metric => startCol <= metric.Col && metric.Col <= endCol)
-            .ToList();
-        var visibleRows = viewport.RowMetrics
-            .Where(metric => startRow <= metric.Row && metric.Row <= endRow)
-            .ToList();
-        if (visibleColumns.Count == 0 || visibleRows.Count == 0)
-            return false;
-
-        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, visibleColumns[0].Col, zoomFactor, out var columnLeft) ||
-            !TryGetDisplayedRowTop(viewport.RowMetrics, visibleRows[0].Row, zoomFactor, out var rowTop))
+        if (!ViewportGeometryPlanner.TryGetVisibleRangeBounds(
+                viewport,
+                range,
+                CreateAvaloniaViewportGeometrySettings(viewport, showHeadings, zoomFactor),
+                out var bounds))
         {
+            left = top = width = height = 0;
             return false;
         }
 
-        left = (showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0) + columnLeft;
-        top = (showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0) + rowTop;
-        width = visibleColumns.Sum(metric => GetDisplayedColumnWidth(metric, zoomFactor));
-        height = visibleRows.Sum(metric => GetDisplayedRowHeight(metric, zoomFactor));
-        return width > 0 && height > 0;
-    }
-
-    private static bool TryGetDisplayedColumnLeft(
-        IReadOnlyList<ColMetric> columns,
-        uint column,
-        double zoomFactor,
-        out double left)
-    {
-        left = 0;
-        for (var i = 0; i < columns.Count; i++)
-        {
-            var metric = columns[i];
-            if (metric.Col == column)
-                return true;
-            left += GetDisplayedColumnWidth(metric, zoomFactor);
-        }
-
-        left = 0;
-        return false;
-    }
-
-    private static bool TryGetDisplayedRowTop(
-        IReadOnlyList<RowMetric> rows,
-        uint row,
-        double zoomFactor,
-        out double top)
-    {
-        top = 0;
-        for (var i = 0; i < rows.Count; i++)
-        {
-            var metric = rows[i];
-            if (metric.Row == row)
-                return true;
-            top += GetDisplayedRowHeight(metric, zoomFactor);
-        }
-
-        top = 0;
-        return false;
+        (left, top, width, height) = (bounds.Left, bounds.Top, bounds.Width, bounds.Height);
+        return true;
     }
 
     private static double CalculateDisplayedGridWidth(ViewportModel viewport, bool showHeadings, double zoomFactor)
-    {
-        var width = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
-        foreach (var metric in CombineSplitColumnMetrics(viewport))
-            width += GetDisplayedColumnWidth(metric, zoomFactor);
-
-        return width;
-    }
+        => ViewportGeometryPlanner.CalculateProjectedWidth(
+            viewport,
+            CreateAvaloniaViewportGeometrySettings(viewport, showHeadings, zoomFactor));
 
     private static double CalculateDisplayedGridHeight(ViewportModel viewport, bool showHeadings, double zoomFactor)
-    {
-        var height = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;
-        foreach (var metric in CombineSplitRowMetrics(viewport))
-            height += GetDisplayedRowHeight(metric, zoomFactor);
+        => ViewportGeometryPlanner.CalculateProjectedHeight(
+            viewport,
+            CreateAvaloniaViewportGeometrySettings(viewport, showHeadings, zoomFactor));
 
-        return height;
-    }
+    private static ViewportGeometrySettings CreateAvaloniaViewportGeometrySettings(
+        ViewportModel viewport,
+        bool showHeadings,
+        double zoomFactor) =>
+        new(
+            showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0,
+            showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0,
+            zoomFactor,
+            MinimumDisplayedColumnWidth,
+            MinimumDisplayedRowHeight,
+            ViewportMetricPlacement.Sequential,
+            ViewportHitTestEdgeBehavior.InclusiveEnd);
 
     private static double GetDisplayedColumnWidth(ColMetric metric, double zoomFactor) =>
         Math.Max(MinimumDisplayedColumnWidth, metric.Width) * zoomFactor;
@@ -7141,8 +6436,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 continue;
             }
 
-            var rowIndex = FindMetricIndex(rowMetrics, cell.Row);
-            var colIndex = FindMetricIndex(colMetrics, cell.Col);
+            var rowIndex = ViewportGeometryPlanner.GetRowIndex(rowMetrics, cell.Row);
+            var colIndex = ViewportGeometryPlanner.GetColumnIndex(colMetrics, cell.Col);
             if (rowIndex < 0 || colIndex < 0)
                 continue;
 
@@ -7278,22 +6573,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         grid.Children.Add(layer);
     }
 
-    private static int FindMetricIndex(IReadOnlyList<RowMetric> metrics, uint row)
-    {
-        for (var i = 0; i < metrics.Count; i++)
-            if (metrics[i].Row == row)
-                return i;
-        return -1;
-    }
-
-    private static int FindMetricIndex(IReadOnlyList<ColMetric> metrics, uint col)
-    {
-        for (var i = 0; i < metrics.Count; i++)
-            if (metrics[i].Col == col)
-                return i;
-        return -1;
-    }
-
     private double ResolveOverflowRightLimit(
         uint row,
         int colIndex,
@@ -7302,26 +6581,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<ColMetric> colMetrics,
         double zoomFactor)
     {
-        var limit = cellRight;
-        var frozenCols = _session.GetEffectiveFrozenCols();
-        var previousCol = colMetrics[colIndex].Col;
-        for (var index = colIndex + 1; index < colMetrics.Count; index++)
-        {
-            var col = colMetrics[index].Col;
-            // Frozen/scrolled-body seam: when the sheet is scrolled, the combined colMetrics list
-            // jumps straight from the last frozen column to the (far-away) first visible scrollable
-            // column, with no entry for anything in between. Walking by list index alone cannot tell
-            // that gap apart from an adjacent column, so it would draw the overflow straight across
-            // the scrolled-off range. Excel's frozen pane is a separate clip region -- overflow must
-            // stop at the pane boundary, so bail once we detect the column-number jump past it.
-            if (frozenCols > 0 && previousCol <= frozenCols && col > frozenCols)
-                break;
-            if (IsOverflowOccupied(row, col, cellsByAddress))
-                break;
-            limit += GetDisplayedColumnWidth(colMetrics[index], zoomFactor);
-            previousCol = col;
-        }
-        return limit;
+        var availability = ViewportGeometryPlanner.CalculateOverflowAvailability(
+            row,
+            colMetrics[colIndex].Col,
+            colIndex,
+            colMetrics,
+            _session.GetEffectiveFrozenCols(),
+            CreateAvaloniaViewportGeometrySettings(_session.Viewport, showHeadings: false, zoomFactor: zoomFactor),
+            ViewportOverflowTraversal.VisibleMetrics,
+            (rowNumber, columnNumber) => IsOverflowOccupied(rowNumber, columnNumber, cellsByAddress));
+        return cellRight + availability.RightWidth;
     }
 
     private double ResolveOverflowLeftLimit(
@@ -7332,22 +6601,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<ColMetric> colMetrics,
         double zoomFactor)
     {
-        var limit = cellLeft;
-        var frozenCols = _session.GetEffectiveFrozenCols();
-        var previousCol = colMetrics[colIndex].Col;
-        for (var index = colIndex - 1; index >= 0; index--)
-        {
-            var col = colMetrics[index].Col;
-            // Mirror of the seam check above: a scrollable-body cell's leftward overflow must not
-            // tunnel backward across the scrolled-off gap into the frozen pane.
-            if (frozenCols > 0 && previousCol > frozenCols && col <= frozenCols)
-                break;
-            if (IsOverflowOccupied(row, col, cellsByAddress))
-                break;
-            limit -= GetDisplayedColumnWidth(colMetrics[index], zoomFactor);
-            previousCol = col;
-        }
-        return limit;
+        var availability = ViewportGeometryPlanner.CalculateOverflowAvailability(
+            row,
+            colMetrics[colIndex].Col,
+            colIndex,
+            colMetrics,
+            _session.GetEffectiveFrozenCols(),
+            CreateAvaloniaViewportGeometrySettings(_session.Viewport, showHeadings: false, zoomFactor: zoomFactor),
+            ViewportOverflowTraversal.VisibleMetrics,
+            (rowNumber, columnNumber) => IsOverflowOccupied(rowNumber, columnNumber, cellsByAddress));
+        return cellLeft - availability.LeftWidth;
     }
 
     private bool IsOverflowOccupied(
@@ -7516,9 +6779,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var header = CreateHeaderCell("", zoomFactor: zoomFactor);
         header.Cursor = new Cursor(StandardCursorType.Hand);
-        ToolTip.SetTip(header, "Select all");
+        ToolTip.SetTip(header, UiText.Get("Worksheet_SelectAllToolTip"));
         AutomationProperties.SetAutomationId(header, "WorksheetSelectAllCorner");
-        AutomationProperties.SetName(header, "Select all cells");
+        AutomationProperties.SetName(header, UiText.Get("Worksheet_SelectAllCellsAutomationName"));
         header.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(header);
@@ -7671,11 +6934,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ? position.X >= Math.Max(0, bounds.Width - HeaderResizeHitThickness)
             : position.Y >= Math.Max(0, bounds.Height - HeaderResizeHitThickness);
 
-    private void BeginCellSelectionDrag(
-        PointerPressedEventArgs args,
-        Control capture,
-        CellAddress address,
-        bool addsAdditionalRange = false)
+    private void BeginCellSelectionDrag(PointerPressedEventArgs args, Control capture, CellAddress address)
     {
         // Defensive: drop any stale subscriptions left over from a drag that lost capture without a
         // PointerReleased (grid rebuild, alt-tab, context menu), so we never double-subscribe.
@@ -7694,7 +6953,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
         _cellSelectionDragShowedDimensionText = false;
-        _cellDragAddsAdditionalRange = addsAdditionalRange;
 
         _cellDragSelectionAnchor = address;
         // Keep _cellDragSelectionCapture for Focus() — the per-cell border is the right focus target.
@@ -7733,7 +6991,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellDragSelectionAnchor = null;
         _cellDragSelectionCapture = null;
         _cellDragSelectionPointer = null;
-        _cellDragAddsAdditionalRange = false;
         _cellDragFormulaPointCursor = null;
         _cellDragFormulaReferenceStart = null;
         _cellDragFormulaReferenceLength = null;
@@ -7900,15 +7157,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
     }
 
-    /// <summary>
-    /// Test-only seam for the production drag auto-scroll application path. The pointer lifecycle
-    /// calls <see cref="RequestCellDragAutoScroll"/>; this seam lets headless tests exercise the
-    /// same scrollbar, viewport-origin, and render-refresh behavior without fabricating native
-    /// pointer-capture state.
-    /// </summary>
-    internal void RaiseCellDragAutoScrollForTest(GridAutoScrollRequest request) =>
-        ApplyCellDragAutoScroll(request);
-
     private async Task EndCellSelectionDragAsync(PointerReleasedEventArgs args)
     {
         var formulaRangeEditor = GetFormulaRangeEntryEditor();
@@ -7922,7 +7170,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellDragSelectionAnchor = null;
         _cellDragSelectionCapture = null;
         _cellDragSelectionPointer = null;
-        _cellDragAddsAdditionalRange = false;
         _cellDragFormulaPointCursor = null;
         _cellDragFormulaReferenceStart = null;
         _cellDragFormulaReferenceLength = null;
@@ -7935,7 +7182,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _selectionMoveSourceRange = null;
         _selectionMovePreviewRange = null;
         RevertNameBoxAfterCellSelectionDragEnd();
-        RecordNameBoxDropdownPhysicalEvidence(item: null, stage: "neutral-cell-selected");
+        RecordOptionalNeutralCellSelection();
 
         // In Draw Border mode the drag-release triggers the border apply (mirrors WPF MouseUp behaviour).
         if (_borderDrawModeActive)
@@ -7965,7 +7212,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellDragSelectionAnchor = null;
         _cellDragSelectionCapture = null;
         _cellDragSelectionPointer = null;
-        _cellDragAddsAdditionalRange = false;
 
         _cellDragSelectionAnchor = kind == HeaderResizeKind.Column
             ? new CellAddress(_session.ActiveSheet.Id, 1, index)
@@ -8044,21 +7290,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var pos = args.GetPosition(_sheetGridHost);
         if (pos.Y < 0 || pos.Y > GetColumnHeaderHeight(_session.Viewport, zoomFactor))
             return false;
-
-        var left = GetRowHeaderWidth(_session.Viewport, zoomFactor);
-        foreach (var metric in CombineSplitColumnMetrics(_session.Viewport))
-        {
-            var right = left + GetDisplayedColumnWidth(metric, zoomFactor);
-            if (pos.X >= left && pos.X <= right)
-            {
-                col = metric.Col;
-                return true;
-            }
-
-            left = right;
-        }
-
-        return false;
+        var hit = ViewportGeometryPlanner.HitTestProjectedColumn(
+            _session.Viewport,
+            pos.X,
+            CreateAvaloniaViewportGeometrySettings(_session.Viewport, showHeadings: true, zoomFactor: zoomFactor));
+        if (hit is not { } column)
+            return false;
+        col = column;
+        return true;
     }
 
     private bool TryResolveRowHeaderPointerIndex(PointerEventArgs args, out uint row)
@@ -8071,69 +7310,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var pos = args.GetPosition(_sheetGridHost);
         if (pos.X < 0 || pos.X > GetRowHeaderWidth(_session.Viewport, zoomFactor))
             return false;
-
-        var top = GetColumnHeaderHeight(_session.Viewport, zoomFactor);
-        foreach (var metric in CombineSplitRowMetrics(_session.Viewport))
-        {
-            var bottom = top + GetDisplayedRowHeight(metric, zoomFactor);
-            if (pos.Y >= top && pos.Y <= bottom)
-            {
-                row = metric.Row;
-                return true;
-            }
-
-            top = bottom;
-        }
-
-        return false;
+        var hit = ViewportGeometryPlanner.HitTestProjectedRow(
+            _session.Viewport,
+            pos.Y,
+            CreateAvaloniaViewportGeometrySettings(_session.Viewport, showHeadings: true, zoomFactor: zoomFactor));
+        if (hit is not { } rowNumber)
+            return false;
+        row = rowNumber;
+        return true;
     }
 
     private bool TryResolveCellAddressFromSheetGridPosition(Point pos, out CellAddress address)
     {
-        address = default;
         var sheet = _session.ActiveSheet;
         var zoomFactor = GetActiveZoomFactor();
-        var left = sheet.ShowHeadings ? GetRowHeaderWidth(_session.Viewport, zoomFactor) : 0;
-        var top = sheet.ShowHeadings ? GetColumnHeaderHeight(_session.Viewport, zoomFactor) : 0;
-
-        if (pos.X < left || pos.Y < top)
-            return false;
-
-        uint? col = null;
-        var currentLeft = left;
-        foreach (var metric in CombineSplitColumnMetrics(_session.Viewport))
+        var hit = ViewportGeometryPlanner.HitTestCell(
+            _session.Viewport,
+            sheet.Id,
+            new LayoutPoint(pos.X, pos.Y),
+            CreateAvaloniaViewportGeometrySettings(_session.Viewport, sheet.ShowHeadings, zoomFactor));
+        if (hit is not { } cell)
         {
-            var right = currentLeft + GetDisplayedColumnWidth(metric, zoomFactor);
-            if (pos.X >= currentLeft && pos.X <= right)
-            {
-                col = metric.Col;
-                break;
-            }
-
-            currentLeft = right;
+            address = default;
+            return false;
         }
 
-        if (!col.HasValue)
-            return false;
-
-        uint? row = null;
-        var currentTop = top;
-        foreach (var metric in CombineSplitRowMetrics(_session.Viewport))
-        {
-            var bottom = currentTop + GetDisplayedRowHeight(metric, zoomFactor);
-            if (pos.Y >= currentTop && pos.Y <= bottom)
-            {
-                row = metric.Row;
-                break;
-            }
-
-            currentTop = bottom;
-        }
-
-        if (!row.HasValue)
-            return false;
-
-        address = new CellAddress(sheet.Id, row.Value, col.Value);
+        address = cell;
         return true;
     }
 
@@ -8160,22 +7362,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Pin the active cell to `anchor` (the pressed cell) rather than the range's normalized
         // top-left, so a drag that ran up/left keeps the active cell at the true starting corner --
         // which View > Split / Freeze Panes read after the gesture ends (split-creation-selection-anchor).
-        if (_cellDragAddsAdditionalRange)
-        {
-            var activeRange = MergedSelectionRangePlanner.ExpandToFullyContainMerges(
-                _session.ActiveSheet,
-                new GridRange(anchor, address));
-            var ranges = SelectionAreaPlanner.AppendOrReplaceActiveArea(
-                _session.SelectedRanges,
-                _session.SelectedRange,
-                activeRange,
-                startNewArea: false);
-            _session.SelectRanges(activeRange, ranges, anchor);
-        }
-        else
-        {
-            _session.SelectAnchoredRange(anchor, address);
-        }
+        _session.SelectAnchoredRange(anchor, address);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(_session.SelectedRange)));
         // While a mouse-drag selection is in progress (this method is only ever invoked from
         // ContinueCellSelectionDrag), Excel's Name Box shows a live "{rows}R x {cols}C" dimension
@@ -8184,7 +7371,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // host's ExtendSelection (R69-render-active-cell-selection-6-2).
         if (!_cellAddressBoxHasPendingEdit)
         {
-            _cellAddressText.Text = FormatDragSelectionDimensionText(_session.SelectedRange);
+            _cellAddressText.Text = GridSelectionNavigationPlanner.FormatDragDimensionText(_session.SelectedRange);
             _cellSelectionDragShowedDimensionText = true;
         }
         RefreshTableContextualTab();
@@ -8372,26 +7559,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (drag.Kind == HeaderResizeKind.Column)
         {
-            var result = _session.ExecuteReviewCommand(
-                new SetColumnWidthCommand(
-                    _session.ActiveSheet.Id,
-                    drag.StartIndex,
-                    drag.EndIndex,
-                    ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize)),
-                _session.ActiveCell);
+            var result = _session.SetColumnsWidthPixels(
+                drag.StartIndex,
+                drag.EndIndex,
+                clampedSize);
             RefreshShell(result.Success
                 ? UiText.Format("RowColumn_ColumnWidthApplied", FormatDimension(ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize)))
                 : result.ErrorMessage ?? UiText.Get("RowColumn_ColumnWidthFailed"));
         }
         else
         {
-            var result = _session.ExecuteReviewCommand(
-                new SetRowHeightCommand(
-                    _session.ActiveSheet.Id,
-                    drag.StartIndex,
-                    drag.EndIndex,
-                    clampedSize),
-                _session.ActiveCell);
+            var result = _session.SetRowsHeightPixels(
+                drag.StartIndex,
+                drag.EndIndex,
+                clampedSize);
             RefreshShell(result.Success
                 ? UiText.Format("RowColumn_RowHeightApplied", FormatDimension(clampedSize))
                 : result.ErrorMessage ?? UiText.Get("RowColumn_RowHeightFailed"));
@@ -8528,7 +7709,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// </summary>
     private void CommitAutofillHandleDoubleClick(GridRange source)
     {
-        var adjacentLastRow = ResolveAutofillAdjacentColumnLastPopulatedRow(_session.ActiveSheet, source);
+        var adjacentLastRow = GridAutofillPlanner.ResolveAdjacentColumnLastPopulatedRow(_session.ActiveSheet, source);
         var fillRange = GridAutofillPlanner.CalculateDoubleClickFillRange(source, adjacentLastRow);
         if (fillRange is null)
             return;
@@ -8538,41 +7719,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.AutofillDragRange(source, fillRange.Value, ctrlHeld: false);
         _session.SelectRange(completedSelection);
         RefreshShell(result.Success
-            ? $"Autofilled {FormatRangeReference(completedSelection)}"
-            : result.ErrorMessage ?? "Autofill failed.");
-    }
-
-    /// <summary>
-    /// Finds the last populated row of the contiguous data run in the column immediately to the
-    /// left of <paramref name="source"/> (checked first) or immediately to the right, starting
-    /// from the row below the source's seed row and stopping at the first blank cell. Returns null
-    /// when neither neighbor has any data immediately below the seed row.
-    /// </summary>
-    private static uint? ResolveAutofillAdjacentColumnLastPopulatedRow(Sheet sheet, GridRange source)
-    {
-        var seedRow = source.Start.Row;
-        if (source.Start.Col > 1 &&
-            ResolveAutofillColumnLastPopulatedRow(sheet, source.Start.Col - 1, seedRow) is { } leftRow)
-        {
-            return leftRow;
-        }
-
-        return ResolveAutofillColumnLastPopulatedRow(sheet, source.End.Col + 1, seedRow);
-    }
-
-    private static uint? ResolveAutofillColumnLastPopulatedRow(Sheet sheet, uint column, uint seedRow)
-    {
-        if (column > CellAddress.MaxCol || seedRow >= CellAddress.MaxRow)
-            return null;
-
-        if (sheet.GetValue(seedRow + 1, column) is BlankValue)
-            return null;
-
-        var lastRow = seedRow + 1;
-        while (lastRow < CellAddress.MaxRow && sheet.GetValue(lastRow + 1, column) is not BlankValue)
-            lastRow++;
-
-        return lastRow;
+            ? UiText.Format("MainLoc_AutofilledStatusFormat", FormatRangeReference(completedSelection))
+            : result.ErrorMessage ?? UiText.Get("MainLoc_AutofillFailed"));
     }
 
     private bool IsPointerOnAutofillHandle(PointerEventArgs args)
@@ -8613,8 +7761,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     /// <summary>
-    /// Core continuation logic shared by <see cref="ContinueAutofillDrag"/> and the test-only
-    /// seam <see cref="RaiseContinueAutofillDragForTest"/>: updates <see cref="_autofillTarget"/>
+    /// Core continuation logic shared by the native pointer route and support-host gesture drivers:
+    /// updates <see cref="_autofillTarget"/>
     /// and, when it actually changed, rebuilds the grid so AddAutofillPreviewOverlayToGrid repaints
     /// the dashed preview rectangle at the new target -- mirrors the WPF host's InvalidateVisual
     /// call on every pointer move in GridView.Input.cs (Avalonia has no DrawingContext repaint
@@ -8632,20 +7780,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _autofillTarget = constrainedTarget;
         RefreshShellForGridPreview();
-    }
-
-    /// <summary>
-    /// Test-only seam that drives the real fill-handle drag CONTINUATION path
-    /// (ContinueAutofillDragCore) directly, bypassing pointer capture, so headless tests can
-    /// assert the live drag-preview overlay appears mid-drag -- distinct from the pre-existing
-    /// <see cref="RaiseAutofillDragForTest"/>, which only exercises the post-release commit path.
-    /// Not used by production code paths.
-    /// </summary>
-    internal void RaiseContinueAutofillDragForTest(GridRange source, CellAddress target)
-    {
-        _autofillDragging = true;
-        _autofillSourceRange = source;
-        ContinueAutofillDragCore(target);
     }
 
     private void CommitAutofillDrag(bool ctrlHeld = false)
@@ -8669,30 +7803,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.AutofillDragRange(source, operationRange, ctrlHeld);
         _session.SelectRange(completedSelection);
         RefreshShell(result.Success
-            ? $"Autofilled {FormatRangeReference(completedSelection)}"
-            : result.ErrorMessage ?? "Autofill failed.");
+            ? UiText.Format("MainLoc_AutofilledStatusFormat", FormatRangeReference(completedSelection))
+            : result.ErrorMessage ?? UiText.Get("MainLoc_AutofillFailed"));
     }
-
-    /// <summary>
-    /// Test-only seam that drives the real fill-handle drag commit path (source/target set directly
-    /// instead of via pointer capture), so headless tests can assert on the resulting cell
-    /// values/formulas without simulating pointer input. Not used by production code paths.
-    /// </summary>
-    internal void RaiseAutofillDragForTest(GridRange source, CellAddress target, bool ctrlHeld = false)
-    {
-        _autofillSourceRange = source;
-        _autofillTarget = target;
-        CommitAutofillDrag(ctrlHeld);
-    }
-
-    /// <summary>
-    /// Test-only seam that drives the real fill-handle double-click commit path directly (instead
-    /// of simulating a double-click <see cref="PointerPressedEventArgs"/>), so headless tests can
-    /// assert on the resulting cell values without constructing pointer input. Not used by
-    /// production code paths.
-    /// </summary>
-    internal void RaiseAutofillHandleDoubleClickForTest(GridRange source) =>
-        CommitAutofillHandleDoubleClick(source);
 
     private static FillCellsDirection ResolveAutofillDirection(GridRange source, GridRange fillRange)
     {
@@ -8776,8 +7889,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     /// <summary>
-    /// Core continuation logic shared by <see cref="ContinueSelectionMoveDrag"/> and the test-only
-    /// seam <see cref="RaiseContinueSelectionMoveDragForTest"/>: updates
+    /// Core continuation logic shared by the native pointer route and support-host gesture drivers:
+    /// updates
     /// <see cref="_selectionMovePreviewRange"/> and, when it actually changed, rebuilds the grid so
     /// AddSelectionMovePreviewOverlayToGrid repaints the destination outline live -- mirrors the
     /// WPF host's InvalidateVisual call in UpdateSelectionMovePreview.
@@ -8797,35 +7910,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShellForGridPreview();
     }
 
-    /// <summary>
-    /// Test-only seam that drives the real selection-border-move drag CONTINUATION path
-    /// (ContinueSelectionMoveDragCore) directly, bypassing pointer capture, so headless tests can
-    /// assert the live drag-preview overlay appears mid-drag -- distinct from the pre-existing
-    /// <see cref="RaiseSelectionMoveDragForTest"/>, which only exercises the post-release commit
-    /// path. Not used by production code paths.
-    /// </summary>
-    internal void RaiseContinueSelectionMoveDragForTest(GridRange source, CellAddress startCell, CellAddress target)
-    {
-        _selectionMoveDragging = true;
-        _selectionMoveSourceRange = source;
-        _selectionMoveStartCell = startCell;
-        _selectionMovePreviewRange = source;
-        ContinueSelectionMoveDragCore(target);
-    }
-
-    /// <summary>
-    /// Test-only seam that drives the real border-drag-move commit path (source/target range set
-    /// directly instead of via pointer capture), so headless tests can assert on the resulting cell
-    /// values and on whether the overwrite confirmation was consulted. Not used by production code
-    /// paths.
-    /// </summary>
-    internal Task RaiseSelectionMoveDragForTest(GridRange source, GridRange target, bool ctrlHeld = false)
-    {
-        _selectionMoveSourceRange = source;
-        _selectionMovePreviewRange = target;
-        return CommitSelectionMoveDragAsync(ctrlHeld);
-    }
-
     private async Task CommitSelectionMoveDragAsync(bool ctrlHeld = false)
     {
         if (_selectionMoveSourceRange is not { } source ||
@@ -8838,7 +7922,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Mirrors the WPF host's OnSelectionMoveRequested: dropping a border-dragged range onto
         // cells that already have content must prompt before overwriting them, matching Excel.
         if (SelectionMoveOverwritePlanner.HasOverwriteTargets(_session.ActiveSheet, source, target) &&
-            !await (ConfirmSelectionMoveOverwriteOverrideForTest?.Invoke() ?? ConfirmSelectionMoveOverwriteAsync()))
+            !await ResolveSelectionMoveOverwriteConfirmationAsync())
         {
             return;
         }
@@ -8854,7 +7938,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 fallbackAddress: target.Start);
             var copyStatus = copyResult.Success
                 ? UiText.Format("MainLoc_SelectedX", FormatRangeReference(target))
-                : copyResult.ErrorMessage ?? "Copy Cells failed.";
+                : copyResult.ErrorMessage ?? UiText.Get("MainLoc_CopyCellsFailed");
             // ExecuteReviewCommand intentionally collapses the session selection to the first
             // affected cell while applying a generic edit. Render that intermediate state, then
             // restore the complete destination range and rebuild the grid once more. Without the
@@ -8872,7 +7956,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.MoveSelectedRangeTo(source, target);
         RefreshShell(result.Success
             ? UiText.Format("MainLoc_SelectedX", FormatRangeReference(target))
-            : result.ErrorMessage ?? "Move Cells failed.");
+            : result.ErrorMessage ?? UiText.Get("MainLoc_MoveCellsFailed"));
     }
 
     /// <summary>
@@ -8884,7 +7968,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var dialog = new Window
         {
-            Title = "Confirm",
+            Title = UiText.Get("Common_ConfirmTitle"),
             Width = 420,
             Height = 180,
             MinWidth = 380,
@@ -8899,13 +7983,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextWrapping = TextWrapping.Wrap,
         };
 
-        var yesButton = new Button { Content = "Yes", MinWidth = 92, Padding = new Thickness(10, 4), IsDefault = true };
+        var yesButton = new Button { Content = UiText.Get("ManageConditionalFormats_Yes"), MinWidth = 92, Padding = new Thickness(10, 4), IsDefault = true };
         AutomationProperties.SetAutomationId(yesButton, "SelectionMoveOverwriteYesButton");
-        AutomationProperties.SetName(yesButton, "Yes");
+        AutomationProperties.SetName(yesButton, UiText.Get("ManageConditionalFormats_Yes"));
 
-        var noButton = new Button { Content = "No", MinWidth = 92, Padding = new Thickness(10, 4), IsCancel = true };
+        var noButton = new Button { Content = UiText.Get("SelectionMoveOverwrite_No"), MinWidth = 92, Padding = new Thickness(10, 4), IsCancel = true };
         AutomationProperties.SetAutomationId(noButton, "SelectionMoveOverwriteNoButton");
-        AutomationProperties.SetName(noButton, "No");
+        AutomationProperties.SetName(noButton, UiText.Get("SelectionMoveOverwrite_No"));
 
         var confirmed = false;
         void Finish(bool value)
@@ -8945,12 +8029,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return confirmed;
     }
 
-    /// <summary>
-    /// Test-only override for <see cref="ResolveDataValidationPrompt"/> -- headless tests inject a
-    /// canned decision here instead of driving the real <see cref="ShowDataValidationPromptDialog"/>
-    /// window. Not used by production code paths.
-    /// </summary>
-    internal Func<DataValidationPromptRequest, UserMessageResult>? DataValidationPromptOverrideForTest;
+    private Task<bool> ResolveSelectionMoveOverwriteConfirmationAsync()
+    {
+        Func<Task<bool>>? handler = null;
+        ResolveSelectionMoveOverwriteConfirmationHandler(ref handler);
+        return handler?.Invoke() ?? ConfirmSelectionMoveOverwriteAsync();
+    }
+
+    partial void ResolveSelectionMoveOverwriteConfirmationHandler(ref Func<Task<bool>>? handler);
 
     /// <summary>
     /// Wired to <see cref="WorkbookSession.DataValidationPromptResolver"/> after every
@@ -8959,123 +8045,40 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// WPF host's <c>IUserMessageService.ShowMessage</c> prompt in
     /// <c>MainWindow.Editing.TryCreateCellFromEntryText</c>.
     /// </summary>
-    private UserMessageResult ResolveDataValidationPrompt(DataValidationPromptRequest request) =>
-        DataValidationPromptOverrideForTest?.Invoke(request) ?? ShowDataValidationPromptDialog(request);
-
-    /// <summary>
-    /// Owned modal alert for a Warning/Information data-validation violation, mirroring the WPF
-    /// host's <c>ShowOwnedMessage</c> button sets: Warning offers Yes/No/Cancel (Yes commits the
-    /// invalid entry, No leaves it in the editor to fix, Cancel discards it); Information offers
-    /// OK/Cancel (OK commits, Cancel discards). <see cref="WorkbookSession.CommitCellText"/> calls
-    /// <see cref="ResolveDataValidationPrompt"/> synchronously, so -- unlike every other owned
-    /// dialog on this shell, which is awaited via <c>await dialog.ShowDialog(this)</c> -- this one
-    /// is shown non-modally and the calling (UI) thread drains the dispatcher queue until it
-    /// closes, since Avalonia has no synchronous nested-pump equivalent to WPF's blocking
-    /// <c>MessageBox.Show</c>. The owner window is disabled for the duration to emulate modal
-    /// blocking.
-    /// </summary>
-    private UserMessageResult ShowDataValidationPromptDialog(DataValidationPromptRequest request)
+    private UserMessageResult ResolveDataValidationPrompt(DataValidationPromptRequest request)
     {
-        var isInformation = request.AlertStyle == DvAlertStyle.Information;
-        var dialog = new Window
-        {
-            Title = request.Title,
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            MinHeight = 150,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-
-        var messageText = new TextBlock
-        {
-            Text = request.Message,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(16, 16, 16, 20),
-        };
-
-        var decision = UserMessageResult.Cancel;
-        var done = false;
-        void Finish(UserMessageResult value)
-        {
-            decision = value;
-            done = true;
-            dialog.Close();
-        }
-
-        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
-        {
-            var button = new Button
-            {
-                Content = content,
-                MinWidth = 82,
-                IsDefault = isDefault,
-                IsCancel = isCancel,
-                Margin = new Thickness(8, 0, 0, 0),
-            };
-            button.Click += (_, _) => Finish(value);
-            return button;
-        }
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(16, 0, 16, 16),
-        };
-
-        Button defaultButton;
-        if (isInformation)
-        {
-            defaultButton = MakeButton("OK", UserMessageResult.Ok, isDefault: true, isCancel: false);
-            buttonRow.Children.Add(defaultButton);
-            buttonRow.Children.Add(MakeButton("Cancel", UserMessageResult.Cancel, isDefault: false, isCancel: true));
-        }
-        else
-        {
-            defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
-            buttonRow.Children.Add(defaultButton);
-            buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: false));
-            buttonRow.Children.Add(MakeButton("Cancel", UserMessageResult.Cancel, isDefault: false, isCancel: true));
-        }
-
-        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
-        dialog.Opened += (_, _) => defaultButton.Focus();
-        dialog.Closed += (_, _) => done = true;
-
-        var wasEnabled = IsEnabled;
-        IsEnabled = false;
-        try
-        {
-            dialog.Show(this);
-            while (!done)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!done)
-                    System.Threading.Thread.Sleep(1);
-            }
-        }
-        finally
-        {
-            IsEnabled = wasEnabled;
-        }
-
-        return decision;
+        Func<DataValidationPromptRequest, UserMessageResult>? handler = null;
+        ResolveDataValidationPromptHandler(ref handler);
+        return handler?.Invoke(request)
+            ?? ShowSynchronousPrompt(FreeXSynchronousPromptCatalog.ForDataValidation(
+                request.Title,
+                request.Message,
+                request.AlertStyle));
     }
 
-    /// <summary>
-    /// Test-only override for <see cref="ResolveReadOnlyRecommendedPrompt"/> -- headless tests
-    /// inject a canned decision here instead of driving the real
-    /// <see cref="ShowReadOnlyRecommendedPromptDialog"/> window. Not used by production code paths.
-    /// </summary>
-    internal Func<string, UserMessageResult>? ReadOnlyRecommendedPromptOverrideForTest;
+    partial void ResolveDataValidationPromptHandler(
+        ref Func<DataValidationPromptRequest, UserMessageResult>? handler);
 
-    /// <summary>Test-visible read of <see cref="_isWorkbookReadOnly"/> (see its declaration).</summary>
-    internal bool IsWorkbookReadOnlyForTest => _isWorkbookReadOnly;
+    private UserMessageResult ShowSynchronousPrompt(FreeXSynchronousPromptDescriptor descriptor)
+    {
+        var request = descriptor.Resolve(UiText.Get, UiText.Format);
+        return AvaloniaSynchronousUserMessageDialog.ShowMessage(
+            this,
+            request,
+            descriptor.DismissedResult);
+    }
 
-    private UserMessageResult ResolveReadOnlyRecommendedPrompt(string body) =>
-        ReadOnlyRecommendedPromptOverrideForTest?.Invoke(body) ?? ShowReadOnlyRecommendedPromptDialog(body);
+    private UserMessageResult ResolveReadOnlyRecommendedPrompt(FreeXSynchronousPromptDescriptor descriptor)
+    {
+        var body = descriptor.Message.Resolve(UiText.Get, UiText.Format);
+        Func<string, UserMessageResult>? handler = null;
+        ResolveReadOnlyRecommendedPromptHandler(ref handler);
+        return handler?.Invoke(body)
+            ?? ShowSynchronousPrompt(descriptor);
+    }
+
+    partial void ResolveReadOnlyRecommendedPromptHandler(
+        ref Func<string, UserMessageResult>? handler);
 
     /// <summary>
     /// A workbook saved with "Read-Only Recommended" (<c>WorkbookFileSharingModel.ReadOnlyRecommended</c>)
@@ -9086,86 +8089,59 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// Excel's "Password to Modify" -- it is not encryption and provides no confidentiality.
     /// <para>
     /// A write-reservation password now actually gates write access: <see cref="ResolveReservationPasswordPrompt"/>
-    /// prompts for the password (via <see cref="ShowReservationPasswordPromptDialog"/> in production, or
-    /// <see cref="ReservationPasswordPromptOverrideForTest"/> in tests) and verifies it against the
-    /// stored hash with <c>ProtectionPasswordHelper.VerifyStoredPassword</c> -- the same verifier used
-    /// for sheet/workbook structure protection. Matching Excel's actual behaviour, a wrong password or
-    /// Cancel does not refuse to open the file: it falls back to a read-only session, exactly like
-    /// declining a plain "Read-Only Recommended" prompt.
+    /// realizes the native password dialog, while <see cref="WorkbookReadOnlySession"/> classifies the
+    /// prompt, verifies the stored password, and owns the resulting read-only state. A wrong password
+    /// or Cancel falls back to a read-only session rather than refusing to open the file.
     /// </para>
-    /// Mirrors the WPF host's <c>MainWindow.Backstage.ApplyReadOnlyRecommendedPromptIfNeeded</c>.
-    /// <see cref="SaveCurrentWorkbookAsync"/> now reads the flag on every Save to force Save-over
+    /// Both renderers delegate this policy to <see cref="WorkbookReadOnlySession.RunOpen"/>.
+    /// <see cref="SaveCurrentWorkbookAsync"/> reads the shared state on every Save to force Save-over
     /// through the Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1).
     /// Individual edit commands are not yet blocked -- that remains out of scope.
     /// </summary>
-    private void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook)
+    private WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicy(Workbook workbook) =>
+        _workbookReadOnlySession.RunOpen(workbook, new AvaloniaWorkbookReadOnlyOpenPromptPort(this));
+
+    private sealed class AvaloniaWorkbookReadOnlyOpenPromptPort(MainWindow owner) : IWorkbookReadOnlyOpenPromptPort
     {
-        _isWorkbookReadOnly = false;
+        public WorkbookReadOnlyRecommendationChoice PromptReadOnlyRecommended(WorkbookReadOnlyOpenPlan plan) =>
+            owner.ResolveReadOnlyRecommendedPrompt(
+                FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(plan.WorkbookName)) == UserMessageResult.Yes
+                ? WorkbookReadOnlyRecommendationChoice.OpenReadOnly
+                : WorkbookReadOnlyRecommendationChoice.OpenEditable;
 
-        var sharing = workbook.FileSharing;
-        if (sharing is null)
-            return;
+        public WorkbookReservationPasswordResponse PromptReservationPassword(WorkbookReadOnlyOpenPlan plan) =>
+            WorkbookReservationPasswordResponse.FromPromptResult(
+                owner.ResolveReservationPasswordPrompt(plan.WorkbookName));
 
-        if (!string.IsNullOrEmpty(sharing.ReservationPassword))
-        {
-            var entered = ResolveReservationPasswordPrompt(workbook.Name);
-            var unlocked = ProtectionPasswordHelper.VerifyStoredPassword(sharing.ReservationPassword, entered);
-            _isWorkbookReadOnly = !unlocked;
-
-            if (!unlocked && entered is not null)
-            {
-                ResolveReservationPasswordIncorrectNotice();
-            }
-
-            return;
-        }
-
-        if (sharing.ReadOnlyRecommended != true)
-            return;
-
-        var body = UiText.Format("MainWindowMessage_ReadOnlyRecommendedBodyFormat", workbook.Name);
-        _isWorkbookReadOnly = ResolveReadOnlyRecommendedPrompt(body) == UserMessageResult.Yes;
+        public void ShowIncorrectReservationPasswordNotice(WorkbookReadOnlyOpenPlan plan) =>
+            owner.ResolveReservationPasswordIncorrectNotice();
     }
 
-    /// <summary>
-    /// Test-only override for <see cref="ResolveReservationPasswordPrompt"/> -- headless tests inject a
-    /// canned password (or <c>null</c> to simulate Cancel) instead of driving the real
-    /// <see cref="ShowReservationPasswordPromptDialog"/> window. Not used by production code paths.
-    /// </summary>
-    internal Func<string, string?>? ReservationPasswordPromptOverrideForTest;
-
-    /// <summary>
-    /// Resolves the write-reservation password prompt via <see cref="ReservationPasswordPromptOverrideForTest"/>
-    /// when set, otherwise the real dialog. Deliberately checks the delegate itself for null rather than
-    /// its invocation result (unlike the enum-returning overrides elsewhere in this file, e.g.
-    /// <see cref="ResolveReadOnlyRecommendedPrompt"/>) -- the invocation result here is itself a
-    /// meaningful <c>string?</c> (a typed password or <c>null</c> for Cancel), so <c>?.Invoke(...) ?? ...</c>
-    /// would wrongly fall through to the real dialog whenever a test override simulates Cancel by
-    /// returning null.
-    /// </summary>
-    private string? ResolveReservationPasswordPrompt(string workbookName) =>
-        ReservationPasswordPromptOverrideForTest is not null
-            ? ReservationPasswordPromptOverrideForTest(workbookName)
+    private string? ResolveReservationPasswordPrompt(string workbookName)
+    {
+        Func<string, string?>? handler = null;
+        ResolveReservationPasswordPromptHandler(ref handler);
+        return handler is not null
+            ? handler(workbookName)
             : ShowReservationPasswordPromptDialog(workbookName);
+    }
 
-    /// <summary>
-    /// Test-only override for the "wrong write-reservation password" notice -- headless tests inject a
-    /// no-op instead of driving the real <see cref="ShowReservationPasswordIncorrectDialog"/> window
-    /// (which needs a shown/visible owner window that headless unit tests don't provide). Not used by
-    /// production code paths.
-    /// </summary>
-    internal Action? ReservationPasswordIncorrectNoticeOverrideForTest;
+    partial void ResolveReservationPasswordPromptHandler(ref Func<string, string?>? handler);
 
     private void ResolveReservationPasswordIncorrectNotice()
     {
-        if (ReservationPasswordIncorrectNoticeOverrideForTest is not null)
+        Action? handler = null;
+        ResolveReservationPasswordIncorrectNoticeHandler(ref handler);
+        if (handler is not null)
         {
-            ReservationPasswordIncorrectNoticeOverrideForTest();
+            handler();
             return;
         }
 
         ShowReservationPasswordIncorrectDialog();
     }
+
+    partial void ResolveReservationPasswordIncorrectNoticeHandler(ref Action? handler);
 
     /// <summary>
     /// Owned modal password prompt for the write-reservation unlock, mirroring
@@ -9234,22 +8210,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         dialog.Opened += (_, _) => passwordBox.Focus();
         dialog.Closed += (_, _) => done = true;
 
-        var wasEnabled = IsEnabled;
-        IsEnabled = false;
-        try
-        {
-            dialog.Show(this);
-            while (!done)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!done)
-                    System.Threading.Thread.Sleep(1);
-            }
-        }
-        finally
-        {
-            IsEnabled = wasEnabled;
-        }
+        AvaloniaSynchronousDialogHost.Show(this, dialog, () => done);
 
         return entered;
     }
@@ -9299,125 +8260,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         dialog.Opened += (_, _) => okButton.Focus();
         dialog.Closed += (_, _) => done = true;
 
-        var wasEnabled = IsEnabled;
-        IsEnabled = false;
-        try
-        {
-            dialog.Show(this);
-            while (!done)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!done)
-                    System.Threading.Thread.Sleep(1);
-            }
-        }
-        finally
-        {
-            IsEnabled = wasEnabled;
-        }
-    }
-
-    /// <summary>
-    /// Test-only seam for <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/> -- mirrors the
-    /// <c>RaiseKeyDownForTest</c>/<c>RaiseAutofillHandleDoubleClickForTest</c> convention of driving
-    /// the real production method directly instead of a source-string proxy. Not used by production
-    /// code paths.
-    /// </summary>
-    internal void ApplyReadOnlyRecommendedPromptIfNeededForTest(Workbook workbook) =>
-        ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
-
-    /// <summary>Test-only seam for <see cref="_isWorkbookReadOnly"/> (see its declaration) -- sets the
-    /// flag directly instead of driving it through <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/>,
-    /// so Save-enforcement tests (R83-services-doc-recovery-props-5-1) don't need FileSharing metadata
-    /// and a prompt override just to reach the read-only state. Not used by production code paths.
-    /// </summary>
-    internal void SetWorkbookReadOnlyForTest(bool value) => _isWorkbookReadOnly = value;
-
-    /// <summary>Test-only seam for <see cref="ResolveExistingSaveTarget"/> -- see its declaration.
-    /// Not used by production code paths.</summary>
-    internal FileSaveTarget? ResolveExistingSaveTargetForTest() => ResolveExistingSaveTarget();
-
-    /// <summary>
-    /// Owned modal Yes/No prompt for the Read-Only-Recommended/write-reservation alert, mirroring
-    /// <see cref="ShowDataValidationPromptDialog"/>'s non-modal-dispatcher-pump technique (Avalonia
-    /// has no synchronous nested-pump equivalent to WPF's blocking <c>MessageBox.Show</c>).
-    /// </summary>
-    private UserMessageResult ShowReadOnlyRecommendedPromptDialog(string body)
-    {
-        var dialog = new Window
-        {
-            Title = UiText.Get("MainWindowMessage_ReadOnlyRecommendedTitle"),
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            MinHeight = 150,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-
-        var messageText = new TextBlock
-        {
-            Text = body,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(16, 16, 16, 20),
-        };
-
-        var decision = UserMessageResult.No;
-        var done = false;
-        void Finish(UserMessageResult value)
-        {
-            decision = value;
-            done = true;
-            dialog.Close();
-        }
-
-        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
-        {
-            var button = new Button
-            {
-                Content = content,
-                MinWidth = 82,
-                IsDefault = isDefault,
-                IsCancel = isCancel,
-                Margin = new Thickness(8, 0, 0, 0),
-            };
-            button.Click += (_, _) => Finish(value);
-            return button;
-        }
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(16, 0, 16, 16),
-        };
-
-        var defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
-        buttonRow.Children.Add(defaultButton);
-        buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: true));
-
-        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
-        dialog.Opened += (_, _) => defaultButton.Focus();
-        dialog.Closed += (_, _) => done = true;
-
-        var wasEnabled = IsEnabled;
-        IsEnabled = false;
-        try
-        {
-            dialog.Show(this);
-            while (!done)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!done)
-                    System.Threading.Thread.Sleep(1);
-            }
-        }
-        finally
-        {
-            IsEnabled = wasEnabled;
-        }
-
-        return decision;
+        AvaloniaSynchronousDialogHost.Show(this, dialog, () => done);
     }
 
     /// <summary>
@@ -9441,33 +8284,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // ── Pre-compute group scaling bounds ──────────────────────────────────
         // When MinAxisType or MaxAxisType == Group, find the shared min/max across all
         // sparklines that share the same GroupId, mirroring the WPF RenderSparklines logic.
-        var groupMin    = new Dictionary<int, double>(); // groupId → shared min
-        var groupMax    = new Dictionary<int, double>(); // groupId → shared max
-        var groupMaxAbs = new Dictionary<int, double>(); // groupId → shared maxAbs (column)
-
-        foreach (var sp in sheet.Sparklines)
-        {
-            if ((sp.MinAxisType == SparklineAxisScaling.Group ||
-                 sp.MaxAxisType == SparklineAxisScaling.Group) &&
-                values.TryGetValue(sp.Id, out var groupVals) && groupVals.Count > 0)
-            {
-                if (!groupMin.ContainsKey(sp.GroupId))
-                {
-                    groupMin[sp.GroupId]    = double.MaxValue;
-                    groupMax[sp.GroupId]    = double.MinValue;
-                    groupMaxAbs[sp.GroupId] = 0;
-                }
-
-                foreach (var v in groupVals)
-                {
-                    if (!double.IsFinite(v)) continue;
-                    if (v < groupMin[sp.GroupId])    groupMin[sp.GroupId]    = v;
-                    if (v > groupMax[sp.GroupId])    groupMax[sp.GroupId]    = v;
-                    var abs = Math.Abs(v);
-                    if (abs > groupMaxAbs[sp.GroupId]) groupMaxAbs[sp.GroupId] = abs;
-                }
-            }
-        }
+        var axisScalePlan = SparklineAxisScalePlanner.Build(sheet.Sparklines, values);
 
         // ── Build per-cell entries with resolved axis overrides ───────────────
         foreach (var sparkline in sheet.Sparklines)
@@ -9475,56 +8292,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (!values.TryGetValue(sparkline.Id, out var series) || series.Count == 0)
                 continue;
 
-            var overrideMin    = ResolveSparklineGroupMin(sparkline, groupMin);
-            var overrideMax    = ResolveSparklineGroupMax(sparkline, groupMax);
-            var overrideMaxAbs = ResolveSparklineGroupMaxAbs(sparkline, groupMax, groupMaxAbs);
+            var axisScale = axisScalePlan.Resolve(sparkline);
 
             lookup[(sparkline.Location.Row, sparkline.Location.Col)] =
-                new SparklineCellEntry(series, sparkline, overrideMin, overrideMax, overrideMaxAbs);
+                new SparklineCellEntry(
+                    series,
+                    sparkline,
+                    axisScale.Minimum,
+                    axisScale.Maximum,
+                    axisScale.MaximumAbsolute);
         }
 
         return lookup;
-    }
-
-    private static double? ResolveSparklineGroupMin(SparklineModel sp, Dictionary<int, double> groupMin) =>
-        sp.MinAxisType switch
-        {
-            SparklineAxisScaling.Custom => sp.ManualMin,
-            SparklineAxisScaling.Group  =>
-                groupMin.TryGetValue(sp.GroupId, out var v) && v != double.MaxValue ? v : null,
-            _ => null,
-        };
-
-    private static double? ResolveSparklineGroupMax(SparklineModel sp, Dictionary<int, double> groupMax) =>
-        sp.MaxAxisType switch
-        {
-            SparklineAxisScaling.Custom => sp.ManualMax,
-            SparklineAxisScaling.Group  =>
-                groupMax.TryGetValue(sp.GroupId, out var v) && v != double.MinValue ? v : null,
-            _ => null,
-        };
-
-    private static double? ResolveSparklineGroupMaxAbs(
-        SparklineModel sp,
-        Dictionary<int, double> groupMax,
-        Dictionary<int, double> groupMaxAbs)
-    {
-        // Custom axis wins for its side; take the larger abs when both apply.
-        double? customAbs = null;
-        if (sp.MaxAxisType == SparklineAxisScaling.Custom && sp.ManualMax.HasValue)
-            customAbs = Math.Abs(sp.ManualMax.Value);
-        if (sp.MinAxisType == SparklineAxisScaling.Custom && sp.ManualMin.HasValue)
-        {
-            var absMin = Math.Abs(sp.ManualMin.Value);
-            customAbs = customAbs.HasValue ? Math.Max(customAbs.Value, absMin) : absMin;
-        }
-
-        double? groupAbs = null;
-        if (sp.MaxAxisType == SparklineAxisScaling.Group || sp.MinAxisType == SparklineAxisScaling.Group)
-            groupAbs = groupMaxAbs.TryGetValue(sp.GroupId, out var v) ? v : null;
-
-        if (customAbs.HasValue && groupAbs.HasValue) return Math.Max(customAbs.Value, groupAbs.Value);
-        return customAbs ?? groupAbs;
     }
 
     private Border CreateCell(DisplayCell cell, uint row, uint col, double zoomFactor, double cellWidth, double cellHeight, GridRange? mergeRegion = null)
@@ -9573,21 +8352,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         var style = cell.Style;
-        IBrush? background;
-        if (style?.GradientFill is { } gradientFill && CellGradientBrush.Build(gradientFill) is { } gradientBrush)
-            background = gradientBrush;
-        else if (style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor)
-            background = Brush(fillColor);
-        else if (_activeSheetHasBackgroundImage)
-            // Let the sheet grid's tiled background-image Brush (set in BuildSheetGrid) show through
-            // instead of occluding it with an opaque base fill — mirrors WPF's
-            // "WorksheetBackground == null ? Brushes.White : null" gate in GridView.Rendering.cs.
-            background = null;
-        else
-            background = Brushes.White;
-
+        var fillPlan = CellFillMaterializationPlanner.Plan(
+            style,
+            _session.Workbook.Theme,
+            CellFillMaterializationProfile.Avalonia,
+            _activeSheetHasBackgroundImage ? CellFillFallbackKind.Transparent : CellFillFallbackKind.White);
+        IBrush? background = fillPlan.BackgroundKind switch
+        {
+            CellFillBackgroundKind.WhiteFallback => Brushes.White,
+            CellFillBackgroundKind.Solid when fillPlan.SolidColor is { } fillColor => Brush(fillColor),
+            CellFillBackgroundKind.LinearGradient or CellFillBackgroundKind.RadialGradient
+                when fillPlan.Gradient is { } gradient => CellGradientBrush.Build(gradient),
+            _ => null,
+        };
         // Pattern fills (Gray0625…DarkTrellis) layer on top of the solid/gradient background.
-        var patternBrush = CellPatternFill.Build(style, _session.Workbook.Theme);
+        var patternBrush = CellPatternFill.Build(fillPlan);
 
         var foreground = style is null
             ? Brushes.Black
@@ -9680,7 +8459,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// Looks up the four neighboring cells' touching border edges (above's bottom, below's top,
     /// left's right, right's left) from the active sheet's raw (unmerged/un-CF'd) styles, so
     /// <see cref="CellBorderPanel"/> can resolve adjacent-edge conflicts via
-    /// <see cref="CellBorderGeometry.ResolveBorderEdgeWinner"/> instead of always drawing its own
+    /// <see cref="CellBorderVisualPlanner.ResolveEdgeWinner"/> instead of always drawing its own
     /// cell's edge unconditionally. Border styles are not affected by conditional formatting (only
     /// fill/font are), so the raw <see cref="Cell.StyleId"/> lookup mirrors what the neighbor's own
     /// <see cref="CellBorderPanel"/> would draw for that shared edge. A missing neighbor cell (no
@@ -9724,11 +8503,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var sheet = _session.ActiveSheet;
         var workbook = _session.Workbook;
+        var anchorEdges = ViewportGeometryPlanner.GetCellEdgeVisibility(
+            region,
+            region.Start.Row,
+            region.Start.Col);
 
-        var bottomBorder = sheet.GetCell(region.End.Row, region.Start.Col) is { } bottomCell
+        var bottomBorder = anchorEdges.Bottom
+            ? anchorStyle?.BorderBottom ?? default
+            : sheet.GetCell(region.End.Row, region.Start.Col) is { } bottomCell
             ? workbook.GetStyle(bottomCell.StyleId).BorderBottom
             : default;
-        var rightBorder = sheet.GetCell(region.Start.Row, region.End.Col) is { } rightCell
+        var rightBorder = anchorEdges.Right
+            ? anchorStyle?.BorderRight ?? default
+            : sheet.GetCell(region.Start.Row, region.End.Col) is { } rightCell
             ? workbook.GetStyle(rightCell.StyleId).BorderRight
             : default;
 
@@ -9867,7 +8654,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var hasHyperlink = _session.Workbook.GetSheet(address.Sheet)?.Hyperlinks.ContainsKey(address) == true;
         AutomationProperties.SetName(
             border,
-            FormatCellAccessibleName(columnName, address.Row, text, commentDisplay, isFormula, mergeRegion is not null, hasHyperlink));
+            CellAnnouncementPlanner.BuildName(
+                $"{columnName}{address.Row}",
+                text,
+                new CellAnnouncementMetadata(
+                    HasComment: commentDisplay is not null,
+                    CommentTitle: commentDisplay?.Title,
+                    IsFormula: isFormula,
+                    IsMerged: mergeRegion is not null,
+                    HasHyperlink: hasHyperlink)));
 
         // The active cell (not just any selected cell) is made a REAL focusable/focus-tracked
         // element so keyboard focus actually moves as the user arrows around the grid, matching
@@ -9890,11 +8685,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             var point = args.GetCurrentPoint(border);
             if (point.Properties.IsLeftButtonPressed &&
-                IsFormulaDisjointReferenceModifier(args.KeyModifiers) &&
+                _formulaRangeEditingSession.ShouldAppendDisjointReference(
+                    FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers)) &&
                 TryAppendDisjointFormulaPointReference(address))
             {
-                var referenceStart = _formulaReferenceStart;
-                var referenceLength = _formulaReferenceLength;
+                var referenceStart = _formulaRangeEditingSession.ReferenceSpan?.Start;
+                var referenceLength = _formulaRangeEditingSession.ReferenceSpan?.Length;
                 BeginCellSelectionDrag(args, border, address);
                 TrackFormulaPointDragAnchor(address, referenceStart, referenceLength);
                 args.Handled = true;
@@ -9925,8 +8721,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (point.Properties.IsLeftButtonPressed &&
                 TryInsertFormulaPointReference(address))
             {
-                var referenceStart = _formulaReferenceStart;
-                var referenceLength = _formulaReferenceLength;
+                var referenceStart = _formulaRangeEditingSession.ReferenceSpan?.Start;
+                var referenceLength = _formulaRangeEditingSession.ReferenceSpan?.Length;
                 BeginCellSelectionDrag(args, border, address);
                 TrackFormulaPointDragAnchor(address, referenceStart, referenceLength);
                 args.Handled = true;
@@ -9968,12 +8764,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            var additionalSelectionAnchor = SelectClickedCell(address, args.KeyModifiers);
-            BeginCellSelectionDrag(
-                args,
-                border,
-                additionalSelectionAnchor ?? address,
-                addsAdditionalRange: additionalSelectionAnchor.HasValue);
+            SelectClickedCell(address, args.KeyModifiers);
+            BeginCellSelectionDrag(args, border, address);
             args.Handled = true;
         };
         // PointerMoved and PointerReleased for cell-selection drag are now subscribed on _sheetGridHost
@@ -10110,9 +8902,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             RefreshFormulaFunctionAutocomplete(editor);
             RefreshFormulaSignatureHelp(editor);
 
-            var suppressed = _suppressNextInlineCellValueAutoCompleteSuggestion;
-            _suppressNextInlineCellValueAutoCompleteSuggestion = false;
-            if (!suppressed)
+            if (!_formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression())
                 ApplyInlineCellValueAutoCompleteSuggestion(address, editor);
         };
         editor.KeyDown += (_, args) => InlineCellEditor_KeyDown(address, editor, args);
@@ -10262,7 +9052,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // (Excel behavior) rather than instantly re-offering the same completion the deletion just
         // removed. The key itself is left unhandled so it still performs its normal TextBox deletion.
         if (args.Key is Key.Back or Key.Delete)
-            _suppressNextInlineCellValueAutoCompleteSuggestion = true;
+            _formulaRangeEditingSession.SuppressNextCellValueAutocomplete();
 
         if (TryToggleFormulaRangeEntrySelectionMode(args.Key, args.KeyModifiers))
         {
@@ -10277,25 +9067,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         var formulaRangeEntryActive = IsFormulaRangeEntryActive(editor.Text);
-        var intent = ExcelEditKeyPlanner.GetIntent(
+        // Avalonia's in-cell overlay is entered by F2/double-click, so it is always Excel's Edit mode.
+        var intent = _formulaRangeEditingSession.PlanEditKey(
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(args.Key),
+            FormulaEditorKey.None,
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
             address,
-            pageSize: Math.Max(1, CountScrollableRows(_session.Viewport, _session.Workbook.GetSheet(address.Sheet)) - 1),
-            allowFormulaBarNavigationKeys: false,
-            formulaRangeEntryActive: formulaRangeEntryActive,
-            // R78-render-inplace-editor-5-1: unlike the WPF host's shared inline editor, this
-            // in-cell overlay is only ever attached via BeginInlineCellEdit, whose sole callers are
-            // F2 and double-click (a typed fresh character instead routes through BeginFormulaEdit /
-            // the formula box). Every session here is therefore Excel's "Edit" mode, so arrows
-            // always reposition the caret and never commit -- entering the reference-entry span is
-            // already handled above by formulaRangeEntryActive/TryHandleFormulaRangeEntryNavigation.
-            inlineEditorCommitsOnArrow: FormulaEditInteractionPlanner.ShouldCommitInlineArrows(
-                editor.Text,
-                _formulaRangeEntryMode,
-                enteredViaEditKey: true),
-            moveSelectionAfterEnter: MoveSelectionAfterEnter,
-            enterDirection: AfterEnterDirection);
+            Math.Max(1, CountScrollableRows(_session.Viewport, _session.Workbook.GetSheet(address.Sheet)) - 1),
+            editor.Text,
+            _session.FormulaEditAddress is not null,
+            FormulaEditorSurfaceKind.Inline,
+            true,
+            MoveSelectionAfterEnter,
+            AfterEnterDirection);
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -10325,10 +9109,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var text = editor.Text ?? _inlineCellEditText ?? "";
             _formulaBox.Text = text;
             ClearInlineCellEditorState();
-            if (CommitEditAcrossSelection(address, text))
+            if (CommitEditAcrossSelection(text))
             {
                 ClearFormulaRangeEntryState();
-                RefreshShell("Ready");
+                RefreshShell(UiText.Get("MainLoc_Ready"));
                 FocusShellRegion(ShellFocusTarget.Worksheet);
             }
             args.Handled = true;
@@ -10356,7 +9140,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// On a match it appends the remainder of the matched column entry and selects it: Tab/Enter
     /// commits the completed text, continuing to type overwrites the selected remainder with the new
     /// keystroke (which re-runs this same check for the new prefix), and Backspace/Delete rejects it
-    /// via <see cref="_suppressNextInlineCellValueAutoCompleteSuggestion"/>.
+    /// via the session's one-shot suppression state.
     /// </summary>
     private void ApplyInlineCellValueAutoCompleteSuggestion(CellAddress address, TextBox editor)
     {
@@ -10367,35 +9151,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        if (!EnableAutoCompleteForCellValues || _formulaRangeEntryMode)
-            return;
-
         var text = editor.Text ?? "";
-        if (string.IsNullOrEmpty(text) || text.StartsWith("=", StringComparison.Ordinal))
-            return;
-
-        // Only offer a suggestion while genuinely typing forward: caret at the end, nothing already
-        // selected (a selected tail means a suggestion is already live).
-        if (editor.SelectionStart != editor.SelectionEnd || editor.CaretIndex != text.Length)
-            return;
-
         var sheet = _session.Workbook.GetSheet(address.Sheet);
-        if (sheet is null)
-            return;
-
-        var candidates = CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries(sheet, address);
-        if (CellValueAutoCompleteSuggester.Suggest(candidates, text) is not { } suggestion)
+        var plan = _formulaRangeEditingSession.PlanCellValueAutocomplete(
+            EnableAutoCompleteForCellValues,
+            text,
+            editor.CaretIndex,
+            Math.Abs(editor.SelectionEnd - editor.SelectionStart),
+            sheet,
+            address);
+        if (plan is null)
             return;
 
         _applyingInlineCellValueAutoCompleteSuggestion = true;
         try
         {
-            editor.Text = suggestion;
-            editor.CaretIndex = suggestion.Length;
-            editor.SelectionStart = text.Length;
-            editor.SelectionEnd = suggestion.Length;
-            _inlineCellEditSelectionStart = text.Length;
-            _inlineCellEditSelectionEnd = suggestion.Length;
+            editor.Text = plan.Value.Text;
+            editor.CaretIndex = plan.Value.Text.Length;
+            editor.SelectionStart = plan.Value.SelectionStart;
+            editor.SelectionEnd = plan.Value.SelectionStart + plan.Value.SelectionLength;
+            _inlineCellEditSelectionStart = plan.Value.SelectionStart;
+            _inlineCellEditSelectionEnd = plan.Value.SelectionStart + plan.Value.SelectionLength;
         }
         finally
         {
@@ -10415,9 +9191,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBox.Text = editText;
         _formulaBoxEditOriginalText = editText;
         ClearFormulaRangeEntryState();
-        _formulaRangeEntryMode = FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(editText);
+        _formulaRangeEditingSession.ApplyTypedEntry(editText);
         _session.BeginFormulaEdit(address);
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         if (_inlineCellEditor is { } editor)
             FocusInlineCellEditor(address, editor);
     }
@@ -10431,7 +9207,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (rowDelta != 0 || colDelta != 0)
                 _session.MoveActiveCell(rowDelta, colDelta);
 
-            RefreshShell("Ready");
+            RefreshShell(UiText.Get("MainLoc_Ready"));
             // The inline editor is detached by CommitFormulaBox before the next-cell refresh.
             // Restore focus to the newly active cell itself, matching WPF's worksheet focus handoff
             // and keeping the next physical F2/text packet on the worksheet rather than the shell
@@ -10449,7 +9225,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();
         ClearInlineCellEditorState();
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         FocusShellRegion(ShellFocusTarget.Worksheet);
     }
 
@@ -10467,59 +9243,40 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _pendingInlineCellCaretIndex = null;
     }
 
-    private void ClearFormulaReferenceEntrySpan()
-    {
-        _formulaReferenceStart = null;
-        _formulaReferenceLength = null;
-        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
-    }
+    private void ClearFormulaReferenceEntrySpan() =>
+        _formulaRangeEditingSession.ClearReferenceSpan();
 
     private void ClearFormulaReferenceEntrySpanIfCaretLeftReference(TextBox editor)
     {
-        if (_formulaReferenceStart is not { } start || _formulaReferenceLength is not { } length)
-            return;
-
         var textLength = editor.Text?.Length ?? 0;
-        var end = start + length;
-        if (start < 0 || length < 0 || start > textLength || end > textLength)
-        {
-            ClearFormulaReferenceEntrySpan();
-            return;
-        }
-
         var selectionStart = Math.Clamp(Math.Min(editor.SelectionStart, editor.SelectionEnd), 0, textLength);
-        if (editor.SelectionStart != editor.SelectionEnd)
-        {
-            // Avalonia raises SelectionStart/SelectionEnd independently while a reverse
-            // Shift+Left selection is forming. Preserve the live reference through that transient
-            // range; the collapsed-caret branch below performs the authoritative outside-span test.
-            return;
-        }
-
-        var caret = Math.Clamp(editor.CaretIndex, 0, textLength);
-        if (caret < start || caret > end)
-            ClearFormulaReferenceEntrySpan();
+        var selectionLength = Math.Abs(editor.SelectionEnd - editor.SelectionStart);
+        _formulaRangeEditingSession.ClearReferenceSpanIfCaretLeft(
+            textLength,
+            selectionStart,
+            selectionLength,
+            editor.CaretIndex,
+            preserveWhileSelectionActive: true);
     }
 
     private void ClearFormulaRangeEntryState()
     {
-        _formulaRangeSelectionAnchor = null;
-        _formulaRangeSelectionCursor = null;
-        _formulaRangeEntryMode = false;
-        _formulaRangeEntrySelectionMode = ExcelSelectionMode.Normal;
-        _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
-        ClearFormulaReferenceEntrySpan();
-        ClearFormulaReferenceTextOverlay();
-        ClearFormulaReferenceGridHighlights();
+        FormulaReferenceEditingController.Reset(
+            _formulaRangeEditingSession,
+            HideFormulaFunctionAutocomplete,
+            () =>
+            {
+                ClearFormulaReferenceTextOverlay();
+                ClearFormulaReferenceGridHighlights();
+            });
     }
 
     private void UpdateFormulaRangeEntryStateAfterTextChanged(string? text)
     {
-        var plan = FormulaEditInteractionPlanner.BuildTextChangePlan(text);
+        var plan = _formulaRangeEditingSession.ApplyTextChanged(text);
         if (!plan.StartsPointMode)
             return;
 
-        _formulaRangeEntryMode = true;
         ApplyFormulaEditStatusBarPlan(plan.StatusBarPlan);
     }
 
@@ -10540,30 +9297,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (args.Key == Key.F2 && args.KeyModifiers == KeyModifiers.None)
         {
-            var togglePlan = FormulaEditInteractionPlanner.BuildPointModeTogglePlan(
-                editor.Text,
-                _formulaRangeEntryMode);
-            _formulaRangeEntryMode = togglePlan.PointMode;
+            var togglePlan = _formulaRangeEditingSession.TogglePointMode(editor.Text);
             if (togglePlan.ClearReferenceSpan)
-            {
-                _formulaRangeSelectionAnchor = null;
-                _formulaRangeSelectionCursor = null;
-                ClearFormulaReferenceEntrySpan();
-            }
+                _formulaRangeEditingSession.ClearSelection();
 
             ApplyFormulaEditStatusBarPlan(togglePlan.StatusBarPlan);
             args.Handled = togglePlan.Handled;
             return args.Handled;
         }
 
-        if (!ExcelEditKeyPlanner.ShouldCycleFormulaReference(key, modifiers))
+        if (!_formulaRangeEditingSession.ShouldCycleReference(key, modifiers))
             return false;
 
+        if (!TryCycleFormulaReference(editor))
+            return false;
+
+        args.Handled = true;
+        return true;
+    }
+
+    private bool TryCycleFormulaReference(TextBox editor)
+    {
         var caretIndex = editor.SelectionStart != editor.SelectionEnd
             ? Math.Min(editor.SelectionStart, editor.SelectionEnd)
             : editor.CaretIndex;
         var anchor = _session.FormulaEditAddress ?? _session.ActiveCell;
-        if (!ExcelTextEditorPlanner.TryCycleFormulaReference(
+        if (!_formulaRangeEditingSession.TryPlanReferenceCycle(
                 editor.Text ?? "",
                 caretIndex,
                 anchor,
@@ -10584,10 +9343,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _isApplyingFormulaBoxText = false;
         }
 
-        _formulaReferenceStart = edit.SelectionStart;
-        _formulaReferenceLength = edit.SelectionLength;
-
-        args.Handled = true;
+        _formulaRangeEditingSession.TrackReferenceSpan(edit.SelectionStart, edit.SelectionLength);
         return true;
     }
 
@@ -10596,25 +9352,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!IsFormulaRangeEntryActive(editor.Text))
             return false;
 
-        var current = FormulaRangeEntryPlanner.GetKeyboardCursor(
+        var current = _formulaRangeEditingSession.ResolveKeyboardCursor(
             _session.SelectedRange,
-            _formulaRangeSelectionCursor ?? fallbackCurrent);
-        var target = FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+            fallbackCurrent);
+        var navigation = _formulaRangeEditingSession.PlanKeyboardNavigation(
+            _session.SelectedRange,
+            fallbackCurrent,
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(args.Key),
             FormulaEditorKey.None,
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
-            current,
             _session.Workbook.GetSheet(current.Sheet),
             Math.Max(1, CountScrollableRows(_session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1),
             Math.Max(1, CountScrollableColumns(_session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1));
-        if (target is null)
+        if (navigation is null)
             return false;
 
         if (!TryApplyFormulaRangeEntryKeyboardSelection(
-                current,
-                target.Value,
-                extendSelection: _formulaRangeEntrySelectionMode == ExcelSelectionMode.Extend ||
-                    args.KeyModifiers.HasFlag(KeyModifiers.Shift)))
+                navigation.Value.Current,
+                navigation.Value.Target,
+                navigation.Value.ExtendSelection))
         {
             return false;
         }
@@ -10627,20 +9383,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var editor = GetFormulaRangeEntryEditor();
         if (editor is null || !IsFormulaRangeEntryActive(editor.Text) ||
-            !FormulaRangeEntryPlanner.TryToggleKeyboardSelectionMode(
+            !_formulaRangeEditingSession.TryToggleSelectionMode(
                 FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(key),
                 FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(modifiers),
-                _formulaRangeEntrySelectionMode,
-                out var next))
+                out var plan))
         {
             return false;
         }
 
-        _formulaRangeEntrySelectionMode = next;
-        if (next == ExcelSelectionMode.Normal)
-            ApplyFormulaEditStatusBarPlan(FormulaEditInteractionPlanner.BuildEditStatusBarPlan(pointMode: true));
-        else
-            RefreshShell(UiText.Get(ExcelSelectionModePlanner.StatusBarModeResourceKey(next)));
+        if (plan.EditStatusBarPlan is { } statusBarPlan)
+            ApplyFormulaEditStatusBarPlan(statusBarPlan);
+        else if (plan.StatusBarModeResourceKey is { } resourceKey)
+            RefreshShell(UiText.Get(resourceKey));
         return true;
     }
 
@@ -10649,84 +9403,57 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         CellAddress target,
         bool extendSelection)
     {
-        if (_formulaRangeEntrySelectionMode != ExcelSelectionMode.Add)
-            return TryApplyFormulaRangeSelection(target, extendSelection);
-
-        var range = FormulaRangeEntryPlanner.GetKeyboardDisjointRange(current, target, extendSelection);
         var editor = GetFormulaRangeEntryEditor();
         var formulaCell = _session.FormulaEditAddress;
-        if (editor is null || formulaCell is null)
+        FormulaRangeEditorSnapshot? snapshot = null;
+        if (editor is not null && formulaCell is { } editCell)
+        {
+            var text = editor.Text ?? "";
+            var (selectionStart, selectionLength) = GetFormulaEditorSelection(editor, text.Length);
+            snapshot = FormulaRangeEditorSnapshot.Capture(
+                text,
+                selectionStart,
+                selectionLength,
+                editCell,
+                UseR1C1ReferenceStyle,
+                _session.Workbook,
+                _formulaRangeEditingSession.PlanKeyboardSelectionRange(current, target, extendSelection));
+        }
+
+        if (!FormulaReferenceEditingController.TryApplyKeyboardSelection(
+                _formulaRangeEditingSession,
+                current,
+                target,
+                extendSelection,
+                snapshot,
+                TryApplyFormulaRangeSelection,
+                edit => ApplyFormulaRangeEditorEdit(editor!, edit),
+                editPlan => _session.SelectRangeForFormulaEdit(
+                    editPlan.Range,
+                    formulaCell!.Value,
+                    editPlan.Anchor),
+                (range, anchor, cursor) => TryApplyFormulaRangeSelection(range, anchor, cursor),
+                out var result))
+        {
             return false;
-
-        FormulaRangeEntryEdit edit;
-        if (_formulaReferenceStart is { } previousStart &&
-            _formulaReferenceLength is { } previousLength)
-        {
-            if (!FormulaRangeEntryPlanner.TryAppendKeyboardRangeSelection(
-                    editor.Text ?? "",
-                    previousStart,
-                    previousLength,
-                    current,
-                    target,
-                    extendSelection,
-                    formulaCell.Value,
-                    UseR1C1ReferenceStyle,
-                    out edit,
-                    _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
-                    _formulaSheetSpanEntryState))
-            {
-                return false;
-            }
-        }
-        else
-        {
-            if (!TryGetFormulaReferenceSpanForAppend(editor, out var recoveredStart, out var recoveredLength))
-                return TryApplyFormulaRangeSelection(range, range.Start, target);
-
-            if (!FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
-                    editor.Text ?? "",
-                    recoveredStart,
-                    recoveredLength,
-                    range,
-                    formulaCell.Value,
-                    UseR1C1ReferenceStyle,
-                    out edit,
-                    _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
-                    _formulaSheetSpanEntryState))
-            {
-                return false;
-            }
         }
 
-        _isApplyingFormulaBoxText = true;
-        try
-        {
-            ApplyTextBoxEdit(editor, edit.TextEdit);
-            SetInlineCellEditorSelection(editor, edit.TextEdit);
-            SynchronizeFormulaEditors(editor);
-        }
-        finally
-        {
-            _isApplyingFormulaBoxText = false;
-        }
+        if (result.Route != FormulaKeyboardSelectionRoute.DisjointReference)
+            return true;
 
-        _session.SelectRangeForFormulaEdit(range, formulaCell.Value, range.Start);
-        _formulaRangeSelectionAnchor = range.Start;
-        _formulaRangeSelectionCursor = range.End;
-        _formulaReferenceStart = edit.ReferenceStart;
-        _formulaReferenceLength = edit.ReferenceLength;
+        var range = result.Range;
         _cellAddressText.Text = FormatRangeReference(range);
         _selectionStatsText.Text = _session.SelectionStatsText;
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
-        ApplyFormulaEditStatusBarPlan(FormulaEditInteractionPlanner.BuildEditStatusBarPlan(pointMode: true));
-        editor.Focus();
+        ApplyFormulaEditStatusBarPlan(_formulaRangeEditingSession.BuildEditStatusBarPlan(pointMode: true));
+        editor!.Focus();
         return true;
     }
 
     private bool IsFormulaRangeEntryActive(string? text) =>
         _session.FormulaEditAddress is not null &&
-        FormulaEditInteractionPlanner.IsRangeEntryActive(text, _formulaRangeEntryMode);
+        _formulaRangeEditingSession.IsRangeEntryActive(text);
 
     private TextBox? GetFormulaRangeEntryEditor()
     {
@@ -10750,40 +9477,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (_inlineCellEditor is { } inlineEditor &&
             _inlineCellEditAddress is not null &&
-            IsFormulaPointModeText(inlineEditor.Text))
+            _formulaRangeEditingSession.IsFormulaText(inlineEditor.Text))
         {
             return inlineEditor;
         }
 
-        return IsFormulaPointModeText(_formulaBox.Text) ? _formulaBox : null;
-    }
-
-    private bool TryGetFormulaReferenceSpanForAppend(
-        TextBox editor,
-        out int referenceStart,
-        out int referenceLength)
-    {
-        var text = editor.Text ?? "";
-        var (caretIndex, selectionLength) = GetFormulaEditorSelection(editor, text.Length);
-        return FormulaRangeEntryPlanner.TryGetReferenceSpanForPointEntry(
-            text,
-            _formulaReferenceStart,
-            _formulaReferenceLength,
-            caretIndex,
-            selectionLength,
-            out referenceStart,
-            out referenceLength);
+        return _formulaRangeEditingSession.IsFormulaText(_formulaBox.Text) ? _formulaBox : null;
     }
 
     private bool TryApplyFormulaRangeSelection(CellAddress target, bool extendSelection)
     {
-        var anchor = extendSelection && _formulaRangeSelectionAnchor is { } existingAnchor
-            ? existingAnchor
-            : target;
-        var range = new GridRange(
-            new CellAddress(target.Sheet, Math.Min(anchor.Row, target.Row), Math.Min(anchor.Col, target.Col)),
-            new CellAddress(target.Sheet, Math.Max(anchor.Row, target.Row), Math.Max(anchor.Col, target.Col)));
-        return TryApplyFormulaRangeSelection(range, anchor, target);
+        var selection = _formulaRangeEditingSession.PlanSelection(target, extendSelection);
+        return TryApplyFormulaRangeSelection(
+            selection.Range,
+            selection.Anchor,
+            selection.Cursor);
     }
 
     private bool TryApplyFormulaRangeSelection(
@@ -10800,88 +9508,44 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var text = editor.Text ?? "";
         var (selectionStart, selectionLength) = GetFormulaEditorSelection(editor, text.Length);
-        var previousReferenceStart = _formulaReferenceStart;
-        var previousReferenceLength = _formulaReferenceLength;
-        if (previousReferenceStart is null && previousReferenceLength is null)
-        {
-            // A physical Avalonia caret edit can clear the tracked span while the TextBox is
-            // moving a reverse selection. Recover the authored trailing area before replacing it,
-            // including its quoted sheet qualifier, instead of inserting a third reference.
-            FormulaRangeEntryPlanner.TryGetReferenceSpanForPointEntry(
-                text,
-                previousReferenceStart,
-                previousReferenceLength,
-                selectionStart,
-                selectionLength,
-                out var recoveredStart,
-                out var recoveredLength);
-            previousReferenceStart = recoveredLength > 0 ? recoveredStart : null;
-            previousReferenceLength = recoveredLength > 0 ? recoveredLength : null;
-        }
-
-        // Match WPF's formula-point behavior for a single PivotTable value cell. Excel's
-        // "Use GetPivotData functions for PivotTable references" option changes only this
-        // point-selection case; ordinary ranges and non-pivot cells remain plain references.
-        var getPivotDataPlan = range.Start == range.End && GenerateGetPivotData
-            ? GetPivotDataFormulaPlanner.Create(
+        var snapshot = FormulaRangeEditorSnapshot.Capture(
+            text,
+            selectionStart,
+            selectionLength,
+            formulaCell.Value,
+            UseR1C1ReferenceStyle,
+            _session.Workbook,
+            range,
+            selectedSheetNameOverride,
+            selectedWorkbookName);
+        if (!_formulaRangeEditingSession.TryApplyPointRangeSelectionEdit(
+                snapshot,
                 _session.Workbook,
-                _session.Workbook.GetSheet(formulaCell.Value.Sheet)!,
-                _session.Workbook.GetSheet(_session.ActiveSheet.Id)!,
-                range.Start)
-            : null;
-        var applied = getPivotDataPlan is not null
-            ? FormulaRangeEntryPlanner.TryApplySelectionText(
-                text,
-                selectionStart,
-                selectionLength,
-                previousReferenceStart,
-                previousReferenceLength,
-                getPivotDataPlan.FunctionCall,
-                out var edit)
-            : FormulaRangeEntryPlanner.TryApplyRangeSelection(
-                text,
-                selectionStart,
-                selectionLength,
-                previousReferenceStart,
-                previousReferenceLength,
+                _session.ActiveSheet.Id,
                 range,
-                formulaCell.Value,
-                UseR1C1ReferenceStyle,
-                out edit,
-                selectedSheetNameOverride ?? _session.ActiveSheet.Name,
-                _formulaSheetSpanEntryState,
-                selectedWorkbookName);
-        if (!applied)
+                selectionAnchor,
+                selectionCursor,
+                GenerateGetPivotData,
+                beforeEditorEdit: null,
+                applyEditorEdit: edit => ApplyFormulaRangeEditorEdit(editor, edit),
+                afterEditorEdit: editPlan =>
+                {
+                    if (editPlan.UpdateLocalSelection)
+                        _session.SelectRangeForFormulaEdit(range, formulaCell.Value, selectionAnchor);
+                },
+                out var plan))
         {
             return false;
         }
 
-        _isApplyingFormulaBoxText = true;
-        try
-        {
-            ApplyTextBoxEdit(editor, edit.TextEdit);
-            SetInlineCellEditorSelection(editor, edit.TextEdit);
-            SynchronizeFormulaEditors(editor);
-        }
-        finally
-        {
-            _isApplyingFormulaBoxText = false;
-        }
-
-        if (selectedWorkbookName is null)
-            _session.SelectRangeForFormulaEdit(range, formulaCell.Value, selectionAnchor);
-        _formulaRangeSelectionAnchor = selectionAnchor;
-        _formulaRangeSelectionCursor = selectionCursor;
-        _formulaReferenceStart = edit.ReferenceStart;
-        _formulaReferenceLength = edit.ReferenceLength;
-        if (selectedWorkbookName is null)
+        if (plan.UpdateLocalSelection)
         {
             _cellAddressText.Text = FormatRangeReference(range);
             _selectionStatsText.Text = _session.SelectionStatsText;
         }
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
-        ApplyFormulaEditStatusBarPlan(FormulaEditInteractionPlanner.BuildEditStatusBarPlan(pointMode: true));
+        ApplyFormulaEditStatusBarPlan(_formulaRangeEditingSession.BuildEditStatusBarPlan(pointMode: true));
         if (ReferenceEquals(editor, _formulaBox))
             _formulaBox.Focus();
         else
@@ -10908,6 +9572,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             inlineEditor.CaretIndex = source.CaretIndex;
             inlineEditor.SelectionStart = source.SelectionStart;
             inlineEditor.SelectionEnd = source.SelectionEnd;
+        }
+    }
+
+    private void ApplyFormulaRangeEditorEdit(TextBox editor, ExcelTextEdit edit)
+    {
+        _isApplyingFormulaBoxText = true;
+        try
+        {
+            ApplyTextBoxEdit(editor, edit);
+            SetInlineCellEditorSelection(editor, edit);
+            SynchronizeFormulaEditors(editor);
+        }
+        finally
+        {
+            _isApplyingFormulaBoxText = false;
         }
     }
 
@@ -11061,12 +9740,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (ShrinkToFitFontSizeCache.Count >= ShrinkToFitFontSizeCacheLimit)
             ShrinkToFitFontSizeCache.Clear();
 
-        var fontSize = requestedFontSize;
-        while (fontSize > ShrinkToFitMinimumFontSize &&
-               MeasureInlineCellTextWidth(text, fontSize, fontWeight, fontStyle) > availableWidth)
-        {
-            fontSize = Math.Max(ShrinkToFitMinimumFontSize, fontSize - 1);
-        }
+        var fontSize = CellTextShrinkPlanner.ResolveFontSize(
+            requestedFontSize,
+            availableWidth,
+            size => MeasureInlineCellTextWidth(text, size, fontWeight, fontStyle),
+            ShrinkToFitMinimumFontSize);
 
         ShrinkToFitFontSizeCache.Add(key, fontSize);
         return fontSize;
@@ -11550,10 +10228,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (editor is null)
             return TryRouteFormulaPointModeSelection(new GridRange(address, address));
 
-        var text = editor.Text ?? "";
-        if (_session.FormulaEditAddress is null ||
-            !IsFormulaPointModeText(text) ||
-            !_formulaRangeEntryMode)
+        if (!_formulaRangeEditingSession.IsPointModeActive(
+                hasRangeEditor: true,
+                hasFormulaEditCell: _session.FormulaEditAddress is not null))
         {
             return false;
         }
@@ -11565,13 +10242,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private bool IsFormulaRangeEntryActiveForPointMode() =>
-        GetFormulaRangeEntryEditor() is { } editor &&
-        _session.FormulaEditAddress is not null &&
-        _formulaRangeEntryMode &&
-        IsFormulaPointModeText(editor.Text);
-
-    private static bool IsFormulaDisjointReferenceModifier(KeyModifiers modifiers) =>
-        modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);
+        _formulaRangeEditingSession.IsPointModeActive(
+            GetFormulaRangeEntryEditor() is not null,
+            _session.FormulaEditAddress is not null);
 
     // WPF/Excel append a comma-separated area when the command modifier is held during formula
     // point mode. Keep the existing reference span intact and track the newly appended span so a
@@ -11589,56 +10262,46 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var editor = GetFormulaRangeEntryEditor();
         var formulaCell = _session.FormulaEditAddress;
-        if (editor is null || formulaCell is null ||
-            !TryGetFormulaReferenceSpanForAppend(editor, out var start, out var length))
-        {
+        if (editor is null || formulaCell is null)
             return TryRouteFormulaPointModeSelection(range, append: true);
-        }
 
         var editorText = editor.Text ?? "";
-        if (start + length > editorText.Length)
-            return false;
-
-        if (!FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
-                editorText,
-                start,
-                length,
+        var (selectionStart, selectionLength) = GetFormulaEditorSelection(editor, editorText.Length);
+        var snapshot = FormulaRangeEditorSnapshot.Capture(
+            editorText,
+            selectionStart,
+            selectionLength,
+            formulaCell.Value,
+            UseR1C1ReferenceStyle,
+            _session.Workbook,
+            range,
+            selectedSheetNameOverride,
+            selectedWorkbookName);
+        if (!_formulaRangeEditingSession.TryApplyDisjointRangeSelectionEdit(
+                snapshot,
                 range,
-                formulaCell.Value,
-                UseR1C1ReferenceStyle,
-                out var edit,
-                selectedSheetNameOverride ?? _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
-                selectedWorkbookName: selectedWorkbookName))
+                range.Start,
+                range.End,
+                includeSheetSpan: false,
+                applyEditorEdit: edit => ApplyFormulaRangeEditorEdit(editor, edit),
+                afterEditorEdit: editPlan =>
+                {
+                    if (editPlan.UpdateLocalSelection)
+                        _session.SelectRangeForFormulaEdit(range, formulaCell.Value, range.Start);
+                },
+                out var plan))
         {
             return false;
         }
 
-        _isApplyingFormulaBoxText = true;
-        try
-        {
-            ApplyTextBoxEdit(editor, edit.TextEdit);
-            SetInlineCellEditorSelection(editor, edit.TextEdit);
-            SynchronizeFormulaEditors(editor);
-        }
-        finally
-        {
-            _isApplyingFormulaBoxText = false;
-        }
-
-        if (selectedWorkbookName is null)
-            _session.SelectRangeForFormulaEdit(range, formulaCell.Value, range.Start);
-        _formulaRangeSelectionAnchor = range.Start;
-        _formulaRangeSelectionCursor = range.End;
-        _formulaReferenceStart = edit.ReferenceStart;
-        _formulaReferenceLength = edit.ReferenceLength;
-        if (selectedWorkbookName is null)
+        if (plan.UpdateLocalSelection)
         {
             _cellAddressText.Text = FormatRangeReference(range);
             _selectionStatsText.Text = _session.SelectionStatsText;
         }
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
-        ApplyFormulaEditStatusBarPlan(FormulaEditInteractionPlanner.BuildEditStatusBarPlan(pointMode: true));
+        ApplyFormulaEditStatusBarPlan(_formulaRangeEditingSession.BuildEditStatusBarPlan(pointMode: true));
         editor.Focus();
         return true;
     }
@@ -11650,27 +10313,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (_cellDragSelectionAnchor is not { } sourceAnchor)
                 return false;
 
-            var range = new GridRange(
-                new CellAddress(address.Sheet,
-                    Math.Min(sourceAnchor.Row, address.Row),
-                    Math.Min(sourceAnchor.Col, address.Col)),
-                new CellAddress(address.Sheet,
-                    Math.Max(sourceAnchor.Row, address.Row),
-                    Math.Max(sourceAnchor.Col, address.Col)));
+            var range = _formulaRangeEditingSession.PlanRange(sourceAnchor, address);
             return TryRouteFormulaPointModeSelection(range, extendSelection: true);
         }
 
         if (_cellDragFormulaPointCursor == address)
             return true;
 
-        _formulaReferenceStart = _cellDragFormulaReferenceStart;
-        _formulaReferenceLength = _cellDragFormulaReferenceLength;
+        _formulaRangeEditingSession.TrackReferenceSpan(
+            _cellDragFormulaReferenceStart,
+            _cellDragFormulaReferenceLength);
         var applied = TryApplyFormulaRangeSelection(address, extendSelection: true);
         if (applied)
         {
             _cellDragFormulaPointCursor = address;
-            _cellDragFormulaReferenceStart = _formulaReferenceStart;
-            _cellDragFormulaReferenceLength = _formulaReferenceLength;
+            _cellDragFormulaReferenceStart = _formulaRangeEditingSession.ReferenceSpan?.Start;
+            _cellDragFormulaReferenceLength = _formulaRangeEditingSession.ReferenceSpan?.Length;
         }
         return applied;
     }
@@ -11687,10 +10345,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static void RestoreFormulaRangeEditorFocusAfterDrag(TextBox? editor) =>
         editor?.Focus();
-
-    private static bool IsFormulaPointModeText(string? text) =>
-        !string.IsNullOrEmpty(text) &&
-        text[0] == '=';
 
     private void FormulaBox_TextChanged(object? sender, TextChangedEventArgs e)
     {
@@ -11717,70 +10371,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private IReadOnlyList<FormulaReferenceHighlight> GetFormulaReferenceHighlights(string text) =>
-        FormulaReferenceHighlightPlanner.GetHighlights(
+        FormulaReferenceEditingController.BuildHighlights(
             text,
-            _session.ActiveSheet.Id,
-            sheetName => _session.Workbook.GetSheet(sheetName)?.Id,
-            ResolveStructuredFormulaReference,
-            sheetId =>
-            {
-                for (var index = 0; index < _session.Workbook.Sheets.Count; index++)
-                {
-                    if (_session.Workbook.Sheets[index].Id == sheetId)
-                        return index;
-                }
-
-                return null;
-            });
-
-    private GridRange? ResolveStructuredFormulaReference(string tableName, string selector)
-    {
-        var currentSheet = _session.ActiveSheet;
-        var currentAddress = _session.FormulaEditAddress ?? _session.ActiveCell;
-        var trimmedSelector = selector.Trim();
-
-        if (trimmedSelector.StartsWith('@'))
-        {
-            var columnSelector = trimmedSelector.Length > 1 ? trimmedSelector[1..].Trim() : "";
-
-            // The bare '@' shorthand (Table1[@] / [@], no column name at all) means "this entire
-            // row" -- same as Table1[#This Row] -- and must highlight the whole-row range, not a
-            // single-cell column lookup. Route it through Resolve's own "#This Row" handling
-            // (mirrors FormulaEvaluator.References.EvaluateCurrentRowReference's evaluation-side
-            // fix for the same shape, and the WPF twin of this method) instead of falling into
-            // ResolveCurrentRowColumn below, which has no column name to search for and always
-            // returned null (no highlight box) for it.
-            if (string.IsNullOrWhiteSpace(columnSelector))
-            {
-                return StructuredReferenceResolver.Resolve(
-                    _session.Workbook,
-                    currentSheet,
-                    tableName,
-                    "#This Row",
-                    currentAddress);
-            }
-
-            var address = StructuredReferenceResolver.ResolveCurrentRowColumn(
-                _session.Workbook,
-                currentSheet,
-                currentAddress,
-                string.IsNullOrWhiteSpace(tableName) ? null : tableName,
-                columnSelector);
-
-            return address is null ? null : new GridRange(address.Value, address.Value);
-        }
-
-        return StructuredReferenceResolver.Resolve(
             _session.Workbook,
-            currentSheet,
-            tableName,
-            trimmedSelector,
-            currentAddress);
-    }
+            _session.ActiveSheet.Id,
+            _session.FormulaEditAddress ?? _session.ActiveCell);
 
     private bool IsFormulaReferenceHighlightActive() =>
         _session.FormulaEditAddress is not null &&
-        IsFormulaPointModeText(_formulaBox.Text);
+        _formulaRangeEditingSession.IsFormulaText(_formulaBox.Text);
 
     private void RefreshFormulaReferenceHighlights()
     {
@@ -11911,7 +10510,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Cursor = new Cursor(StandardCursorType.SizeAll),
             };
             AutomationProperties.SetAutomationId(grip, "WorksheetFormulaReferenceGrip");
-            AutomationProperties.SetName(grip, $"Formula reference resize grip for {highlight.Text}");
+            AutomationProperties.SetName(
+                grip,
+                UiText.Format("FormulaPointMode_ResizeGripAutomationNameFormat", highlight.Text));
             Canvas.SetLeft(grip, left + width - FormulaReferenceGripHitSize / 2);
             Canvas.SetTop(grip, top + height - FormulaReferenceGripHitSize / 2);
             grip.PointerPressed += (_, args) =>
@@ -11935,11 +10536,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         DetachFormulaReferenceDragHandlers();
-        _formulaReferenceDragActive = true;
+        if (!_formulaRangeEditingSession.TryBeginReferenceDrag(highlight))
+            return;
+
         _formulaReferenceDragPointer = args.Pointer;
         _formulaReferenceDragGrip = grip;
         _formulaReferenceDragPreviewVisual = preview;
-        _formulaReferenceDragHighlight = highlight;
         _formulaReferenceDragEditor = editor;
         UpdateFormulaReferenceDragPreview(range);
 
@@ -11952,14 +10554,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void FormulaReferenceDragPointerMoved(object? sender, PointerEventArgs args)
     {
-        if (!_formulaReferenceDragActive || _formulaReferenceDragHighlight?.Range is not { } originalRange)
+        if (!_formulaRangeEditingSession.IsReferenceDragActive)
             return;
 
         if (TryResolveCellPointerAddress(args, out var targetCell) &&
-            targetCell.Sheet == originalRange.Start.Sheet)
+            _formulaRangeEditingSession.PlanActiveReferenceDrag(targetCell) is { } previewRange)
         {
-            UpdateFormulaReferenceDragPreview(
-                FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, targetCell));
+            UpdateFormulaReferenceDragPreview(previewRange);
         }
 
         args.Handled = true;
@@ -11967,23 +10568,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void FormulaReferenceDragPointerReleased(object? sender, PointerReleasedEventArgs args)
     {
-        if (!_formulaReferenceDragActive)
+        if (!_formulaRangeEditingSession.IsReferenceDragActive)
             return;
 
-        var highlight = _formulaReferenceDragHighlight;
+        var highlight = _formulaRangeEditingSession.EndReferenceDrag();
         var editor = _formulaReferenceDragEditor;
         var pointer = _formulaReferenceDragPointer;
         var targetResolved = TryResolveCellPointerAddress(args, out var targetCell);
-        var targetIsSameSheet = highlight?.Range is { } range && targetCell.Sheet == range.Start.Sheet;
 
         DetachFormulaReferenceDragHandlers();
         pointer?.Capture(null);
         ClearFormulaReferenceDragState();
 
-        if (editor is not null && highlight?.Range is { } originalRange &&
-            targetResolved && targetIsSameSheet)
+        if (editor is not null && highlight is not null && targetResolved &&
+            _formulaRangeEditingSession.PlanReferenceDrag(highlight, targetCell) is { } newRange)
         {
-            var newRange = FormulaReferenceDragResizePlanner.ComputeResizedRange(originalRange.Start, targetCell);
             TryApplyFormulaReferenceResize(editor, highlight, newRange);
         }
 
@@ -11992,7 +10591,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void FormulaReferenceDragPointerCaptureLost(object? sender, PointerCaptureLostEventArgs args)
     {
-        if (!_formulaReferenceDragActive)
+        if (!_formulaRangeEditingSession.IsReferenceDragActive)
             return;
 
         DetachFormulaReferenceDragHandlers();
@@ -12012,12 +10611,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_formulaReferenceDragPreviewVisual is { } preview)
             preview.IsVisible = false;
 
-        _formulaReferenceDragActive = false;
         _formulaReferenceDragPointer = null;
         _formulaReferenceDragGrip = null;
         _formulaReferenceDragPreviewVisual = null;
-        _formulaReferenceDragHighlight = null;
         _formulaReferenceDragEditor = null;
+        _formulaRangeEditingSession.CancelReferenceDrag();
     }
 
     private void UpdateFormulaReferenceDragPreview(GridRange range)
@@ -12052,13 +10650,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         GridRange newRange)
     {
         var text = editor.Text ?? "";
-        var (newText, caretIndex) = FormulaReferenceDragResizePlanner.ApplyResize(
+        var edit = _formulaRangeEditingSession.PlanReferenceResizeEdit(
             text,
-            highlight.TextStart,
-            highlight.TextLength,
+            highlight,
             newRange,
             UseR1C1ReferenceStyle);
-        var edit = new ExcelTextEdit(newText, caretIndex, 0);
 
         _isApplyingFormulaBoxText = true;
         try
@@ -12072,8 +10668,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _isApplyingFormulaBoxText = false;
         }
 
-        _formulaReferenceStart = highlight.TextStart;
-        _formulaReferenceLength = caretIndex - highlight.TextStart;
+        _formulaRangeEditingSession.ApplyReferenceResizeEdit(highlight, edit);
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
         editor.Focus();
@@ -12133,15 +10728,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// </summary>
     private void RefreshFormulaFunctionAutocomplete(TextBox editor)
     {
-        if (!FormulaFunctionAutocompletePlanner.ShouldShowAutocomplete(
-                editor.Text, editor.CaretIndex, out var tokenStart, out var tokenLength, out var prefix))
-        {
-            HideFormulaFunctionAutocomplete();
-            return;
-        }
-
-        var candidates = FormulaFunctionAutocompletePlanner.BuildCandidates(
-            prefix,
+        var candidates = _formulaRangeEditingSession.RefreshFunctionAutocomplete(
+            editor.Text,
+            editor.CaretIndex,
             BuiltInFunctions.Names,
             _session.Workbook.NamedRanges.Keys,
             _session.Workbook.Sheets.SelectMany(s => s.StructuredTables).Select(t => t.Name));
@@ -12152,9 +10741,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        _functionAutocompleteCandidates = candidates;
-        _functionAutocompleteTokenStart = tokenStart;
-        _functionAutocompleteTokenLength = tokenLength;
         ShowFormulaFunctionAutocomplete(editor, candidates);
     }
 
@@ -12173,7 +10759,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         if (_functionAutocompletePopup is not null)
             _functionAutocompletePopup.IsOpen = false;
-        _functionAutocompleteCandidates = [];
+        _formulaRangeEditingSession.ClearFunctionAutocomplete();
     }
 
     private void EnsureFunctionAutocompletePopup()
@@ -12210,38 +10796,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!FunctionAutocompleteIsOpen)
             return false;
 
-        switch (key)
-        {
-            case Key.Down:
-            case Key.Up:
-                _functionAutocompleteListBox!.SelectedIndex = FormulaFunctionAutocompletePlanner.MoveSelection(
-                    _functionAutocompleteListBox.SelectedIndex,
-                    _functionAutocompleteCandidates.Count,
-                    key == Key.Down ? 1 : -1);
-                return true;
-
-            case Key.Tab:
-            case Key.Enter:
-                if (_functionAutocompleteListBox!.SelectedItem is string chosen)
+        return _formulaRangeEditingSession.ExecuteFunctionAutocompleteKey(
+            FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(key),
+            _functionAutocompleteListBox!.SelectedIndex,
+            index => _functionAutocompleteListBox.SelectedIndex = index,
+            _ =>
+            {
+                if (_functionAutocompleteListBox.SelectedItem is string chosen)
                     CommitFunctionAutocomplete(editor, chosen);
-                return true;
-
-            case Key.Escape:
-                HideFormulaFunctionAutocomplete();
-                return true;
-
-            default:
-                return false;
-        }
+            },
+            HideFormulaFunctionAutocomplete);
     }
 
     private void CommitFunctionAutocomplete(TextBox editor, string chosenName)
     {
-        var isFunction = FormulaFunctionAutocompletePlanner.IsFunctionCandidate(chosenName, BuiltInFunctions.Names);
-        var (text, caretIndex) = FormulaFunctionAutocompletePlanner.Commit(
-            editor.Text ?? "", _functionAutocompleteTokenStart, _functionAutocompleteTokenLength, chosenName, isFunction);
+        var edit = _formulaRangeEditingSession.CommitFunctionAutocomplete(
+            editor.Text ?? "",
+            chosenName,
+            BuiltInFunctions.Names);
         HideFormulaFunctionAutocomplete();
-        ApplyTextBoxEdit(editor, new ExcelTextEdit(text, caretIndex, 0));
+        ApplyTextBoxEdit(editor, edit);
         SynchronizeFormulaEditors(editor);
     }
 
@@ -12316,19 +10890,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
     }
 
-    /// <summary>
-    /// Test-only seam onto the static reference-coloring decision logic below (which cell/overlay
-    /// pair receives which run gets exercised in production via <see cref="RefreshFormulaReferenceHighlights"/>
-    /// for both the formula bar and, since R78-render-inplace-editor-5-2, the in-cell editor).
-    /// </summary>
-    internal static void ApplyFormulaReferenceTextOverlayForTest(
-        TextBox editor,
-        TextBlock overlay,
-        IBrush plainBrush,
-        string text,
-        IReadOnlyList<FormulaReferenceHighlight> highlights) =>
-        ApplyFormulaReferenceTextOverlay(editor, overlay, plainBrush, text, highlights);
-
     private static void ApplyFormulaReferenceTextOverlay(
         TextBox editor,
         TextBlock overlay,
@@ -12337,35 +10898,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<FormulaReferenceHighlight> highlights)
     {
         overlay.Inlines?.Clear();
-        if (!text.StartsWith("=", StringComparison.Ordinal) || highlights.Count == 0)
+        var segments = FormulaReferenceTextSegmentPlanner.CreateSegments(text, highlights);
+        if (segments.Count == 0)
         {
             ClearFormulaReferenceTextOverlay(editor, overlay, plainBrush);
             return;
         }
 
-        var index = 0;
-        foreach (var highlight in highlights.OrderBy(h => h.TextStart))
+        foreach (var segment in segments)
         {
-            if (highlight.TextStart < index ||
-                highlight.TextStart >= text.Length ||
-                highlight.TextLength <= 0)
-            {
-                continue;
-            }
-
-            var highlightEnd = Math.Min(text.Length, highlight.TextStart + highlight.TextLength);
-            if (highlight.TextStart > index)
-                AddFormulaReferenceRun(overlay, text[index..highlight.TextStart], plainBrush);
-
             AddFormulaReferenceRun(
                 overlay,
-                text[highlight.TextStart..highlightEnd],
-                FormulaReferenceBrushes[highlight.PaletteIndex % FormulaReferenceBrushes.Count]);
-            index = highlightEnd;
+                segment.Text,
+                segment.PaletteIndex is { } paletteIndex
+                    ? FormulaReferenceBrushes[paletteIndex % FormulaReferenceBrushes.Count]
+                    : plainBrush);
         }
-
-        if (index < text.Length)
-            AddFormulaReferenceRun(overlay, text[index..], plainBrush);
 
         overlay.IsVisible = true;
         editor.Foreground = Brushes.Transparent;
@@ -12420,25 +10968,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var sheet = _session.ActiveSheet;
         var address = _session.ActiveCell;
-        sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
-        var hasAutoFilterHeaderTarget =
-            SelectionRangeService.GetCurrentRegion(sheet, address) is { } currentRegion &&
-            AutoFilterDropdownMenuPlanner.TryPlan(currentRegion, address, out _);
-        var hasValidationDropdown =
-            sheet.DataValidations.Count > 0 &&
-            DataValidationService.GetApplicable(sheet, address)
-                .Any(rule => rule.Type == DvType.List && rule.ShowDropdown);
-        var state = WorksheetContextMenuState.Default with
-        {
-            HasThreadedComment = threadedComment is not null,
-            IsThreadedCommentResolved = threadedComment?.IsResolved == true,
-            HasNote = sheet.Comments.ContainsKey(address),
-            HasHyperlink = sheet.Hyperlinks.ContainsKey(address),
-            HasAutoFilterHeaderTarget = hasAutoFilterHeaderTarget,
-            HasDropdownTarget = hasAutoFilterHeaderTarget || hasValidationDropdown,
-            HasPivotTableTarget = PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null,
-            NoteIsShown = sheet.ShownComments.Contains(address),
-        };
+        var state = WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address);
         var commands = WorksheetContextMenuPlanner.BuildCommands(
             WorksheetContextMenuTargetKind.Worksheet,
             state);
@@ -12456,196 +10986,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// drawing object) via <see cref="DispatchDrawingObjectContextMenuCommand"/>, so they do not appear
     /// in this worksheet cell menu.
     /// </summary>
-    private void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
+    private async void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
     {
         if (!Enum.TryParse<WorksheetContextMenuAction>(commandId.Value, out var action))
             return;
 
-        switch (action)
-        {
-            case WorksheetContextMenuAction.Cut:
-                _ = CutSelectedRangeToClipboardAsync();
-                break;
-            case WorksheetContextMenuAction.Copy:
-                _ = CopySelectedRangeToClipboardAsync();
-                break;
-            case WorksheetContextMenuAction.Paste:
-                _ = PasteClipboardTextAsync();
-                break;
-            case WorksheetContextMenuAction.ClearContents:
-                ClearSelectedRangeContents();
-                break;
-            case WorksheetContextMenuAction.ClearAll:
-                ClearSelectedRangeAll();
-                break;
-            case WorksheetContextMenuAction.ClearFormats:
-                ClearSelectedRangeFormats();
-                break;
-            case WorksheetContextMenuAction.ClearComments:
-                ClearSelectedRangeComments();
-                break;
-            case WorksheetContextMenuAction.ClearHyperlinks:
-                RemoveSelectedRangeHyperlinks();
-                break;
-            case WorksheetContextMenuAction.HideRows:
-                HideSelectedRows();
-                break;
-            case WorksheetContextMenuAction.UnhideRows:
-                UnhideSelectedRows();
-                break;
-            case WorksheetContextMenuAction.HideColumns:
-                HideSelectedColumns();
-                break;
-            case WorksheetContextMenuAction.UnhideColumns:
-                UnhideSelectedColumns();
-                break;
-            case WorksheetContextMenuAction.RowHeight:
-                _ = ShowRowHeightDialogAsync();
-                break;
-            case WorksheetContextMenuAction.AutoFitRowHeight:
-                AutoFitSelectedRowHeight();
-                break;
-            case WorksheetContextMenuAction.ColumnWidth:
-                _ = ShowColumnWidthDialogAsync();
-                break;
-            case WorksheetContextMenuAction.AutoFitColumnWidth:
-                AutoFitSelectedColumnWidth();
-                break;
-            case WorksheetContextMenuAction.InsertRowAbove:
-                InsertContextRow(_session.ActiveCell.Row);
-                break;
-            case WorksheetContextMenuAction.InsertRowBelow:
-                InsertContextRow(_session.ActiveCell.Row + 1);
-                break;
-            case WorksheetContextMenuAction.InsertColumnLeft:
-                InsertContextColumn(_session.ActiveCell.Col);
-                break;
-            case WorksheetContextMenuAction.InsertColumnRight:
-                InsertContextColumn(_session.ActiveCell.Col + 1);
-                break;
-            case WorksheetContextMenuAction.InsertCells:
-            case WorksheetContextMenuAction.InsertCopiedCells:
-                _ = ShowInsertCellsDialogAsync();
-                break;
-            case WorksheetContextMenuAction.DeleteRows:
-                DeleteSheetRows();
-                break;
-            case WorksheetContextMenuAction.DeleteColumns:
-                DeleteSheetColumns();
-                break;
-            case WorksheetContextMenuAction.DeleteCells:
-                _ = ShowDeleteCellsDialogAsync();
-                break;
-            case WorksheetContextMenuAction.PasteSpecial:
-                _ = ShowPasteSpecialDialogAsync();
-                break;
-            // Sort & Filter submenu → existing sort/filter handlers (same ones the ribbon Data tab uses).
-            case WorksheetContextMenuAction.SortAscending:
-                SortSelectedRange(ascending: true);
-                break;
-            case WorksheetContextMenuAction.SortDescending:
-                SortSelectedRange(ascending: false);
-                break;
-            case WorksheetContextMenuAction.CustomSort:
-                _ = ShowSortDialogAsync();
-                break;
-            case WorksheetContextMenuAction.Filter:
-                ToggleAutoFilter();
-                break;
-            case WorksheetContextMenuAction.ClearFilter:
-                ClearActiveSheetFilters();
-                break;
-            case WorksheetContextMenuAction.ReapplyFilter:
-                ReapplyCurrentFilterSort();
-                break;
-            case WorksheetContextMenuAction.QuickAnalysis:
-                _ = ShowQuickAnalysisDialogAsync();
-                break;
-            // Data Tools submenu → existing data-tools dialogs/handlers.
-            case WorksheetContextMenuAction.DefineName:
-                DefineName();
-                break;
-            case WorksheetContextMenuAction.CreateTable:
-            case WorksheetContextMenuAction.FormatAsTable:
-                _ = InsertTableFromSelectionAsync();
-                break;
-            case WorksheetContextMenuAction.TextToColumns:
-                TextToColumns();
-                break;
-            case WorksheetContextMenuAction.RemoveDuplicates:
-                _ = ShowRemoveDuplicatesDialogAsync();
-                break;
-            case WorksheetContextMenuAction.DataValidation:
-                _ = ShowDataValidationDialogAsync();
-                break;
-            // Outline grouping (Rows-and-Columns submenu on row/column selections).
-            case WorksheetContextMenuAction.Group:
-                GroupSelectedRows();
-                break;
-            case WorksheetContextMenuAction.Ungroup:
-                UngroupSelection();
-                break;
-            // Comments and Notes submenu (create/edit/delete/resolve/show route through WorkbookSession
-            // comment APIs; SetThreadedCommentCommand / UpdateThreadedCommentTextCommand /
-            // ResolveThreadedCommentCommand / SetCommentCommand all carry undo/redo).
-            case WorksheetContextMenuAction.NewComment:
-                _ = ShowNewThreadedCommentDialogAsync();
-                break;
-            case WorksheetContextMenuAction.NewNote:
-                _ = ShowNewNoteDialogAsync();
-                break;
-            case WorksheetContextMenuAction.EditComment:
-                _ = ShowEditThreadedCommentDialogAsync();
-                break;
-            case WorksheetContextMenuAction.EditNote:
-                _ = ShowEditNoteDialogAsync();
-                break;
-            case WorksheetContextMenuAction.ResolveComment:
-                ResolveActiveCellThreadedComment(resolved: true);
-                break;
-            case WorksheetContextMenuAction.UnresolveComment:
-                ResolveActiveCellThreadedComment(resolved: false);
-                break;
-            case WorksheetContextMenuAction.DeleteComment:
-                DeleteActiveCellThreadedComment();
-                break;
-            case WorksheetContextMenuAction.DeleteNote:
-                DeleteActiveCellNote();
-                break;
-            case WorksheetContextMenuAction.ShowNotes:
-                ToggleAllNotesVisibility();
-                break;
-            case WorksheetContextMenuAction.ShowHideNote:
-                ToggleActiveCellNoteVisibility();
-                break;
-            case WorksheetContextMenuAction.ShowAllNotes:
-                ToggleAllNotesVisibility();
-                break;
-            // Hyperlink submenu → existing hyperlink handlers.
-            case WorksheetContextMenuAction.Hyperlink:
-                _ = ShowInsertHyperlinkDialogAsync();
-                break;
-            case WorksheetContextMenuAction.OpenHyperlink:
-                _ = OpenSelectedHyperlinkAsync();
-                break;
-            case WorksheetContextMenuAction.RemoveHyperlinks:
-                ClearSelectedRangeHyperlinks();
-                break;
-            case WorksheetContextMenuAction.PivotTableOptions:
-                OpenPivotTableOptions();
-                break;
-            case WorksheetContextMenuAction.FormatCells:
-                _ = ShowFormatCellsDialogAsync();
-                break;
-            case WorksheetContextMenuAction.PickFromDropDown:
-                if (!OpenActiveDropdown())
-                    RefreshShell(UiText.Get("DrawingInteract_PickListNoList"));
-                break;
-            default:
-                // The generic worksheet planner emits only the actions handled above. Drawing-only
-                // actions are dispatched by the selected-object context menus in DrawingObjectInteraction.
-                break;
-        }
+        if (!WorkbookApplicationCommandRouter.TryRouteWorksheetContextMenu(action.ToString(), out var route))
+            return;
+
+        await WorkbookApplicationCommands.TryExecuteAsync(
+            route,
+            targetAddress: _session.ActiveCell);
     }
 
     private static Border CreateCellBorder(
@@ -12691,19 +11042,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Rich text runs override cell-level super/subscript — each run carries its own VertAlign
         // and RenderedFontSize from the planner.  When runs are present the TextBlock uses Inlines
         // rather than a single Text string, so cell-level super/sub adjustment is skipped.
-        double adjustedFontSize;
-        double superSubOffsetDip;
-        if (CellRichTextInlinesBuilder.HasRuns(richRuns))
-        {
-            // For rich runs the TextBlock font acts as a fallback only; actual sizes come per Run.
-            adjustedFontSize  = scaledFontSize;
-            superSubOffsetDip = 0;
-        }
-        else
-        {
-            // Cell-level super/subscript: shrink font and shift baseline vertically.
-            CellSuperSubScript.Resolve(style, scaledFontSize, out adjustedFontSize, out superSubOffsetDip);
-        }
+        var textMaterialization = CellTextMaterializationPlanner.Plan(
+            effectiveText,
+            isNumeric,
+            style,
+            scaledFontSize,
+            richRuns,
+            CellTextMaterializationProfile.Avalonia);
+        var adjustedFontSize = textMaterialization.RenderedFontSize;
+        var superSubOffsetDip = textMaterialization.BaselineOffset;
 
         // HAlign=Fill: repeat the display text to overflow the cell width then rely on ClipToBounds.
         // Approximate char width as 0.6× font size to determine repetition count; always over-allocate
@@ -12714,7 +11061,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // cell's available width, matching Excel/WPF's GridView.Rendering.cs ResolveCachedShrinkFontSize.
         // Only applies when WrapText is off (Excel disables Shrink to fit whenever Wrap text is on)
         // and is skipped for Fill alignment / rich runs, which resolve sizing independently.
-        if (style?.ShrinkToFit == true && textWrapping != TextWrapping.Wrap && !isFillAlign && !CellRichTextInlinesBuilder.HasRuns(richRuns))
+        if (style?.ShrinkToFit == true && textWrapping != TextWrapping.Wrap && !isFillAlign && !textMaterialization.HasRichText)
         {
             var availableWidth = Math.Max(1, cellWidth - (scaledHorizontalPadding * 2) - scaledIndentPadding);
             adjustedFontSize = ResolveShrinkToFitFontSize(effectiveText, fontWeight, fontStyle, adjustedFontSize, availableWidth);
@@ -12769,10 +11116,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Each Run carries its own font size, weight, style, color, decorations, and baseline
         // alignment — the planner has already coalesced null props against the cell style.
         // Otherwise fall back to a single plain-text string (existing path).
-        if (CellRichTextInlinesBuilder.HasRuns(richRuns))
+        if (textMaterialization.HasRichText)
         {
             CellRichTextInlinesBuilder.Build(
-                richRuns!,
+                textMaterialization.RunSegments,
                 textBlock.Inlines!,
                 color => Brush(color));
         }
@@ -12789,7 +11136,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 cellHeight,
                 horizontalAlignment,
                 verticalAlignmentModel,
-                isNumeric,
+                textMaterialization.Formatting.IsNumericOrDate,
                 scaledIndentPadding,
                 textRotation,
                 effectiveTextWrapping,
@@ -13097,10 +11444,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return string.IsNullOrWhiteSpace(screenTip) ? target.Trim() : screenTip.Trim();
     }
 
-    /// <summary>Test-only forwarder for <see cref="FormatHyperlinkTooltip"/>.</summary>
-    internal static string? FormatHyperlinkTooltipForTest(Sheet? sheet, CellAddress address) =>
-        FormatHyperlinkTooltip(sheet, address);
-
     /// <summary>
     /// Wrap-width available to a rotated cell's TextBlock before it is measured, matching WPF's
     /// unconditional-of-rotation <c>rect.Width - 4 - indentPx</c> (GridView.Rendering.cs
@@ -13112,10 +11455,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         textWrapping == TextWrapping.Wrap
             ? Math.Max(1, cellWidth - 4 - indentPixels)
             : double.PositiveInfinity;
-
-    /// <summary>Test-only forwarder for <see cref="ResolveOrientedWrapMeasureWidth"/>.</summary>
-    internal static double ResolveOrientedWrapMeasureWidthForTest(double cellWidth, double indentPixels, TextWrapping textWrapping) =>
-        ResolveOrientedWrapMeasureWidth(cellWidth, indentPixels, textWrapping);
 
     private static AvaloniaGrid CreateOrientedCellContent(
         TextBlock textBlock,
@@ -13168,40 +11507,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return content;
     }
 
-    /// <summary>
-    /// Test-only forwarder exposing the private <see cref="CreateOrientedCellContent"/> so
-    /// regression tests can inspect the resulting Canvas-left/top of a rotated cell's TextBlock
-    /// without spinning up a full MainWindow/viewport.
-    /// </summary>
-    internal static AvaloniaGrid CreateOrientedCellContentForTest(
-        TextBlock textBlock,
-        double cellWidth,
-        double cellHeight,
-        CellHAlign horizontalAlignment,
-        CellVAlign? verticalAlignment,
-        bool isNumeric,
-        double indentPixels,
-        int textRotation,
-        TextWrapping textWrapping,
-        CellStyle? style,
-        CellBorderNeighborEdges borderNeighbors = default,
-        bool isEffectivelyRightToLeft = false,
-        double zoomFactor = 1) =>
-        CreateOrientedCellContent(
-            textBlock,
-            cellWidth,
-            cellHeight,
-            horizontalAlignment,
-            verticalAlignment,
-            isNumeric,
-            indentPixels,
-            textRotation,
-            textWrapping,
-            style,
-            borderNeighbors,
-            isEffectivelyRightToLeft,
-            zoomFactor);
-
     private static void AddStyledCellBorderOverlay(
         AvaloniaGrid content,
         CellStyle? style,
@@ -13215,8 +11520,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // supporting dash patterns and correct per-style thicknesses (replaces the old solid
         // Border-strip approach that could not dash and had incorrect Hair/SlantDashDot thickness).
         // borderNeighbors carries the touching neighbor cells' opposing edge styles so a shared
-        // grid edge resolves to the heavier/more-prominent style (CellBorderGeometry.
-        // ResolveBorderEdgeWinner) instead of this cell always winning by paint order.
+        // grid edge resolves to the heavier/more-prominent style through CellBorderVisualPlanner
+        // instead of this cell always winning by paint order.
         content.Children.Add(new CellBorderPanel(visibleStyle, borderNeighbors, zoomFactor));
     }
 
@@ -13487,7 +11792,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var menu = new NativeMenu();
         if (includeClearFill)
         {
-            var clearFillItem = new NativeMenuItem { Header = "No Fill" };
+            var clearFillItem = new NativeMenuItem { Header = UiText.Get("FormatCells_NoFill") };
             clearFillItem.Click += (_, _) => ClearSelectedRangeFill();
             menu.Items.Add(clearFillItem);
         }
@@ -13508,7 +11813,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private NativeMenu CreateNativeSheetTabColorMenu()
     {
         var menu = new NativeMenu();
-        var clearColorItem = new NativeMenuItem { Header = "No Color" };
+        var clearColorItem = new NativeMenuItem { Header = UiText.Get("RibbonWire_TabColorNone") };
         clearColorItem.Click += (_, _) => ApplyActiveSheetTabColor(null);
         menu.Items.Add(clearColorItem);
 
@@ -13553,7 +11858,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetActiveSheetTabColor(color);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Tab Color failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_TabColorFailed"));
             return;
         }
 
@@ -13652,12 +11957,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = new[]
             {
-                CreateTextRotationMenuItem("Horizontal", 0, "Set horizontal text for", "Horizontal Text failed."),
-                CreateTextRotationMenuItem("Angle Counterclockwise", 45, "Angled text counterclockwise for", "Angle Counterclockwise failed."),
-                CreateTextRotationMenuItem("Angle Clockwise", -45, "Angled text clockwise for", "Angle Clockwise failed."),
-                CreateTextRotationMenuItem("Vertical Text", 255, "Set vertical text for", "Vertical Text failed."),
-                CreateTextRotationMenuItem("Rotate Text Up", 90, "Rotated text up for", "Rotate Text Up failed."),
-                CreateTextRotationMenuItem("Rotate Text Down", -90, "Rotated text down for", "Rotate Text Down failed."),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_Horizontal"), 0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_AngleCounterclockwise"), 45, UiText.Get("TextRotation_CounterclockwiseSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_AngleClockwise"), -45, UiText.Get("TextRotation_ClockwiseSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_VerticalText"), 255, UiText.Get("TextRotation_VerticalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_RotateTextUp"), 90, UiText.Get("TextRotation_UpSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_RotateTextDown"), -90, UiText.Get("TextRotation_DownSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
             },
         };
 
@@ -13788,12 +12093,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// plain click always collapsed the selection even with F8 armed (R68-app-selection-
     /// navigation-6-1).
     /// </summary>
-    internal CellAddress? SelectClickedCell(CellAddress address, KeyModifiers modifiers)
+    internal void SelectClickedCell(CellAddress address, KeyModifiers modifiers)
     {
         if (modifiers.HasFlag(KeyModifiers.Shift) || _keyboardSelectionMode == ExcelSelectionMode.Extend)
         {
             SelectRange(address);
-            return null;
+            return;
         }
 
         // A plain click onto a locked cell on a protected sheet with "Select locked cells"
@@ -13802,7 +12107,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // above is left ungated for now; CommandGuards.CanSelectCell already exists for exactly
         // this check (it returns true unconditionally on an unprotected sheet).
         if (!CommandGuards.CanSelectCell(_session.Workbook, _session.ActiveSheet, address))
-            return null;
+            return;
 
         // Ctrl+click (without Shift, checked above) adds the clicked cell as a disjoint SECOND
         // (or later) selection area instead of collapsing the selection down to just this cell --
@@ -13811,11 +12116,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // click here, discarding every prior area (R84-app-mouse-selection-5-1).
         if (modifiers.HasFlag(KeyModifiers.Control))
         {
-            return AddAdditionalCellSelection(address);
+            AddAdditionalCellSelection(address);
+            return;
         }
 
         SelectCell(address);
-        return null;
     }
 
     /// <summary>
@@ -13824,27 +12129,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// Selection.cs) for a fresh (non-dragging) Ctrl+click. The active cell moves to the newly
     /// added area so subsequent editing/formula-bar state targets it, matching Excel.
     /// </summary>
-    private CellAddress? AddAdditionalCellSelection(CellAddress address)
+    private void AddAdditionalCellSelection(CellAddress address)
     {
         if (!TryCommitPendingFormulaEdit())
-            return null;
+            return;
 
         ClearSelectionExtensionState();
         ClearSelectedDrawingObject();
-        var clickedMerge = _session.ActiveSheet.GetMergeRegion(address);
-        var newRange = clickedMerge ?? new GridRange(address, address);
-        var activeCell = clickedMerge?.Start ?? address;
-        var ranges = SelectionAreaPlanner.AppendOrReplaceActiveArea(
+        var newRange = new GridRange(address, address);
+        var ranges = GridSelectionNavigationPlanner.AppendDisjointSelectionArea(
             _session.SelectedRanges,
             _session.SelectedRange,
-            newRange,
-            startNewArea: true);
-        _session.SelectRanges(newRange, ranges, activeCell);
+            newRange);
+        _session.SelectRanges(newRange, ranges, address);
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
         ApplyFormatPainterAfterTargetSelection();
         FocusShellRegion(ShellFocusTarget.Worksheet);
-        return activeCell;
     }
 
     private void ClearSelectionExtensionState()
@@ -14046,7 +12347,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         ClearSelectedDrawingObject();
-        RefreshShell("Selected all visible sheets");
+        RefreshShell(UiText.Get("SheetTabs_SelectedAllVisibleStatus"));
     }
 
     private void UngroupSheets()
@@ -14059,7 +12360,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         ClearSelectedDrawingObject();
-        RefreshShell($"Ungrouped sheets to {_session.ActiveSheet.Name}");
+        RefreshShell(UiText.Format("SheetTabs_UngroupedToStatusFormat", _session.ActiveSheet.Name));
     }
 
     private void AddNewSheet()
@@ -14078,7 +12379,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        RefreshShell($"Inserted {_session.ActiveSheet.Name}");
+        RefreshShell(UiText.Format("SheetTabs_InsertedStatusFormat", _session.ActiveSheet.Name));
     }
 
     private async Task CreateNewWorkbookAsync()
@@ -14089,7 +12390,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        if (!await ConfirmBeforeDestructiveWorkbookActionAsync("New Workbook", "Discard and Create"))
+        if (!await ConfirmBeforeDestructiveWorkbookActionAsync(
+                UiText.Get("DirtyWorkbook_NewWorkbookTitle"),
+                UiText.Get("DirtyWorkbook_DiscardAndCreate")))
             return;
 
         var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
@@ -14108,7 +12411,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        if (!await ConfirmBeforeDestructiveWorkbookActionAsync("Close Workbook", "Discard and Close"))
+        if (!await ConfirmBeforeDestructiveWorkbookActionAsync(
+                UiText.Get("DirtyWorkbook_CloseWorkbookTitle"),
+                UiText.Get("DirtyWorkbook_DiscardAndClose")))
             return;
 
         ResetToNewWorkbook("Closed workbook.");
@@ -14171,7 +12476,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // so force a recalc here — sheet structure commands don't report affected cells to the
         // shared edit pipeline's automatic recalc (WPF host parity: SheetCtxDuplicate_Click).
         _session.RecalculateWorkbook();
-        RefreshShell($"Duplicated {sourceName}");
+        RefreshShell(UiText.Format("SheetTabs_DuplicatedStatusFormat", sourceName));
     }
 
     private void MoveActiveSheetLeft()
@@ -14194,7 +12499,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Reordering sheets can change which sheets a 3-D reference spans, so force a recalc
         // (sheet structure commands don't report affected cells to the automatic recalc path).
         _session.RecalculateWorkbook();
-        RefreshShell($"Moved {sheetName} left");
+        RefreshShell(UiText.Format("SheetTabs_MovedLeftStatusFormat", sheetName));
     }
 
     private void MoveActiveSheetRight()
@@ -14217,7 +12522,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Reordering sheets can change which sheets a 3-D reference spans, so force a recalc
         // (sheet structure commands don't report affected cells to the automatic recalc path).
         _session.RecalculateWorkbook();
-        RefreshShell($"Moved {sheetName} right");
+        RefreshShell(UiText.Format("SheetTabs_MovedRightStatusFormat", sheetName));
     }
 
     private void ToggleShowGridlines()
@@ -14288,7 +12593,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var currentZoom = StatusBarZoomSliderPlanner.ClampZoomPercent(_session.ZoomPercent);
         var dialog = new Window
         {
-            Title = "Zoom",
+            Title = UiText.Get("Zoom_Zoom"),
             Width = ZoomDialogPlanner.Width,
             Height = ZoomDialogPlanner.Height,
             MinWidth = ZoomDialogPlanner.Width,
@@ -14333,7 +12638,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var fitSelectionButton = new RadioButton
         {
-            Content = "Fit selection",
+            Content = StripDisplayMnemonic(UiText.Get("Zoom_FitSelection")),
             GroupName = "ZoomDialogOptions",
             Margin = new Thickness(0, 0, 0, ZoomDialogPlanner.FitSelectionBottomMargin),
         };
@@ -14342,7 +12647,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var customButton = new RadioButton
         {
-            Content = "Custom:",
+            Content = StripDisplayMnemonic(UiText.Get("Zoom_Custom")),
             GroupName = "ZoomDialogOptions",
             IsChecked = !presetButtons.Any(button => button.IsChecked == true),
         };
@@ -14357,7 +12662,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(customBox, zoomDialogChrome);
         AutomationProperties.SetAutomationId(customBox, "ZoomCustomPercentBox");
-        AutomationProperties.SetName(customBox, "Custom zoom percentage");
+        AutomationProperties.SetName(customBox, UiText.Get("Zoom_CustomZoomPercent"));
 
         customBox.GotFocus += (_, _) => customButton.IsChecked = true;
 
@@ -14371,7 +12676,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             Width = ZoomDialogPlanner.ActionButtonWidth,
             IsDefault = true,
         };
@@ -14379,7 +12684,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             Width = ZoomDialogPlanner.ActionButtonWidth,
             IsCancel = true,
         };
@@ -14473,7 +12778,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var magnificationGroup = new GroupBox
         {
-            Header = "Magnification",
+            Header = UiText.Get("Zoom_Magnification"),
             Padding = new Thickness(ZoomDialogPlanner.MagnificationGroupPadding),
             Margin = new Thickness(0, 0, 0, ZoomDialogPlanner.MagnificationGroupBottomMargin),
             Content = choices,
@@ -14516,12 +12821,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         await dialog.ShowDialog(this);
         if (selectedZoomPercent is { } zoomPercent)
-            ApplyZoomPercent(zoomPercent, "Zoom failed.");
+            ApplyZoomPercent(zoomPercent, UiText.Get("InsertLoc_ZoomFailed"));
     }
 
     private static string ResolveZoomDialogValidationError(ZoomDialogValidationError? validationError) =>
         validationError is null
-            ? UiText.Get("Zoom_EnterAValidZoomPercent")
+            ? UiText.Get(ZoomDialogPlanner.ValidationFallbackResourceKey)
             : UiText.Get(validationError.ResourceKey);
 
     private void ApplyZoomPercent(int zoomPercent, string errorMessage)
@@ -14542,7 +12847,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         RefreshViewportSizeForZoom();
-        RefreshShell($"Zoom {StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent)}");
+        RefreshShell(UiText.Format(
+            "MainLoc_ActionRangeStatusFormat",
+            UiText.Get("MainWindow_Text_Zoom"),
+            StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent)));
     }
 
     /// <summary>
@@ -14671,7 +12979,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        RefreshShell($"Hid {sheetName}");
+        RefreshShell(UiText.Format("SheetTabs_HidStatusFormat", sheetName));
     }
 
     private async Task UnhideSheetAsync()
@@ -14701,7 +13009,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        RefreshShell($"Unhid {sheet.Name}");
+        RefreshShell(UiText.Format("SheetTabs_UnhidStatusFormat", sheet.Name));
     }
 
     private void DeleteActiveSheet()
@@ -14725,7 +13033,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // stale, so force a recalc here — sheet structure commands don't report affected cells to
         // the shared edit pipeline's automatic recalc (WPF host parity: SheetCtxDelete_Click).
         _session.RecalculateWorkbook();
-        RefreshShell($"Deleted {sheetName}");
+        RefreshShell(UiText.Format("SheetTabs_DeletedStatusFormat", sheetName));
     }
 
     private async Task<WorkbookHiddenSheet?> ShowUnhideSheetDialogAsync(IReadOnlyList<WorkbookHiddenSheet> hiddenSheets)
@@ -14759,8 +13067,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetHelpText(sheetBox, UiText.Get("UnhideSheet_SelectTheHiddenWorksheetToMakeVisible"));
         sheetBox.DoubleTapped += (_, _) => Accept();
 
-        var okButton = new Button { Content = "OK" };
-        var cancelButton = new Button { Content = "Cancel" };
+        var okButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")) };
+        var cancelButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")) };
         ApplyDialogButtonChrome(okButton, width: 72, isDefault: true);
         ApplyDialogButtonChrome(cancelButton, width: 72);
         AutomationProperties.SetAutomationId(okButton, "UnhideSheetOkButton");
@@ -14825,7 +13133,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         string? result = null;
         var dialog = new Window
         {
-            Title = "Rename Sheet",
+            Title = UiText.Get("SheetName_RenameSheet"),
             Width = 340,
             Height = 150,
             MinWidth = 340,
@@ -14842,9 +13150,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = currentName,
             MinWidth = 280,
         };
-        AutomationProperties.SetName(nameBox, "Sheet name");
+        AutomationProperties.SetName(nameBox, UiText.Get("SheetName_SheetName"));
         AutomationProperties.SetAutomationId(nameBox, "RenameSheetNameBox");
-        AutomationProperties.SetHelpText(nameBox, "Enter a worksheet name up to 31 characters.");
+        AutomationProperties.SetHelpText(nameBox, UiText.Get("SheetName_EnterAWorksheetNameUpTo31Characters"));
 
         var validationText = new TextBlock
         {
@@ -14855,13 +13163,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             MinWidth = 72,
             Padding = new Thickness(10, 4),
         };
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             MinWidth = 72,
             Padding = new Thickness(10, 4),
         };
@@ -14917,7 +13225,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "Sheet name" },
+                new TextBlock { Text = UiText.Get("SheetName_SheetName") },
                 nameBox,
                 validationText,
                 buttonRow,
@@ -14963,7 +13271,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var dialog = new Window
         {
-            Title = UiText.Get("FindReplace_FindAndReplace"),
+            Title = FindReplaceText(FindReplaceDialogText.Title),
             Width = FindReplaceDialogPlanner.Width,
             Height = FindReplaceDialogPlanner.Height,
             MinWidth = FindReplaceDialogPlanner.MinWidth,
@@ -14976,25 +13284,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var selectionScopeAtOpen = CaptureFindReplaceSelectionScopeAtOpen();
 
-        // Resolve a localized caption, stripping the WPF access-key marker ('_') so labels read cleanly.
-        string Fr(string key, string fallback) =>
-            (UiText.GetNeutralResourceKeys().Contains(key) ? UiText.Get(key) : fallback)
-                .Replace("_", string.Empty, StringComparison.Ordinal);
+        string Fr(FindReplaceDialogText text, params object?[] arguments) =>
+            FindReplaceText(text, arguments);
 
         // ── Find tab: "Find what" box ───────────────────────────────────────────
         var findBox = new TextBox { Text = _session.LastFindText, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
-        AutomationProperties.SetName(findBox, "Find what");
+        AutomationProperties.SetName(findBox, Fr(FindReplaceDialogText.FindWhat));
         AutomationProperties.SetAutomationId(findBox, "FindReplaceFindBox");
         ApplyDialogTextBoxChrome(findBox);
 
         // ── Replace tab: "Find what" + "Replace with" boxes ─────────────────────
         var replaceFindBox = new TextBox { Text = _session.LastFindText, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
-        AutomationProperties.SetName(replaceFindBox, "Find what");
+        AutomationProperties.SetName(replaceFindBox, Fr(FindReplaceDialogText.FindWhat));
         AutomationProperties.SetAutomationId(replaceFindBox, "FindReplaceReplaceFindBox");
         ApplyDialogTextBoxChrome(replaceFindBox);
 
         var replaceWithBox = new TextBox { Text = "", MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
-        AutomationProperties.SetName(replaceWithBox, "Replace with");
+        AutomationProperties.SetName(replaceWithBox, Fr(FindReplaceDialogText.ReplaceWith));
         AutomationProperties.SetAutomationId(replaceWithBox, "FindReplaceReplaceWithBox");
         ApplyDialogTextBoxChrome(replaceWithBox);
 
@@ -15015,9 +13321,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             syncing = false;
         };
 
-        var findFormatButton = CreateFindReplaceFormatButton("FindReplaceFindFormatButton", Fr("FindReplace_Format", "Format..."));
-        var findFormatClearButton = CreateFindReplaceFormatButton("FindReplaceFindClearFormatButton", Fr("FindReplace_Clear", "Clear"));
-        var findChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceFindChooseFormatFromCellButton", Fr("FindReplace_ChooseFromCell", "Choose From Cell..."));
+        var findFormatButton = CreateFindReplaceFormatButton("FindReplaceFindFormatButton", FindReplaceDialogText.Format);
+        var findFormatClearButton = CreateFindReplaceFormatButton("FindReplaceFindClearFormatButton", FindReplaceDialogText.Clear);
+        var findChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceFindChooseFormatFromCellButton", FindReplaceDialogText.ChooseFromCell);
         findFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.FormatButtonMargin, 0, 0, 0);
         findFormatClearButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);
         findChooseFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);
@@ -15027,7 +13333,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ColumnDefinitions = new ColumnDefinitions($"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto"),
             Margin = new Thickness(FindReplaceDialogPlanner.TabContentMargin),
         };
-        var findLabel = new TextBlock { Text = Fr("FindReplace_FindWhat", "Find what:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        var findLabel = new TextBlock { Text = Fr(FindReplaceDialogText.FindWhat), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetColumn(findLabel, 0);
         Grid.SetColumn(findBox, 1);
         Grid.SetColumn(findFormatButton, 2);
@@ -15039,12 +13345,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         findTabGrid.Children.Add(findFormatClearButton);
         findTabGrid.Children.Add(findChooseFormatButton);
 
-        var replaceFindFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceFindFormatButton", Fr("FindReplace_Format", "Format..."));
-        var replaceFindFormatClearButton = CreateFindReplaceFormatButton("FindReplaceReplaceFindClearFormatButton", Fr("FindReplace_Clear", "Clear"));
-        var replaceFindChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceFindChooseFormatFromCellButton", Fr("FindReplace_ChooseFromCell", "Choose From Cell..."));
-        var replaceWithFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithFormatButton", Fr("FindReplace_Format", "Format..."));
-        var replaceWithFormatClearButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithClearFormatButton", Fr("FindReplace_Clear", "Clear"));
-        var replaceWithChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithChooseFormatFromCellButton", Fr("FindReplace_ChooseFromCell", "Choose From Cell..."));
+        var replaceFindFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceFindFormatButton", FindReplaceDialogText.Format);
+        var replaceFindFormatClearButton = CreateFindReplaceFormatButton("FindReplaceReplaceFindClearFormatButton", FindReplaceDialogText.Clear);
+        var replaceFindChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceFindChooseFormatFromCellButton", FindReplaceDialogText.ChooseFromCell);
+        var replaceWithFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithFormatButton", FindReplaceDialogText.Format);
+        var replaceWithFormatClearButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithClearFormatButton", FindReplaceDialogText.Clear);
+        var replaceWithChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithChooseFormatFromCellButton", FindReplaceDialogText.ChooseFromCell);
         replaceFindFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.FormatButtonMargin, 0, 0, 0);
         replaceFindFormatClearButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);
         replaceFindChooseFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);
@@ -15058,7 +13364,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Margin = new Thickness(FindReplaceDialogPlanner.TabContentMargin),
         };
         var replaceFindRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto") };
-        var replaceFindLabel = new TextBlock { Text = Fr("FindReplace_FindWhat", "Find what:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        var replaceFindLabel = new TextBlock { Text = Fr(FindReplaceDialogText.FindWhat), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetColumn(replaceFindLabel, 0);
         Grid.SetColumn(replaceFindBox, 1);
         Grid.SetColumn(replaceFindFormatButton, 2);
@@ -15070,7 +13376,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         replaceFindRow.Children.Add(replaceFindFormatClearButton);
         replaceFindRow.Children.Add(replaceFindChooseFormatButton);
         var replaceWithRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto") };
-        var replaceWithLabel = new TextBlock { Text = Fr("FindReplace_ReplaceWith", "Replace with:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        var replaceWithLabel = new TextBlock { Text = Fr(FindReplaceDialogText.ReplaceWith), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetColumn(replaceWithLabel, 0);
         Grid.SetColumn(replaceWithBox, 1);
         Grid.SetColumn(replaceWithFormatButton, 2);
@@ -15086,9 +13392,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         replaceTabPanel.Children.Add(replaceFindRow);
         replaceTabPanel.Children.Add(replaceWithRow);
 
-        var findTabItem = new TabItem { Header = Fr("FindReplace_Find", "Find"), Content = findTabGrid };
+        var findTabItem = new TabItem { Header = Fr(FindReplaceDialogText.Find), Content = findTabGrid };
         AutomationProperties.SetAutomationId(findTabItem, "FindReplaceFindTab");
-        var replaceTabItem = new TabItem { Header = Fr("FindReplace_Replace", "Replace"), Content = replaceTabPanel };
+        var replaceTabItem = new TabItem { Header = Fr(FindReplaceDialogText.Replace), Content = replaceTabPanel };
         AutomationProperties.SetAutomationId(replaceTabItem, "FindReplaceReplaceTab");
 
         var tabs = new TabControl
@@ -15123,8 +13429,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 format,
                 formatButton,
                 clearButton,
-                Fr("FindReplace_Format", "Format..."),
-                Fr("FindReplace_FormatSetButton", "Format Set"));
+                Fr(FindReplaceDialogText.Format),
+                Fr(FindReplaceDialogText.FormatSetButton));
         }
 
         UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
@@ -15196,7 +13502,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             if (!FormatCellsCompactPlanner.TryPlan(selection.Request, out var diff, out var errorMessage))
             {
-                statusLabel.Text = errorMessage ?? UiText.Get("MainLoc_FormatCellsFailed");
+                statusLabel.Text = errorMessage ?? Fr(FindReplaceDialogText.FormatCellsFailed);
                 return existingFormat;
             }
 
@@ -15205,7 +13511,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         // ── Results list ────────────────────────────────────────────────────────
         var resultsList = new ListBox { MinHeight = FindReplaceDialogPlanner.ResultsMinimumHeight };
-        AutomationProperties.SetName(resultsList, "Find all results");
+        AutomationProperties.SetName(resultsList, Fr(FindReplaceDialogText.ResultsAutomationName));
         AutomationProperties.SetAutomationId(resultsList, "FindReplaceResultsList");
         resultsList.SelectionChanged += (_, _) =>
         {
@@ -15230,12 +13536,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ColumnDefinitions = FindReplaceResultColumns(),
             Background = Brush(245, 245, 245),
         };
-        AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Book", "Book"), 0);
-        AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Sheet", "Sheet"), 1);
-        AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Name", "Name"), 2);
-        AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Cell", "Cell"), 3);
-        AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Value", "Value"), 4);
-        AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Formula", "Formula"), 5);
+        AddFindReplaceResultCell(resultsHeader, Fr(FindReplaceDialogText.Book), 0);
+        AddFindReplaceResultCell(resultsHeader, Fr(FindReplaceDialogText.Sheet), 1);
+        AddFindReplaceResultCell(resultsHeader, Fr(FindReplaceDialogText.Name), 2);
+        AddFindReplaceResultCell(resultsHeader, Fr(FindReplaceDialogText.Cell), 3);
+        AddFindReplaceResultCell(resultsHeader, Fr(FindReplaceDialogText.Value), 4);
+        AddFindReplaceResultCell(resultsHeader, Fr(FindReplaceDialogText.Formula), 5);
         var resultsPanel = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
         Grid.SetRow(resultsHeader, 0);
         Grid.SetRow(resultsList, 1);
@@ -15250,23 +13556,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
 
         // ── Buttons ─────────────────────────────────────────────────────────────
-        var findAllButton = new Button { Content = Fr("FindReplace_FindAll", "Find All"), Width = FindReplaceDialogPlanner.FindAllButtonWidth, MinWidth = FindReplaceDialogPlanner.FindAllButtonWidth, Padding = new Thickness(4, 1) };
+        var findAllButton = new Button { Content = Fr(FindReplaceDialogText.FindAll), Width = FindReplaceDialogPlanner.FindAllButtonWidth, MinWidth = FindReplaceDialogPlanner.FindAllButtonWidth, Padding = new Thickness(4, 1) };
         AutomationProperties.SetAutomationId(findAllButton, "FindReplaceFindAllButton");
         ApplyDialogButtonChrome(findAllButton);
 
-        var findNextButton = new Button { Content = Fr("FindReplace_FindNext", "Find Next"), Width = FindReplaceDialogPlanner.FindNextButtonWidth, MinWidth = FindReplaceDialogPlanner.FindNextButtonWidth, Padding = new Thickness(4, 1) };
+        var findNextButton = new Button { Content = Fr(FindReplaceDialogText.FindNext), Width = FindReplaceDialogPlanner.FindNextButtonWidth, MinWidth = FindReplaceDialogPlanner.FindNextButtonWidth, Padding = new Thickness(4, 1) };
         AutomationProperties.SetAutomationId(findNextButton, "FindReplaceFindNextButton");
         ApplyDialogButtonChrome(findNextButton, isDefault: true);
 
-        var replaceButton = new Button { Content = Fr("FindReplace_Replace", "Replace"), Width = FindReplaceDialogPlanner.ReplaceButtonWidth, MinWidth = FindReplaceDialogPlanner.ReplaceButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
+        var replaceButton = new Button { Content = Fr(FindReplaceDialogText.Replace), Width = FindReplaceDialogPlanner.ReplaceButtonWidth, MinWidth = FindReplaceDialogPlanner.ReplaceButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
         AutomationProperties.SetAutomationId(replaceButton, "FindReplaceReplaceButton");
         ApplyDialogButtonChrome(replaceButton);
 
-        var replaceAllButton = new Button { Content = Fr("FindReplace_ReplaceAll", "Replace All"), Width = FindReplaceDialogPlanner.ReplaceAllButtonWidth, MinWidth = FindReplaceDialogPlanner.ReplaceAllButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
+        var replaceAllButton = new Button { Content = Fr(FindReplaceDialogText.ReplaceAll), Width = FindReplaceDialogPlanner.ReplaceAllButtonWidth, MinWidth = FindReplaceDialogPlanner.ReplaceAllButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
         AutomationProperties.SetAutomationId(replaceAllButton, "FindReplaceReplaceAllButton");
         ApplyDialogButtonChrome(replaceAllButton);
 
-        var closeButton = new Button { Content = Fr("FindReplace_Close", "Close"), Width = FindReplaceDialogPlanner.CloseButtonWidth, MinWidth = FindReplaceDialogPlanner.CloseButtonWidth, Padding = new Thickness(4, 1), IsCancel = true };
+        var closeButton = new Button { Content = Fr(FindReplaceDialogText.Close), Width = FindReplaceDialogPlanner.CloseButtonWidth, MinWidth = FindReplaceDialogPlanner.CloseButtonWidth, Padding = new Thickness(4, 1), IsCancel = true };
         AutomationProperties.SetAutomationId(closeButton, "FindReplaceCloseButton");
         ApplyDialogButtonChrome(closeButton);
 
@@ -15329,10 +13635,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var r = _session.FindNext(CurrentFindText(), BuildOptions(), MatchCase(), MatchEntire());
             if (!r.Success)
             {
-                statusLabel.Text = r.ErrorMessage ?? UiText.Get("MainLoc_FindFailed");
+                statusLabel.Text = r.ErrorMessage ?? Fr(FindReplaceDialogText.FindFailed);
                 return;
             }
-            statusLabel.Text = UiText.Format("MainLoc_FoundRangeOfCount", FormatRangeReference(r.SelectedRange!.Value), r.MatchIndex, r.MatchCount);
+            statusLabel.Text = Fr(
+                FindReplaceDialogText.FoundRangeStatus,
+                FormatRangeReference(r.SelectedRange!.Value),
+                r.MatchIndex,
+                r.MatchCount);
             RefreshShell(statusLabel.Text);
         }
 
@@ -15343,13 +13653,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
             if (!result.Success)
             {
-                statusLabel.Text = result.ErrorMessage ?? UiText.Get("MainLoc_FindAllFailed");
+                statusLabel.Text = result.ErrorMessage ?? Fr(FindReplaceDialogText.FindAllFailed);
                 return;
             }
             resultsList.ItemsSource = result.Matches;
             statusLabel.Text = result.MatchCount == 0
-                ? UiText.Get("MainLoc_NoMatchesFound")
-                : UiText.Format("MainLoc_FoundCells", result.MatchCount);
+                ? Fr(FindReplaceDialogText.NoMatchesFound)
+                : Fr(FindReplaceDialogText.CellsFoundStatus, result.MatchCount);
             RefreshShell(statusLabel.Text);
         }
 
@@ -15359,12 +13669,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var r = _session.ReplaceNextValue(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), replacementFormat);
             if (!r.Success)
             {
-                statusLabel.Text = r.ErrorMessage ?? UiText.Get("MainLoc_ReplaceFailed");
+                statusLabel.Text = r.ErrorMessage ?? Fr(FindReplaceDialogText.ReplaceFailed);
                 return;
             }
             statusLabel.Text = r.ReplacedCount == 0
-                ? (r.MatchCount == 0 ? UiText.Get("MainLoc_NoMatchesFound") : UiText.Get("MainLoc_NoReplaceableMatch"))
-                : UiText.Format("MainLoc_ReplacedRangeOfCount", FormatRangeReference(r.ReplacedRange!.Value), r.MatchIndex, r.MatchCount);
+                ? (r.MatchCount == 0
+                    ? Fr(FindReplaceDialogText.NoMatchesFound)
+                    : Fr(FindReplaceDialogText.NoReplaceableMatchFound))
+                : Fr(
+                    FindReplaceDialogText.ReplacedRangeStatus,
+                    FormatRangeReference(r.ReplacedRange!.Value),
+                    r.MatchIndex,
+                    r.MatchCount);
             RefreshShell(statusLabel.Text);
         }
 
@@ -15374,12 +13690,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var r = _session.ReplaceAllValues(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), replacementFormat);
             if (!r.Success)
             {
-                statusLabel.Text = r.ErrorMessage ?? UiText.Get("MainLoc_ReplaceFailed");
+                statusLabel.Text = r.ErrorMessage ?? Fr(FindReplaceDialogText.ReplaceFailed);
                 return;
             }
             statusLabel.Text = r.ReplacedCount == 0
-                ? (r.MatchCount == 0 ? UiText.Get("MainLoc_NoMatchesFound") : UiText.Get("MainLoc_NoReplaceableMatch"))
-                : UiText.Format("MainLoc_ReplacedCells", r.ReplacedCount);
+                ? (r.MatchCount == 0
+                    ? Fr(FindReplaceDialogText.NoMatchesFound)
+                    : Fr(FindReplaceDialogText.NoReplaceableMatchFound))
+                : Fr(FindReplaceDialogText.ReplacedCellsStatus, r.ReplacedCount);
             RefreshShell(statusLabel.Text);
         }
 
@@ -15433,7 +13751,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         var optionsHeaderText = new TextBlock
         {
-            Text = Fr("FindReplace_Options", "Options >>"),
+            Text = Fr(FindReplaceDialogText.Options),
             FontSize = 12,
             Foreground = Brushes.Black,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
@@ -15462,7 +13780,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
-        AutomationProperties.SetName(optionsHeader, Fr("FindReplace_Options", "Options"));
+        AutomationProperties.SetName(optionsHeader, Fr(FindReplaceDialogText.Options));
         AutomationProperties.SetAutomationId(optionsHeader, "FindReplaceOptionsExpander");
         ApplyDialogButtonChrome(optionsHeader);
         optionsHeader.Height = FindReplaceDialogPlanner.ActionButtonHeight;
@@ -15493,8 +13811,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             optionsContent.IsVisible = !optionsContent.IsVisible;
             optionsHeaderText.Text = optionsContent.IsVisible
-                ? Fr("FindReplace_OptionsExpanded", "Options <<")
-                : Fr("FindReplace_Options", "Options >>");
+                ? Fr(FindReplaceDialogText.OptionsExpanded)
+                : Fr(FindReplaceDialogText.Options);
             AutomationProperties.SetName(optionsHeader, optionsHeaderText.Text);
             optionsGlyph.Child = new TextBlock
             {
@@ -15563,13 +13881,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return Task.CompletedTask;
     }
 
-    private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)
+    private async Task<FindDialogResult?> ShowFindInputDialogAsync()
     {
         FindDialogResult? result = null;
         var selectionScopeAtOpen = CaptureFindReplaceSelectionScopeAtOpen();
         var dialog = new Window
         {
-            Title = "Find",
+            Title = FindReplaceText(FindReplaceDialogText.Find),
             Width = 420,
             Height = 430,
             MinWidth = 360,
@@ -15583,13 +13901,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = _session.LastFindText,
             MinWidth = 300,
         };
-        AutomationProperties.SetName(findBox, "Find what");
+        AutomationProperties.SetName(findBox, FindReplaceText(FindReplaceDialogText.FindWhat));
         AutomationProperties.SetAutomationId(findBox, "FindTextBox");
         ApplyDialogTextBoxChrome(findBox);
 
         var findNextButton = new Button
         {
-            Content = "Find Next",
+            Content = FindReplaceText(FindReplaceDialogText.FindNext),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -15598,7 +13916,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var findAllButton = new Button
         {
-            Content = "Find All",
+            Content = FindReplaceText(FindReplaceDialogText.FindAll),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -15607,7 +13925,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -15616,8 +13934,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var optionsControls = CreateFindOptionsControls("Find", defaultLookInIndex: 0);
         StyleDiff? findFormat = null;
-        var chooseFormatButton = CreateFindReplaceFormatButton("FindChooseFormatFromCellButton", "Choose From Cell");
-        var clearFormatButton = CreateFindReplaceFormatButton("FindClearFormatButton", "Clear Format");
+        var chooseFormatButton = CreateFindReplaceFormatButton(
+            "FindChooseFormatFromCellButton",
+            FindReplaceText(FindReplaceDialogText.ChooseFromCell));
+        var clearFormatButton = CreateFindReplaceFormatButton(
+            "FindClearFormatButton",
+            UiText.Get("FindReplace_ClearFormat"));
         UpdateFindReplaceFormatState(findFormat, chooseFormatButton, clearFormatButton);
         chooseFormatButton.Click += (_, _) =>
         {
@@ -15629,7 +13951,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             findFormat = null;
             UpdateFindReplaceFormatState(findFormat, chooseFormatButton, clearFormatButton);
         };
-        var findFormatRow = CreateFindReplaceFormatRow("Find format", chooseFormatButton, clearFormatButton);
+        var findFormatRow = CreateFindReplaceFormatRow(
+            UiText.Get("FindReplace_FindFormat"),
+            chooseFormatButton,
+            clearFormatButton);
 
         void Accept(FindDialogAction action)
         {
@@ -15678,7 +14003,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "Find what" },
+                new TextBlock { Text = FindReplaceText(FindReplaceDialogText.FindWhat) },
                 findBox,
                 findFormatRow,
                 optionsControls.Panel,
@@ -15690,23 +14015,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             findBox.Focus();
             findBox.SelectAll();
         };
-        if (launchSmokeProbe is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                RunLaunchSmokeDialogProbe(
-                    dialog,
-                    () => launchSmokeProbe(new FindDialogSmokeProbe(
-                        dialog,
-                        findBox,
-                        findNextButton,
-                        findAllButton,
-                        cancelButton,
-                        optionsControls,
-                        chooseFormatButton,
-                        clearFormatButton)));
-            };
-        }
+        AttachOptionalFindDialogObservation(
+            dialog,
+            findBox,
+            findNextButton,
+            findAllButton,
+            cancelButton,
+            optionsControls,
+            chooseFormatButton,
+            clearFormatButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -15724,11 +14041,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.FindNext(searchText, options, matchCase, matchEntireCell);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FindFailed"));
+            ShowEditIssue(result.ErrorMessage ?? FindReplaceText(FindReplaceDialogText.FindFailed));
             return;
         }
 
-        RefreshShell(UiText.Format("MainLoc_FoundRangeOfCount", FormatRangeReference(result.SelectedRange!.Value), result.MatchIndex, result.MatchCount));
+        RefreshShell(FindReplaceText(
+            FindReplaceDialogText.FoundRangeStatus,
+            FormatRangeReference(result.SelectedRange!.Value),
+            result.MatchIndex,
+            result.MatchCount));
     }
 
     private void NavigateToFindAllMatch(WorkbookFindAllMatch match)
@@ -15736,11 +14057,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.GoToCell(match.Address);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FindResultNotSelected"));
+            ShowEditIssue(result.ErrorMessage ?? FindReplaceText(FindReplaceDialogText.FindResultNotSelected));
             return;
         }
 
-        RefreshShell(UiText.Format("MainLoc_FoundSheetCell", match.Sheet, match.Cell));
+        RefreshShell(FindReplaceText(FindReplaceDialogText.FoundSheetCellStatus, match.Sheet, match.Cell));
     }
 
     private Task ShowReplaceDialogAsync()
@@ -15751,13 +14072,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return ShowFindReplaceTabbedDialogAsync(replaceMode: true);
     }
 
-    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)
+    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync()
     {
         ReplaceDialogResult? result = null;
         var selectionScopeAtOpen = CaptureFindReplaceSelectionScopeAtOpen();
         var dialog = new Window
         {
-            Title = "Replace",
+            Title = FindReplaceText(FindReplaceDialogText.Replace),
             Width = 420,
             Height = 520,
             MinWidth = 360,
@@ -15771,7 +14092,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = _session.LastFindText,
             MinWidth = 300,
         };
-        AutomationProperties.SetName(findBox, "Find what");
+        AutomationProperties.SetName(findBox, FindReplaceText(FindReplaceDialogText.FindWhat));
         AutomationProperties.SetAutomationId(findBox, "ReplaceFindTextBox");
         ApplyDialogTextBoxChrome(findBox);
 
@@ -15780,13 +14101,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = "",
             MinWidth = 300,
         };
-        AutomationProperties.SetName(replaceBox, "Replace with");
+        AutomationProperties.SetName(replaceBox, FindReplaceText(FindReplaceDialogText.ReplaceWith));
         AutomationProperties.SetAutomationId(replaceBox, "ReplaceWithTextBox");
         ApplyDialogTextBoxChrome(replaceBox);
 
         var replaceButton = new Button
         {
-            Content = "Replace",
+            Content = FindReplaceText(FindReplaceDialogText.Replace),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -15795,7 +14116,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var replaceAllButton = new Button
         {
-            Content = "Replace All",
+            Content = FindReplaceText(FindReplaceDialogText.ReplaceAll),
             MinWidth = 96,
             Padding = new Thickness(10, 4),
         };
@@ -15804,7 +14125,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -15814,10 +14135,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var optionsControls = CreateFindOptionsControls("Replace", defaultLookInIndex: 1);
         StyleDiff? findFormat = null;
         StyleDiff? replacementFormat = null;
-        var chooseFindFormatButton = CreateFindReplaceFormatButton("ReplaceFindChooseFormatFromCellButton", "Choose From Cell");
-        var clearFindFormatButton = CreateFindReplaceFormatButton("ReplaceFindClearFormatButton", "Clear Format");
-        var chooseReplaceFormatButton = CreateFindReplaceFormatButton("ReplaceWithChooseFormatFromCellButton", "Choose From Cell");
-        var clearReplaceFormatButton = CreateFindReplaceFormatButton("ReplaceWithClearFormatButton", "Clear Format");
+        var chooseFindFormatButton = CreateFindReplaceFormatButton(
+            "ReplaceFindChooseFormatFromCellButton",
+            FindReplaceText(FindReplaceDialogText.ChooseFromCell));
+        var clearFindFormatButton = CreateFindReplaceFormatButton(
+            "ReplaceFindClearFormatButton",
+            UiText.Get("FindReplace_ClearFormat"));
+        var chooseReplaceFormatButton = CreateFindReplaceFormatButton(
+            "ReplaceWithChooseFormatFromCellButton",
+            FindReplaceText(FindReplaceDialogText.ChooseFromCell));
+        var clearReplaceFormatButton = CreateFindReplaceFormatButton(
+            "ReplaceWithClearFormatButton",
+            UiText.Get("FindReplace_ClearFormat"));
         UpdateFindReplaceFormatState(findFormat, chooseFindFormatButton, clearFindFormatButton);
         UpdateFindReplaceFormatState(replacementFormat, chooseReplaceFormatButton, clearReplaceFormatButton);
         chooseFindFormatButton.Click += (_, _) =>
@@ -15840,8 +14169,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             replacementFormat = null;
             UpdateFindReplaceFormatState(replacementFormat, chooseReplaceFormatButton, clearReplaceFormatButton);
         };
-        var findFormatRow = CreateFindReplaceFormatRow("Find format", chooseFindFormatButton, clearFindFormatButton);
-        var replaceFormatRow = CreateFindReplaceFormatRow("Replace format", chooseReplaceFormatButton, clearReplaceFormatButton);
+        var findFormatRow = CreateFindReplaceFormatRow(
+            UiText.Get("FindReplace_FindFormat"),
+            chooseFindFormatButton,
+            clearFindFormatButton);
+        var replaceFormatRow = CreateFindReplaceFormatRow(
+            UiText.Get("FindReplace_ReplaceFormat"),
+            chooseReplaceFormatButton,
+            clearReplaceFormatButton);
 
         void Accept(ReplaceDialogAction action)
         {
@@ -15881,10 +14216,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "Find what" },
+                new TextBlock { Text = FindReplaceText(FindReplaceDialogText.FindWhat) },
                 findBox,
                 findFormatRow,
-                new TextBlock { Text = "Replace with" },
+                new TextBlock { Text = FindReplaceText(FindReplaceDialogText.ReplaceWith) },
                 replaceBox,
                 replaceFormatRow,
                 optionsControls.Panel,
@@ -15896,26 +14231,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             findBox.Focus();
             findBox.SelectAll();
         };
-        if (launchSmokeProbe is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                RunLaunchSmokeDialogProbe(
-                    dialog,
-                    () => launchSmokeProbe(new ReplaceDialogSmokeProbe(
-                        dialog,
-                        findBox,
-                        replaceBox,
-                        replaceButton,
-                        replaceAllButton,
-                        cancelButton,
-                        optionsControls,
-                        chooseFindFormatButton,
-                        clearFindFormatButton,
-                        chooseReplaceFormatButton,
-                        clearReplaceFormatButton)));
-            };
-        }
+        AttachOptionalReplaceDialogObservation(
+            dialog,
+            findBox,
+            replaceBox,
+            replaceButton,
+            replaceAllButton,
+            cancelButton,
+            optionsControls,
+            chooseFindFormatButton,
+            clearFindFormatButton,
+            chooseReplaceFormatButton,
+            clearReplaceFormatButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -15956,13 +14283,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             recentReferences: null,
             definedNames: _session.Workbook.NamedRanges.Keys);
 
-    private async Task<GoToDialogResult?> ShowGoToInputDialogAsync(
-        Action<GoToDialogSmokeProbe>? launchSmokeProbe = null)
+    private async Task<GoToDialogResult?> ShowGoToInputDialogAsync()
     {
         GoToDialogResult? result = null;
         var dialog = new Window
         {
-            Title = "Go To",
+            Title = UiText.Get("GoTo_GoTo"),
             Width = 420,
             Height = 320,
             MinWidth = 420,
@@ -15988,8 +14314,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinHeight = 130,
             Margin = new Thickness(0, 24, 0, 0),
         };
-        AutomationProperties.SetName(historyList, "Go To");
-        AutomationProperties.SetHelpText(historyList, "Recent references and defined names");
+        AutomationProperties.SetName(historyList, UiText.Get("GoTo_GoTo"));
+        AutomationProperties.SetHelpText(historyList, UiText.Get("GoTo_RecentReferencesAndDefinedNames"));
         AutomationProperties.SetAutomationId(historyList, "GoToHistoryList");
 
         var inputBox = new TextBox
@@ -15997,13 +14323,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = defaultReference,
             MinWidth = 330,
         };
-        AutomationProperties.SetName(inputBox, "Reference");
+        AutomationProperties.SetName(inputBox, UiText.CreateAutomationName(UiText.Get("GoTo_Reference2")));
         AutomationProperties.SetAutomationId(inputBox, "GoToReferenceBox");
         AvaloniaCompactDialogChrome.ApplyTextBox(inputBox, dialogChrome);
 
         var specialButton = new Button
         {
-            Content = "Special...",
+            Content = StripDisplayMnemonic(UiText.Get("GoTo_Special")),
             Width = 86,
             MinWidth = 86,
         };
@@ -16012,7 +14338,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var acceptButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             Width = 72,
             MinWidth = 72,
             IsDefault = true,
@@ -16022,7 +14348,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             Width = 72,
             MinWidth = 72,
             IsCancel = true,
@@ -16093,7 +14419,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var historyLabel = new TextBlock
         {
-            Text = "Go to:",
+            Text = StripDisplayMnemonic(UiText.Get("GoTo_GoTo2")),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 4),
         };
@@ -16107,7 +14433,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var referenceLabel = new TextBlock
         {
-            Text = "Reference:",
+            Text = StripDisplayMnemonic(UiText.Get("GoTo_Reference")),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 10, 8, 12),
         };
@@ -16128,21 +14454,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             AvaloniaCompactDialogChrome.FocusAndSelect(inputBox);
         };
-        if (launchSmokeProbe is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                RunLaunchSmokeDialogProbe(
-                    dialog,
-                    () => launchSmokeProbe(new GoToDialogSmokeProbe(
-                        dialog,
-                        historyList,
-                        inputBox,
-                        specialButton,
-                        acceptButton,
-                        cancelButton)));
-            };
-        }
+        AttachOptionalGoToDialogObservation(
+            dialog,
+            historyList,
+            inputBox,
+            specialButton,
+            acceptButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -16197,7 +14515,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        if (_session.TryResolveOpenTarget(plan.LocalPath, out var target, out var message) &&
+        if (_fileWorkflow.TryResolveOpenTarget(plan.LocalPath, out var target, out var message) &&
             target is not null)
         {
             await OpenWorkbookPathAsync(target.Path);
@@ -16241,12 +14559,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         SelectGoToSpecial(selection.Kind, selection.Options);
     }
 
-    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogSmokeProbe>? launchSmokeProbe = null)
+    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync()
     {
         GoToSpecialDialogResult? result = null;
         var dialog = new Window
         {
-            Title = "Go To Special",
+            Title = UiText.Get("GoToSpecial_GoToSpecial"),
             Width = GoToSpecialDialogPlanner.Width,
             Height = GoToSpecialDialogPlanner.Height,
             MinWidth = GoToSpecialDialogPlanner.Width,
@@ -16266,10 +14584,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         foreach (var button in kindButtons)
             AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, AvaloniaCompactDialogChrome.WindowsStyle);
 
-        var numbersBox = CreateGoToSpecialValueTypeBox("Numbers", "GoToSpecialNumbersBox");
-        var textBox = CreateGoToSpecialValueTypeBox("Text", "GoToSpecialTextBox");
-        var logicalsBox = CreateGoToSpecialValueTypeBox("Logicals", "GoToSpecialLogicalsBox");
-        var errorsBox = CreateGoToSpecialValueTypeBox("Errors", "GoToSpecialErrorsBox");
+        var numbersBox = CreateGoToSpecialValueTypeBox(
+            StripDisplayMnemonic(UiText.Get("GoToSpecial_Numbers")),
+            "GoToSpecialNumbersBox");
+        var textBox = CreateGoToSpecialValueTypeBox(
+            StripDisplayMnemonic(UiText.Get("GoToSpecial_Text")),
+            "GoToSpecialTextBox");
+        var logicalsBox = CreateGoToSpecialValueTypeBox(
+            StripDisplayMnemonic(UiText.Get("GoToSpecial_Logicals")),
+            "GoToSpecialLogicalsBox");
+        var errorsBox = CreateGoToSpecialValueTypeBox(
+            StripDisplayMnemonic(UiText.Get("GoToSpecial_Errors")),
+            "GoToSpecialErrorsBox");
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(numbersBox, AvaloniaCompactDialogChrome.WindowsStyle);
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(textBox, AvaloniaCompactDialogChrome.WindowsStyle);
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(logicalsBox, AvaloniaCompactDialogChrome.WindowsStyle);
@@ -16277,7 +14603,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             Width = 72,
             MinWidth = 72,
             IsDefault = true,
@@ -16287,7 +14613,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             Width = 72,
             MinWidth = 72,
             IsCancel = true,
@@ -16379,7 +14705,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var availableGroup = new GroupBox
         {
-            Header = "Go To Special",
+            Header = UiText.Get("GoToSpecial_GoToSpecial"),
             Margin = new Thickness(
                 0,
                 GoToSpecialDialogPlanner.AvaloniaChoiceGroupTopMargin,
@@ -16396,7 +14722,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var valueTypeGroup = new GroupBox
         {
-            Header = "Values for constants and formulas",
+            Header = UiText.Get("GoToSpecial_ValuesForConstantsAndFormulas"),
             Margin = new Thickness(0),
             Padding = new Thickness(0, 0, 0, GoToSpecialDialogPlanner.AvaloniaValueTypeGroupBottomPadding),
             Content = valueTypeRow,
@@ -16414,7 +14740,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 new TextBlock
                 {
-                    Text = "Select",
+                    Text = UiText.Get("MainWindow_Content_Select"),
                     FontWeight = FontWeight.SemiBold,
                     Margin = new Thickness(0, 0, 0, 7),
                 },
@@ -16434,23 +14760,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ApplyGoToSpecialButtonSize(cancelButton);
             kindButtons.FirstOrDefault()?.Focus();
         };
-        if (launchSmokeProbe is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                RunLaunchSmokeDialogProbe(
-                    dialog,
-                    () => launchSmokeProbe(new GoToSpecialDialogSmokeProbe(
-                        dialog,
-                        choiceGrid,
-                        numbersBox,
-                        textBox,
-                        logicalsBox,
-                        errorsBox,
-                        okButton,
-                        cancelButton)));
-            };
-        }
+        AttachOptionalGoToSpecialDialogObservation(
+            dialog,
+            choiceGrid,
+            numbersBox,
+            textBox,
+            logicalsBox,
+            errorsBox,
+            okButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -16566,7 +14884,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeHyperlink(plan);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Insert Hyperlink failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_InsertHyperlinkFailed"));
             return;
         }
 
@@ -16679,15 +14997,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var screenTipButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Hyperlink_ScreenTip")) };
         ApplyDialogButtonChrome(screenTipButton, width: HyperlinkDialogPlanner.SecondaryButtonWidth);
-        AutomationProperties.SetName(screenTipButton, "ScreenTip");
+        AutomationProperties.SetName(screenTipButton, UiText.CreateAutomationName(UiText.Get("Hyperlink_ScreenTip")));
         AutomationProperties.SetAutomationId(screenTipButton, "HyperlinkScreenTipButton");
-        AutomationProperties.SetHelpText(screenTipButton, "Set the ScreenTip text shown when hovering the hyperlink.");
+        AutomationProperties.SetHelpText(screenTipButton, UiText.Get("Hyperlink_ScreenTipButtonHelpText"));
 
         var bookmarkButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Hyperlink_Bookmark")) };
         ApplyDialogButtonChrome(bookmarkButton, width: HyperlinkDialogPlanner.SecondaryButtonWidth);
-        AutomationProperties.SetName(bookmarkButton, "Bookmark");
+        AutomationProperties.SetName(bookmarkButton, UiText.CreateAutomationName(UiText.Get("Hyperlink_Bookmark")));
         AutomationProperties.SetAutomationId(bookmarkButton, "HyperlinkBookmarkButton");
-        AutomationProperties.SetHelpText(bookmarkButton, "Choose a bookmark or cell reference within the destination.");
+        AutomationProperties.SetHelpText(bookmarkButton, UiText.Get("Hyperlink_BookmarkButtonHelpText"));
 
         var validationText = new TextBlock
         {
@@ -17017,14 +15335,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
 
     private static string GetHyperlinkValidationErrorText(HyperlinkDialogValidationError error) =>
-        error switch
-        {
-            HyperlinkDialogValidationError.MissingDocumentLocation => "Enter a cell reference or defined name.",
-            HyperlinkDialogValidationError.MissingEmailAddress => "Enter an email address.",
-            HyperlinkDialogValidationError.MissingNewDocumentName => "Enter a new document name.",
-            HyperlinkDialogValidationError.InvalidEmailAddress => "Enter a valid email address.",
-            _ => "Enter an address."
-        };
+        HyperlinkDialogPlanner
+            .DescribeValidationError(error, HyperlinkDialogTextProfile.Avalonia)
+            .Message.Resolve(UiText.Get, UiText.Format);
 
     private async Task ShowWorkbookStatisticsDialogAsync()
     {
@@ -17034,7 +15347,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var statistics = WorkbookStatisticsService.GetStatistics(_session.Workbook);
         var dialog = new Window
         {
-            Title = "Workbook Statistics",
+            Title = UiText.Get("MainWindow_Content_WorkbookStatistics"),
             Width = WorkbookStatisticsDialogPlanner.Width,
             Height = WorkbookStatisticsDialogPlanner.Height,
             MinWidth = WorkbookStatisticsDialogPlanner.MinWidth,
@@ -17046,31 +15359,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
-        AutomationProperties.SetName(okButton, "OK");
+        AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
         AutomationProperties.SetAutomationId(okButton, "WorkbookStatisticsOkButton");
-        AutomationProperties.SetHelpText(okButton, "Close workbook statistics.");
+        AutomationProperties.SetHelpText(okButton, UiText.Get("WorkbookStatistics_CloseHelpText"));
 
         var copyToClipboardButton = new Button
         {
-            Content = "Copy to Clipboard",
+            Content = UiText.Get("WorkbookStatistics_CopyToClipboard"),
             MinWidth = 120,
             Padding = new Thickness(10, 4),
         };
-        AutomationProperties.SetName(copyToClipboardButton, "Copy to Clipboard");
-        AutomationProperties.SetAutomationId(copyToClipboardButton, "WorkbookStatisticsCopyButton");
-        AutomationProperties.SetHelpText(copyToClipboardButton, "Copy workbook statistics to the clipboard.");
+        AutomationProperties.SetName(copyToClipboardButton, UiText.Get("WorkbookStatistics_CopyToClipboard"));
+        AutomationProperties.SetAutomationId(
+            copyToClipboardButton,
+            FreeXAutomationIdCatalog.WorkbookStatisticsCopyButton);
+        AutomationProperties.SetHelpText(copyToClipboardButton, UiText.Get("WorkbookStatistics_CopyToClipboardHelpText"));
         ApplyDialogButtonChrome(copyToClipboardButton);
 
         var statsText = FormatWorkbookStatistics(statistics);
         copyToClipboardButton.Click += async (_, _) =>
         {
-            if (TopLevel.GetTopLevel(dialog)?.Clipboard is { } clipboard)
-                await clipboard.SetTextAsync(statsText);
+            _ = await _platformClipboard.WriteAsync(
+                new PlatformClipboardContent(Text: statsText));
         };
 
         okButton.Click += (_, _) => dialog.Close();
@@ -17102,9 +15417,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Padding = new Thickness(6, 4),
             VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
-        AutomationProperties.SetName(statisticsBlock, "Workbook Statistics");
-        AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
-        AutomationProperties.SetHelpText(statisticsBlock, "Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
+        AutomationProperties.SetName(statisticsBlock, UiText.Get("WorkbookStatistics_WorkbookStatistics"));
+        AutomationProperties.SetAutomationId(
+            statisticsBlock,
+            FreeXAutomationIdCatalog.WorkbookStatisticsSummary);
+        AutomationProperties.SetHelpText(
+            statisticsBlock,
+            UiText.Get("WorkbookStatistics_SummarizesSheetCellFormulaCommentAndObjectCountsForTheWorkbook"));
 
         var buttonRow = new StackPanel
         {
@@ -17140,6 +15459,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         var plan = _session.GetReviewWorkflowPlan();
+        var display = ReviewWorkflowPlanner.CreateDisplayModel(plan);
         var dialog = new Window
         {
             Title = focusAccessibility ? "Accessibility Check" : "Review Summary",
@@ -17154,41 +15474,41 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var summaryBlock = new TextBlock
         {
-            Text = FormatReviewWorkflowSummary(plan),
+            Text = display.Summary,
             TextWrapping = TextWrapping.Wrap,
             LineHeight = 21,
         };
-        AutomationProperties.SetName(summaryBlock, "Review Summary");
+        AutomationProperties.SetName(summaryBlock, UiText.Get("ReviewSummary_AutomationName"));
         AutomationProperties.SetAutomationId(summaryBlock, "ReviewSummaryText");
-        AutomationProperties.SetHelpText(summaryBlock, "Summarizes workbook statistics and review item counts.");
+        AutomationProperties.SetHelpText(summaryBlock, UiText.Get("ReviewSummary_HelpText"));
 
         var spellingList = CreateReviewPreviewList(
-            "Spelling issues",
+            UiText.Get("ReviewSummary_SpellingIssues"),
             "ReviewSpellingIssuesList",
-            FormatReviewSpellingIssues(plan.SpellingIssues));
+            display.SpellingIssues);
         var accessibilityList = CreateReviewPreviewList(
-            "Accessibility issues",
+            UiText.Get("AccessibilityChecker_IssueListAutomationName"),
             "ReviewAccessibilityIssuesList",
-            FormatReviewAccessibilityIssues(plan.AccessibilityIssues));
+            display.AccessibilityIssues);
         var notesList = CreateReviewPreviewList(
-            "Notes",
+            UiText.Get("ShellLoc_NotesTitle"),
             "ReviewNotesList",
-            FormatReviewCommentItems(plan.Notes, "No notes on the active sheet."));
+            display.Notes);
         var commentsList = CreateReviewPreviewList(
-            "Threaded comments",
+            UiText.Get("ReviewSummary_ThreadedComments"),
             "ReviewCommentsList",
-            FormatReviewCommentItems(plan.ThreadedComments, "No threaded comments on the active sheet."));
+            display.ThreadedComments);
 
         var closeButton = new Button
         {
-            Content = "Close",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Close")),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
-        AutomationProperties.SetName(closeButton, "Close");
+        AutomationProperties.SetName(closeButton, UiText.CreateAutomationName(UiText.Get("Common_Close")));
         AutomationProperties.SetAutomationId(closeButton, "ReviewCloseButton");
-        AutomationProperties.SetHelpText(closeButton, "Close review summary.");
+        AutomationProperties.SetHelpText(closeButton, UiText.Get("ReviewSummary_CloseHelpText"));
         closeButton.Click += (_, _) => dialog.Close();
 
         dialog.KeyDown += (_, e) =>
@@ -17291,25 +15611,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             $"Selected {FormatRangeReference(_session.SelectedRange)} ({statusLabel})");
     }
 
-    private static string FormatReviewWorkflowSummary(ReviewWorkflowPlan plan)
-    {
-        var statistics = plan.Statistics;
-        return string.Join(Environment.NewLine,
-            $"Sheets: {statistics.WorksheetCount}",
-            $"Cells with data: {statistics.CellCount}",
-            $"Formulas: {statistics.FormulaCount}",
-            $"Workbook comments: {statistics.CommentCount}",
-            $"Charts: {statistics.ChartCount}",
-            $"Pictures: {statistics.PictureCount}",
-            $"Shapes and text boxes: {statistics.ShapeCount}",
-            $"Named ranges: {statistics.NamedRangeCount}",
-            "",
-            $"Spelling issues: {plan.SpellingIssues.Count}",
-            $"Accessibility issues: {plan.AccessibilityIssues.Count}",
-            $"Notes on active sheet: {plan.Notes.Count}",
-            $"Threaded comments on active sheet: {plan.ThreadedComments.Count}");
-    }
-
     private static StackPanel CreateReviewPreviewSection(string header, ListBox list) =>
         new()
         {
@@ -17339,73 +15640,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetName(list, name);
         AutomationProperties.SetAutomationId(list, automationId);
         return list;
-    }
-
-    private static IReadOnlyList<string> FormatReviewSpellingIssues(IReadOnlyList<SpellingIssue> issues) =>
-        CreateReviewPreviewItems(
-            issues,
-            issue =>
-            {
-                var suggestion = string.IsNullOrWhiteSpace(issue.Suggestion) ? "no suggestion" : issue.Suggestion;
-                return $"{FormatCellReference(issue.Address)}: {issue.Word} -> {suggestion} ({FormatSpellingIssueSource(issue.Source)})";
-            },
-            "No spelling issues.");
-
-    private static IReadOnlyList<string> FormatReviewAccessibilityIssues(IReadOnlyList<AccessibilityIssue> issues) =>
-        CreateReviewPreviewItems(
-            issues,
-            issue => $"{TrimReviewPreview(issue.SheetName)}!{TrimReviewPreview(issue.Location)}: {TrimReviewPreview(issue.Message)}",
-            "No accessibility issues.");
-
-    private static IReadOnlyList<string> FormatReviewCommentItems(
-        IReadOnlyList<ReviewCommentListItem> items,
-        string emptyMessage) =>
-        CreateReviewPreviewItems(
-            items,
-            item => $"{FormatCellReference(item.Address)}: {TrimReviewPreview(item.PreviewText)}",
-            emptyMessage);
-
-    private static IReadOnlyList<string> CreateReviewPreviewItems<T>(
-        IReadOnlyList<T> items,
-        Func<T, string> format,
-        string emptyMessage)
-    {
-        if (items.Count == 0)
-            return [emptyMessage];
-
-        const int previewLimit = 6;
-        var preview = items
-            .Take(previewLimit)
-            .Select(format)
-            .ToList();
-        if (items.Count > preview.Count)
-            preview.Add($"... and {items.Count - preview.Count} more");
-
-        return preview;
-    }
-
-    private static string FormatSpellingIssueSource(SpellingIssueSource source) =>
-        source switch
-        {
-            SpellingIssueSource.CellText => "cell text",
-            SpellingIssueSource.Note => "note",
-            SpellingIssueSource.ThreadedComment => "threaded comment",
-            SpellingIssueSource.ThreadedCommentReply => "threaded reply",
-            _ => "spelling"
-        };
-
-    private static string TrimReviewPreview(string text)
-    {
-        var normalized = string.Join(
-            " ",
-            text.Split(['\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries)).Trim();
-        if (string.IsNullOrWhiteSpace(normalized))
-            return "(blank)";
-
-        const int maxLength = 96;
-        return normalized.Length <= maxLength
-            ? normalized
-            : normalized[..(maxLength - 3)] + "...";
     }
 
     private async Task ShowFormatCellsDialogAsync(int initialTabIndex = 0)
@@ -17450,16 +15684,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
             if (contentPlan.WouldLoseContent)
             {
-                var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-                if (choice == MergeCellsWarningChoice.Cancel)
+                var decision = CellMergePlanner.ResolveContentChoice(
+                    await ShowMergeCellsContentWarningDialogAsync(contentPlan));
+                if (!decision.ShouldProceed)
                 {
-                    RefreshShell(_statusText.Text ?? "Ready");
+                    RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
                     return;
                 }
 
-                mergeContentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                    ? MergeCellContentResolution.ConcatenateAllCells
-                    : MergeCellContentResolution.KeepFirstCell;
+                mergeContentResolution = decision.Resolution;
             }
         }
 
@@ -17480,18 +15713,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShell(UiText.Format("MainLoc_FormattedX", rangeReference));
     }
 
-    internal Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogAsync(
-        Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null,
+    internal Task<FormatCellsCompactDialogPlan?> ShowFormatCellsInputDialogAsync(
         int initialTabIndex = 0) =>
-        ShowFormatCellsInputDialogCoreAsync(launchSmokeProbe, initialTabIndex, numberFormatOverride: null);
+        ShowFormatCellsInputDialogCoreAsync(initialTabIndex, numberFormatOverride: null);
 
-    internal Task<FormatCellsDialogResult?> ShowPivotNumberFormatInputDialogAsync(
-        string? currentNumberFormat,
-        Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null) =>
-        ShowFormatCellsInputDialogCoreAsync(launchSmokeProbe, initialTabIndex: 0, currentNumberFormat);
+    internal Task<FormatCellsCompactDialogPlan?> ShowPivotNumberFormatInputDialogAsync(
+        string? currentNumberFormat) =>
+        ShowFormatCellsInputDialogCoreAsync(initialTabIndex: 0, currentNumberFormat);
 
-    private async Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogCoreAsync(
-        Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null,
+    private async Task<FormatCellsCompactDialogPlan?> ShowFormatCellsInputDialogCoreAsync(
         int initialTabIndex = 0,
         string? numberFormatOverride = null)
     {
@@ -17499,7 +15729,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         const double formatCellsDefaultDialogHeight = 540;
         const double formatCellsBorderDialogHeight = 596.5;
 
-        FormatCellsDialogResult? result = null;
+        FormatCellsCompactDialogPlan? result = null;
         var currentNumberFormat = numberFormatOverride ?? _session.SelectedRangeStartNumberFormat;
         var currentHorizontalAlignment = _session.SelectedRangeStartHorizontalAlignment;
         var currentVerticalAlignment = _session.SelectedRangeStartVerticalAlignment;
@@ -17552,7 +15782,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Height = 278,
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
         };
-        AutomationProperties.SetName(numberCategoryList, "Category");
+        AutomationProperties.SetName(
+            numberCategoryList,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Category")));
         AutomationProperties.SetAutomationId(numberCategoryList, "FormatCellsNumberCategoryList");
         numberCategoryList.FontSize = 12;
         numberCategoryList.FontFamily = FormulaBarFontFamily;
@@ -17561,7 +15793,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinWidth = 260,
         };
-        AutomationProperties.SetName(numberFormatBox, "Type");
+        AutomationProperties.SetName(
+            numberFormatBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Type")));
         AutomationProperties.SetAutomationId(numberFormatBox, "FormatCellsNumberFormatBox");
         ApplyFormatCellsComboBoxChrome(numberFormatBox);
 
@@ -17571,7 +15805,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 .ToString(CultureInfo.InvariantCulture),
             MinWidth = 100,
         };
-        AutomationProperties.SetName(numberDecimalPlacesBox, "Decimal places");
+        AutomationProperties.SetName(
+            numberDecimalPlacesBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_DecimalPlaces")));
         AutomationProperties.SetAutomationId(numberDecimalPlacesBox, "FormatCellsNumberDecimalPlacesBox");
         ApplyDialogTextBoxChrome(numberDecimalPlacesBox);
 
@@ -17642,7 +15878,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 : (numberSymbols.Contains("$") ? "$" : (numberSymbols.Count > 0 ? numberSymbols[0] : null)),
             MinWidth = 220,
         };
-        AutomationProperties.SetName(numberSymbolBox, "Symbol");
+        AutomationProperties.SetName(
+            numberSymbolBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Symbol")));
         AutomationProperties.SetAutomationId(numberSymbolBox, "FormatCellsNumberSymbolBox");
         ApplyFormatCellsComboBoxChrome(numberSymbolBox);
 
@@ -17653,7 +15891,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 200,
             Height = 96,
         };
-        AutomationProperties.SetName(numberNegativeBox, "Negative numbers");
+        AutomationProperties.SetName(
+            numberNegativeBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_NegativeNumbers")));
         AutomationProperties.SetAutomationId(numberNegativeBox, "FormatCellsNumberNegativeBox");
 
         var numberPreview = new TextBlock
@@ -17824,7 +16064,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 100,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        AutomationProperties.SetName(indentLevelBox, "Indent level");
+        AutomationProperties.SetName(indentLevelBox, UiText.Get("FormatCells_IndentLevelAutomationName"));
         AutomationProperties.SetAutomationId(indentLevelBox, "FormatCellsIndentLevelBox");
         ApplyDialogTextBoxChrome(indentLevelBox);
 
@@ -17834,7 +16074,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 100,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        AutomationProperties.SetName(textRotationBox, "Text rotation");
+        AutomationProperties.SetName(textRotationBox, UiText.Get("FormatCells_TextRotation"));
         AutomationProperties.SetAutomationId(textRotationBox, "FormatCellsTextRotationBox");
         ApplyDialogTextBoxChrome(textRotationBox);
 
@@ -17861,7 +16101,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = currentFontName,
             MinWidth = 180,
         };
-        AutomationProperties.SetName(fontNameBox, "Font");
+        AutomationProperties.SetName(
+            fontNameBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Font")));
         AutomationProperties.SetAutomationId(fontNameBox, "FormatCellsFontNameBox");
         ApplyDialogTextBoxChrome(fontNameBox);
 
@@ -17870,7 +16112,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = currentFontSize.ToString("0.##", CultureInfo.InvariantCulture),
             MinWidth = 100,
         };
-        AutomationProperties.SetName(fontSizeBox, "Size");
+        AutomationProperties.SetName(
+            fontSizeBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Size")));
         AutomationProperties.SetAutomationId(fontSizeBox, "FormatCellsFontSizeBox");
         ApplyDialogTextBoxChrome(fontSizeBox);
 
@@ -17891,7 +16135,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
-        AutomationProperties.SetName(fontNameList, "Font");
+        AutomationProperties.SetName(
+            fontNameList,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Font")));
         AutomationProperties.SetAutomationId(fontNameList, "FormatCellsFontNameList");
         fontNameList.SelectionChanged += (_, _) =>
         {
@@ -17909,7 +16155,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
-        AutomationProperties.SetName(fontSizeList, "Size");
+        AutomationProperties.SetName(
+            fontSizeList,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Size")));
         AutomationProperties.SetAutomationId(fontSizeList, "FormatCellsFontSizeList");
         fontSizeList.SelectionChanged += (_, _) =>
         {
@@ -17918,7 +16166,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
 
         var fontColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreFontColors"));
-        AutomationProperties.SetName(fontColorBox, "Font color");
+        AutomationProperties.SetName(fontColorBox, UiText.Get("FormatCells_FontColorTitle"));
         AutomationProperties.SetAutomationId(fontColorBox, "FormatCellsFontColorBox");
         var normalFontBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_NormalFont"), "FormatCellsNormalFontBox", false);
         normalFontBox.PropertyChanged += (_, e) =>
@@ -17943,7 +16191,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // user edits, mirroring the WPF preview.
         var fontPreview = new TextBlock
         {
-            Text = "AaBbCcYyZz",
+            Text = UiText.Get("FormatCells_AaBbCcYyZz"),
             MinHeight = 36,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
@@ -18015,7 +16263,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             SelectedIndex = 0,
             MinWidth = 220,
         };
-        AutomationProperties.SetName(borderPresetBox, "Border preset");
+        AutomationProperties.SetName(borderPresetBox, UiText.Get("FormatCells_BorderPresetAutomationName"));
         AutomationProperties.SetAutomationId(borderPresetBox, "FormatCellsBorderPresetBox");
         ApplyFormatCellsComboBoxChrome(borderPresetBox);
         // Windows renders the line style as a scrollable textual list, not a combo.
@@ -18028,7 +16276,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         borderColorBox.ConfigureCompactPickButton();
         borderColorBox.BorderBrush = Brush(112, 112, 112);
         borderColorBox.CornerRadius = new CornerRadius(0);
-        AutomationProperties.SetName(borderColorBox, "Border color");
+        AutomationProperties.SetName(borderColorBox, UiText.Get("FormatCells_BorderColorTitle"));
         AutomationProperties.SetAutomationId(borderColorBox, "FormatCellsBorderColorBox");
 
         TextBox CreateBorderColorTextBox(FormatCellsColorPicker picker, string automationId)
@@ -18432,59 +16680,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             IsVisible = false,
         };
 
-        void ShowFormatCellsError(string message)
+        void ShowFormatCellsError(string message, Control? target = null)
         {
             errorText.Text = message;
             errorText.IsVisible = true;
+            target?.Focus();
         }
 
         void Accept()
         {
-            if (!fillEditor.TryCommitInput(out var fillValidationMessage, out var invalidFillControl))
-            {
-                ShowFormatCellsError(fillValidationMessage);
-                invalidFillControl?.Focus();
-                return;
-            }
-
             var normalFont = normalFontBox.IsChecked == true;
-            var normalStyle = CellStyle.Default;
-            string message;
-            double? fontSize;
-            if (normalFont)
-            {
-                fontSize = normalStyle.FontSize;
-            }
-            else if (!TryReadFormatCellsFontSize(fontSizeBox.Text, currentFontSize, out fontSize, out message))
-            {
-                ShowFormatCellsError(message);
-                return;
-            }
-            if (!TryReadFormatCellsIndentLevel(indentLevelBox.Text, currentIndentLevel, out var indentLevel, out message))
-            {
-                ShowFormatCellsError(message);
-                return;
-            }
-            if (!TryReadFormatCellsTextRotation(textRotationBox.Text, currentTextRotation, out var textRotation, out message))
-            {
-                ShowFormatCellsError(message);
-                return;
-            }
-
-            var numberAvailability = FormatCellsNumberControlPlanner.Plan(numberCategoryList.SelectedItem as string);
-            if (numberAvailability.UsesDecimals
-                && (!int.TryParse(numberDecimalPlacesBox.Text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var decimalPlaces)
-                    || decimalPlaces is < 0 or > 30))
-            {
-                ShowFormatCellsError("Decimal places must be a whole number between 0 and 30.");
-                return;
-            }
-
-            var resolvedNumberFormat = ResolveSelectedNumberFormatCode();
-            var numberFormat = resolvedNumberFormat is { } resolvedFormat &&
-                !string.Equals(resolvedFormat, currentNumberFormat, StringComparison.Ordinal)
-                    ? resolvedFormat
-                    : null;
             var clearFill = fillEditor.ClearFill;
             var borderChoice = borderPresetBox.SelectedItem as FormatCellsNullableChoice<CellBorderPreset>;
             var borderStyle = borderStyleBox.SelectedItem is FormatCellsNullableChoice<BorderStyle> { Value: { } selectedBorderStyle }
@@ -18502,36 +16707,66 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 || borderInsideVerticalToggle.IsChecked == true;
             var borderPreset = borderChoice?.Value
                 ?? (hasInsideToggle ? CellBorderPreset.Inside : (CellBorderPreset?)null);
-            var request = new FormatCellsCompactRequest(
-                NumberFormat: numberFormat,
-                HorizontalAlignment: ReadChangedFormatCellsValue(currentHorizontalAlignment, horizontalAlignmentBox),
-                VerticalAlignment: ReadChangedFormatCellsValue(currentVerticalAlignment, verticalAlignmentBox),
-                WrapText: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartWrapText, wrapTextBox),
-                Bold: normalFont ? normalStyle.Bold : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox),
-                Italic: normalFont ? normalStyle.Italic : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartItalic, italicBox),
-                Underline: normalFont ? normalStyle.Underline : ReadChangedFormatCellsBool(currentUnderline, underlineBox),
-                Strikethrough: normalFont ? normalStyle.Strikethrough : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartStrikethrough, strikethroughBox),
-                DoubleUnderline: normalFont ? normalStyle.DoubleUnderline : ReadChangedFormatCellsBool(currentDoubleUnderline, doubleUnderlineBox),
-                Superscript: normalFont ? normalStyle.Superscript : ReadChangedFormatCellsBool(currentSuperscript, superscriptBox),
-                Subscript: normalFont ? normalStyle.Subscript : ReadChangedFormatCellsBool(currentSubscript, subscriptBox),
-                FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox),
-                FontSize: fontSize,
-                FillColor: fillEditor.FillColor,
+            var plannerInput = new FormatCellsCompactDialogInput(
+                CurrentStyle: currentFillStyle,
+                CurrentNumberFormat: currentNumberFormat,
+                InitialMergeCells: currentMergeCells,
+                Number: new FormatCellsDialogNumberInput(
+                    numberCategoryList.SelectedItem as string,
+                    numberFormatBox.SelectedItem as string ?? numberFormatBox.Text,
+                    numberFormatBox.SelectedIndex,
+                    numberDecimalPlacesBox.Text,
+                    numberSymbolBox.SelectedItem as string ?? numberSymbolBox.Text,
+                    numberNegativeBox.SelectedIndex),
+                HorizontalAlignment: SelectedFormatCellsValue(currentHorizontalAlignment, horizontalAlignmentBox),
+                VerticalAlignment: SelectedFormatCellsValue(currentVerticalAlignment, verticalAlignmentBox),
+                WrapText: wrapTextBox.IsChecked == true,
+                ShrinkToFit: shrinkToFitBox.IsChecked == true,
+                MergeCells: mergeCellsBox.IsChecked == true,
+                IndentLevelText: indentLevelBox.Text,
+                TextRotationText: textRotationBox.Text,
+                UseNormalFont: normalFont,
+                Bold: boldBox.IsChecked == true,
+                Italic: italicBox.IsChecked == true,
+                Underline: underlineBox.IsChecked == true,
+                DoubleUnderline: doubleUnderlineBox.IsChecked == true,
+                Strikethrough: strikethroughBox.IsChecked == true,
+                Superscript: superscriptBox.IsChecked == true,
+                Subscript: subscriptBox.IsChecked == true,
+                FontNameText: fontNameBox.Text,
+                FontSizeText: fontSizeBox.Text,
+                FontColor: (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
+                FillColorText: fillEditor.FillColorTextBox.Text,
                 ClearFill: clearFill,
-                FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox),
-                FillPatternColor: clearFill ? null : fillEditor.PatternColor,
-                FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
-                ShrinkToFit: ReadChangedFormatCellsBool(currentShrinkToFit, shrinkToFitBox),
-                MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox),
-                IndentLevel: indentLevel,
-                TextRotation: textRotation,
-                Locked: ReadChangedFormatCellsBool(currentLocked, lockedBox),
-                Hidden: ReadChangedFormatCellsBool(currentHidden, hiddenBox),
+                FillPatternStyle: SelectedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox),
+                FillPatternColorText: fillEditor.PatternColorTextBox.Text,
+                Locked: lockedBox.IsChecked == true,
+                Hidden: hiddenBox.IsChecked == true,
+                BorderPreset: borderPreset,
+                BorderStyle: borderStyle,
+                BorderColor: borderColor,
                 BorderTop: borderTopSide,
                 BorderRight: borderRightSide,
                 BorderBottom: borderBottomSide,
                 BorderLeft: borderLeftSide);
-            result = new FormatCellsDialogResult(request, borderPreset, borderStyle, borderColor);
+            if (!FormatCellsDialogPlanner.TryCreateCompactPlan(plannerInput, out var plan, out var validation))
+            {
+                Control? target = validation!.Target switch
+                {
+                    FormatCellsDialogValidationTarget.NumberFormat => numberFormatBox,
+                    FormatCellsDialogValidationTarget.NumberDecimalPlaces => numberDecimalPlacesBox,
+                    FormatCellsDialogValidationTarget.FontSize => fontSizeBox,
+                    FormatCellsDialogValidationTarget.FillColor => fillEditor.FillColorTextBox,
+                    FormatCellsDialogValidationTarget.FillPatternColor => fillEditor.PatternColorTextBox,
+                    FormatCellsDialogValidationTarget.IndentLevel => indentLevelBox,
+                    FormatCellsDialogValidationTarget.TextRotation => textRotationBox,
+                    _ => null,
+                };
+                ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target);
+                return;
+            }
+
+            result = plan;
             dialog.Close();
         }
 
@@ -18765,42 +17000,47 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // MIDDLE: Line group — scrollable line-sample list + color picker.
         Control CreateBorderPalette(FormatCellsColorPicker picker)
         {
-            var palette = CellColorPalettePlanner.BuildDefaultSwatches();
-            var wanted = new (byte R, byte G, byte B)[]
-            {
-                (0, 0, 0), (127, 127, 127), (255, 0, 0), (255, 192, 0),
-                (0, 176, 80), (0, 176, 240), (0, 112, 192), (112, 48, 160),
-            };
-            var swatches = wanted
-                .Select(rgb => palette.FirstOrDefault(s => s.Color is { R: var r, G: var g, B: var b } && r == rgb.R && g == rgb.G && b == rgb.B))
-                .Where(swatch => swatch is not null)
-                .Cast<CellColorSwatch>()
-                .ToList();
             var row = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 1,
                 Height = 20,
             };
-            foreach (var swatch in swatches)
+            foreach (var entry in FormatCellsBorderPalettePlanner.ColorEntries)
             {
-                var swatchButton = new Button
+                var label = UiText.Get(entry.ResourceKey);
+                if (entry.Color is { } color)
                 {
+                    var swatchButton = new Button
+                    {
+                        Width = 22,
+                        Height = 18,
+                        Padding = new Thickness(0),
+                        Background = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)),
+                        BorderBrush = Brushes.Gray,
+                        BorderThickness = new Thickness(1),
+                        Tag = entry,
+                    };
+                    AutomationProperties.SetName(swatchButton, label);
+                    ToolTip.SetTip(swatchButton, label);
+                    swatchButton.Click += (_, _) => picker.SelectColor(color);
+                    row.Children.Add(swatchButton);
+                    continue;
+                }
+
+                var moreButton = new Button
+                {
+                    Content = "...",
                     Width = 22,
                     Height = 18,
                     Padding = new Thickness(0),
-                    Background = new SolidColorBrush(Color.FromRgb(swatch.Color.R, swatch.Color.G, swatch.Color.B)),
-                    BorderBrush = Brushes.Gray,
-                    BorderThickness = new Thickness(1),
+                    Tag = entry,
                 };
-                AutomationProperties.SetName(swatchButton, swatch.Hex);
-                swatchButton.Click += (_, _) => picker.SelectColor(swatch.Color);
-                row.Children.Add(swatchButton);
+                AutomationProperties.SetName(moreButton, label);
+                ToolTip.SetTip(moreButton, label);
+                moreButton.Click += (_, _) => picker.Flyout?.ShowAt(moreButton);
+                row.Children.Add(moreButton);
             }
-            var moreButton = new Button { Content = "...", Width = 22, Height = 18, Padding = new Thickness(0) };
-            AutomationProperties.SetName(moreButton, UiText.Get("FormatCells_MoreBorderColors"));
-            moreButton.Click += (_, _) => picker.Flyout?.ShowAt(moreButton);
-            row.Children.Add(moreButton);
             return row;
         }
 
@@ -18855,7 +17095,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // with the inside toggles as small buttons beneath.
         var textPreviewLabel = new TextBlock
         {
-            Text = "Text",
+            Text = UiText.Get("ConditionalFormat_TextLabel"),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             IsHitTestVisible = false,
@@ -19131,28 +17371,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             };
             target.Focus();
         };
-        if (launchSmokeProbe is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                RunLaunchSmokeDialogProbe(
-                    dialog,
-                    () => launchSmokeProbe(new FormatCellsDialogSmokeProbe(
-                        dialog,
-                        tabStrip,
-                        numberTab,
-                        alignmentTab,
-                        fontTab,
-                        fillTab,
-                        borderTab,
-                        protectionTab,
-                        numberCategoryList,
-                        numberFormatBox,
-                        numberPreview,
-                        okButton,
-                        cancelButton)));
-            };
-        }
+        AttachOptionalFormatCellsDialogObservation(
+            dialog,
+            tabStrip,
+            numberTab,
+            alignmentTab,
+            fontTab,
+            fillTab,
+            borderTab,
+            protectionTab,
+            numberCategoryList,
+            numberFormatBox,
+            numberPreview,
+            okButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -19336,40 +17568,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             .Select(metadata => new FormatCellsNullableChoice<CellBorderPreset>(metadata.DisplayName, metadata.Preset)),
     ];
 
-    private static IReadOnlyList<FormatCellsNullableChoice<BorderStyle>> CreateFormatCellsBorderStyleChoices() =>
-    [
-        new("Thin", BorderStyle.Thin),
-        new("Medium", BorderStyle.Medium),
-        new("Thick", BorderStyle.Thick),
-        new("Dashed", BorderStyle.Dashed),
-        new("Dotted", BorderStyle.Dotted),
-        new("Double", BorderStyle.Double),
-    ];
-
-    // The Windows Format Cells "Line" group renders the available border styles as a
-    // scrollable textual list. The SelectedItem stays a
-    // FormatCellsNullableChoice<BorderStyle> so the existing Accept()/SelectedBorderLineStyle()
-    // reads are unchanged.  All 14 BorderStyle values (plus the "None" sentinel) are listed so
-    // that opening FormatCells on a cell whose edge carries Hair / MediumDashed / DashDot / etc.
-    // seeds the correct entry instead of falling back to "None" and silently losing a
-    // subsequent color-only edit.
+    // The native controls retain their nullable wrapper, but their order, labels, and typed values
+    // project exclusively from the portable catalog shared with WPF.
     internal static IReadOnlyList<FormatCellsNullableChoice<BorderStyle>> CreateFormatCellsBorderStyleListChoices() =>
-    [
-        new("None",              null),
-        new("Thin",              BorderStyle.Thin),
-        new("Medium",            BorderStyle.Medium),
-        new("Thick",             BorderStyle.Thick),
-        new("Dashed",            BorderStyle.Dashed),
-        new("Dotted",            BorderStyle.Dotted),
-        new("Double",            BorderStyle.Double),
-        new("Hair",              BorderStyle.Hair),
-        new("Medium Dashed",     BorderStyle.MediumDashed),
-        new("Dash Dot",          BorderStyle.DashDot),
-        new("Medium Dash Dot",   BorderStyle.MediumDashDot),
-        new("Dash Dot Dot",      BorderStyle.DashDotDot),
-        new("Medium Dash Dot Dot", BorderStyle.MediumDashDotDot),
-        new("Slant Dash Dot",    BorderStyle.SlantDashDot),
-    ];
+        FormatCellsBorderPalettePlanner.StyleChoices
+            .Select(choice => new FormatCellsNullableChoice<BorderStyle>(
+                choice.DisplayName,
+                choice.Style == BorderStyle.None ? null : choice.Style))
+            .ToArray();
 
     private static ListBox CreateFormatCellsBorderStyleListBox(string automationId, BorderStyle currentValue)
     {
@@ -19420,7 +17626,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 },
             });
         }
-        AutomationProperties.SetName(listBox, "Border line style");
+        AutomationProperties.SetName(listBox, UiText.Get("FormatCells_BorderLineStyleAutomationName"));
         AutomationProperties.SetAutomationId(listBox, automationId);
         return listBox;
     }
@@ -19443,115 +17649,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
 
-    private static bool? ReadChangedFormatCellsBool(bool currentValue, CheckBox checkBox)
-    {
-        var value = checkBox.IsChecked == true;
-        return value == currentValue ? null : value;
-    }
-
     private static void SelectFormatCellsColor(FormatCellsColorPicker picker, CellColor color) =>
         picker.SelectColor(color);
 
-    private static T? ReadChangedFormatCellsValue<T>(T currentValue, ComboBox comboBox)
+    private static T SelectedFormatCellsValue<T>(T currentValue, ComboBox comboBox)
         where T : struct
     {
-        if (comboBox.SelectedItem is FormatCellsNullableChoice<T> { Value: { } value } &&
-            !EqualityComparer<T>.Default.Equals(value, currentValue))
-        {
-            return value;
-        }
-
-        return null;
-    }
-
-    private static string? ReadChangedFormatCellsText(string currentValue, TextBox textBox)
-    {
-        var value = textBox.Text?.Trim();
-        return !string.IsNullOrWhiteSpace(value) &&
-            !string.Equals(value, currentValue, StringComparison.Ordinal)
-                ? value
-                : null;
-    }
-
-    private static bool TryReadFormatCellsFontSize(
-        string? text,
-        double currentFontSize,
-        out double? fontSize,
-        out string errorMessage)
-    {
-        fontSize = null;
-        errorMessage = "";
-        var trimmed = text?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return true;
-
-        if (!double.TryParse(trimmed, NumberStyles.Float, CultureInfo.CurrentCulture, out var parsed) &&
-            !double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
-        {
-            errorMessage = "Font size must be a number.";
-            return false;
-        }
-
-        if (!double.IsFinite(parsed) || parsed <= 0)
-        {
-            errorMessage = "Font size must be a positive number.";
-            return false;
-        }
-
-        if (Math.Abs(parsed - currentFontSize) > 0.001)
-            fontSize = parsed;
-
-        return true;
-    }
-
-    private static bool TryReadFormatCellsIndentLevel(
-        string? text,
-        int currentIndentLevel,
-        out int? indentLevel,
-        out string errorMessage)
-    {
-        indentLevel = null;
-        errorMessage = "";
-        var trimmed = text?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return true;
-
-        if (!int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
-        {
-            errorMessage = "Indent level must be a whole number from 0 through 15.";
-            return false;
-        }
-
-        var normalized = Math.Clamp(parsed, 0, 15);
-        if (normalized != currentIndentLevel)
-            indentLevel = normalized;
-
-        return true;
-    }
-
-    private static bool TryReadFormatCellsTextRotation(
-        string? text,
-        int currentTextRotation,
-        out int? textRotation,
-        out string errorMessage)
-    {
-        textRotation = null;
-        errorMessage = "";
-        var trimmed = text?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return true;
-
-        if (!int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ||
-            parsed != 255 && parsed is < -90 or > 90)
-        {
-            errorMessage = "Text rotation must be 255 or a whole number from -90 through 90.";
-            return false;
-        }
-
-        if (parsed != currentTextRotation)
-            textRotation = parsed;
-
-        return true;
+        return comboBox.SelectedItem is FormatCellsNullableChoice<T> { Value: { } value }
+            ? value
+            : currentValue;
     }
 
     private async Task<string?> ShowSingleInputDialogAsync(
@@ -19559,8 +17665,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         string label,
         string initialText,
         string acceptText,
-        string automationId,
-        Action<SingleInputDialogSmokeProbe>? launchSmokeProbe = null)
+        string automationId)
     {
         string? result = null;
         var dialog = new Window
@@ -19586,7 +17691,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ApplyDialogButtonChrome(acceptButton, width: 84, isDefault: true);
         AutomationProperties.SetAutomationId(acceptButton, $"{automationId}AcceptButton");
 
-        var cancelButton = new Button { Content = "Cancel" };
+        var cancelButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")) };
         ApplyDialogButtonChrome(cancelButton, width: 84);
         AutomationProperties.SetAutomationId(cancelButton, $"{automationId}CancelButton");
 
@@ -19640,19 +17745,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             inputBox.Focus();
             inputBox.SelectAll();
         };
-        if (launchSmokeProbe is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                RunLaunchSmokeDialogProbe(
-                    dialog,
-                    () => launchSmokeProbe(new SingleInputDialogSmokeProbe(
-                        dialog,
-                        inputBox,
-                        acceptButton,
-                        cancelButton)));
-            };
-        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -19662,19 +17754,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         FindOptionsControls controls,
         StyleDiff? requiredFormat = null,
         IReadOnlyList<GridRange>? selectionScope = null) =>
-        new(
-            Within: controls.WithinBox.SelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet,
-            CurrentSheetId: _session.ActiveSheet.Id,
-            SearchOrder: controls.SearchBox.SelectedIndex == 1 ? FindSearchOrder.ByColumns : FindSearchOrder.ByRows,
-            LookIn: controls.LookInBox.SelectedIndex switch
-            {
-                0 => FindLookIn.Formulas,
-                2 => FindLookIn.Notes,
-                3 => FindLookIn.Comments,
-                _ => FindLookIn.Values
-            },
-            RequiredFormat: requiredFormat,
-            SelectionScope: selectionScope);
+        FindReplaceDialogPlanner.CreateFindOptions(
+            currentSheetId: _session.ActiveSheet.Id,
+            withinSelectedIndex: controls.WithinBox.SelectedIndex,
+            searchOrderSelectedIndex: controls.SearchBox.SelectedIndex,
+            lookInSelectedIndex: controls.LookInBox.SelectedIndex,
+            requiredFormat: requiredFormat,
+            selectionScope: selectionScope);
 
     /// <summary>
     /// Excel: when more than one cell is selected before Find &amp; Replace is opened, Replace
@@ -19688,41 +17774,35 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// MainWindow.MergePaste.cs, etc. already use for exactly this SelectedRange/SelectedRanges
     /// duality.
     /// </summary>
-    private IReadOnlyList<GridRange>? CaptureFindReplaceSelectionScopeAtOpen()
-    {
-        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
-        if (ranges.Count == 0)
-            return null;
-
-        // A scope of a single, degenerate one-cell range means nothing was really selected
-        // (Excel only restricts the search when more than one cell was selected); anything
-        // covering more than one cell -- whether a single contiguous block or several disjoint
-        // Ctrl+click areas -- must be captured.
-        return ranges.Count == 1 && ranges[0].Start == ranges[0].End ? null : ranges;
-    }
+    private IReadOnlyList<GridRange>? CaptureFindReplaceSelectionScopeAtOpen() =>
+        FindReplaceDialogPlanner.ResolveSelectionScopeAtOpen(
+            _session.SelectedRange,
+            _session.SelectedRanges);
 
     private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)
     {
+        string Text(FindReplaceDialogText text) => FindReplaceText(text);
+
         var withinBox = CreateFindOptionComboBox(
             $"{automationPrefix}WithinBox",
-            "Within",
-            ["Sheet", "Workbook"],
+            Text(FindReplaceDialogText.Within),
+            FindReplaceDialogSchema.WithinChoices.Select(choice => Text(choice.Text)).ToArray(),
             selectedIndex: 0);
         var searchBox = CreateFindOptionComboBox(
             $"{automationPrefix}SearchBox",
-            "Search",
-            ["By Rows", "By Columns"],
+            Text(FindReplaceDialogText.Search),
+            FindReplaceDialogSchema.SearchChoices.Select(choice => Text(choice.Text)).ToArray(),
             selectedIndex: 0);
         var lookInBox = CreateFindOptionComboBox(
             $"{automationPrefix}LookInBox",
-            "Look in",
-            ["Formulas", "Values", "Notes", "Comments"],
+            Text(FindReplaceDialogText.LookIn),
+            FindReplaceDialogSchema.LookInChoices.Select(choice => Text(choice.Text)).ToArray(),
             selectedIndex: defaultLookInIndex);
         var matchCaseBox = CreateFindOptionCheckBox(
-            "Match case",
+            Text(FindReplaceDialogText.MatchCase),
             $"{automationPrefix}MatchCaseBox");
         var matchEntireCellBox = CreateFindOptionCheckBox(
-            "Match entire cell contents",
+            Text(FindReplaceDialogText.MatchEntireCellContents),
             $"{automationPrefix}MatchEntireCellBox");
 
         var matchRow = new StackPanel
@@ -19742,9 +17822,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
             Margin = new Thickness(0, 8, 0, 0),
         };
-        var withinLabel = new TextBlock { Text = "Within", VerticalAlignment = AvaloniaVerticalAlignment.Center };
-        var searchLabel = new TextBlock { Text = "Search", VerticalAlignment = AvaloniaVerticalAlignment.Center };
-        var lookInLabel = new TextBlock { Text = "Look in", VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        var withinLabel = new TextBlock { Text = Text(FindReplaceDialogText.Within), VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        var searchLabel = new TextBlock { Text = Text(FindReplaceDialogText.Search), VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        var lookInLabel = new TextBlock { Text = Text(FindReplaceDialogText.LookIn), VerticalAlignment = AvaloniaVerticalAlignment.Center };
         Grid.SetColumn(withinLabel, 0);
         Grid.SetColumn(withinBox, 1);
         Grid.SetColumn(searchLabel, 2);
@@ -19790,6 +17870,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return comboBox;
     }
 
+    private static Button CreateFindReplaceFormatButton(string automationId, FindReplaceDialogText text)
+    {
+        var width = text switch
+        {
+            FindReplaceDialogText.ChooseFromCell => FindReplaceDialogPlanner.ChooseFormatButtonWidth,
+            FindReplaceDialogText.Clear => FindReplaceDialogPlanner.ClearFormatButtonWidth,
+            _ => FindReplaceDialogPlanner.FormatButtonWidth,
+        };
+        return CreateFindReplaceFormatButton(automationId, FindReplaceText(text), width);
+    }
+
     private static Button CreateFindReplaceFormatButton(string automationId, string content)
     {
         var width = content.Contains("Choose", StringComparison.OrdinalIgnoreCase)
@@ -19797,6 +17888,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             : content.Contains("Clear", StringComparison.OrdinalIgnoreCase)
                 ? FindReplaceDialogPlanner.ClearFormatButtonWidth
                 : FindReplaceDialogPlanner.FormatButtonWidth;
+        return CreateFindReplaceFormatButton(automationId, content, width);
+    }
+
+    private static Button CreateFindReplaceFormatButton(string automationId, string content, double width)
+    {
         var button = new Button
         {
             Content = content,
@@ -19863,9 +17959,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static void UpdateFindReplaceFormatState(StyleDiff? format, Button chooseButton, Button clearButton)
     {
-        chooseButton.Content = format is null ? "Choose From Cell" : "Format Set";
+        chooseButton.Content = format is null
+            ? FindReplaceText(FindReplaceDialogText.ChooseFromCell)
+            : FindReplaceText(FindReplaceDialogText.FormatSetButton);
         clearButton.IsVisible = format is not null;
     }
+
+    private static string FindReplaceText(FindReplaceDialogText text, params object?[] arguments) =>
+        FindReplaceDialogSchema.Resolve(
+            text,
+            UiText.Get,
+            UiText.Format,
+            stripAccessKeys: true,
+            arguments: arguments);
 
     private static CheckBox CreateFindOptionCheckBox(string label, string automationId)
     {
@@ -19896,13 +18002,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ClearSelectedDrawingObject();
         ClearFormulaRangeEntryState();
         _session.BeginFormulaEdit(address);
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         var originalText = _formulaBox.Text ?? "";
         _formulaBox.Focus();
         if (initialText is not null)
         {
             _formulaBox.Text = initialText;
-            _formulaRangeEntryMode = FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(initialText);
+            _formulaRangeEditingSession.ApplyTypedEntry(initialText);
             // Existing formulas are populated after the shell refresh above. Rebuild the live
             // reference visuals now so Edit-mode highlights and resize grips are available on the
             // same first frame as WPF's formula editor.
@@ -19962,17 +18068,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (TryHandleFormulaRangeEntryNavigation(_formulaBox, current, e))
             return;
 
-        var formulaTextActive = FormulaEditInteractionPlanner.IsFormulaText(_formulaBox.Text);
         var formulaRangeEntryActive = IsFormulaRangeEntryActive(_formulaBox.Text);
-        var intent = ExcelEditKeyPlanner.GetIntent(
+        var intent = _formulaRangeEditingSession.PlanEditKey(
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(e.Key),
+            FormulaEditorKey.None,
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers),
             current,
-            pageSize: Math.Max(1, CountScrollableRows(_session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1),
-            allowFormulaBarNavigationKeys: !formulaTextActive,
-            formulaRangeEntryActive: formulaRangeEntryActive,
-            moveSelectionAfterEnter: MoveSelectionAfterEnter,
-            enterDirection: AfterEnterDirection);
+            Math.Max(1, CountScrollableRows(_session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1),
+            _formulaBox.Text,
+            _session.FormulaEditAddress is not null,
+            FormulaEditorSurfaceKind.FormulaBar,
+            false,
+            MoveSelectionAfterEnter,
+            AfterEnterDirection);
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -19989,7 +18097,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             if (_isOpening || _isSaving)
             {
-                ShowSaveIssue("Finish saving before editing cells.");
+                ShowSaveIssue(UiText.Get("File_FinishSavingBeforeEditing"));
             }
             else if (CommitFormulaBox())
             {
@@ -20001,7 +18109,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 var rowDelta = GetCellIndexDelta(current.Row, adjustedTarget.Row);
                 var colDelta = GetCellIndexDelta(current.Col, adjustedTarget.Col);
                 _session.MoveActiveCell(rowDelta, colDelta);
-                RefreshShell("Ready");
+                RefreshShell(UiText.Get("MainLoc_Ready"));
                 FocusShellRegion(ShellFocusTarget.Worksheet);
             }
             else
@@ -20015,12 +18123,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             if (_isOpening || _isSaving)
             {
-                ShowSaveIssue("Finish saving before editing cells.");
+                ShowSaveIssue(UiText.Get("File_FinishSavingBeforeEditing"));
             }
-            else if (CommitEditAcrossSelection(current, _formulaBox.Text ?? ""))
+            else if (CommitEditAcrossSelection(_formulaBox.Text ?? ""))
             {
                 ClearFormulaRangeEntryState();
-                RefreshShell("Ready");
+                RefreshShell(UiText.Get("MainLoc_Ready"));
                 FocusShellRegion(ShellFocusTarget.Worksheet);
             }
             else
@@ -20119,29 +18227,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // data-body range (the same rows a structured reference like Table1[#Data] would select),
         // rather than only cell/named-range references. Without this, an existing table's name
         // falls through to TryDefineNameFromCellAddressBox and silently creates a colliding
-        // defined name (matches the WPF host's TryFindStructuredTableDataBodyRange).
-        return TryFindStructuredTableDataBodyRange(text.Trim(), out range);
-    }
-
-    // Matches StructuredReferenceResolver's table-name lookup (name OR display name, both header-row
-    // and totals-row aware) so Name Box navigation lands on exactly the same range a structured
-    // reference to the same table would resolve to.
-    private bool TryFindStructuredTableDataBodyRange(string name, out GridRange range)
-    {
-        foreach (var sheet in _session.Workbook.Sheets)
-        {
-            var table = sheet.StructuredTables.FirstOrDefault(t =>
-                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase));
-            if (table is null)
-                continue;
-
-            range = NameBoxDropdownPlanner.GetTableDataBodyRange(table);
-            return true;
-        }
-
-        range = default;
-        return false;
+        // defined name through the same shared policy used by the WPF host.
+        return StructuredTableSelectionPlanner.TryResolveDataBodyRange(
+            _session.Workbook,
+            text,
+            out range);
     }
 
     private void NavigateCellAddressBoxTo(GridRange selectedRange)
@@ -20158,46 +18248,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private bool TryDefineNameFromCellAddressBox(string text)
     {
-        var name = text.Trim();
-        if (_session.Workbook.ValidateNamedRangeName(name) is not null)
+        var plan = DefinedNameUiPolicy.PlanNameBoxDefinition(
+            _session.Workbook,
+            _session.ActiveSheet.Id,
+            _session.SelectedRange,
+            text,
+            DefinedNameUiProfile.Avalonia);
+        if (!plan.CanDefine)
             return false;
-        // Never silently define a name that collides with an existing structured table's name --
-        // Excel rejects this outright (a table name and a defined name share one namespace).
-        // TryParseCellAddressBoxReferenceRange already resolves table names to a selection before
-        // this method runs, so this is a defense-in-depth guard against ever reaching here for one.
-        if (_session.Workbook.Sheets.Any(sheet => sheet.StructuredTables.Any(t =>
-                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase))))
-        {
-            return false;
-        }
-        // R74-commands-name-manager-4-2: never silently redefine an existing named FORMULA/constant
-        // (e.g. "TaxRate" = "0.08") as a range just because it doesn't resolve to one --
-        // TryParseCellAddressBoxReferenceRange only ever recognizes NamedRanges/ScopedNamedRanges as
-        // navigable, so an existing formula-name falls through to here exactly like a brand-new
-        // name would, and without this guard would gain a colliding NamedRanges entry that wins over
-        // the stale NamedFormulas one at evaluation time (matches the WPF host's TryDefineNameFromNameBox).
-        if (WorkbookReferenceNavigator.NameExistsAsFormula(
-                name,
-                _session.ActiveSheet.Id,
-                sheetName => _session.Workbook.Sheets.FirstOrDefault(sheet =>
-                    string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id,
-                _session.Workbook.NamedFormulas,
-                (formulaName, sheetId) => _session.Workbook.TryGetNamedFormulaText(formulaName, sheetId)))
-        {
-            return false;
-        }
 
-        var command = new DefineNamedRangeCommand(name, _session.SelectedRange, NamedRangeMetadata.WorkbookScope);
-        var result = _session.ExecuteReviewCommand(command);
+        var result = _session.ExecuteReviewCommand(plan.Command!);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Format("InsertLoc_CouldNotDefineName", name));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Format("InsertLoc_CouldNotDefineName", plan.Name));
             return false;
         }
 
-        RefreshShell(UiText.Format("InsertLoc_DefinedName", name));
-        _cellAddressText.Text = name;
+        RefreshShell(UiText.Format("InsertLoc_DefinedName", plan.Name));
+        _cellAddressText.Text = plan.Name;
         _cellAddressText.SelectAll();
         return true;
     }
@@ -20258,8 +18326,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Child = new Border
             {
-                Width = NameBoxDropdownParityCaptureWidth,
-                Height = NameBoxDropdownParityCaptureHeight,
+                Width = NameBoxDropdownWidth,
+                Height = NameBoxDropdownHeight,
                 Background = Brushes.White,
                 BorderBrush = FormulaBarControlBorder,
                 BorderThickness = new Thickness(1),
@@ -20340,67 +18408,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellAddressAutocompleteListBox.Focus();
     }
 
-    // The X11 lane needs stable non-defined-name entries without relying on a user-authored file.
-    // This fixture only runs behind the explicit interaction-validation argument; normal documents
-    // continue to enumerate their own workbook model unchanged.
-    private void SeedNameBoxDropdownPhysicalFixture()
-    {
-        var sheet = _session.ActiveSheet;
-        var firstCell = new CellAddress(sheet.Id, 1, 1);
-        var tableLastCell = new CellAddress(sheet.Id, 2, 2);
-        _session.Workbook.NamedRanges["PhysicalName"] = new GridRange(firstCell, firstCell);
-        sheet.StructuredTables.Add(new StructuredTableModel
-        {
-            Id = 6701,
-            Name = "PhysicalTable",
-            DisplayName = "PhysicalTable",
-            Range = new GridRange(firstCell, tableLastCell),
-            HeaderRowCount = 1,
-            TotalsRowCount = 0,
-            HasAutoFilter = true,
-        });
-        sheet.DrawingShapes.Add(new DrawingShapeModel
-        {
-            Id = Guid.Parse("67000000-0000-0000-0000-000000000001"),
-            Name = "PhysicalShape",
-            Anchor = new CellAddress(sheet.Id, 2, 4),
-            Width = 96,
-            Height = 48,
-            IsVisible = true,
-        });
-        sheet.Pictures.Add(new PictureModel
-        {
-            Id = Guid.Parse("67000000-0000-0000-0000-000000000002"),
-            Name = "PhysicalPicture",
-            Anchor = new CellAddress(sheet.Id, 3, 4),
-            Kind = PictureKind.Image,
-            ImageBytes = [1, 2, 3, 4],
-            ContentType = "image/png",
-            Width = 96,
-            Height = 48,
-            IsVisible = true,
-        });
-        sheet.TextBoxes.Add(new TextBoxModel
-        {
-            Id = Guid.Parse("67000000-0000-0000-0000-000000000003"),
-            Name = "PhysicalTextBox",
-            Anchor = new CellAddress(sheet.Id, 4, 4),
-            Text = "Physical Name Box text box",
-            Width = 120,
-            Height = 48,
-            IsVisible = true,
-        });
-        sheet.Charts.Add(new ChartModel
-        {
-            Id = Guid.Parse("67000000-0000-0000-0000-000000000004"),
-            Name = "PhysicalChart",
-            DataRange = new GridRange(
-                new CellAddress(sheet.Id, 5, 4),
-                new CellAddress(sheet.Id, 6, 5)),
-            IsVisible = true,
-        });
-    }
-
     private bool SelectCellAddressBoxItem(NameBoxNavigationItem item)
     {
         _cellAddressBoxHasPendingEdit = false;
@@ -20436,8 +18443,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _ribbonContextSource.OnDrawingObjectSelected(objectKind);
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
-        RefreshShell($"Selected {FormatDrawingObjectKind(objectKind)}: {item.Name}");
-        RecordNameBoxDropdownPhysicalEvidence(item, "object-selected");
+        RefreshShell(UiText.Format(
+            "MainLoc_SelectedX",
+            UiText.Format(
+                "RecentFile_AutomationNameFormat",
+                FormatDrawingObjectKind(objectKind),
+                item.Name)));
+        RecordOptionalNameBoxSelection(item);
         return true;
     }
 
@@ -20477,7 +18489,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         if (_isOpening || _isSaving)
         {
-            ShowSaveIssue("Finish saving before editing cells.");
+            ShowSaveIssue(UiText.Get("File_FinishSavingBeforeEditing"));
             return false;
         }
 
@@ -20486,7 +18498,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Edit failed");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_EditFailed"));
             return false;
         }
 
@@ -20504,7 +18516,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // committed -- a subsequent Paste must not silently move/copy a source range the user has
         // since overwritten.
         SetClipboardMarquee(null, isCut: false);
-        RefreshShell($"Edited {FormatCellReference(address)}");
+        RefreshShell(UiText.Format("MainLoc_EditedCellStatusFormat", FormatCellReference(address)));
         return true;
     }
 
@@ -20512,46 +18524,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // cell of the current selection as a single undoable command, mirroring the WPF host's
     // CommitEditAcrossSelection (MainWindow.Editing.cs). Unlike CommitAndMove, the selection is
     // not collapsed to one cell -- Excel keeps the whole range selected after a Ctrl+Enter fill.
-    private bool CommitEditAcrossSelection(CellAddress current, string text)
+    private bool CommitEditAcrossSelection(string text)
     {
         if (_isOpening || _isSaving)
         {
-            ShowSaveIssue("Finish saving before editing cells.");
+            ShowSaveIssue(UiText.Get("File_FinishSavingBeforeEditing"));
             return false;
         }
 
-        var range = _session.SelectedRange;
-        var edits = new List<(CellAddress Address, Cell NewCell)>();
-        try
-        {
-            foreach (var address in range.AllCells())
-                edits.Add((address, CellEntryParser.CreateCell(text, address, UseR1C1ReferenceStyle)));
-        }
-        catch (FormulaParseException ex)
-        {
-            // Matches Excel's own refusal to commit a genuinely malformed formula (e.g. an
-            // unbalanced "=SUM(A1") for a Ctrl+Enter fill-across-selection entry, instead of
-            // silently persisting broken formula text into every selected cell
-            // (R91-formula-editing-assist-5-4).
-            ShowEditIssue(ex.Message);
-            return false;
-        }
-
-        if (edits.Count == 0)
-            return false;
-
-        var result = _session.ExecuteReviewCommand(
-            new EditCellsCommand(_session.ActiveSheet.Id, edits),
-            fallbackAddress: current);
+        var result = _session.CommitCellTextAcrossSelection(text, UseR1C1ReferenceStyle);
 
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Edit failed");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_EditFailed"));
             return false;
         }
-
-        if (range.CellCount > 1)
-            _session.SelectRange(range);
 
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();
@@ -20670,11 +18657,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.InsertAutoSumFormula(functionName);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "AutoSum failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_AutoSumFailed"));
             return;
         }
 
-        RefreshShell($"Inserted {functionName.ToUpperInvariant()} at {targetReference}");
+        RefreshShell(UiText.Format(
+            "MainLoc_ActionRangeStatusFormat",
+            functionName.ToUpperInvariant(),
+            targetReference));
     }
 
     private void FillSelectedRange(FillCellsDirection direction)
@@ -20689,11 +18679,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.FillSelectedRange(direction);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? $"{FormatFillCellsAction(direction)} failed.");
+            ShowEditIssue(result.ErrorMessage ?? WorksheetCommandPresentationCatalog.FormatFillFailure(direction));
             return;
         }
 
-        RefreshShell($"{FormatFillCellsAction(direction)} in {rangeReference}");
+        RefreshShell(WorksheetCommandPresentationCatalog.FormatFillStatus(direction, rangeReference));
     }
 
     private void FlashFillSelectedRange()
@@ -20708,7 +18698,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.FlashFillSelectedRange();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Flash Fill failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FlashFillFailed"));
             return;
         }
 
@@ -20725,21 +18715,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var range = _session.SelectedRange;
         var rangeReference = FormatRangeReference(range);
-        // Match WPF's quick-sort path: a labels-over-values first row stays outside the sort range,
-        // while a headerless selection keeps every row as data. The session overload preserves the
-        // grouped-sheet command path and undo semantics used by the desktop host.
-        var hasHeaders = QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range).HasHeaderRow;
-        var result = _session.SortSelectedRange(
-            [new CoreSortKey(0, ascending)],
-            new SortOptions(CaseSensitive: false, LeftToRight: false),
-            hasHeaders);
+        var result = _session.SortSelectedRange(ascending);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Sort failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_SortFailed"));
             return;
         }
 
-        RefreshShell($"Sorted {rangeReference} {(ascending ? "A to Z" : "Z to A")}");
+        RefreshShell(UiText.Format(
+            "MainLoc_SortedX",
+            UiText.Format(
+                "MainLoc_ActionRangeStatusFormat",
+                rangeReference,
+                UiText.Get(ascending ? "Sort_AtoZ" : "Sort_ZtoA"))));
     }
 
     /// <summary>
@@ -20763,6 +18751,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        _filterWorkflowSession.ResetAutoFilterState();
         RefreshShell(wasEnabled ? UiText.Get("MainLoc_RemovedFilter") : UiText.Get("MainLoc_AddedFilter"));
     }
 
@@ -20779,15 +18768,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
-        var keys = SortDialogPlanner.BuildSortKeys(selection.Levels);
-        if (CustomSortOrder.TryParse(selection.Options.FirstKeySortOrder, out var customOrder))
-            keys = SortDialogPlanner.ApplyCustomOrderToFirstKey(keys, customOrder);
-
-        var options = new SortOptions(selection.Options.CaseSensitive, selection.Options.LeftToRight);
-        var result = _session.SortSelectedRange(keys, options, selection.HasHeaders);
+        var sortPlan = SortDialogPlanner.CreateCommandPlan(
+            selection.Levels,
+            selection.Options,
+            selection.HasHeaders);
+        var result = _session.SortSelectedRange(sortPlan);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Sort failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_SortFailed"));
             return;
         }
 
@@ -20795,11 +18783,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private async Task<SortDialogResult?> ShowSortInputDialogAsync()
-    {
-        return await ShowSortInputDialogAsync(null);
-    }
-
-    private async Task<SortDialogResult?> ShowSortInputDialogAsync(Action<SortDialogSmokeProbe>? launchSmokeProbe)
     {
         SortDialogResult? result = null;
         var range = _session.SelectedRange;
@@ -20817,7 +18800,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var fontColorChoices = SortDialogPlanner.BuildColorChoices(_session.Workbook, _session.ActiveSheet, range, SortOn.FontColor);
         var dialog = new Window
         {
-            Title = "Custom Sort",
+            Title = UiText.Get("Sort_CustomSort"),
             Width = 760,
             Height = 500,
             MinWidth = 680,
@@ -20828,11 +18811,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(dialog, "SortCompactDialog");
         AutomationProperties.SetHelpText(
             dialog,
-            "Custom sort supports cell values, cell color, font color, custom first-key sort order, case-sensitive sorting, and left-to-right sorting through the shared SortDialogPlanner.");
+            UiText.Get("Sort_CustomSortHelpText"));
 
         var headersCheck = new CheckBox
         {
-            Content = "My data has headers",
+            Content = UiText.Get("RemoveDuplicates_MyDataHasHeadersAutomationName"),
             IsChecked = true,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             FontSize = 12,
@@ -20859,27 +18842,35 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var addLevelButton = new Button
         {
-            Content = "Add Level",
+            Content = StripDisplayMnemonic(UiText.Get("Sort_AddLevel")),
             MinWidth = 98,
         };
         ApplySortDialogButtonChrome(addLevelButton);
         AutomationProperties.SetAutomationId(addLevelButton, "SortAddLevelButton");
 
-        var deleteLevelButton = new Button { Content = "Delete Level", MinWidth = 104 };
+        var deleteLevelButton = new Button
+        {
+            Content = StripDisplayMnemonic(UiText.Get("Sort_DeleteLevel")),
+            MinWidth = 104,
+        };
         ApplySortDialogButtonChrome(deleteLevelButton);
         AutomationProperties.SetAutomationId(deleteLevelButton, "SortDeleteLevelButton");
-        var copyLevelButton = new Button { Content = "Copy Level", MinWidth = 98 };
+        var copyLevelButton = new Button
+        {
+            Content = StripDisplayMnemonic(UiText.Get("Sort_CopyLevel")),
+            MinWidth = 98,
+        };
         ApplySortDialogButtonChrome(copyLevelButton);
         AutomationProperties.SetAutomationId(copyLevelButton, "SortCopyLevelButton");
-        var moveUpButton = new Button { Content = "Move Up", MinWidth = 86 };
+        var moveUpButton = new Button { Content = UiText.Get("ConditionalFormat_ManageMoveUp"), MinWidth = 86 };
         ApplySortDialogButtonChrome(moveUpButton);
         AutomationProperties.SetAutomationId(moveUpButton, "SortMoveUpButton");
-        var moveDownButton = new Button { Content = "Move Down", MinWidth = 92 };
+        var moveDownButton = new Button { Content = UiText.Get("ConditionalFormat_ManageMoveDown"), MinWidth = 92 };
         ApplySortDialogButtonChrome(moveDownButton);
         AutomationProperties.SetAutomationId(moveDownButton, "SortMoveDownButton");
         var optionsButton = new Button
         {
-            Content = "Options...",
+            Content = UiText.Get("PageSetup_OptionsButton"),
             MinWidth = 92,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
@@ -20888,7 +18879,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             IsDefault = true,
             MinWidth = 76,
         };
@@ -20897,7 +18888,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             IsCancel = true,
             MinWidth = 76,
         };
@@ -20937,12 +18928,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         IReadOnlyList<SortDialogComboItem<SortColorChoice>> CreateColorItems(SortDialogLevel level) =>
             level.ColorChoices
-                .Select(choice => new SortDialogComboItem<SortColorChoice>(string.IsNullOrWhiteSpace(choice.Label) ? "None" : choice.Label, choice))
+                .Select(choice => new SortDialogComboItem<SortColorChoice>(
+                    string.IsNullOrWhiteSpace(choice.Label) ? UiText.Get("Common_None") : choice.Label,
+                    choice))
                 .ToList();
 
         IReadOnlyList<SortDialogComboItem<SortIconChoice>> CreateIconItems(SortDialogLevel level) =>
             level.IconChoices
-                .Select(choice => new SortDialogComboItem<SortIconChoice>(string.IsNullOrWhiteSpace(choice.Label) ? "None" : choice.Label, choice))
+                .Select(choice => new SortDialogComboItem<SortIconChoice>(
+                    string.IsNullOrWhiteSpace(choice.Label) ? UiText.Get("Common_None") : choice.Label,
+                    choice))
                 .ToList();
 
         void SelectColumn(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortColumnChoice>> choices, SortDialogLevel level)
@@ -21123,11 +19118,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             for (var i = 0; i < levels.Count; i++)
                 levelsGrid.RowDefinitions.Add(new RowDefinition(new GridLength(28)));
 
-            levelsGrid.Children.Add(CreateHeaderCell(optionsState.LeftToRight ? "Sort by row" : "Sort by", 0));
-            levelsGrid.Children.Add(CreateHeaderCell("Sort On", 1));
-            levelsGrid.Children.Add(CreateHeaderCell("Order", 2));
-            levelsGrid.Children.Add(CreateHeaderCell("Color", 3));
-            levelsGrid.Children.Add(CreateHeaderCell("Icon", 4));
+            levelsGrid.Children.Add(CreateHeaderCell(
+                UiText.Get(optionsState.LeftToRight ? "Sort_SortByRowHeader" : "Sort_SortByHeader"),
+                0));
+            levelsGrid.Children.Add(CreateHeaderCell(UiText.Get("Sort_SortOn"), 1));
+            levelsGrid.Children.Add(CreateHeaderCell(UiText.Get("Sort_Order"), 2));
+            levelsGrid.Children.Add(CreateHeaderCell(UiText.Get("Sort_Color"), 3));
+            levelsGrid.Children.Add(CreateHeaderCell(UiText.Get("Sort_Icon"), 4));
 
             firstSortOnBox = null;
             firstColorBox = null;
@@ -21151,7 +19148,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     IsVisible = selected,
                 };
                 ApplySortComboChrome(columnBox);
-                AutomationProperties.SetName(columnBox, "Sort by");
+                AutomationProperties.SetName(columnBox, UiText.CreateAutomationName(UiText.Get("Sort_SortByHeader")));
                 AutomationProperties.SetAutomationId(columnBox, $"SortLevel{levelIndex + 1}ColumnBox");
                 SelectColumn(columnBox, columnChoices, level);
 
@@ -21162,7 +19159,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     IsVisible = selected,
                 };
                 ApplySortComboChrome(sortOnBox);
-                AutomationProperties.SetName(sortOnBox, "Sort On");
+                AutomationProperties.SetName(sortOnBox, UiText.CreateAutomationName(UiText.Get("Sort_SortOn")));
                 AutomationProperties.SetAutomationId(sortOnBox, $"SortLevel{levelIndex + 1}SortOnBox");
                 SelectSortOn(sortOnBox, sortOnItems, level);
 
@@ -21173,7 +19170,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     IsVisible = selected,
                 };
                 ApplySortComboChrome(orderBox);
-                AutomationProperties.SetName(orderBox, "Order");
+                AutomationProperties.SetName(orderBox, UiText.CreateAutomationName(UiText.Get("Sort_Order")));
                 AutomationProperties.SetAutomationId(orderBox, $"SortLevel{levelIndex + 1}OrderBox");
                 SelectOrder(orderBox, directionChoices, level);
 
@@ -21185,7 +19182,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     IsVisible = selected,
                 };
                 ApplySortComboChrome(colorBox);
-                AutomationProperties.SetName(colorBox, "Color");
+                AutomationProperties.SetName(colorBox, UiText.CreateAutomationName(UiText.Get("Sort_Color")));
                 AutomationProperties.SetAutomationId(colorBox, $"SortLevel{levelIndex + 1}ColorBox");
                 SelectColor(colorBox, colorChoices, level);
 
@@ -21197,7 +19194,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     IsVisible = selected,
                 };
                 ApplySortComboChrome(iconBox);
-                AutomationProperties.SetName(iconBox, "Icon");
+                AutomationProperties.SetName(iconBox, UiText.CreateAutomationName(UiText.Get("Sort_Icon")));
                 AutomationProperties.SetAutomationId(iconBox, $"SortLevel{levelIndex + 1}IconBox");
                 SelectIcon(iconBox, iconChoices, level);
 
@@ -21377,7 +19374,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         headerRow.Children.Add(headersCheck);
         headerRow.Children.Add(new TextBlock
         {
-            Text = "Sort levels",
+            Text = UiText.Get("Sort_SortLevels"),
             FontWeight = FontWeight.SemiBold,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         });
@@ -21431,28 +19428,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         root.Children.Add(buttons);
         dialog.Content = root;
 
-        if (launchSmokeProbe is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                RunLaunchSmokeDialogProbe(
-                    dialog,
-                    () => launchSmokeProbe(new SortDialogSmokeProbe(
-                        dialog,
-                        headersCheck,
-                        levelsGrid,
-                        firstSortOnBox!,
-                        firstColorBox!,
-                        addLevelButton,
-                        deleteLevelButton,
-                        copyLevelButton,
-                        moveUpButton,
-                        moveDownButton,
-                        optionsButton,
-                        okButton,
-                        cancelButton)));
-            };
-        }
+        AttachOptionalSortDialogObservation(
+            dialog,
+            headersCheck,
+            levelsGrid,
+            firstSortOnBox!,
+            firstColorBox!,
+            addLevelButton,
+            deleteLevelButton,
+            copyLevelButton,
+            moveUpButton,
+            moveDownButton,
+            optionsButton,
+            okButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -21590,11 +19579,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task<SortDialogOptions?> ShowSortOptionsDialogAsync(SortDialogOptions current)
     {
-        const string normalFirstKeySortOrder = "Normal";
         SortDialogOptions? result = null;
+        var presentation = SortOptionsDialogCatalog.Create(UiText.Get);
         var dialog = new Window
         {
-            Title = UiText.Get("SortOptions_SortOptions"),
+            Title = presentation.Title,
             Width = 330,
             Height = 260,
             MinWidth = 330,
@@ -21611,7 +19600,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var caseSensitiveBox = new CheckBox
         {
-            Content = UiText.Get("SortOptions_CaseSensitive"),
+            Content = presentation.CaseSensitive,
             IsChecked = current.CaseSensitive,
             Margin = new Thickness(0, 0, 0, 10),
         };
@@ -21619,21 +19608,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(caseSensitiveBox, AvaloniaCompactDialogChrome.WindowsStyle);
         AutomationProperties.SetAutomationId(caseSensitiveBox, "SortOptionsCaseSensitiveCheckBox");
 
-        var firstKeyChoices = new[]
-        {
-            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeyNormal"), normalFirstKeySortOrder),
-            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeySunToSatShort"), "Sun, Mon, Tue, Wed, Thu, Fri, Sat"),
-            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeySundayToSaturday"), "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday"),
-            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeyJanToDecShort"), "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec"),
-            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeyJanuaryToDecember"), "January, February, March, April, May, June, July, August, September, October, November, December"),
-        };
-        var normalizedFirstKey = firstKeyChoices.FirstOrDefault(choice =>
-            string.Equals(choice.Value, current.FirstKeySortOrder, StringComparison.Ordinal) ||
-            string.Equals(choice.Label, current.FirstKeySortOrder, StringComparison.Ordinal)) ?? firstKeyChoices[0];
+        var firstKeySelection = SortOptionsPolicy.ResolveFirstKeyOrderSelection(
+            current.FirstKeySortOrder,
+            presentation.FirstKeySortOrders,
+            preserveUnlistedEditorText: false);
         var firstKeyBox = new ComboBox
         {
-            ItemsSource = firstKeyChoices,
-            SelectedItem = normalizedFirstKey,
+            ItemsSource = presentation.FirstKeySortOrders,
+            SelectedItem = firstKeySelection.SelectedChoice,
             Margin = new Thickness(0, 0, 0, 10),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
@@ -21642,14 +19624,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var topToBottomButton = new RadioButton
         {
-            Content = UiText.Get("SortOptions_SortTopToBottom"),
+            Content = presentation.SortTopToBottom,
             IsChecked = !current.LeftToRight,
             GroupName = "SortOptionsOrientation",
             Margin = new Thickness(0, 0, 0, 1),
         };
         var leftToRightButton = new RadioButton
         {
-            Content = UiText.Get("SortOptions_SortLeftToRight"),
+            Content = presentation.SortLeftToRight,
             IsChecked = current.LeftToRight,
             GroupName = "SortOptionsOrientation",
         };
@@ -21669,12 +19651,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         okButton.Click += (_, _) =>
         {
-            result = new SortDialogOptions(
-                CaseSensitive: caseSensitiveBox.IsChecked == true,
-                LeftToRight: leftToRightButton.IsChecked == true,
-                FirstKeySortOrder: firstKeyBox.SelectedItem is SortDialogComboItem<string> choice
-                    ? choice.Value
-                    : normalFirstKeySortOrder);
+            result = SortOptionsPolicy.CreateResult(
+                caseSensitiveBox.IsChecked == true,
+                leftToRightButton.IsChecked == true,
+                firstKeyBox.SelectedItem as SortOptionsFirstKeyOrderChoice,
+                editorText: null);
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();
@@ -21698,11 +19679,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Children =
             {
                 caseSensitiveBox,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("SortOptions_FirstKeySortOrderLabel")), FontSize = 12, Margin = new Thickness(0, 0, 0, 3) },
+                new TextBlock { Text = StripDisplayMnemonic(presentation.FirstKeySortOrderLabel), FontSize = 12, Margin = new Thickness(0, 0, 0, 3) },
                 firstKeyBox,
                 new GroupBox
                 {
-                    Header = StripDisplayMnemonic(UiText.Get("SortOptions_Orientation")),
+                    Header = StripDisplayMnemonic(presentation.Orientation),
                     Padding = new Thickness(8),
                     Margin = new Thickness(0, 0, 0, 10),
                     Content = new StackPanel
@@ -21796,7 +19777,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         GoalSeekRequest? result = null;
         var dialog = new Window
         {
-            Title = "Goal Seek",
+            Title = UiText.Get("GoalSeek_GoalSeek"),
             Width = 380,
             Height = 210,
             MinWidth = 380,
@@ -21817,9 +19798,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Margin = new Thickness(0, 4),
         };
         ApplyDataToolsTextBoxChrome(setCellBox);
-        AutomationProperties.SetName(setCellBox, "Set cell");
+        AutomationProperties.SetName(setCellBox, UiText.CreateAutomationName(UiText.Get("GoalSeek_SetCellAutomationName")));
         AutomationProperties.SetAutomationId(setCellBox, "GoalSeekSetCellBox");
-        AutomationProperties.SetHelpText(setCellBox, "Formula cell to solve.");
+        AutomationProperties.SetHelpText(setCellBox, UiText.Get("GoalSeek_SetCellHelpText"));
 
         var targetValueBox = new TextBox
         {
@@ -21828,9 +19809,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Margin = new Thickness(0, 4),
         };
         ApplyDataToolsTextBoxChrome(targetValueBox);
-        AutomationProperties.SetName(targetValueBox, "To value");
+        AutomationProperties.SetName(targetValueBox, UiText.CreateAutomationName(UiText.Get("GoalSeek_ToValueAutomationName")));
         AutomationProperties.SetAutomationId(targetValueBox, "GoalSeekTargetValueBox");
-        AutomationProperties.SetHelpText(targetValueBox, "Target value for the set cell.");
+        AutomationProperties.SetHelpText(targetValueBox, UiText.Get("GoalSeek_ToValueHelpText"));
 
         var changingCellBox = new TextBox
         {
@@ -21839,9 +19820,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Margin = new Thickness(0, 4),
         };
         ApplyDataToolsTextBoxChrome(changingCellBox);
-        AutomationProperties.SetName(changingCellBox, "By changing cell");
+        AutomationProperties.SetName(changingCellBox, UiText.CreateAutomationName(UiText.Get("GoalSeek_ByChangingCellAutomationName")));
         AutomationProperties.SetAutomationId(changingCellBox, "GoalSeekChangingCellBox");
-        AutomationProperties.SetHelpText(changingCellBox, "Input cell Goal Seek can change.");
+        AutomationProperties.SetHelpText(changingCellBox, UiText.Get("GoalSeek_ByChangingCellHelpText"));
 
         var errorText = new TextBlock
         {
@@ -21849,34 +19830,34 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
         };
-        AutomationProperties.SetName(errorText, "Goal Seek validation");
+        AutomationProperties.SetName(errorText, UiText.Get("GoalSeek_ValidationAutomationName"));
         AutomationProperties.SetAutomationId(errorText, "GoalSeekErrorText");
-        AutomationProperties.SetHelpText(errorText, "Shows Goal Seek input validation messages.");
+        AutomationProperties.SetHelpText(errorText, UiText.Get("GoalSeek_ValidationHelpText"));
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             Width = 75,
             MinWidth = 75,
             IsDefault = true,
             Margin = new Thickness(0, 0, 6, 0),
         };
         ApplyDataToolsButtonChrome(okButton, 75, isDefault: true);
-        AutomationProperties.SetName(okButton, "OK");
+        AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
         AutomationProperties.SetAutomationId(okButton, "GoalSeekOkButton");
-        AutomationProperties.SetHelpText(okButton, "Run Goal Seek with these inputs.");
+        AutomationProperties.SetHelpText(okButton, UiText.Get("GoalSeek_RunHelpText"));
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             Width = 75,
             MinWidth = 75,
             IsCancel = true,
         };
         ApplyDataToolsButtonChrome(cancelButton, 75);
-        AutomationProperties.SetName(cancelButton, "Cancel");
+        AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
         AutomationProperties.SetAutomationId(cancelButton, "GoalSeekCancelButton");
-        AutomationProperties.SetHelpText(cancelButton, "Close Goal Seek without running.");
+        AutomationProperties.SetHelpText(cancelButton, UiText.Get("GoalSeek_CancelHelpText"));
 
         void Accept()
         {
@@ -21887,9 +19868,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 changingCellBox.Text);
             if (!parseResult.Success)
             {
-                errorText.Text = FormatGoalSeekParseError(parseResult);
+                var validation = GoalSeekStatusDialogPlanner.DescribeValidationError(
+                    parseResult,
+                    GoalSeekPresentationProfile.Avalonia);
+                errorText.Text = validation.Message.Resolve(UiText.Get, UiText.Format);
                 errorText.IsVisible = true;
-                FocusGoalSeekErrorField(parseResult.Error, setCellBox, targetValueBox, changingCellBox);
+                FocusGoalSeekErrorField(validation.FocusTarget, setCellBox, targetValueBox, changingCellBox);
                 return;
             }
 
@@ -21965,7 +19949,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             : GoalSeekStatusDialogChoice.Dismiss;
         var dialog = new Window
         {
-            Title = "Goal Seek Status",
+            Title = UiText.Get("GoalSeekStatus_GoalSeekStatus"),
             Width = GoalSeekStatusDialogPlanner.WindowWidth,
             Height = GoalSeekStatusDialogPlanner.WindowHeight(result.Status == WorkbookGoalSeekStatus.Applied),
             MinWidth = GoalSeekStatusDialogPlanner.WindowWidth,
@@ -21994,9 +19978,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // which renders each line with a blank-line gap between them.
             LineHeight = GoalSeekStatusDialogPlanner.SummaryLineHeight,
         };
-        AutomationProperties.SetName(summaryBlock, "Goal Seek Status");
+        AutomationProperties.SetName(summaryBlock, UiText.CreateAutomationName(UiText.Get("GoalSeekStatus_GoalSeekStatus")));
         AutomationProperties.SetAutomationId(summaryBlock, "GoalSeekStatusText");
-        AutomationProperties.SetHelpText(summaryBlock, "Shows the Goal Seek result status.");
+        AutomationProperties.SetHelpText(
+            summaryBlock,
+            UiText.Get("GoalSeekStatus_ReportsWhetherGoalSeekReachedTheTargetValue"));
 
         var buttonRow = new StackPanel
         {
@@ -22010,28 +19996,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             var restoreButton = new Button
             {
-                Content = "Restore Original Values",
+                Content = UiText.Get("GoalSeekStatus_RestoreOriginalValues2"),
                 Width = GoalSeekStatusDialogPlanner.RestoreOriginalValuesButtonWidth,
                 MinWidth = GoalSeekStatusDialogPlanner.RestoreOriginalValuesButtonWidth,
                 IsCancel = true,
             };
             ApplyGoalSeekStatusButtonChrome(restoreButton, GoalSeekStatusDialogPlanner.RestoreOriginalValuesButtonWidth);
-            AutomationProperties.SetName(restoreButton, "Restore Original Values");
+            AutomationProperties.SetName(restoreButton, UiText.CreateAutomationName(UiText.Get("GoalSeekStatus_RestoreOriginalValues2")));
             AutomationProperties.SetAutomationId(restoreButton, "GoalSeekRestoreOriginalValuesButton");
-            AutomationProperties.SetHelpText(restoreButton, "Undo the Goal Seek result and restore the original changing cell value.");
+        AutomationProperties.SetHelpText(
+            restoreButton,
+            UiText.Get("GoalSeekStatus_RestoreTheOriginalWorkbookValuesBeforeGoalSeekRan"));
 
             var keepButton = new Button
             {
-                Content = "Keep Result",
+                Content = UiText.Get("GoalSeekStatus_KeepResult2"),
                 Width = GoalSeekStatusDialogPlanner.KeepResultButtonWidth,
                 MinWidth = GoalSeekStatusDialogPlanner.KeepResultButtonWidth,
                 Margin = new Thickness(0, 0, GoalSeekStatusDialogPlanner.ButtonGap, 0),
                 IsDefault = true,
             };
             ApplyGoalSeekStatusButtonChrome(keepButton, GoalSeekStatusDialogPlanner.KeepResultButtonWidth, isDefault: true);
-            AutomationProperties.SetName(keepButton, "Keep Result");
+            AutomationProperties.SetName(keepButton, UiText.CreateAutomationName(UiText.Get("GoalSeekStatus_KeepResult2")));
             AutomationProperties.SetAutomationId(keepButton, "GoalSeekKeepResultButton");
-            AutomationProperties.SetHelpText(keepButton, "Keep the applied Goal Seek result in the workbook.");
+        AutomationProperties.SetHelpText(
+            keepButton,
+            UiText.Get("GoalSeekStatus_KeepTheGoalSeekResultInTheChangingCell"));
 
             restoreButton.Click += (_, _) =>
             {
@@ -22051,16 +20041,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             var okButton = new Button
             {
-                Content = "OK",
+                Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
                 Width = GoalSeekStatusDialogPlanner.OkButtonWidth,
                 MinWidth = GoalSeekStatusDialogPlanner.OkButtonWidth,
                 IsDefault = true,
                 IsCancel = true,
             };
             ApplyGoalSeekStatusButtonChrome(okButton, GoalSeekStatusDialogPlanner.OkButtonWidth, isDefault: true);
-            AutomationProperties.SetName(okButton, "OK");
+            AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
             AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
-            AutomationProperties.SetHelpText(okButton, "Close the Goal Seek status dialog.");
+            AutomationProperties.SetHelpText(okButton, UiText.Get("GoalSeekStatus_CloseTheGoalSeekStatusDialog"));
             okButton.Click += (_, _) =>
             {
                 choice = GoalSeekStatusDialogChoice.Dismiss;
@@ -22097,18 +20087,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return choice;
     }
 
-    private static string FormatGoalSeekParseError(GoalSeekRequestParseResult result) =>
-        result.Error switch
-        {
-            GoalSeekRequestParseError.SetCellRequired => "Set cell is required.",
-            GoalSeekRequestParseError.InvalidSetCellAddress => $"Set cell '{result.InvalidText}' is not a valid cell reference.",
-            GoalSeekRequestParseError.InvalidTargetValue => "Target value must be a finite number.",
-            GoalSeekRequestParseError.ChangingCellRequired => "Changing cell is required.",
-            GoalSeekRequestParseError.InvalidChangingCellAddress => $"Changing cell '{result.InvalidText}' is not a valid cell reference.",
-            GoalSeekRequestParseError.CellsMustDiffer => "Set cell and changing cell must be different.",
-            _ => "Goal Seek request is invalid."
-        };
-
     private static string FormatGoalSeekStatus(WorkbookGoalSeekResult result)
     {
         var setCell = FormatCellReference(result.Request.SetCell);
@@ -22116,44 +20094,37 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return result.Status switch
         {
             WorkbookGoalSeekStatus.Applied when result.SeekResult is { } seekResult =>
-                string.Join(
-                    Environment.NewLine,
-                    "Goal Seek found a solution.",
-                    $"Target value: {FormatGoalSeekNumber(result.Request.TargetValue)}",
-                    $"Current value: {FormatGoalSeekNumber(seekResult.ActualResult)}",
-                    $"Changing cell value: {FormatGoalSeekNumber(seekResult.FoundValue)}"),
+                GoalSeekStatusDialogPlanner.DescribeStatus(
+                    true,
+                    result.Request.TargetValue,
+                    seekResult.ActualResult,
+                    seekResult.FoundValue,
+                    GoalSeekPresentationProfile.Avalonia).Resolve(UiText.Get, UiText.Format),
             WorkbookGoalSeekStatus.NotConverged when result.SeekResult is { } seekResult =>
-                string.Join(
-                    Environment.NewLine,
-                    "Goal Seek could not find a solution.",
-                    $"Target value: {FormatGoalSeekNumber(result.Request.TargetValue)}",
-                    $"Current value: {FormatGoalSeekNumber(seekResult.ActualResult)}",
-                    $"Changing cell value: {FormatGoalSeekNumber(seekResult.FoundValue)}"),
-            WorkbookGoalSeekStatus.InvalidRequest =>
-                result.ErrorMessage ?? $"Goal Seek request for {setCell} is invalid.",
-            WorkbookGoalSeekStatus.ApplyFailed =>
-                result.ErrorMessage ?? $"Goal Seek result for {changingCell} could not be applied.",
-            _ => "Goal Seek could not complete."
+                GoalSeekStatusDialogPlanner.DescribeStatus(
+                    false,
+                    result.Request.TargetValue,
+                    seekResult.ActualResult,
+                    seekResult.FoundValue,
+                    GoalSeekPresentationProfile.Avalonia).Resolve(UiText.Get, UiText.Format),
+            _ => GoalSeekStatusDialogPlanner.DescribeExecutionFailure(
+                result.Status,
+                result.ErrorMessage,
+                setCell,
+                changingCell).Resolve(UiText.Get, UiText.Format)
         };
     }
 
-    private static string FormatGoalSeekNumber(double value) =>
-        value.ToString("G12", CultureInfo.CurrentCulture);
-
     private static void FocusGoalSeekErrorField(
-        GoalSeekRequestParseError error,
+        GoalSeekValidationFocusTarget focusTarget,
         TextBox setCellBox,
         TextBox targetValueBox,
         TextBox changingCellBox)
     {
-        var target = error switch
+        var target = focusTarget switch
         {
-            GoalSeekRequestParseError.SetCellRequired or
-            GoalSeekRequestParseError.InvalidSetCellAddress => setCellBox,
-            GoalSeekRequestParseError.InvalidTargetValue => targetValueBox,
-            GoalSeekRequestParseError.ChangingCellRequired or
-            GoalSeekRequestParseError.InvalidChangingCellAddress or
-            GoalSeekRequestParseError.CellsMustDiffer => changingCellBox,
+            GoalSeekValidationFocusTarget.TargetValue => targetValueBox,
+            GoalSeekValidationFocusTarget.ChangingCell => changingCellBox,
             _ => setCellBox
         };
         target.Focus();
@@ -22214,17 +20185,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ExecuteAdvancedFilterPlan(plan);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Advanced Filter failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_AdvancedFilterFailed"));
             return;
         }
 
-        _lastInPlaceAdvancedFilter =
-            FreeX.App.Presentation.Filtering.AdvancedFilterReapplyPlanner.CreateState(
-                plan.ListRange,
-                plan.CriteriaRange,
-                plan.OutputMode == AdvancedFilterOutputMode.FilterInPlace,
-                plan.UniqueRecordsOnly);
+        _filterWorkflowSession.RememberAdvancedFilter(
+            plan.ListRange,
+            plan.CriteriaRange,
+            plan.OutputMode == AdvancedFilterOutputMode.FilterInPlace,
+            plan.UniqueRecordsOnly);
 
         RefreshShell(FormatAdvancedFilterStatus(plan));
     }
@@ -22234,7 +20204,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AdvancedFilterPlan? result = null;
         var dialog = new Window
         {
-            Title = "Advanced Filter",
+            Title = UiText.Get("MainWindow_TooltipTitle_AdvancedFilter"),
             Width = 420,
             Height = 340,
             MinWidth = 420,
@@ -22246,7 +20216,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ShowInTaskbar = false,
             FontSize = 12,
         };
-        AutomationProperties.SetAutomationId(dialog, "AdvancedFilterCompactDialog");
+        AutomationProperties.SetAutomationId(dialog, FreeXAutomationIdCatalog.AdvancedFilter.Dialog);
 
         static void ApplyAdvancedFilterPickerButtonChrome(Button button)
         {
@@ -22271,39 +20241,49 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 0,
         };
         ApplyDialogTextBoxChrome(listRangeBox);
-        AutomationProperties.SetName(listRangeBox, "List range");
-        AutomationProperties.SetAutomationId(listRangeBox, "AdvancedFilterListRangeBox");
-        AutomationProperties.SetHelpText(listRangeBox, "Range containing list headers and records.");
+        AutomationProperties.SetName(listRangeBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_ListRange")));
+        AutomationProperties.SetAutomationId(listRangeBox, FreeXAutomationIdCatalog.AdvancedFilter.ListRangeBox);
+        AutomationProperties.SetHelpText(
+            listRangeBox,
+            UiText.Get("AdvancedFilter_EnterTheListRangeToFilterIncludingColumnLabels"));
 
         var criteriaRangeBox = new TextBox
         {
             MinWidth = 0,
         };
         ApplyDialogTextBoxChrome(criteriaRangeBox);
-        AutomationProperties.SetName(criteriaRangeBox, "Criteria range");
-        AutomationProperties.SetAutomationId(criteriaRangeBox, "AdvancedFilterCriteriaRangeBox");
-        AutomationProperties.SetHelpText(criteriaRangeBox, "Range containing criteria headers and criteria rows.");
+        AutomationProperties.SetName(criteriaRangeBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_CriteriaRange")));
+        AutomationProperties.SetAutomationId(criteriaRangeBox, FreeXAutomationIdCatalog.AdvancedFilter.CriteriaRangeBox);
+        AutomationProperties.SetHelpText(
+            criteriaRangeBox,
+            UiText.Get("AdvancedFilter_EnterTheCriteriaRangeIncludingCriteriaLabels"));
 
         var inPlaceButton = new RadioButton
         {
-            Content = "Filter the list, in-place",
+            Content = UiText.Get("AdvancedFilter_FilterTheListInPlaceAutomationName"),
             GroupName = "AdvancedFilterOutputMode",
             IsChecked = true,
         };
         ApplyDialogRadioButtonChrome(inPlaceButton);
-        AutomationProperties.SetName(inPlaceButton, "Filter in-place");
-        AutomationProperties.SetAutomationId(inPlaceButton, "AdvancedFilterInPlaceButton");
-        AutomationProperties.SetHelpText(inPlaceButton, "Filter the list range without copying results.");
+        AutomationProperties.SetName(
+            inPlaceButton,
+            UiText.Get("AdvancedFilter_FilterTheListInPlaceAutomationName"));
+        AutomationProperties.SetAutomationId(inPlaceButton, FreeXAutomationIdCatalog.AdvancedFilter.InPlaceButton);
+        AutomationProperties.SetHelpText(
+            inPlaceButton,
+            UiText.Get("AdvancedFilter_FilterTheListInItsCurrentLocation"));
 
         var copyToAnotherLocationButton = new RadioButton
         {
-            Content = "Copy to another location",
+            Content = UiText.Get("AdvancedFilter_CopyToAnotherLocationAutomationName"),
             GroupName = "AdvancedFilterOutputMode",
         };
         ApplyDialogRadioButtonChrome(copyToAnotherLocationButton);
-        AutomationProperties.SetName(copyToAnotherLocationButton, "Copy to another location");
-        AutomationProperties.SetAutomationId(copyToAnotherLocationButton, "AdvancedFilterCopyToAnotherLocationButton");
-        AutomationProperties.SetHelpText(copyToAnotherLocationButton, "Copy filtered rows to the Copy to range.");
+        AutomationProperties.SetName(copyToAnotherLocationButton, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_CopyToAnotherLocationAutomationName")));
+        AutomationProperties.SetAutomationId(copyToAnotherLocationButton, FreeXAutomationIdCatalog.AdvancedFilter.CopyToAnotherLocationButton);
+        AutomationProperties.SetHelpText(
+            copyToAnotherLocationButton,
+            UiText.Get("AdvancedFilter_CopyFilteredRecordsToTheCopyToDestination"));
 
         var copyToBox = new TextBox
         {
@@ -22311,19 +20291,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 0,
         };
         ApplyDialogTextBoxChrome(copyToBox);
-        AutomationProperties.SetName(copyToBox, "Copy to");
-        AutomationProperties.SetAutomationId(copyToBox, "AdvancedFilterCopyToBox");
-        AutomationProperties.SetHelpText(copyToBox, "Destination cell or one-row header range on the list sheet.");
+        AutomationProperties.SetName(copyToBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_CopyTo")));
+        AutomationProperties.SetAutomationId(copyToBox, FreeXAutomationIdCatalog.AdvancedFilter.CopyToBox);
+        AutomationProperties.SetHelpText(
+            copyToBox,
+            UiText.Get("AdvancedFilter_EnterTheDestinationCellOrOneRowHeaderRangeWhenCopyingFilteredRecords"));
 
         var uniqueBox = new CheckBox
         {
-            Content = "Unique records only",
+            Content = UiText.Get("AdvancedFilter_UniqueRecordsOnlyAutomationName"),
             Margin = new Thickness(0, 8, 0, 0),
         };
         ApplyDialogCheckBoxChrome(uniqueBox);
-        AutomationProperties.SetName(uniqueBox, "Unique records only");
-        AutomationProperties.SetAutomationId(uniqueBox, "AdvancedFilterUniqueRecordsOnlyBox");
-        AutomationProperties.SetHelpText(uniqueBox, "Return only unique matching records.");
+        AutomationProperties.SetName(uniqueBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_UniqueRecordsOnlyAutomationName")));
+        AutomationProperties.SetAutomationId(uniqueBox, FreeXAutomationIdCatalog.AdvancedFilter.UniqueRecordsOnlyBox);
+        AutomationProperties.SetHelpText(
+            uniqueBox,
+            UiText.Get("AdvancedFilter_ShowOrCopyOnlyUniqueRecords"));
 
         var errorText = new TextBlock
         {
@@ -22334,33 +20318,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
-        AutomationProperties.SetName(errorText, "Advanced Filter validation");
-        AutomationProperties.SetAutomationId(errorText, "AdvancedFilterErrorText");
-        AutomationProperties.SetHelpText(errorText, "Shows Advanced Filter readiness and validation messages.");
+        AutomationProperties.SetName(errorText, UiText.Get("AdvancedFilter_ValidationAutomationName"));
+        AutomationProperties.SetAutomationId(errorText, FreeXAutomationIdCatalog.AdvancedFilter.ErrorText);
+        AutomationProperties.SetHelpText(errorText, UiText.Get("AdvancedFilter_ValidationHelpText"));
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             Width = 76,
             MinWidth = 76,
             IsDefault = true,
         };
         ApplyDialogButtonChrome(okButton, width: 76, isDefault: true);
-        AutomationProperties.SetName(okButton, "OK");
-        AutomationProperties.SetAutomationId(okButton, "AdvancedFilterOkButton");
-        AutomationProperties.SetHelpText(okButton, "Run Advanced Filter.");
+        AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
+        AutomationProperties.SetAutomationId(okButton, FreeXAutomationIdCatalog.AdvancedFilter.OkButton);
+        AutomationProperties.SetHelpText(okButton, UiText.Get("AdvancedFilter_RunHelpText"));
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             Width = 76,
             MinWidth = 76,
             IsCancel = true,
         };
         ApplyDialogButtonChrome(cancelButton, width: 76);
-        AutomationProperties.SetName(cancelButton, "Cancel");
-        AutomationProperties.SetAutomationId(cancelButton, "AdvancedFilterCancelButton");
-        AutomationProperties.SetHelpText(cancelButton, "Close Advanced Filter without running.");
+        AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
+        AutomationProperties.SetAutomationId(cancelButton, FreeXAutomationIdCatalog.AdvancedFilter.CancelButton);
+        AutomationProperties.SetHelpText(cancelButton, UiText.Get("AdvancedFilter_CancelHelpText"));
 
         AdvancedFilterPlanResult CreatePlan()
         {
@@ -22417,12 +20401,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return (row, pickerButton, labelBlock);
         }
 
-        var listRangeRow = CreateReferenceRow("List range:", listRangeBox, "AdvancedFilterSelectListRangeButton", isFirstRow: true);
-        var criteriaRangeRow = CreateReferenceRow("Criteria range:", criteriaRangeBox, "AdvancedFilterSelectCriteriaRangeButton");
-        var copyToRow = CreateReferenceRow("Copy to:", copyToBox, "AdvancedFilterSelectCopyToButton");
+        var listRangeRow = CreateReferenceRow(
+            StripDisplayMnemonic(UiText.Get("AdvancedFilter_ListRange")) + ":",
+            listRangeBox,
+            FreeXAutomationIdCatalog.AdvancedFilter.SelectListRangeButton,
+            isFirstRow: true);
+        var criteriaRangeRow = CreateReferenceRow(
+            StripDisplayMnemonic(UiText.Get("AdvancedFilter_CriteriaRange")) + ":",
+            criteriaRangeBox,
+            FreeXAutomationIdCatalog.AdvancedFilter.SelectCriteriaRangeButton);
+        var copyToRow = CreateReferenceRow(
+            StripDisplayMnemonic(UiText.Get("AdvancedFilter_CopyTo")) + ":",
+            copyToBox,
+            FreeXAutomationIdCatalog.AdvancedFilter.SelectCopyToButton);
         var copyToHint = new TextBlock
         {
-            Text = "Copy to is available when Copy to another location is selected.",
+            Text = UiText.Get("AdvancedFilter_CopyToIsAvailableWhenCopyToAnotherLocationIsSelected"),
             Foreground = SecondaryInk,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 0),
@@ -22431,7 +20425,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         var criteriaHint = new TextBlock
         {
-            Text = "Criteria should include column labels in the first row, matching Excel Advanced Filter.",
+            Text = UiText.Get("AdvancedFilter_CriteriaShouldIncludeColumnLabelsInTheFirstRowMatchingExcelAdvancedFilte"),
             Foreground = SecondaryInk,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 8, 0, 0),
@@ -22444,9 +20438,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         void RefreshPlanStatus(bool showInvalid = false)
         {
             var planResult = CreatePlan();
-            errorText.Text = planResult.Success
-                ? "Ready to run Advanced Filter."
-                : FormatAdvancedFilterPlanError(planResult);
+            errorText.Text = AdvancedFilterPlanner
+                .DescribeError(planResult, AdvancedFilterErrorPresentationKind.InlineValidation)
+                .Message
+                .Resolve(UiText.Get, UiText.Format);
             errorText.IsVisible = showInvalid && !planResult.Success;
         }
 
@@ -22464,9 +20459,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var planResult = CreatePlan();
             if (!planResult.Success || planResult.Plan is null)
             {
-                errorText.Text = FormatAdvancedFilterPlanError(planResult);
+                var error = AdvancedFilterPlanner.DescribeError(
+                    planResult,
+                    AdvancedFilterErrorPresentationKind.InlineValidation);
+                errorText.Text = error.Message.Resolve(UiText.Get, UiText.Format);
                 errorText.IsVisible = true;
-                FocusAdvancedFilterErrorField(planResult.Error, listRangeBox, criteriaRangeBox, copyToBox);
+                FocusAdvancedFilterErrorField(error.FocusTarget, listRangeBox, criteriaRangeBox, copyToBox);
                 return;
             }
 
@@ -22546,7 +20544,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 },
                 new TextBlock
                 {
-                    Text = "Action",
+                    Text = UiText.Get("AdvancedFilter_Action"),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                     Background = Brushes.White,
@@ -22598,48 +20596,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             : $"Advanced Filter applied to {listRange}";
     }
 
-    private static string FormatAdvancedFilterPlanError(AdvancedFilterPlanResult result)
-    {
-        var message = result.Error switch
-        {
-            AdvancedFilterPlanError.None => "Ready to run Advanced Filter.",
-            AdvancedFilterPlanError.InvalidListRange => "Enter a valid list range.",
-            AdvancedFilterPlanError.ListRangeRequiresDataRows => "List range must include headers and at least one data row.",
-            AdvancedFilterPlanError.ListRangeTooLarge => AdvancedFilterCommand.ListRangeTooLargeMessage,
-            AdvancedFilterPlanError.InvalidCriteriaRange => "Enter a valid criteria range.",
-            AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows => "Criteria range must include headers and at least one criteria row.",
-            AdvancedFilterPlanError.CriteriaRangeTooLarge => AdvancedFilterCommand.CriteriaRangeTooLargeMessage,
-            AdvancedFilterPlanError.CopyDestinationRequired => "Enter a copy-to range.",
-            AdvancedFilterPlanError.InvalidCopyDestinationRange => "Enter a valid one-row copy-to range on the active sheet.",
-            AdvancedFilterPlanError.CopyDestinationRangeTooLarge => AdvancedFilterCommand.CopyOutputTooLargeMessage,
-            AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => "Copy-to range must be on the list sheet.",
-            _ => "Advanced Filter request is invalid."
-        };
-
-        return string.IsNullOrWhiteSpace(result.InvalidText)
-            ? message
-            : $"{message} ({result.InvalidText})";
-    }
-
     private static void FocusAdvancedFilterErrorField(
-        AdvancedFilterPlanError error,
+        AdvancedFilterErrorFocusTarget focusTarget,
         TextBox listRangeBox,
         TextBox criteriaRangeBox,
         TextBox copyToBox)
     {
-        var target = error switch
+        var target = focusTarget switch
         {
-            AdvancedFilterPlanError.InvalidListRange or
-            AdvancedFilterPlanError.ListRangeRequiresDataRows or
-            AdvancedFilterPlanError.ListRangeTooLarge => listRangeBox,
-            AdvancedFilterPlanError.InvalidCriteriaRange or
-            AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows or
-            AdvancedFilterPlanError.CriteriaRangeTooLarge => criteriaRangeBox,
-            AdvancedFilterPlanError.CopyDestinationRequired or
-            AdvancedFilterPlanError.InvalidCopyDestinationRange or
-            AdvancedFilterPlanError.CopyDestinationRangeTooLarge or
-            AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => copyToBox,
-            _ => criteriaRangeBox
+            AdvancedFilterErrorFocusTarget.CriteriaRange => criteriaRangeBox,
+            AdvancedFilterErrorFocusTarget.CopyTo => copyToBox,
+            _ => listRangeBox
         };
         target.Focus();
         target.SelectAll();
@@ -22660,7 +20627,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         var result = selection.Action == SubtotalDialogPlanAction.RemoveAll
             ? _session.RemoveSelectedRangeSubtotals()
-            : _session.ExecuteSubtotalOptions(selection.Options!);
+            : _session.ExecuteSubtotalOptions(selection.ToInputOptions());
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_SubtotalFailed"));
@@ -22672,30 +20639,34 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             : UiText.Format("MainLoc_AddedSubtotalsTo", rangeReference));
     }
 
-    private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(
-        SubtotalParityFixtureState? parityFixture = null)
+    private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(
+        GridRange? initialRange = null,
+        IReadOnlyList<SubtotalDialogColumnChoice>? initialColumns = null,
+        SubtotalDialogPlanResult? initialPlan = null)
     {
-        SubtotalDialogResult? result = null;
-        var range = parityFixture?.SelectedRange ?? _session.SelectedRange;
-        var columns = parityFixture?.Columns ?? SubtotalDialogPlanner.BuildColumnChoices(
+        SubtotalDialogPlanResult? result = null;
+        var range = initialRange ?? _session.SelectedRange;
+        var columns = initialColumns ?? SubtotalDialogPlanner.BuildColumnChoices(
             range,
-            absoluteColumn => FormatScalarValue(_session.ActiveSheet.GetValue(range.Start.Row, absoluteColumn)));
+            absoluteColumn => SpreadsheetDisplayFormatter.FormatScalarValue(
+                _session.ActiveSheet.GetValue(range.Start.Row, absoluteColumn),
+                SpreadsheetScalarFormatProfile.InvariantScalar));
         var plannerText = SubtotalDialogPlannerText.From(UiText.Get);
         var functions = SubtotalDialogPlanner.CreateFunctionChoices(plannerText);
-        var initialGroupColumnOffset = parityFixture?.GroupColumnOffset ?? 0;
-        var initialSubtotalColumnOffsets = parityFixture?.SubtotalColumnOffsets
+        var initialGroupColumnOffset = initialPlan?.GroupColumnOffset ?? 0;
+        var initialSubtotalColumnOffsets = initialPlan?.SubtotalColumnOffsets
             ?? columns.Where(static column => column.IsSelected).Select(static column => column.Offset).ToArray();
-        var summaryBelowData = parityFixture?.SummaryBelowData ?? _session.ActiveSheet.OutlineSummaryBelow ?? true;
+        var summaryBelowData = initialPlan?.SummaryBelowData ?? _session.ActiveSheet.OutlineSummaryBelow ?? true;
 
         var dialog = new Window
         {
             Title = UiText.Get("Subtotal_Subtotal"),
-            Width = SubtotalParityDialogWidth,
-            Height = SubtotalParityDialogHeight,
-            MinWidth = SubtotalParityDialogWidth,
-            MinHeight = SubtotalParityDialogHeight,
-            MaxWidth = SubtotalParityDialogWidth,
-            MaxHeight = SubtotalParityDialogHeight,
+            Width = SubtotalDialogWidth,
+            Height = SubtotalDialogHeight,
+            MinWidth = SubtotalDialogWidth,
+            MinHeight = SubtotalDialogHeight,
+            MaxWidth = SubtotalDialogWidth,
+            MaxHeight = SubtotalDialogHeight,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -22718,8 +20689,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var functionBox = new ComboBox
         {
             ItemsSource = functions,
-            SelectedItem = functions.FirstOrDefault(function =>
-                string.Equals(function.FunctionText, parityFixture?.FunctionText ?? SubtotalDialogPlanner.DefaultFunctionText, StringComparison.Ordinal))
+            SelectedItem = (initialPlan is null
+                ? functions.FirstOrDefault(function =>
+                    string.Equals(function.FunctionText, SubtotalDialogPlanner.DefaultFunctionText, StringComparison.Ordinal))
+                : SubtotalDialogPlanner.FindFunctionChoice(initialPlan.FunctionNumber, plannerText))
                 ?? functions[0],
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
@@ -22767,7 +20740,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var replaceBox = new CheckBox
         {
             Content = UiText.Get("Subtotal_ReplaceCurrentSubtotals"),
-            IsChecked = parityFixture?.ReplaceCurrentSubtotals ?? true,
+            IsChecked = initialPlan?.ReplaceCurrentSubtotals ?? true,
         };
         ApplySubtotalCheckBoxChrome(replaceBox);
         AutomationProperties.SetName(replaceBox, StripDisplayMnemonic(UiText.Get("Subtotal_ReplaceCurrentSubtotalsAutomationName")));
@@ -22777,7 +20750,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var pageBreakBox = new CheckBox
         {
             Content = UiText.Get("Subtotal_PageBreakBetweenGroups"),
-            IsChecked = parityFixture?.PageBreakBetweenGroups ?? false,
+            IsChecked = initialPlan?.PageBreakBetweenGroups ?? false,
         };
         ApplySubtotalCheckBoxChrome(pageBreakBox);
         AutomationProperties.SetName(pageBreakBox, StripDisplayMnemonic(UiText.Get("Subtotal_PageBreakBetweenGroupsAutomationName")));
@@ -22799,9 +20772,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(errorText, "Subtotal validation");
+        AutomationProperties.SetName(errorText, UiText.Get("Subtotal_ValidationAutomationName"));
         AutomationProperties.SetAutomationId(errorText, "SubtotalErrorText");
-        AutomationProperties.SetHelpText(errorText, "Shows Subtotal validation messages.");
+        AutomationProperties.SetHelpText(errorText, UiText.Get("Subtotal_ValidationHelpText"));
 
         var okButton = new Button
         {
@@ -22843,14 +20816,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (groupColumnBox.SelectedItem is not SubtotalDialogColumnChoice groupColumn ||
                 functionBox.SelectedItem is not SubtotalDialogFunctionChoice functionChoice)
             {
-                errorText.Text = UiText.Get("Subtotal_UnsupportedSubtotalFunction");
+                errorText.Text = SubtotalDialogInputParser
+                    .DescribeIssue(SubtotalDialogInputParseIssue.InvalidGroupColumnOffset)
+                    .Message
+                    .Resolve(UiText.Get, UiText.Format);
                 groupColumnBox.Focus();
                 return;
             }
 
             if (selectedOffsets.Count == 0)
             {
-                errorText.Text = UiText.Get("Subtotal_AtLeastOneSubtotalColumnIsRequired");
+                errorText.Text = SubtotalDialogInputParser
+                    .DescribeIssue(SubtotalDialogInputParseIssue.InvalidSubtotalColumnOffsets)
+                    .Message
+                    .Resolve(UiText.Get, UiText.Format);
                 columnsList.Focus();
                 return;
             }
@@ -22863,14 +20842,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     pageBreakBox.IsChecked == true,
                     summaryBelowBox.IsChecked == true,
                     out var plan,
-                    out _))
+                    out var issue))
             {
-                errorText.Text = UiText.Get("Subtotal_UnsupportedSubtotalFunction");
+                errorText.Text = SubtotalDialogInputParser
+                    .DescribeIssue(issue)
+                    .Message
+                    .Resolve(UiText.Get, UiText.Format);
                 functionBox.Focus();
                 return;
             }
 
-            result = new SubtotalDialogResult(plan.Action, plan.ToInputOptions());
+            result = plan;
             dialog.Close();
         }
 
@@ -22878,7 +20860,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         removeAllButton.Click += (_, _) =>
         {
             var plan = SubtotalDialogPlanner.CreateRemoveAllResult();
-            result = new SubtotalDialogResult(plan.Action, Options: null);
+            result = plan;
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();
@@ -23024,8 +21006,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ExecuteRemoveDuplicatesPlan(plan);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Remove Duplicates failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_RemoveDuplicatesFailed"));
             return;
         }
 
@@ -23060,22 +21042,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var hasHeadersBox = new CheckBox
         {
-            Content = "My data has headers",
+            Content = UiText.Get("RemoveDuplicates_MyDataHasHeadersAutomationName"),
             IsChecked = hasHeaders,
             Margin = new Thickness(0, 0, 0, 8),
         };
-        AutomationProperties.SetName(hasHeadersBox, "My data has headers");
+        AutomationProperties.SetName(hasHeadersBox, UiText.CreateAutomationName(UiText.Get("RemoveDuplicates_MyDataHasHeadersAutomationName")));
         AutomationProperties.SetAutomationId(hasHeadersBox, "RemoveDuplicatesHasHeadersBox");
-        AutomationProperties.SetHelpText(hasHeadersBox, "Treat the first row as headers when comparing duplicates.");
+        AutomationProperties.SetHelpText(hasHeadersBox, UiText.Get("RemoveDuplicates_MyDataHasHeadersHelpText"));
         ApplyDialogCheckBoxChrome(hasHeadersBox);
 
         var columnsPanel = new StackPanel
         {
             Spacing = 4,
         };
-        AutomationProperties.SetName(columnsPanel, "Columns");
+        AutomationProperties.SetName(columnsPanel, UiText.CreateAutomationName(UiText.Get("RemoveDuplicates_ColumnsAutomationName")));
         AutomationProperties.SetAutomationId(columnsPanel, "RemoveDuplicatesColumnsPanel");
-        AutomationProperties.SetHelpText(columnsPanel, "Columns used to identify duplicate rows.");
+        AutomationProperties.SetHelpText(columnsPanel, UiText.Get("RemoveDuplicates_ColumnsHelpText"));
 
         var columnBoxes = new List<CheckBox>();
 
@@ -23098,7 +21080,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 };
                 AutomationProperties.SetName(box, column.Label);
                 AutomationProperties.SetAutomationId(box, $"RemoveDuplicatesColumn{column.Offset}Box");
-                AutomationProperties.SetHelpText(box, "Include this column when comparing duplicate rows.");
+                AutomationProperties.SetHelpText(box, UiText.Get("RemoveDuplicates_ColumnHelpText"));
                 ApplyDialogCheckBoxChrome(box);
                 box.PropertyChanged += (_, e) =>
                 {
@@ -23114,25 +21096,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var selectAllButton = new Button
         {
-            Content = "Select All",
+            Content = StripDisplayMnemonic(UiText.Get("RemoveDuplicates_SelectAll")),
             Width = 88,
             MinWidth = 88,
             Margin = new Thickness(0, 0, 8, 0),
         };
-        AutomationProperties.SetName(selectAllButton, "Select All");
+        AutomationProperties.SetName(selectAllButton, UiText.Get("RemoveDuplicates_SelectAllAutomationName"));
         AutomationProperties.SetAutomationId(selectAllButton, "RemoveDuplicatesSelectAllButton");
-        AutomationProperties.SetHelpText(selectAllButton, "Select all columns for duplicate comparison.");
+        AutomationProperties.SetHelpText(selectAllButton, UiText.Get("RemoveDuplicates_SelectAllHelpText"));
         ApplyDialogButtonChrome(selectAllButton, width: 88);
 
         var unselectAllButton = new Button
         {
-            Content = "Unselect All",
+            Content = StripDisplayMnemonic(UiText.Get("RemoveDuplicates_UnselectAll")),
             Width = 88,
             MinWidth = 88,
         };
-        AutomationProperties.SetName(unselectAllButton, "Unselect All");
+        AutomationProperties.SetName(unselectAllButton, UiText.Get("RemoveDuplicates_UnselectAllAutomationName"));
         AutomationProperties.SetAutomationId(unselectAllButton, "RemoveDuplicatesUnselectAllButton");
-        AutomationProperties.SetHelpText(unselectAllButton, "Clear all selected duplicate comparison columns.");
+        AutomationProperties.SetHelpText(unselectAllButton, UiText.Get("RemoveDuplicates_UnselectAllHelpText"));
         ApplyDialogButtonChrome(unselectAllButton, width: 88);
 
         var errorText = new TextBlock
@@ -23141,32 +21123,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
         };
-        AutomationProperties.SetName(errorText, "Remove Duplicates validation");
+        AutomationProperties.SetName(errorText, UiText.Get("RemoveDuplicates_ValidationAutomationName"));
         AutomationProperties.SetAutomationId(errorText, "RemoveDuplicatesErrorText");
-        AutomationProperties.SetHelpText(errorText, "Shows Remove Duplicates validation messages.");
+        AutomationProperties.SetHelpText(errorText, UiText.Get("RemoveDuplicates_ValidationHelpText"));
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             Width = 72,
             MinWidth = 72,
             IsDefault = true,
         };
-        AutomationProperties.SetName(okButton, "OK");
+        AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
         AutomationProperties.SetAutomationId(okButton, "RemoveDuplicatesOkButton");
-        AutomationProperties.SetHelpText(okButton, "Remove duplicate rows using the selected columns.");
+        AutomationProperties.SetHelpText(okButton, UiText.Get("RemoveDuplicates_ApplyHelpText"));
         ApplyDialogButtonChrome(okButton, width: 72, isDefault: true);
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             Width = 72,
             MinWidth = 72,
             IsCancel = true,
         };
-        AutomationProperties.SetName(cancelButton, "Cancel");
+        AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
         AutomationProperties.SetAutomationId(cancelButton, "RemoveDuplicatesCancelButton");
-        AutomationProperties.SetHelpText(cancelButton, "Close Remove Duplicates without changes.");
+        AutomationProperties.SetHelpText(cancelButton, UiText.Get("RemoveDuplicates_CancelHelpText"));
         ApplyDialogButtonChrome(cancelButton, width: 72);
 
         void RefreshBulkButtonState()
@@ -23261,7 +21243,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     hasHeadersBox,
                     new TextBlock
                     {
-                        Text = "Columns:",
+                        Text = StripDisplayMnemonic(UiText.Get("RemoveDuplicates_Columns")),
                         Margin = new Thickness(0, 0, 0, 4),
                     },
                     new StackPanel
@@ -23345,7 +21327,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,
         };
-        AutomationProperties.SetAutomationId(dialog, "ScenarioManagerCompactDialog");
+        AutomationProperties.SetAutomationId(dialog, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaDialog);
         var dialogChrome = ScenarioManagerDialogChromeStyle with
         {
             FontFamily = FormulaBarFontFamily,
@@ -23366,26 +21348,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             });
         AvaloniaCompactDialogChrome.ApplyListBox(scenarioList, dialogChrome);
         AutomationProperties.SetName(scenarioList, StripDisplayMnemonic(UiText.Get("ScenarioManager_Scenarios")));
-        AutomationProperties.SetAutomationId(scenarioList, "ScenarioManagerScenarioList");
-        AutomationProperties.SetHelpText(scenarioList, "Select a saved scenario.");
+        AutomationProperties.SetAutomationId(scenarioList, FreeXAutomationIdCatalog.ScenarioManager.ScenarioList);
+        AutomationProperties.SetHelpText(scenarioList, UiText.Get("ScenarioManager_SelectSavedScenarioHelpText"));
 
         var nameBox = new TextBox
         {
             MinWidth = 170,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(nameBox, dialogChrome);
-        AutomationProperties.SetName(nameBox, "Scenario name");
-        AutomationProperties.SetAutomationId(nameBox, "ScenarioManagerNameBox");
-        AutomationProperties.SetHelpText(nameBox, "Scenario name.");
+        AutomationProperties.SetName(nameBox, UiText.Get("ScenarioManager_ScenarioNameAutomationName"));
+        AutomationProperties.SetAutomationId(nameBox, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaScenarioNameBox);
+        AutomationProperties.SetHelpText(nameBox, UiText.Get("ScenarioManager_ScenarioNameHelpText"));
 
         var commentBox = new TextBox
         {
             MinWidth = 170,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(commentBox, dialogChrome);
-        AutomationProperties.SetName(commentBox, "Comment");
-        AutomationProperties.SetAutomationId(commentBox, "ScenarioManagerCommentBox");
-        AutomationProperties.SetHelpText(commentBox, "Scenario comment.");
+        AutomationProperties.SetName(commentBox, UiText.Get("ScenarioManager_CommentAutomationName"));
+        AutomationProperties.SetAutomationId(commentBox, FreeXAutomationIdCatalog.ScenarioManager.CommentBox);
+        AutomationProperties.SetHelpText(commentBox, UiText.Get("ScenarioManager_CommentHelpText"));
 
         var changingCellsBox = new TextBox
         {
@@ -23393,7 +21375,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(changingCellsBox, dialogChrome);
         AutomationProperties.SetName(changingCellsBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCellsAutomationName")));
-        AutomationProperties.SetAutomationId(changingCellsBox, "ScenarioManagerChangingCellsBox");
+        AutomationProperties.SetAutomationId(changingCellsBox, FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsBox);
         AutomationProperties.SetHelpText(changingCellsBox, UiText.Get("ScenarioManager_EnterTheWorksheetCellsWhoseValuesChangeInTheScenario"));
 
         // Result cells field (Windows shows both Changing cells and Result cells).
@@ -23402,9 +21384,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 170,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(resultCellsBox, dialogChrome);
-        AutomationProperties.SetName(resultCellsBox, "Result cells");
-        AutomationProperties.SetAutomationId(resultCellsBox, "ScenarioManagerResultCellsBox");
-        AutomationProperties.SetHelpText(resultCellsBox, "The worksheet cells whose results the scenario reports.");
+        AutomationProperties.SetName(resultCellsBox, UiText.Get("ScenarioManager_ResultCellsAutomationName"));
+        AutomationProperties.SetAutomationId(resultCellsBox, FreeXAutomationIdCatalog.ScenarioManager.ResultCellsBox);
+        AutomationProperties.SetHelpText(resultCellsBox, UiText.Get("ScenarioManager_ResultCellsHelpText"));
 
         var preventChangesBox = new CheckBox
         {
@@ -23415,7 +21397,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(preventChangesBox, dialogChrome);
         AutomationProperties.SetName(preventChangesBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_PreventChangesAutomationName")));
-        AutomationProperties.SetAutomationId(preventChangesBox, "ScenarioManagerPreventChangesBox");
+        AutomationProperties.SetAutomationId(preventChangesBox, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaPreventChangesBox);
         AutomationProperties.SetHelpText(preventChangesBox, UiText.Get("ScenarioManager_PreventChangesToTheScenarioWhenTheSheetIsProtected"));
 
         var hideBox = new CheckBox
@@ -23426,7 +21408,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(hideBox, dialogChrome);
         AutomationProperties.SetName(hideBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_HideAutomationName")));
-        AutomationProperties.SetAutomationId(hideBox, "ScenarioManagerHideBox");
+        AutomationProperties.SetAutomationId(hideBox, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaHideBox);
         AutomationProperties.SetHelpText(hideBox, UiText.Get("ScenarioManager_HideTheScenarioWhenTheSheetIsProtected"));
 
         var errorText = new TextBlock
@@ -23435,9 +21417,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
         };
-        AutomationProperties.SetName(errorText, "Scenario Manager validation");
-        AutomationProperties.SetAutomationId(errorText, "ScenarioManagerErrorText");
-        AutomationProperties.SetHelpText(errorText, "Shows Scenario Manager validation and error messages.");
+        AutomationProperties.SetName(errorText, UiText.Get("ScenarioManager_ValidationAutomationName"));
+        AutomationProperties.SetAutomationId(errorText, FreeXAutomationIdCatalog.ScenarioManager.ErrorText);
+        AutomationProperties.SetHelpText(errorText, UiText.Get("ScenarioManager_ValidationHelpText"));
 
         var saveButton = new Button
         {
@@ -23446,9 +21428,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(saveButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: plan.Scenarios.Count == 0);
-        AutomationProperties.SetName(saveButton, "Save/Add");
-        AutomationProperties.SetAutomationId(saveButton, "ScenarioManagerSaveButton");
-        AutomationProperties.SetHelpText(saveButton, "Save the selected cells as a new or updated scenario.");
+        AutomationProperties.SetName(saveButton, UiText.Get("ScenarioManager_SaveAddAutomationName"));
+        AutomationProperties.SetAutomationId(saveButton, FreeXAutomationIdCatalog.ScenarioManager.SaveButton);
+        AutomationProperties.SetHelpText(saveButton, UiText.Get("ScenarioManager_SaveAddHelpText"));
 
         var editButton = new Button
         {
@@ -23458,7 +21440,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyButton(editButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
         AutomationProperties.SetName(editButton, StripDisplayMnemonic(UiText.Get("ScenarioManager_EditScenarioAutomationName")));
-        AutomationProperties.SetAutomationId(editButton, "ScenarioManagerEditButton");
+        AutomationProperties.SetAutomationId(editButton, FreeXAutomationIdCatalog.ScenarioManager.EditButton);
         AutomationProperties.SetHelpText(editButton, UiText.Get("ScenarioManager_EditTheSelectedScenarioUsingTheScenarioFields"));
 
         var showButton = new Button
@@ -23468,9 +21450,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(showButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: plan.SelectedScenario is not null);
-        AutomationProperties.SetName(showButton, "Show");
-        AutomationProperties.SetAutomationId(showButton, "ScenarioManagerShowButton");
-        AutomationProperties.SetHelpText(showButton, "Apply the selected scenario values to the workbook.");
+        AutomationProperties.SetName(
+            showButton,
+            UiText.CreateAutomationName(UiText.Get("ScenarioManager_Show")));
+        AutomationProperties.SetAutomationId(showButton, FreeXAutomationIdCatalog.ScenarioManager.ShowButton);
+        AutomationProperties.SetHelpText(showButton, UiText.Get("ScenarioManager_ShowHelpText"));
 
         var deleteButton = new Button
         {
@@ -23479,9 +21463,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(deleteButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
-        AutomationProperties.SetName(deleteButton, "Delete");
-        AutomationProperties.SetAutomationId(deleteButton, "ScenarioManagerDeleteButton");
-        AutomationProperties.SetHelpText(deleteButton, "Delete the selected scenario.");
+        AutomationProperties.SetName(
+            deleteButton,
+            UiText.CreateAutomationName(UiText.Get("ScenarioManager_Delete")));
+        AutomationProperties.SetAutomationId(deleteButton, FreeXAutomationIdCatalog.ScenarioManager.DeleteButton);
+        AutomationProperties.SetHelpText(deleteButton, UiText.Get("ScenarioManager_DeleteTheSelectedScenario"));
 
         var summaryButton = new Button
         {
@@ -23490,9 +21476,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(summaryButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
-        AutomationProperties.SetName(summaryButton, "Summary Report");
-        AutomationProperties.SetAutomationId(summaryButton, "ScenarioManagerSummaryButton");
-        AutomationProperties.SetHelpText(summaryButton, "Create a scenario summary report sheet.");
+        AutomationProperties.SetName(summaryButton, UiText.Get("ScenarioManager_SummaryReportAutomationName"));
+        AutomationProperties.SetAutomationId(summaryButton, FreeXAutomationIdCatalog.ScenarioManager.SummaryButton);
+        AutomationProperties.SetHelpText(summaryButton, UiText.Get("ScenarioManager_SummaryReportHelpText"));
 
         var closeButton = new Button
         {
@@ -23502,8 +21488,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyButton(closeButton, dialogChrome, ScenarioManagerDialogLayout.CloseButtonWidth);
         AutomationProperties.SetName(closeButton, StripDisplayMnemonic(UiText.Get("ScenarioManager_Close")));
-        AutomationProperties.SetAutomationId(closeButton, "ScenarioManagerCloseButton");
-        AutomationProperties.SetHelpText(closeButton, "Close Scenario Manager.");
+        AutomationProperties.SetAutomationId(closeButton, FreeXAutomationIdCatalog.ScenarioManager.CloseButton);
+        AutomationProperties.SetHelpText(closeButton, UiText.Get("ScenarioManager_CloseHelpText"));
 
         string? CurrentScenarioName() =>
             scenarioList.SelectedItem is ScenarioManagerDialogScenarioItem item
@@ -23528,7 +21514,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var fields = ScenarioManagerDialogPlanner.ProjectSelectionFields(
                 selectedDialogItem,
                 nameBox.Text ?? "",
-                CreateScenarioManagerDefaultName(plan.Scenarios));
+                ScenarioManagerPlanner.GetDefaultScenarioName(plan.Scenarios.Select(scenario => scenario.Name)));
             if (fields is not null)
             {
                 nameBox.Text = fields.ScenarioName;
@@ -23576,7 +21562,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _ => nameBox,
             };
 
-        bool ValidateScenarioManagerFields(ScenarioManagerDialogAction action)
+        bool ValidateScenarioManagerFields(ScenarioManagerAction action)
         {
             var failure = ScenarioManagerDialogPlanner.ValidateAcceptRequest(
                 action,
@@ -23588,20 +21574,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (failure is null)
                 return true;
 
-            var message = failure.Error switch
-            {
-                ScenarioManagerDialogValidationError.EnterScenarioName =>
-                    UiText.Get("ScenarioManager_EnterScenarioName"),
-                ScenarioManagerDialogValidationError.EnterValidChangingCellsReference =>
-                    UiText.Get("ScenarioManager_EnterValidChangingCellsReference"),
-                ScenarioManagerDialogValidationError.EnterValidResultCellsReference =>
-                    UiText.Get("ScenarioManager_EnterValidResultCellsReference"),
-                _ => UiText.Get("ScenarioManager_EnterScenarioDetails"),
-            };
+            var presentation = ScenarioManagerDialogPlanner.DescribeValidationFailure(failure);
+            var message = presentation.Message.Resolve(UiText.Get, UiText.Format);
             errorText.Text = message;
             errorText.IsVisible = true;
             ShowEditIssue(message);
-            var target = ValidationTarget(failure.Field);
+            var target = ValidationTarget(presentation.FocusTarget);
             target.Focus();
             if (target is TextBox textBox)
                 textBox.SelectAll();
@@ -23627,7 +21605,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         void ReportScenarioManagerFailure(WorkbookCellEditResult result)
         {
-            var message = result.ErrorMessage ?? "Scenario Manager failed.";
+        var message = result.ErrorMessage ?? UiText.Get("MainLoc_ScenarioManagerFailed");
             errorText.Text = message;
             errorText.IsVisible = true;
             ShowEditIssue(message);
@@ -23647,14 +21625,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return true;
         }
 
-        void SaveCurrentValues(ScenarioManagerDialogAction action)
+        void SaveCurrentValues(ScenarioManagerAction action)
         {
             if (!ValidateScenarioManagerFields(action))
                 return;
 
             if (!TryReadScenarioManagerRanges(changingCellsBox.Text, out var ranges))
             {
-                var message = UiText.Get("ScenarioManager_EnterValidChangingCellsReference");
+                var message = ScenarioManagerDialogPlanner
+                    .DescribeValidationError(ScenarioManagerDialogValidationError.EnterValidChangingCellsReference)!
+                    .Resolve(UiText.Get, UiText.Format);
                 errorText.Text = message;
                 errorText.IsVisible = true;
                 ShowEditIssue(message);
@@ -23682,7 +21662,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var request = new ScenarioManagerSaveRequest(
                 acceptedName,
                 changingCells,
-                ReplaceScenarioName: accepted.Action == ScenarioManagerDialogAction.Edit
+                ReplaceScenarioName: accepted.Action == ScenarioManagerAction.Edit
                     ? accepted.SelectedScenarioName
                     : null,
                 Comment: accepted.CommentText,
@@ -23692,9 +21672,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var result = _session.ExecuteScenarioManagerSavePlan(savePlan, request);
             if (!ApplyScenarioManagerResult(
                     result,
-                    $"Saved scenario '{acceptedName}' ({changingCells.Count} {FormatCountLabel(changingCells.Count, "cell")})"))
+                    UiText.Format("MainLoc_SavedX", acceptedName)))
             {
-                var target = action == ScenarioManagerDialogAction.Edit
+                var target = action == ScenarioManagerAction.Edit
                     ? nameBox
                     : changingCellsBox;
                 target.Focus();
@@ -23703,7 +21683,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             }
 
             RefreshDialogPlan(acceptedName);
-            nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
+            nameBox.Text = ScenarioManagerPlanner.GetDefaultScenarioName(plan.Scenarios.Select(scenario => scenario.Name));
             commentBox.Text = "";
         }
 
@@ -23714,7 +21694,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var result = _session.ExecuteScenarioManagerShowPlan(showPlan);
             if (!ApplyScenarioManagerResult(
                     result,
-                    $"Showed scenario '{showPlan.SelectedScenario?.Name ?? scenarioName}'"))
+                    UiText.Format(
+                        "MainLoc_ActionRangeStatusFormat",
+                        UiText.Get("ScenarioManager_Show"),
+                        showPlan.SelectedScenario?.Name ?? scenarioName)))
                 return;
 
             RefreshDialogPlan(showPlan.SelectedScenario?.Name ?? scenarioName);
@@ -23724,18 +21707,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             var scenarioName = CurrentScenarioName();
             var deletePlan = ScenarioManagerPlanner.CreateDeletePlan(_session.Workbook, scenarioName);
-            var deletedName = deletePlan.SelectedScenario?.Name ?? scenarioName ?? "scenario";
+            var deletedName = deletePlan.SelectedScenario?.Name
+                ?? scenarioName
+                ?? UiText.Get("ScenarioManager_ScenarioFallbackName");
             var result = _session.ExecuteScenarioManagerDeletePlan(deletePlan);
-            if (!ApplyScenarioManagerResult(result, $"Deleted scenario '{deletedName}'"))
+            if (!ApplyScenarioManagerResult(
+                    result,
+                    UiText.Format("ScenarioManager_DeletedStatusFormat", deletedName)))
                 return;
 
             RefreshDialogPlan();
-            nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
+            nameBox.Text = ScenarioManagerPlanner.GetDefaultScenarioName(plan.Scenarios.Select(scenario => scenario.Name));
         }
 
         void CreateSummaryReport()
         {
-            if (!ValidateScenarioManagerFields(ScenarioManagerDialogAction.Report))
+            if (!ValidateScenarioManagerFields(ScenarioManagerAction.Report))
                 return;
 
             IReadOnlyList<CellAddress> resultCells = [];
@@ -23763,15 +21750,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var result = _session.ExecuteScenarioManagerSummaryReportPlan(summaryPlan);
             if (!ApplyScenarioManagerResult(
                     result,
-                    $"Created Scenario Summary for {summaryPlan.Scenarios.Count} {FormatCountLabel(summaryPlan.Scenarios.Count, "scenario")}"))
+                    UiText.Format(
+                        "MainLoc_ActionRangeStatusFormat",
+                        UiText.Get("ScenarioManager_Summary"),
+                        FormatCountLabel(
+                            summaryPlan.Scenarios.Count,
+                            "ScenarioManager_ScenarioSingular",
+                            "ScenarioManager_ScenarioPlural"))))
                 return;
 
             RefreshDialogPlan(selectedScenarioName);
         }
 
         scenarioList.SelectionChanged += (_, _) => RefreshSelectionDetails();
-        saveButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerDialogAction.Add);
-        editButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerDialogAction.Edit);
+        saveButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerAction.Add);
+        editButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerAction.Edit);
         showButton.Click += (_, _) => ShowSelectedScenario();
         deleteButton.Click += (_, _) => DeleteSelectedScenario();
         summaryButton.Click += (_, _) => CreateSummaryReport();
@@ -23854,7 +21847,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         RefreshDialogPlan(selectedScenarioName);
         if (plan.SelectedScenario is null)
-            nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
+            nameBox.Text = ScenarioManagerPlanner.GetDefaultScenarioName(plan.Scenarios.Select(scenario => scenario.Name));
         dialog.Content = new AvaloniaGrid
         {
             Margin = new Thickness(12),
@@ -23897,50 +21890,42 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private static string FormatScenarioManagerSelectionSummary(GridRange range) =>
-        $"Current selection: {FormatRangeReference(range)} ({range.CellCount} {FormatCountLabel(range.CellCount, "cell")})";
+        UiText.Format(
+            "MainLoc_SelectedX",
+            FormatRangeReference(range));
 
     private static string FormatScenarioManagerScenarioDetails(ScenarioManagerScenarioChoice? choice)
     {
         if (choice is null)
-            return "No scenario selected.";
+            return UiText.Get("ScenarioManager_NoScenarioSelected");
 
         var comment = string.IsNullOrWhiteSpace(choice.Comment)
-            ? "No comment."
+            ? UiText.Get("ScenarioManager_NoComment")
             : choice.Comment.Trim();
         var flags = new List<string>();
         if (choice.Hidden)
-            flags.Add("hidden");
+            flags.Add(UiText.Get("ScenarioManager_HiddenState"));
         if (choice.Locked)
-            flags.Add("locked");
+            flags.Add(UiText.Get("ScenarioManager_LockedState"));
 
         var flagText = flags.Count == 0
-            ? "Visible, editable."
-            : string.Join(", ", flags.Select(flag => CultureInfo.CurrentCulture.TextInfo.ToTitleCase(flag))) + ".";
+            ? UiText.Get("ScenarioManager_VisibleEditableState")
+            : UiText.Format("ScenarioManager_FlagListFormat", string.Join(UiText.Get("ManageConditionalFormats_ListSeparator"), flags));
         return string.Join(
             Environment.NewLine,
-            $"{choice.Name}: {choice.ChangingCellCount} {FormatCountLabel(choice.ChangingCellCount, "changing cell")}.",
+            UiText.Format(
+                "MainLoc_ActionRangeStatusFormat",
+                choice.Name,
+                FormatCountLabel(
+                    choice.ChangingCellCount,
+                    "ScenarioManager_ChangingCellSingular",
+                    "ScenarioManager_ChangingCellPlural")),
             comment,
             flagText);
     }
 
-    private static string CreateScenarioManagerDefaultName(IReadOnlyList<ScenarioManagerScenarioChoice> scenarios)
-    {
-        var existingNames = new HashSet<string>(
-            scenarios.Select(scenario => scenario.Name),
-            StringComparer.OrdinalIgnoreCase);
-        var index = scenarios.Count + 1;
-        while (true)
-        {
-            var candidate = $"Scenario {index}";
-            if (!existingNames.Contains(candidate))
-                return candidate;
-
-            index++;
-        }
-    }
-
-    private static string FormatCountLabel(long count, string singular) =>
-        count == 1 ? singular : $"{singular}s";
+    private static string FormatCountLabel(long count, string singularKey, string pluralKey) =>
+        UiText.Get(count == 1 ? singularKey : pluralKey);
 
     private static void AddScenarioManagerField(AvaloniaGrid grid, int row, string label, Control control)
     {
@@ -23987,12 +21972,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ExecuteDataTablePlan(plan);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Data Table failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DataTableFailed"));
             return;
         }
 
-        RefreshShell($"Created {FormatDataTableMode(plan)} Data Table for {tableRange}");
+        RefreshShell(UiText.Format(
+            "MainLoc_ActionRangeStatusFormat",
+            FormatDataTableMode(plan),
+            tableRange));
     }
 
     private async Task<DataTablePlan?> ShowDataTableInputDialogAsync(
@@ -24057,19 +22045,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
         };
-        AutomationProperties.SetName(errorText, "Data Table validation");
+        AutomationProperties.SetName(errorText, UiText.Get("DataTable_ValidationAutomationName"));
         AutomationProperties.SetAutomationId(errorText, "DataTableErrorText");
-        AutomationProperties.SetHelpText(errorText, "Shows Data Table readiness and validation messages.");
+        AutomationProperties.SetHelpText(errorText, UiText.Get("DataTable_ValidationHelpText"));
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             Width = 76,
             MinWidth = 76,
             IsDefault = true,
         };
         ApplyDataToolsButtonChrome(okButton, 76, isDefault: true);
-        AutomationProperties.SetName(okButton, "OK");
+        AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
         AutomationProperties.SetAutomationId(okButton, "DataTableOkButton");
         AutomationProperties.SetHelpText(okButton, UiText.Get("TableLoc_OK"));
 
@@ -24302,12 +22290,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ExecuteForecastSheetPlan(plan);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Forecast Sheet failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ForecastSheetFailed"));
             return;
         }
 
-        RefreshShell($"Created Forecast Sheet from {sourceRange}");
+        RefreshShell(UiText.Format("ForecastSheet_CreatedStatusFormat", sourceRange));
     }
 
     private async Task<ForecastSheetPlan?> ShowForecastSheetInputDialogAsync()
@@ -24315,13 +22303,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ForecastSheetPlan? result = null;
         var dialog = new Window
         {
-            Title = "Forecast Sheet",
-            Width = ForecastSheetParityDialogWidth,
-            Height = ForecastSheetParityDialogHeight,
-            MinWidth = ForecastSheetParityDialogWidth,
-            MinHeight = ForecastSheetParityDialogHeight,
-            MaxWidth = ForecastSheetParityDialogWidth,
-            MaxHeight = ForecastSheetParityDialogHeight,
+            Title = UiText.Get("MainWindow_Content_ForecastSheet"),
+            Width = ForecastSheetDialogWidth,
+            Height = ForecastSheetDialogHeight,
+            MinWidth = ForecastSheetDialogWidth,
+            MinHeight = ForecastSheetDialogHeight,
+            MaxWidth = ForecastSheetDialogWidth,
+            MaxHeight = ForecastSheetDialogHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -24332,13 +22320,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var sourceRangeText = new TextBlock
         {
-            Text = $"Source range: {FormatRangeReference(_session.SelectedRange)}",
+            Text = UiText.Format(
+                "ForecastSheet_SourceRangeFormat",
+                FormatRangeReference(_session.SelectedRange)),
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(sourceRangeText, "Forecast source range");
+        AutomationProperties.SetName(sourceRangeText, UiText.Get("ForecastSheet_SourceRangeAutomationName"));
         AutomationProperties.SetAutomationId(sourceRangeText, "ForecastSheetSourceRangeSummaryText");
-        AutomationProperties.SetHelpText(sourceRangeText, "Shows the selected source range for the forecast.");
+        AutomationProperties.SetHelpText(sourceRangeText, UiText.Get("ForecastSheet_SourceRangeHelpText"));
 
         var periodsBox = new TextBox
         {
@@ -24346,42 +22336,44 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 160,
         };
         ApplyDataToolsTextBoxChrome(periodsBox);
-        AutomationProperties.SetName(periodsBox, "Forecast periods");
+        AutomationProperties.SetName(periodsBox, UiText.CreateAutomationName(UiText.Get("ForecastSheet_PeriodsAutomationName")));
         AutomationProperties.SetAutomationId(periodsBox, "ForecastPeriodsBox");
-        AutomationProperties.SetHelpText(periodsBox, "Enter the positive whole number of periods to forecast.");
+        AutomationProperties.SetHelpText(periodsBox, UiText.Get("ForecastSheet_PeriodsHelpText"));
 
         var errorText = new TextBlock
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(errorText, "Forecast Sheet validation");
+        AutomationProperties.SetName(errorText, UiText.Get("ForecastSheet_ValidationAutomationName"));
         AutomationProperties.SetAutomationId(errorText, "ForecastSheetErrorText");
-        AutomationProperties.SetHelpText(errorText, "Shows Forecast Sheet readiness and validation messages.");
+        AutomationProperties.SetHelpText(errorText, UiText.Get("ForecastSheet_ValidationHelpText"));
 
         var createButton = new Button
         {
-            Content = "Create",
+            Content = StripDisplayMnemonic(UiText.Get("ForecastSheet_CreateButton")),
             Width = 76,
             MinWidth = 76,
             IsDefault = true,
         };
         ApplyDataToolsButtonChrome(createButton, 76, isDefault: true);
-        AutomationProperties.SetName(createButton, "Create");
+        AutomationProperties.SetName(
+            createButton,
+            UiText.CreateAutomationName(UiText.Get("ForecastSheet_CreateButton")));
         AutomationProperties.SetAutomationId(createButton, "ForecastSheetCreateButton");
-        AutomationProperties.SetHelpText(createButton, "Create the Forecast Sheet.");
+        AutomationProperties.SetHelpText(createButton, UiText.Get("ForecastSheet_CreateHelpText"));
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             Width = 76,
             MinWidth = 76,
             IsCancel = true,
         };
         ApplyDataToolsButtonChrome(cancelButton, 76);
-        AutomationProperties.SetName(cancelButton, "Cancel");
+        AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
         AutomationProperties.SetAutomationId(cancelButton, "ForecastSheetCancelButton");
-        AutomationProperties.SetHelpText(cancelButton, "Close Forecast Sheet without creating it.");
+        AutomationProperties.SetHelpText(cancelButton, UiText.Get("ForecastSheet_CancelHelpText"));
 
         ForecastSheetPlan CreatePlan() =>
             ForecastSheetPlanner.CreatePlan(
@@ -24456,7 +22448,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     Children =
                     {
                         sourceRangeText,
-                        CreateForecastSheetField("Forecast periods", periodsBox),
+                        CreateForecastSheetField(
+                            StripDisplayMnemonic(UiText.Get("ForecastSheet_PeriodsLabel")),
+                            periodsBox),
                         errorText,
                     },
                 },
@@ -24570,11 +22564,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync()
     {
-        return await ShowDataValidationInputDialogAsync(null);
-    }
-
-    private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync(Action<DataValidationDialogSmokeProbe>? launchSmokeProbe)
-    {
         DataValidationDialogResult? result = null;
         var summary = DataValidationPresetPlanner.CreateSelectionSummary(
             _session.Workbook,
@@ -24618,7 +22607,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ItemsSource = typeChoices,
             MinWidth = 220,
         };
-        AutomationProperties.SetName(typeBox, "Allow");
+        AutomationProperties.SetName(
+            typeBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_Allow")));
         AutomationProperties.SetAutomationId(typeBox, "DataValidationTypeBox");
         ApplyDialogComboBoxChrome(typeBox);
 
@@ -24627,7 +22618,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ItemsSource = operatorChoices,
             MinWidth = 220,
         };
-        AutomationProperties.SetName(operatorBox, "Data");
+        AutomationProperties.SetName(
+            operatorBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_Data")));
         AutomationProperties.SetAutomationId(operatorBox, "DataValidationOperatorBox");
         ApplyDialogComboBoxChrome(operatorBox);
         var operatorField = CreateDataValidationField(UiText.Get("DataValidation_Data"), operatorBox);
@@ -24637,7 +22630,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinWidth = 240,
         };
-        AutomationProperties.SetName(formula1Box, "Value");
+        AutomationProperties.SetName(
+            formula1Box,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_Value")));
         AutomationProperties.SetAutomationId(formula1Box, "DataValidationFormula1Box");
         ApplyDialogTextBoxChrome(formula1Box);
         var formula1Field = CreateDataValidationField(formula1Label, formula1Box);
@@ -24647,7 +22642,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinWidth = 240,
         };
-        AutomationProperties.SetName(formula2Box, "Maximum");
+        AutomationProperties.SetName(
+            formula2Box,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_Maximum")));
         AutomationProperties.SetAutomationId(formula2Box, "DataValidationFormula2Box");
         ApplyDialogTextBoxChrome(formula2Box);
         var formula2Field = CreateDataValidationField(formula2Label, formula2Box);
@@ -24684,7 +22681,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinWidth = 240,
         };
-        AutomationProperties.SetName(promptTitleBox, "Input title");
+        AutomationProperties.SetName(
+            promptTitleBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_InputTitle")));
         AutomationProperties.SetAutomationId(promptTitleBox, "DataValidationPromptTitleBox");
         ApplyDialogTextBoxChrome(promptTitleBox);
 
@@ -24695,7 +22694,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 240,
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(promptMessageBox, "Input message");
+        AutomationProperties.SetName(
+            promptMessageBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_InputMessage2")));
         AutomationProperties.SetAutomationId(promptMessageBox, "DataValidationPromptMessageBox");
         promptMessageBox.FontSize = 12;
         promptMessageBox.FontFamily = FormulaBarFontFamily;
@@ -24714,7 +22715,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ItemsSource = alertStyleChoices,
             MinWidth = 220,
         };
-        AutomationProperties.SetName(alertStyleBox, "Style");
+        AutomationProperties.SetName(
+            alertStyleBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_AlertStyle")));
         AutomationProperties.SetAutomationId(alertStyleBox, "DataValidationAlertStyleBox");
         ApplyDialogComboBoxChrome(alertStyleBox);
 
@@ -24722,7 +22725,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinWidth = 240,
         };
-        AutomationProperties.SetName(errorTitleBox, "Error title");
+        AutomationProperties.SetName(
+            errorTitleBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_ErrorTitle")));
         AutomationProperties.SetAutomationId(errorTitleBox, "DataValidationErrorTitleBox");
         ApplyDialogTextBoxChrome(errorTitleBox);
 
@@ -24733,7 +22738,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 240,
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(errorMessageBox, "Error message");
+        AutomationProperties.SetName(
+            errorMessageBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_ErrorMessage")));
         AutomationProperties.SetAutomationId(errorMessageBox, "DataValidationErrorMessageBox");
         errorMessageBox.FontSize = 12;
         errorMessageBox.FontFamily = FormulaBarFontFamily;
@@ -24819,10 +22826,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 SelectedOperator(),
                 hasSelectionSource: false);
 
-            formula1Label.Text = StripDisplayMnemonic(UiText.Get(DataValidationFormula1LabelKey(plan.Formula1Label)));
+            var formula1Descriptor = DataValidationDialogPlanner.GetFormula1FieldDescriptor(plan.Formula1Label);
+            formula1Label.Text = StripDisplayMnemonic(UiText.Get(formula1Descriptor.LabelResourceKey));
             AutomationProperties.SetName(formula1Box, formula1Label.Text);
-            AutomationProperties.SetHelpText(formula1Box, DataValidationFormula1HelpText(plan.Formula1Label));
-            formula2Label.Text = StripDisplayMnemonic(UiText.Get("DataValidation_Maximum"));
+            AutomationProperties.SetHelpText(formula1Box, formula1Descriptor.HelpText);
+            formula2Label.Text = StripDisplayMnemonic(UiText.Get(DataValidationDialogPlanner.Formula2FieldDescriptor.LabelResourceKey));
+            AutomationProperties.SetHelpText(formula2Box, DataValidationDialogPlanner.Formula2FieldDescriptor.HelpText);
             operatorField.IsVisible = plan.ShowOperator;
             formula1Field.IsVisible = plan.ShowFormula1;
             formula2Field.IsVisible = plan.ShowFormula2;
@@ -25020,60 +23029,51 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ConfigureDialogTabCycle(dialog, root);
         dialog.Content = root;
         dialog.Opened += (_, _) => typeBox.Focus();
-        if (launchSmokeProbe is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                RunLaunchSmokeDialogProbe(
-                    dialog,
-                    () => launchSmokeProbe(new DataValidationDialogSmokeProbe(
-                        dialog,
-                        summaryText,
-                        typeBox,
-                        operatorBox,
-                        formula1Box,
-                        formula2Box,
-                        allowBlankBox,
-                        showDropdownBox,
-                        showInputMessageBox,
-                        promptTitleBox,
-                        promptMessageBox,
-                        showErrorMessageBox,
-                        alertStyleBox,
-                        errorTitleBox,
-                        errorMessageBox,
-                        applyButton,
-                        clearButton,
-                        cancelButton)));
-            };
-        }
+        AttachOptionalDataValidationDialogObservation(
+            dialog,
+            summaryText,
+            typeBox,
+            operatorBox,
+            formula1Box,
+            formula2Box,
+            allowBlankBox,
+            showDropdownBox,
+            showInputMessageBox,
+            promptTitleBox,
+            promptMessageBox,
+            showErrorMessageBox,
+            alertStyleBox,
+            errorTitleBox,
+            errorMessageBox,
+            applyButton,
+            clearButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
     }
 
-    private static IReadOnlyList<DataValidationTypeChoice> CreateDataValidationTypeChoices() =>
-        DataValidationPresetPlanner.GetRuleTypeMetadata()
+    private static IReadOnlyList<DataValidationTypeChoice> CreateDataValidationTypeChoices()
+    {
+        var localizedChoices = DataValidationDialogPlanner.CreateTypeChoices(UiText.Get)
+            .ToDictionary(choice => choice.Type);
+        return DataValidationPresetPlanner.GetRuleTypeMetadata()
             .Where(metadata => metadata.Type is DvType.WholeNumber or DvType.Decimal or DvType.List or DvType.Date or DvType.Time or DvType.TextLength or DvType.Custom or DvType.Any)
-            .Select(metadata => new DataValidationTypeChoice(metadata.Type, metadata.DisplayName))
+            .Select(metadata => localizedChoices[metadata.Type])
             .ToArray();
+    }
 
     private static IReadOnlyList<DataValidationOperatorChoice> CreateDataValidationOperatorChoices() =>
-    [
-        new(DvOperator.Between, "Between"),
-        new(DvOperator.NotBetween, "Not between"),
-        new(DvOperator.Equal, "Equal to"),
-        new(DvOperator.NotEqual, "Not equal to"),
-        new(DvOperator.GreaterThan, "Greater than"),
-        new(DvOperator.LessThan, "Less than"),
-        new(DvOperator.GreaterThanOrEqual, "Greater than or equal to"),
-        new(DvOperator.LessThanOrEqual, "Less than or equal to"),
-    ];
+        DataValidationDialogPlanner.CreateOperatorChoices(UiText.Get);
 
-    private static IReadOnlyList<DataValidationAlertStyleChoice> CreateDataValidationAlertStyleChoices() =>
-        DataValidationDisplayTextPlanner.GetAlertStyleMetadata()
-            .Select(metadata => new DataValidationAlertStyleChoice(metadata.Style, metadata.DisplayName))
+    private static IReadOnlyList<DataValidationAlertStyleChoice> CreateDataValidationAlertStyleChoices()
+    {
+        var localizedChoices = DataValidationDialogPlanner.CreateAlertStyleChoices(UiText.Get)
+            .ToDictionary(choice => choice.AlertStyle);
+        return DataValidationDisplayTextPlanner.GetAlertStyleMetadata()
+            .Select(metadata => localizedChoices[metadata.Style])
             .ToArray();
+    }
 
     private static DataValidationTypeChoice? FindDataValidationTypeChoice(
         IReadOnlyList<DataValidationTypeChoice> choices,
@@ -25113,22 +23113,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         return choices[0];
     }
-
-    private static string DataValidationFormula1LabelKey(DvFormula1Label label) => label switch
-    {
-        DvFormula1Label.Source => "DataValidation_Source",
-        DvFormula1Label.Formula => "DataValidation_Formula",
-        DvFormula1Label.Value => "DataValidation_Value",
-        _ => "DataValidation_Minimum",
-    };
-
-    private static string DataValidationFormula1HelpText(DvFormula1Label label) => label switch
-    {
-        DvFormula1Label.Source => "List source range or comma-separated values.",
-        DvFormula1Label.Formula => "Formula that must evaluate to TRUE (e.g. =A1>0).",
-        DvFormula1Label.Minimum => "Minimum value for the validation rule.",
-        _ => "Value for the validation rule.",
-    };
 
     private static string DataValidationValidationErrorText(DvValidationError? error) =>
         error?.Message ?? "";
@@ -25295,7 +23279,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Edit history unavailable.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_EditHistoryUnavailable"));
             return;
         }
 
@@ -25328,20 +23312,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         // Keep object Cut separate from the cell clipboard. The source is removed only by the
         // shared move command after Paste has validated and added the destination object.
-        _internalObjectClipboard = null;
+        _drawingObjectClipboard.Clear();
 
         if (TryCopySelectedDrawingObject(isCut: true))
             return;
 
         if (!TryCommitPendingFormulaEdit())
             return;
-
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
-        {
-            ShowEditIssue("Clipboard unavailable on this platform.");
-            return;
-        }
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         var cutResult = _session.TryCutSelectedRangeText();
@@ -25351,7 +23328,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        await clipboard.SetTextAsync(cutResult.Text);
+        var write = await _platformClipboard.WriteAsync(
+            WorkbookClipboardSession.AttachMarker(
+                new PlatformClipboardContent(Text: cutResult.Text),
+                cutResult.ClipboardMarker));
+        if (write.Status == PlatformClipboardWriteStatus.Unavailable)
+        {
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
+            return;
+        }
+        if (!write.IsSuccess)
+            throw new InvalidOperationException(write.ErrorMessage);
         SetClipboardMarquee(_session.SelectedRange, isCut: true);
         RefreshShell(UiText.Format("MainLoc_CutX", rangeReference));
     }
@@ -25361,19 +23348,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
             return;
 
-        _internalObjectClipboard = null;
+        _drawingObjectClipboard.Clear();
         if (TryCopySelectedDrawingObject())
             return;
 
         if (!TryCommitPendingFormulaEdit())
             return;
-
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
-        {
-            ShowEditIssue("Clipboard unavailable on this platform.");
-            return;
-        }
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         var copyResult = _session.TryCopySelectedRangeText();
@@ -25389,10 +23369,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // instead of only flattened TSV text. Only single-range selections build the HTML fragment
         // (mirroring TryCopySelectedRangeText's own single-range Viewport/SelectedRange usage) —
         // multi-area selections keep the existing plain-text-only behavior.
-        using var transfer = new DataTransfer();
+        PlatformClipboardContent clipboardContent;
         if (_session.SelectedRanges.Count > 1)
         {
-            transfer.Add(DataTransferItem.CreateText(copiedText));
+            clipboardContent = new PlatformClipboardContent(Text: copiedText);
         }
         else
         {
@@ -25401,18 +23381,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // full-range viewport TryCopySelectedRangeText() built for the same range (falling back to
             // the on-screen one only if a result somehow carries none) so the CF_HTML fragment always
             // reflects the complete selection, matching the plain-text payload it is paired with.
-            AddClipboardTextAndHtml(transfer, copiedText, copyResult.Viewport ?? _session.Viewport, _session.ActiveSheet, _session.SelectedRange, _session.Workbook.Theme);
+            clipboardContent = BuildClipboardTextAndHtmlContent(
+                copiedText,
+                copyResult.Viewport ?? _session.Viewport,
+                _session.ActiveSheet,
+                _session.SelectedRange,
+                _session.Workbook.Theme);
         }
 
-        try
+        clipboardContent = WorkbookClipboardSession.AttachMarker(
+            clipboardContent,
+            copyResult.ClipboardMarker);
+        var write = await _platformClipboard.WriteAsync(clipboardContent);
+        if (write.Status == PlatformClipboardWriteStatus.Unavailable)
         {
-            await clipboard.SetDataAsync(transfer);
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
+            return;
         }
-        catch
-        {
-            // Some backends may reject a custom platform format; fall back to plain text only.
-            await clipboard.SetTextAsync(copiedText);
-        }
+        if (!write.IsSuccess)
+            throw new InvalidOperationException(write.ErrorMessage);
 
         SetClipboardMarquee(_session.SelectedRange, isCut: false);
         RefreshShell(UiText.Format("MainLoc_CopiedX", rangeReference));
@@ -25424,21 +23411,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// completed (<see cref="WorkbookCellEditResult.ClipboardCutMoveCompleted"/>), the real OS
     /// clipboard must be invalidated too. Without this, it still holds the payload
     /// CutSelectedRangeToClipboardAsync placed there for the original Ctrl+X, so a later Ctrl+V --
-    /// finding <c>_internalClipboard</c> already null -- falls through to the external-clipboard
+    /// finding the workbook clipboard session already empty -- falls through to the external-clipboard
     /// path and re-pastes the already-moved content a second time. Best-effort: a transiently
     /// unavailable clipboard just leaves the stale cut payload in place, matching how every other
     /// clipboard call in this shell already treats OS-clipboard access as fallible.
     /// </summary>
-    private static async Task InvalidateOsClipboardAfterCutMoveAsync(IClipboard clipboard)
+    private async Task InvalidateOsClipboardAfterCutMoveAsync()
     {
-        try
-        {
-            await clipboard.ClearAsync();
-        }
-        catch
-        {
-            // Best-effort -- see remarks above.
-        }
+        _ = await _platformClipboard.ClearAsync();
     }
 
     /// <summary>
@@ -25454,17 +23434,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _clipboardMarqueeRange = range;
         _clipboardMarqueeIsCut = isCut;
     }
-
-    /// <summary>Test-only seam: exercises <see cref="SetClipboardMarquee"/> without the real OS
-    /// clipboard write CopySelectedRangeToClipboardAsync/CutSelectedRangeToClipboardAsync require
-    /// (Avalonia's IClipboard is [NotClientImplementable] in a headless test, matching the existing
-    /// R66/R68 clipboard test rationale in this project).</summary>
-    internal void SetClipboardMarqueeForTest(GridRange? range, bool isCut = false) =>
-        SetClipboardMarquee(range, isCut);
-
-    internal GridRange? ClipboardMarqueeRangeForTest => _clipboardMarqueeRange;
-
-    internal bool ClipboardMarqueeIsCutForTest => _clipboardMarqueeIsCut;
 
     private void SelectCurrentRegionOrAll()
     {
@@ -25512,7 +23481,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         ClearSelectedDrawingObject();
-        var range = SelectionRangeService.GetWholeColumns(_session.SelectedRange);
+        var range = StructuredTableSelectionPlanner.PlanWholeColumns(
+                _session.ActiveSheet,
+                _session.SelectedRange)
+            .Range;
         _session.SelectRange(range);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
@@ -25530,7 +23502,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         ClearSelectedDrawingObject();
-        var range = SelectionRangeService.GetWholeRows(_session.SelectedRange);
+        var range = StructuredTableSelectionPlanner.PlanWholeRows(
+                _session.ActiveSheet,
+                _session.SelectedRange)
+            .Range;
         _session.SelectRange(range);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
@@ -25540,7 +23515,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
             return;
 
-        if (_internalObjectClipboard is { } objectClip)
+        if (_drawingObjectClipboard.Content is { } objectClip)
         {
             PasteClipboardObject(objectClip);
             return;
@@ -25549,21 +23524,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextForPastePlanningAsync();
+        if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
-        var (text, clipboardReadFailed) = await TryGetClipboardTextAsync(clipboard);
+        var (text, clipboardReadFailed) = (textRead.Text, textRead.ReadFailed);
         if (_session.ShouldPreferExternalClipboardImage(text) &&
-            await TryPasteClipboardImageAsync(clipboard))
+            await TryPasteClipboardImageAsync())
         {
             return;
         }
 
-        var html = await TryGetClipboardHtmlAsync(clipboard);
+        var html = await TryGetClipboardHtmlAsync();
         // Capture the destination as the last synchronous step right before use (matching the
         // paste-special helpers below): the clipboard reads above are real awaits, and the OS
         // clipboard can take long enough (or the user can click a different cell while it's
@@ -25571,10 +23546,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // message even though the paste itself always lands at the live active cell
         // (R68-async-ordering-race-sweep-1).
         var destination = _session.ActiveCell;
-        var result = _session.PasteClipboardTextAtActiveCell(text, clipboardReadFailed: clipboardReadFailed, html: html);
+        var result = _session.PasteClipboardTextAtActiveCell(
+            text,
+            clipboardReadFailed: clipboardReadFailed,
+            html: html,
+            clipboardMarker: textRead.Marker);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteFailed"));
             return;
         }
 
@@ -25582,7 +23561,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // the success message -- see the matching note on the PastedLabelAt path.
         // R75_ClipboardMarqueeOverlayTests pins that adjacency for every paste success path.
         if (result.ClipboardCutMoveCompleted)
-            await InvalidateOsClipboardAfterCutMoveAsync(clipboard);
+            await InvalidateOsClipboardAfterCutMoveAsync();
         SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedAt", FormatCellReference(destination)));
     }
@@ -25594,17 +23573,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// must skip the paste on failure instead of falling back to a stale internal-clipboard paste,
     /// mirroring the WPF host's <c>TryGetClipboardText(out bool readFailed)</c> (review P1/M5).
     /// </summary>
-    private static async Task<(string? Text, bool ReadFailed)> TryGetClipboardTextAsync(IClipboard clipboard)
+    private async Task<WorkbookClipboardReadObservation> ReadClipboardTextForPastePlanningAsync()
     {
-        try
+        var result = await _platformClipboard.ReadAsync(WorkbookClipboardSession.PasteReadRequest);
+        return WorkbookClipboardSession.Observe(result);
+    }
+
+    private async Task<(bool Available, string? Text)> ReadClipboardTextAsync()
+    {
+        var result = await _platformClipboard.ReadTextAsync();
+        return result.Status switch
         {
-            var text = await clipboard.TryGetTextAsync();
-            return (text, false);
-        }
-        catch (Exception)
-        {
-            return (null, true);
-        }
+            PlatformClipboardReadStatus.Success => (true, result.Value),
+            PlatformClipboardReadStatus.Empty => (true, null),
+            PlatformClipboardReadStatus.Unavailable => (false, null),
+            PlatformClipboardReadStatus.Unsupported => throw new NotSupportedException(result.ErrorMessage),
+            PlatformClipboardReadStatus.Failed => throw new InvalidOperationException(result.ErrorMessage),
+            _ => (true, null),
+        };
     }
 
     /// <summary>
@@ -25616,17 +23602,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// header) misaligned rows/columns (R66-services-clipboard-formats-6-1). Reads the same two formats
     /// <see cref="AddClipboardTextAndHtml"/> writes on copy.
     /// </summary>
-    private static async Task<string?> TryGetClipboardHtmlAsync(IClipboard clipboard)
+    private async Task<string?> TryGetClipboardHtmlAsync()
     {
-        try
-        {
-            using var dataTransfer = await clipboard.TryGetDataAsync();
-            return await TryGetHtmlFromDataTransferAsync(dataTransfer);
-        }
-        catch (Exception)
-        {
+        var request = new PlatformClipboardReadRequest(
+            CustomFormats: [HtmlClipboardFormat, HtmlWindowsClipboardFormat]);
+        var result = await _platformClipboard.ReadAsync(request);
+        if (result.Status != PlatformClipboardReadStatus.Success || result.Value is null)
             return null;
-        }
+        return result.Value.GetText(HtmlClipboardFormat.Name)
+            ?? result.Value.GetText(HtmlWindowsClipboardFormat.Name);
     }
 
     /// <summary>
@@ -25645,28 +23629,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ?? await dataTransfer.TryGetValueAsync(HtmlWindowsPlatformFormat);
     }
 
-    private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)
+    private async Task<bool> TryPasteClipboardImageAsync()
     {
-        byte[] pngBytes;
-        int pixelWidth;
-        int pixelHeight;
-        try
-        {
-            using var bitmap = await clipboard.TryGetBitmapAsync();
-            if (bitmap is null)
-                return false;
-
-            var pixelSize = bitmap.PixelSize;
-            pixelWidth = pixelSize.Width;
-            pixelHeight = pixelSize.Height;
-            using var stream = new MemoryStream();
-            bitmap.Save(stream);
-            pngBytes = stream.ToArray();
-        }
-        catch (Exception)
-        {
+        var read = await _platformClipboard.ReadImageAsync();
+        if (read.Status != PlatformClipboardReadStatus.Success
+            || read.Value is not { PngBytes.Length: > 0 } image)
             return false;
-        }
+        var pngBytes = image.PngBytes;
+        var pixelWidth = image.PixelWidth ?? 0;
+        var pixelHeight = image.PixelHeight ?? 0;
 
         // Capture the destination as the last synchronous step right before use: the bitmap read
         // above is a real await, and it names the cell the picture actually lands at (PasteClipboard
@@ -25686,7 +23657,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return true;
     }
 
-    internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()
+    internal async Task<bool> TryPasteExternalClipboardImageAsync()
     {
         if (_isOpening || _isSaving)
             return false;
@@ -25694,15 +23665,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return false;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await _platformClipboard.ReadTextAsync();
+        if (textRead.Status == PlatformClipboardReadStatus.Unavailable)
             return false;
-
-        var text = await clipboard.TryGetTextAsync();
+        var text = textRead.Status == PlatformClipboardReadStatus.Success ? textRead.Value : null;
         if (!_session.ShouldPreferExternalClipboardImage(text))
             return false;
 
-        return await TryPasteClipboardImageAsync(clipboard);
+        return await TryPasteClipboardImageAsync();
     }
 
     private async Task PasteSpecialClipboardTextAsync(
@@ -25717,22 +23687,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextForPastePlanningAsync();
+        if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
-        var (text, clipboardReadFailed) = await TryGetClipboardTextAsync(clipboard);
-        var html = await TryGetClipboardHtmlAsync(clipboard);
+        var (text, clipboardReadFailed) = (textRead.Text, textRead.ReadFailed);
+        var html = await TryGetClipboardHtmlAsync();
         var destination = _session.ActiveCell;
         var result = keepSourceColumnWidths
             ? _session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true, clipboardReadFailed: clipboardReadFailed, html: html)
             : _session.PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed, html: html);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Special failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteSpecialFailed"));
             return;
         }
 
@@ -25743,7 +23713,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // reported -- so ordering the invalidation first keeps behaviour identical and leaves that
         // contract intact rather than carving an exception into it for one variant.
         if (result.ClipboardCutMoveCompleted)
-            await InvalidateOsClipboardAfterCutMoveAsync(clipboard);
+            await InvalidateOsClipboardAfterCutMoveAsync();
         SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
@@ -25756,14 +23726,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextAsync();
+        if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var text = textRead.Text;
         var destination = _session.ActiveCell;
         var result = _session.PasteColumnWidthsFromClipboardAtActiveCell(text);
         if (!result.Success)
@@ -25784,14 +23754,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextAsync();
+        if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var text = textRead.Text;
         var destination = _session.ActiveCell;
         var result = _session.PasteCommentsFromClipboardAtActiveCell(text);
         if (!result.Success)
@@ -25812,14 +23782,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextAsync();
+        if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var text = textRead.Text;
         var destination = _session.ActiveCell;
         var result = _session.PasteDataValidationFromClipboardAtActiveCell(text);
         if (!result.Success)
@@ -25840,14 +23810,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextAsync();
+        if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var text = textRead.Text;
         var destination = _session.ActiveCell;
         var result = _session.PasteLinkFromClipboardAtActiveCell(text);
         if (!result.Success)
@@ -25868,15 +23838,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextForPastePlanningAsync();
+        if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
-        var (text, clipboardReadFailed) = await TryGetClipboardTextAsync(clipboard);
-        var html = await TryGetClipboardHtmlAsync(clipboard);
+        var (text, clipboardReadFailed) = (textRead.Text, textRead.ReadFailed);
+        var html = await TryGetClipboardHtmlAsync();
         var destination = _session.ActiveCell;
         var result = _session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed, html: html);
         if (!result.Success)
@@ -25897,14 +23867,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextAsync();
+        if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var text = textRead.Text;
         var destination = _session.ActiveCell;
         var result = _session.PastePictureFromClipboardAtActiveCell(text, linkedPicture);
         if (!result.Success)
@@ -25929,7 +23899,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ClearSelectedRangeContents();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Clear Contents failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ClearContentsFailed"));
             return;
         }
 
@@ -25938,7 +23908,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // but this shell's own marching-ants overlay is separate UI-only state RefreshShell does not
         // touch -- clear it here too, matching the WPF host's TryExecuteEditCells-routed Clear Contents.
         SetClipboardMarquee(null, isCut: false);
-        RefreshShell($"Cleared {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ClearedRangeStatusFormat", rangeReference));
     }
 
     private void ClearSelectedRangeAll()
@@ -25953,7 +23923,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ClearSelectedRangeAll();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Clear All failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ClearAllFailed"));
             return;
         }
 
@@ -25972,7 +23942,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ClearSelectedRangeFormats();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Clear Formats failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ClearFormatsFailed"));
             return;
         }
 
@@ -25991,7 +23961,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ClearSelectedRangeComments();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Clear Comments and Notes failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ClearCommentsNotesFailed"));
             return;
         }
 
@@ -26010,7 +23980,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ClearSelectedRangeHyperlinks();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Clear Hyperlinks failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ClearHyperlinksFailed"));
             return;
         }
 
@@ -26035,7 +24005,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.RemoveSelectedRangeHyperlinks();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Remove Hyperlinks failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_RemoveHyperlinksFailed"));
             return;
         }
 
@@ -26070,7 +24040,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         if (!_session.IsFormatPainterActive)
         {
-            RefreshShell("Ready");
+            RefreshShell(UiText.Get("MainLoc_Ready"));
             return;
         }
 
@@ -26078,8 +24048,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ApplyFormatPainterToSelectedRange();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Format Painter failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FormatPainterFailed"));
             return;
         }
 
@@ -26088,41 +24058,29 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ToggleSelectedRangeBold()
     {
-        ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: false);
-    }
-
-    private void ToggleSelectedRangeBold(bool trackLaunchSmokeLiveCommandKey)
-    {
         var before = _session.IsSelectedRangeStartBold;
         ApplySelectedRangeBold(!before);
-        if (trackLaunchSmokeLiveCommandKey)
-            RecordLaunchSmokeLiveCommandKey(Key.B, before, _session.IsSelectedRangeStartBold);
+        ObserveOptionalBoldCommand(
+            before,
+            _session.IsSelectedRangeStartBold);
     }
 
     private void ToggleSelectedRangeItalic()
     {
-        ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: false);
-    }
-
-    private void ToggleSelectedRangeItalic(bool trackLaunchSmokeLiveCommandKey)
-    {
         var before = _session.IsSelectedRangeStartItalic;
         ApplySelectedRangeItalic(!before);
-        if (trackLaunchSmokeLiveCommandKey)
-            RecordLaunchSmokeLiveCommandKey(Key.I, before, _session.IsSelectedRangeStartItalic);
+        ObserveOptionalItalicCommand(
+            before,
+            _session.IsSelectedRangeStartItalic);
     }
 
     private void ToggleSelectedRangeUnderline()
     {
-        ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: false);
-    }
-
-    private void ToggleSelectedRangeUnderline(bool trackLaunchSmokeLiveCommandKey)
-    {
         var before = _session.IsSelectedRangeStartUnderline;
         ApplySelectedRangeUnderline(!before);
-        if (trackLaunchSmokeLiveCommandKey)
-            RecordLaunchSmokeLiveCommandKey(Key.U, before, _session.IsSelectedRangeStartUnderline);
+        ObserveOptionalUnderlineCommand(
+            before,
+            _session.IsSelectedRangeStartUnderline);
     }
 
     private void ToggleSelectedRangeDoubleUnderline()
@@ -26152,12 +24110,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.DecreaseSelectedRangeIndent();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Decrease Indent failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DecreaseIndentFailed"));
             return;
         }
 
-        RefreshShell($"Decreased indent for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_DecreasedIndentStatusFormat", rangeReference));
     }
 
     private void IncreaseSelectedRangeIndent()
@@ -26172,12 +24130,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.IncreaseSelectedRangeIndent();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Increase Indent failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_IncreaseIndentFailed"));
             return;
         }
 
-        RefreshShell($"Increased indent for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_IncreasedIndentStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeBold(bool enabled)
@@ -26193,11 +24151,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!result.Success)
         {
             _boldButton.IsChecked = _session.IsSelectedRangeStartBold;
-            ShowEditIssue(result.ErrorMessage ?? "Bold failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_BoldFailed"));
             return;
         }
 
-        RefreshShell($"{(enabled ? "Bolded" : "Unbolded")} {rangeReference}");
+        RefreshShell(UiText.Format(
+            enabled ? "MainLoc_BoldedStatusFormat" : "MainLoc_UnboldedStatusFormat",
+            rangeReference));
     }
 
     /// <summary>
@@ -26231,11 +24191,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.RepeatLastAction();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Repeat failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_RepeatFailed"));
             return;
         }
 
-        RefreshShell($"Repeated last action in {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_RepeatedLastActionStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeItalic(bool enabled)
@@ -26251,11 +24211,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!result.Success)
         {
             _italicButton.IsChecked = _session.IsSelectedRangeStartItalic;
-            ShowEditIssue(result.ErrorMessage ?? "Italic failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ItalicFailed"));
             return;
         }
 
-        RefreshShell($"{(enabled ? "Italicized" : "Unitalicized")} {rangeReference}");
+        RefreshShell(UiText.Format(
+            enabled ? "MainLoc_ItalicizedStatusFormat" : "MainLoc_UnitalicizedStatusFormat",
+            rangeReference));
     }
 
     private void ApplySelectedRangeUnderline(bool enabled)
@@ -26271,11 +24233,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!result.Success)
         {
             _underlineButton.IsChecked = _session.IsSelectedRangeStartUnderline;
-            ShowEditIssue(result.ErrorMessage ?? "Underline failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_UnderlineFailed"));
             return;
         }
 
-        RefreshShell($"{(enabled ? "Underlined" : "Removed underline from")} {rangeReference}");
+        RefreshShell(UiText.Format(
+            enabled ? "MainLoc_UnderlinedStatusFormat" : "MainLoc_RemovedUnderlineStatusFormat",
+            rangeReference));
     }
 
     private void ApplySelectedRangeDoubleUnderline(bool enabled)
@@ -26291,11 +24255,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!result.Success)
         {
             _doubleUnderlineButton.IsChecked = _session.IsSelectedRangeStartDoubleUnderline;
-            ShowEditIssue(result.ErrorMessage ?? "Double Underline failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DoubleUnderlineFailed"));
             return;
         }
 
-        RefreshShell($"{(enabled ? "Double underlined" : "Removed double underline from")} {rangeReference}");
+        RefreshShell(UiText.Format(
+            enabled ? "MainLoc_DoubleUnderlinedStatusFormat" : "MainLoc_RemovedDoubleUnderlineStatusFormat",
+            rangeReference));
     }
 
     private void ApplySelectedRangeStrikethrough(bool enabled)
@@ -26311,11 +24277,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!result.Success)
         {
             _strikethroughButton.IsChecked = _session.IsSelectedRangeStartStrikethrough;
-            ShowEditIssue(result.ErrorMessage ?? "Strikethrough failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_StrikethroughFailed"));
             return;
         }
 
-        RefreshShell($"{(enabled ? "Struck through" : "Removed strikethrough from")} {rangeReference}");
+        RefreshShell(UiText.Format(
+            enabled ? "MainLoc_StruckThroughStatusFormat" : "MainLoc_RemovedStrikethroughStatusFormat",
+            rangeReference));
     }
 
     /// <summary>
@@ -26338,7 +24306,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeFontSize(size);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_SetFontSizeFailed"));
             return;
         }
@@ -26365,7 +24333,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeFontName(fontName);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_SetFontFailed"));
             return;
         }
@@ -26385,12 +24353,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.IncreaseSelectedRangeFontSize();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Increase Font Size failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_IncreaseFontSizeFailed"));
             return;
         }
 
-        RefreshShell($"Increased font size for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_IncreasedFontSizeStatusFormat", rangeReference));
     }
 
     private void DecreaseSelectedRangeFontSize()
@@ -26405,12 +24373,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.DecreaseSelectedRangeFontSize();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Decrease Font Size failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DecreaseFontSizeFailed"));
             return;
         }
 
-        RefreshShell($"Decreased font size for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_DecreasedFontSizeStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeFillColor(CellColor fillColor)
@@ -26425,12 +24393,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeFillColor(fillColor);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Fill Color failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FillColorFailed"));
             return;
         }
 
-        RefreshShell($"Applied fill color to {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_AppliedFillColorStatusFormat", rangeReference));
     }
 
     private void ClearSelectedRangeFill()
@@ -26445,12 +24413,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ClearSelectedRangeFill();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "No Fill failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_NoFillFailed"));
             return;
         }
 
-        RefreshShell($"Cleared fill from {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ClearedFillStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeFontColor(CellColor fontColor)
@@ -26465,12 +24433,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeFontColor(fontColor);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Font Color failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FontColorFailed"));
             return;
         }
 
-        RefreshShell($"Applied font color to {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_AppliedFontColorStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeCellStylePreset(CellStylePreset preset)
@@ -26486,12 +24454,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeCellStylePreset(preset);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Cell Style failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_CellStyleFailed"));
             return;
         }
 
-        RefreshShell($"Applied {presetName} style to {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_AppliedStyleStatusFormat", presetName, rangeReference));
     }
 
     private void ApplySelectedRangeBorderPreset(CellBorderPreset preset)
@@ -26511,12 +24479,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _borderPickerColor);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Borders failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_BordersFailed"));
             return;
         }
 
-        RefreshShell($"Applied {presetName} to {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_AppliedPresetStatusFormat", presetName, rangeReference));
     }
 
     private async Task MergeAndCenterSelectedRangeAsync()
@@ -26578,23 +24546,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
         if (contentPlan.WouldLoseContent)
         {
-            var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-            if (choice == MergeCellsWarningChoice.Cancel)
+            var decision = CellMergePlanner.ResolveContentChoice(
+                await ShowMergeCellsContentWarningDialogAsync(contentPlan));
+            if (!decision.ShouldProceed)
             {
-                RefreshShell(_statusText.Text ?? "Ready");
+                RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
                 return;
             }
 
-            contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                ? MergeCellContentResolution.ConcatenateAllCells
-                : MergeCellContentResolution.KeepFirstCell;
+            contentResolution = decision.Resolution;
         }
 
         var result = _session.MergeAndCenterSelectedRange(contentResolution);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Merge & Center failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_MergeCenterFailed"));
             return;
         }
 
@@ -26620,31 +24587,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // the single-sheet analysis it replaces.
     private MergeCellContentPlan AnalyzeGroupedSheetMergeContent(IReadOnlyList<GridRange> ranges, bool perRow = false)
     {
-        var targetSheetIds = _session.GetCurrentGroupedEditSheetIds();
-        var sheetRanges = targetSheetIds
-            .Select(sheetId => _session.Workbook.GetSheet(sheetId))
-            .Where(sheet => sheet is not null)
-            .Select(sheet => (
-                Sheet: sheet!,
-                Ranges: (IReadOnlyList<GridRange>)ranges
-                    .Select(r => GroupedSheetRangePlanner.RemapRangeToSheet(r, sheet!.Id))
-                    .ToList()));
-
-        return CellMergePlanner.AnalyzeContent(sheetRanges, perRow);
+        return CellMergePlanner.AnalyzeGroupedContent(
+            _session.Workbook,
+            _session.GetCurrentGroupedEditSheetIds(),
+            ranges,
+            perRow);
     }
 
-    private async Task<MergeCellsWarningChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)
+    private async Task<MergeCellContentChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)
     {
-        var choice = MergeCellsWarningChoice.Cancel;
+        var choice = MergeCellContentChoice.Cancel;
+        var presentation = MergeCellsContentWarningPlanner.Create(
+            contentPlan.Entries.Select(entry => entry.DisplayText).ToArray());
+        var keepFirstAction = presentation.Action(MergeCellsContentWarningAction.KeepFirstCell);
+        var concatenateAction = presentation.Action(MergeCellsContentWarningAction.ConcatenateAllCells);
+        var cancelAction = presentation.Action(MergeCellsContentWarningAction.Cancel);
         var dialog = new Window
         {
-            Title = "Merge Cells",
+            Title = presentation.Title,
             Width = 460,
             Height = 240,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false
         };
-        AutomationProperties.SetAutomationId(dialog, "MergeCellsContentWarningDialog");
+        AutomationProperties.SetAutomationId(
+            dialog,
+            presentation.DialogAutomationId);
 
         var root = new StackPanel
         {
@@ -26654,22 +24622,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         root.Children.Add(new TextBlock
         {
-            Text = "Merging cells can discard cell contents.",
+            Text = presentation.PrimaryMessage,
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap
         });
 
         root.Children.Add(new TextBlock
         {
-            Text = "Only the first cell is kept by default. Choose how FreeX should handle the other selected contents.",
+            Text = presentation.DetailedGuidanceMessage,
             TextWrapping = TextWrapping.Wrap
         });
 
-        if (contentPlan.Entries.Count > 0)
+        if (presentation.EntryCountText is not null)
         {
             root.Children.Add(new TextBlock
             {
-                Text = $"Non-empty cells: {contentPlan.Entries.Count}",
+                Text = presentation.EntryCountText,
                 Foreground = Brushes.DimGray
             });
         }
@@ -26684,39 +24652,45 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var keepFirstButton = new Button
         {
-            Content = "Keep only first cell",
+            Content = keepFirstAction.Label,
             MinWidth = 136,
-            IsDefault = true
+            IsDefault = keepFirstAction.IsDefault
         };
-        AutomationProperties.SetAutomationId(keepFirstButton, "MergeCellsKeepFirstButton");
+        AutomationProperties.SetAutomationId(
+            keepFirstButton,
+            keepFirstAction.AutomationId);
         keepFirstButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.KeepFirstCell;
+            choice = MergeCellContentChoice.KeepFirstCell;
             dialog.Close();
         };
 
         var concatenateButton = new Button
         {
-            Content = "Concatenate all cells",
+            Content = concatenateAction.Label,
             MinWidth = 136
         };
-        AutomationProperties.SetAutomationId(concatenateButton, "MergeCellsConcatenateButton");
+        AutomationProperties.SetAutomationId(
+            concatenateButton,
+            concatenateAction.AutomationId);
         concatenateButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.ConcatenateAllCells;
+            choice = MergeCellContentChoice.ConcatenateAllCells;
             dialog.Close();
         };
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = cancelAction.Label,
             MinWidth = 82,
-            IsCancel = true
+            IsCancel = cancelAction.IsCancel
         };
-        AutomationProperties.SetAutomationId(cancelButton, "MergeCellsCancelButton");
+        AutomationProperties.SetAutomationId(
+            cancelButton,
+            cancelAction.AutomationId);
         cancelButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.Cancel;
+            choice = MergeCellContentChoice.Cancel;
             dialog.Close();
         };
 
@@ -26743,17 +24717,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.UnmergeSelectedRange();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Unmerge Cells failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_UnmergeCellsFailed"));
             return;
         }
 
-        RefreshShell($"Unmerged cells in {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_UnmergedCellsStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeCurrencyFormat()
     {
-        ApplySelectedRangeNumberFormat(CurrencyNumberFormat, "Applied currency format to", "Currency format failed.");
+        ApplySelectedRangeNumberFormat(
+            CurrencyNumberFormat,
+            UiText.Get("NumberFormat_CurrencySuccessAction"),
+            UiText.Get("NumberFormat_CurrencyFailed"));
     }
 
     /// <summary>
@@ -26763,17 +24740,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void ApplySelectedRangeAccountingFormat(string symbol)
     {
         var format = FormatCellsNumberFormatPlanner.BuildAccountingFormatFor(2, symbol);
-        ApplySelectedRangeNumberFormat(format, "Applied accounting format to", "Accounting format failed.");
+        ApplySelectedRangeNumberFormat(
+            format,
+            UiText.Get("NumberFormat_AccountingSuccessAction"),
+            UiText.Get("NumberFormat_AccountingFailed"));
     }
 
     private void ApplySelectedRangePercentFormat()
     {
-        ApplySelectedRangeNumberFormat(PercentNumberFormat, "Applied percent format to", "Percent format failed.");
+        ApplySelectedRangeNumberFormat(
+            PercentNumberFormat,
+            UiText.Get("NumberFormat_PercentSuccessAction"),
+            UiText.Get("NumberFormat_PercentFailed"));
     }
 
     private void ApplySelectedRangeCommaStyle()
     {
-        ApplySelectedRangeNumberFormat(CommaNumberFormat, "Applied comma style to", "Comma style failed.");
+        ApplySelectedRangeNumberFormat(
+            CommaNumberFormat,
+            UiText.Get("NumberFormat_CommaSuccessAction"),
+            UiText.Get("NumberFormat_CommaFailed"));
     }
 
     /// <summary>
@@ -26786,22 +24772,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var (successAction, failureMessage) = shortcut switch
         {
-            NumberFormatShortcut.General => ("Applied General format to", "Number format failed."),
-            NumberFormatShortcut.Number => ("Applied Number format to", "Number format failed."),
-            NumberFormatShortcut.Currency => ("Applied currency format to", "Currency format failed."),
-            NumberFormatShortcut.Percentage => ("Applied percent format to", "Percent format failed."),
-            NumberFormatShortcut.Date => ("Applied Date format to", "Number format failed."),
-            NumberFormatShortcut.Time => ("Applied Time format to", "Number format failed."),
-            NumberFormatShortcut.Scientific => ("Applied Scientific format to", "Number format failed."),
-            _ => ("Applied Number format to", "Number format failed."),
+            NumberFormatShortcut.General => (UiText.Get("NumberFormat_GeneralSuccessAction"), UiText.Get("NumberFormat_NumberFailed")),
+            NumberFormatShortcut.Number => (UiText.Get("NumberFormat_NumberSuccessAction"), UiText.Get("NumberFormat_NumberFailed")),
+            NumberFormatShortcut.Currency => (UiText.Get("NumberFormat_CurrencySuccessAction"), UiText.Get("NumberFormat_CurrencyFailed")),
+            NumberFormatShortcut.Percentage => (UiText.Get("NumberFormat_PercentSuccessAction"), UiText.Get("NumberFormat_PercentFailed")),
+            NumberFormatShortcut.Date => (UiText.Get("NumberFormat_DateSuccessAction"), UiText.Get("NumberFormat_NumberFailed")),
+            NumberFormatShortcut.Time => (UiText.Get("NumberFormat_TimeSuccessAction"), UiText.Get("NumberFormat_NumberFailed")),
+            NumberFormatShortcut.Scientific => (UiText.Get("NumberFormat_ScientificSuccessAction"), UiText.Get("NumberFormat_NumberFailed")),
+            _ => (UiText.Get("NumberFormat_NumberSuccessAction"), UiText.Get("NumberFormat_NumberFailed")),
         };
         ApplySelectedRangeNumberFormat(NumberFormatShortcutService.GetFormat(shortcut), successAction, failureMessage);
     }
 
-    private void ApplyRibbonNumberFormat(string? selectedLabel)
+    private void ApplyRibbonNumberFormat(string? selectedValue)
     {
-        var option = HomeNumberFormatDropdownPlanner.Options.FirstOrDefault(candidate =>
-            string.Equals(candidate.Label, selectedLabel, StringComparison.Ordinal));
+        var option = HomeNumberFormatDropdownPlanner.FindByValueOrLegacyLabel(selectedValue);
         if (option is null)
             return;
 
@@ -26812,7 +24797,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         if (option.Code is { } numberFormat)
-            ApplySelectedRangeNumberFormat(numberFormat, $"Applied {option.Label} format to", "Number format failed.");
+            ApplySelectedRangeNumberFormat(
+                numberFormat,
+                UiText.Format("NumberFormat_AppliedNamedFormatSuccessAction", option.Label),
+                UiText.Get("NumberFormat_NumberFailed"));
     }
 
     private void ApplySelectedRangeNumberFormat(string numberFormat, string successAction, string failureMessage)
@@ -26827,12 +24815,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeNumberFormat(numberFormat);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
             ShowEditIssue(result.ErrorMessage ?? failureMessage);
             return;
         }
 
-        RefreshShell($"{successAction} {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ActionRangeStatusFormat", successAction, rangeReference));
     }
 
     private void ApplySelectedRangeTextRotation(int textRotation, string successAction, string failureMessage)
@@ -26847,12 +24835,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeTextRotation(textRotation);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
             ShowEditIssue(result.ErrorMessage ?? failureMessage);
             return;
         }
 
-        RefreshShell($"{successAction} {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ActionRangeStatusFormat", successAction, rangeReference));
     }
 
     private void IncreaseSelectedRangeDecimalPlaces()
@@ -26867,12 +24855,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.IncreaseSelectedRangeDecimalPlaces();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Increase Decimal failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_IncreaseDecimalFailed"));
             return;
         }
 
-        RefreshShell($"Increased decimals for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_IncreasedDecimalsStatusFormat", rangeReference));
     }
 
     private void DecreaseSelectedRangeDecimalPlaces()
@@ -26887,12 +24875,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.DecreaseSelectedRangeDecimalPlaces();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Decrease Decimal failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DecreaseDecimalFailed"));
             return;
         }
 
-        RefreshShell($"Decreased decimals for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_DecreasedDecimalsStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeWrapText(bool enabled)
@@ -26908,32 +24896,46 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!result.Success)
         {
             _wrapTextButton.IsChecked = _session.IsSelectedRangeStartWrapText;
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Wrap Text failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_WrapTextFailed"));
             return;
         }
 
-        RefreshShell($"{(enabled ? "Wrapped" : "Unwrapped")} {rangeReference}");
+        RefreshShell(UiText.Format(
+            enabled ? "MainLoc_WrappedStatusFormat" : "MainLoc_UnwrappedStatusFormat",
+            rangeReference));
     }
 
     private void FreezePanesAtActiveCell()
     {
-        ApplyFreezePaneCommand(_session.FreezePanesAtActiveCell, "Froze panes at", "Freeze Panes failed.");
+        ApplyFreezePaneCommand(
+            _session.FreezePanesAtActiveCell,
+            UiText.Get("FreezePanes_FrozePanesSuccessAction"),
+            UiText.Get("FreezePanes_FreezePanesFailed"));
     }
 
     private void FreezeTopRow()
     {
-        ApplyFreezePaneCommand(_session.FreezeTopRow, "Froze top row for", "Freeze Top Row failed.");
+        ApplyFreezePaneCommand(
+            _session.FreezeTopRow,
+            UiText.Get("FreezePanes_FrozeTopRowSuccessAction"),
+            UiText.Get("FreezePanes_FreezeTopRowFailed"));
     }
 
     private void FreezeFirstColumn()
     {
-        ApplyFreezePaneCommand(_session.FreezeFirstColumn, "Froze first column for", "Freeze First Column failed.");
+        ApplyFreezePaneCommand(
+            _session.FreezeFirstColumn,
+            UiText.Get("FreezePanes_FrozeFirstColumnSuccessAction"),
+            UiText.Get("FreezePanes_FreezeFirstColumnFailed"));
     }
 
     private void UnfreezePanes()
     {
-        ApplyFreezePaneCommand(_session.UnfreezePanes, "Unfroze panes for", "Unfreeze Panes failed.");
+        ApplyFreezePaneCommand(
+            _session.UnfreezePanes,
+            UiText.Get("FreezePanes_UnfrozePanesSuccessAction"),
+            UiText.Get("FreezePanes_UnfreezePanesFailed"));
     }
 
     private void ApplyFreezePaneCommand(Func<WorkbookCellEditResult> execute, string successAction, string failureMessage)
@@ -26948,12 +24950,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = execute();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
             ShowEditIssue(result.ErrorMessage ?? failureMessage);
             return;
         }
 
-        RefreshShell($"{successAction} {sheetName}");
+        RefreshShell(UiText.Format("MainLoc_ActionRangeStatusFormat", successAction, sheetName));
     }
 
     private void ApplySelectedRangeHorizontalAlignment(CellHAlign alignment)
@@ -26968,12 +24970,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeHorizontalAlignment(alignment);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Alignment failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_AlignmentFailed"));
             return;
         }
 
-        RefreshShell($"Aligned {rangeReference} {FormatHorizontalAlignmentStatus(alignment)}");
+        RefreshShell(WorksheetCommandPresentationCatalog.FormatHorizontalAlignmentStatus(rangeReference, alignment));
     }
 
     private void ApplySelectedRangeVerticalAlignment(CellVAlign alignment)
@@ -26988,12 +24990,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeVerticalAlignment(alignment);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Vertical alignment failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_VerticalAlignmentFailed"));
             return;
         }
 
-        RefreshShell($"Aligned {rangeReference} {FormatVerticalAlignmentStatus(alignment)}");
+        RefreshShell(WorksheetCommandPresentationCatalog.FormatVerticalAlignmentStatus(rangeReference, alignment));
     }
 
     private void MainWindow_DragOver(object? sender, DragEventArgs e)
@@ -27023,7 +25025,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         catch (Exception ex)
         {
-            ShowOpenIssue($"Open failed: {ex.Message}");
+            ShowOpenIssue(UiText.Format("File_OpenFailedFormat", ex.Message));
         }
     }
 
@@ -27039,835 +25041,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         await OpenWorkbookPathAsync(path!, fileAccessIdentity);
     }
 
-    internal async Task<MacOsLaunchSmokeDialogSnapshot> CaptureLaunchSmokeDialogEvidenceAsync()
-    {
-        _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
+    internal Task OpenStartupFileAsync(string path) => OpenWorkbookPathAsync(path);
 
-        var hasFindDialog = false;
-        var hasFindDialogTextBox = false;
-        var hasFindDialogActionButtons = false;
-        var hasFindDialogOptions = false;
-        var hasFindDialogFormatControls = false;
-        var hasFindDialogCompactLayout = false;
-        var findDialogResult = await ShowFindInputDialogAsync(probe =>
-        {
-            hasFindDialog = HasLaunchSmokeDialog(probe.Dialog, "Find");
-            hasFindDialogTextBox = HasLaunchSmokeAutomationId(probe.FindBox, "FindTextBox") &&
-                probe.FindBox.MinWidth >= 300;
-            hasFindDialogActionButtons =
-                HasLaunchSmokeButton(probe.FindNextButton, "FindNextButton", "Find Next") &&
-                HasLaunchSmokeButton(probe.FindAllButton, "FindAllButton", "Find All") &&
-                HasLaunchSmokeButton(probe.CancelButton, "FindCancelButton", "Cancel");
-            hasFindDialogOptions = HasLaunchSmokeFindOptions(probe.OptionsControls, "Find", defaultLookInIndex: 0);
-            hasFindDialogFormatControls =
-                HasLaunchSmokeButton(probe.ChooseFormatButton, "FindChooseFormatFromCellButton", "Choose From Cell") &&
-                HasLaunchSmokeButton(probe.ClearFormatButton, "FindClearFormatButton", "Clear Format") &&
-                !probe.ClearFormatButton.IsVisible;
-            hasFindDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 430, minWidth: 360, minHeight: 390);
-        });
+    internal void ReportStartupFileNotFound(string path) =>
+        ShowOpenIssue(UiText.Format("Startup_FileArgumentNotFoundMessage", path));
 
-        var hasReplaceDialog = false;
-        var hasReplaceDialogTextBoxes = false;
-        var hasReplaceDialogActionButtons = false;
-        var hasReplaceDialogOptions = false;
-        var hasReplaceDialogFormatControls = false;
-        var hasReplaceDialogCompactLayout = false;
-        var replaceDialogResult = await ShowReplaceInputDialogAsync(probe =>
-        {
-            hasReplaceDialog = HasLaunchSmokeDialog(probe.Dialog, "Replace");
-            hasReplaceDialogTextBoxes =
-                HasLaunchSmokeAutomationId(probe.FindBox, "ReplaceFindTextBox") &&
-                HasLaunchSmokeAutomationId(probe.ReplaceBox, "ReplaceWithTextBox") &&
-                probe.FindBox.MinWidth >= 300 &&
-                probe.ReplaceBox.MinWidth >= 300;
-            hasReplaceDialogActionButtons =
-                HasLaunchSmokeButton(probe.ReplaceButton, "ReplaceButton", "Replace") &&
-                HasLaunchSmokeButton(probe.ReplaceAllButton, "ReplaceAllButton", "Replace All") &&
-                HasLaunchSmokeButton(probe.CancelButton, "ReplaceCancelButton", "Cancel");
-            hasReplaceDialogOptions = HasLaunchSmokeFindOptions(probe.OptionsControls, "Replace", defaultLookInIndex: 1);
-            hasReplaceDialogFormatControls =
-                HasLaunchSmokeButton(probe.ChooseFindFormatButton, "ReplaceFindChooseFormatFromCellButton", "Choose From Cell") &&
-                HasLaunchSmokeButton(probe.ClearFindFormatButton, "ReplaceFindClearFormatButton", "Clear Format") &&
-                !probe.ClearFindFormatButton.IsVisible &&
-                HasLaunchSmokeButton(probe.ChooseReplaceFormatButton, "ReplaceWithChooseFormatFromCellButton", "Choose From Cell") &&
-                HasLaunchSmokeButton(probe.ClearReplaceFormatButton, "ReplaceWithClearFormatButton", "Clear Format") &&
-                !probe.ClearReplaceFormatButton.IsVisible;
-            hasReplaceDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 520, minWidth: 360, minHeight: 480);
-        });
+    partial void ObserveOptionalBoldCommand(bool before, bool after);
 
-        var hasGoToDialog = false;
-        var hasGoToDialogReferenceControls = false;
-        var hasGoToDialogHistoryControls = false;
-        var hasGoToDialogSpecialControl = false;
-        var hasGoToDialogCompactLayout = false;
-        var goToDialogResult = await ShowGoToInputDialogAsync(
-            probe =>
-            {
-                hasGoToDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To");
-                hasGoToDialogReferenceControls =
-                    HasLaunchSmokeAutomationId(probe.InputBox, "GoToReferenceBox") &&
-                    HasLaunchSmokeButton(probe.AcceptButton, "GoToReferenceBoxAcceptButton", "OK") &&
-                    HasLaunchSmokeButton(probe.CancelButton, "GoToReferenceBoxCancelButton", "Cancel");
-                hasGoToDialogHistoryControls =
-                    HasLaunchSmokeAutomationId(probe.HistoryList, "GoToHistoryList") &&
-                    string.Equals(AutomationProperties.GetName(probe.HistoryList), "Go To", StringComparison.Ordinal) &&
-                    probe.HistoryList.ItemCount > 0;
-                hasGoToDialogSpecialControl =
-                    HasLaunchSmokeButton(probe.SpecialButton, "GoToSpecialButton", "Special...");
-                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 320, minWidth: 420, minHeight: 320);
-            });
+    partial void ObserveOptionalItalicCommand(bool before, bool after);
 
-        var hasGoToSpecialDialog = false;
-        var hasGoToSpecialKindControls = false;
-        var hasGoToSpecialValueTypeControls = false;
-        var hasGoToSpecialDialogCompactLayout = false;
-        var goToSpecialDialogResult = await ShowGoToSpecialInputDialogAsync(probe =>
-        {
-            hasGoToSpecialDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To Special");
-            var hasSelectedKind =
-                probe.KindBox is AvaloniaGrid kindGrid &&
-                kindGrid.Children.OfType<RadioButton>().Any(button => button.IsChecked == true);
-            hasGoToSpecialKindControls =
-                HasLaunchSmokeAutomationId(probe.KindBox, "GoToSpecialKindBox") &&
-                hasSelectedKind &&
-                HasLaunchSmokeButton(probe.OkButton, "GoToSpecialOkButton", "OK") &&
-                HasLaunchSmokeButton(probe.CancelButton, "GoToSpecialCancelButton", "Cancel");
-            hasGoToSpecialValueTypeControls =
-                HasLaunchSmokeCheckBox(probe.NumbersBox, "GoToSpecialNumbersBox", "Numbers") &&
-                HasLaunchSmokeCheckBox(probe.TextBox, "GoToSpecialTextBox", "Text") &&
-                HasLaunchSmokeCheckBox(probe.LogicalsBox, "GoToSpecialLogicalsBox", "Logicals") &&
-                HasLaunchSmokeCheckBox(probe.ErrorsBox, "GoToSpecialErrorsBox", "Errors");
-            hasGoToSpecialDialogCompactLayout = HasLaunchSmokeCompactDialog(
-                probe.Dialog,
-                width: GoToSpecialDialogPlanner.Width,
-                height: GoToSpecialDialogPlanner.Height,
-                minWidth: GoToSpecialDialogPlanner.Width,
-                minHeight: GoToSpecialDialogPlanner.Height);
-        });
+    partial void ObserveOptionalUnderlineCommand(bool before, bool after);
 
-        var hasFormatCellsDialog = false;
-        var hasFormatCellsDialogTabStrip = false;
-        var hasFormatCellsDialogDefaultNumberTab = false;
-        var hasFormatCellsDialogNumberControls = false;
-        var hasFormatCellsDialogActionButtons = false;
-        var hasFormatCellsDialogCompactLayout = false;
-        var formatCellsDialogResult = await ShowFormatCellsInputDialogAsync(probe =>
-        {
-            hasFormatCellsDialog = HasLaunchSmokeDialog(probe.Dialog, "Format Cells");
-            hasFormatCellsDialogTabStrip =
-                HasLaunchSmokeAutomationId(probe.TabStrip, "FormatCellsTabStrip") &&
-                HasLaunchSmokeAutomationId(probe.NumberTab, "FormatCellsNumberTab") &&
-                HasLaunchSmokeAutomationId(probe.AlignmentTab, "FormatCellsAlignmentTab") &&
-                HasLaunchSmokeAutomationId(probe.FontTab, "FormatCellsFontTab") &&
-                HasLaunchSmokeAutomationId(probe.FillTab, "FormatCellsFillTab") &&
-                HasLaunchSmokeAutomationId(probe.BorderTab, "FormatCellsBorderTab") &&
-                HasLaunchSmokeAutomationId(probe.ProtectionTab, "FormatCellsProtectionTab");
-            hasFormatCellsDialogDefaultNumberTab =
-                probe.TabStrip.SelectedIndex == 0 &&
-                HasLaunchSmokeAutomationId(probe.NumberTab, "FormatCellsNumberTab");
-            hasFormatCellsDialogNumberControls =
-                HasLaunchSmokeAutomationId(probe.NumberCategoryList, "FormatCellsNumberCategoryList") &&
-                HasLaunchSmokeAutomationId(probe.NumberFormatBox, "FormatCellsNumberFormatBox") &&
-                HasLaunchSmokeAutomationId(probe.NumberPreview, "FormatCellsNumberPreview") &&
-                probe.NumberFormatBox.MinWidth >= 260;
-            hasFormatCellsDialogActionButtons =
-                HasLaunchSmokeButton(probe.OkButton, "FormatCellsOkButton", "OK") &&
-                HasLaunchSmokeButton(probe.CancelButton, "FormatCellsCancelButton", "Cancel");
-            hasFormatCellsDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 690, height: 660, minWidth: 620, minHeight: 560);
-        });
-
-        var hasSortDialog = false;
-        var hasSortDialogSortOnControls = false;
-        var hasSortDialogColorControls = false;
-        var hasSortDialogActionButtons = false;
-        var hasSortDialogCompactLayout = false;
-        var sortDialogResult = await ShowSortInputDialogAsync(probe =>
-        {
-            hasSortDialog = HasLaunchSmokeDialog(probe.Dialog, "Custom Sort");
-            hasSortDialogSortOnControls =
-                HasLaunchSmokeComboBox(probe.SortOnBox, "SortLevel1SortOnBox", "Sort On") &&
-                probe.SortOnBox.MinWidth >= 120 &&
-                string.Equals(probe.SortOnBox.SelectedItem?.ToString(), SortDialogPlannerText.Default.SortOnCellValues, StringComparison.Ordinal);
-            hasSortDialogColorControls =
-                HasLaunchSmokeComboBox(probe.ColorBox, "SortLevel1ColorBox", "Color") &&
-                probe.ColorBox.MinWidth >= 105 &&
-                !probe.ColorBox.IsEnabled &&
-                string.Equals(probe.ColorBox.SelectedItem?.ToString(), "None", StringComparison.Ordinal);
-            hasSortDialogActionButtons =
-                HasLaunchSmokeCheckBox(probe.HeadersCheckBox, "SortHeadersCheckBox", "My data has headers") &&
-                HasLaunchSmokeAutomationId(probe.LevelsGrid, "SortLevelsGrid") &&
-                HasLaunchSmokeButton(probe.AddLevelButton, "SortAddLevelButton", "Add Level") &&
-                HasLaunchSmokeButton(probe.DeleteLevelButton, "SortDeleteLevelButton", "Delete Level") &&
-                HasLaunchSmokeButton(probe.CopyLevelButton, "SortCopyLevelButton", "Copy Level") &&
-                HasLaunchSmokeButton(probe.MoveUpButton, "SortMoveUpButton", "Move Up") &&
-                HasLaunchSmokeButton(probe.MoveDownButton, "SortMoveDownButton", "Move Down") &&
-                HasLaunchSmokeButton(probe.OptionsButton, "SortOptionsButton", "Options...") &&
-                HasLaunchSmokeButton(probe.OkButton, "SortOkButton", "OK") &&
-                HasLaunchSmokeButton(probe.CancelButton, "SortCancelButton", "Cancel");
-            hasSortDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 760, height: 500, minWidth: 680, minHeight: 420);
-        });
-
-        var dvPlan = new DataValidationDropdownPlan(
-            ["Yes", "No"],
-            "Yes",
-            new DataValidationDropdownBounds(12, 16, 48, 18));
-        var dropdown = CreateDataValidationDropdown(
-            dvPlan,
-            DataValidationAffordancePlanner.ArrowButtonWidth,
-            Math.Max(DataValidationDropdownPlanner.MinimumHeight, dvPlan.Bounds.Height));
-        var hasDataValidationDropdownControl =
-            HasLaunchSmokeComboBox(dropdown, "WorksheetDataValidationDropdown", "Data validation list") &&
-            string.Equals(
-                AutomationProperties.GetHelpText(dropdown),
-                "Pick a permitted value for the active cell.",
-                StringComparison.Ordinal) &&
-            dropdown.Width == DataValidationAffordancePlanner.ArrowButtonWidth &&
-            dropdown.Height == Math.Max(DataValidationDropdownPlanner.MinimumHeight, dvPlan.Bounds.Height) &&
-            dropdown.MinWidth == DataValidationDropdownPlanner.MinimumWidth &&
-            dropdown.MinHeight == DataValidationDropdownPlanner.MinimumHeight;
-        var hasDataValidationDropdownItems =
-            dropdown.ItemsSource is IEnumerable<string> dropdownItems &&
-            dropdownItems.SequenceEqual(["Yes", "No"], StringComparer.Ordinal) &&
-            string.Equals(dropdown.SelectedItem?.ToString(), "Yes", StringComparison.Ordinal);
-
-        var hasDataValidationDialog = false;
-        var hasDataValidationDialogCriteriaControls = false;
-        var hasDataValidationDialogMessageControls = false;
-        var hasDataValidationDialogActionButtons = false;
-        var hasDataValidationDialogCompactLayout = false;
-        var dataValidationDialogResult = await ShowDataValidationInputDialogAsync(probe =>
-        {
-            hasDataValidationDialog = HasLaunchSmokeDialog(probe.Dialog, "Data Validation");
-            hasDataValidationDialogCriteriaControls =
-                HasLaunchSmokeAutomationId(probe.SummaryText, "DataValidationSelectionSummaryText") &&
-                HasLaunchSmokeComboBox(probe.TypeBox, "DataValidationTypeBox", "Allow") &&
-                HasLaunchSmokeComboBox(probe.OperatorBox, "DataValidationOperatorBox", "Data") &&
-                HasLaunchSmokeAutomationId(probe.Formula1Box, "DataValidationFormula1Box") &&
-                HasLaunchSmokeAutomationId(probe.Formula2Box, "DataValidationFormula2Box") &&
-                HasLaunchSmokeCheckBox(probe.AllowBlankBox, "DataValidationAllowBlankBox", UiText.Get("DataValidation_IgnoreBlank")) &&
-                HasLaunchSmokeCheckBox(probe.ShowDropdownBox, "DataValidationShowDropdownBox", UiText.Get("DataValidation_InCellDropdown")) &&
-                !probe.ShowDropdownBox.IsVisible &&
-                string.Equals(probe.TypeBox.SelectedItem?.ToString(), "Whole number", StringComparison.Ordinal) &&
-                string.Equals(probe.Formula1Box.Text, "1", StringComparison.Ordinal) &&
-                string.Equals(probe.Formula2Box.Text, "100", StringComparison.Ordinal);
-            hasDataValidationDialogMessageControls =
-                HasLaunchSmokeCheckBox(probe.ShowInputMessageBox, "DataValidationShowInputMessageBox", UiText.Get("DataValidation_ShowInputMessageWhenCellIsSelected")) &&
-                HasLaunchSmokeAutomationId(probe.PromptTitleBox, "DataValidationPromptTitleBox") &&
-                HasLaunchSmokeAutomationId(probe.PromptMessageBox, "DataValidationPromptMessageBox") &&
-                HasLaunchSmokeCheckBox(probe.ShowErrorMessageBox, "DataValidationShowErrorMessageBox", UiText.Get("DataValidation_ShowErrorAlertAfterInvalidDataIsEntered")) &&
-                HasLaunchSmokeComboBox(probe.AlertStyleBox, "DataValidationAlertStyleBox", "Style") &&
-                HasLaunchSmokeAutomationId(probe.ErrorTitleBox, "DataValidationErrorTitleBox") &&
-                HasLaunchSmokeAutomationId(probe.ErrorMessageBox, "DataValidationErrorMessageBox") &&
-                string.Equals(probe.AlertStyleBox.SelectedItem?.ToString(), "Stop", StringComparison.Ordinal);
-            hasDataValidationDialogActionButtons =
-                HasLaunchSmokeButton(probe.ApplyButton, "DataValidationApplyButton", UiText.Get("Common_Ok")) &&
-                HasLaunchSmokeButton(probe.ClearButton, "DataValidationClearButton", UiText.Get("DataValidation_ClearAll")) &&
-                HasLaunchSmokeButton(probe.CancelButton, "DataValidationCancelButton", UiText.Get("Common_Cancel"));
-            hasDataValidationDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 520, height: 560, minWidth: 480, minHeight: 460);
-        });
-
-        var hasConditionalFormatRuleDialog = false;
-        var hasConditionalFormatRuleTypeControls = false;
-        var hasConditionalFormatRulePresetControls = false;
-        var hasConditionalFormatRuleValueControls = false;
-        var hasConditionalFormatRuleActionButtons = false;
-        var hasConditionalFormatRuleCompactLayout = false;
-        var conditionalFormatRuleDialogResult = await ShowConditionalFormatRuleEditorAsync(
-            existingRule: null,
-            launchSmokeProbe: probe =>
-            {
-                hasConditionalFormatRuleDialog = HasLaunchSmokeDialog(probe.Dialog, "New Formatting Rule");
-                hasConditionalFormatRuleTypeControls =
-                    HasLaunchSmokeComboBox(probe.RuleTypeBox, "ConditionalFormatRuleTypeBox", "Rule type") &&
-                    probe.RuleTypeBox.SelectedIndex == 0 &&
-                    HasLaunchSmokeComboBox(probe.TopBottomBox, "ConditionalFormatTopBottomBox", "Top or bottom") &&
-                    HasLaunchSmokeAutomationId(probe.IconSetBox, "ConditionalFormatIconSetBox");
-                hasConditionalFormatRulePresetControls =
-                    HasLaunchSmokeComboBox(probe.PresetBox, "ConditionalFormatPresetBox", "Preset") &&
-                    probe.PresetBox.ItemCount > 0 &&
-                    HasLaunchSmokeAutomationId(probe.HighlightBox, "ConditionalFormatHighlightBox") &&
-                    probe.HighlightBox.SelectedIndex == 0;
-                hasConditionalFormatRuleValueControls =
-                    HasLaunchSmokeAutomationId(probe.OperatorBox, "ConditionalFormatOperatorBox") &&
-                    HasLaunchSmokeAutomationId(probe.Value1Box, "ConditionalFormatValue1Box") &&
-                    HasLaunchSmokeAutomationId(probe.FormulaBox, "ConditionalFormatFormulaBox") &&
-                    HasLaunchSmokeAutomationId(probe.TextBox, "ConditionalFormatTextBox") &&
-                    HasLaunchSmokeAutomationId(probe.RankBox, "ConditionalFormatRankBox") &&
-                    HasLaunchSmokeAutomationId(probe.MinColorBox, "ConditionalFormatMinColorBox") &&
-                    HasLaunchSmokeAutomationId(probe.MaxColorBox, "ConditionalFormatMaxColorBox");
-                hasConditionalFormatRuleActionButtons =
-                    HasLaunchSmokeButton(probe.OkButton, "ConditionalFormatOkButton", "OK") &&
-                    HasLaunchSmokeButton(probe.CancelButton, "ConditionalFormatCancelButton", "Cancel");
-                hasConditionalFormatRuleCompactLayout = HasLaunchSmokeCompactDialog(
-                    probe.Dialog,
-                    width: ConditionalFormatDialogCatalog.RuleEditorCaptureWidth,
-                    height: ConditionalFormatDialogCatalog.RuleEditorCaptureHeight,
-                    minWidth: ConditionalFormatDialogCatalog.RuleEditorMinWidth,
-                    minHeight: ConditionalFormatDialogCatalog.RuleEditorMinHeight);
-            });
-
-        var hasManageConditionalFormatsDialog = false;
-        var hasManageConditionalFormatsListControls = false;
-        var hasManageConditionalFormatsReorderControls = false;
-        var hasManageConditionalFormatsAppliesToControls = false;
-        var hasManageConditionalFormatsActionButtons = false;
-        var hasManageConditionalFormatsCompactLayout = false;
-        var manageConditionalFormatsClosedWithoutAccept = false;
-        await ShowManageConditionalFormatsDialogAsync(probe =>
-        {
-            hasManageConditionalFormatsDialog = HasLaunchSmokeDialog(probe.Dialog, UiText.Get("ManageConditionalFormats_ConditionalFormattingRulesManager"));
-            hasManageConditionalFormatsListControls =
-                HasLaunchSmokeAutomationId(probe.ListBox, "ManageConditionalFormatsListBox") &&
-                HasLaunchSmokeText(AutomationProperties.GetName(probe.ListBox), UiText.Get("ManageConditionalFormats_ConditionalFormattingRules"));
-            hasManageConditionalFormatsReorderControls =
-                HasLaunchSmokeNamedButton(probe.MoveUpButton, "ManageConditionalFormatsMoveUpButton", UiText.Get("ManageConditionalFormats_MoveUp")) &&
-                HasLaunchSmokeNamedButton(probe.MoveDownButton, "ManageConditionalFormatsMoveDownButton", UiText.Get("ManageConditionalFormats_MoveDown"));
-            hasManageConditionalFormatsAppliesToControls =
-                HasLaunchSmokeAutomationId(probe.AppliesToBox, "ManageConditionalFormatsAppliesToBox") &&
-                HasLaunchSmokeButton(probe.ApplyAppliesToButton, "ManageConditionalFormatsApplyAppliesToButton", UiText.Get("ManageConditionalFormats_Apply"));
-            hasManageConditionalFormatsActionButtons =
-                HasLaunchSmokeButton(probe.NewButton, "ManageConditionalFormatsNewButton", UiText.Get("ManageConditionalFormats_NewRule")) &&
-                HasLaunchSmokeButton(probe.EditButton, "ManageConditionalFormatsEditButton", UiText.Get("ManageConditionalFormats_EditRule")) &&
-                HasLaunchSmokeButton(probe.DeleteButton, "ManageConditionalFormatsDeleteButton", UiText.Get("ManageConditionalFormats_DeleteRule")) &&
-                HasLaunchSmokeButton(probe.CloseButton, "ManageConditionalFormatsCloseButton", UiText.Get("Common_Ok"));
-            hasManageConditionalFormatsCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 560, height: 460, minWidth: 480, minHeight: 360);
-            manageConditionalFormatsClosedWithoutAccept = true;
-        });
-
-        _launchSmokeDialogEvidence = new MacOsLaunchSmokeDialogSnapshot(
-            hasFindDialog,
-            hasFindDialogTextBox,
-            hasFindDialogActionButtons,
-            hasFindDialogOptions,
-            hasFindDialogFormatControls,
-            hasFindDialogCompactLayout,
-            hasReplaceDialog,
-            hasReplaceDialogTextBoxes,
-            hasReplaceDialogActionButtons,
-            hasReplaceDialogOptions,
-            hasReplaceDialogFormatControls,
-            hasReplaceDialogCompactLayout,
-            hasGoToDialog,
-            hasGoToDialogReferenceControls,
-            hasGoToDialogHistoryControls,
-            hasGoToDialogSpecialControl,
-            hasGoToDialogCompactLayout,
-            hasGoToSpecialDialog,
-            hasGoToSpecialKindControls,
-            hasGoToSpecialValueTypeControls,
-            hasGoToSpecialDialogCompactLayout,
-            findDialogResult is null,
-            replaceDialogResult is null,
-            goToDialogResult is null,
-            goToSpecialDialogResult is null,
-            hasFormatCellsDialog,
-            hasFormatCellsDialogTabStrip,
-            hasFormatCellsDialogDefaultNumberTab,
-            hasFormatCellsDialogNumberControls,
-            hasFormatCellsDialogActionButtons,
-            hasFormatCellsDialogCompactLayout,
-            formatCellsDialogResult is null,
-            hasSortDialog,
-            hasSortDialogSortOnControls,
-            hasSortDialogColorControls,
-            hasSortDialogActionButtons,
-            hasSortDialogCompactLayout,
-            sortDialogResult is null,
-            hasDataValidationDropdownControl,
-            hasDataValidationDropdownItems,
-            hasDataValidationDialog,
-            hasDataValidationDialogCriteriaControls,
-            hasDataValidationDialogMessageControls,
-            hasDataValidationDialogActionButtons,
-            hasDataValidationDialogCompactLayout,
-            dataValidationDialogResult is null,
-            hasConditionalFormatRuleDialog,
-            hasConditionalFormatRuleTypeControls,
-            hasConditionalFormatRulePresetControls,
-            hasConditionalFormatRuleValueControls,
-            hasConditionalFormatRuleActionButtons,
-            hasConditionalFormatRuleCompactLayout,
-            conditionalFormatRuleDialogResult is null,
-            hasManageConditionalFormatsDialog,
-            hasManageConditionalFormatsListControls,
-            hasManageConditionalFormatsReorderControls,
-            hasManageConditionalFormatsAppliesToControls,
-            hasManageConditionalFormatsActionButtons,
-            hasManageConditionalFormatsCompactLayout,
-            manageConditionalFormatsClosedWithoutAccept);
-        return _launchSmokeDialogEvidence;
-    }
-
-    private static void RunLaunchSmokeDialogProbe(Window dialog, Action probe)
-    {
-        try
-        {
-            probe();
-        }
-        finally
-        {
-            Dispatcher.UIThread.Post(() => dialog.Close());
-        }
-    }
-
-    private static bool HasLaunchSmokeDialog(Window dialog, string title) =>
-        dialog.IsVisible &&
-        string.Equals(dialog.Title, title, StringComparison.Ordinal);
-
-    private static bool HasLaunchSmokeCompactDialog(
-        Window dialog,
-        double width,
-        double height,
-        double minWidth,
-        double minHeight) =>
-        dialog.Width <= width &&
-        dialog.Height <= height &&
-        dialog.MinWidth <= minWidth &&
-        dialog.MinHeight <= minHeight;
-
-    private static bool HasLaunchSmokeButton(Button button, string automationId, string content) =>
-        HasLaunchSmokeAutomationId(button, automationId) &&
-        HasLaunchSmokeText(button.Content?.ToString(), content);
-
-    private static bool HasLaunchSmokeNamedButton(Button button, string automationId, string name) =>
-        HasLaunchSmokeAutomationId(button, automationId) &&
-        HasLaunchSmokeText(AutomationProperties.GetName(button), name);
-
-    private static bool HasLaunchSmokeCheckBox(CheckBox checkBox, string automationId, string content) =>
-        HasLaunchSmokeAutomationId(checkBox, automationId) &&
-        HasLaunchSmokeText(checkBox.Content?.ToString(), content);
-
-    private static bool HasLaunchSmokeComboBox(ComboBox comboBox, string automationId, string name) =>
-        HasLaunchSmokeAutomationId(comboBox, automationId) &&
-        HasLaunchSmokeText(AutomationProperties.GetName(comboBox), name);
-
-    private static bool HasLaunchSmokeText(string? actual, string expected) =>
-        string.Equals(NormalizeLaunchSmokeText(actual), NormalizeLaunchSmokeText(expected), StringComparison.Ordinal);
-
-    private static string NormalizeLaunchSmokeText(string? text) =>
-        (text ?? string.Empty).Replace("_", string.Empty, StringComparison.Ordinal);
-
-    private static bool HasLaunchSmokeAutomationId(Control control, string automationId) =>
-        string.Equals(AutomationProperties.GetAutomationId(control), automationId, StringComparison.Ordinal);
-
-    private static bool HasLaunchSmokeFindOptions(
-        FindOptionsControls controls,
-        string automationPrefix,
-        int defaultLookInIndex) =>
-        HasLaunchSmokeAutomationId(controls.Panel, $"{automationPrefix}OptionsPanel") &&
-        HasLaunchSmokeAutomationId(controls.WithinBox, $"{automationPrefix}WithinBox") &&
-        HasLaunchSmokeAutomationId(controls.SearchBox, $"{automationPrefix}SearchBox") &&
-        HasLaunchSmokeAutomationId(controls.LookInBox, $"{automationPrefix}LookInBox") &&
-        HasLaunchSmokeAutomationId(controls.MatchCaseBox, $"{automationPrefix}MatchCaseBox") &&
-        HasLaunchSmokeAutomationId(controls.MatchEntireCellBox, $"{automationPrefix}MatchEntireCellBox") &&
-        controls.WithinBox.SelectedIndex == 0 &&
-        controls.SearchBox.SelectedIndex == 0 &&
-        controls.LookInBox.SelectedIndex == defaultLookInIndex;
-
-    internal MacOsLaunchSmokeLiveCommandKeySnapshot BeginLaunchSmokeLiveCommandKeyProbe()
-    {
-        FocusShellRegion(ShellFocusTarget.Worksheet);
-        _launchSmokeLiveCommandKeySnapshot = MacOsLaunchSmokeLiveCommandKeySnapshot.Ready(
-            _session.IsSelectedRangeStartBold,
-            _session.IsSelectedRangeStartItalic,
-            _session.IsSelectedRangeStartUnderline);
-        return _launchSmokeLiveCommandKeySnapshot;
-    }
-
-    internal MacOsLaunchSmokeLiveCommandKeySnapshot CreateLaunchSmokeLiveCommandKeySnapshot() =>
-        _launchSmokeLiveCommandKeySnapshot;
-
-    private void RecordLaunchSmokeLiveCommandKey(Key key, bool before, bool after)
-    {
-        if (!_launchSmokeLiveCommandKeySnapshot.IsReady)
-            return;
-
-        var changed = before != after;
-        _launchSmokeLiveCommandKeySnapshot = key switch
-        {
-            Key.B => _launchSmokeLiveCommandKeySnapshot with
-            {
-                HasBoldCommandKey = true,
-                HasBoldStateChange = _launchSmokeLiveCommandKeySnapshot.HasBoldStateChange || changed,
-                CurrentBoldState = after
-            },
-            Key.I => _launchSmokeLiveCommandKeySnapshot with
-            {
-                HasItalicCommandKey = true,
-                HasItalicStateChange = _launchSmokeLiveCommandKeySnapshot.HasItalicStateChange || changed,
-                CurrentItalicState = after
-            },
-            Key.U => _launchSmokeLiveCommandKeySnapshot with
-            {
-                HasUnderlineCommandKey = true,
-                HasUnderlineStateChange = _launchSmokeLiveCommandKeySnapshot.HasUnderlineStateChange || changed,
-                CurrentUnderlineState = after
-            },
-            _ => _launchSmokeLiveCommandKeySnapshot
-        };
-    }
-
-    private void RecordLaunchSmokeLiveSelectAllCommandKey(GridRange before, GridRange after)
-    {
-        if (!_launchSmokeLiveCommandKeySnapshot.IsReady)
-            return;
-
-        _launchSmokeLiveCommandKeySnapshot = _launchSmokeLiveCommandKeySnapshot with
-        {
-            HasSelectAllCommandKey = true,
-            HasSelectAllStateChange = _launchSmokeLiveCommandKeySnapshot.HasSelectAllStateChange || before != after
-        };
-    }
-
-    internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()
-    {
-        var nativeTopLevelMenuOrder = GetNativeTopLevelMenuOrder(_nativeMenu);
-        var nativeDockMenu = Application.Current is { } app
-            ? NativeDock.GetMenu(app)
-            : null;
-        var nativeDockTopLevelMenuOrder = GetNativeTopLevelMenuOrder(nativeDockMenu);
-        var hasNativeDockMenu = nativeDockMenu is not null;
-        var hasNativeDockFileMenu = HasNativeTopLevelMenu(nativeDockMenu, NativeMenuTopLevelId.File);
-        var nativeDockFileMenuItemCount = CountNativeTopLevelMenuItems(nativeDockMenu, NativeMenuTopLevelId.File);
-        var hasNativeFileMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.File);
-        var hasNativeHomeMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Home);
-        var hasNativeInsertMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Insert);
-        var hasNativePageLayoutMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.PageLayout);
-        var hasNativeFormulasMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Formulas);
-        var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);
-        var hasNativeReviewMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Review);
-        var hasNativeViewMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.View);
-        var hasNativeSheetMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Sheet);
-        var hasNativeWindowMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Window);
-        var hasNativeHelpMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Help);
-        var nativeCellStylesPresetCount = _cellStylesMenuItem.Menu?
-            .Items
-            .OfType<NativeMenuItem>()
-            .Count(item => item.Header is not null) ?? 0;
-        var nativeOpenRecentItemCount = CountNativeOpenRecentItems(_openRecentMenuItem.Menu);
-        var nativeFillColorSwatchCount = CountNativeColorPaletteSwatches(_fillColorMenuItem.Menu);
-        var nativeFontColorSwatchCount = CountNativeColorPaletteSwatches(_fontColorMenuItem.Menu);
-        var nativeBordersPresetCount = _bordersMenuItem.Menu?
-            .Items
-            .OfType<NativeMenuItem>()
-            .Count(item => item.Header is not null) ?? 0;
-        var nativeTabColorSwatchCount = CountNativeColorPaletteSwatches(_tabColorMenuItem.Menu);
-        var externalImageClipboardPictures = _session.ActiveSheet.Pictures
-            .Where(static picture =>
-                picture.Kind == PictureKind.Image &&
-                string.Equals(picture.ContentType, "image/png", StringComparison.OrdinalIgnoreCase) &&
-                picture.ImageBytes is { Length: > 0 })
-            .ToArray();
-
-        return new MacOsLaunchSmokeSnapshot(
-            WindowShown: IsVisible,
-            WindowTitle: Title ?? "",
-            DisplayName: _session.DisplayName,
-            ActiveSheetName: _session.ActiveSheet.Name,
-            SheetTabCount: _session.SheetTabs.Count,
-            ViewportRowCount: _session.Viewport.RowMetrics.Count,
-            ViewportColumnCount: _session.Viewport.ColMetrics.Count,
-            ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length,
-            ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length),
-            DialogEvidence: _launchSmokeDialogEvidence,
-            OpenedSourcePath: _session.CurrentFilePath,
-            IsOpening: _isOpening,
-            HasNewSheetButton: _newSheetButton.Content?.ToString() == "+",
-            HasFormatPainterButton: _formatPainterButton.Content?.ToString() == "Format Painter" &&
-                string.Equals(AutomationProperties.GetAutomationId(_formatPainterButton), "HomeFormatPainterButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_formatPainterButton), "Copy formatting from the selection and apply it to another range.", StringComparison.Ordinal),
-            HasAutoSumButton: _autoSumButton.Content?.ToString() == "AutoSum" &&
-                _autoSumButton.Flyout is MenuFlyout &&
-                string.Equals(AutomationProperties.GetAutomationId(_autoSumButton), "HomeAutoSumButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_autoSumButton), "Insert a formula using nearby numeric cells.", StringComparison.Ordinal),
-            HasAutoSumSumMenuItem: HasToolbarMenuItem(_autoSumSumFlyoutItem, "Sum"),
-            HasAutoSumAverageMenuItem: HasToolbarMenuItem(_autoSumAverageFlyoutItem, "Average"),
-            HasAutoSumCountNumbersMenuItem: HasToolbarMenuItem(_autoSumCountNumbersFlyoutItem, "Count Numbers"),
-            HasAutoSumCountAllMenuItem: HasToolbarMenuItem(_autoSumCountAllFlyoutItem, "Count All"),
-            HasAutoSumMaxMenuItem: HasToolbarMenuItem(_autoSumMaxFlyoutItem, "Max"),
-            HasAutoSumMinMenuItem: HasToolbarMenuItem(_autoSumMinFlyoutItem, "Min"),
-            HasFillCellsButton: _fillCellsButton.Content?.ToString() == "Fill Cells" &&
-                _fillCellsButton.Flyout is MenuFlyout &&
-                string.Equals(AutomationProperties.GetAutomationId(_fillCellsButton), "HomeFillCellsButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_fillCellsButton), "Copy the edge cells across the selected range.", StringComparison.Ordinal),
-            HasFillDownMenuItem: HasToolbarMenuItem(_fillDownFlyoutItem, "Down"),
-            HasFillRightMenuItem: HasToolbarMenuItem(_fillRightFlyoutItem, "Right"),
-            HasFillUpMenuItem: HasToolbarMenuItem(_fillUpFlyoutItem, "Up"),
-            HasFillLeftMenuItem: HasToolbarMenuItem(_fillLeftFlyoutItem, "Left"),
-            HasClearButton: _clearButton.Content?.ToString() == "Clear" &&
-                _clearButton.Flyout is MenuFlyout &&
-                string.Equals(AutomationProperties.GetAutomationId(_clearButton), "HomeClearButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_clearButton), "Clear contents, formatting, comments, hyperlinks, or all cell state from the selected range.", StringComparison.Ordinal),
-            HasClearAllMenuItem: HasToolbarMenuItem(_clearAllFlyoutItem, "Clear All"),
-            HasClearFormatsMenuItem: HasToolbarMenuItem(_clearFormatsFlyoutItem, "Clear Formats"),
-            HasClearContentsMenuItem: HasToolbarMenuItem(_clearContentsFlyoutItem, "Clear Contents"),
-            HasClearCommentsMenuItem: HasToolbarMenuItem(_clearCommentsFlyoutItem, "Clear Comments and Notes"),
-            HasClearHyperlinksMenuItem: HasToolbarMenuItem(_clearHyperlinksFlyoutItem, "Clear Hyperlinks"),
-            HasBordersButton: _bordersButton.Content?.ToString() == "Borders" &&
-                string.Equals(AutomationProperties.GetAutomationId(_bordersButton), "HomeBordersButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_bordersButton), "Apply or change borders on the selected cells.", StringComparison.Ordinal),
-            HasWrapTextButton: _wrapTextButton.Content?.ToString() == "Wrap" &&
-                string.Equals(AutomationProperties.GetAutomationId(_wrapTextButton), "HomeWrapTextButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_wrapTextButton), "Wrap text within the selected cells.", StringComparison.Ordinal),
-            HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == "Merge & Center" &&
-                string.Equals(AutomationProperties.GetAutomationId(_mergeAndCenterButton), "HomeMergeAndCenterButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_mergeAndCenterButton), "Merge and center the selected cells.", StringComparison.Ordinal),
-            HasFormulaBoxAutomationName: string.Equals(
-                AutomationProperties.GetName(_formulaBox),
-                FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey),
-                StringComparison.Ordinal),
-            HasFormulaBoxAutomationHelp: string.Equals(
-                AutomationProperties.GetHelpText(_formulaBox),
-                FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey),
-                StringComparison.Ordinal),
-            HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), "FormulaBox", StringComparison.Ordinal),
-            HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), "Status", StringComparison.Ordinal),
-            HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal),
-            HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal),
-            HasStatusTextValue: HasStatusBarAccessibleValue(),
-            HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal),
-            HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal),
-            HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal),
-            HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), "Selection statistics", StringComparison.Ordinal),
-            HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), "Shows statistics for the current selection.", StringComparison.Ordinal),
-            HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), "SelectionStatsText", StringComparison.Ordinal),
-            HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable),
-            HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true,
-            HasShellFocusCycleTargets: _sheetGridHost.Focusable &&
-                GetToolbarFocusTargets().Any(control => control.Focusable) &&
-                _formulaBox.Focusable &&
-                FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true &&
-                _zoomText.Focusable,
-            HasSheetTabContextKeyboardHelp: HasSheetTabButton(button =>
-                string.Equals(AutomationProperties.GetHelpText(button), SheetTabContextHelpText, StringComparison.Ordinal)),
-            HasSheetTabContextRenameMenuItem: HasSheetTabContextMenuItem("Rename..."),
-            HasSheetTabContextTabColorMenuItem: HasSheetTabContextMenuItem("Tab Color"),
-            HasSheetTabContextNoColorMenuItem: HasSheetTabContextSubmenuItem("Tab Color", "No Color"),
-            HasSheetTabContextSelectAllSheetsMenuItem: HasSheetTabContextMenuItem("Select All Sheets"),
-            HasSheetTabContextUngroupSheetsMenuItem: HasSheetTabContextMenuItem("Ungroup Sheets"),
-            NativeTopLevelMenuOrder: nativeTopLevelMenuOrder,
-            NativeDockTopLevelMenuOrder: nativeDockTopLevelMenuOrder,
-            HasNativeDockMenu: hasNativeDockMenu,
-            HasNativeDockFileMenu: hasNativeDockFileMenu,
-            NativeDockFileMenuItemCount: nativeDockFileMenuItemCount,
-            HasNativeFileMenu: hasNativeFileMenu,
-            HasNativeHomeMenu: hasNativeHomeMenu,
-            HasNativeInsertMenu: hasNativeInsertMenu,
-            HasNativePageLayoutMenu: hasNativePageLayoutMenu,
-            HasNativeFormulasMenu: hasNativeFormulasMenu,
-            HasNativeDataMenu: hasNativeDataMenu,
-            HasNativeReviewMenu: hasNativeReviewMenu,
-            HasNativeViewMenu: hasNativeViewMenu,
-            HasNativeSheetMenu: hasNativeSheetMenu,
-            HasNativeWindowMenu: hasNativeWindowMenu,
-            HasNativeHelpMenu: hasNativeHelpMenu,
-            HasNativeNewWorkbookMenuItem: HasNativeFileMenuItem(_newWorkbookMenuItem, NativeFileMenuItemId.NewWorkbook),
-            HasNativeOpenMenuItem: HasNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open),
-            HasNativeOpenRecentMenuItem: HasNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent),
-            NativeOpenRecentItemCount: nativeOpenRecentItemCount,
-            HasNativeSaveMenuItem: HasNativeFileMenuItem(_saveMenuItem, NativeFileMenuItemId.Save),
-            HasNativeSaveAsMenuItem: HasNativeFileMenuItem(_saveAsMenuItem, NativeFileMenuItemId.SaveAs),
-            HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf),
-            HasNativeShareWorkbookMenuItem: HasEnabledNativeFileMenuItem(_shareWorkbookMenuItem, NativeFileMenuItemId.ShareWorkbook),
-            HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics),
-            HasNativeCloseWorkbookMenuItem: HasNativeFileMenuItem(_closeWorkbookMenuItem, NativeFileMenuItemId.CloseWorkbook),
-            HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, NativeMenuItemId.NewSheet),
-            HasNativeRenameSheetMenuItem: HasNativeMenuItem(_renameSheetMenuItem, NativeMenuItemId.RenameSheet),
-            HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, NativeMenuItemId.DuplicateSheet),
-            HasNativeMoveSheetLeftMenuItem: HasNativeMenuItem(_moveSheetLeftMenuItem, NativeMenuItemId.MoveSheetLeft),
-            HasNativeMoveSheetRightMenuItem: HasNativeMenuItem(_moveSheetRightMenuItem, NativeMenuItemId.MoveSheetRight),
-            HasNativeTabColorMenuItem: HasNativeMenuItem(_tabColorMenuItem, NativeMenuItemId.TabColor),
-            HasNativeClearTabColorMenuItem: HasNativeSubmenuItem(_tabColorMenuItem.Menu, "No Color"),
-            NativeTabColorSwatchCount: nativeTabColorSwatchCount,
-            HasNativeSelectAllSheetsMenuItem: HasNativeMenuItem(_selectAllSheetsMenuItem, NativeMenuItemId.SelectAllSheets),
-            HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, NativeMenuItemId.UngroupSheets),
-            HasNativeHideSheetMenuItem: HasNativeMenuItem(_hideSheetMenuItem, NativeMenuItemId.HideSheet),
-            HasNativeUnhideSheetMenuItem: HasNativeMenuItem(_unhideSheetMenuItem, NativeMenuItemId.UnhideSheet),
-            HasNativeDeleteSheetMenuItem: HasNativeMenuItem(_deleteSheetMenuItem, NativeMenuItemId.DeleteSheet),
-            HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, NativeMenuItemId.Undo),
-            HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, NativeMenuItemId.Redo),
-            HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, NativeMenuItemId.Cut),
-            HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, NativeMenuItemId.Copy),
-            HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, NativeMenuItemId.Paste),
-            HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, NativeMenuItemId.PasteSpecial),
-            HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, NativeMenuItemId.FormatPainter),
-            HasNativePasteSpecialCommentsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Comments and Notes"),
-            HasNativePasteSpecialValidationMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Validation"),
-            HasNativePasteSpecialAllExceptBordersMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "All Except Borders"),
-            HasNativePasteSpecialAllMergingConditionalFormatsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "All Merging Conditional Formats"),
-            HasNativePasteSpecialColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Column Widths"),
-            HasNativePasteSpecialFormulasAndNumberFormatsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Formulas and Number Formats"),
-            HasNativePasteSpecialValuesAndNumberFormatsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Values and Number Formats"),
-            HasNativePasteSpecialValuesAndSourceFormattingMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Values and Source Formatting"),
-            HasNativePasteSpecialKeepSourceColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Keep Source Column Widths"),
-            HasNativePasteSpecialPasteLinkMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Paste Link"),
-            HasNativePasteSpecialTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Text"),
-            HasNativePasteSpecialUnicodeTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Unicode Text"),
-            HasNativePasteSpecialPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Picture"),
-            HasNativePasteSpecialLinkedPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Linked Picture"),
-            HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, NativeMenuItemId.SelectAll),
-            HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, NativeMenuItemId.Find),
-            HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, NativeMenuItemId.FindNext),
-            HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, NativeMenuItemId.Replace),
-            HasNativeGoToMenuItem: HasNativeMenuItem(_goToMenuItem, NativeMenuItemId.GoTo),
-            HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, NativeMenuItemId.GoToSpecial),
-            HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, NativeMenuItemId.SortAscending),
-            HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, NativeMenuItemId.SortDescending),
-            HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, NativeMenuItemId.FlashFill),
-            HasNativeAdvancedFilterMenuItem: HasNativeMenuItem(_advancedFilterMenuItem, NativeMenuItemId.AdvancedFilter),
-            HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, NativeMenuItemId.RemoveDuplicates),
-            HasNativeSubtotalMenuItem: HasNativeMenuItem(_subtotalMenuItem, NativeMenuItemId.Subtotal),
-            HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, NativeMenuItemId.DataValidationPreview),
-            HasNativeDataValidationMenuItem: HasNativeMenuItem(_dataValidationMenuItem, NativeMenuItemId.DataValidation),
-            HasNativeWhatIfAnalysisMenuItem: HasNativeMenuItem(_whatIfAnalysisMenuItem, NativeMenuItemId.WhatIfAnalysis),
-            HasNativeGoalSeekMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, NativeMenuItemId.GoalSeek),
-            HasNativeDataTableMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, NativeMenuItemId.DataTable),
-            HasNativeScenarioManagerMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, NativeMenuItemId.ScenarioManager),
-            HasNativeForecastSheetMenuItem: HasNativeMenuItem(_forecastSheetMenuItem, NativeMenuItemId.ForecastSheet),
-            HasNativeReviewSummaryMenuItem: HasNativeMenuItem(_reviewSummaryMenuItem, NativeMenuItemId.ReviewSummary),
-            HasNativeCheckAccessibilityMenuItem: HasNativeMenuItem(_checkAccessibilityMenuItem, NativeMenuItemId.CheckAccessibility),
-            HasNativeNextNoteMenuItem: HasNativeMenuItem(_nextNoteMenuItem, NativeMenuItemId.NextNote),
-            HasNativePreviousNoteMenuItem: HasNativeMenuItem(_previousNoteMenuItem, NativeMenuItemId.PreviousNote),
-            HasNativeNextCommentMenuItem: HasNativeMenuItem(_nextCommentMenuItem, NativeMenuItemId.NextComment),
-            HasNativePreviousCommentMenuItem: HasNativeMenuItem(_previousCommentMenuItem, NativeMenuItemId.PreviousComment),
-            HasNativeFormatCellsMenuItem: HasNativeMenuItem(_formatCellsMenuItem, NativeMenuItemId.FormatCells),
-            HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, NativeMenuItemId.AutoSum),
-            HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumSum),
-            HasNativeAutoSumAverageMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumAverage),
-            HasNativeAutoSumCountNumbersMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumCountNumbers),
-            HasNativeAutoSumCountAllMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumCountAll),
-            HasNativeAutoSumMaxMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumMax),
-            HasNativeAutoSumMinMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumMin),
-            HasNativeFillCellsMenuItem: HasNativeMenuItem(_fillCellsMenuItem, NativeMenuItemId.FillCells),
-            HasNativeFillDownMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillDown),
-            HasNativeFillRightMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillRight),
-            HasNativeFillUpMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillUp),
-            HasNativeFillLeftMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillLeft),
-            HasNativeClearMenuItem: HasNativeMenuItem(_clearMenuItem, NativeMenuItemId.Clear),
-            HasNativeClearAllMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearAll),
-            HasNativeClearFormatsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearFormats),
-            HasNativeClearContentsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearContents),
-            HasNativeClearCommentsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearComments),
-            HasNativeClearHyperlinksMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearHyperlinks),
-            HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, NativeMenuItemId.Bold),
-            HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, NativeMenuItemId.Italic),
-            HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, NativeMenuItemId.Underline),
-            HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, NativeMenuItemId.DoubleUnderline),
-            HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, NativeMenuItemId.Strikethrough),
-            HasNativeIncreaseFontSizeMenuItem: HasNativeMenuItem(_increaseFontSizeMenuItem, NativeMenuItemId.IncreaseFontSize),
-            HasNativeDecreaseFontSizeMenuItem: HasNativeMenuItem(_decreaseFontSizeMenuItem, NativeMenuItemId.DecreaseFontSize),
-            HasNativeFillColorMenuItem: HasNativeMenuItem(_fillColorMenuItem, NativeMenuItemId.FillColor),
-            HasNativeClearFillMenuItem: HasNativeMenuItem(_clearFillMenuItem, NativeMenuItemId.ClearFill),
-            HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, NativeMenuItemId.FontColor),
-            NativeFillColorSwatchCount: nativeFillColorSwatchCount,
-            NativeFontColorSwatchCount: nativeFontColorSwatchCount,
-            HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, NativeMenuItemId.Borders),
-            NativeBordersPresetCount: nativeBordersPresetCount,
-            HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, NativeMenuItemId.CellStyles),
-            NativeCellStylesPresetCount: nativeCellStylesPresetCount,
-            HasNativeHorizontalTextMenuItem: HasNativeMenuItem(_horizontalTextMenuItem, NativeMenuItemId.HorizontalText),
-            HasNativeAngleCounterclockwiseMenuItem: HasNativeMenuItem(_angleCounterclockwiseMenuItem, NativeMenuItemId.AngleCounterclockwise),
-            HasNativeAngleClockwiseMenuItem: HasNativeMenuItem(_angleClockwiseMenuItem, NativeMenuItemId.AngleClockwise),
-            HasNativeVerticalTextMenuItem: HasNativeMenuItem(_verticalTextMenuItem, NativeMenuItemId.VerticalText),
-            HasNativeRotateTextUpMenuItem: HasNativeMenuItem(_rotateTextUpMenuItem, NativeMenuItemId.RotateTextUp),
-            HasNativeRotateTextDownMenuItem: HasNativeMenuItem(_rotateTextDownMenuItem, NativeMenuItemId.RotateTextDown),
-            HasNativeCurrencyFormatMenuItem: HasNativeMenuItem(_currencyFormatMenuItem, NativeMenuItemId.CurrencyFormat),
-            HasNativePercentFormatMenuItem: HasNativeMenuItem(_percentFormatMenuItem, NativeMenuItemId.PercentFormat),
-            HasNativeCommaStyleMenuItem: HasNativeMenuItem(_commaStyleMenuItem, NativeMenuItemId.CommaStyle),
-            HasNativeIncreaseDecimalMenuItem: HasNativeMenuItem(_increaseDecimalMenuItem, NativeMenuItemId.IncreaseDecimal),
-            HasNativeDecreaseDecimalMenuItem: HasNativeMenuItem(_decreaseDecimalMenuItem, NativeMenuItemId.DecreaseDecimal),
-            HasNativeAlignTopMenuItem: HasNativeMenuItem(_alignTopMenuItem, NativeMenuItemId.AlignTop),
-            HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, NativeMenuItemId.AlignMiddle),
-            HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, NativeMenuItemId.AlignBottom),
-            HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, NativeMenuItemId.WrapText),
-            HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, NativeMenuItemId.MergeAndCenter),
-            HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, NativeMenuItemId.UnmergeCells),
-            HasNativeShowGridlinesMenuItem: HasNativeMenuItem(_showGridlinesMenuItem, NativeMenuItemId.ShowGridlines),
-            HasNativeShowHeadingsMenuItem: HasNativeMenuItem(_showHeadingsMenuItem, NativeMenuItemId.ShowHeadings),
-            HasNativeZoomInMenuItem: HasNativeMenuItem(_zoomInMenuItem, NativeMenuItemId.ZoomIn),
-            HasNativeZoomOutMenuItem: HasNativeMenuItem(_zoomOutMenuItem, NativeMenuItemId.ZoomOut),
-            HasNativeZoom100MenuItem: HasNativeMenuItem(_zoom100MenuItem, NativeMenuItemId.Zoom100),
-            HasNativeZoomToSelectionMenuItem: HasNativeMenuItem(_zoomToSelectionMenuItem, NativeMenuItemId.ZoomToSelection),
-            HasNativeFreezePanesMenuItem: HasNativeMenuItem(_freezePanesMenuItem, NativeMenuItemId.FreezePanes),
-            HasNativeFreezeTopRowMenuItem: HasNativeMenuItem(_freezeTopRowMenuItem, NativeMenuItemId.FreezeTopRow),
-            HasNativeFreezeFirstColumnMenuItem: HasNativeMenuItem(_freezeFirstColumnMenuItem, NativeMenuItemId.FreezeFirstColumn),
-            HasNativeUnfreezePanesMenuItem: HasNativeMenuItem(_unfreezePanesMenuItem, NativeMenuItemId.UnfreezePanes),
-            HasNativeDecreaseIndentMenuItem: HasNativeMenuItem(_decreaseIndentMenuItem, NativeMenuItemId.DecreaseIndent),
-            HasNativeIncreaseIndentMenuItem: HasNativeMenuItem(_increaseIndentMenuItem, NativeMenuItemId.IncreaseIndent),
-            HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, NativeMenuItemId.AlignLeft),
-            HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, NativeMenuItemId.AlignCenter),
-            HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, NativeMenuItemId.AlignRight),
-            HasNativeShowFormulasMenuItem: HasNativeMenuItem(_showFormulasMenuItem, NativeMenuItemId.ShowFormulas),
-            HasNativeMinimizeWindowMenuItem: HasNativeMenuItem(_minimizeWindowMenuItem, NativeMenuItemId.MinimizeWindow),
-            HasNativeZoomWindowMenuItem: HasNativeMenuItem(_zoomWindowMenuItem, NativeMenuItemId.ZoomWindow),
-            HasNativeBringAllToFrontMenuItem: HasNativeMenuItem(_bringAllToFrontMenuItem, NativeMenuItemId.BringAllToFront),
-            HasNativeHelpOnlineMenuItem: HasNativeMenuItem(_helpOnlineMenuItem, NativeMenuItemId.HelpOnline),
-            HasNativeSendFeedbackMenuItem: HasNativeMenuItem(_sendFeedbackMenuItem, NativeMenuItemId.SendFeedback),
-            HasNativeCheckForUpdatesMenuItem: HasNativeMenuItem(_checkForUpdatesMenuItem, NativeMenuItemId.CheckForUpdates),
-            HasNativeAboutMenuItem: HasNativeMenuItem(_aboutMenuItem, NativeMenuItemId.About),
-            HasNativeLegalNoticesMenuItem: HasNativeMenuItem(_legalNoticesMenuItem, NativeMenuItemId.LegalNotices),
-            HasNativeQuitMenuItem: HasNativeFileMenuItem(_quitMenuItem, NativeFileMenuItemId.Quit));
-    }
-
-    private bool HasStatusBarAccessibleValue() =>
-        !string.IsNullOrWhiteSpace(_statusText.Text) ||
-        !string.IsNullOrWhiteSpace(_selectionStatsText.Text);
-
-    private static bool HasToolbarMenuItem(MenuItem item, string expectedHeader) =>
-        string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal);
-
-    private bool HasNativeTopLevelMenu(NativeMenuTopLevelId id) =>
-        HasNativeTopLevelMenu(_nativeMenu, id);
-
-    private static bool HasNativeTopLevelMenu(NativeMenu? menu, NativeMenuTopLevelId id) =>
-        HasNativeTopLevelMenu(menu, GetNativeTopLevelHeader(id));
-
-    private static bool HasNativeTopLevelMenu(NativeMenu? menu, string expectedHeader) =>
-        FindNativeTopLevelSubmenu(menu, expectedHeader) is not null;
-
-    private static string GetNativeTopLevelMenuOrder(NativeMenu? menu) =>
-        string.Join("|", menu?.Items.OfType<NativeMenuItem>()
-            .Select(static item => item.Header?.ToString())
-            .Where(static header => !string.IsNullOrWhiteSpace(header)) ?? []);
-
-    private static NativeMenu? FindNativeTopLevelSubmenu(NativeMenu? menu, string expectedHeader) =>
-        menu?.Items.OfType<NativeMenuItem>().FirstOrDefault(item =>
-            string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
-            item.Menu is not null)?.Menu;
-
-    private static int CountNativeTopLevelMenuItems(NativeMenu? menu, NativeMenuTopLevelId id) =>
-        CountNativeTopLevelMenuItems(menu, GetNativeTopLevelHeader(id));
-
-    private static int CountNativeTopLevelMenuItems(NativeMenu? menu, string expectedHeader) =>
-        FindNativeTopLevelSubmenu(menu, expectedHeader)?.Items.OfType<NativeMenuItem>()
-            .Count(static item => !string.IsNullOrWhiteSpace(item.Header?.ToString())) ?? 0;
-
-    private static string GetNativeTopLevelHeader(NativeMenuTopLevelId id) =>
-        NativeMenuCatalog.TopLevelMenus.First(plan => plan.Id == id).Header;
-
-    private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
-        string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
-        (!requireGesture || item.Gesture is not null);
-
-    private static bool HasNativeMenuItem(NativeMenuItem item, NativeMenuItemId id)
-    {
-        var plan = NativeMenuCatalog.GetMenuItem(id);
-        return HasNativeMenuItem(item, GetNativeMenuItemHeader(plan), plan.RequiresGestureInSmoke);
-    }
-
-    private static bool HasNativeFileMenuItem(NativeMenuItem item, NativeFileMenuItemId id)
-    {
-        var plan = NativeMenuCatalog.GetFileMenuItem(id);
-        return HasNativeMenuItem(item, GetNativeFileMenuItemHeader(plan), plan.RequiresGestureInSmoke);
-    }
-
-    private static bool HasEnabledNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
-        item.IsEnabled &&
-        HasNativeMenuItem(item, expectedHeader, requireGesture);
-
-    private static bool HasEnabledNativeFileMenuItem(NativeMenuItem item, NativeFileMenuItemId id) =>
-        item.IsEnabled &&
-        HasNativeFileMenuItem(item, id);
+    partial void ObserveOptionalSelectAllCommand(bool before, bool after);
 
     private bool HasSheetTabButton(Func<Button, bool> predicate) =>
         _sheetTabsHost.Content is StackPanel panel &&
@@ -27898,27 +25083,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         item.ItemsSource is IEnumerable<MenuItem> submenuItems &&
                         submenuItems.Any(submenuItem => string.Equals(submenuItem.Header?.ToString(), expectedHeader, StringComparison.Ordinal))));
 
-    private static bool HasNativeSubmenuItem(NativeMenu? menu, string expectedHeader) =>
-        menu?
-            .Items
-            .OfType<NativeMenuItem>()
-            .Any(item => string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal)) == true;
-
-    private static bool HasNativeSubmenuItem(NativeMenu? menu, NativeMenuItemId id) =>
-        HasNativeSubmenuItem(menu, GetNativeMenuItemHeader(id));
-
-    private static int CountNativeColorPaletteSwatches(NativeMenu? menu) =>
-        menu?
-            .Items
-            .OfType<NativeMenuItem>()
-            .Count(item => item.Header?.ToString()?.StartsWith("#", StringComparison.Ordinal) == true) ?? 0;
-
-    private static int CountNativeOpenRecentItems(NativeMenu? menu) =>
-        menu?
-            .Items
-            .OfType<NativeMenuItem>()
-            .Count(item => item.IsEnabled && !string.Equals(item.Header?.ToString(), "(No Recent Workbooks)", StringComparison.Ordinal)) ?? 0;
-
     private void RefreshNativeOpenRecentMenu(bool isIdle)
     {
         _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle);
@@ -27930,12 +25094,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var plan = OpenRecentWorkbookMenuPlanner.Create(
             _recentFiles.Snapshot(),
             File.Exists,
-            path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null);
+            path => _fileWorkflow.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null);
         if (plan.ItemCount == 0)
         {
             menu.Items.Add(new NativeMenuItem
             {
-                Header = "(No Recent Workbooks)",
+                Header = UiText.Get("Backstage_Home_NoRecentWorkbooks"),
                 IsEnabled = false,
             });
             return menu;
@@ -27961,12 +25125,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         string path,
         WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
-        if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _) ||
+        if (!_fileWorkflow.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _) ||
             target is null)
         {
             _recentFiles.Remove(path);
             RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
-            ShowOpenIssue($"Recent workbook no longer exists: {path}");
+            ShowOpenIssue(WorkbookFileWorkflowMessages.RecentWorkbookMissing(path));
             return;
         }
 
@@ -27977,7 +25141,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             _recentFiles.Remove(path);
             RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
-            ShowOpenIssue($"Recent workbook no longer exists: {path}");
+            ShowOpenIssue(WorkbookFileWorkflowMessages.RecentWorkbookMissing(path));
             return;
         }
 
@@ -27992,17 +25156,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
-        if (!_session.TryResolveOpenTarget(path, out var target, out _) ||
+        if (!_fileWorkflow.TryResolveOpenTarget(path, out var target, out _) ||
             target is null ||
             !File.Exists(target.Path))
             return;
 
-        RecentFileRegistrationService.RegisterIfNeeded(
-            _recentFiles,
-            new RecentFileRegistrationRequest(
-                target.Path,
-                FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity));
-        RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
+        _fileWorkflow.RegisterRecentFile(new RecentFileRegistrationRequest(
+            target.Path,
+            FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity));
     }
 
     private static bool HasOnlyCommandModifier(KeyModifiers modifiers)
@@ -28036,23 +25197,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static bool IsOpenActiveDropdownShortcut(KeyEventArgs args) =>
         args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;
 
-    private static bool TryGetNumberFormatShortcut(WorkbookShortcutRoute route, out NumberFormatShortcut shortcut)
-    {
-        shortcut = route switch
-        {
-            WorkbookShortcutRoute.NumberFormatGeneral => NumberFormatShortcut.General,
-            WorkbookShortcutRoute.NumberFormatNumber => NumberFormatShortcut.Number,
-            WorkbookShortcutRoute.NumberFormatTime => NumberFormatShortcut.Time,
-            WorkbookShortcutRoute.NumberFormatDate => NumberFormatShortcut.Date,
-            WorkbookShortcutRoute.NumberFormatCurrency => NumberFormatShortcut.Currency,
-            WorkbookShortcutRoute.NumberFormatPercentage => NumberFormatShortcut.Percentage,
-            WorkbookShortcutRoute.NumberFormatScientific => NumberFormatShortcut.Scientific,
-            _ => default
-        };
-
-        return WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(route);
-    }
-
     private static bool TryGetWorkbookShortcutRoute(
         Key key,
         KeyModifiers modifiers,
@@ -28063,12 +25207,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TryGetWorkbookShortcutRoute(shortcutKey, ToWorkbookShortcutModifiers(modifiers), out route);
     }
 
-    internal static bool TryResolveWorkbookShortcutRouteForTest(
-        Key key,
-        KeyModifiers modifiers,
-        out WorkbookShortcutRoute route) =>
-        TryGetWorkbookShortcutRoute(key, modifiers, out route);
-
     private static bool TryGetWorkbookShortcutRoute(
         WorkbookShortcutKey key,
         WorkbookShortcutModifiers modifiers,
@@ -28076,98 +25214,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(key, modifiers, out route) ||
         WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(key, modifiers, out route);
 
-    private static bool TryGetWorkbookShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
-    {
-        shortcutKey = key switch
-        {
-            Key.A => WorkbookShortcutKey.A,
-            Key.Back => WorkbookShortcutKey.Back,
-            Key.B => WorkbookShortcutKey.B,
-            Key.C => WorkbookShortcutKey.C,
-            Key.D => WorkbookShortcutKey.D,
-            Key.D1 or Key.NumPad1 => WorkbookShortcutKey.D1,
-            Key.D2 or Key.NumPad2 => WorkbookShortcutKey.D2,
-            Key.D3 or Key.NumPad3 => WorkbookShortcutKey.D3,
-            Key.D4 or Key.NumPad4 => WorkbookShortcutKey.D4,
-            Key.D5 or Key.NumPad5 => WorkbookShortcutKey.D5,
-            Key.D6 or Key.NumPad6 => WorkbookShortcutKey.D6,
-            Key.D7 => WorkbookShortcutKey.D7,
-            Key.Delete => WorkbookShortcutKey.Delete,
-            Key.E => WorkbookShortcutKey.E,
-            Key.F => WorkbookShortcutKey.F,
-            Key.F3 => WorkbookShortcutKey.F3,
-            Key.F5 => WorkbookShortcutKey.F5,
-            Key.F11 => WorkbookShortcutKey.F11,
-            Key.F12 => WorkbookShortcutKey.F12,
-            Key.G => WorkbookShortcutKey.G,
-            Key.H => WorkbookShortcutKey.H,
-            Key.I => WorkbookShortcutKey.I,
-            Key.Insert => WorkbookShortcutKey.Insert,
-            Key.N => WorkbookShortcutKey.N,
-            Key.O => WorkbookShortcutKey.O,
-            Key.Oem3 => WorkbookShortcutKey.Oem3,
-            Key.OemMinus => WorkbookShortcutKey.OemMinus,
-            Key.OemPlus or Key.Add => WorkbookShortcutKey.OemPlus,
-            Key.PageDown => WorkbookShortcutKey.PageDown,
-            Key.PageUp => WorkbookShortcutKey.PageUp,
-            Key.P => WorkbookShortcutKey.P,
-            Key.R => WorkbookShortcutKey.R,
-            Key.S => WorkbookShortcutKey.S,
-            Key.U => WorkbookShortcutKey.U,
-            Key.V => WorkbookShortcutKey.V,
-            Key.X => WorkbookShortcutKey.X,
-            Key.Y => WorkbookShortcutKey.Y,
-            Key.Z => WorkbookShortcutKey.Z,
-            _ => default
-        };
-
-        return key is
-            Key.A or
-            Key.Back or
-            Key.B or
-            Key.C or
-            Key.D or
-            Key.D1 or
-            Key.NumPad1 or
-            Key.D2 or
-            Key.NumPad2 or
-            Key.D3 or
-            Key.NumPad3 or
-            Key.D4 or
-            Key.NumPad4 or
-            Key.D5 or
-            Key.NumPad5 or
-            Key.D6 or
-            Key.NumPad6 or
-            Key.D7 or
-            Key.Delete or
-            Key.E or
-            Key.F or
-            Key.F3 or
-            Key.F5 or
-            Key.F11 or
-            Key.F12 or
-            Key.G or
-            Key.H or
-            Key.I or
-            Key.Insert or
-            Key.N or
-            Key.O or
-            Key.Oem3 or
-            Key.OemMinus or
-            Key.OemPlus or
-            Key.Add or
-            Key.PageDown or
-            Key.PageUp or
-            Key.P or
-            Key.R or
-            Key.S or
-            Key.U or
-            Key.V or
-            Key.X or
-            Key.Y or
-            Key.Z;
-    }
+    private static bool TryGetWorkbookShortcutKey(Key key, out WorkbookShortcutKey shortcutKey) =>
+        WorkbookKeyboardShortcutCatalog.TryParseKeyName(key.ToString(), out shortcutKey);
 
     private static WorkbookShortcutModifiers ToWorkbookShortcutModifiers(KeyModifiers modifiers)
     {
@@ -28215,15 +25263,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e) =>
         RunGuarded(() => MainWindow_KeyDownAsync(e));
 
-    /// <summary>
-    /// Test-only seam that drives the real worksheet-grid key-handling logic (F9/Ctrl+Space/
-    /// Ctrl+Arrow/etc.) with a caller-supplied <see cref="KeyEventArgs"/>, awaiting completion so
-    /// assertions can run against the resulting <see cref="Session"/> state. Not used by production
-    /// code paths (the real <c>KeyDown</c> subscription goes through the <c>async void</c> wrapper
-    /// above, as Avalonia event handlers require).
-    /// </summary>
-    internal Task RaiseKeyDownForTest(KeyEventArgs e) => MainWindow_KeyDownAsync(e);
-
     private async Task MainWindow_KeyDownAsync(KeyEventArgs e)
     {
         if (e.Key is Key.CapsLock or Key.NumLock)
@@ -28241,7 +25280,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (TryHandleWorkbookWindowSwitchShortcut(e))
             return;
 
-        if (TryHandleLegacyDataFilterSequence(e))
+        if (TryHandleRibbonKeyTipInput(e))
             return;
 
         if (TryHandleRibbonKeyTips(e))
@@ -28286,7 +25325,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        if (await TryHandleAvaloniaHostShortcutAsync(e))
+        if (await TryHandleApplicationOrLocalShortcutAsync(e))
             return;
 
         if (e.Key == Key.Enter &&
@@ -28408,7 +25447,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (e.Key == Key.F1)
             {
                 e.Handled = true;
-                await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
+                await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"));
                 return;
             }
 
@@ -28446,12 +25485,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // marquee, mirroring the WPF host's ClearClipboardVisualState call on Escape
             // (MainWindow.Editing.cs).
             if (e.Key == Key.Escape &&
-                (_clipboardMarqueeRange is not null || _internalObjectClipboard is not null))
+                (_clipboardMarqueeRange is not null || _drawingObjectClipboard.HasContent))
             {
                 e.Handled = true;
                 SetClipboardMarquee(null, isCut: false);
-                _internalObjectClipboard = null;
-                RefreshShell("Ready");
+                _drawingObjectClipboard.Clear();
+                RefreshShell(UiText.Get("MainLoc_Ready"));
                 return;
             }
 
@@ -28464,20 +25503,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 e.Handled = true;
                 ClearSelectedDrawingObject();
-                RefreshShell("Ready");
+                RefreshShell(UiText.Get("MainLoc_Ready"));
                 return;
             }
 
             // R129-model-drawing-nudge-1: with a picture/shape/text box/chart genuinely selected,
             // Excel routes plain and Ctrl+ arrow keys to nudging the object instead of moving the
-            // cell cursor underneath it. Only these two modifier states are claimed here -- Shift/
-            // Alt + arrow combos fall through unchanged, matching the WPF host's scope.
-            if (e.Key is Key.Up or Key.Down or Key.Left or Key.Right &&
-                e.KeyModifiers is KeyModifiers.None or KeyModifiers.Control &&
-                HasSelectedDrawingObject())
+            // cell cursor underneath it. Shift/Alt + arrow combos fall through unchanged; the
+            // shared planner owns that modifier/selection enablement policy for both renderers.
+            if (TryPlanSelectedDrawingObjectNudge(e.Key, e.KeyModifiers, out var nudgePlan))
             {
                 e.Handled = true;
-                NudgeSelectedDrawingObject(e.Key, fine: e.KeyModifiers == KeyModifiers.Control);
+                ExecuteSelectedDrawingObjectNudge(nudgePlan);
                 return;
             }
 
@@ -28514,7 +25551,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             e.Handled = true;
             var before = _session.SelectedRange;
             SelectCurrentRegionOrAll();
-            RecordLaunchSmokeLiveSelectAllCommandKey(before, _session.SelectedRange);
+            ObserveOptionalSelectAllCommand(
+                before == _session.SelectedRange,
+                after: true);
         }
         else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
@@ -28562,147 +25601,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryGetWorkbookShortcutRoute(e.Key, e.KeyModifiers, out var route))
             return false;
 
-        switch (route)
-        {
-            case WorkbookShortcutRoute.NewWorkbook:
-                e.Handled = true;
-                await CreateNewWorkbookAsync();
-                return true;
-            case WorkbookShortcutRoute.OpenWorkbook:
-                e.Handled = true;
-                await OpenWorkbookAsync();
-                return true;
-            case WorkbookShortcutRoute.SaveWorkbook:
-                e.Handled = true;
-                await SaveCurrentWorkbookAsync();
-                return true;
-            case WorkbookShortcutRoute.PrintWorkbook:
-                e.Handled = true;
-                ShowBackstagePrintPane();
-                return true;
-            case WorkbookShortcutRoute.Copy:
-                e.Handled = true;
-                await CopySelectedRangeToClipboardAsync();
-                return true;
-            case WorkbookShortcutRoute.Cut:
-                e.Handled = true;
-                await CutSelectedRangeToClipboardAsync();
-                return true;
-            case WorkbookShortcutRoute.Paste:
-                e.Handled = true;
-                await PasteClipboardTextAsync();
-                return true;
-            case WorkbookShortcutRoute.PasteSpecial:
-                e.Handled = true;
-                await ShowPasteSpecialDialogAsync();
-                return true;
-            case WorkbookShortcutRoute.Undo:
-                e.Handled = true;
-                UndoLastEdit();
-                return true;
-            case WorkbookShortcutRoute.Redo:
-                e.Handled = true;
-                RedoLastEdit();
-                return true;
-            case WorkbookShortcutRoute.ToggleBold:
-                e.Handled = true;
-                ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: e.Key == Key.B);
-                return true;
-            case WorkbookShortcutRoute.ToggleItalic:
-                e.Handled = true;
-                ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: e.Key == Key.I);
-                return true;
-            case WorkbookShortcutRoute.ToggleUnderline:
-                e.Handled = true;
-                ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: e.Key == Key.U);
-                return true;
-            case WorkbookShortcutRoute.ToggleStrikethrough:
-                e.Handled = true;
-                ToggleSelectedRangeStrikethrough();
-                return true;
-            case WorkbookShortcutRoute.FillDown:
-                e.Handled = true;
-                // R129-model-drawing-fill-1: Ctrl+D must no-op, not fill, while a picture/shape/
-                // text box/chart is genuinely selected -- same family as the Escape/F2/Backspace/
-                // Delete guards (see HasSelectedDrawingObject).
-                if (!HasSelectedDrawingObject())
-                    FillSelectedRange(FillCellsDirection.Down);
-                return true;
-            case WorkbookShortcutRoute.FillRight:
-                e.Handled = true;
-                if (!HasSelectedDrawingObject())
-                    FillSelectedRange(FillCellsDirection.Right);
-                return true;
-            case WorkbookShortcutRoute.FlashFill:
-                e.Handled = true;
-                FlashFillSelectedRange();
-                return true;
-            case WorkbookShortcutRoute.ToggleShowFormulas:
-                e.Handled = true;
-                ToggleShowFormulas();
-                return true;
-            case WorkbookShortcutRoute.ActivatePreviousSheet:
-                e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false);
-                return true;
-            case WorkbookShortcutRoute.ActivateNextSheet:
-                e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false);
-                return true;
-            case WorkbookShortcutRoute.SelectPreviousSheetGroup:
-                e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true);
-                return true;
-            case WorkbookShortcutRoute.SelectNextSheetGroup:
-                e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true);
-                return true;
-            case WorkbookShortcutRoute.OpenFormatCells:
-                e.Handled = true;
-                await ShowFormatCellsDialogAsync();
-                return true;
-            case WorkbookShortcutRoute.Find:
-                e.Handled = true;
-                await ShowFindDialogAsync();
-                return true;
-            case WorkbookShortcutRoute.Replace:
-                e.Handled = true;
-                await ShowReplaceDialogAsync();
-                return true;
-            case WorkbookShortcutRoute.GoTo:
-                e.Handled = true;
-                await ShowGoToDialogAsync();
-                return true;
-            case WorkbookShortcutRoute.InsertFunction:
-                e.Handled = true;
-                InsertFunction();
-                return true;
-            case WorkbookShortcutRoute.AutoSum:
-                e.Handled = true;
-                InsertAutoSumFormula("SUM");
-                return true;
-            case WorkbookShortcutRoute.WorkbookStatistics:
-                e.Handled = true;
-                await ShowWorkbookStatisticsDialogAsync();
-                return true;
-            case WorkbookShortcutRoute.InsertWorksheet:
-                e.Handled = true;
-                AddNewSheet();
-                return true;
-            case WorkbookShortcutRoute.ApplyOutlineBorder:
-                e.Handled = true;
-                ApplySelectedRangeBorderPreset(CellBorderPreset.Outside);
-                return true;
-            case WorkbookShortcutRoute.ClearOutlineBorder:
-                e.Handled = true;
-                ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder);
-                return true;
-        }
+        if (!WorkbookApplicationCommandRouter.TryRouteShortcut(route, out var applicationRoute))
+            return false;
 
-        if (TryGetNumberFormatShortcut(route, out var numberFormatShortcut))
-        {
-            e.Handled = true;
-            ApplySelectedRangeNumberFormatShortcut(numberFormatShortcut);
-            return true;
-        }
+        var execution = await WorkbookApplicationCommands.TryExecuteAsync(
+            applicationRoute,
+            nativeSource: e.Source,
+            nativeEventArgs: e);
+        if (!execution.IsBound)
+            return false;
 
-        return false;
+        e.Handled = execution.Handled;
+        return true;
     }
 
     private bool IsTextEditingEventSource(KeyEventArgs args) =>
@@ -28720,7 +25630,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return true;
 
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         if (_activeDataValidationDropdown is null)
             return false;
 
@@ -28809,18 +25719,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        RefreshShell($"Picked {selected} for {FormatCellReference(address)}");
+        RefreshShell(UiText.Format(
+            "MainLoc_ActionRangeStatusFormat",
+            selected,
+            FormatCellReference(address)));
     }
 
     private void CycleShellFocus(bool reverse)
     {
-        var current = GetCurrentShellFocusTarget();
-        for (var attempt = 0; attempt < Enum.GetValues<ShellFocusTarget>().Length; attempt++)
-        {
-            current = ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable);
-            if (FocusShellRegion(current))
-                return;
-        }
+        ShellFocusCyclePlanner.TryFocusNextAvailable(
+            GetCurrentShellFocusTarget(),
+            reverse,
+            IsShellFocusTargetAvailable,
+            FocusShellRegion);
     }
 
     private bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
@@ -28955,7 +25866,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
         {
             e.Cancel = true;
-            ShowOpenIssue("Finish opening or saving before closing FreeX.");
+            ShowOpenIssue(UiText.Get("File_FinishOperationBeforeClosing"));
             return;
         }
 
@@ -28976,7 +25887,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // rather than escaping to the dispatcher and crashing the app mid-close.
         try
         {
-            if (await ConfirmBeforeDestructiveWorkbookActionAsync("Close FreeX", "Discard and Close"))
+            if (await ConfirmBeforeDestructiveWorkbookActionAsync(
+                    UiText.Get("DirtyWorkbook_CloseFreeXTitle"),
+                    UiText.Get("DirtyWorkbook_DiscardAndClose")))
             {
                 _allowCloseWithoutDirtyPrompt = true;
                 Close();
@@ -28984,31 +25897,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         catch (Exception ex)
         {
-            ShowOpenIssue($"Close failed: {ex.Message}");
+            ShowOpenIssue(UiText.Format("File_CloseFailedFormat", ex.Message));
         }
     }
-
-    /// <summary>
-    /// Lets the headless parity-capture coordinator close the window without the dirty-workbook
-    /// save prompt. The capture seeds/edits the workbook (so it is dirty by the end); without this
-    /// the <see cref="MainWindow_Closing"/> handler would cancel the close and pop a modal that
-    /// never gets answered under Xvfb, hanging the capture process. Mirrors the WPF host's
-    /// <c>SuppressNextClosePrompt</c>.
-    /// </summary>
-    internal void AllowCloseWithoutDirtyPromptForParityCapture() => _allowCloseWithoutDirtyPrompt = true;
 
     private async Task TryQuitApplicationAsync()
     {
         if (_isOpening || _isSaving)
         {
-            ShowOpenIssue("Finish opening or saving before quitting FreeX.");
+            ShowOpenIssue(UiText.Get("File_FinishOperationBeforeQuitting"));
             return;
         }
 
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        if (!await ConfirmBeforeDestructiveWorkbookActionAsync("Quit FreeX", "Discard and Quit"))
+        if (!await ConfirmBeforeDestructiveWorkbookActionAsync(
+                UiText.Get("DirtyWorkbook_QuitFreeXTitle"),
+                UiText.Get("DirtyWorkbook_DiscardAndQuit")))
             return;
 
         _allowCloseWithoutDirtyPrompt = true;
@@ -29021,41 +25927,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Close();
     }
 
-    /// <summary>
-    /// Counts the scrollable (non-frozen) rows in <paramref name="viewport"/>'s RowMetrics, mirroring
-    /// the WPF host's MainWindow.Viewport.cs CountScrollableRows so that PageUp/PageDown and other
-    /// page-size computations exclude pinned frozen rows from the jump distance (R52-render-scroll-
-    /// viewport-nav-3-2: RowMetrics.Count alone includes the frozen rows and over-pages).
-    /// </summary>
-    private static int CountScrollableRows(ViewportModel viewport, Sheet? sheet)
-    {
-        var frozenRows = sheet?.FrozenRows ?? 0;
-        var count = 0;
-        foreach (var row in viewport.RowMetrics)
-        {
-            if (row.Row > frozenRows)
-                count++;
-        }
+    private static int CountScrollableRows(ViewportModel viewport, Sheet? sheet) =>
+        Math.Max(1, ViewportService.CountScrollableRows(viewport.RowMetrics, sheet?.FrozenRows ?? 0));
 
-        return Math.Max(1, count);
-    }
-
-    /// <summary>
-    /// Column counterpart of <see cref="CountScrollableRows"/> -- excludes frozen columns from the
-    /// scrollable count used for PageUp/PageDown-style horizontal page-size computations.
-    /// </summary>
-    private static int CountScrollableColumns(ViewportModel viewport, Sheet? sheet)
-    {
-        var frozenCols = sheet?.FrozenCols ?? 0;
-        var count = 0;
-        foreach (var column in viewport.ColMetrics)
-        {
-            if (column.Col > frozenCols)
-                count++;
-        }
-
-        return Math.Max(1, count);
-    }
+    private static int CountScrollableColumns(ViewportModel viewport, Sheet? sheet) =>
+        Math.Max(1, ViewportService.CountScrollableColumns(viewport.ColMetrics, sheet?.FrozenCols ?? 0));
 
     private void NavigateActiveCell(KeyEventArgs e)
     {
@@ -29085,7 +25961,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             _endMode = nextEndMode;
             e.Handled = true;
-            RefreshShell("Ready");
+            RefreshShell(UiText.Get("MainLoc_Ready"));
             return;
         }
 
@@ -29106,22 +25982,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_endMode)
             _endMode = false;
 
-        // Enter/Tab moves the active cell within the current selection without changing its areas.
-        // The shared planner also carries movement across Ctrl-selected areas in original selection
-        // order, matching WPF, and treats a lone merged region as one logical cell.
-        if (moveOnly &&
-            SelectionNavigationPlanner.TryAdvanceWithinSelection(
-                _session.SelectedRanges,
+        // Presentation owns traversal order, multi-area wrapping, and merged-cell eligibility.
+        // Avalonia retains native key conversion and applies only the returned active-cell target.
+        var cyclePlan = moveOnly
+            ? GridSelectionNavigationPlanner.PlanCycle(
                 sheet,
+                _session.SelectedRange,
+                _session.SelectedRanges,
                 current,
-                isTab: navigationKey == ExcelWorksheetNavigationKey.Tab,
-                forward: !extendSelection,
-                out var withinSelectionPlan))
+                navigationKey == ExcelWorksheetNavigationKey.Tab
+                    ? GridSelectionCycleKey.Tab
+                    : GridSelectionCycleKey.Enter,
+                forward: !extendSelection)
+            : null;
+        if (cyclePlan is { } cycle)
         {
-            _session.MoveActiveCellWithinSelection(withinSelectionPlan.Target);
+            _session.MoveActiveCellWithinSelection(cycle.Target);
             ClearSelectedDrawingObject();
             e.Handled = true;
-            RefreshShell("Ready");
+            RefreshShell(UiText.Get("MainLoc_Ready"));
             return;
         }
 
@@ -29180,11 +26059,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // applies when this navigation will actually MOVE the active cell (not extend a range).
         bool willMoveActiveCell = !(extendSelection && !moveOnly);
         if (willMoveActiveCell &&
-            sheet is { IsProtected: true } &&
-            GetProtectedNavigationStep(navigationKey, extendSelection) is { } step &&
-            !CommandGuards.CanSelectCell(_session.Workbook, sheet, navigationTarget))
+            sheet is { IsProtected: true })
         {
-            var adjustedTarget = FindNextSelectableCellInDirection(sheet, navigationTarget, step.RowStep, step.ColStep);
+            var adjustedTarget = ExcelWorksheetNavigationPlanner.ResolveProtectedSheetTarget(
+                _session.Workbook,
+                sheet,
+                navigationTarget,
+                navigationKey,
+                extendSelection);
             if (adjustedTarget is null)
             {
                 // No selectable cell exists further in this direction (e.g. every remaining cell
@@ -29199,49 +26081,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         MoveOrExtendActiveCellTo(navigationTarget, extendSelection && !moveOnly);
         ClearSelectedDrawingObject();
         e.Handled = true;
-        RefreshShell("Ready");
-    }
-
-    /// <summary>
-    /// The (row, column) step of travel a given navigation key moves the active cell by, used only
-    /// to know which direction to keep stepping in past a locked cell on a protected sheet
-    /// (R75-services-protection-security-4-1). Returns null for keys this protection-skip doesn't
-    /// cover (Home/End/PageUp/PageDown/data-boundary jumps) -- those land on their target
-    /// unadjusted, mirroring the WPF host's scope in MainWindow.Selection.cs.
-    /// </summary>
-    private static (int RowStep, int ColStep)? GetProtectedNavigationStep(ExcelWorksheetNavigationKey key, bool shiftHeld) =>
-        key switch
-        {
-            ExcelWorksheetNavigationKey.Up => (-1, 0),
-            ExcelWorksheetNavigationKey.Down => (1, 0),
-            ExcelWorksheetNavigationKey.Left => (0, -1),
-            ExcelWorksheetNavigationKey.Right => (0, 1),
-            ExcelWorksheetNavigationKey.Enter => shiftHeld ? (-1, 0) : (1, 0),
-            ExcelWorksheetNavigationKey.Tab => shiftHeld ? (0, -1) : (0, 1),
-            _ => null
-        };
-
-    /// <summary>
-    /// Starting at <paramref name="start"/> (already known not to be selectable), keeps stepping by
-    /// (<paramref name="rowStep"/>, <paramref name="colStep"/>) until a cell <see
-    /// cref="CommandGuards.CanSelectCell"/> allows is found, mirroring Excel's
-    /// protected-sheet navigation skip. Returns null if the worksheet bounds are reached with
-    /// nothing selectable in between (R75-services-protection-security-4-1).
-    /// </summary>
-    private CellAddress? FindNextSelectableCellInDirection(Sheet sheet, CellAddress start, int rowStep, int colStep)
-    {
-        var candidate = start;
-        while (!CommandGuards.CanSelectCell(_session.Workbook, sheet, candidate))
-        {
-            long nextRow = (long)candidate.Row + rowStep;
-            long nextCol = (long)candidate.Col + colStep;
-            if (nextRow < 1 || nextRow > CellAddress.MaxRow || nextCol < 1 || nextCol > CellAddress.MaxCol)
-                return null;
-
-            candidate = new CellAddress(candidate.Sheet, (uint)nextRow, (uint)nextCol);
-        }
-
-        return candidate;
+        RefreshShell(UiText.Get("MainLoc_Ready"));
     }
 
     private CellAddress OffsetAddress(CellAddress current, int rowDelta, int colDelta) =>
@@ -29383,7 +26223,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (rowDelta == 0 && colDelta == 0)
             return;
 
-        var step = GetWheelScrollLinesPerNotch();
+        var visibleSpan = colDelta != 0
+            ? _horizontalWorksheetScrollBar.ViewportSize
+            : _verticalWorksheetScrollBar.ViewportSize;
+        var step = WorkbookViewportScrollPlanner.NormalizeWheelScrollStep(
+            GetSystemWheelScrollLines(),
+            visibleSpan);
         SplitPanePointerWheelTarget? splitTarget = null;
         if (TryGetSplitPanePointerLayout(out var splitLayout))
         {
@@ -29425,46 +26270,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         e.Handled = true;
     }
 
-    /// <summary>Default rows/cols scrolled per wheel notch when the OS setting is unavailable or
-    /// invalid (mirrors the WPF host's DefaultWheelScrollLinesPerNotch, MainWindow.Viewport.cs).</summary>
-    private const int DefaultWheelScrollLinesPerNotch = 3;
-
-    private const int MaxWheelScrollLinesPerNotch = 100;
-
-    /// <summary>
-    /// R76-render-freeze-scroll-4-2: the mouse-wheel step was hardcoded to 3 rows/cols per notch,
-    /// ignoring the OS "Number of lines to scroll" setting Excel honors (on Windows: the
-    /// SPI_GETWHEELSCROLLLINES system parameter, exposed to the WPF host via
-    /// SystemParameters.WheelScrollLines). Pure/testable clamp of the raw OS value; the
-    /// "-1 = scroll one screen at a time" sentinel falls back to the same default here rather
-    /// than a full pixel-to-row/col visible-span translation, which this call site does not have
-    /// on hand (the WPF host's twin, MainWindow.NormalizeWheelScrollLines, does have the
-    /// ScrollBar's row/col ViewportSize on hand and honors it precisely).
-    /// </summary>
-    public static int NormalizeWheelScrollLines(int wheelScrollLines)
-    {
-        if (wheelScrollLines <= 0)
-            return DefaultWheelScrollLinesPerNotch;
-
-        return Math.Clamp(wheelScrollLines, 1, MaxWheelScrollLinesPerNotch);
-    }
-
-    private static int GetWheelScrollLinesPerNotch()
+    private static int GetSystemWheelScrollLines()
     {
         if (!OperatingSystem.IsWindows())
-            return DefaultWheelScrollLinesPerNotch;
+            return WorkbookViewportScrollPlanner.DefaultWheelScrollLinesPerNotch;
 
         try
         {
             return NativeMethods.SystemParametersInfo(NativeMethods.SPI_GETWHEELSCROLLLINES, 0, out var value, 0)
-                ? NormalizeWheelScrollLines(unchecked((int)value))
-                : DefaultWheelScrollLinesPerNotch;
+                ? unchecked((int)value)
+                : WorkbookViewportScrollPlanner.DefaultWheelScrollLinesPerNotch;
         }
         catch
         {
             // Mirrors the WPF host's try/catch fallback: never let a wheel-scroll-lines lookup
             // failure break the wheel handler itself.
-            return DefaultWheelScrollLinesPerNotch;
+            return WorkbookViewportScrollPlanner.DefaultWheelScrollLinesPerNotch;
         }
     }
 
@@ -29521,10 +26342,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         UpdateSaveButton();
         try
         {
-            if (!await ConfirmBeforeDestructiveWorkbookActionAsync("Open Workbook", "Discard and Open"))
+            if (!await ConfirmBeforeDestructiveWorkbookActionAsync(
+                    UiText.Get("DirtyWorkbook_OpenWorkbookTitle"),
+                    UiText.Get("DirtyWorkbook_DiscardAndOpen")))
                 return;
 
-            var openPlan = WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats);
+            var openPlan = WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _fileWorkflow.OpenFormats);
             if (!openPlan.CanShowPicker)
             {
                 ShowOpenIssue(openPlan.Message);
@@ -29543,7 +26366,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 var path = pickedStorageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
-                    ShowOpenIssue("Open requires a local file path.");
+            ShowOpenIssue(UiText.Get("File_OpenRequiresLocalPath"));
                     return;
                 }
 
@@ -29597,10 +26420,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         if (confirmDirtyWorkbook &&
-            !await ConfirmBeforeDestructiveWorkbookActionAsync("Open Workbook", "Discard and Open"))
+            !await ConfirmBeforeDestructiveWorkbookActionAsync(
+                UiText.Get("DirtyWorkbook_OpenWorkbookTitle"),
+                UiText.Get("DirtyWorkbook_DiscardAndOpen")))
             return;
 
-        if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out var message))
+        if (!_fileWorkflow.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out var message))
         {
             ShowOpenIssue(message);
             return;
@@ -29663,7 +26488,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var plan = WorkbookOpenIngressPlanner.SelectOpenableExistingLocalFile(
             candidates.Select(candidate => candidate.LocalPath),
             candidatePath =>
-                _session.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)
+                _fileWorkflow.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)
                     ? WorkbookOpenIngressResolution.Resolved(target!.Path)
                     : WorkbookOpenIngressResolution.Failed(unsupportedMessage));
         if (!plan.Success)
@@ -29687,8 +26512,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // R119-avalonia-file-op-cancel: this is the single choke point every open path funnels
         // through (File > Open, drag-drop, MRU clicks, startup args), so wiring the cancellable
         // token here -- rather than at each caller -- reaches all of them at once, mirroring the
-        // WPF host's OpenFileAsync/BeginFileOperationCancellation.
-        using var operationCancellation = BeginFileOperationCancellation();
+        // WPF host's OpenFileAsync shared cancellation-session lease.
+        var operationCancellation = _fileOperationCancellationSession.Begin();
         UpdateSaveButton();
         try
         {
@@ -29703,21 +26528,39 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
-            using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(
-                StorageProvider,
-                target.FileAccessIdentity);
-            var result = await _openService.LoadAsync(
-                target.Path,
-                target.Adapter,
-                target.Extension,
-                target.Format,
-                progress,
-                operationCancellation.Token);
-            operationCancellation.Token.ThrowIfCancellationRequested();
+            var workflowResult = await _fileWorkflow.OpenAsync(new WorkbookOpenWorkflowRequest(
+                target,
+                ApplyOpenedWorkbookAsync,
+                CompletionDisplayName: Path.GetFileName(target.Path),
+                Progress: progress,
+                PrepareAsync: async (openTarget, _) => new WorkbookFileWorkflowPreparation(
+                    await _workbookFileAccessService.BeginAccessAsync(
+                        StorageProvider,
+                        openTarget.FileAccessIdentity)),
+                CancellationToken: operationCancellation.Token));
+            if (!workflowResult.Succeeded)
+            {
+                ShowOpenIssue(workflowResult.Message);
+                return;
+            }
+
+            return;
+
+            Task ApplyOpenedWorkbookAsync(
+                WorkbookOpenWorkflowContext context,
+                CancellationToken cancellationToken)
+            {
+            var result = context.Result;
+            cancellationToken.ThrowIfCancellationRequested();
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
-            ReplaceSession(_sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true));
+            ReplaceSession(_sessionFactory.CreateOpened(
+                target,
+                result,
+                viewportHeight,
+                viewportWidth,
+                includeObjects: true,
+                completionPlan: context.CompletionPlan));
             RefreshViewportSizeForZoom();
-            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
             // Capture the write-time snapshot this workbook was opened from so a later Save to the
             // SAME path can detect a concurrent second writer (see _currentFileSourceLastWriteTimeUtc)
             // -- mirrors the WPF host's equivalent capture in MainWindow.Backstage.cs
@@ -29734,17 +26577,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // A workbook saved with "Read-Only Recommended" or a write-reservation password used
             // to open fully editable on this shell with no prompt at all until this fix
             // (R75-services-protection-security-4-2); mirrors the WPF host's
-            // ApplyReadOnlyRecommendedPromptIfNeeded (MainWindow.Backstage.cs), called at the same
+            // ApplyWorkbookReadOnlyOpenPolicy (MainWindow.Backstage.cs), called at the same
             // point in the open sequence, right after the session/shell refresh.
-            ApplyReadOnlyRecommendedPromptIfNeeded(_session.Workbook);
+            ApplyWorkbookReadOnlyOpenPolicy(_session.Workbook);
+            return Task.CompletedTask;
+            }
         }
-        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
+        catch (OperationCanceledException) when (operationCancellation.Token.IsCancellationRequested)
         {
             // The user clicked the status-bar Cancel button (R119-avalonia-file-op-cancel): the
             // session was never replaced (ReplaceSession only runs after LoadAsync/the
             // ThrowIfCancellationRequested above both return normally), so there is nothing to roll
             // back -- just report the abort, matching the WPF host's equivalent catch.
-            ShowOpenIssue("Open canceled.");
+                ShowOpenIssue(UiText.Get("File_OpenCanceledMessage"));
         }
         catch (Exception ex)
         {
@@ -29757,7 +26602,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // propagates out of an `async void` event handler (OpenButton_Click / the Open Recent
             // menu item's click handler), which is fatal and crashes the whole app instead of
             // showing "Open failed: ..." (R86-services-file-format-detect-5-1).
-            ShowOpenIssue($"Open failed: {ex.Message}");
+            ShowOpenIssue(UiText.Format("File_OpenFailedFormat", ex.Message));
         }
         finally
         {
@@ -29765,7 +26610,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // fresh source and the Cancel button hides again via the caller's own UpdateSaveButton
             // (OpenWorkbookAsync/OpenWorkbookPathAsync already call it in their own finally after
             // clearing _isOpening).
-            ClearFileOperationCancellation(operationCancellation);
+            operationCancellation.Dispose();
         }
     }
 
@@ -29782,22 +26627,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         try
         {
-            var adapter = new NativeJsonAdapter();
-            Workbook workbook;
-            using (var stream = File.OpenRead(snapshotPath))
-                workbook = adapter.Load(stream);
-
-            var displayName = string.IsNullOrWhiteSpace(originalFilePath)
-                ? workbook.Name
-                : Path.GetFileName(originalFilePath);
-            workbook.Name = displayName;
-
-            var source = new StartupWorkbookLoadResult(
-                workbook,
-                displayName,
-                "Recovered from a previous session.",
-                IsFallback: false,
-                SourcePath: originalFilePath);
+            var source = RecoverySnapshotLoader.Load(snapshotPath, originalFilePath);
 
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
             ReplaceSession(_sessionFactory.Create(source, viewportHeight, viewportWidth, includeObjects: true));
@@ -29827,7 +26657,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return false;
 
-        return await WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
+        return await _fileWorkflow.SaveResolvedAsync(
             isDirty: _session.IsDirty,
             currentFilePath: _session.CurrentFilePath,
             resolveCurrentTarget: ResolveExistingSaveTarget,
@@ -29837,13 +26667,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     /// <summary>
     /// The existing-path save target, or <c>null</c> if there is none usable OR this session was
-    /// marked read-only by <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/> -- withholding the
+    /// marked read-only by <see cref="ApplyWorkbookReadOnlyOpenPolicy"/> -- withholding the
     /// target here falls <see cref="SaveCurrentWorkbookAsync"/> through to the Save-As dialog instead
     /// of silently overwriting the original file (R83-services-doc-recovery-props-5-1, mirrors the
     /// WPF host's <c>MainWindow.WorkbookLifecycle.ResolveExistingSaveTarget</c>).
     /// </summary>
     private FileSaveTarget? ResolveExistingSaveTarget() =>
-        !_isWorkbookReadOnly && _session.CanSaveCurrentSource(out var target) ? target : null;
+        _workbookReadOnlySession.ResolveExistingSaveTarget(
+            () => _fileWorkflow.ResolveExistingSaveTarget(_session.CurrentFilePath));
 
     private async Task ShareWorkbookAsync()
     {
@@ -29986,8 +26817,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task OpenWorkbookContainingFolderAsync(WorkbookShareActionPlan plan)
     {
-        var folderPath = plan.ContainingFolderPath;
-        if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+        if (string.IsNullOrWhiteSpace(plan.Path))
+        {
+            var unavailablePlan = plan with
+            {
+                Kind = WorkbookShareActionPlanKind.Deferred,
+                UnavailableReason = WorkbookShareActionUnavailableReason.ContainingFolderUnavailable,
+            };
+            ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(unavailablePlan), isWarning: true);
+            return;
+        }
+
+        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
+        ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
+        var result = await DesktopPathLauncher.RevealFileAsync(
+            plan.Path,
+            launcher is null
+                ? null
+                : target => launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(target.LaunchPath)));
+
+        if (result.Outcome == DesktopPathLaunchOutcome.Missing)
         {
             var unavailablePlan = new WorkbookShareActionPlan(
                 WorkbookShareActionPlanKind.Deferred,
@@ -29998,31 +26847,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
-        if (launcher is null)
+        if (result.Outcome == DesktopPathLaunchOutcome.LauncherUnavailable)
         {
             ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(CreateWorkbookShareActionPlan()), isWarning: true);
             return;
         }
 
-        ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
-        try
+        if (result.Outcome != DesktopPathLaunchOutcome.Launched)
         {
-            if (!await launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(folderPath)))
-            {
-                ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} could not open for {plan.Path}.", isWarning: true);
-                return;
-            }
+            var detail = result.Error is null
+                ? $" for {plan.Path}."
+                : $": {result.Error.Message}";
+            ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} could not open{detail}", isWarning: true);
+            return;
+        }
 
-            var workbookName = string.IsNullOrWhiteSpace(plan.Path)
-                ? "the saved workbook"
-                : Path.GetFileName(plan.Path);
-            ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} opened for {workbookName}.", isWarning: false);
-        }
-        catch (Exception ex)
-        {
-            ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} could not open: {ex.Message}", isWarning: true);
-        }
+        var workbookName = string.IsNullOrWhiteSpace(plan.Path)
+            ? "the saved workbook"
+            : Path.GetFileName(plan.Path);
+        ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} opened for {workbookName}.", isWarning: false);
     }
 
     private async Task<bool> SaveWorkbookAsAsync()
@@ -30035,12 +26878,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (!TryCommitPendingFormulaEdit())
                 return false;
 
+            Func<WorkbookSaveAsCommandPickerPlan, Task<WorkbookSaveAsPickerSelection?>>? pickerOverride = null;
+            ResolveWorkbookSaveAsPicker(ref pickerOverride);
             var canShowPicker = ResolveWorkbookSaveAsPickerAvailability(
                 StorageProvider.CanSave,
-                _workbookSaveAsPickerOverride is not null);
+                pickerOverride is not null);
             var savePlan = WorkbookFileCommandPlanner.PlanSaveAsPicker(
                 canShowPicker,
-                _session.SaveFormats,
+                _fileWorkflow.SaveFormats,
                 _session.Workbook.Name,
                 _session.DisplayName,
                 NativeWorkbookExtension);
@@ -30051,7 +26896,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             }
 
             WorkbookSaveAsPickerSelection? pickedStorageFile;
-            if (_workbookSaveAsPickerOverride is { } pickerOverride)
+            if (pickerOverride is not null)
             {
                 pickedStorageFile = await pickerOverride(savePlan);
             }
@@ -30077,23 +26922,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 var path = pickedStorageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
-                    ShowSaveIssue("Save As requires a local file path.");
+            ShowSaveIssue(UiText.Get("File_SaveAsRequiresLocalPath"));
                     return false;
                 }
 
-                var pathPlan = WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(
+                var pathPlan = _fileWorkflow.PlanSavePathNormalization(
                     path,
                     NativeWorkbookExtension,
                     File.Exists);
                 if (pathPlan.ShouldConfirmOverwrite &&
-                    !await ConfirmNormalizedWorkbookOverwriteAsync(pathPlan.Path))
+                    !await ConfirmNormalizedOverwriteAsync(
+                        pathPlan.Path,
+                        NormalizedOverwriteTargetKind.Workbook))
                 {
-                    ShowSaveIssue("Save canceled.");
+                ShowSaveIssue(UiText.Get("File_SaveCanceledMessage"));
                     return false;
                 }
 
                 path = pathPlan.Path;
-                if (!_session.TryResolveSaveTarget(path, out var target, out var message))
+                if (!_fileWorkflow.TryResolveSaveTarget(path, out var target, out var message))
                 {
                     ShowSaveIssue(message);
                     return false;
@@ -30111,91 +26958,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
     }
 
-    private async Task ExportActiveSheetPdfAsync()
-    {
-        if (!TryBeginFileOperation())
-            return;
-
-        try
-        {
-            if (!TryCommitPendingFormulaEdit())
-                return;
-
-            if (!StorageProvider.CanSave)
-            {
-                ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
-                return;
-            }
-
-            var exportOptions = await ShowExportOptionsDialogAsync(ExportContentScope.ActiveSheet, ExportFormat.Pdf);
-            if (exportOptions is null)
-                return;
-
-            var storageFile = await ShowPortablePdfSavePickerAsync("Export to PDF");
-
-            if (storageFile is null)
-                return;
-
-            using (storageFile)
-            {
-                var path = storageFile.LocalPath;
-                if (string.IsNullOrWhiteSpace(path))
-                {
-                    ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
-                    return;
-                }
-
-                var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
-                if (exportTargetPlan.ShouldConfirmNormalizedOverwrite &&
-                    !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path))
-                {
-                    ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
-                    return;
-                }
-
-                path = exportTargetPlan.Path;
-                try
-                {
-                    _statusText.Text = "Exporting PDF...";
-                    _statusText.Foreground = Brush(67, 113, 83);
-
-                    var exportPrintPlan = CreatePortablePdfPrintPlan(exportOptions, WorkbookExportPrintOutputKind.Pdf);
-                    var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
-                    if (!exportPlan.IsReady)
-                    {
-                        ShowExportIssue(exportPlan.StatusText);
-                        return;
-                    }
-
-                    if (!TryPreparePortablePdfExportPlan(exportPlan, exportOptions, out var effectiveExportPlan, out var optionsError))
-                    {
-                        ShowExportIssue(optionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions"));
-                        return;
-                    }
-
-                    // Prefer the Unicode-capable Skia writer (shapes + auto-embeds/subsets fonts), and
-                    // fall back to the dependency-free WinAnsi writer when Skia is unavailable
-                    // (headless/no-Skia). The routing decision lives in AvaloniaPdfDocumentExporter so it
-                    // is exercised by tests.
-                    using var pdfBuffer = new MemoryStream();
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
-                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
-
-                    RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
-                    if (exportOptions.OpenAfterPublish)
-                        await TryOpenExportedPdfAsync(path);
-                }
-                catch (Exception ex)
-                {
-                    ShowExportIssue(UiText.Format("MainLoc_PdfExportFailed", ex.Message));
-                }
-            }
-        }
-        finally
-        {
-            EndFileOperation();
-        }
-    }
+    private Task ExportActiveSheetPdfAsync() =>
+        ExportWorkbookPdfAsync(
+            WorkbookExportPrintScope.ActiveSheet,
+            WorkbookExportPrintOutputKind.Pdf);
 
     private bool TryBeginFileOperation()
     {
@@ -30213,15 +26979,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         UpdateSaveButton();
     }
 
-    private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)
+    private async Task<bool> ConfirmNormalizedOverwriteAsync(
+        string normalizedPath,
+        NormalizedOverwriteTargetKind targetKind)
     {
-        var fileName = Path.GetFileName(normalizedPath);
-        if (string.IsNullOrWhiteSpace(fileName))
-            fileName = normalizedPath;
+        var prompt = NormalizedOverwritePromptPlanner.Build(targetKind, normalizedPath);
 
         var dialog = new Window
         {
-            Title = "Replace PDF?",
+            Title = UiText.Get(prompt.WindowTitleResourceKey),
             Width = 460,
             Height = 210,
             MinWidth = 420,
@@ -30232,136 +26998,42 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var titleText = new TextBlock
         {
-            Text = $"{fileName} already exists.",
+            Text = UiText.Format(prompt.FileExistsFormatResourceKey, prompt.FileName),
             FontSize = 16,
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
         var detailText = new TextBlock
         {
-            Text = "FreeX changed the selected file name to use the .pdf extension. Replace the existing PDF file?",
+            Text = UiText.Get(prompt.DetailResourceKey),
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
 
         var replaceButton = new Button
         {
-            Content = "Replace",
+            Content = UiText.Get(prompt.ReplaceButtonResourceKey),
             MinWidth = 92,
             Padding = new Thickness(10, 4),
         };
-        AutomationProperties.SetAutomationId(replaceButton, "PdfExportOverwriteReplaceButton");
-        AutomationProperties.SetName(replaceButton, "Replace");
-        AutomationProperties.SetHelpText(replaceButton, "Replace the existing normalized PDF file.");
+        AutomationProperties.SetAutomationId(replaceButton, prompt.ReplaceButtonAutomationId);
+        AutomationProperties.SetName(
+            replaceButton,
+            UiText.CreateAutomationName(UiText.Get(prompt.ReplaceButtonResourceKey)));
+        AutomationProperties.SetHelpText(replaceButton, UiText.Get(prompt.ReplaceHelpTextResourceKey));
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get(prompt.CancelButtonResourceKey)),
             MinWidth = 92,
             Padding = new Thickness(10, 4),
             IsCancel = true,
         };
-        AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
-        AutomationProperties.SetName(cancelButton, "Cancel");
-        AutomationProperties.SetHelpText(cancelButton, "Return without exporting the PDF.");
-
-        var shouldReplace = false;
-        void Finish(bool value)
-        {
-            shouldReplace = value;
-            dialog.Close();
-        }
-
-        replaceButton.Click += (_, _) => Finish(true);
-        cancelButton.Click += (_, _) => Finish(false);
-        dialog.Opened += (_, _) => cancelButton.Focus();
-        dialog.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Escape)
-            {
-                Finish(false);
-                e.Handled = true;
-            }
-        };
-
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(18),
-            Spacing = 12,
-            Children =
-            {
-                titleText,
-                detailText,
-                new Border { Height = 10 },
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Children =
-                    {
-                        cancelButton,
-                        replaceButton,
-                    },
-                },
-            },
-        };
-
-        await dialog.ShowDialog(this);
-        return shouldReplace;
-    }
-
-    private async Task<bool> ConfirmNormalizedWorkbookOverwriteAsync(string normalizedPath)
-    {
-        var fileName = Path.GetFileName(normalizedPath);
-        if (string.IsNullOrWhiteSpace(fileName))
-            fileName = normalizedPath;
-
-        var dialog = new Window
-        {
-            Title = "Replace workbook?",
-            Width = 460,
-            Height = 210,
-            MinWidth = 420,
-            MinHeight = 200,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-
-        var titleText = new TextBlock
-        {
-            Text = $"{fileName} already exists.",
-            FontSize = 16,
-            FontWeight = FontWeight.SemiBold,
-            TextWrapping = TextWrapping.Wrap,
-        };
-        var detailText = new TextBlock
-        {
-            Text = "FreeX changed the selected file name to use the workbook extension. Replace the existing workbook?",
-            Foreground = HeaderForeground,
-            TextWrapping = TextWrapping.Wrap,
-        };
-
-        var replaceButton = new Button
-        {
-            Content = "Replace",
-            MinWidth = 92,
-            Padding = new Thickness(10, 4),
-        };
-        AutomationProperties.SetAutomationId(replaceButton, "WorkbookSaveOverwriteReplaceButton");
-        AutomationProperties.SetName(replaceButton, "Replace");
-        AutomationProperties.SetHelpText(replaceButton, "Replace the existing normalized workbook file.");
-
-        var cancelButton = new Button
-        {
-            Content = "Cancel",
-            MinWidth = 92,
-            Padding = new Thickness(10, 4),
-            IsCancel = true,
-        };
-        AutomationProperties.SetAutomationId(cancelButton, "WorkbookSaveOverwriteCancelButton");
-        AutomationProperties.SetName(cancelButton, "Cancel");
-        AutomationProperties.SetHelpText(cancelButton, "Return without saving the workbook.");
+        AutomationProperties.SetAutomationId(cancelButton, prompt.CancelButtonAutomationId);
+        AutomationProperties.SetName(
+            cancelButton,
+            UiText.CreateAutomationName(UiText.Get(prompt.CancelButtonResourceKey)));
+        AutomationProperties.SetHelpText(cancelButton, UiText.Get(prompt.CancelHelpTextResourceKey));
 
         var shouldReplace = false;
         void Finish(bool value)
@@ -30434,19 +27106,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         try
         {
+            if (!TryCommitPendingFormulaEdit())
+                return;
+
             if (!StorageProvider.CanSave)
             {
                 ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
                 return;
             }
 
-            if (outputKind != WorkbookExportPrintOutputKind.Pdf)
+            var format = ExportFormatCatalog.Get(outputKind);
+            if (!format.IsPortable)
             {
                 ShowExportIssue("Portable export supports PDF only; XPS remains Windows-only.");
                 return;
             }
 
-            var exportOptions = await ShowExportOptionsDialogAsync(ToExportContentScope(scope), ExportFormat.Pdf);
+            var selectionPlan = WorkbookExportInteractionPlanner.CreateSelectionPlan(
+                scope,
+                _session.SelectedRange);
+            if (!selectionPlan.IsValid)
+            {
+                ShowExportIssue(UiText.Get(selectionPlan.ErrorStatusKey!));
+                return;
+            }
+
+            var exportOptions = await ShowExportOptionsDialogAsync(selectionPlan.ContentScope, format.Format);
             if (exportOptions is null)
                 return;
 
@@ -30464,41 +27149,86 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     return;
                 }
 
-                var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
-                if (exportTargetPlan.ShouldConfirmNormalizedOverwrite &&
-                    !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path))
+                var requestPlan = WorkbookExportInteractionPlanner.CreateRequestPlan(
+                    path,
+                    outputKind,
+                    exportOptions,
+                    File.Exists);
+                if (requestPlan.ShouldConfirmNormalizedOverwrite &&
+                    !await ConfirmNormalizedOverwriteAsync(
+                        requestPlan.Request.Path,
+                        NormalizedOverwriteTargetKind.Pdf))
                 {
                     ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
                     return;
                 }
 
-                path = exportTargetPlan.Path;
                 try
                 {
-                    _statusText.Text = "Exporting PDF...";
-                    _statusText.Foreground = Brush(67, 113, 83);
+                    string? adapterFailureMessage = null;
+                    var workflowResult = await WorkbookExportWorkflow.ExecuteBooleanAsync(
+                        requestPlan.Request,
+                        async (effectiveRequest, cancellationToken) =>
+                        {
+                            _statusText.Text = UiText.Get("Progress_ExportingPdf");
+                            _statusText.Foreground = Brush(67, 113, 83);
 
-                    var exportPrintPlan = CreatePortablePdfPrintPlan(exportOptions, outputKind);
-                    var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
-                    if (!exportPlan.IsReady)
+                            var exportPrintPlan = CreatePortablePdfPrintPlan(effectiveRequest.Options, outputKind);
+                            var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+                            if (!exportPlan.IsReady)
+                            {
+                                adapterFailureMessage = exportPlan.StatusText;
+                                return false;
+                            }
+
+                            if (!PortablePdfExportPlanner.TryApplyOptions(
+                                    exportPlan,
+                                    effectiveRequest.Options,
+                                    out var effectiveExportPlan,
+                                    out var optionsError,
+                                    AvaloniaExportPlannerTextResolver))
+                            {
+                                adapterFailureMessage = optionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions");
+                                return false;
+                            }
+
+                            using var pdfBuffer = new MemoryStream();
+                            var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(
+                                _session.Workbook,
+                                effectiveExportPlan,
+                                pdfBuffer,
+                                options: null,
+                                workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
+                            await File.WriteAllBytesAsync(
+                                effectiveRequest.Path,
+                                pdfBuffer.ToArray(),
+                                cancellationToken);
+
+                            RefreshShell(UiText.Format(
+                                "MainLoc_StatusFileName",
+                                outcome.Result.StatusText,
+                                Path.GetFileName(effectiveRequest.Path)));
+                            return true;
+                        });
+                    var resultPlan = WorkbookExportInteractionPlanner.CreateResultPlan(
+                        workflowResult,
+                        isBackstageVisible: false,
+                        adapterFailureMessage: adapterFailureMessage);
+                    if (resultPlan.ShouldPresentIssue)
                     {
-                        ShowExportIssue(exportPlan.StatusText);
-                        return;
+                        var message = resultPlan.IssueKind switch
+                        {
+                            WorkbookExportResultIssueKind.Failure when adapterFailureMessage is null => UiText.Format(
+                                "MainLoc_PdfExportFailed",
+                                workflowResult.Exception?.Message ?? resultPlan.Message),
+                            WorkbookExportResultIssueKind.Canceled => UiText.Get("MainLoc_PdfExportCanceled"),
+                            _ => resultPlan.Message
+                        };
+                        ShowExportIssue(message);
                     }
 
-                    if (!TryPreparePortablePdfExportPlan(exportPlan, exportOptions, out var effectiveExportPlan, out var optionsError))
-                    {
-                        ShowExportIssue(optionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions"));
-                        return;
-                    }
-
-                    using var pdfBuffer = new MemoryStream();
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
-                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
-
-                    RefreshShell(UiText.Format("MainLoc_StatusFileName", outcome.Result.StatusText, Path.GetFileName(path)));
-                    if (exportOptions.OpenAfterPublish)
-                        await TryOpenExportedPdfAsync(path);
+                    if (resultPlan.ShouldOpenDestination)
+                        await TryOpenExportedPdfAsync(resultPlan.DestinationPath);
                 }
                 catch (Exception ex)
                 {
@@ -30516,7 +27246,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ExportOptions options,
         WorkbookExportPrintOutputKind outputKind)
     {
-        var scope = ToWorkbookExportPrintScope(options.Scope);
+        var scope = ExportFormatCatalog.ToPrintScope(options.Scope);
         var selectedRange = scope == WorkbookExportPrintScope.SelectedRange
             ? _session.SelectedRange
             : (GridRange?)null;
@@ -30531,22 +27261,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 IgnorePrintAreas: options.IgnorePrintAreas),
             WorkbookExportPrintSurface.MacOs);
     }
-
-    private static ExportContentScope ToExportContentScope(WorkbookExportPrintScope scope) =>
-        scope switch
-        {
-            WorkbookExportPrintScope.SelectedRange => ExportContentScope.Selection,
-            WorkbookExportPrintScope.VisibleWorkbook => ExportContentScope.EntireWorkbook,
-            _ => ExportContentScope.ActiveSheet
-        };
-
-    private static WorkbookExportPrintScope ToWorkbookExportPrintScope(ExportContentScope scope) =>
-        scope switch
-        {
-            ExportContentScope.Selection => WorkbookExportPrintScope.SelectedRange,
-            ExportContentScope.EntireWorkbook => WorkbookExportPrintScope.VisibleWorkbook,
-            _ => WorkbookExportPrintScope.ActiveSheet
-        };
 
     private int ResolveActiveSheetIndex()
     {
@@ -30577,61 +27291,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         FileSaveTarget target,
         WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
-        if (WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(_session.IsDirty, _session.CurrentFilePath, target)
-            == WorkbookSaveTargetIntent.SkipCleanCurrentPath)
+        if (_fileWorkflow.ShouldSkipSaveTargetWrite(_session.IsDirty, _session.CurrentFilePath, target))
         {
             return true;
         }
 
-        // This save targets the same path the session was opened from -- only then does the
-        // captured write-time snapshot mean anything (a Save-As to a different path is never a
-        // clobber of the original file).
         var targetPath = target.Path;
-        var savingOverOpenedPath = PlatformPathIdentityComparer.Current.Equals(_session.CurrentFilePath, targetPath);
-
-        // Detect a concurrent second writer before doing any work: if this save targets the same
-        // path this session loaded from, and the on-disk write time no longer matches what was
-        // captured at open, someone else (another FreeX/Excel instance, a colleague on a shared
-        // drive) has changed the file since -- writing over it here would silently discard their
-        // changes. Ask before clobbering, matching Excel's own behavior for this scenario and the
-        // WPF host's equivalent check in MainWindow.Backstage.cs
-        // (R116-avalonia-external-modification-detection).
-        if (savingOverOpenedPath &&
-            _currentFileSourceLastWriteTimeUtc is { } expectedWriteTimeUtc &&
-            File.Exists(targetPath) &&
-            File.GetLastWriteTimeUtc(targetPath) != expectedWriteTimeUtc &&
-            ResolveExternallyModifiedFileOverwriteConfirm(targetPath) != UserMessageResult.Yes)
-        {
-            return false;
-        }
-
-        // Save-As to a plain/single-sheet lossy format (CSV/TXT/PRN/SLK/DIF/DBF, ...) -- or to .ods
-        // when the workbook carries a VBA project -- would otherwise write silently, dropping every
-        // sheet but the current one plus any charts (or the macros) with no warning at all. Mirrors
-        // the WPF host's equivalent gate in MainWindow.Backstage.cs (SaveWorkbookToTargetAsync)
-        // (R128-avalonia-lossy-format-feature-loss-confirm).
-        var saveExtension = Path.GetExtension(targetPath);
-        if (LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(_session.Workbook, saveExtension) &&
-            ResolveLossyFormatFeatureLossConfirm(saveExtension) != UserMessageResult.Yes)
-        {
-            return false;
-        }
-
-        // Capture the dirty generation before the first await so mid-save edits are detectable.
-        var generationAtSaveStart = _session.DirtyGeneration;
-        _isSaving = true;
+        var sessionAtSaveStart = _session;
         // R119-avalonia-file-op-cancel: this is the single choke point every save path funnels
         // through (Save, Save As, autosave-triggered saves), so wiring the cancellable token here
         // reaches all of them at once, mirroring the WPF host's SaveWorkbookToTargetAsync in
         // MainWindow.Backstage.cs.
-        using var operationCancellation = BeginFileOperationCancellation();
-        UpdateSaveButton();
+        var operationCancellation = _fileOperationCancellationSession.Begin();
         try
         {
-            _statusText.Text = WorkbookProgressTextFormatter
-                .FormatSave("preparing", TimeSpan.Zero, percent: null, UiText.Get)
-                .Detail;
-            _statusText.Foreground = Brush(67, 113, 83);
             var progress = new Progress<WorkbookSaveProgressUpdate>(
                 update =>
                 {
@@ -30639,302 +27312,150 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
-            fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(
-                targetPath,
-                existingIdentity: _session.CurrentFileAccessIdentity);
-            using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(StorageProvider, fileAccessIdentity);
             // R120-corewriter-persist-saving-window-view-1: reconcile THIS view's own per-window
             // view state (zoom/view-mode/gridlines/headings/show-formulas/freeze/split) onto the
             // shared Sheet fields before the writer reads them, so a save from THIS view persists
             // what THIS view is displaying rather than whichever sibling view last touched those
             // shared fields. Must run synchronously, before the workbook is handed off below.
-            _session.ReconcileViewStateForSave();
-            var saveWarnings = await _saveService.SaveAsync(
-                targetPath,
-                target.Adapter,
-                _session.Workbook,
-                progress,
-                operationCancellation.Token,
-                savingOverOpenedPath ? _currentFileSourceLastWriteTimeUtc : null);
-            operationCancellation.Token.ThrowIfCancellationRequested();
-            _session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, targetPath, fileAccessIdentity);
+            var workflowResult = await _fileWorkflow.SaveTargetAsync(new WorkbookSaveWorkflowRequest(
+                sessionAtSaveStart.IsDirty,
+                sessionAtSaveStart.CurrentFilePath,
+                target,
+                _currentFileSourceLastWriteTimeUtc,
+                GetCurrentWorkbook: () => _session.Workbook,
+                GetDirtyGeneration: () => _session.DirtyGeneration,
+                ConfirmExternallyModifiedOverwrite: path =>
+                    ResolveExternallyModifiedFileOverwriteConfirm(path) == UserMessageResult.Yes,
+                ProjectViewStateForSave: sessionAtSaveStart.ReconcileViewStateForSave,
+                SaveAsync: invocation => _saveService.SaveAsync(
+                    invocation.Target.Path,
+                    invocation.Target.Adapter,
+                    invocation.Workbook,
+                    progress,
+                    invocation.CancellationToken,
+                    invocation.ExpectedLastWriteTimeUtc),
+                PrepareAsync: async _ =>
+                {
+                    fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(
+                        targetPath,
+                        existingIdentity: sessionAtSaveStart.CurrentFileAccessIdentity);
+                    var fileAccess = await _workbookFileAccessService.BeginAccessAsync(
+                        StorageProvider,
+                        fileAccessIdentity);
+                    return new WorkbookSaveExecutionPreparation(fileAccessIdentity, fileAccess);
+                },
+                ApplyCompletion: plan => _session.ApplySaveCompletion(plan),
+                CancellationToken: operationCancellation.Token,
+                CompletionDisplayName: Path.GetFileName(targetPath),
+                ConfirmTargetAsync: (saveTarget, _) =>
+                {
+                    var extension = Path.GetExtension(saveTarget.Path);
+                    var confirmed =
+                        !LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(
+                            sessionAtSaveStart.Workbook,
+                            extension) ||
+                        ResolveLossyFormatFeatureLossConfirm(extension) == UserMessageResult.Yes;
+                    return Task.FromResult(confirmed);
+                },
+                ExecutionStarting: () =>
+                {
+                    _isSaving = true;
+                    _statusText.Text = WorkbookProgressTextFormatter
+                        .FormatSave("preparing", TimeSpan.Zero, percent: null, UiText.Get)
+                        .Detail;
+                    _statusText.Foreground = Brush(67, 113, 83);
+                    UpdateSaveButton();
+                },
+                ExecutionCompleted: () =>
+                {
+                    _isSaving = false;
+                    UpdateSaveButton();
+                }));
+
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.ExternalWriteConflict)
+            {
+                ShowSaveIssue(UiText.Format(
+                    "MainWindowMessage_ExternallyModifiedFileBody",
+                    Path.GetFileName(targetPath)));
+                return false;
+            }
+
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Rejected)
+            {
+                if (!string.Equals(
+                        workflowResult.Message,
+                        WorkbookFileWorkflowMessages.SaveCanceled,
+                        StringComparison.Ordinal))
+                {
+                    ShowSaveIssue(workflowResult.Message);
+                }
+                return false;
+            }
+
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Canceled)
+            {
+                ShowSaveIssue(UiText.Get("File_SaveCanceledMessage"));
+                return false;
+            }
+
+            if (workflowResult.Outcome == WorkbookFileOperationOutcome.Failed)
+            {
+                ShowSaveIssue(UiText.Format(
+                    "File_SaveFailedFormat",
+                    workflowResult.Exception?.Message ?? UiText.Get("Common_UnknownError")));
+                return false;
+            }
+
+            var executionResult = workflowResult.RequireExecutionResult();
+            var completionPlan = workflowResult.RequireCompletionPlan();
             // The save just wrote targetPath -- refresh the "known good" write-time snapshot to the
             // file's new on-disk timestamp so the very next save doesn't mistake THIS save's own
             // write for an external modification (mirrors the WPF host's equivalent refresh).
-            _currentFileSourceLastWriteTimeUtc = File.Exists(targetPath)
-                ? File.GetLastWriteTimeUtc(targetPath)
-                : null;
+            if (completionPlan.ApplyFileContext)
+            {
+                _currentFileSourceLastWriteTimeUtc = executionResult.SavedLastWriteTimeUtc;
+            }
             // A clean save means there is nothing left to recover from — delete the crash-recovery
             // snapshot immediately rather than waiting for window close (mirrors WPF's
             // NotifyAutosaveSaved, called from the same save-completion point).
-            _autosaveCoordinator?.NotifyAutosaveSaved();
-            RecordRecentWorkbook(target.Path, fileAccessIdentity);
-            RefreshShell(FormatSaveCompletionStatus(targetPath, saveWarnings));
+            if (completionPlan.MarkSaved)
+                _autosaveCoordinator?.NotifyAutosaveSaved();
+            RefreshShell(FormatSaveCompletionStatus(targetPath, executionResult.Warnings));
             return true;
-        }
-        catch (WorkbookExternallyModifiedException)
-        {
-            // Belt-and-suspenders: the proactive check above already covers the common case, but
-            // the file could still have changed in the (check-then-act) gap between that check and
-            // WorkbookSaveService actually writing. Surface the same warning rather than silently
-            // failing or letting a shell-crashing exception type escape (mirrors the WPF host's
-            // equivalent catch in MainWindow.Backstage.cs).
-            ShowSaveIssue(UiText.Format(
-                "MainWindowMessage_ExternallyModifiedFileBody",
-                Path.GetFileName(targetPath)));
-            return false;
-        }
-        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
-        {
-            // The user clicked the status-bar Cancel button (R119-avalonia-file-op-cancel).
-            // WorkbookSaveService.SaveAsync only replaces the on-disk file (ReplaceTargetFile)
-            // after its own final ThrowIfCancellationRequested, so a cancellation reaching here
-            // never overwrote the original file with a partial write -- the workbook is
-            // deliberately left dirty (TryMarkSavedIfNoEditsArrived never ran) so the user is not
-            // told a canceled save actually completed, matching the WPF host's equivalent catch.
-            ShowSaveIssue("Save canceled.");
-            return false;
         }
         catch (Exception ex)
         {
-            ShowSaveIssue($"Save failed: {ex.Message}");
+            ShowSaveIssue(UiText.Format("File_SaveFailedFormat", ex.Message));
             return false;
         }
         finally
         {
-            _isSaving = false;
-            ClearFileOperationCancellation(operationCancellation);
+            operationCancellation.Dispose();
             UpdateSaveButton();
         }
     }
 
-    /// <summary>Test-only override for <see cref="ResolveExternallyModifiedFileOverwriteConfirm"/> --
-    /// lets tests answer the confirm-overwrite prompt deterministically without a real modal dialog.
-    /// Not used by production code paths.</summary>
-    internal Func<string, UserMessageResult>? ExternallyModifiedFileOverwriteConfirmOverrideForTest;
-
-    private UserMessageResult ResolveExternallyModifiedFileOverwriteConfirm(string path) =>
-        ExternallyModifiedFileOverwriteConfirmOverrideForTest?.Invoke(path)
-            ?? ShowExternallyModifiedFileOverwriteConfirmDialog(path);
-
-    /// <summary>
-    /// Owned modal Yes/No prompt shown when Save is about to overwrite a file that changed on disk
-    /// since this session opened it -- mirrors <see cref="ShowReadOnlyRecommendedPromptDialog"/>'s
-    /// non-modal-dispatcher-pump technique (Avalonia has no synchronous nested-pump equivalent to
-    /// WPF's blocking <c>MessageBox.Show</c>) and the WPF host's
-    /// <c>ConfirmExternallyModifiedFileOverwrite</c> (R116-avalonia-external-modification-detection).
-    /// </summary>
-    private UserMessageResult ShowExternallyModifiedFileOverwriteConfirmDialog(string path)
+    private UserMessageResult ResolveExternallyModifiedFileOverwriteConfirm(string path)
     {
-        var dialog = new Window
-        {
-            Title = UiText.Get("MainWindowMessage_ExternallyModifiedFileTitle"),
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            MinHeight = 150,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-
-        var messageText = new TextBlock
-        {
-            Text = UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", Path.GetFileName(path)),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(16, 16, 16, 20),
-        };
-
-        var decision = UserMessageResult.No;
-        var done = false;
-        void Finish(UserMessageResult value)
-        {
-            decision = value;
-            done = true;
-            dialog.Close();
-        }
-
-        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
-        {
-            var button = new Button
-            {
-                Content = content,
-                MinWidth = 82,
-                IsDefault = isDefault,
-                IsCancel = isCancel,
-                Margin = new Thickness(8, 0, 0, 0),
-            };
-            button.Click += (_, _) => Finish(value);
-            return button;
-        }
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(16, 0, 16, 16),
-        };
-
-        var defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
-        buttonRow.Children.Add(defaultButton);
-        buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: true));
-
-        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
-        dialog.Opened += (_, _) => defaultButton.Focus();
-        dialog.Closed += (_, _) => done = true;
-
-        var wasEnabled = IsEnabled;
-        IsEnabled = false;
-        try
-        {
-            dialog.Show(this);
-            while (!done)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!done)
-                    System.Threading.Thread.Sleep(1);
-            }
-        }
-        finally
-        {
-            IsEnabled = wasEnabled;
-        }
-
-        return decision;
+        Func<string, UserMessageResult>? handler = null;
+        ResolveExternallyModifiedFileOverwriteConfirmHandler(ref handler);
+        return handler?.Invoke(path)
+            ?? ShowSynchronousPrompt(FreeXSynchronousPromptCatalog.ForExternallyModifiedFile(path));
     }
 
-    /// <summary>Test-only override for <see cref="ResolveLossyFormatFeatureLossConfirm"/> -- lets
-    /// tests answer the "Possible Data Loss" confirm prompt deterministically without a real modal
-    /// dialog. Not used by production code paths.</summary>
-    internal Func<string, UserMessageResult>? LossyFormatFeatureLossConfirmOverrideForTest;
+    partial void ResolveExternallyModifiedFileOverwriteConfirmHandler(
+        ref Func<string, UserMessageResult>? handler);
 
-    private UserMessageResult ResolveLossyFormatFeatureLossConfirm(string extension) =>
-        LossyFormatFeatureLossConfirmOverrideForTest?.Invoke(extension)
-            ?? ShowLossyFormatFeatureLossConfirmDialog(extension);
-
-    /// <summary>
-    /// Owned modal Yes/No prompt shown when Save-As targets a plain/single-sheet lossy format
-    /// (CSV/TXT/PRN/SLK/DIF/DBF, ...) -- or .ods with a VBA project -- and the workbook actually has
-    /// content that format can't hold (more than one sheet, a chart, or macros). Mirrors the WPF
-    /// host's <c>ConfirmLossyFormatFeatureLossSave</c> (src/FreeX.App.Host/MainWindow.Backstage.cs)
-    /// and this class's own <see cref="ShowExternallyModifiedFileOverwriteConfirmDialog"/> non-modal-
-    /// dispatcher-pump technique (Avalonia has no synchronous nested-pump equivalent to WPF's
-    /// blocking <c>MessageBox.Show</c>) (R128-avalonia-lossy-format-feature-loss-confirm).
-    /// </summary>
-    private UserMessageResult ShowLossyFormatFeatureLossConfirmDialog(string extension)
+    private UserMessageResult ResolveLossyFormatFeatureLossConfirm(string extension)
     {
-        var formatLabel = FileFormatResolver.SafeFileTypeFromExtension(extension).ToUpperInvariant();
-        var body = UiText.Format("MainWindowMessage_LossyFormatFeatureLossBodyFormat", formatLabel);
-
-        var dialog = new Window
-        {
-            Title = UiText.Get("MainWindowMessage_LossyFormatFeatureLossTitle"),
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            MinHeight = 150,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-
-        var messageText = new TextBlock
-        {
-            Text = body,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(16, 16, 16, 20),
-        };
-
-        var decision = UserMessageResult.No;
-        var done = false;
-        void Finish(UserMessageResult value)
-        {
-            decision = value;
-            done = true;
-            dialog.Close();
-        }
-
-        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
-        {
-            var button = new Button
-            {
-                Content = content,
-                MinWidth = 82,
-                IsDefault = isDefault,
-                IsCancel = isCancel,
-                Margin = new Thickness(8, 0, 0, 0),
-            };
-            button.Click += (_, _) => Finish(value);
-            return button;
-        }
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(16, 0, 16, 16),
-        };
-
-        var defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
-        buttonRow.Children.Add(defaultButton);
-        buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: true));
-
-        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
-        dialog.Opened += (_, _) => defaultButton.Focus();
-        dialog.Closed += (_, _) => done = true;
-
-        var wasEnabled = IsEnabled;
-        IsEnabled = false;
-        try
-        {
-            dialog.Show(this);
-            while (!done)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!done)
-                    System.Threading.Thread.Sleep(1);
-            }
-        }
-        finally
-        {
-            IsEnabled = wasEnabled;
-        }
-
-        return decision;
+        Func<string, UserMessageResult>? handler = null;
+        ResolveLossyFormatFeatureLossConfirmHandler(ref handler);
+        return handler?.Invoke(extension)
+            ?? ShowSynchronousPrompt(FreeXSynchronousPromptCatalog.ForLossyFormatFeatureLoss(extension));
     }
 
-    /// <summary>Test-only seam for <see cref="_currentFileSourceLastWriteTimeUtc"/> (see its
-    /// declaration) -- not used by production code paths.</summary>
-    internal DateTime? CurrentFileSourceLastWriteTimeUtcForTest => _currentFileSourceLastWriteTimeUtc;
-
-    /// <summary>Test-only seam driving <see cref="OpenWorkbookFromTargetAsync"/> directly (mirrors
-    /// <see cref="ApplyReadOnlyRecommendedPromptIfNeededForTest"/>'s convention) -- lets a test open a
-    /// REAL file through the real production open path without going through the OS file picker.
-    /// Not used by production code paths.</summary>
-    internal Task OpenWorkbookFromTargetAsyncForTest(WorkbookOpenTarget target) =>
-        OpenWorkbookFromTargetAsync(target);
-
-    /// <summary>Test-only seam driving <see cref="SaveWorkbookToTargetAsync"/> directly. Not used by
-    /// production code paths.</summary>
-    internal Task<bool> SaveWorkbookToTargetAsyncForTest(FileSaveTarget target) =>
-        SaveWorkbookToTargetAsync(target);
-
-    /// <summary>Test-only seam for <see cref="_fileOperationCancellation"/> (R119-avalonia-file-op-cancel)
-    /// -- lets a test request cancellation of an in-flight open/save the same way the real status-bar
-    /// Cancel button does, without needing a live pointer click. Not used by production code paths.</summary>
-    internal CancellationTokenSource? FileOperationCancellationForTest => _fileOperationCancellation;
-
-    /// <summary>Test-only seam for the status-bar Cancel button's visibility
-    /// (R119-avalonia-file-op-cancel) -- not used by production code paths.</summary>
-    internal bool FileOperationCancelButtonVisibleForTest => _fileOperationCancelButton.IsVisible;
-
-    /// <summary>Test-only seam for the status-bar Cancel button's enabled state
-    /// (R119-avalonia-file-op-cancel) -- not used by production code paths.</summary>
-    internal bool FileOperationCancelButtonEnabledForTest => _fileOperationCancelButton.IsEnabled;
-
-    /// <summary>Test-only seam driving the real <see cref="FileOperationCancelButton_Click"/> handler
-    /// directly (R119-avalonia-file-op-cancel), so a test exercises the exact same code path a real
-    /// pointer click on the status-bar Cancel button would. Not used by production code paths.</summary>
-    internal void RaiseFileOperationCancelButtonClickForTest() =>
-        FileOperationCancelButton_Click(_fileOperationCancelButton, new RoutedEventArgs());
+    partial void ResolveLossyFormatFeatureLossConfirmHandler(
+        ref Func<string, UserMessageResult>? handler);
 
     private void ShowSaveIssue(string message)
     {
@@ -30992,12 +27513,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         UpdateSaveButton();
     }
 
-    /// <summary>Test-only seam driving the real <see cref="ShowEditIssue"/> production code path.</summary>
-    internal void InvokeShowEditIssueForTest(string message) => ShowEditIssue(message);
-
-    /// <summary>Test-only seam exposing <see cref="_statusText"/> for accessibility assertions.</summary>
-    internal TextBlock StatusTextForTest => _statusText;
-
     private void ShowHelpIssue(string message)
     {
         // Same accessibility rationale as ShowEditIssue: no owned modal dialog reports Help failures,
@@ -31016,7 +27531,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _pendingDirtyWorkbookGate = gateCompletion.Task;
         try
         {
-            return await WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
+            return await _fileWorkflow.CanProceedAfterDirtyGateWithCleanSaveAsync(
                 isDirty: true,
                 async () => ToSaveChangesPrompt(await ShowDirtyWorkbookCloseDialogAsync(title, discardButtonText)),
                 SaveCurrentWorkbookAsync,
@@ -31063,27 +27578,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             var titleText = new TextBlock
             {
-                Text = $"Save changes to {_session.DisplayName}?",
+                Text = UiText.Format("DirtyWorkbook_SaveChangesToFormat", _session.DisplayName),
                 FontSize = 16,
                 FontWeight = FontWeight.SemiBold,
                 TextWrapping = TextWrapping.Wrap,
             };
             var detailText = new TextBlock
             {
-                Text = "Unsaved changes will be lost if you discard them.",
+                Text = UiText.Get("DirtyWorkbook_UnsavedChangesWillBeLost"),
                 Foreground = HeaderForeground,
                 TextWrapping = TextWrapping.Wrap,
             };
 
             var saveButton = new Button
             {
-                Content = "Save",
+                Content = UiText.Get("MainWindow_AutomationName_Save"),
                 MinWidth = 92,
                 Padding = new Thickness(10, 4),
             };
             AutomationProperties.SetAutomationId(saveButton, "DirtyWorkbookSaveButton");
-            AutomationProperties.SetName(saveButton, "Save");
-            AutomationProperties.SetHelpText(saveButton, "Save the workbook before closing.");
+            AutomationProperties.SetName(saveButton, UiText.CreateAutomationName(UiText.Get("MainWindow_AutomationName_Save")));
+            AutomationProperties.SetHelpText(saveButton, UiText.Get("DirtyWorkbook_SaveHelpText"));
 
             var discardButton = new Button
             {
@@ -31093,17 +27608,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             };
             AutomationProperties.SetAutomationId(discardButton, "DirtyWorkbookDiscardButton");
             AutomationProperties.SetName(discardButton, discardButtonText);
-            AutomationProperties.SetHelpText(discardButton, "Close without saving workbook changes.");
+            AutomationProperties.SetHelpText(discardButton, UiText.Get("DirtyWorkbook_DiscardHelpText"));
 
             var cancelButton = new Button
             {
-                Content = "Cancel",
+                Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
                 MinWidth = 92,
                 Padding = new Thickness(10, 4),
             };
             AutomationProperties.SetAutomationId(cancelButton, "DirtyWorkbookCancelButton");
-            AutomationProperties.SetName(cancelButton, "Cancel");
-            AutomationProperties.SetHelpText(cancelButton, "Return to the workbook without closing.");
+            AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
+            AutomationProperties.SetHelpText(cancelButton, UiText.Get("DirtyWorkbook_CancelHelpText"));
 
             void Finish(DirtyWorkbookCloseChoice selectedChoice)
             {
@@ -31193,23 +27708,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var yesButton = new Button
         {
-            Content = "Recover",
+            Content = UiText.Get("Startup_RecoverButton"),
             MinWidth = 92,
             Padding = new Thickness(10, 4),
             IsDefault = true,
         };
         AutomationProperties.SetAutomationId(yesButton, "RecoverySnapshotYesButton");
-        AutomationProperties.SetName(yesButton, "Recover");
+        AutomationProperties.SetName(yesButton, UiText.Get("Startup_RecoverButton"));
 
         var noButton = new Button
         {
-            Content = "Discard",
+            Content = UiText.Get("Startup_DiscardButton"),
             MinWidth = 92,
             Padding = new Thickness(10, 4),
             IsCancel = true,
         };
         AutomationProperties.SetAutomationId(noButton, "RecoverySnapshotNoButton");
-        AutomationProperties.SetName(noButton, "Discard");
+        AutomationProperties.SetName(noButton, UiText.Get("Startup_DiscardButton"));
 
         void Finish(bool selected)
         {
@@ -31292,11 +27807,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)
     {
-        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
-        Func<Uri, Task<bool>>? launchAsync = launcher is null
-            ? null
-            : async uri => await launcher.LaunchUriAsync(uri);
-        return await ExternalUriLauncher.OpenAsync(target, launchAsync);
+        return await AvaloniaExternalUriLauncher.OpenAsync(this, target);
     }
 
     private async Task ShowAboutDialogAsync()
@@ -31326,13 +27837,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var closeButton = new Button
         {
-            Content = "Close",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Close")),
             Width = 92,
             Padding = new Thickness(10, 4),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
-        AutomationProperties.SetName(closeButton, "Close");
-        AutomationProperties.SetHelpText(closeButton, $"Close {title}.");
+        AutomationProperties.SetName(closeButton, UiText.CreateAutomationName(UiText.Get("Common_Close")));
+        AutomationProperties.SetHelpText(closeButton, UiText.Format("Common_CloseNamedHelpText", title));
         closeButton.Click += (_, _) => dialog.Close();
 
         var textBox = new TextBox
@@ -31346,7 +27857,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinHeight = 240,
         };
         AutomationProperties.SetName(textBox, title);
-        AutomationProperties.SetHelpText(textBox, $"Read-only {title} text.");
+        AutomationProperties.SetHelpText(textBox, UiText.Format("Common_ReadOnlyNamedTextHelpText", title));
 
         var root = new DockPanel
         {
@@ -31421,105 +27932,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         status.Contains("load warning", StringComparison.OrdinalIgnoreCase);
 
     private static string FormatCellReference(CellAddress address) =>
-        CellAddress.NumberToColumnName(address.Col) + address.Row.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        SpreadsheetDisplayFormatter.FormatCellReference(address, useR1C1ReferenceStyle: false);
 
-    /// <summary>
-    /// Builds the UIA/AT-SPI accessible name for a worksheet cell: the plain A1-style address alone
-    /// when the cell is empty, or "&lt;address&gt;: &lt;value&gt;" when it has display text, followed
-    /// by a comma-separated "has X"/"is X" cue for each piece of metadata the cell carries -- mirrors
-    /// WPF's <c>GridViewCellAutomationPeer.GetNameCore</c>/<c>GridView.BuildCellAnnouncementName</c>
-    /// (GridView.cs:688-708, :113-137) so a screen reader announces the same thing on both platforms
-    /// regardless of the R1C1 display option (accessible names always use plain A1 addressing,
-    /// matching Excel/NVDA/VoiceOver convention). <paramref name="comment"/>'s cue text uses its
-    /// <c>Title</c> lower-cased ("has note"/"has threaded comment"/"has mixed comment"), exactly as
-    /// WPF's builder does; HasDataValidation/IsLocked cues are deliberately not produced here because
-    /// WPF's own equivalent leaves them unwired too (see <c>CellAnnouncementMetadata</c>'s doc comment).
-    /// </summary>
-    private static string FormatCellAccessibleName(
-        string columnName,
-        uint row,
-        string displayText,
-        CellCommentDisplay? comment,
-        bool isFormula,
-        bool isMerged,
-        bool hasHyperlink)
-    {
-        var address = $"{columnName}{row}";
-        var name = string.IsNullOrWhiteSpace(displayText) ? address : $"{address}: {displayText}";
-
-        List<string>? cues = null;
-        void AddCue(string cue) => (cues ??= []).Add(cue);
-
-        if (comment is { } activeComment && !string.IsNullOrEmpty(activeComment.Title))
-            AddCue($"has {activeComment.Title.ToLowerInvariant()}");
-        if (isFormula)
-            AddCue("is a formula");
-        if (isMerged)
-            AddCue("is merged");
-        if (hasHyperlink)
-            AddCue("has a hyperlink");
-
-        return cues is null ? name : $"{name}, {string.Join(", ", cues)}";
-    }
-
-    /// <summary>Test-only forwarder for <see cref="FormatCellAccessibleName"/>.</summary>
-    internal static string FormatCellAccessibleNameForTest(
-        string columnName,
-        uint row,
-        string displayText,
-        CellCommentDisplay? comment = null,
-        bool isFormula = false,
-        bool isMerged = false,
-        bool hasHyperlink = false) =>
-        FormatCellAccessibleName(columnName, row, displayText, comment, isFormula, isMerged, hasHyperlink);
-
-    private static string FormatRangeReference(GridRange range)
-    {
-        var start = FormatCellReference(range.Start);
-        var end = FormatCellReference(range.End);
-        return string.Equals(start, end, StringComparison.Ordinal)
-            ? start
-            : $"{start}:{end}";
-    }
-
-    // Live dimension readout Excel shows in the Name Box while a mouse-drag selection is in
-    // progress (e.g. "4R x 3C" for a 4-row-by-3-column drag from B2 to D5), reverting to the plain
-    // range address once the drag ends -- mirrors the WPF host's FormatDragSelectionDimensionText
-    // (R69-render-active-cell-selection-6-2).
-    private static string FormatDragSelectionDimensionText(GridRange range)
-    {
-        var rowCount = range.End.Row - range.Start.Row + 1;
-        var colCount = range.End.Col - range.Start.Col + 1;
-        return $"{rowCount}R x {colCount}C";
-    }
-
-    private static string FormatFillCellsAction(FillCellsDirection direction) =>
-        direction switch
-        {
-            FillCellsDirection.Down => "Filled down",
-            FillCellsDirection.Right => "Filled right",
-            FillCellsDirection.Up => "Filled up",
-            FillCellsDirection.Left => "Filled left",
-            _ => "Filled"
-        };
-
-    private static string FormatHorizontalAlignmentStatus(CellHAlign alignment) =>
-        alignment switch
-        {
-            CellHAlign.Left => "left",
-            CellHAlign.Center => "center",
-            CellHAlign.Right => "right",
-            _ => "general"
-        };
-
-    private static string FormatVerticalAlignmentStatus(CellVAlign alignment) =>
-        alignment switch
-        {
-            CellVAlign.Top => "top",
-            CellVAlign.Center => "middle",
-            CellVAlign.Bottom => "bottom",
-            _ => "middle"
-        };
+    private static string FormatRangeReference(GridRange range) =>
+        SpreadsheetDisplayFormatter.FormatRangeReference(
+            range.Start,
+            range.End,
+            useR1C1ReferenceStyle: false);
 
     private string FormatEditText(Cell? cell, CellAddress address) =>
         SpreadsheetDisplayFormatter.FormatFormulaBarText(
@@ -31529,207 +27948,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _session.Workbook.GetSheet(address.Sheet),
             _session.Workbook);
 
-    // Cache for UseR1C1ReferenceStyle: avoids a File.ReadAllText + JsonSerializer.Deserialize round
-    // trip through AppOptionsStore.Load() on every RefreshShell (selecting a cell, typing, pasting,
-    // undo/redo all funnel through FormatEditText -> UseR1C1ReferenceStyle). We still need to notice
-    // when the Options dialog (MainWindow.Options.cs) persists a change via AppOptionsStore.Save, so
-    // the cache is keyed on the options file's last-write time: a cheap File.Exists/GetLastWriteTimeUtc
-    // stat call is orders of magnitude cheaper than re-reading and re-parsing the whole JSON document,
-    // and only the read+parse work is redone when the timestamp actually moves (i.e. right after a
-    // save). Mirrors WPF's live <c>_options.UseR1C1ReferenceStyle</c> field (MainWindow.Editing.cs,
-    // MainWindow.FormulaReferenceEditing.cs), which is populated once and updated in place on save.
-    private static bool? _cachedUseR1C1ReferenceStyle;
-    private static DateTime _cachedUseR1C1ReferenceStyleWriteTimeUtc;
-    private static string? _cachedUseR1C1ReferenceStyleStorePath;
+    // Application options are loaded and adopted by the renderer-neutral runtime session. Hot edit
+    // paths read its in-memory snapshot directly, so the Avalonia renderer needs no file-time cache.
+    private bool UseR1C1ReferenceStyle =>
+        _optionsRuntimeSession.LiveOptions.UseR1C1ReferenceStyle;
 
-    /// <summary>
-    /// Reads the persisted "R1C1 Reference Style" toggle (Options ▸ Formulas), caching the parsed value
-    /// and only re-loading from disk when the underlying options file's last-write time changes (see the
-    /// cache fields above for why).
-    /// </summary>
-    private static bool UseR1C1ReferenceStyle
-    {
-        get
-        {
-            var storePath = AppOptionsStore.StorePath;
-            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
+    private bool GenerateGetPivotData =>
+        _optionsRuntimeSession.LiveOptions.GenerateGetPivotData;
 
-            if (_cachedUseR1C1ReferenceStyle is { } cached &&
-                _cachedUseR1C1ReferenceStyleStorePath == storePath &&
-                _cachedUseR1C1ReferenceStyleWriteTimeUtc == writeTimeUtc)
-            {
-                return cached;
-            }
+    private bool EnableFillHandleAndCellDragAndDrop =>
+        _optionsRuntimeSession.LiveOptions.EnableFillHandleAndCellDragAndDrop;
 
-            var value = AppOptionsStore.Load().UseR1C1ReferenceStyle;
-            _cachedUseR1C1ReferenceStyle = value;
-            _cachedUseR1C1ReferenceStyleStorePath = storePath;
-            _cachedUseR1C1ReferenceStyleWriteTimeUtc = writeTimeUtc;
-            return value;
-        }
-    }
+    private bool EnableAutoCompleteForCellValues =>
+        _optionsRuntimeSession.LiveOptions.EnableAutoCompleteForCellValues;
 
-    private static bool? _cachedGenerateGetPivotData;
-    private static DateTime _cachedGenerateGetPivotDataWriteTimeUtc;
-    private static string? _cachedGenerateGetPivotDataStorePath;
+    private bool MoveSelectionAfterEnter =>
+        _optionsRuntimeSession.LiveOptions.MoveSelectionAfterEnter;
 
-    private static bool GenerateGetPivotData
-    {
-        get
-        {
-            var storePath = AppOptionsStore.StorePath;
-            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
-
-            if (_cachedGenerateGetPivotData is { } cached &&
-                _cachedGenerateGetPivotDataStorePath == storePath &&
-                _cachedGenerateGetPivotDataWriteTimeUtc == writeTimeUtc)
-            {
-                return cached;
-            }
-
-            var value = AppOptionsStore.Load().GenerateGetPivotData;
-            _cachedGenerateGetPivotData = value;
-            _cachedGenerateGetPivotDataStorePath = storePath;
-            _cachedGenerateGetPivotDataWriteTimeUtc = writeTimeUtc;
-            return value;
-        }
-    }
-
-    // Same write-time cache strategy as UseR1C1ReferenceStyle above, for the "Enable fill handle and
-    // cell drag-and-drop" option (Options > Advanced). Both pointer gesture hosts read the same
-    // persisted AppOptions value; keyboard and ribbon fill commands do not use this gate.
-    private static bool? _cachedEnableFillHandleAndCellDragAndDrop;
-    private static DateTime _cachedEnableFillHandleAndCellDragAndDropWriteTimeUtc;
-    private static string? _cachedEnableFillHandleAndCellDragAndDropStorePath;
-
-    private static bool EnableFillHandleAndCellDragAndDrop
-    {
-        get
-        {
-            var storePath = AppOptionsStore.StorePath;
-            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
-
-            if (_cachedEnableFillHandleAndCellDragAndDrop is { } cached &&
-                _cachedEnableFillHandleAndCellDragAndDropStorePath == storePath &&
-                _cachedEnableFillHandleAndCellDragAndDropWriteTimeUtc == writeTimeUtc)
-            {
-                return cached;
-            }
-
-            var value = AppOptionsStore.Load().EnableFillHandleAndCellDragAndDrop;
-            _cachedEnableFillHandleAndCellDragAndDrop = value;
-            _cachedEnableFillHandleAndCellDragAndDropStorePath = storePath;
-            _cachedEnableFillHandleAndCellDragAndDropWriteTimeUtc = writeTimeUtc;
-            return value;
-        }
-    }
-
-    // Same write-time cache strategy as UseR1C1ReferenceStyle above, for the "Enable AutoComplete for
-    // cell values" option (Options ▸ Advanced ▸ Editing options): mirrors WPF's live
-    // <c>_options.EnableAutoCompleteForCellValues</c> field (MainWindow.Editing.cs), which gates
-    // ApplyCellValueAutoCompleteSuggestion.
-    private static bool? _cachedEnableAutoCompleteForCellValues;
-    private static DateTime _cachedEnableAutoCompleteForCellValuesWriteTimeUtc;
-    private static string? _cachedEnableAutoCompleteForCellValuesStorePath;
-
-    private static bool EnableAutoCompleteForCellValues
-    {
-        get
-        {
-            var storePath = AppOptionsStore.StorePath;
-            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
-
-            if (_cachedEnableAutoCompleteForCellValues is { } cached &&
-                _cachedEnableAutoCompleteForCellValuesStorePath == storePath &&
-                _cachedEnableAutoCompleteForCellValuesWriteTimeUtc == writeTimeUtc)
-            {
-                return cached;
-            }
-
-            var value = AppOptionsStore.Load().EnableAutoCompleteForCellValues;
-            _cachedEnableAutoCompleteForCellValues = value;
-            _cachedEnableAutoCompleteForCellValuesStorePath = storePath;
-            _cachedEnableAutoCompleteForCellValuesWriteTimeUtc = writeTimeUtc;
-            return value;
-        }
-    }
-
-    // Same write-time cache strategy as UseR1C1ReferenceStyle above, for the "After pressing
-    // Enter, move selection" option (Options ▸ Advanced): mirrors WPF's live
-    // <c>_options.MoveSelectionAfterEnter</c> / <c>_options.AfterEnterDirection</c> fields
-    // (MainWindow.Editing.cs), which are forwarded into ExcelEditKeyPlanner.GetIntent so Enter
-    // moves the active cell in the persisted direction (or not at all) instead of always Down.
-    private static bool? _cachedMoveSelectionAfterEnter;
-    private static DateTime _cachedMoveSelectionAfterEnterWriteTimeUtc;
-    private static string? _cachedMoveSelectionAfterEnterStorePath;
-
-    private static bool MoveSelectionAfterEnter
-    {
-        get
-        {
-            var storePath = AppOptionsStore.StorePath;
-            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
-
-            if (_cachedMoveSelectionAfterEnter is { } cached &&
-                _cachedMoveSelectionAfterEnterStorePath == storePath &&
-                _cachedMoveSelectionAfterEnterWriteTimeUtc == writeTimeUtc)
-            {
-                return cached;
-            }
-
-            var value = AppOptionsStore.Load().MoveSelectionAfterEnter;
-            _cachedMoveSelectionAfterEnter = value;
-            _cachedMoveSelectionAfterEnterStorePath = storePath;
-            _cachedMoveSelectionAfterEnterWriteTimeUtc = writeTimeUtc;
-            return value;
-        }
-    }
-
-    private static FormulaEditorEnterDirection? _cachedAfterEnterDirection;
-    private static DateTime _cachedAfterEnterDirectionWriteTimeUtc;
-    private static string? _cachedAfterEnterDirectionStorePath;
-
-    private static FormulaEditorEnterDirection AfterEnterDirection
-    {
-        get
-        {
-            var storePath = AppOptionsStore.StorePath;
-            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
-
-            if (_cachedAfterEnterDirection is { } cached &&
-                _cachedAfterEnterDirectionStorePath == storePath &&
-                _cachedAfterEnterDirectionWriteTimeUtc == writeTimeUtc)
-            {
-                return cached;
-            }
-
-            var value = ToFormulaEditorEnterDirection(AppOptionsStore.Load().AfterEnterDirection);
-            _cachedAfterEnterDirection = value;
-            _cachedAfterEnterDirectionStorePath = storePath;
-            _cachedAfterEnterDirectionWriteTimeUtc = writeTimeUtc;
-            return value;
-        }
-    }
-
-    private static FormulaEditorEnterDirection ToFormulaEditorEnterDirection(AppOptionsEnterDirection direction) =>
-        direction switch
-        {
-            AppOptionsEnterDirection.Right => FormulaEditorEnterDirection.Right,
-            AppOptionsEnterDirection.Up => FormulaEditorEnterDirection.Up,
-            AppOptionsEnterDirection.Left => FormulaEditorEnterDirection.Left,
-            _ => FormulaEditorEnterDirection.Down
-        };
-
-    private static string FormatScalarValue(ScalarValue? value) => value switch
-    {
-        null or BlankValue => "",
-        NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        TextValue text => text.Value,
-        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-        DateTimeValue dateTime => dateTime.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        ErrorValue error => error.Code,
-        _ => ""
-    };
+    private FormulaEditorEnterDirection AfterEnterDirection =>
+        AppOptionsEnterDirectionMapper.ToFormulaEditor(_optionsRuntimeSession.LiveOptions.AfterEnterDirection);
 
     private static void AddGridChild(AvaloniaGrid grid, Control control, int row, int column)
     {

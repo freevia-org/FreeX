@@ -1,5 +1,6 @@
 using FreeX.ParityCompare;
 using FreeX.ParityCompare.Core;
+using Free.ToolsShared;
 
 // ---------------------------------------------------------------------------
 // FreeX.ParityCompare — cross-platform visual parity runner.
@@ -28,7 +29,7 @@ if (opts.ShowHelp)
     return 0;
 }
 
-string repoRoot = RepoLocator.FindRepoRoot(AppContext.BaseDirectory)
+string repoRoot = RepositoryRootLocator.Find(AppContext.BaseDirectory, "FreeX.slnx")
     ?? Directory.GetCurrentDirectory();
 
 string outDir = Path.GetFullPath(opts.OutDir ?? Path.Combine(repoRoot, "artifacts", "parity-report"));

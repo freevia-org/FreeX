@@ -52,7 +52,8 @@ public sealed class SisterAppFrameHelperTests
         source.Should().Contain("Content = frame.Root;");
         source.Should().Contain("SisterAppStatusBarChrome.Build(");
         source.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
-        source.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(");
+        if (appFolder == "freew")
+            source.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(");
         AssertBefore(source, "_titleBinder = new SisterWpfWindowTitleBinder(this, titleBar.TitleText);", "SisterAppClientFrameBuilder.Build(");
         AssertBefore(source, "SisterAppClientFrameBuilder.Build(", "SisterAppWindowFrameBuilder.Build(");
         AssertBefore(source, "SisterAppWindowFrameBuilder.Build(", "Content = frame.Root;");

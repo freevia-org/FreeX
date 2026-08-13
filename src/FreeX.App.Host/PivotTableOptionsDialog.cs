@@ -6,45 +6,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed record PivotTableOptionsDialogResult(
-    bool ShowRowGrandTotals,
-    bool ShowColumnGrandTotals,
-    bool ShowSubtotals,
-    PivotSubtotalPlacement SubtotalPlacement,
-    bool RepeatItemLabels,
-    bool BlankLineAfterItems,
-    string StyleName,
-    bool ShowRowHeaders,
-    bool ShowColumnHeaders,
-    bool ShowRowStripes,
-    bool ShowColumnStripes,
-    PivotReportLayout ReportLayout,
-    string? EmptyValueText = null,
-    bool RefreshOnOpen = false,
-    bool SaveSourceData = true,
-    bool EnableRefresh = true,
-    bool PreserveSourceSortFilter = true,
-    int? MissingItemsLimit = null,
-    bool PrintTitles = false,
-    bool PrintExpandCollapseButtons = false,
-    string? AltTextTitle = null,
-    string? AltTextDescription = null,
-    int CompactRowLabelIndent = 1,
-    bool ShowExpandCollapseButtons = true,
-    bool AutofitColumnsOnUpdate = true,
-    bool PreserveFormattingOnUpdate = true,
-    bool ShowFieldHeaders = true,
-    bool ShowContextualTooltips = true,
-    bool ShowPropertiesInTooltips = true,
-    bool ShowClassicLayout = false,
-    bool MergeAndCenterLabels = false,
-    bool ShowItemsWithNoDataOnRows = false,
-    bool ShowItemsWithNoDataOnColumns = false,
-    bool PageOverThenDown = false,
-    int PageWrap = 0,
-    string? ErrorValueText = null,
-    bool EnableDrill = true);
-
 public sealed partial class PivotTableOptionsDialog : Window
 {
     private readonly CheckBox _rowGrandTotalsBox = new() { Content = UiText.Get("PivotTableOptions_ShowRowGrandTotals") };
@@ -91,11 +52,11 @@ public sealed partial class PivotTableOptionsDialog : Window
     private readonly TabControl _tabs = new() { Margin = new Thickness(0, 0, 0, 12) };
     private readonly TabItem _layoutTab = new() { Header = UiText.Get("PivotTableOptions_LayoutAndFormat") };
 
-    public PivotTableOptionsDialogResult Result { get; private set; }
+    public PivotOptionsDialogValues Result { get; private set; }
 
     public PivotTableOptionsDialog(PivotTableModel pivotTable, PivotCacheModel? cache = null)
     {
-        Result = FromPivotTable(pivotTable, cache);
+        Result = PivotOptionsPlanner.CaptureDialogValues(pivotTable, cache);
         Title = UiText.Get("PivotTableOptions_PivotTableOptions");
         DialogSizing.ApplyContentHeight(this, width: PivotOptionsPlanner.DialogWidth, minHeight: PivotOptionsPlanner.DialogMinHeight);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -131,7 +92,11 @@ public sealed partial class PivotTableOptionsDialog : Window
         var layoutPanel = PivotDialogLayout.CreateGroupPanel();
         AddLabeledControl(layoutPanel, UiText.Get("PivotTableOptions_ReportLayoutLabel"), _reportLayoutBox, Enum.GetValues<PivotReportLayout>());
         AddLabeledControl(layoutPanel, UiText.Get("PivotTableOptions_CompactIndentLabel"), _compactIndentBox);
-        AddLabeledControl(layoutPanel, UiText.Get("PivotTableOptions_ReportFilterAreaLabel"), _pageFieldLayoutBox, PageFieldLayoutLabels);
+        AddLabeledControl(
+            layoutPanel,
+            UiText.Get("PivotTableOptions_ReportFilterAreaLabel"),
+            _pageFieldLayoutBox,
+            PivotOptionsPlanner.PageFieldLayouts.Select(option => option.Label));
         AddLabeledControl(layoutPanel, UiText.Get("PivotTableOptions_ReportFilterFieldsPerColumnLabel"), _pageWrapBox);
         AddCheckBox(layoutPanel, _repeatItemLabelsBox);
         AddCheckBox(layoutPanel, _blankLineBox);
@@ -192,7 +157,11 @@ public sealed partial class PivotTableOptionsDialog : Window
         AddCheckBox(dataPanel, _enableRefreshBox);
         AddCheckBox(dataPanel, _enableShowDetailsBox);
         AddCheckBox(dataPanel, _preserveSourceSortFilterBox);
-        AddLabeledControl(dataPanel, UiText.Get("PivotTableOptions_RetainItemsDeletedLabel"), _missingItemsLimitBox, MissingItemsLimitLabels);
+        AddLabeledControl(
+            dataPanel,
+            UiText.Get("PivotTableOptions_RetainItemsDeletedLabel"),
+            _missingItemsLimitBox,
+            PivotOptionsPlanner.MissingItemsLimits.Select(option => option.Label));
         stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotTableOptions_DataOptionsGroup"), dataPanel));
         return stack;
     }
@@ -252,7 +221,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         AddLabeledControl(stack, label, comboBox);
     }
 
-    private void Load(PivotTableOptionsDialogResult result)
+    private void Load(PivotOptionsDialogValues result)
     {
         _rowGrandTotalsBox.IsChecked = result.ShowRowGrandTotals;
         _columnGrandTotalsBox.IsChecked = result.ShowColumnGrandTotals;
@@ -262,7 +231,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         _blankLineBox.IsChecked = result.BlankLineAfterItems;
         _reportLayoutBox.SelectedItem = result.ReportLayout;
         _compactIndentBox.Text = PivotOptionsPlanner.CompactRowLabelIndentText(result.CompactRowLabelIndent);
-        _pageFieldLayoutBox.SelectedItem = result.PageOverThenDown ? PageFieldLayoutOverThenDown : PageFieldLayoutDownThenOver;
+        _pageFieldLayoutBox.SelectedItem = PivotOptionsPlanner.GetPageFieldLayoutLabel(result.PageOverThenDown);
         _pageWrapBox.Text = PivotOptionsPlanner.PageWrapText(result.PageWrap);
         _mergeLabelsBox.IsChecked = result.MergeAndCenterLabels;
         var styleNames = PivotStyleGalleryPlanner.GetStyleNames(result.StyleName);
@@ -287,7 +256,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         _enableRefreshBox.IsChecked = result.EnableRefresh;
         _enableShowDetailsBox.IsChecked = result.EnableDrill;
         _preserveSourceSortFilterBox.IsChecked = result.PreserveSourceSortFilter;
-        _missingItemsLimitBox.SelectedItem = LabelForMissingItemsLimit(result.MissingItemsLimit);
+        _missingItemsLimitBox.SelectedItem = PivotOptionsPlanner.GetMissingItemsLimitLabel(result.MissingItemsLimit);
         _showExpandCollapseBox.IsChecked = result.ShowExpandCollapseButtons;
         _printTitlesBox.IsChecked = result.PrintTitles;
         _printExpandCollapseBox.IsChecked = result.PrintExpandCollapseButtons;
@@ -303,7 +272,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         PivotOptionsPlanner.TryParseCompactRowLabelIndent(_compactIndentBox.Text, out var compactIndent, out _);
         PivotOptionsPlanner.TryParsePageWrap(_pageWrapBox.Text, out var pageWrap, out _);
 
-        Result = CreateResult(
+        Result = PivotOptionsPlanner.CreateDialogValues(
             _rowGrandTotalsBox.IsChecked == true,
             _columnGrandTotalsBox.IsChecked == true,
             _subtotalsBox.IsChecked == true,
@@ -325,7 +294,7 @@ public sealed partial class PivotTableOptionsDialog : Window
             saveSourceData: _saveSourceDataBox.IsChecked == true,
             enableRefresh: _enableRefreshBox.IsChecked == true,
             preserveSourceSortFilter: _preserveSourceSortFilterBox.IsChecked == true,
-            missingItemsLimit: MissingItemsLimitForLabel(_missingItemsLimitBox.SelectedItem?.ToString()),
+            missingItemsLimit: PivotOptionsPlanner.MissingItemsLimitFromLabel(_missingItemsLimitBox.SelectedItem?.ToString()),
             printTitles: _printTitlesBox.IsChecked == true,
             printExpandCollapseButtons: _printExpandCollapseBox.IsChecked == true,
             altTextTitle: _altTextTitleBox.Text,
@@ -341,7 +310,7 @@ public sealed partial class PivotTableOptionsDialog : Window
             mergeAndCenterLabels: _mergeLabelsBox.IsChecked == true,
             showItemsWithNoDataOnRows: _showItemsWithNoDataRowsBox.IsChecked == true,
             showItemsWithNoDataOnColumns: _showItemsWithNoDataColumnsBox.IsChecked == true,
-            pageOverThenDown: PageFieldLayoutForLabel(_pageFieldLayoutBox.SelectedItem?.ToString()),
+            pageOverThenDown: PivotOptionsPlanner.PageFieldLayoutFromLabel(_pageFieldLayoutBox.SelectedItem?.ToString()),
             pageWrap: pageWrap,
             errorValueText: _errorValuesBox.Text,
             enableDrill: _enableShowDetailsBox.IsChecked == true);

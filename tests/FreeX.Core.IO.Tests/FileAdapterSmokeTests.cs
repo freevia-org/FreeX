@@ -6739,12 +6739,12 @@ public partial class FileAdapterSmokeTests
 
         loaded.IsStructureProtected.Should().BeTrue();
         // After a save+load round-trip the password is stored as a sha256 hash, not plaintext.
-        NativePasswordHelper.VerifyPassword(loaded.StructureProtectionPassword!, "workbook-secret")
+        ProtectionPasswordHelper.VerifyStoredPassword(loaded.StructureProtectionPassword, "workbook-secret")
             .Should().BeTrue("the stored hash must verify against the original password");
         loaded.ProtectionMetadata.Should().BeEquivalentTo(workbook.ProtectionMetadata);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.IsProtected.Should().BeTrue();
-        NativePasswordHelper.VerifyPassword(loadedSheet.ProtectionPassword!, "sheet-secret")
+        ProtectionPasswordHelper.VerifyStoredPassword(loadedSheet.ProtectionPassword, "sheet-secret")
             .Should().BeTrue("the stored hash must verify against the original password");
         loadedSheet.ProtectionPermissions.Should().Equal(
             SheetProtectionPermission.SelectUnlockedCells,
@@ -6785,8 +6785,8 @@ public partial class FileAdapterSmokeTests
 
         secondWorkbookHash.Should().Be(firstWorkbookHash);
         secondSheetHash.Should().Be(firstSheetHash);
-        NativePasswordHelper.VerifyPassword(secondWorkbookHash!, "workbook-secret").Should().BeTrue();
-        NativePasswordHelper.VerifyPassword(secondSheetHash!, "sheet-secret").Should().BeTrue();
+        ProtectionPasswordHelper.VerifyStoredPassword(secondWorkbookHash, "workbook-secret").Should().BeTrue();
+        ProtectionPasswordHelper.VerifyStoredPassword(secondSheetHash, "sheet-secret").Should().BeTrue();
     }
 
     [Fact]

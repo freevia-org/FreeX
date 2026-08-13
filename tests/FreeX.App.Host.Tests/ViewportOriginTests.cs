@@ -9,11 +9,9 @@ public sealed class ViewportOriginTests
     public void CreateViewport_SkipsObjectDataWhenObjectsAreNotRendered()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
-        var createViewport = source[
-            source.IndexOf("private ViewportModel CreateViewport", StringComparison.Ordinal)..
-            source.IndexOf("private SplitPaneViewportOffsets? GetSplitPaneViewportOffsets", StringComparison.Ordinal)];
 
-        createViewport.Should().Contain("IncludeObjects: _options.ObjectsDisplay == FreeXObjectDisplay.All");
+        source.Should().Contain("private ViewportModel CreateViewport");
+        source.Should().Contain("IncludeObjects: _options.ObjectsDisplay == AppOptionsObjectDisplay.All");
     }
 
     [Fact]

@@ -9,11 +9,13 @@ public sealed class DialogCaptureAdapterParitySourceTests
     {
         var factory = ReadWorkspaceSource("freew", "tools", "FreeW.DialogVisualHarness.Wpf", "WpfDialogRouteFactory.cs");
         var program = ReadWorkspaceSource("freew", "tools", "FreeW.DialogVisualHarness.Wpf", "Program.cs");
+        var catalog = ReadWorkspaceSource("freew", "tools", "FreeW.DialogVisualHarness", "FreeWDialogEvidenceCatalog.cs");
 
-        factory.Should().Contain("routeId == \"manual-hyphenation\"");
+        catalog.Should().Contain("Pair(\"manual-hyphenation\", \"ManualHyphenationDialog\"");
+        catalog.Should().Contain("wpfAction: FreeWDialogOpenAction.ManualHyphenation");
         factory.Should().Contain("ManualHyphenationPlanner.CreateSession(editor.Model).Current");
         factory.Should().Contain("FreeW.App.Host.ManualHyphenationDialog");
-        program.Should().Contain("scenario.RouteId == \"manual-hyphenation\"");
+        program.Should().Contain("FreeWDialogPopulationKind.ManualHyphenation");
         program.Should().Contain("PixelContentMetrics.Compute");
         program.Should().Contain("c.FullPixelContent?.PassesContentGate == true");
     }
@@ -23,14 +25,15 @@ public sealed class DialogCaptureAdapterParitySourceTests
     {
         var factory = ReadWorkspaceSource("freew", "tools", "FreeW.DialogVisualHarness.Avalonia", "AvaloniaDialogRouteFactory.cs");
         var program = ReadWorkspaceSource("freew", "tools", "FreeW.DialogVisualHarness.Avalonia", "Program.cs");
+        var catalog = ReadWorkspaceSource("freew", "tools", "FreeW.DialogVisualHarness", "FreeWDialogEvidenceCatalog.cs");
 
-        factory.Should().Contain("[\"caption\"] = \"CaptionDialog\"");
-        factory.Should().Contain("[\"character-formatting-picker\"] = \"CharacterFormattingPickerDialog\"");
-        factory.Should().Contain("[\"header-footer-text\"] = \"HeaderFooterTextDialog\"");
-        factory.Should().Contain("[\"manual-hyphenation\"] = \"ManualHyphenationDialog\"");
+        catalog.Should().Contain("AvaloniaOnly(\"caption\", \"CaptionDialog\")");
+        catalog.Should().Contain("AvaloniaOnly(\"character-formatting-picker\", \"CharacterFormattingPickerDialog\"");
+        catalog.Should().Contain("AvaloniaOnly(\"header-footer-text\", \"HeaderFooterTextDialog\")");
+        catalog.Should().Contain("Pair(\"manual-hyphenation\", \"ManualHyphenationDialog\"");
         factory.Should().Contain("ForTestShading");
         factory.Should().Contain("ManualHyphenationPlanner.CreateSession(document).Current");
-        program.Should().Contain("scenario.RouteId == \"manual-hyphenation\"");
+        program.Should().Contain("FreeWDialogPopulationKind.ManualHyphenation");
     }
 
     private static string ReadWorkspaceSource(params string[] parts)

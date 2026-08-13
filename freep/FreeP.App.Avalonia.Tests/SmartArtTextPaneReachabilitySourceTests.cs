@@ -7,9 +7,8 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
     [Fact]
     public void AvaloniaSmartArtTextPane_UsesWrappingCommandBandForFixedWidthHost()
     {
-        var sourcePath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../FreeP.App.Avalonia/MainWindow.cs"));
+        var sourcePath = TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var source = File.ReadAllText(sourcePath);
 
         source.Should().Contain("_smartArtTextPaneCommandActions = new WrapPanel");
@@ -24,42 +23,54 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
     [Fact]
     public void AvaloniaSmartArtTextPane_RefreshesAfterEditorUndoRedo()
     {
-        var sourcePath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../FreeP.App.Avalonia/MainWindow.cs"));
-        var source = File.ReadAllText(sourcePath);
+        var mainWindowPath = TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Avalonia", "MainWindow.cs");
+        var endpointPath = TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Avalonia", "MainWindow.WorkareaEndpoint.cs");
+        var workareaSessionPath = TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Presentation", "PresentationWorkareaSession.cs");
+        var mainWindow = File.ReadAllText(mainWindowPath);
+        var endpoint = File.ReadAllText(endpointPath);
+        var workareaSession = File.ReadAllText(workareaSessionPath);
 
-        source.Should().MatchRegex(
-            @"if\s*\(IsSmartArtTextPaneVisible\)\s*ShowSmartArtTextPane\(\);");
+        mainWindow.Should().Contain(
+            "_workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());");
+        mainWindow.Should().Contain(
+            "_workareaSession.Panes.Show(PresentationWorkareaPane.SmartArtText)");
+        endpoint.Should().Contain("RefreshSmartArtPane = () => ShowSmartArtTextPane()");
+        workareaSession.Should().Contain(
+            "Panes.IsVisible(PresentationWorkareaPane.SmartArtText)");
+        workareaSession.Should().Contain(
+            "operations.Add(PresentationWorkareaOperation.RefreshSmartArtPane);");
     }
 
     [Fact]
     public void AvaloniaSmartArtTextPane_IsReachableFromTheRibbonRegistry()
     {
-        var sourcePath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../FreeP.App.Avalonia/MainWindow.cs"));
+        var sourcePath = TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var source = File.ReadAllText(sourcePath);
+        var workflow = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");
 
-        source.Should().Contain("SmartArtEditingPlanner.OpenTextPaneCommandId");
-        source.Should().Contain("new ActionRibbonCommand(() => ShowSmartArtTextPane())");
+        workflow.Should().Contain("SmartArtEditingPlanner.OpenTextPaneCommandId");
+        source.Should().Contain("OpenSmartArtTextPane = () => ShowSmartArtTextPane(),");
     }
 
     [Fact]
-    public void AvaloniaSmartArtAuthoring_RejectsFailedNativeRefreshBeforeUndoCommit()
+    public void SharedSmartArtSession_RejectsFailedNativeRefreshBeforeUndoCommit()
     {
-        var sourcePath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../FreeP.App.Avalonia/MainWindow.cs"));
+        var sourcePath = TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Presentation", "PresentationSmartArtTextPaneSession.cs");
         var source = File.ReadAllText(sourcePath);
 
         source.Should().Contain(
-            "private bool CommitSmartArtTextPaneMutation(");
+            "private bool CommitMutation(");
         source.Should().Contain(
-            "if (LastSmartArtDataPartRewriteResult is not { Applied: true })");
+            "if (LastDataPartRewriteResult is not { Applied: true })");
         source.Should().Contain(
-            "return LastSmartArtDrawingCacheRegenerationResult is { Applied: true };");
+            "return LastDrawingCacheRegenerationResult is { Applied: true };");
         source.Should().Contain(
-            "Message = \"SmartArt native data or drawing cache refresh failed.\"");
+            "Message = NativeRefreshFailureMessage");
     }
 }

@@ -3,6 +3,7 @@ using OxyPlot;
 using OxyPlot.Annotations;
 using OxyPlot.Axes;
 using OxyPlot.Series;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -121,42 +122,18 @@ public static partial class ChartRenderer
                     TryGetChartNumericValue(cell, out var v))
                     colValues.Add(v);
 
-            if (colValues.Count > 0)
+            var statistics = ChartRenderPolicyPlanner.PlanBoxAndWhisker(colValues);
+            if (statistics is not null)
             {
-                colValues.Sort();
-                double q1 = BoxPercentile(colValues, 25);
-                double median = BoxPercentile(colValues, 50);
-                double q3 = BoxPercentile(colValues, 75);
-                double iqr = q3 - q1;
-                double lowerFence = q1 - 1.5 * iqr;
-                double upperFence = q3 + 1.5 * iqr;
-                var lowerWhisker = colValues[0];
-                for (var index = 0; index < colValues.Count; index++)
-                {
-                    if (colValues[index] >= lowerFence)
-                    {
-                        lowerWhisker = colValues[index];
-                        break;
-                    }
-                }
-
-                var upperWhisker = colValues[^1];
-                for (var index = colValues.Count - 1; index >= 0; index--)
-                {
-                    if (colValues[index] <= upperFence)
-                    {
-                        upperWhisker = colValues[index];
-                        break;
-                    }
-                }
-
-                var item = new BoxPlotItem(boxIndex, lowerWhisker, q1, median, q3, upperWhisker);
-                for (var index = 0; index < colValues.Count; index++)
-                {
-                    var value = colValues[index];
-                    if (value < lowerFence || value > upperFence)
-                        item.Outliers.Add(value);
-                }
+                var item = new BoxPlotItem(
+                    boxIndex,
+                    statistics.LowerWhisker,
+                    statistics.FirstQuartile,
+                    statistics.Median,
+                    statistics.ThirdQuartile,
+                    statistics.UpperWhisker);
+                foreach (var outlier in statistics.Outliers)
+                    item.Outliers.Add(outlier);
 
                 boxSeries.Items.Add(item);
             }
@@ -172,16 +149,6 @@ public static partial class ChartRenderer
         model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
 
         return model;
-    }
-
-    private static double BoxPercentile(List<double> sorted, double pct)
-    {
-        if (sorted.Count == 1) return sorted[0];
-        double pos = pct / 100.0 * (sorted.Count - 1);
-        int lo = (int)pos;
-        int hi = lo + 1;
-        if (hi >= sorted.Count) return sorted[^1];
-        return sorted[lo] + (pos - lo) * (sorted[hi] - sorted[lo]);
     }
 
     internal static PlotModel BuildTreemapModel(

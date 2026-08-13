@@ -20,6 +20,13 @@ public sealed class SlideShowSettingsDialogTests
         GetField<CheckBox>(dialog, "_showNarrationCheck").IsChecked.Should().BeTrue();
         GetField<CheckBox>(dialog, "_showMediaControlsCheck").IsChecked.Should().BeTrue();
         GetField<CheckBox>(dialog, "_showMasterShapesCheck").IsChecked.Should().BeTrue();
+        GetField<ComboBox>(dialog, "_showTypeCombo").Items
+            .Cast<SlideShowSettingsShowTypeOption>()
+            .Select(option => option.Label)
+            .Should().Equal(
+                "Presented by a speaker",
+                "Browsed by an individual",
+                "Browsed at a kiosk");
 
         dialog.ApplyForTests(
             useSlideTimings: false,
@@ -40,6 +47,16 @@ public sealed class SlideShowSettingsDialogTests
         editor.Presentation.ShowWithNarration.Should().BeFalse();
         editor.Presentation.ShowMediaControls.Should().BeFalse();
         editor.Presentation.ShowMasterShapes.Should().BeFalse();
+        dialog.LastCommitPlan!.Settings.Should().Be(new SlideShowSettingsState(
+            UseSlideTimings: false,
+            ShowWithAnimation: false,
+            LoopUntilStopped: true,
+            ShowType: PresentationShowType.BrowsedByIndividual,
+            ShowBrowseScrollbar: false,
+            KioskRestartAfterMilliseconds: 12_000,
+            ShowWithNarration: false,
+            ShowMediaControls: false,
+            ShowMasterShapes: false));
 
         editor.Undo();
         editor.Presentation.UseSlideTimings.Should().BeTrue();

@@ -25,11 +25,67 @@ public sealed class PivotOptionsPlannerTests
         PivotOptionsPlanner.ReportLayoutFromIndex(99).Should().Be(PivotOptionsPlanner.ReportLayouts[^1].Value);
     }
 
+    [Theory]
+    [InlineData(PivotReportLayout.Compact, "Compact")]
+    [InlineData(PivotReportLayout.Outline, "Outline")]
+    [InlineData(PivotReportLayout.Tabular, "Tabular")]
+    [InlineData((PivotReportLayout)99, "Tabular")]
+    public void GetReportLayoutLabel_UsesSharedCatalog(PivotReportLayout layout, string expected)
+    {
+        PivotOptionsPlanner.GetReportLayoutLabel(layout).Should().Be(expected);
+    }
+
+    [Fact]
+    public void AvaloniaPivotTabs_DelegateReportLayoutLabelsToSharedCatalog()
+    {
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.PivotTabs.cs"));
+
+        source.Should().Contain("PivotOptionsPlanner.GetReportLayoutLabel(next)");
+        source.Should().NotContain("private static string FormatReportLayout(");
+    }
+
     [Fact]
     public void SubtotalPlacementRoundTrip_FindsAndResolvesIndex()
     {
         var index = PivotOptionsPlanner.FindSubtotalPlacementIndex(PivotSubtotalPlacement.Top);
         PivotOptionsPlanner.SubtotalPlacementFromIndex(index).Should().Be(PivotSubtotalPlacement.Top);
+    }
+
+    [Fact]
+    public void PageFieldLayoutChoices_RoundTripAcrossIndexAndLabelBindings()
+    {
+        PivotOptionsPlanner.PageFieldLayouts.Select(option => option.Label).Should().Equal(
+            "Down, then over",
+            "Over, then down");
+        PivotOptionsPlanner.FindPageFieldLayoutIndex(false).Should().Be(0);
+        PivotOptionsPlanner.FindPageFieldLayoutIndex(true).Should().Be(1);
+        PivotOptionsPlanner.PageFieldLayoutFromIndex(-1).Should().BeFalse();
+        PivotOptionsPlanner.PageFieldLayoutFromIndex(99).Should().BeTrue();
+        PivotOptionsPlanner.GetPageFieldLayoutLabel(true).Should().Be("Over, then down");
+        PivotOptionsPlanner.PageFieldLayoutFromLabel("over, THEN down").Should().BeTrue();
+        PivotOptionsPlanner.PageFieldLayoutFromLabel("unknown").Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(null, 0, "Automatic")]
+    [InlineData(0, 1, "None")]
+    [InlineData(42, 2, "Maximum")]
+    public void MissingItemsChoices_RoundTripAcrossIndexAndLabelBindings(
+        int? value,
+        int expectedIndex,
+        string expectedLabel)
+    {
+        PivotOptionsPlanner.FindMissingItemsLimitIndex(value).Should().Be(expectedIndex);
+        PivotOptionsPlanner.GetMissingItemsLimitLabel(value).Should().Be(expectedLabel);
+        PivotOptionsPlanner.MissingItemsLimitFromIndex(expectedIndex)
+            .Should().Be(PivotOptionsPlanner.NormalizeMissingItemsLimit(value));
+        PivotOptionsPlanner.MissingItemsLimitFromLabel(expectedLabel.ToLowerInvariant())
+            .Should().Be(PivotOptionsPlanner.NormalizeMissingItemsLimit(value));
     }
 
     [Fact]

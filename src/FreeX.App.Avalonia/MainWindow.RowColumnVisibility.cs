@@ -8,8 +8,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.GridInteraction;
-using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -75,36 +75,21 @@ public sealed partial class MainWindow
 
     private void UnhideSelectedColumns() => SetSelectedColumnsHidden(hidden: false);
 
-    /// <summary>
-    /// R126-cellscmds-multiarea-rowheight-2: a Ctrl+click multi-area row-header selection (e.g. rows
-    /// 2 and 5 via AddAdditionalRowSelection) must hide/unhide EVERY disjoint area, matching Excel
-    /// and the WPF host's R124 fix (MainWindow.CellsCommands.cs ExecuteRowsHidden via
-    /// TryExecuteRepeatableCurrentSelectionRangesCommand) -- reading only the single active
-    /// <c>_session.SelectedRange</c> silently left every area but the last-clicked one untouched.
-    /// Resolves the selection through the same <see cref="SelectionStyleCommandPlanner.ResolveRanges"/>
-    /// choke point MainWindow.Outline.cs's Group/Ungroup and MainWindow.RibbonMenuWires.cs already use.
-    /// </summary>
     private void SetSelectedRowsHidden(bool hidden)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var sheetId = _session.ActiveSheet.Id;
-        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
-        if (ranges.Count == 0)
-            ranges = [_session.SelectedRange];
-
-        var totalRows = 0;
-        var commands = new List<IWorkbookCommand>(ranges.Count);
+        var ranges = _session.SelectedRanges.Count > 0
+            ? _session.SelectedRanges
+            : [_session.SelectedRange];
+        long totalRows = 0;
         foreach (var range in ranges)
         {
             var (startRow, endRow) = SelectionRangeService.GetRowSpan(range);
-            totalRows += (int)(endRow - startRow + 1);
-            commands.Add(new SetRowsHiddenCommand(sheetId, startRow, endRow, hidden));
+            totalRows += endRow - startRow + 1;
         }
-
-        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand(hidden ? "Hide Row" : "Unhide Row", commands);
-        var result = _session.ExecuteReviewCommand(command);
+        var result = _session.SetSelectedRowsHidden(hidden);
         if (result.Success)
             RefreshShell(hidden
                 ? UiText.Format("RowColumn_RowsHidden", totalRows)
@@ -113,31 +98,24 @@ public sealed partial class MainWindow
             RefreshShell(result.ErrorMessage ?? UiText.Get(hidden ? "RowColumn_HideRowsFailed" : "RowColumn_UnhideRowsFailed"));
     }
 
-    /// <summary>Column counterpart of <see cref="SetSelectedRowsHidden"/> above (R126-cellscmds-multiarea-rowheight-2).</summary>
     private void SetSelectedColumnsHidden(bool hidden)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var sheetId = _session.ActiveSheet.Id;
-        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
-        if (ranges.Count == 0)
-            ranges = [_session.SelectedRange];
-
-        var totalCols = 0;
-        var commands = new List<IWorkbookCommand>(ranges.Count);
+        var ranges = _session.SelectedRanges.Count > 0
+            ? _session.SelectedRanges
+            : [_session.SelectedRange];
+        long totalColumns = 0;
         foreach (var range in ranges)
         {
             var (startCol, endCol) = SelectionRangeService.GetColumnSpan(range);
-            totalCols += (int)(endCol - startCol + 1);
-            commands.Add(new SetColumnsHiddenCommand(sheetId, startCol, endCol, hidden));
+            totalColumns += endCol - startCol + 1;
         }
-
-        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand(hidden ? "Hide Column" : "Unhide Column", commands);
-        var result = _session.ExecuteReviewCommand(command);
+        var result = _session.SetSelectedColumnsHidden(hidden);
         if (result.Success)
             RefreshShell(hidden
-                ? UiText.Format("RowColumn_ColumnsHidden", totalCols)
+                ? UiText.Format("RowColumn_ColumnsHidden", totalColumns)
                 : UiText.Get("RowColumn_ColumnsUnhidden"));
         else
             RefreshShell(result.ErrorMessage ?? UiText.Get(hidden ? "RowColumn_HideColumnsFailed" : "RowColumn_UnhideColumnsFailed"));
@@ -159,8 +137,7 @@ public sealed partial class MainWindow
     private void SelectEntireRowRange(uint anchorRow, uint targetRow)
     {
         var sheet = _session.ActiveSheet.Id;
-        var range = SelectionRangeService.GetWholeRows(
-            new GridRange(new CellAddress(sheet, anchorRow, 1), new CellAddress(sheet, targetRow, 1)));
+        var range = GridSelectionNavigationPlanner.CreateWholeRowsRange(sheet, anchorRow, targetRow);
 
         // Match the WPF SelectRow route: a row-header click is a formula reference
         // while point mode is active, not a request to commit the edit first.
@@ -187,8 +164,7 @@ public sealed partial class MainWindow
     private void AddAdditionalRowSelection(uint row)
     {
         var sheet = _session.ActiveSheet.Id;
-        var newRange = SelectionRangeService.GetWholeRows(
-            new GridRange(new CellAddress(sheet, row, 1), new CellAddress(sheet, row, 1)));
+        var newRange = GridSelectionNavigationPlanner.CreateWholeRowsRange(sheet, row, row);
         if (IsFormulaRangeEntryActiveForPointMode() &&
             TryAppendDisjointFormulaPointRange(newRange))
         {
@@ -200,7 +176,10 @@ public sealed partial class MainWindow
 
         ClearSelectedDrawingObject();
         newRange = MergedSelectionRangePlanner.ExpandToFullyContainMerges(_session.ActiveSheet, newRange);
-        var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
+        var ranges = GridSelectionNavigationPlanner.AppendDisjointSelectionArea(
+            _session.SelectedRanges,
+            _session.SelectedRange,
+            newRange);
         _session.SelectRanges(newRange, ranges, newRange.Start);
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
@@ -222,8 +201,7 @@ public sealed partial class MainWindow
     private void SelectEntireColumnRange(uint anchorCol, uint targetCol)
     {
         var sheet = _session.ActiveSheet.Id;
-        var range = SelectionRangeService.GetWholeColumns(
-            new GridRange(new CellAddress(sheet, 1, anchorCol), new CellAddress(sheet, 1, targetCol)));
+        var range = GridSelectionNavigationPlanner.CreateWholeColumnsRange(sheet, anchorCol, targetCol);
 
         // Keep column-header point selection on the shared formula-entry path, as WPF does.
         if (TryApplyFormulaRangeSelection(
@@ -251,8 +229,7 @@ public sealed partial class MainWindow
     private void AddAdditionalColumnSelection(uint col)
     {
         var sheet = _session.ActiveSheet.Id;
-        var newRange = SelectionRangeService.GetWholeColumns(
-            new GridRange(new CellAddress(sheet, 1, col), new CellAddress(sheet, 1, col)));
+        var newRange = GridSelectionNavigationPlanner.CreateWholeColumnsRange(sheet, col, col);
         if (IsFormulaRangeEntryActiveForPointMode() &&
             TryAppendDisjointFormulaPointRange(newRange))
         {
@@ -264,7 +241,10 @@ public sealed partial class MainWindow
 
         ClearSelectedDrawingObject();
         newRange = MergedSelectionRangePlanner.ExpandToFullyContainMerges(_session.ActiveSheet, newRange);
-        var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
+        var ranges = GridSelectionNavigationPlanner.AppendDisjointSelectionArea(
+            _session.SelectedRanges,
+            _session.SelectedRange,
+            newRange);
         _session.SelectRanges(newRange, ranges, newRange.Start);
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
@@ -311,8 +291,7 @@ public sealed partial class MainWindow
             UiText.Get("RowColumn_RowHeightDialogTitle"),
             UiText.Get("RowColumn_RowHeightDialogPrompt"),
             current,
-            min: 0,
-            max: 409.5,
+            WorksheetDimensionKind.RowHeight,
             automationId: "RowHeightValueBox");
         if (value is not { } height)
             return;
@@ -338,8 +317,7 @@ public sealed partial class MainWindow
             UiText.Get("RowColumn_ColumnWidthDialogTitle"),
             UiText.Get("RowColumn_ColumnWidthDialogPrompt"),
             current,
-            min: 0,
-            max: 255,
+            WorksheetDimensionKind.ColumnWidth,
             automationId: "ColumnWidthValueBox");
         if (value is not { } width)
             return;
@@ -386,15 +364,14 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Single-numeric-input modal used by the Row Height / Column Width dialogs. Returns the parsed,
-    /// clamped value, or null on cancel / invalid input. The Core command re-validates the range, so
-    /// this clamp is only for an immediate, friendly result.
+    /// validated value, or null on cancel. Validation is delegated to the same portable planner the
+    /// WPF row-height and column-width dialogs use.
     /// </summary>
     private async Task<double?> ShowDimensionInputDialogAsync(
         string title,
         string prompt,
         double current,
-        double min,
-        double max,
+        WorksheetDimensionKind dimensionKind,
         string automationId)
     {
         double? result = null;
@@ -421,8 +398,8 @@ public sealed partial class MainWindow
         var validationText = new TextBlock();
         AvaloniaCompactDialogChrome.ApplyValidationStatus(validationText, RowColumnDialogChromeStyle);
 
-        var okButton = new Button { Content = "OK", IsDefault = true };
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true };
+        var okButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")), IsDefault = true };
+        var cancelButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(okButton, RowColumnDialogChromeStyle, 84, isDefault: true);
         AvaloniaCompactDialogChrome.ApplyButton(cancelButton, RowColumnDialogChromeStyle, 84);
         AutomationProperties.SetAutomationId(okButton, "DimensionDialogOkButton");
@@ -430,9 +407,10 @@ public sealed partial class MainWindow
 
         void Accept()
         {
-            var text = (valueBox.Text ?? "").Trim();
-            if (!double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var parsed) &&
-                !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
+            if (!WorksheetDimensionDialogPlanner.TryCreateResult(
+                    dimensionKind,
+                    valueBox.Text,
+                    out var parsed))
             {
                 validationText.Text = prompt;
                 validationText.IsVisible = true;
@@ -441,7 +419,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            result = Math.Clamp(parsed, min, max);
+            result = parsed.Value;
             dialog.Close();
         }
 

@@ -53,12 +53,12 @@ public sealed class AvaloniaComboChartRuntimeTests
                 window, "BuildContextualTabCommands")!;
 
             chart.UseComboLineForSecondarySeries.Should().BeFalse();
-            commands["chartDesign.comboChart"]();
+            commands["Combo Chart"]();
 
             chart.UseComboLineForSecondarySeries.Should().BeTrue();
             window.Session.CanUndo.Should().BeTrue();
 
-            commands["chartDesign.comboChart"]();
+            commands["Combo Chart"]();
             chart.UseComboLineForSecondarySeries.Should().BeFalse();
 
             // WPF can also turn off a loaded combo chart whose source now exposes only one data
@@ -76,7 +76,7 @@ public sealed class AvaloniaComboChartRuntimeTests
             };
             sheet.Charts.Add(oneSeriesChart);
             InvokePrivate(window, "SelectChart", oneSeriesChart);
-            commands["chartDesign.comboChart"]();
+            commands["Combo Chart"]();
             oneSeriesChart.UseComboLineForSecondarySeries.Should().BeFalse();
 
             window.AllowCloseWithoutDirtyPromptForParityCapture();

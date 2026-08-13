@@ -1,4 +1,5 @@
 using FreeX.Core.IO;
+using FilePathPolicy = Free.Shared.IO.FilePathPolicy;
 using FileFormatDialogDescriptorAdapter = Free.Shared.IO.FileFormatDialogDescriptorAdapter;
 using FileOpenDialogPlan = Free.Shared.IO.FileOpenDialogPlan;
 using FileOpenPickerPlan = Free.Shared.IO.FileOpenPickerPlan;
@@ -88,7 +89,7 @@ public static class WorkbookFilePickerPlanner
         string? preferredDefaultFormat)
     {
         var preferredExtension = AppOptions.NormalizeDefaultFormat(preferredDefaultFormat);
-        return FileDialogFilterBuilder.FindSaveAdapter(adapters, preferredExtension, out _) is null
+        return FileFormatResolver.FindSaveAdapter(adapters, preferredExtension, out _) is null
             ? AppOptions.XlsxDefaultFormat
             : preferredExtension;
     }
@@ -110,7 +111,7 @@ public static class WorkbookFilePickerPlanner
             return false;
         }
 
-        var chosenExtension = Path.GetExtension(resolvedTarget.Path);
+        var chosenExtension = FilePathPolicy.GetExtensionOrEmpty(resolvedTarget.Path);
         var adapter = FileDialogSaveSelectionResolver.ResolveAdapter(
             adapterRows,
             static candidate => candidate.Formats,

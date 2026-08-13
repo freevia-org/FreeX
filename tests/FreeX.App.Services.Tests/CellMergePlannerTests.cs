@@ -211,6 +211,50 @@ public sealed class CellMergePlannerTests
     }
 
     [Fact]
+    public void WrapCommands_UsesNoOpSingleAndCompositeShapes()
+    {
+        var sheetId = SheetId.New();
+        var first = new MergeCellsCommand(sheetId, Range(sheetId, 1, 1, 1, 2));
+        var second = new MergeCellsCommand(sheetId, Range(sheetId, 2, 1, 2, 2));
+
+        CellMergePlanner.WrapCommands("Merge Cells", []).Should().BeSameAs(NoOpWorkbookCommand.Instance);
+        CellMergePlanner.WrapCommands("Merge Cells", [first]).Should().BeSameAs(first);
+        CellMergePlanner.WrapCommands("Merge Cells", [first, second])
+            .Should().BeOfType<CompositeWorkbookCommand>();
+    }
+
+    [Fact]
+    public void CreateMergeAcrossCommand_BuildsOneNonTogglingMergePerRow()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var command = CellMergePlanner.CreateMergeAcrossCommand(
+            sheet,
+            sheet.Id,
+            Range(sheet.Id, 1, 1, 2, 3),
+            MergeCellContentResolution.KeepFirstCell);
+
+        command.Should().BeOfType<CompositeWorkbookCommand>();
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+        sheet.MergedRegions.Should().BeEquivalentTo(
+            [Range(sheet.Id, 1, 1, 1, 3), Range(sheet.Id, 2, 1, 2, 3)]);
+    }
+
+    [Fact]
+    public void CreateUnmergeCellsCommand_NoOpsWithoutAnOverlappingMerge()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+
+        var command = CellMergePlanner.CreateUnmergeCellsCommand(
+            sheet,
+            sheet.Id,
+            Range(sheet.Id, 1, 1, 2, 2));
+
+        command.Should().BeSameAs(NoOpWorkbookCommand.Instance);
+    }
+
+    [Fact]
     public void AnalyzeContent_WarnsWhenNonTopLeftContentWouldBeDiscarded()
     {
         var workbook = CreateWorkbook();
@@ -346,6 +390,40 @@ public sealed class CellMergePlannerTests
         plan.Entries.Should().BeEmpty();
     }
 
+    [Fact]
+    public void AnalyzeGroupedContent_RemapsRangesAndWarnsForContentOnAnotherSheet()
+    {
+        var workbook = CreateWorkbook();
+        var first = workbook.Sheets[0];
+        var second = workbook.AddSheet("Sheet2");
+        var range = Range(first.Id, 1, 1, 1, 2);
+        second.SetCell(new CellAddress(second.Id, 1, 2), new TextValue("would be lost"));
+
+        var plan = CellMergePlanner.AnalyzeGroupedContent(
+            workbook,
+            [first.Id, second.Id],
+            [range]);
+
+        plan.WouldLoseContent.Should().BeTrue();
+        plan.Entries.Should().ContainSingle(entry =>
+            entry.Address.Sheet == second.Id &&
+            entry.DisplayText == "would be lost" &&
+            !entry.IsTopLeft);
+    }
+
+    [Theory]
+    [InlineData(MergeCellContentChoice.Cancel, false, MergeCellContentResolution.KeepFirstCell)]
+    [InlineData(MergeCellContentChoice.KeepFirstCell, true, MergeCellContentResolution.KeepFirstCell)]
+    [InlineData(MergeCellContentChoice.ConcatenateAllCells, true, MergeCellContentResolution.ConcatenateAllCells)]
+    public void ResolveContentChoice_ReturnsSharedProceedAndResolutionDecision(
+        MergeCellContentChoice choice,
+        bool shouldProceed,
+        MergeCellContentResolution resolution)
+    {
+        CellMergePlanner.ResolveContentChoice(choice).Should().Be(
+            new MergeCellContentDecision(shouldProceed, resolution));
+    }
+
     private static Workbook CreateWorkbook()
     {
         var workbook = new Workbook("Book");
@@ -358,4 +436,11 @@ public sealed class CellMergePlannerTests
         new(
             new CellAddress(sheetId, startRow, startCol),
             new CellAddress(sheetId, endRow, endCol));
+
+    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+
+        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
+    }
 }

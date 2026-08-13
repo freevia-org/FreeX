@@ -90,9 +90,10 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("PivotDataSourcePlanner.TryCreateChange(_sourceBox.Text, _resolveReference, out change, out _)");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotTableDataSource_EnterValidSourceRange\"), _sourceBox);");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
-        commandSource.Should().Contain("sheetId: sheet.Id");
-        commandSource.Should().Contain("resolveReference: (string reference, out GridRange range) => TryParseWorkbookRange(sheet.Id, reference, out range)");
-        commandSource.Should().Contain("dialog.Result.SourceRange is not { } sourceRange");
+        commandSource.Should().Contain("sheetId: target.Sheet.Id");
+        commandSource.Should().Contain("resolveReference: (string reference, out GridRange range) =>");
+        commandSource.Should().Contain("TryParseWorkbookRange(target.Sheet.Id, reference, out range)");
+        commandSource.Should().Contain("dialog.Result.SourceRange is null");
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -22,8 +23,13 @@ internal static class StyleDialog
         Window? owner,
         IReadOnlyDictionary<string, string> styleNamesById,
         string? defaultBasedOnId) =>
-        Show(owner, "New Style", styleNamesById, fixedName: null, defaultBasedOnId,
-            RunFormatting.Default, ParagraphFormatting.Default, defaultNextStyleId: null, isModify: false);
+        Show(owner, StyleDialogPlanner.CreateNewSession(styleNamesById, defaultBasedOnId));
+
+    public static StyleDefinitionResult? AskNew(
+        Window? owner,
+        TextDocument document,
+        string? defaultBasedOnId) =>
+        Show(owner, StyleDialogPlanner.CreateNewSession(document, defaultBasedOnId));
 
     /// <summary>
     /// Show the Modify Style dialog seeded with an existing style's name/based-on/formatting. The name is
@@ -33,25 +39,25 @@ internal static class StyleDialog
         Window? owner,
         IReadOnlyDictionary<string, string> styleNamesById,
         DocumentStyle existing) =>
-        Show(owner, $"Modify Style — {existing.Name}", styleNamesById, fixedName: existing.Name,
-            existing.BasedOnStyleId, existing.Run, existing.Paragraph, existing.NextStyleId, isModify: true);
+        Show(owner, StyleDialogPlanner.CreateModifySession(styleNamesById, existing));
+
+    public static StyleDefinitionResult? AskModify(
+        Window? owner,
+        TextDocument document,
+        DocumentStyle existing) =>
+        Show(owner, StyleDialogPlanner.CreateModifySession(document, existing));
 
     private static StyleDefinitionResult? Show(
         Window? owner,
-        string title,
-        IReadOnlyDictionary<string, string> styleNamesById,
-        string? fixedName,
-        string? defaultBasedOnId,
-        RunFormatting seedRun,
-        ParagraphFormatting seedPara,
-        string? defaultNextStyleId,
-        bool isModify)
+        StyleDialogSession session)
     {
         StyleDefinitionResult? result = null;
+        var state = session.InitialState;
+        var surface = StyleDialogPlanner.Surface;
 
         var dialog = new Window
         {
-            Title = title,
+            Title = state.Title,
             SizeToContent = SizeToContent.WidthAndHeight,
             ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
@@ -61,80 +67,88 @@ internal static class StyleDialog
 
         var name = new TextBox
         {
-            MinWidth = 280,
+            MinWidth = surface.Field(StyleDialogFieldKind.Name).MinWidth,
             Height = StyleDialogMetrics.NameTextBoxHeight,
             MinHeight = StyleDialogMetrics.NameTextBoxHeight,
             MaxHeight = StyleDialogMetrics.NameTextBoxHeight,
-            Text = fixedName ?? string.Empty,
+            Text = state.Name,
+            IsReadOnly = state.NameIsReadOnly,
         };
-        if (isModify)
-            name.IsReadOnly = true;
 
-        var basedOn = new ComboBox { MinWidth = 280, Height = StyleDialogMetrics.ComboBoxHeight };
-        var basedOnEntries = StyleDialogPlanner.BuildStyleOptions(styleNamesById, "(none)").ToList();
-        basedOn.ItemsSource = basedOnEntries;
-        basedOn.DisplayMemberPath = "Key";
-        basedOn.SelectedIndex = 0;
-        if (defaultBasedOnId is { Length: > 0 })
-        {
-            var match = basedOnEntries.FindIndex(kv => kv.Value == defaultBasedOnId);
-            if (match >= 0)
-                basedOn.SelectedIndex = match;
-        }
+        var basedOn = new ComboBox { MinWidth = surface.Field(StyleDialogFieldKind.BasedOn).MinWidth, Height = StyleDialogMetrics.ComboBoxHeight };
+        basedOn.ItemsSource = state.BasedOnOptions;
+        basedOn.SelectedIndex = state.BasedOnIndex;
 
         // "Style for following paragraph" (Word's w:next): the style the next paragraph takes when Enter is
         // pressed at the end of one carrying this style. "(same style)" maps to null (keep this style).
-        var nextStyle = new ComboBox { MinWidth = 280, Height = StyleDialogMetrics.ComboBoxHeight };
-        var nextEntries = StyleDialogPlanner.BuildStyleOptions(styleNamesById, "(same style)").ToList();
-        nextStyle.ItemsSource = nextEntries;
-        nextStyle.DisplayMemberPath = "Key";
-        nextStyle.SelectedIndex = 0;
-        if (defaultNextStyleId is { Length: > 0 })
+        var nextStyle = new ComboBox { MinWidth = surface.Field(StyleDialogFieldKind.NextStyle).MinWidth, Height = StyleDialogMetrics.ComboBoxHeight };
+        nextStyle.ItemsSource = state.NextStyleOptions;
+        nextStyle.SelectedIndex = state.NextStyleIndex;
+
+        var effectControls = surface.Effects.ToDictionary(
+            spec => spec.Kind,
+            spec => new CheckBox
+            {
+                Content = spec.Label,
+                IsChecked = state.EffectValue(spec.Kind),
+                Height = StyleDialogMetrics.CheckBoxHeight,
+                Margin = new Thickness(0, 0, spec.Kind == StyleDialogEffectKind.Underline ? 0 : 12, 0),
+            });
+        var effects = new StackPanel { Orientation = Orientation.Horizontal };
+        foreach (var spec in surface.Effects)
         {
-            var match = nextEntries.FindIndex(kv => kv.Value == defaultNextStyleId);
-            if (match >= 0)
-                nextStyle.SelectedIndex = match;
+            AutomationProperties.SetAutomationId(effectControls[spec.Kind], spec.AutomationId);
+            effects.Children.Add(effectControls[spec.Kind]);
         }
 
-        var bold = new CheckBox { Content = "Bold", IsChecked = seedRun.Bold, Height = StyleDialogMetrics.CheckBoxHeight, Margin = new Thickness(0, 0, 12, 0) };
-        var italic = new CheckBox { Content = "Italic", IsChecked = seedRun.Italic, Height = StyleDialogMetrics.CheckBoxHeight, Margin = new Thickness(0, 0, 12, 0) };
-        var underline = new CheckBox { Content = "Underline", IsChecked = seedRun.Underline, Height = StyleDialogMetrics.CheckBoxHeight };
-        var effects = new StackPanel { Orientation = Orientation.Horizontal };
-        effects.Children.Add(bold);
-        effects.Children.Add(italic);
-        effects.Children.Add(underline);
+        var size = new ComboBox { MinWidth = surface.Field(StyleDialogFieldKind.FontSize).MinWidth, Height = StyleDialogMetrics.ComboBoxHeight };
+        size.ItemsSource = StyleDialogPlanner.FontSizes;
+        size.SelectedIndex = state.FontSizeIndex;
 
-        var size = new ComboBox { MinWidth = 100, Height = StyleDialogMetrics.ComboBoxHeight };
-        size.ItemsSource = StyleDialogPlanner.FontSizes.Select(s => s.Label).ToList();
-        size.SelectedIndex = StyleDialogPlanner.IndexOfSize(seedRun.FontSizePt);
+        var color = new ComboBox { MinWidth = surface.Field(StyleDialogFieldKind.TextColor).MinWidth, Height = StyleDialogMetrics.ComboBoxHeight };
+        color.ItemsSource = StyleDialogPlanner.Colors;
+        color.SelectedIndex = state.ColorIndex;
 
-        var color = new ComboBox { MinWidth = 160, Height = StyleDialogMetrics.ComboBoxHeight };
-        color.ItemsSource = StyleDialogPlanner.Colors.Select(c => c.Label).ToList();
-        color.SelectedIndex = StyleDialogPlanner.IndexOfColor(seedRun.ColorHex);
-
-        var alignment = new ComboBox { MinWidth = 160, Height = StyleDialogMetrics.ComboBoxHeight };
+        var alignment = new ComboBox { MinWidth = surface.Field(StyleDialogFieldKind.Alignment).MinWidth, Height = StyleDialogMetrics.ComboBoxHeight };
         alignment.ItemsSource = StyleDialogPlanner.AlignmentLabels.ToList();
-        alignment.SelectedIndex = (int)seedPara.Alignment;
+        alignment.SelectedIndex = state.AlignmentIndex;
+
+        var fields = new Dictionary<StyleDialogFieldKind, UIElement>
+        {
+            [StyleDialogFieldKind.Name] = name,
+            [StyleDialogFieldKind.BasedOn] = basedOn,
+            [StyleDialogFieldKind.NextStyle] = nextStyle,
+            [StyleDialogFieldKind.Formatting] = effects,
+            [StyleDialogFieldKind.FontSize] = size,
+            [StyleDialogFieldKind.TextColor] = color,
+            [StyleDialogFieldKind.Alignment] = alignment,
+        };
+        foreach (var spec in surface.Fields)
+            AutomationProperties.SetAutomationId(fields[spec.Kind], spec.AutomationId);
 
         void Accept()
         {
-            var input = new StyleDialogInput(
+            var acceptance = session.PlanAcceptance(StyleDialogPlanner.CaptureControlState(
                 name.Text,
-                SelectedId(basedOn.SelectedItem),
-                SelectedId(nextStyle.SelectedItem),
-                bold.IsChecked == true,
-                italic.IsChecked == true,
-                underline.IsChecked == true,
+                basedOn.SelectedIndex,
+                nextStyle.SelectedIndex,
                 size.SelectedIndex,
                 color.SelectedIndex,
-                alignment.SelectedIndex);
+                alignment.SelectedIndex,
+                kind => effectControls[kind].IsChecked == true));
 
-            if (!StyleDialogPlanner.TryBuildDefinition(input, seedRun, seedPara, out result, out var validation))
+            if (!acceptance.IsAccepted)
             {
-                DialogMessageHelper.ShowWarning(dialog, StyleDialogPlanner.ValidationMessageFor(validation), "New Style");
+                DialogMessageHelper.ShowWarning(
+                    dialog,
+                    acceptance.ErrorMessage ?? string.Empty,
+                    session.ValidationTitle);
+                if (acceptance.FocusField == StyleDialogField.Name)
+                    name.Focus();
                 return;
             }
 
+            result = acceptance.Result;
             dialog.DialogResult = true;
         }
 
@@ -142,30 +156,22 @@ internal static class StyleDialog
         // IsCancel so Esc/Cancel closes). Single source of truth shared with FreeX's dialogs.
         var buttons = DialogButtonRowFactory.Create(
             Accept,
-            buttonWidth: 72,
+            buttonWidth: surface.ActionButtonWidth,
             rowMargin: new Thickness(0, StyleDialogMetrics.ActionRowTopMargin, 0, 0));
 
         var panel = new StackPanel { Margin = new Thickness(StyleDialogMetrics.DialogMargin) };
-        AddRow(panel, "Name:", name);
-        AddRow(panel, "Style based on:", basedOn);
-        AddRow(panel, "Style for following paragraph:", nextStyle);
-        AddRow(panel, "Formatting:", effects);
-        AddRow(panel, "Font size:", size);
-        AddRow(panel, "Text colour:", color);
-        AddRow(panel, "Alignment:", alignment);
+        foreach (var spec in surface.Fields)
+            AddRow(panel, spec.Label, fields[spec.Kind]);
         panel.Children.Add(buttons);
         dialog.Content = panel;
 
-        if (isModify)
+        if (state.InitialFocus == StyleDialogFocusTarget.BasedOn)
             basedOn.Focus();
         else
             name.Focus();
 
         return dialog.ShowDialog() == true ? result : null;
     }
-
-    private static string? SelectedId(object? selectedItem) =>
-        selectedItem is KeyValuePair<string, string> { Value.Length: > 0 } kv ? kv.Value : null;
 
     private static void AddRow(Panel panel, string label, UIElement field)
     {
@@ -187,10 +193,12 @@ internal static class ManageStylesDialog
     public static ManageStyleAction? Ask(Window? owner, TextDocument model, string? preselectStyleId)
     {
         ManageStyleAction? result = null;
+        var session = StyleDialogPlanner.CreateManageStylesSession(model, preselectStyleId);
+        var surface = StyleDialogPlanner.Surface.Manage;
 
         var dialog = new Window
         {
-            Title = "Manage Styles",
+            Title = surface.Title,
             SizeToContent = SizeToContent.WidthAndHeight,
             ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
@@ -199,86 +207,75 @@ internal static class ManageStylesDialog
         };
 
         // Sort order picker - Alphabetical / By Type / By Use.
-        var sortOrderBox = new ComboBox { MinWidth = 160, Margin = new Thickness(0, 0, 0, 8) };
-        sortOrderBox.Items.Add("Alphabetical");
-        sortOrderBox.Items.Add("By type (built-ins first)");
-        sortOrderBox.Items.Add("By use (most-used first)");
-        sortOrderBox.SelectedIndex = 0;
+        var sortField = surface.Field(ManageStyleFieldKind.Sort);
+        var sortOrderBox = new ComboBox { MinWidth = sortField.MinWidth, Margin = new Thickness(0, 0, 0, 8) };
+        AutomationProperties.SetAutomationId(sortOrderBox, sortField.AutomationId);
+        foreach (var label in StyleDialogPlanner.ManageStyleSortLabels)
+            sortOrderBox.Items.Add(label);
+        sortOrderBox.SelectedIndex = session.State.SortIndex;
 
-        var list = new ListBox { MinWidth = 320, MinHeight = 220 };
+        var listField = surface.Field(ManageStyleFieldKind.Styles);
+        var list = new ListBox { MinWidth = listField.MinWidth, MinHeight = listField.MinHeight };
+        AutomationProperties.SetAutomationId(list, listField.AutomationId);
 
         // Rebuild the list whenever the sort order changes.
-        void RebuildList(StyleDialogSortOrder order)
+        void RebuildList(int sortIndex)
         {
-            var currentId = (list.SelectedItem as StyleDialogRow)?.Id ?? preselectStyleId;
-
-            var rows = BuildRows(model, order);
-            list.ItemsSource = rows;
+            var state = session.PlanSort(sortIndex);
+            list.ItemsSource = state.Rows;
             list.DisplayMemberPath = nameof(StyleDialogRow.Display);
-
-            var preselect = rows.FindIndex(r => r.Id == currentId);
-            list.SelectedIndex = preselect >= 0 ? preselect : 0;
+            list.SelectedIndex = state.SelectedIndex;
         }
 
-        sortOrderBox.SelectionChanged += (_, _) =>
-        {
-            var order = sortOrderBox.SelectedIndex switch
+        sortOrderBox.SelectionChanged += (_, _) => RebuildList(sortOrderBox.SelectedIndex);
+
+        RebuildList(sortOrderBox.SelectedIndex);
+
+        var actionButtons = surface.Actions.ToDictionary(
+            spec => spec.Kind,
+            spec => new Button
             {
-                1 => StyleDialogSortOrder.ByType,
-                2 => StyleDialogSortOrder.ByUse,
-                _ => StyleDialogSortOrder.Alphabetical,
+                Content = spec.Label,
+                IsDefault = spec.IsDefault,
+                IsCancel = spec.IsCancel,
+                MinWidth = surface.ActionButtonWidth,
+                Margin = spec.Kind == ManageStyleCommandKind.Close
+                    ? new Thickness(0)
+                    : new Thickness(0, 0, 0, 8),
+            });
+        foreach (var spec in surface.Actions)
+        {
+            var button = actionButtons[spec.Kind];
+            AutomationProperties.SetAutomationId(button, spec.AutomationId);
+            button.Click += (_, _) =>
+            {
+                if (spec.ActionKind is not { } actionKind)
+                {
+                    dialog.Close();
+                    return;
+                }
+
+                if (session.PlanAction(actionKind, list.SelectedIndex) is not { } action)
+                    return;
+                result = action;
+                dialog.DialogResult = true;
             };
-            RebuildList(order);
-        };
-
-        RebuildList(StyleDialogSortOrder.Alphabetical);
-
-        var apply  = new Button { Content = "Apply",   IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
-        var modify = new Button { Content = "Modify…",               MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
-        var delete = new Button { Content = "Delete",                MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
-        var close  = new Button { Content = "Close", IsCancel = true, MinWidth = 80 };
+        }
 
         void SyncButtons()
         {
-            var row = list.SelectedItem as StyleDialogRow;
-            var hasSelection = row is not null;
-            apply.IsEnabled  = hasSelection;
-            modify.IsEnabled = hasSelection;
-            delete.IsEnabled = hasSelection && row is { IsBuiltIn: false };
+            var buttons = session.SelectRow(list.SelectedIndex).Buttons;
+            foreach (var spec in surface.Actions)
+                actionButtons[spec.Kind].IsEnabled = buttons.IsEnabled(spec.Kind);
         }
 
         list.SelectionChanged += (_, _) => SyncButtons();
         SyncButtons();
 
-        apply.Click += (_, _) =>
-        {
-            if (list.SelectedItem is StyleDialogRow row)
-            {
-                result = new ManageStyleAction.Apply(row.Id);
-                dialog.DialogResult = true;
-            }
-        };
-        modify.Click += (_, _) =>
-        {
-            if (list.SelectedItem is StyleDialogRow row)
-            {
-                result = new ManageStyleAction.Modify(row.Id);
-                dialog.DialogResult = true;
-            }
-        };
-        delete.Click += (_, _) =>
-        {
-            if (list.SelectedItem is StyleDialogRow { IsBuiltIn: false } row)
-            {
-                result = new ManageStyleAction.Delete(row.Id);
-                dialog.DialogResult = true;
-            }
-        };
-
         var sortRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
         sortRow.Children.Add(new TextBlock
         {
-            Text = "Sort:",
+            Text = sortField.Label,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
         });
@@ -289,10 +286,8 @@ internal static class ManageStylesDialog
         listPane.Children.Add(list);
 
         var buttons = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(12, 0, 0, 0) };
-        buttons.Children.Add(apply);
-        buttons.Children.Add(modify);
-        buttons.Children.Add(delete);
-        buttons.Children.Add(close);
+        foreach (var spec in surface.Actions)
+            buttons.Children.Add(actionButtons[spec.Kind]);
 
         var body = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(16) };
         body.Children.Add(listPane);
@@ -302,7 +297,4 @@ internal static class ManageStylesDialog
         list.Focus();
         return dialog.ShowDialog() == true ? result : null;
     }
-
-    private static List<StyleDialogRow> BuildRows(TextDocument model, StyleDialogSortOrder order) =>
-        StyleDialogPlanner.BuildRows(model, order).ToList();
 }

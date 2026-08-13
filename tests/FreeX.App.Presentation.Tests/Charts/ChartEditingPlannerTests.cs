@@ -291,6 +291,14 @@ public sealed class ChartEditingPlannerTests
     // ---- ChartTitlesPlanner --------------------------------------------------------------------------
 
     [Fact]
+    public void Titles_Normalize_ReturnsCanonicalEditedValues()
+    {
+        ChartTitlesPlanner.Normalize(new ChartTitlesInput("  Sales  ", "  Quarter ", "   "))
+            .Should()
+            .Be(new ChartTitlesInput("Sales", "Quarter", string.Empty));
+    }
+
+    [Fact]
     public void Titles_Plan_TrimsAndCollapsesWhitespace()
     {
         var input = new ChartTitlesInput("  Sales  ", "  Quarter ", "   ");

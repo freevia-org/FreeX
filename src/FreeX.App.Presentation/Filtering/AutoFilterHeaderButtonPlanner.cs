@@ -28,4 +28,36 @@ public static class AutoFilterHeaderButtonPlanner
 
         return row == range.Start.Row && col >= range.Start.Col && col <= range.End.Col;
     }
+
+    public static IReadOnlySet<uint>? GetActiveColumnOffsets(Sheet sheet, GridRange range)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        HashSet<uint>? active = null;
+        if (sheet.AutoFilter is { } autoFilter)
+        {
+            foreach (var column in autoFilter.FilterColumns)
+                (active ??= []).Add((uint)column.ColumnId);
+        }
+
+        if (active is not null)
+            return active;
+
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (!table.Range.Equals(range))
+                continue;
+
+            foreach (var column in table.FilterColumns)
+                (active ??= []).Add((uint)column.ColumnId);
+            break;
+        }
+
+        return active;
+    }
+
+    public static bool IsColumnActive(Sheet sheet, GridRange range, uint column) =>
+        column >= range.Start.Col &&
+        column <= range.End.Col &&
+        GetActiveColumnOffsets(sheet, range)?.Contains(column - range.Start.Col) == true;
 }

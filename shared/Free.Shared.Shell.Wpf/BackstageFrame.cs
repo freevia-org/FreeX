@@ -61,6 +61,9 @@ public sealed class BackstageEntry
     /// <summary>The visible label. Ignored for separators.</summary>
     public string Label { get; init; } = string.Empty;
 
+    /// <summary>Language-invariant identity shared with the renderer-neutral entry plan.</summary>
+    public string? StableId { get; init; }
+
     /// <summary>Optional leading glyph drawn left of the label.</summary>
     public BackstageIconKind? Icon { get; init; }
 
@@ -76,6 +79,9 @@ public sealed class BackstageEntry
 
     /// <summary>For an action entry: invoked on select; the frame then closes.</summary>
     public Action? Action { get; init; }
+
+    /// <summary>Whether a command dismisses the frame before its action runs.</summary>
+    public bool DismissOnActivate { get; init; }
 
     /// <summary>When true this entry is a thin divider, not a clickable button.</summary>
     public bool Separator { get; init; }
@@ -103,20 +109,24 @@ public sealed class BackstageEntry
 
     public static BackstageEntry Pane(string label, BackstageIconKind? icon, Func<UIElement> content, bool dockBottom = false,
         string? keyTip = null, string? automationId = null, string? automationName = null, string? automationHelpText = null,
-        string? tooltipTitle = null, string? tooltipDescription = null, string? iconName = null) =>
+        string? tooltipTitle = null, string? tooltipDescription = null, string? iconName = null,
+        string? stableId = null) =>
         new()
         {
-            Label = label, Icon = icon, IconCommandName = iconName, ContentFactory = content, DockBottom = dockBottom,
+            Label = label, StableId = stableId, Icon = icon, IconCommandName = iconName, ContentFactory = content,
+            DockBottom = dockBottom,
             KeyTip = keyTip, AutomationId = automationId, AutomationName = automationName, AutomationHelpText = automationHelpText,
             TooltipTitle = tooltipTitle, TooltipDescription = tooltipDescription
         };
 
     public static BackstageEntry Command(string label, BackstageIconKind? icon, Action action, bool dockBottom = false,
         string? keyTip = null, string? automationId = null, string? automationName = null, string? automationHelpText = null,
-        string? tooltipTitle = null, string? tooltipDescription = null, string? iconName = null) =>
+        string? tooltipTitle = null, string? tooltipDescription = null, string? iconName = null,
+        string? stableId = null, bool dismissOnActivate = true) =>
         new()
         {
-            Label = label, Icon = icon, IconCommandName = iconName, Action = action, DockBottom = dockBottom,
+            Label = label, StableId = stableId, Icon = icon, IconCommandName = iconName, Action = action,
+            DockBottom = dockBottom, DismissOnActivate = dismissOnActivate,
             KeyTip = keyTip, AutomationId = automationId, AutomationName = automationName, AutomationHelpText = automationHelpText,
             TooltipTitle = tooltipTitle, TooltipDescription = tooltipDescription
         };
@@ -138,18 +148,25 @@ public sealed class BackstageEntry
 /// </summary>
 public sealed class BackstageFrame : UserControl
 {
+    private readonly BackstageFrameSession<UIElement> _session = new();
     private readonly BackstageFrameChrome _chrome;
     private readonly StackPanel _topNav;       // back arrow + top entries
     private readonly StackPanel _bottomNav;     // bottom-docked entries (Options / Close)
     private readonly Border _rail;
     private readonly ContentControl _content;
 
+    public bool IsOpen => _session.IsOpen;
+    public string? CurrentEntryId => _session.CurrentEntryId;
+    public string? CurrentPaneLabel => _session.CurrentPaneLabel;
     public UIElement? CurrentPaneContent => _content.Content as UIElement;
+    public IReadOnlyList<SisterBackstageEntryPlan<UIElement>> Entries => _session.Entries;
     private readonly Button _back;              // top-of-rail back arrow (closes the overlay)
-    private readonly List<(BackstageEntry Entry, Button Button)> _navButtons = new();
+    private readonly List<(
+        BackstageEntry Entry,
+        Button Button,
+        SisterBackstageEntryPlan<UIElement> Plan)> _navButtons = new();
 
     private Button? _selectedButton;
-    private string? _defaultPaneLabel;
 
     /// <summary>Raised after the frame hides (the host restores document focus / state).</summary>
     public event Action? Closed;
@@ -209,56 +226,49 @@ public sealed class BackstageFrame : UserControl
         KeyDown += OnKeyDown;
     }
 
-    // Esc closes; Up/Down/Home/End move focus among the rail nav buttons, mirroring FreeX's start-screen
-    // rail (Up=Previous, Down=Next, Home=First, End=Last). Only fires while focus sits on the rail so the
-    // arrow keys still scroll / navigate inside content panes.
+    // Native key translation, visual-tree membership, and focus realization stay here. The portable
+    // planner owns modifier, boundary, dismissal, and target-index semantics for both renderers.
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)
+        var buttons = RailButtons();
+        var focusedIndex = -1;
+        if (Keyboard.FocusedElement is DependencyObject focused && IsInsideRail(focused))
         {
+            focusedIndex = Array.FindIndex(
+                buttons,
+                button => ReferenceEquals(button, focused) || button.IsKeyboardFocusWithin);
+        }
+
+        var plan = BackstageRailNavigationPlanner.Plan(
+            ToNavigationKey(e.Key),
+            Keyboard.Modifiers != ModifierKeys.None,
+            focusedIndex,
+            buttons.Length);
+        if (!plan.IsHandled)
+            return;
+
+        if (plan.DismissFrame)
             Hide();
-            e.Handled = true;
-            return;
-        }
-
-        if (Keyboard.Modifiers != ModifierKeys.None ||
-            Keyboard.FocusedElement is not UIElement focused ||
-            !IsInsideRail(focused) ||
-            e.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
-        {
-            return;
-        }
-
-        // Home/End jump to the rail's first/last button deterministically (rather than a generic
-        // First/Last MoveFocus, which would traverse into the content pane's focusable children). Up/Down
-        // move relative to the focused rail entry.
-        switch (e.Key)
-        {
-            case Key.Home:
-                FocusButton(_back);
-                break;
-            case Key.End:
-                var last = LastRailButton();
-                if (last is not null)
-                    FocusButton(last);
-                break;
-            case Key.Up:
-                focused.MoveFocus(new TraversalRequest(FocusNavigationDirection.Previous));
-                break;
-            case Key.Down:
-                focused.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
-                break;
-        }
+        else if (plan.TargetIndex is { } targetIndex)
+            FocusButton(buttons[targetIndex]);
         e.Handled = true;
     }
 
-    // The last focusable rail entry: the last bottom-docked button, or the last top button when no entries
-    // are bottom-docked.
-    private Button? LastRailButton()
+    private Button[] RailButtons() =>
+        new[] { _back }
+            .Concat(_navButtons.Where(item => !item.Entry.DockBottom).Select(item => item.Button))
+            .Concat(_navButtons.Where(item => item.Entry.DockBottom).Select(item => item.Button))
+            .ToArray();
+
+    private static BackstageRailNavigationKey ToNavigationKey(Key key) => key switch
     {
-        var bottom = _bottomNav.Children.OfType<Button>().LastOrDefault();
-        return bottom ?? _topNav.Children.OfType<Button>().LastOrDefault();
-    }
+        Key.Escape => BackstageRailNavigationKey.Escape,
+        Key.Home => BackstageRailNavigationKey.Home,
+        Key.End => BackstageRailNavigationKey.End,
+        Key.Up => BackstageRailNavigationKey.Up,
+        Key.Down => BackstageRailNavigationKey.Down,
+        _ => BackstageRailNavigationKey.Other,
+    };
 
     private static void FocusButton(Button button)
     {
@@ -319,13 +329,19 @@ public sealed class BackstageFrame : UserControl
     /// <summary>Replace the rail's entries. The first pane entry becomes the default landing pane.</summary>
     public void SetEntries(IEnumerable<BackstageEntry> entries)
     {
+        ArgumentNullException.ThrowIfNull(entries);
+        var projected = entries
+            .Select(entry => (Entry: entry, Plan: WpfBackstageEntryProjection.ToPlan(entry)))
+            .ToArray();
+
+        _session.SetEntries(projected.Select(item => item.Plan));
         _topNav.Children.Clear();
         _bottomNav.Children.Clear();
         _navButtons.Clear();
         _selectedButton = null;
-        _defaultPaneLabel = null;
+        _content.Content = null;
 
-        foreach (var entry in entries)
+        foreach (var (entry, plan) in projected)
         {
             var host = entry.DockBottom ? _bottomNav : _topNav;
 
@@ -340,12 +356,9 @@ public sealed class BackstageFrame : UserControl
                 continue;
             }
 
-            var button = BuildNavButton(entry);
-            _navButtons.Add((entry, button));
+            var button = BuildNavButton(entry, plan);
+            _navButtons.Add((entry, button, plan));
             host.Children.Add(button);
-
-            if (entry.ContentFactory is not null && _defaultPaneLabel is null)
-                _defaultPaneLabel = entry.Label;
         }
     }
 
@@ -360,7 +373,7 @@ public sealed class BackstageFrame : UserControl
     public void DecorateNavButtons(Action<BackstageEntry?, Button> decorator)
     {
         decorator(null, _back);
-        foreach (var (entry, button) in _navButtons)
+        foreach (var (entry, button, _) in _navButtons)
             decorator(entry, button);
     }
 
@@ -394,29 +407,46 @@ public sealed class BackstageFrame : UserControl
 
     /// <summary>
     /// Show the overlay and land on the default pane, or on the pane identified by
-    /// <paramref name="paneLabelOrAutomationId"/> (its label or its automation id) when given. Addressing by
+    /// <paramref name="paneLabelOrAutomationId"/> (its stable id, automation id, or label) when given. Addressing by
     /// automation id lets a host land on a pane language-invariantly (FreeX's localized labels change per UI
     /// language, but its automation ids — <c>BackstageInfoButton</c>, <c>BackstagePrintButton</c> — do not).
     /// </summary>
     public void Show(string? paneLabelOrAutomationId = null)
     {
         Visibility = Visibility.Visible;
-        var target = paneLabelOrAutomationId ?? _defaultPaneLabel;
-        if (target is not null)
-            SelectPane(target);
+        if (_session.Show(paneLabelOrAutomationId) is { } activation)
+            ApplyActivation(activation);
         Focus();
     }
 
     /// <summary>Hide the overlay and notify the host.</summary>
     public void Hide()
     {
+        _session.Hide();
         Visibility = Visibility.Collapsed;
         Closed?.Invoke();
     }
 
+    public bool TryActivateEntry(string idOrLabel)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(idOrLabel);
+
+        var entry = _session.FindEntry(idOrLabel);
+        if (entry is null)
+            return false;
+
+        var rendered = FindRenderedEntry(entry);
+        if (rendered is null || !rendered.Value.Button.IsVisible || !rendered.Value.Button.IsEnabled)
+            return false;
+
+        ApplyActivation(_session.Activate(entry), rendered.Value.Button);
+        return true;
+    }
+
     /// <summary>
-    /// Move keyboard focus to a rail nav button identified by its <see cref="BackstageEntry.AutomationId"/>
-    /// or, failing that, its <see cref="BackstageEntry.Label"/>. Returns <c>false</c> when no entry matches.
+    /// Move keyboard focus to a rail nav button identified by its <see cref="BackstageEntry.StableId"/>,
+    /// <see cref="BackstageEntry.AutomationId"/>, or <see cref="BackstageEntry.Label"/>. Returns
+    /// <c>false</c> when no entry matches.
     /// Used by hosts that need to land focus on a specific rail entry (e.g. FreeX's screenshot tour, which
     /// previously focused named rail buttons such as <c>SsNewNavBtn</c>). The match is case-sensitive on the
     /// automation id and case-insensitive on the label, mirroring how the rail is addressed elsewhere.
@@ -441,39 +471,13 @@ public sealed class BackstageFrame : UserControl
 
     private Button? FindNavButton(string automationIdOrLabel)
     {
-        foreach (var (entry, button) in _navButtons)
-        {
-            if (entry.AutomationId is { } id && string.Equals(id, automationIdOrLabel, StringComparison.Ordinal))
-                return button;
-        }
-        foreach (var (entry, button) in _navButtons)
-        {
-            if (string.Equals(entry.Label, automationIdOrLabel, StringComparison.OrdinalIgnoreCase))
-                return button;
-        }
-        return null;
+        var entry = _session.FindEntry(automationIdOrLabel);
+        return entry is null ? null : FindRenderedEntry(entry)?.Button;
     }
 
-    // Select a pane entry by label or automation id: highlight it and swap the content host. No-op for
-    // unknown identifiers or for entries that are not panes (action entries have no content to show).
-    private void SelectPane(string labelOrAutomationId)
-    {
-        foreach (var (entry, button) in _navButtons)
-        {
-            if (entry.ContentFactory is null)
-                continue;
-
-            var matches = string.Equals(entry.Label, labelOrAutomationId, StringComparison.Ordinal) ||
-                (entry.AutomationId is { } id && string.Equals(id, labelOrAutomationId, StringComparison.Ordinal));
-            if (matches)
-            {
-                Activate(entry, button);
-                return;
-            }
-        }
-    }
-
-    private Button BuildNavButton(BackstageEntry entry)
+    private Button BuildNavButton(
+        BackstageEntry entry,
+        SisterBackstageEntryPlan<UIElement> plan)
     {
         var button = new Button { Tag = entry };
         ApplyStyle(button, "BackstageSidebarNavButton");
@@ -518,25 +522,40 @@ public sealed class BackstageFrame : UserControl
         button.Focusable = true;
         KeyboardNavigation.SetTabNavigation(button, KeyboardNavigationMode.Continue);
 
-        button.Click += (_, _) => Activate(entry, button);
+        button.Click += (_, _) => ApplyActivation(_session.Activate(plan), button);
         return button;
     }
 
-    // Activate an entry: pane entries highlight + show content; action entries fire + close.
-    private void Activate(BackstageEntry entry, Button button)
+    private void ApplyActivation(
+        BackstageFrameActivation<UIElement> activation,
+        Button? button = null)
     {
-        if (entry.ContentFactory is not null)
+        activation.Dispatch(
+            paneContent =>
+            {
+                var targetButton = button ?? FindRenderedEntry(activation.Entry)?.Button
+                    ?? throw new InvalidOperationException(
+                        $"Backstage pane '{activation.Entry.Label}' is not rendered.");
+                SetSelected(targetButton);
+                _content.Content = paneContent;
+            },
+            () =>
+            {
+                Visibility = Visibility.Collapsed;
+                Closed?.Invoke();
+            });
+    }
+
+    private (BackstageEntry Entry, Button Button, SisterBackstageEntryPlan<UIElement> Plan)?
+        FindRenderedEntry(SisterBackstageEntryPlan<UIElement> entry)
+    {
+        foreach (var item in _navButtons)
         {
-            SetSelected(button);
-            _content.Content = entry.ContentFactory();
-            return;
+            if (ReferenceEquals(item.Plan, entry))
+                return item;
         }
 
-        if (entry.Action is not null)
-        {
-            Hide();
-            entry.Action();
-        }
+        return null;
     }
 
     // Paint the selected entry with the accent band; clear the previous selection.

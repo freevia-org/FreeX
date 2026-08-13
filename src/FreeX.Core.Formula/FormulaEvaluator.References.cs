@@ -433,41 +433,7 @@ public sealed partial class FormulaEvaluator
         if (ReferenceEquals(shifted, ast))
             return ast;
 
-        return ReferencesCell(shifted, current) ? ast : shifted;
-    }
-
-    // Best-effort structural check for whether `node` contains an unqualified (implicit-sheet)
-    // cell/range reference that covers `current` — see ApplyRelativeNameAnchor's self-reference
-    // guard. Only the node kinds that ShiftAst actually rewrites are inspected; this is
-    // intentionally narrow (not a full reference-tracking pass) to match the guard's limited
-    // purpose.
-    private static bool ReferencesCell(FormulaNode node, FreeX.Core.Model.CellAddress current) => node switch
-    {
-        CellRefNode cr when cr.SheetName is null => cr.Row == current.Row && cr.ColumnNumber == current.Col,
-        RangeRefNode rr when rr.SheetName is null =>
-            current.Row >= Math.Min(rr.Start.Row, rr.End.Row) && current.Row <= Math.Max(rr.Start.Row, rr.End.Row) &&
-            current.Col >= Math.Min(rr.Start.ColumnNumber, rr.End.ColumnNumber) && current.Col <= Math.Max(rr.Start.ColumnNumber, rr.End.ColumnNumber),
-        FullColumnRangeRefNode fcr when fcr.SheetName is null =>
-            current.Col >= Math.Min(fcr.StartColumnNumber, fcr.EndColumnNumber) && current.Col <= Math.Max(fcr.StartColumnNumber, fcr.EndColumnNumber),
-        FullRowRangeRefNode frr when frr.SheetName is null =>
-            current.Row >= Math.Min(frr.StartRow, frr.EndRow) && current.Row <= Math.Max(frr.StartRow, frr.EndRow),
-        BinaryOpNode bin => ReferencesCell(bin.Left, current) || ReferencesCell(bin.Right, current),
-        UnaryOpNode un => ReferencesCell(un.Operand, current),
-        FunctionCallNode fn => ReferencesCellInAny(fn.Arguments, current),
-        UnionNode union => ReferencesCellInAny(union.Areas, current),
-        IntersectionNode ix => ReferencesCell(ix.Left, current) || ReferencesCell(ix.Right, current),
-        NamedRangeEndpointNode nre => ReferencesCell(nre.Start, current) || ReferencesCell(nre.End, current),
-        _ => false
-    };
-
-    private static bool ReferencesCellInAny(IReadOnlyList<FormulaNode> nodes, FreeX.Core.Model.CellAddress current)
-    {
-        for (var i = 0; i < nodes.Count; i++)
-        {
-            if (ReferencesCell(nodes[i], current))
-                return true;
-        }
-        return false;
+        return FormulaReferenceContainment.ContainsUnqualifiedCell(shifted, current) ? ast : shifted;
     }
 
     /// <summary>

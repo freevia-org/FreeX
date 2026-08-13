@@ -24,6 +24,10 @@ param(
     [ValidateSet("FreeX", "FreeW", "FreeP")]
     [string]$App = "FreeX",
 
+    [ValidateSet("Application", "Validation", "TestSupport")]
+    [Alias("Host")]
+    [string]$HostMode = "Application",
+
     [ValidateRange(1024, 65535)]
     [int]$Port = 6080,
 
@@ -94,12 +98,49 @@ $appDefinitions = @{
 }
 
 $definition = $appDefinitions[$App]
+if ($HostMode -eq "Validation") {
+    if ($App -eq "FreeX") {
+        $definition = @{
+            Project = "tools/FreeX.ParityCapture.Avalonia/FreeX.ParityCapture.Avalonia.csproj"
+            Executable = "FreeX.ParityCapture.Avalonia"
+            WindowTitle = "FreeX"
+        }
+    } elseif ($App -eq "FreeW") {
+        $definition = @{
+            Project = "freew/TestSupport/Validation.Avalonia/FreeW.Validation.Avalonia.csproj"
+            Executable = "FreeW.Validation.Avalonia"
+            WindowTitle = "FreeW"
+        }
+    } elseif ($App -eq "FreeP") {
+        $definition = @{
+            Project = "freep/TestSupport/Validation.Avalonia/FreeP.Validation.Avalonia.csproj"
+            Executable = "FreeP.Validation.Avalonia"
+            WindowTitle = "FreeP"
+        }
+    } else {
+        throw "The Validation host is not available for $App."
+    }
+} elseif ($HostMode -eq "TestSupport") {
+    if ($App -ne "FreeX") {
+        throw "The TestSupport host is currently available only for FreeX."
+    }
+    $definition = @{
+        Project = "tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj"
+        Executable = "FreeX.Validation.Avalonia"
+        WindowTitle = "FreeX"
+    }
+}
 $appKey = $App.ToLowerInvariant()
+$publishKey = if ($HostMode -eq "Application" -or ($App -eq "FreeX" -and $HostMode -eq "TestSupport")) {
+    $appKey
+} else {
+    "$appKey-$($HostMode.ToLowerInvariant())"
+}
 $containerName = "freex-linux-interactive-$appKey-$Port"
-$appImage = "freex-linux-interactive-app-$appKey-$workspaceKey`:current"
+$appImage = "freex-linux-interactive-app-$publishKey-$workspaceKey`:current"
 $appOutputRoot = Join-Path $resolvedOutputRoot $appKey
 $publishDir = if ([string]::IsNullOrWhiteSpace($PublishDir)) {
-    Join-Path $env:TEMP "FreeX-LinuxInteractive/$workspaceKey/$appKey/publish/linux-x64"
+    Join-Path $env:TEMP "FreeX-LinuxInteractive/$workspaceKey/$publishKey/publish/linux-x64"
 } elseif ([IO.Path]::IsPathRooted($PublishDir)) {
     [IO.Path]::GetFullPath($PublishDir)
 } else {
@@ -296,7 +337,7 @@ if (-not $SkipImageBuild) {
 
 $projectPath = Join-Path $repoRoot $definition.Project
 if (-not $SkipPublish) {
-    Write-Host "Publishing $App for linux-x64..."
+    Write-Host "Publishing $App $HostMode host for linux-x64..."
     $publishArguments = @(
         "--configuration", "Release",
         "--framework", "net10.0",

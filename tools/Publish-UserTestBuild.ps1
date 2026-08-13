@@ -182,6 +182,7 @@ Assert-MsixPublishSigningMode -PublishMode $PublishMode -CertificatePath $MsixCe
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "src\FreeX.App.Host\FreeX.App.Host.csproj"
+$testerReleaseSmokeProjectPath = Join-Path $repoRoot "tools\FreeX.Validation.Wpf\FreeX.Validation.Wpf.csproj"
 
 function ConvertTo-MsixPackageVersion {
     param(
@@ -329,8 +330,20 @@ if (-not (Test-Path -LiteralPath $defaultExePath)) {
 
 $smokeReportName = "tester-release-smoke.json"
 $smokeReportPath = Join-Path $publishDir $smokeReportName
+$smokeToolDir = Join-Path $artifactRoot ".$artifactName-smoke-tool"
+if (Test-Path -LiteralPath $smokeToolDir) {
+    Remove-Item -LiteralPath $smokeToolDir -Recurse -Force
+}
+dotnet publish $testerReleaseSmokeProjectPath -c $Configuration -r $RuntimeIdentifier --self-contained false -p:DebugType=None -p:DebugSymbols=false -o $smokeToolDir
+if ($LASTEXITCODE -ne 0) {
+    throw "Tester-release smoke tool publish failed with exit code $LASTEXITCODE"
+}
+$smokeToolPath = Join-Path $smokeToolDir "FreeX.Validation.Wpf.exe"
+if (-not (Test-Path -LiteralPath $smokeToolPath -PathType Leaf)) {
+    throw "Tester-release smoke tool was not published at $smokeToolPath"
+}
 $smokeProcess = Start-Process `
-    -FilePath $defaultExePath `
+    -FilePath $smokeToolPath `
     -ArgumentList @("--tester-release-smoke", $smokeReportName) `
     -WorkingDirectory $publishDir `
     -WindowStyle Hidden `
@@ -349,6 +362,7 @@ if ($smokeReport.Success -ne $true -or $smokeReport.BorderPixelSnapPassed -ne $t
 }
 Write-Host "Published app smoke passed: $($smokeReport.ActionableRibbonCommandCount) ribbon commands, $($smokeReport.RibbonHandlerCount) handlers, pixel-snapped borders."
 Remove-Item -LiteralPath $smokeReportPath -Force
+Remove-Item -LiteralPath $smokeToolDir -Recurse -Force
 
 $runtimeUrl = "https://dotnet.microsoft.com/download/dotnet/10.0"
 

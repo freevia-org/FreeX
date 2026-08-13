@@ -5,26 +5,34 @@ namespace FreeP.App.Avalonia.Tests;
 public sealed class ZoomNavigationParitySourceTests
 {
     [Fact]
-    public void AvaloniaZoomNavigationForwardsTransitionMetadata()
+    public void AvaloniaZoomNavigationDelegatesTransitionMetadataToPortableSession()
     {
-        var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs"));
-        var zoomCase = source.IndexOf(
-            "case SlideShowPointerClickIntentKind.Zoom",
+        var hostSource = File.ReadAllText(RepoFile(
+            "freep",
+            "FreeP.App.Avalonia",
+            "SlideShowWindow.cs"));
+        var sessionSource = File.ReadAllText(RepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowSessionController.cs"));
+        var runtimeSource = File.ReadAllText(RepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowRuntimeApplication.cs"));
+        var zoomCase = sessionSource.IndexOf(
+            "SlideShowPointerClickIntentKind.Zoom",
             StringComparison.Ordinal);
 
         zoomCase.Should().BeGreaterThanOrEqualTo(0);
-        var route = source[zoomCase..];
-        route.Should().Contain("pointerIntent.TransitionDurationMs");
-        route.Should().Contain("pointerIntent.ShowBackground");
+        var route = sessionSource[zoomCase..];
+        route.Should().Contain("intent.TransitionDurationMs");
+        route.Should().Contain("intent.ShowBackground");
+        hostSource.Should().Contain("_runtime.HandlePointerInput(");
+        runtimeSource.Should().Contain("_session.PlanPointerInput(pointer)");
+        hostSource.Should().NotContain("case SlideShowPointerClickIntentKind.Zoom");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        directory.Should().NotBeNull();
-        return Path.Combine(new[] { directory!.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeX.slnx", parts);
 }

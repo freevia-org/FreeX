@@ -3,19 +3,6 @@ namespace FreeP.Core.Model;
 // ── OLE embedded-object model (Theme 21) ──────────────────────────────────────────────────────
 
 /// <summary>
-/// How the OLE object is represented in the slide XML.
-/// </summary>
-public enum OleObjectLayout
-{
-    /// <summary>
-    /// Object appears as a p:graphicFrame whose a:graphicData/@uri is the OLE namespace,
-    /// with a p:oleObj child (and an optional mc:AlternateContent wrapper).
-    /// This is the form used by embedded Excel/Word objects.
-    /// </summary>
-    GraphicFrame = 0,
-}
-
-/// <summary>
 /// Payload for an OLE embedded object (SlideShapeKind.Ole).
 ///
 /// FreeP preserves the raw embedded binary + its OPC relationship verbatim so that the

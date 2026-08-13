@@ -16,7 +16,8 @@ internal sealed class ImageAltTextDialog : FreeWDialogWindow
 
     private ImageAltTextDialog(string seed)
     {
-        Title = "Alt Text";
+        var text = AltTextDialogPlanner.ResolveText(UiText.Get);
+        Title = text.Title;
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -30,9 +31,9 @@ internal sealed class ImageAltTextDialog : FreeWDialogWindow
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(_descriptionBox, Style);
 
-        var ok = CreateButton("OK", isDefault: true);
+        var ok = CreateButton(text.OkLabel, isDefault: true);
         ok.Click += (_, _) => Close(_descriptionBox.Text ?? string.Empty);
-        var cancel = CreateButton("Cancel", isCancel: true);
+        var cancel = CreateButton(text.CancelLabel, isCancel: true);
         cancel.Click += (_, _) => Close(null);
 
         Content = new StackPanel
@@ -40,13 +41,13 @@ internal sealed class ImageAltTextDialog : FreeWDialogWindow
             Margin = new Thickness(16),
             Children =
             {
-                new TextBlock { Text = "Description:", Margin = new Thickness(0, 0, 0, 4) },
+                new TextBlock { Text = text.DescriptionLabel, Margin = new Thickness(0, 0, 0, 4) },
                 _descriptionBox,
                 AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]),
             },
         };
 
-        Opened += (_, _) => FocusAndSelect(_descriptionBox);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_descriptionBox);
         CloseOnEscape(this, () => Close(null));
     }
 
@@ -65,12 +66,14 @@ internal sealed class ImageSizeDialog : FreeWDialogWindow
 
     private ImageSizeDialog(double widthPt, double heightPt, string title)
     {
+        var surface = ImageSizeDialogPlanner.Surface;
         Title = title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        ImageChartDialogSurfaceSemantics.Apply(this, surface with { AutomationName = title });
 
         var state = ImageSizeDialogPlanner.BuildInitialState(widthPt, heightPt, CultureInfo.CurrentCulture);
         _aspect = state.AspectRatio;
@@ -78,20 +81,24 @@ internal sealed class ImageSizeDialog : FreeWDialogWindow
         _heightBox = CreateTextBox(state.HeightText, minWidth: 120);
         _lockCheck = new CheckBox
         {
-            Content = "Lock aspect ratio",
+            Content = surface.Field(ImageSizeDialogField.LockAspectRatio).Label,
             IsChecked = state.LockAspectRatio,
             Margin = new Thickness(0, 6, 0, 0),
         };
+        ImageChartDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ImageSizeDialogField.Width));
+        ImageChartDialogSurfaceSemantics.Apply(_heightBox, surface.Field(ImageSizeDialogField.Height));
+        ImageChartDialogSurfaceSemantics.Apply(_lockCheck, surface.Field(ImageSizeDialogField.LockAspectRatio));
         AvaloniaCompactDialogChrome.ApplyCheckBox(_lockCheck, Style);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Style, new Thickness(0, 6, 0, 0));
+        ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);
 
         _widthBox.TextChanged += (_, _) => UpdateLockedHeight();
         _heightBox.TextChanged += (_, _) => UpdateLockedWidth();
 
-        var grid = CreateGrid(rows: 5);
-        AddField(grid, "Width (pt):", _widthBox, 0);
-        AddField(grid, "Height (pt):", _heightBox, 1);
-        Place(grid, _lockCheck, 2, 1);
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(rows: 5);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ImageSizeDialogField.Width).Label, _widthBox, 0);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ImageSizeDialogField.Height).Label, _heightBox, 1);
+        AvaloniaLabeledFormRow.Place(grid, _lockCheck, 2, 1);
         Grid.SetRow(_status, 3);
         Grid.SetColumnSpan(_status, 2);
         grid.Children.Add(_status);
@@ -100,10 +107,10 @@ internal sealed class ImageSizeDialog : FreeWDialogWindow
         ok.Click += (_, _) => Accept();
         var cancel = CreateButton("Cancel", isCancel: true);
         cancel.Click += (_, _) => Close(null);
-        Place(grid, AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)), 4, 1);
+        AvaloniaLabeledFormRow.Place(grid, AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)), 4, 1);
 
         Content = new Border { Padding = new Thickness(14), Child = grid };
-        Opened += (_, _) => FocusAndSelect(_widthBox);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_widthBox);
         CloseOnEscape(this, () => Close(null));
     }
 
@@ -111,7 +118,7 @@ internal sealed class ImageSizeDialog : FreeWDialogWindow
         Window owner,
         double widthPt,
         double heightPt,
-        string title = "Image Size") =>
+        string title = ImageSizeDialogPlanner.DefaultTitle) =>
         new ImageSizeDialog(widthPt, heightPt, title).ShowDialog<ImageSizeDialogResult?>(owner);
 
     private void UpdateLockedHeight()
@@ -165,7 +172,7 @@ internal sealed class ImageSizeDialog : FreeWDialogWindow
         }
 
         _status.Text = validation?.Message ?? ImageSizeDialogPlanner.PositiveSizeValidationMessage;
-        FocusAndSelect(validation?.Field == ImageSizeDialogField.Height ? _heightBox : _widthBox);
+        AvaloniaCompactDialogChrome.FocusAndSelect(validation?.Field == ImageSizeDialogField.Height ? _heightBox : _widthBox);
     }
 
 }
@@ -179,12 +186,14 @@ internal sealed class ImageBorderDialog : FreeWDialogWindow
 
     private ImageBorderDialog(string? colorHex, double widthPt, string? dash)
     {
-        Title = "Picture Border";
+        var surface = ImageBorderDialogPlanner.Surface;
+        Title = surface.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        ImageChartDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageBorderDialogPlanner.BuildInitialState(
             colorHex,
@@ -199,17 +208,21 @@ internal sealed class ImageBorderDialog : FreeWDialogWindow
             ItemsSource = ImageBorderDialogPlanner.DashItems.Select(item => item.Label).ToArray(),
             SelectedIndex = state.DashIndex,
         };
+        ImageChartDialogSurfaceSemantics.Apply(_colorBox, surface.Field(ImageBorderDialogField.Color));
+        ImageChartDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ImageBorderDialogField.Width));
+        ImageChartDialogSurfaceSemantics.Apply(_dashBox, surface.Field(ImageBorderDialogField.Style));
         AvaloniaCompactDialogChrome.ApplyComboBox(_dashBox, Style);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Style, new Thickness(0, 6, 0, 0));
+        ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);
 
-        var grid = CreateGrid(rows: 6);
-        AddField(grid, "Color (hex, empty = no border):", _colorBox, 0);
-        AddField(grid, "Width (pt):", _widthBox, 1);
-        AddField(grid, "Style:", _dashBox, 2);
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(rows: 6);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ImageBorderDialogField.Color).Label, _colorBox, 0);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ImageBorderDialogField.Width).Label, _widthBox, 1);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ImageBorderDialogField.Style).Label, _dashBox, 2);
 
         var note = new TextBlock
         {
-            Text = "Color: 6-digit RGB hex, e.g. 000000 for black. Leave blank to remove the border.",
+            Text = surface.SupportingText,
             TextWrapping = TextWrapping.Wrap,
             FontSize = 10,
             Margin = new Thickness(0, 6, 0, 0),
@@ -225,10 +238,10 @@ internal sealed class ImageBorderDialog : FreeWDialogWindow
         ok.Click += (_, _) => Accept();
         var cancel = CreateButton("Cancel", isCancel: true);
         cancel.Click += (_, _) => Close(null);
-        Place(grid, AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)), 5, 1);
+        AvaloniaLabeledFormRow.Place(grid, AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)), 5, 1);
 
         Content = new Border { Padding = new Thickness(14), Child = grid };
-        Opened += (_, _) => FocusAndSelect(_colorBox);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_colorBox);
         CloseOnEscape(this, () => Close(null));
     }
 
@@ -252,7 +265,7 @@ internal sealed class ImageBorderDialog : FreeWDialogWindow
         }
 
         _status.Text = validation?.Message ?? ImageBorderDialogPlanner.ColorValidationMessage;
-        FocusAndSelect(validation?.Field == ImageBorderDialogField.Width ? _widthBox : _colorBox);
+        AvaloniaCompactDialogChrome.FocusAndSelect(validation?.Field == ImageBorderDialogField.Width ? _widthBox : _colorBox);
     }
 
 }
@@ -284,38 +297,4 @@ internal static class PictureFormattingDialogChrome
             e.Handled = true;
         };
 
-    public static Grid CreateGrid(int rows)
-    {
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < rows; i++)
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        return grid;
-    }
-
-    public static void AddField(Grid grid, string label, Control field, int row)
-    {
-        var text = new TextBlock
-        {
-            Text = label,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, row == 0 ? 0 : 4, 8, 0),
-        };
-        Place(grid, text, row, 0);
-        Place(grid, field, row, 1);
-    }
-
-    public static void Place(Grid grid, Control control, int row, int column)
-    {
-        Grid.SetRow(control, row);
-        Grid.SetColumn(control, column);
-        grid.Children.Add(control);
-    }
-
-    public static void FocusAndSelect(TextBox box)
-    {
-        box.Focus();
-        box.SelectAll();
-    }
 }

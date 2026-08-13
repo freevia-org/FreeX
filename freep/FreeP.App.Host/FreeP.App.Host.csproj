@@ -9,11 +9,78 @@
     <StartupObject>FreeP.App.Host.Program</StartupObject>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
+    <OutputPath>bin\VisualEvidence\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\VisualEvidence\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(FreePHostAccess)' == 'true' And '$(FreePSlideShowTestSupport)' == 'true' And '$(FreePVisualEvidenceHost)' != 'true'">
+    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(FreePHostAccess)' == 'true' And '$(FreePSlideShowTestSupport)' != 'true' And '$(FreePVisualEvidenceHost)' != 'true'">
+    <OutputPath>bin\HostAccess\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\HostAccess\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FreePHostAccess)' == 'true' Or '$(FreePVisualEvidenceHost)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.TestAccess.cs"
+             Link="MainWindow.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.DiagnosticsAccess.cs"
+             Link="MainWindow.DiagnosticsAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\BackstageView.TestAccess.cs"
+             Link="Backstage\BackstageView.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\BasicDialogs.TestAccess.cs"
+             Link="BasicDialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\EditingDialogs.TestAccess.cs"
+             Link="EditingDialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\PaneAndCustomShow.TestAccess.cs"
+             Link="PaneAndCustomShow.TestAccess.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Wpf\ChartOptionsDialogs.TestAccess.cs"
+             Link="ChartOptionsDialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.ExtendedTestAccess.cs"
+             Link="MainWindow.ExtendedTestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.AccessibilityTestAccess.cs"
+             Link="MainWindow.AccessibilityTestAccess.cs" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(FreePSlideShowTestSupport)' == 'true' And '$(FreePHostAccess)' != 'true' And '$(FreePVisualEvidenceHost)' != 'true'">
+    <OutputPath>bin\SlideShowTestSupport\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\SlideShowTestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
+    <Compile Include="..\TestSupport\VisualEvidence.Wpf\MainWindow.VisualCaptureAdapter.cs"
+             Link="MainWindow.VisualCaptureAdapter.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePSlideShowTestSupport)' == 'true'">
+    <Compile Include="..\TestSupport\SlideShow.Wpf\SlideShowMediaController.TestAccess.cs"
+             Link="SlideShowMediaController.TestAccess.cs" />
+    <Compile Include="..\TestSupport\SlideShow.Wpf\SlideShowWindow.TestAccess.cs"
+             Link="SlideShowWindow.TestAccess.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <Resource Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico" Link="Resources\FreeP.ico" />
-    <!-- Tests construct the shell window + backstage directly. -->
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
     <InternalsVisibleTo Include="FreeP.App.Host.Tests" />
   </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
+    <InternalsVisibleTo Include="FreeP.VisualEvidence.Wpf" />
+  </ItemGroup>
+
+  <ItemDefinitionGroup>
+    <ProjectReference>
+      <GlobalPropertiesToRemove>$(GlobalPropertiesToRemove);FreePHostAccess;FreePSlideShowTestSupport;FreePVisualEvidenceHost</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.Windows.SDK.NET.Ref" />
@@ -24,7 +91,9 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Wpf\Free.Shared.Pdf.Wpf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Commands\Free.Shared.Commands.csproj" />
@@ -32,6 +101,7 @@
     <ProjectReference Include="..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" />
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
+    <ProjectReference Include="..\FreeP.App.Media\FreeP.App.Media.csproj" />
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording.Windows\FreeP.App.Recording.Windows.csproj" />
@@ -43,6 +113,7 @@
     <Using Include="Free.Shared.Ribbon" />
     <Using Include="Free.Shared.AppServices" />
     <Using Include="Free.Shared.Shell" />
+    <Using Include="FreeP.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 
   <ItemGroup>

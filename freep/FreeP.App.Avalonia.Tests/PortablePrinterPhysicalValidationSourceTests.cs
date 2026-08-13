@@ -86,13 +86,7 @@ public sealed class PortablePrinterPhysicalValidationSourceTests
         runner.Should().NotContain("FreeW");
     }
 
-    private static string RepoFile(string relativePath)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-            directory = directory.Parent;
-
-        directory.Should().NotBeNull();
-        return Path.Combine(directory!.FullName, relativePath);
-    }
+    private static string RepoFile(string relativePath) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeP.slnx", relativePath);
 }

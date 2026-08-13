@@ -5,7 +5,7 @@ using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed class FreeXOptionsPersistenceTests : IDisposable
+public sealed class AppOptionsPersistenceTests : IDisposable
 {
     private readonly TestTemporaryDirectory _temp = new();
 
@@ -15,7 +15,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         var path = Path.Combine(_temp.Path, "options.json");
         File.WriteAllText(path, "{ not-json");
 
-        var options = FreeXOptions.LoadFromPath(path);
+        var options = AppOptionsStore.LoadFromPath(path);
 
         options.DefaultFormat.Should().Be(".xlsx");
         options.LastPersistenceError.Should().Contain("Failed to load options");
@@ -25,9 +25,9 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     [Fact]
     public void SaveToPath_WhenTargetCannotBeWritten_ReturnsFalseWithObservableError()
     {
-        var options = new FreeXOptions();
+        var options = new AppOptions();
 
-        var saved = options.SaveToPath(_temp.Path);
+        var saved = AppOptionsStore.SaveToPath(options, _temp.Path);
 
         saved.Should().BeFalse();
         options.LastPersistenceError.Should().Contain("Failed to save options");
@@ -40,19 +40,19 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         var path = Path.Combine(_temp.Path, "options.json");
         File.WriteAllText(path, """{ "DefaultFormat": ".json" }""");
 
-        var options = FreeXOptions.LoadFromPath(path);
+        var options = AppOptionsStore.LoadFromPath(path);
 
-        options.DefaultFormat.Should().Be(FreeXOptions.FreeXWorkbookDefaultFormat);
+        options.DefaultFormat.Should().Be(AppOptions.FreeXWorkbookDefaultFormat);
     }
 
     [Fact]
     public void FillHandleAndCellDragAndDrop_RoundTripsThroughWpfOptionsBridge()
     {
         var path = Path.Combine(_temp.Path, "options.json");
-        var options = new FreeXOptions { EnableFillHandleAndCellDragAndDrop = false };
+        var options = new AppOptions { EnableFillHandleAndCellDragAndDrop = false };
 
-        options.SaveToPath(path).Should().BeTrue();
-        FreeXOptions.LoadFromPath(path).EnableFillHandleAndCellDragAndDrop.Should().BeFalse();
+        AppOptionsStore.SaveToPath(options, path).Should().BeTrue();
+        AppOptionsStore.LoadFromPath(path).EnableFillHandleAndCellDragAndDrop.Should().BeFalse();
     }
 
     [Theory]
@@ -66,7 +66,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         var path = Path.Combine(_temp.Path, "options.json");
         File.WriteAllText(path, $$"""{ "DefaultSheetCount": {{persistedSheetCount}} }""");
 
-        var options = FreeXOptions.LoadFromPath(path);
+        var options = AppOptionsStore.LoadFromPath(path);
 
         options.DefaultSheetCount.Should().Be(expectedSheetCount);
     }
@@ -81,7 +81,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         var path = Path.Combine(_temp.Path, "options.json");
         File.WriteAllText(path, $$"""{ "DefaultFontName": "{{persistedFontName}}" }""");
 
-        var options = FreeXOptions.LoadFromPath(path);
+        var options = AppOptionsStore.LoadFromPath(path);
 
         options.DefaultFontName.Should().Be(expectedFontName);
     }
@@ -97,7 +97,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         var path = Path.Combine(_temp.Path, "options.json");
         File.WriteAllText(path, $$"""{ "DefaultFontSize": {{persistedFontSize}} }""");
 
-        var options = FreeXOptions.LoadFromPath(path);
+        var options = AppOptionsStore.LoadFromPath(path);
 
         options.DefaultFontSize.Should().Be(expectedFontSize);
     }
@@ -108,7 +108,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         var path = Path.Combine(_temp.Path, "options.json");
         File.WriteAllText(path, """{ "UserName": "  Analyst  " }""");
 
-        var options = FreeXOptions.LoadFromPath(path);
+        var options = AppOptionsStore.LoadFromPath(path);
 
         options.UserName.Should().Be("Analyst");
     }
@@ -117,17 +117,17 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     public void SaveToPath_NormalizesDefaultFontOptions()
     {
         var path = Path.Combine(_temp.Path, "options.json");
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             DefaultFontName = "  Aptos  ",
             DefaultFontSize = 500
         };
 
-        options.SaveToPath(path).Should().BeTrue();
+        AppOptionsStore.SaveToPath(options, path).Should().BeTrue();
 
         options.DefaultFontName.Should().Be("Aptos");
         options.DefaultFontSize.Should().Be(409);
-        var reloaded = FreeXOptions.LoadFromPath(path);
+        var reloaded = AppOptionsStore.LoadFromPath(path);
         reloaded.DefaultFontName.Should().Be("Aptos");
         reloaded.DefaultFontSize.Should().Be(409);
     }
@@ -135,10 +135,10 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     [Fact]
     public void Save_WhenStorePathCannotBeWritten_ReturnsFalseWithObservableError()
     {
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, _temp.Path);
-        var options = new FreeXOptions();
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, _temp.Path);
+        var options = new AppOptions();
 
-        options.Save().Should().BeFalse();
+        AppOptionsStore.Save(options).Should().BeFalse();
 
         options.LastPersistenceError.Should().Contain("Failed to save options");
         options.LastPersistenceError.Should().Contain(_temp.Path);
@@ -149,7 +149,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     {
         var provider = new TestApplicationDataPathProvider(_temp.Path);
 
-        var path = FreeXOptions.ResolveStorePath(provider);
+        var path = AppOptionsStore.ResolveStorePath(provider);
 
         path.Should().Be(Path.Combine(_temp.Path, "FreeX", "options.json"));
     }
@@ -159,9 +159,9 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     {
         var provider = new TestApplicationDataPathProvider(Path.Combine(_temp.Path, "ignored"));
         var overridePath = Path.Combine(_temp.Path, "custom-options.json");
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, overridePath);
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, overridePath);
 
-        var path = FreeXOptions.ResolveStorePath(provider);
+        var path = AppOptionsStore.ResolveStorePath(provider);
 
         path.Should().Be(overridePath);
     }
@@ -185,12 +185,12 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
             }
             """);
 
-        var options = FreeXOptions.LoadFromPath(path);
+        var options = AppOptionsStore.LoadFromPath(path);
 
-        options.DefaultFormat.Should().Be(FreeXOptions.FreeXWorkbookDefaultFormat);
+        options.DefaultFormat.Should().Be(AppOptions.FreeXWorkbookDefaultFormat);
         options.DefaultFontName.Should().Be("Aptos");
-        options.DefaultFontSize.Should().Be(FreeXOptions.MaxDefaultFontSize);
-        options.DefaultSheetCount.Should().Be(FreeXOptions.MaxDefaultSheetCount);
+        options.DefaultFontSize.Should().Be(AppOptions.MaxDefaultFontSize);
+        options.DefaultSheetCount.Should().Be(AppOptions.MaxDefaultSheetCount);
         options.UserName.Should().Be("Analyst");
         options.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
         options.QuickAccessToolbarCommands.Should().Equal(
@@ -206,7 +206,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     public void SaveToPath_WritesAtomicallyAndClearsPreviousError()
     {
         var path = Path.Combine(_temp.Path, "options.json");
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             DefaultFormat = ".fxl",
             AppLanguage = "uk-UA",
@@ -222,20 +222,20 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
             SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh", ""]
         };
 
-        options.SaveToPath(_temp.Path).Should().BeFalse();
-        options.SaveToPath(path).Should().BeTrue();
+        AppOptionsStore.SaveToPath(options, _temp.Path).Should().BeFalse();
+        AppOptionsStore.SaveToPath(options, path).Should().BeTrue();
 
         options.LastPersistenceError.Should().BeNull();
         JsonDocument.Parse(File.ReadAllText(path))
-            .RootElement.GetProperty(nameof(FreeXOptions.DefaultFormat))
+            .RootElement.GetProperty(nameof(AppOptions.DefaultFormat))
             .GetString()
             .Should()
             .Be(".fxl");
-        FreeXOptions.LoadFromPath(path)
+        AppOptionsStore.LoadFromPath(path)
             .AppLanguage
             .Should()
             .Be("uk-UA");
-        var reloaded = FreeXOptions.LoadFromPath(path);
+        var reloaded = AppOptionsStore.LoadFromPath(path);
         reloaded.CollapseRibbonAutomatically.Should().BeTrue();
         reloaded.ShowScreenTips.Should().BeFalse();
         reloaded.QuickAccessToolbarBelowRibbon.Should().BeTrue();
@@ -251,7 +251,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     public void SaveToPath_RoundTripsStatusBarOptions()
     {
         var path = Path.Combine(_temp.Path, "options.json");
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             StatusBarShowCellMode = false,
             StatusBarShowEndMode = true,
@@ -268,9 +268,9 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
             StatusBarShowZoomSlider = false
         };
 
-        options.SaveToPath(path).Should().BeTrue();
+        AppOptionsStore.SaveToPath(options, path).Should().BeTrue();
 
-        var reloaded = FreeXOptions.LoadFromPath(path);
+        var reloaded = AppOptionsStore.LoadFromPath(path);
         reloaded.StatusBarShowCellMode.Should().BeFalse();
         reloaded.StatusBarShowEndMode.Should().BeTrue();
         reloaded.StatusBarShowSelectionMode.Should().BeTrue();
@@ -287,19 +287,25 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     }
 
     [Fact]
-    public void FreeXOptions_CurrentDefaultsMatchPortableAppOptions()
+    public void AppOptions_CurrentDefaultsAreOwnedByPortableModel()
     {
-        var hostOptions = new FreeXOptions();
-        var appOptions = new AppOptions();
+        var options = new AppOptions();
 
-        hostOptions.ToAppOptions().Should().BeEquivalentTo(appOptions);
-        hostOptions.DefaultFontName.Should().Be(FreeXOptions.DefaultFontNameFallback);
-        hostOptions.DefaultFontSize.Should().Be(FreeXOptions.DefaultFontSizeFallback);
-        hostOptions.DefaultSheetCount.Should().Be(1);
-        hostOptions.UserName.Should().Be(Environment.UserName);
-        hostOptions.QuickAccessToolbarCommands.Should().Equal(QuickAccessToolbarCatalog.DefaultCommandIds);
-        hostOptions.PdfExportLanguage.Should().Be(ExportPlanner.DefaultPdfLanguage);
-        hostOptions.LastPersistenceError.Should().BeNull();
+        options.DefaultFontName.Should().Be(AppOptions.DefaultFontNameFallback);
+        options.DefaultFontSize.Should().Be(AppOptions.DefaultFontSizeFallback);
+        options.DefaultSheetCount.Should().Be(1);
+        options.UserName.Should().Be(Environment.UserName);
+        options.QuickAccessToolbarCommands.Should().Equal(QuickAccessToolbarCatalog.DefaultCommandIds);
+        options.PdfExportLanguage.Should().Be(ExportPlanner.DefaultPdfLanguage);
+        options.LastPersistenceError.Should().BeNull();
+
+        File.Exists(Path.Combine(
+                WorkspaceFileLocator.FindWorkspaceRoot(),
+                "src",
+                "FreeX.App.Host",
+                "FreeXOptions.cs"))
+            .Should().BeFalse();
+        typeof(AppOptions).Assembly.GetName().Name.Should().Be("FreeX.App.Services");
     }
 
     [Fact]
@@ -321,12 +327,12 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     }
 
     [Fact]
-    public void FreeXOptions_DoesNotUseDebugWriteLineForPersistenceFailures()
+    public void AppOptions_DoesNotUseDebugWriteLineForPersistenceFailures()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("FreeXOptions.cs");
+        var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "AppOptions.cs");
 
         source.Should().NotContain("Debug.WriteLine");
-        source.Should().Contain(nameof(FreeXOptions.LastPersistenceError));
+        source.Should().Contain(nameof(AppOptions.LastPersistenceError));
     }
 
     public void Dispose()

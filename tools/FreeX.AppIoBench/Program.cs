@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using FreeX.App.Host;
+using Free.Shared.AppServices;
+using Free.ToolsShared;
+using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
@@ -87,15 +89,15 @@ internal static class Program
     private static async Task RunIterationAsync(AppIoBenchOptions options, int iteration)
     {
         var adapter = new XlsxFileAdapter();
-        var loader = new OpenWorkbookLoader(CreateRecalculationAction(options));
+        var loader = new WorkbookOpenService(CreateRecalculationAction(options));
         var fileInfo = new FileInfo(options.Path!);
         var inputExtension = Path.GetExtension(options.Path!);
         var inputFormat = ResolveOpenFormat(adapter, inputExtension);
-        var openProgress = new ThrottledProgress<OpenProgressUpdate>(
+        var openProgress = new ThrottledProgress<WorkbookOpenProgressUpdate>(
             options,
             iteration,
             "open",
-            update => (update.Detail, update.Percent));
+            update => (update.Phase.ToString(), update.Percent));
 
         WritePerf(
             options,
@@ -162,13 +164,15 @@ internal static class Program
             return;
         }
 
-        using var temporaryOutput = options.OutputPath is null ? TemporaryOutputFile.Create(".xlsx") : null;
-        var savePath = options.OutputPath ?? temporaryOutput!.Path;
-        var saveProgress = new ThrottledProgress<SaveProgressUpdate>(
+        using var temporaryOutput = options.OutputPath is null
+            ? new ToolTemporaryDirectory("freex-app-io-bench-")
+            : null;
+        var savePath = options.OutputPath ?? temporaryOutput!.GetPath("output.xlsx");
+        var saveProgress = new ThrottledProgress<WorkbookSaveProgressUpdate>(
             options,
             iteration,
             "save",
-            update => (update.Detail, update.Percent));
+            update => (update.Phase.ToString(), update.Percent));
 
         WritePerf(
             options,
@@ -177,7 +181,7 @@ internal static class Program
         ForceFullCollection();
         var saveAllocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
         var saveStopwatch = Stopwatch.StartNew();
-        await new SaveWorkbookWriter().SaveAsync(
+        await new WorkbookSaveService().SaveAsync(
             savePath,
             adapter,
             workbook,
@@ -760,34 +764,6 @@ internal static class Program
                 "none" => false,
                 _ => throw new ArgumentException($"Unsupported prewarm mode: {value}")
             };
-    }
-
-    private sealed class TemporaryOutputFile : IDisposable
-    {
-        private readonly string _directory;
-
-        private TemporaryOutputFile(string directory, string path)
-        {
-            _directory = directory;
-            Path = path;
-        }
-
-        public string Path { get; }
-
-        public static TemporaryOutputFile Create(string extension)
-        {
-            var directory = System.IO.Path.Combine(
-                System.IO.Path.GetTempPath(),
-                $"freex-app-io-bench-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(directory);
-            return new TemporaryOutputFile(directory, System.IO.Path.Combine(directory, $"output{extension}"));
-        }
-
-        public void Dispose()
-        {
-            if (Directory.Exists(_directory))
-                Directory.Delete(_directory, recursive: true);
-        }
     }
 
     private enum AppIoBenchEditMode

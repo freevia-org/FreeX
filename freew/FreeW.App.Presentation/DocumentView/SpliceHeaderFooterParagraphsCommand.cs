@@ -33,10 +33,10 @@ public sealed class SpliceHeaderFooterParagraphsCommand(
         var paragraphs = story.Paragraphs;
         var at = Math.Clamp(firstParagraphIndex, 0, paragraphs.Count - 1);
         var actualRemoveCount = Math.Clamp(removeCount, 0, paragraphs.Count - at);
-        if (!HeaderFooterTableTextPlanner.CanSplice(story, at, actualRemoveCount))
+        if (!HeaderFooterTableParagraphMap.CanSplice(story, at, actualRemoveCount))
             return;
 
-        var tableAddress = HeaderFooterTableTextPlanner.TryResolveAddress(story, at, out var resolvedAddress)
+        var tableAddress = HeaderFooterTableParagraphMap.TryResolveAddress(story, at, out var resolvedAddress)
             ? resolvedAddress
             : (HeaderFooterTableParagraphAddress?)null;
         var replacement = buildReplacement();

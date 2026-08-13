@@ -9,7 +9,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class RestrictEditingDialog : FreeWDialogWindow
+internal sealed partial class RestrictEditingDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
@@ -17,7 +17,7 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
             CompactRadioButtonHeight = RestrictEditingDialogPlanner.Presentation.RadioButtonHeight,
             TextBoxHeight = RestrictEditingDialogPlanner.Presentation.TextBoxHeight,
         };
-    private readonly ProtectionSettings _currentProtection;
+    private readonly RestrictEditingDialogSession _session;
     private readonly RestrictEditingDialogPlan _plan;
     private readonly RadioButton[] _radios;
     private readonly TextBox _passwordBox = CreatePasswordBox();
@@ -36,8 +36,8 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
         ProtectionSettings current,
         Func<Window, string, string, Task<string?>> askPassword)
     {
-        _currentProtection = current;
-        _plan = RestrictEditingDialogPlanner.BuildPlan(current);
+        _session = new RestrictEditingDialogSession(current);
+        _plan = _session.InitialPlan;
         _askPassword = askPassword ?? throw new ArgumentNullException(nameof(askPassword));
         var presentation = RestrictEditingDialogPlanner.Presentation;
 
@@ -131,7 +131,11 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
 
         var cancel = new Button { Content = RestrictEditingDialogPlanner.CancelButtonText, IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
-        cancel.Click += (_, _) => Close();
+        cancel.Click += (_, _) =>
+        {
+            _session.Cancel();
+            Close();
+        };
 
         cancel.Margin = new Thickness(0, presentation.CancelActionTopMargin, 0, 0);
         cancel.HorizontalAlignment = HorizontalAlignment.Right;
@@ -151,60 +155,46 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
 
     private void StartProtection()
     {
-        if (!RestrictEditingDialogPlanner.TryCreateStartSettings(
-            SelectedMode(),
+        var outcome = _session.Start(
+            SelectedModeIndex(),
             _passwordBox.Text,
-            _confirmBox.Text,
-            out var settings,
-            out var validationMessage))
+            _confirmBox.Text);
+        if (!outcome.IsAccepted)
         {
-            ShowValidation(validationMessage);
+            ShowValidation(outcome.ValidationMessage);
             _passwordBox.Focus();
             return;
         }
 
-        Result = settings;
+        Result = outcome.Settings;
         Close();
     }
 
     private async Task StopProtectionAsync()
     {
-        string? password = null;
-        if (_currentProtection.HasPassword)
+        var outcome = await _session.StopAsync(async (title, prompt) =>
+            await _askPassword(this, title, prompt));
+        if (outcome.Kind == RestrictEditingDialogOutcomeKind.Cancelled)
+            return;
+        if (!outcome.IsAccepted)
         {
-            password = await _askPassword(
-                this,
-                "Stop Protection",
-                RestrictEditingDialogPlanner.StopPasswordPrompt);
-            if (password is null)
-                return;
-        }
-
-        if (!RestrictEditingDialogPlanner.TryCreateStopSettings(
-            _currentProtection,
-            password,
-            out var settings,
-            out var validationMessage))
-        {
-            ShowValidation(validationMessage);
+            ShowValidation(outcome.ValidationMessage);
             return;
         }
 
-        Result = settings;
+        Result = outcome.Settings;
         Close();
     }
 
-    internal Task StopProtectionForTestAsync() => StopProtectionAsync();
-
-    private ProtectionMode SelectedMode()
+    private int SelectedModeIndex()
     {
         for (var i = 0; i < _radios.Length; i++)
         {
             if (_radios[i].IsChecked == true)
-                return RestrictEditingDialogPlanner.ModeOptions[i].Mode;
+                return i;
         }
 
-        return ProtectionMode.ReadOnly;
+        return -1;
     }
 
     private void ShowValidation(string? message)
@@ -247,7 +237,8 @@ internal sealed class DocumentInspectorDialog : FreeWDialogWindow
 
     public DocumentInspectorDialog(InspectionResult result)
     {
-        Title = "Document Inspector";
+        var text = DocumentInspectorDialogPlanner.Text;
+        Title = text.Title;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -264,15 +255,15 @@ internal sealed class DocumentInspectorDialog : FreeWDialogWindow
         {
             body.Children.Add(new TextBlock
             {
-                Text = "No comments, revisions, document properties, or bookmarks were found.",
+                Text = text.CleanMessage,
                 TextWrapping = TextWrapping.Wrap,
             });
         }
 
-        _comments = AddCheck(body, "Comments", result.Comments);
-        _revisions = AddCheck(body, "Revisions", result.Revisions);
-        _properties = AddCheck(body, "Document properties", result.NonEmptyProperties);
-        _bookmarks = AddCheck(body, "Bookmarks", result.Bookmarks);
+        _comments = AddCheck(body, text.Comments.Label, result.Comments);
+        _revisions = AddCheck(body, text.Revisions.Label, result.Revisions);
+        _properties = AddCheck(body, text.Properties.Label, result.NonEmptyProperties);
+        _bookmarks = AddCheck(body, text.Bookmarks.Label, result.Bookmarks);
 
         var actionPlans = DocumentInspectorDialogPlanner.ActionButtons;
         var removePlan = actionPlans[0];
@@ -301,7 +292,7 @@ internal sealed class DocumentInspectorDialog : FreeWDialogWindow
     {
         var box = new CheckBox
         {
-            Content = $"{label}: {count}",
+            Content = UiText.Format("DocumentInspector_CategoryCount_Format", label, count),
             IsChecked = count > 0,
             IsEnabled = count > 0,
         };
@@ -325,7 +316,8 @@ internal sealed class AccessibilityReportDialog : FreeWDialogWindow
 
     public AccessibilityReportDialog(AccessibilityReport report)
     {
-        Title = "Accessibility Checker";
+        var plan = AccessibilityReportDialogPlanner.Build(report);
+        Title = plan.Title;
         Width = 460;
         MaxHeight = 560;
         SizeToContent = SizeToContent.Height;
@@ -340,20 +332,17 @@ internal sealed class AccessibilityReportDialog : FreeWDialogWindow
 
         outer.Children.Add(new TextBlock
         {
-            Text = report.IsClean
-                ? "No accessibility issues found."
-                : $"{report.ErrorCount} error(s), {report.WarningCount} warning(s), {report.TipCount} tip(s).",
+            Text = plan.Summary,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 10),
             TextWrapping = TextWrapping.Wrap,
         });
 
-        if (!report.IsClean)
+        if (!plan.IsClean)
         {
             var list = new StackPanel();
-            AddGroup(list, "Errors", AccessibilitySeverity.Error, report, Color.FromRgb(0xC0, 0x00, 0x00));
-            AddGroup(list, "Warnings", AccessibilitySeverity.Warning, report, Color.FromRgb(0xB8, 0x6A, 0x00));
-            AddGroup(list, "Tips", AccessibilitySeverity.Tip, report, Color.FromRgb(0x40, 0x40, 0x40));
+            foreach (var group in plan.Groups)
+                AddGroup(list, group);
 
             outer.Children.Add(new ScrollViewer
             {
@@ -363,7 +352,7 @@ internal sealed class AccessibilityReportDialog : FreeWDialogWindow
             });
         }
 
-        var ok = new Button { Content = "OK", IsDefault = true, IsCancel = true };
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true, IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 84, isDefault: true);
         ok.Click += (_, _) => Close();
         outer.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok], new Thickness(0, 12, 0, 4)));
@@ -371,29 +360,22 @@ internal sealed class AccessibilityReportDialog : FreeWDialogWindow
         Content = outer;
     }
 
-    private static void AddGroup(
-        StackPanel parent,
-        string heading,
-        AccessibilitySeverity severity,
-        AccessibilityReport report,
-        Color accent)
+    private static void AddGroup(StackPanel parent, AccessibilityDialogGroupPlan group)
     {
-        var issues = report.Issues.Where(issue => issue.Severity == severity).ToArray();
-        if (issues.Length == 0)
-            return;
+        var accent = Brush.Parse(group.AccentHex);
 
         parent.Children.Add(new TextBlock
         {
-            Text = $"{heading} ({issues.Length})",
+            Text = group.Heading,
             FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(accent),
+            Foreground = accent,
             Margin = new Thickness(0, 8, 0, 2),
         });
 
-        foreach (var issue in issues)
+        foreach (var issueLine in group.IssueLines)
             parent.Children.Add(new TextBlock
             {
-                Text = $"\u2022  {issue.Message}",
+                Text = issueLine,
                 Margin = new Thickness(8, 2, 0, 2),
                 TextWrapping = TextWrapping.Wrap,
             });

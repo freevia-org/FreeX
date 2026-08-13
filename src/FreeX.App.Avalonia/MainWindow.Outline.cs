@@ -11,7 +11,6 @@ using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.SheetUI;
-using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -56,144 +55,43 @@ public sealed partial class MainWindow
     // Avalonia shell (no WorkbookSession change) to avoid churn with the concurrently-active
     // FreeW/macOS sessions.
 
-    // R124-outlinecmds-multiarea-group-1: a Ctrl+click multi-area row/column header selection
-    // must group/ungroup EVERY disjoint area in one action, not just the active (last-clicked)
-    // one -- Excel groups all selected areas together. ResolveOutlineSelectionRanges routes
-    // through the same SelectionStyleCommandPlanner.ResolveRanges choke point the WPF host's
-    // AutoFit Row Height/Column Width multi-area fix and cell-style commands already use, instead
-    // of reading only the single active _session.SelectedRange.
-    private IReadOnlyList<GridRange> ResolveOutlineSelectionRanges()
-    {
-        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
-        return ranges.Count > 0 ? ranges : [_session.SelectedRange];
-    }
-
     private void GroupSelectedRows()
     {
-        var sheet = _session.ActiveSheet;
-        var ranges = ResolveOutlineSelectionRanges();
-
-        var commands = ranges.Select(range => CreateGroupCommand(sheet, range)).ToList();
-        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand("Group", commands);
-        var result = _session.ExecuteReviewCommand(command);
+        var range = _session.SelectedRange;
+        var ranges = _session.SelectedRanges.Count > 0 ? _session.SelectedRanges : [range];
+        var columns = OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns;
+        var result = _session.GroupSelectedOutline();
         RefreshShell(result.Success
             ? DescribeOutlineOutcome("Grouped", ranges)
-            : result.ErrorMessage ?? "Could not group.");
-    }
-
-    private static IWorkbookCommand CreateGroupCommand(Sheet sheet, GridRange range)
-    {
-        if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
-        {
-            var colLevel = OutlineGroupingPlanner.GetNextOutlineLevel(
-                range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
-            return new GroupColumnsCommand(sheet.Id, range.Start.Col, range.End.Col, colLevel, preserveExistingHierarchy: true);
-        }
-
-        var rowLevel = OutlineGroupingPlanner.GetNextOutlineLevel(
-            range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
-        return new GroupRowsCommand(sheet.Id, range.Start.Row, range.End.Row, rowLevel, preserveExistingHierarchy: true);
+            : result.ErrorMessage ?? (columns ? "Could not group columns." : "Could not group rows."));
     }
 
     /// <summary>
     /// Data ▸ Outline ▸ Ungroup (and the "Ungroup" submenu / grid context-menu action): always
     /// scoped to the current selection, regardless of its shape. A single-cell selection inside a
     /// grouped row/column still only decrements that row/column's own outline level by one -- it
-    /// must never fall back to clearing the whole sheet's outline (R38-meta-2). A Ctrl+click
-    /// multi-area selection ungroups every disjoint area (R124-outlinecmds-multiarea-group-1).
+    /// must never fall back to clearing the whole sheet's outline (R38-meta-2).
     /// </summary>
     private void UngroupSelection()
     {
-        var sheet = _session.ActiveSheet;
-        var ranges = ResolveOutlineSelectionRanges();
-
-        var commands = new List<IWorkbookCommand>();
-        foreach (var range in ranges)
-            commands.AddRange(CreateUngroupCommands(sheet, range));
-
-        var result = _session.ExecuteReviewCommand(new CompositeWorkbookCommand("Ungroup", commands));
+        var range = _session.SelectedRange;
+        var ranges = _session.SelectedRanges.Count > 0 ? _session.SelectedRanges : [range];
+        var columns = OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns;
+        var result = _session.UngroupSelectedOutline();
         RefreshShell(result.Success
             ? DescribeOutlineOutcome("Ungrouped", ranges)
-            : result.ErrorMessage ?? "Could not ungroup.");
-    }
-
-    private static IReadOnlyList<IWorkbookCommand> CreateUngroupCommands(Sheet sheet, GridRange range)
-    {
-        if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
-        {
-            var colRuns = GetContiguousSameLevelRuns(range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
-            return colRuns
-                .Select(run => (IWorkbookCommand)new GroupColumnsCommand(
-                    sheet.Id,
-                    run.Start,
-                    run.End,
-                    OutlineGroupingPlanner.GetUngroupedOutlineLevel(run.Start, run.End, sheet.ColOutlineLevels)))
-                .ToList();
-        }
-
-        var rowRuns = GetContiguousSameLevelRuns(range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
-        return rowRuns
-            .Select(run => (IWorkbookCommand)new GroupRowsCommand(
-                sheet.Id,
-                run.Start,
-                run.End,
-                OutlineGroupingPlanner.GetUngroupedOutlineLevel(run.Start, run.End, sheet.RowOutlineLevels)))
-            .ToList();
+            : result.ErrorMessage ?? (columns ? "Could not ungroup columns." : "Could not ungroup rows."));
     }
 
     private static string DescribeOutlineOutcome(string verb, IReadOnlyList<GridRange> ranges)
     {
-        if (ranges.Count == 1)
-        {
-            var range = ranges[0];
-            return OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns
-                ? $"{verb} columns {range.Start.Col}–{range.End.Col}"
-                : $"{verb} rows {range.Start.Row}–{range.End.Row}";
-        }
+        if (ranges.Count > 1)
+            return $"{verb} {ranges.Count} selected areas";
 
-        return $"{verb} {ranges.Count} selected areas";
-    }
-
-    // Splits [start, end] into contiguous runs of indices that currently share the same outline
-    // level. Indices with no level / level 0 are excluded entirely (they have nothing to decrement
-    // and must stay untouched). Mirrors the WPF host shell's outline-command helper of the same
-    // name so both shells share the identical per-run splitting behavior.
-    private static List<(uint Start, uint End)> GetContiguousSameLevelRuns(
-        uint start, uint end, IReadOnlyDictionary<uint, int> outlineLevels)
-    {
-        var runs = new List<(uint Start, uint End)>();
-        uint? runStart = null;
-        int runLevel = 0;
-        for (var index = start; index <= end; index++)
-        {
-            outlineLevels.TryGetValue(index, out var level);
-            if (level <= 0)
-            {
-                if (runStart is { } pendingStart)
-                {
-                    runs.Add((pendingStart, index - 1));
-                    runStart = null;
-                }
-                continue;
-            }
-
-            if (runStart is null)
-            {
-                runStart = index;
-                runLevel = level;
-            }
-            else if (level != runLevel)
-            {
-                runs.Add((runStart.Value, index - 1));
-                runStart = index;
-                runLevel = level;
-            }
-        }
-
-        if (runStart is { } finalStart)
-            runs.Add((finalStart, end));
-
-        return runs;
+        var range = ranges[0];
+        return OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns
+            ? $"{verb} columns {range.Start.Col}–{range.End.Col}"
+            : $"{verb} rows {range.Start.Row}–{range.End.Row}";
     }
 
     /// <summary>
@@ -202,10 +100,10 @@ public sealed partial class MainWindow
     /// </summary>
     private void ClearWorksheetOutline()
     {
-        var result = _session.ExecuteReviewCommand(new ClearWorksheetOutlineCommand(_session.ActiveSheet.Id));
+        var result = _session.ClearActiveWorksheetOutline();
         RefreshShell(result.Success
-            ? "Cleared the worksheet outline."
-            : result.ErrorMessage ?? "Could not clear the outline.");
+            ? UiText.Get("Outline_ClearedStatus")
+            : result.ErrorMessage ?? UiText.Get("Outline_ClearFailed"));
     }
 
     /// <summary>

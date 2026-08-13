@@ -2248,6 +2248,38 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SortSelectedRange_UsesSharedHeaderAndActiveColumnPlan()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var range = new GridRange(a1, new CellAddress(sheet.Id, 3, 2));
+        sheet.SetCell(a1, new TextValue("Name"));
+        sheet.SetCell(b1, new TextValue("Score"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Low"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("High"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(9));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRanges(range, [range], b1);
+
+        var result = session.SortSelectedRange(ascending: false);
+
+        result.Success.Should().BeTrue();
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Name"));
+        sheet.GetValue(1, 2).Should().Be(new TextValue("Score"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("High"));
+        sheet.GetValue(2, 2).Should().Be(new NumberValue(9));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Low"));
+        sheet.GetValue(3, 2).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void SortSelectedRange_CustomKeysExcludeHeaderRowAndPreserveSelection()
     {
         var workbook = CreateWorkbook();

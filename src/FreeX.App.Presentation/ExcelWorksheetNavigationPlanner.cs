@@ -1,3 +1,4 @@
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation;
@@ -247,6 +248,42 @@ public static class ExcelWorksheetNavigationPlanner
         return new CellAddress(next.Sheet, row, col);
     }
 
+    /// <summary>
+    /// Resolves an Arrow, Enter, or Tab target on a protected sheet, skipping cells that the
+    /// workbook protection policy does not allow the user to select. Other navigation keys retain
+    /// their original target. Returns null when no selectable cell remains before the sheet edge.
+    /// </summary>
+    public static CellAddress? ResolveProtectedSheetTarget(
+        Workbook workbook,
+        Sheet sheet,
+        CellAddress target,
+        ExcelWorksheetNavigationKey key,
+        bool shiftHeld)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        if (!sheet.IsProtected ||
+            GetProtectedNavigationStep(key, shiftHeld) is not { } step ||
+            CommandGuards.CanSelectCell(workbook, sheet, target))
+        {
+            return target;
+        }
+
+        var candidate = target;
+        while (!CommandGuards.CanSelectCell(workbook, sheet, candidate))
+        {
+            var nextRow = (long)candidate.Row + step.RowStep;
+            var nextCol = (long)candidate.Col + step.ColStep;
+            if (nextRow is < 1 or > CellAddress.MaxRow || nextCol is < 1 or > CellAddress.MaxCol)
+                return null;
+
+            candidate = new CellAddress(candidate.Sheet, (uint)nextRow, (uint)nextCol);
+        }
+
+        return candidate;
+    }
+
     private static bool CellHasData(Sheet? sheet, uint row, uint col)
     {
         if (sheet is null)
@@ -255,6 +292,20 @@ public static class ExcelWorksheetNavigationPlanner
         var value = sheet.GetValue(new CellAddress(sheet.Id, row, col));
         return value is not null and not BlankValue;
     }
+
+    private static (int RowStep, int ColStep)? GetProtectedNavigationStep(
+        ExcelWorksheetNavigationKey key,
+        bool shiftHeld) =>
+        key switch
+        {
+            ExcelWorksheetNavigationKey.Up => (-1, 0),
+            ExcelWorksheetNavigationKey.Down => (1, 0),
+            ExcelWorksheetNavigationKey.Left => (0, -1),
+            ExcelWorksheetNavigationKey.Right => (0, 1),
+            ExcelWorksheetNavigationKey.Enter => shiftHeld ? (-1, 0) : (1, 0),
+            ExcelWorksheetNavigationKey.Tab => shiftHeld ? (0, -1) : (0, 1),
+            _ => null
+        };
 
     private static CellAddress FindVerticalDataBoundaryFromBlank(Sheet? sheet, CellAddress current, int rowDirection)
     {

@@ -2,8 +2,13 @@ using System.IO;
 using System.Reflection;
 using System.Windows.Threading;
 using FluentAssertions;
+using Free.Shared.AppServices;
+using FreeX.Core.Calc;
+using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FreeX.App.Host.Tests;
 
@@ -33,29 +38,6 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class R120_SavePersistsSavingWindowsOwnViewStateTests
 {
-    private sealed class SaveTempDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
-
-        public SaveTempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            const int attempts = 60;
-            for (var attempt = 1; Directory.Exists(Path); attempt++)
-            {
-                try
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-                catch (IOException) when (attempt < attempts)
-                {
-                    Thread.Sleep(50);
-                }
-            }
-        }
-    }
-
     /// <summary>
     /// The primary regression scenario: window1 sets its own Freeze Panes, then window2 (a "New
     /// Window" sibling sharing the exact same document) changes the SAME shared Sheet's Freeze
@@ -68,15 +50,13 @@ public sealed class R120_SavePersistsSavingWindowsOwnViewStateTests
     {
         StaTestRunner.Run(() =>
         {
-            using var temp = new SaveTempDirectory();
+            using var temp = new TestTemporaryDirectory("FreeX.R120.Save-");
             var savePath = System.IO.Path.Combine(temp.Path, "Shared.fxjson");
 
-            var (window1, workbook) = R49MainWindowTestHarness.CreateWindow();
-            var (window2, _) = R49MainWindowTestHarness.CreateWindow();
+            var (window1, window2, workbook) = CreateSharedWindows();
             try
             {
                 var sheetId = GetCurrentSheetId(window1);
-                AdoptSameDocument(window2, workbook, sheetId);
 
                 // Window 2 renders first, seeding its own per-window store from the (still
                 // unfrozen) shared FrozenRows/FrozenCols -- mirrors R89_FreezeSplitPerWindowTests.
@@ -146,7 +126,7 @@ public sealed class R120_SavePersistsSavingWindowsOwnViewStateTests
     {
         StaTestRunner.Run(() =>
         {
-            using var temp = new SaveTempDirectory();
+            using var temp = new TestTemporaryDirectory("FreeX.R120.Save-");
             var savePath = System.IO.Path.Combine(temp.Path, "Solo.fxjson");
 
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
@@ -182,12 +162,70 @@ public sealed class R120_SavePersistsSavingWindowsOwnViewStateTests
         });
     }
 
-    private static void AdoptSameDocument(MainWindow window, Workbook workbook, SheetId sheetId)
+    private static (MainWindow Primary, MainWindow Secondary, Workbook Workbook) CreateSharedWindows()
     {
-        typeof(MainWindow).GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(window, workbook);
-        typeof(MainWindow).GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(window, sheetId);
+        var initialWorkbook = new Workbook("Book1");
+        initialWorkbook.AddSheet("Sheet1");
+        var workbookRef = new WorkbookRef { Current = initialWorkbook };
+        var registry = new WorkbookWindowRegistry();
+        var documentState = new WorkbookDocumentState();
+        var recalcEngine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var commandBus = new CommandBus(_ => new TestCommandContext(workbookRef.Current));
+
+        var primary = CreateSharedWindow(
+            workbookRef,
+            registry,
+            documentState,
+            recalcEngine,
+            commandBus);
+        primary.Show();
+        R49MainWindowTestHarness.PumpDispatcher();
+
+        var secondary = CreateSharedWindow(
+            workbookRef,
+            registry,
+            documentState,
+            recalcEngine,
+            commandBus,
+            primary.Session.CreateSiblingView(600, 800));
+        secondary.Show();
+        R49MainWindowTestHarness.PumpDispatcher();
+
+        return (primary, secondary, workbookRef.Current);
+    }
+
+    private static MainWindow CreateSharedWindow(
+        WorkbookRef workbookRef,
+        WorkbookWindowRegistry registry,
+        WorkbookDocumentState documentState,
+        RecalcEngine recalcEngine,
+        ICommandBus commandBus,
+        WorkbookSession? session = null) =>
+        new(
+            NullLogger<MainWindow>.Instance,
+            new ViewportService(),
+            commandBus,
+            recalcEngine,
+            [],
+            workbookRef,
+            workbookRef.Current,
+            new R120UserMessageService(),
+            documentState,
+            windowRegistry: registry,
+            workbookSession: session);
+
+    private sealed class R120UserMessageService : IUserMessageService
+    {
+        public void ShowError(string message, string title = "Error") { }
+        public void ShowWarning(string message, string title = "Warning") { }
+        public void ShowInfo(string message, string title = "Information") { }
+        public bool AskYesNo(string message, string title = "Confirm") => false;
+
+        public UserMessageResult ShowMessage(
+            string message,
+            string title,
+            UserMessageButtons buttons,
+            UserMessageIcon icon) => UserMessageResult.Ok;
     }
 
     private static SheetId GetCurrentSheetId(MainWindow window) =>

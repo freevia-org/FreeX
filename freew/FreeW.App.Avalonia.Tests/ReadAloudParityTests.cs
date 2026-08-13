@@ -63,7 +63,7 @@ public sealed class ReadAloudParityTests
             ToggleReadAloud = () => active = !active,
             IsReadAloudActive = () => active,
         };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks, out _);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks, out _);
 
         registry.TryGet(new RibbonCommandId("freew.read-aloud"), out var command).Should().BeTrue();
         var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
@@ -447,13 +447,16 @@ public sealed class ReadAloudParityTests
         source.Should().Contain("IsReadAloudActive: IsReadAloudActive");
         source.Should().Contain("StopReadAloud();");
         source.Should().Contain("DisposeReadAloud();");
-        source.Should().Contain("_editor.ReadAloudStartSegmentIndex()");
+        source.Should().Contain("EnsureReadAloudSession().ToggleStartStop()");
+        source.Should().Contain("GetStartSegmentIndex: _editor.ReadAloudStartSegmentIndex");
+        source.Should().NotContain("_readAloudController");
+        source.Should().NotContain("_readAloudEngine");
     }
 
     private static Task OnUiThread(Action action) =>
         Session.Dispatch(action, CancellationToken.None);
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },
@@ -464,22 +467,8 @@ public sealed class ReadAloudParityTests
             ApplyPaperSize: _ => { }, InsertPicture: () => { }, OpenWordCountDialog: () => { },
             ApplyZoom: (_, _) => { });
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        foreach (var startingDirectory in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
-        {
-            var directory = Path.GetFullPath(startingDirectory);
-            while (!string.IsNullOrEmpty(directory))
-            {
-                var candidate = Path.Combine([directory, .. parts]);
-                if (File.Exists(candidate))
-                    return candidate;
-                directory = Directory.GetParent(directory)?.FullName ?? string.Empty;
-            }
-        }
-
-        throw new FileNotFoundException(string.Join(Path.DirectorySeparatorChar, parts));
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 
     private sealed class RecordingSpeechEngine : ISpeechEngine
     {

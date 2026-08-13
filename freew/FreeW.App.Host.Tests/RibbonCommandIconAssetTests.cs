@@ -33,7 +33,6 @@ public sealed class RibbonCommandIconAssetTests
         Directory.Exists(iconDirectory).Should().BeTrue("FreeW command SVG assets should be copied to the test output");
 
         var commandIds = WpfCommandIds()
-            .Concat(AvaloniaCommandIds())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -73,42 +72,81 @@ public sealed class RibbonCommandIconAssetTests
     {
         ToCommandIconSlug("freew.accept-all").Should().Be("accept-all");
         ToCommandIconSlug("freew.align-center").Should().Be("align-center");
+        RibbonCommandIconPolicy.ToCommandIconSlug("  FREEW.Accept & Reject  ", "freew.")
+            .Should().Be("accept-and-reject");
     }
 
     [Fact]
-    public void FreeW_project_links_canonical_FreeX_assets_for_output_and_publish()
+    public void FreeW_hosts_import_one_definitions_owned_asset_composition()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
-        var projectPath = Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
-        var project = XDocument.Load(projectPath);
-        var canonicalIcons = project
+        const string importPath = @"..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Assets.props";
+        foreach (var projectPath in new[]
+        {
+            Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj"),
+            Path.Combine(root, "freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj")
+        })
+        {
+            var project = XDocument.Load(projectPath);
+            project.Descendants("Import")
+                .Single(item => (string?)item.Attribute("Project") == importPath)
+                .Should().NotBeNull();
+            project.Descendants("Content")
+                .Should().NotContain(item =>
+                    ((string?)item.Attribute("Include") ?? string.Empty).Contains("CommandIconsSvg"));
+            project.Descendants("Content")
+                .Should().NotContain(item =>
+                    ((string?)item.Attribute("Include") ?? string.Empty).Contains("ContentIconsSvg"));
+        }
+
+        var assetPropsPath = Path.Combine(root, "freew", "FreeW.Ribbon.Definitions", "FreeW.Ribbon.Assets.props");
+        var assets = XDocument.Load(assetPropsPath);
+        var canonicalIcons = assets
             .Descendants("Content")
             .Single(item => (string?)item.Attribute("Include") ==
-                @"..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg");
+                @"$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg");
 
         ((string?)canonicalIcons.Attribute("Link")).Should().Be(
             @"Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
         ((string?)canonicalIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
         ((string?)canonicalIcons.Attribute("CopyToPublishDirectory")).Should().Be("PreserveNewest");
 
+        var contentIcons = assets
+            .Descendants("Content")
+            .Single(item => (string?)item.Attribute("Include") ==
+                @"$(MSBuildThisFileDirectory)Resources\ContentIconsSvg\**\*.svg");
+        ((string?)contentIcons.Attribute("Link")).Should().Be(
+            @"Resources\ContentIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
+        ((string?)contentIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
+        contentIcons.Element("CopyToPublishDirectory")!.Value.Should().Be("PreserveNewest");
+        ((string?)contentIcons.Element("CopyToPublishDirectory")!.Attribute("Condition"))
+            .Should().Be("'$(UseWPF)' != 'true'");
+
         foreach (var alias in new[]
         {
             "align-center.svg", "chart.svg", "datetime.svg", "font-dialog.svg", "highlight.svg", "zoom-dialog.svg",
             "reject-all.svg", "style-heading1.svg", "style-heading2.svg", "style-title.svg"
         })
-            File.Exists(Path.Combine(root, "freew", "FreeW.App.Host", "Resources", "CommandIconsSvg", alias)).Should().BeFalse();
+            File.Exists(Path.Combine(root, "freew", "FreeW.Ribbon.Definitions", "Resources", "CommandIconsSvg", alias)).Should().BeFalse();
     }
 
     [Fact]
     public void FreeW_exact_duplicate_aliases_resolve_through_Wpf_loader_and_publish()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
-        var iconDirectory = Path.Combine(root, "freew", "FreeW.App.Host", "Resources", "CommandIconsSvg");
-        var project = XDocument.Load(Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj"));
-        var localIcons = project
+        var iconDirectory = Path.Combine(root, "freew", "FreeW.Ribbon.Definitions", "Resources", "CommandIconsSvg");
+        var assets = XDocument.Load(Path.Combine(
+            root,
+            "freew",
+            "FreeW.Ribbon.Definitions",
+            "FreeW.Ribbon.Assets.props"));
+        var localIcons = assets
             .Descendants("Content")
-            .Single(item => (string?)item.Attribute("Include") == @"Resources\CommandIconsSvg\**\*.svg");
+            .Single(item => (string?)item.Attribute("Include") ==
+                @"$(MSBuildThisFileDirectory)Resources\CommandIconsSvg\**\*.svg");
 
+        ((string?)localIcons.Attribute("Link")).Should().Be(
+            @"Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
         ((string?)localIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
         ((string?)localIcons.Attribute("CopyToPublishDirectory")).Should().Be("PreserveNewest");
 
@@ -179,8 +217,29 @@ public sealed class RibbonCommandIconAssetTests
         }
     }
 
+    [Fact]
+    public void FreeW_icon_wrapper_keeps_svg_resolution_and_delegates_geometry_fallback()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            "freew",
+            "FreeW.App.Host",
+            "Ribbon",
+            "RibbonIconFactory.cs"));
+
+        source.Should().Contain("SvgCommandIconLoader");
+        source.Should().Contain("RibbonCommandIconSlugAliases.GetCandidates(slug)");
+        source.Should().Contain("RibbonCommandIconPolicy.ToCommandIconSlug(text, \"freew.\")");
+        source.Should().Contain("SharedRibbonIconFactory.CreateIcon(fallbackIcon, size, glyphBrush)");
+        source.Should().NotContain("new System.Text.StringBuilder");
+        source.Should().NotContain("RibbonIconDefinitions.Resolve(");
+        source.Should().NotContain("DrawElement(");
+        source.Should().NotContain("Geometry.Parse(");
+        source.Should().NotContain("new Canvas");
+    }
+
     private static IEnumerable<string> WpfCommandIds() =>
-        CommandIds(FreeWRibbon.Build())
+        CommandIds(FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf))
             .Select(id => id.Value)
             .Where(id => !string.IsNullOrWhiteSpace(id));
 
@@ -219,21 +278,6 @@ public sealed class RibbonCommandIconAssetTests
             foreach (var child in MenuCommandIds(item.Children))
                 yield return child;
         }
-    }
-
-    private static IEnumerable<string> AvaloniaCommandIds()
-    {
-        var sourcePath = Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
-            "freew",
-            "FreeW.App.Avalonia",
-            "Ribbon",
-            "FreeWRibbon.cs");
-
-        var source = File.ReadAllText(sourcePath);
-        return Regex
-            .Matches(source, "\"(freew\\.[a-z0-9.-]+)\"")
-            .Select(match => match.Groups[1].Value);
     }
 
     private static string ToCommandIconSlug(string commandId)

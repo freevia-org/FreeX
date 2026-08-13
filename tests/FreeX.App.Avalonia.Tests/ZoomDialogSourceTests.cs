@@ -16,7 +16,7 @@ public sealed class ZoomDialogSourceTests
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, zoomDialogChrome);");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(");
         source.Should().Contain("ZoomDialogPlanner.PresetColumnWidth");
-        source.Should().Contain("Header = \"Magnification\"");
+        source.Should().Contain("Header = UiText.Get(\"Zoom_Magnification\")");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(magnificationGroup, zoomDialogChrome);");
         source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton])");
         source.Should().Contain("Width = ZoomDialogPlanner.ActionButtonWidth");
@@ -35,15 +35,6 @@ public sealed class ZoomDialogSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"ZoomCancelButton\");");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

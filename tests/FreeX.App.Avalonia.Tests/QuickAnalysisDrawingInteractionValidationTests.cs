@@ -14,11 +14,9 @@ public sealed class QuickAnalysisDrawingInteractionValidationTests
     [Fact]
     public async Task BoundedValidation_RecordsQuickAnalysisAndProductionDrawingPostconditions()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-quick-analysis-drawing-validation-" + Guid.NewGuid().ToString("N"));
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-quick-analysis-drawing-validation-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -77,11 +75,6 @@ public sealed class QuickAnalysisDrawingInteractionValidationTests
                     window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            if (Directory.Exists(outputDirectory))
-                Directory.Delete(outputDirectory, recursive: true);
         }
     }
 }

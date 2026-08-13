@@ -45,7 +45,7 @@ internal static class PdfDocumentExporter
     public static void Save(
         FixedDocument document,
         string path,
-        PdfDocumentProperties? properties = null,
+        SharedPdf.PdfDocumentProperties? properties = null,
         string pdfLanguage = ExportPlanner.DefaultPdfLanguage)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -57,7 +57,7 @@ internal static class PdfDocumentExporter
     public static void Save(
         FixedDocument document,
         string path,
-        PdfDocumentProperties? properties,
+        SharedPdf.PdfDocumentProperties? properties,
         ExportPageRange? pageRange,
         ExportQuality quality = ExportQuality.Standard,
         IReadOnlyList<PdfBookmark>? bookmarks = null,
@@ -80,12 +80,12 @@ internal static class PdfDocumentExporter
     /// <summary>
     /// Renders <paramref name="document"/> into PDF bytes without writing any file.  The caller
     /// may then flush the bytes to disk on a background thread via
-    /// <see cref="ExportAtomicWriter.WriteAllBytes"/>.  This overload must be called on the
+    /// <see cref="AtomicFileWriter.WriteAllBytes"/>.  This overload must be called on the
     /// UI / STA thread because it accesses WPF visual objects.
     /// </summary>
     public static byte[] RenderToBytes(
         FixedDocument document,
-        PdfDocumentProperties? properties,
+        SharedPdf.PdfDocumentProperties? properties,
         ExportPageRange? pageRange,
         ExportQuality quality = ExportQuality.Standard,
         IReadOnlyList<PdfBookmark>? bookmarks = null,
@@ -114,7 +114,7 @@ internal static class PdfDocumentExporter
     private static void SavePages(
         FixedDocument document,
         string path,
-        PdfDocumentProperties? properties,
+        SharedPdf.PdfDocumentProperties? properties,
         int firstPageIndex,
         int lastPageIndexInclusive,
         double dpi = StandardDpi,
@@ -138,7 +138,7 @@ internal static class PdfDocumentExporter
     private static void BuildPages(
         FixedDocument document,
         Stream outputStream,
-        PdfDocumentProperties? properties,
+        SharedPdf.PdfDocumentProperties? properties,
         int firstPageIndex,
         int lastPageIndexInclusive,
         double dpi = StandardDpi,
@@ -174,8 +174,8 @@ internal static class PdfDocumentExporter
             exportPages.Add(new ExportPage(fixedPage, internalLinks));
         }
 
-        var rasterDocument = new SharedPdf.PdfRasterDocument(rasterPages, BuildProperties(properties));
-        var normalizedTitle = NormalizeProperty(properties?.Title);
+        var rasterDocument = new SharedPdf.PdfRasterDocument(rasterPages, WithDefaultCreator(properties));
+        var normalizedTitle = ExportDocumentPropertiesPlanner.Normalize(properties?.Title);
 
         WpfRasterPdfWriter.Write(
             rasterDocument,
@@ -187,13 +187,25 @@ internal static class PdfDocumentExporter
             uncompressedContent: includeSelectableText);
     }
 
-    private static SharedPdf.PdfDocumentProperties BuildProperties(PdfDocumentProperties? properties) =>
-        new(
-            Title: properties?.Title,
-            Author: properties?.Author,
-            Subject: properties?.Subject,
-            Keywords: properties?.Keywords,
-            Creator: "FreeX");
+    internal static SharedPdf.PdfDocumentProperties? CreateProperties(Workbook workbook, ExportOptions options)
+    {
+        if (ExportDocumentPropertiesPlanner.FromWorkbook(workbook, options) is not { } properties)
+            return null;
+
+        return new SharedPdf.PdfDocumentProperties(
+            properties.Title,
+            properties.Creator,
+            properties.Subject,
+            properties.Keywords,
+            ExportDocumentPropertiesPlanner.DefaultCreator);
+    }
+
+    private static SharedPdf.PdfDocumentProperties WithDefaultCreator(
+        SharedPdf.PdfDocumentProperties? properties) =>
+        (properties ?? new SharedPdf.PdfDocumentProperties()) with
+        {
+            Creator = ExportDocumentPropertiesPlanner.DefaultCreator,
+        };
 
     private static void ConfigureDocument(
         PdfDocument pdf,
@@ -320,9 +332,6 @@ internal static class PdfDocumentExporter
 
         return false;
     }
-
-    private static string? NormalizeProperty(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static void ApplyDefaultCatalogMetadata(PdfDocument pdf, string? pdfLanguage)
     {

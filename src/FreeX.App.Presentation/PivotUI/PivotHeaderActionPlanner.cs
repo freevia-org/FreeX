@@ -37,9 +37,8 @@ public sealed record PivotHeaderActionPlan(
 
 /// <summary>
 /// Shared routing for PivotTable header-dropdown actions. Menu construction stays in
-/// <see cref="PivotHeaderDropdownMenuBuilder"/>, command construction stays in each host, and this planner
-/// owns the cross-host decision of whether a menu action is a direct command, an in-app dialog, a no-op, or
-/// still unsupported.
+/// <see cref="PivotHeaderDropdownMenuBuilder"/>. This planner owns the cross-host route decision while
+/// <see cref="PivotHeaderCommandPlanner"/> owns direct command composition; renderers keep dialog realization.
 /// </summary>
 public static class PivotHeaderActionPlanner
 {

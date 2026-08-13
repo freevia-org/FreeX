@@ -16,7 +16,8 @@ public sealed class DocumentFileDialogRequestPlannerTests
         plan.SuggestedFileName.Should().Be("Letter.rtf");
         plan.DefaultExtensionWithDot.Should().Be(".rtf");
         plan.DefaultExtensionWithoutDot.Should().Be("rtf");
-        plan.FilterIndex.Should().Be(DocumentFileDialogFilterBuilder.FindSaveFilterIndex(adapters, ".rtf"));
+        plan.FilterIndex.Should().Be(
+            DocumentFileDialogRequestPlanner.BuildSaveDialogPlan(adapters, "", ".rtf").FilterIndex);
         plan.Filter.Should().Contain("Rich Text Format (*.rtf)|*.rtf");
     }
 

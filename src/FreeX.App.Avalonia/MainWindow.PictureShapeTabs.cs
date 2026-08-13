@@ -50,8 +50,8 @@ public sealed partial class MainWindow
             DrawingObjectContextualCommandAction.PictureCropMenuHint => BeginSelectedPictureCropMode,
             DrawingObjectContextualCommandAction.CropPicture => () => RunGuarded(OpenPictureCropDialogAsync),
             DrawingObjectContextualCommandAction.ResetPictureCrop => ResetSelectedPictureCrop,
-            DrawingObjectContextualCommandAction.BringPictureForward => BringSelectedPictureForward,
-            DrawingObjectContextualCommandAction.SendPictureBackward => SendSelectedPictureBackward,
+            DrawingObjectContextualCommandAction.BringForward => () => ReorderSelectedDrawingObject(forward: true),
+            DrawingObjectContextualCommandAction.SendBackward => () => ReorderSelectedDrawingObject(forward: false),
             DrawingObjectContextualCommandAction.SelectionPane => () => RunGuarded(OpenSelectionPaneDialogAsync),
             DrawingObjectContextualCommandAction.RotateObject => () => RunGuarded(RotateSelectedDrawingObjectAsync),
             DrawingObjectContextualCommandAction.ResizeObject => () => RunGuarded(ResizeSelectedDrawingObjectAsync),
@@ -61,8 +61,6 @@ public sealed partial class MainWindow
             DrawingObjectContextualCommandAction.ShapeGradient => () => RunGuarded(OpenShapeGradientDialogAsync),
             DrawingObjectContextualCommandAction.ShapeEffectsDialog => () => RunGuarded(OpenShapeEffectsDialogAsync),
             DrawingObjectContextualCommandAction.ShapeEffectPreset => () => ApplySelectedShapeEffect(spec.EffectPreset ?? DrawingShapeEffectPreset.None),
-            DrawingObjectContextualCommandAction.BringShapeForward => BringSelectedShapeForward,
-            DrawingObjectContextualCommandAction.SendShapeBackward => SendSelectedShapeBackward,
             _ => throw new NotSupportedException($"Unsupported picture/shape contextual action: {spec.Action}")
         };
 
@@ -173,30 +171,10 @@ public sealed partial class MainWindow
     // Drawing-object z-order (shared target policy + command planner)
     // -------------------------------------------------------------------------------------------------------
 
-    private void BringSelectedShapeForward()
-    {
-        ReorderSelectedDrawingObject(forward: true);
-    }
-
-    private void SendSelectedShapeBackward()
-    {
-        ReorderSelectedDrawingObject(forward: false);
-    }
-
     // -------------------------------------------------------------------------------------------------------
     // Picture z-order (real: cross-kind MoveSelectionPaneObjectCommand, the same Core path as the Selection
     // Pane's one-step bring-forward / send-backward — so undo/redo and mixed-stack ordering behave identically)
     // -------------------------------------------------------------------------------------------------------
-
-    private void BringSelectedPictureForward()
-    {
-        ReorderSelectedDrawingObject(forward: true);
-    }
-
-    private void SendSelectedPictureBackward()
-    {
-        ReorderSelectedDrawingObject(forward: false);
-    }
 
     private void ReorderSelectedDrawingObject(bool forward)
     {
@@ -278,7 +256,7 @@ public sealed partial class MainWindow
         var status = FormatDrawingObjectResourceText(
             DrawingObjectActionPlanner.ShapeEffectSuccess(normalized, ShapeEffectPresetLabel(normalized)));
         RunDrawingObjectCommand(
-            new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, shape.Id, normalized),
+            ShapeEffectsPlanner.BuildCommand(_session.ActiveSheet.Id, shape.Id, normalized),
             status,
             UiText.Get("InsertLoc_ShapeEffectsLabel"));
     }

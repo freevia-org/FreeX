@@ -151,7 +151,7 @@ public sealed class EditingReferenceParityTests
             ShowTableOfAuthoritiesDialog = () => { },
             OpenMarkCitationDialog = () => { },
         };
-        var registry = FreeWRibbon.BuildRegistry(view, callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
 
         foreach (var id in new[] { "freew.datetime", "freew.text-to-table", "freew.footnote", "freew.endnote", "freew.table-of-authorities", "freew.mark-citation" })
         {
@@ -225,7 +225,7 @@ public sealed class EditingReferenceParityTests
         return view;
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() => new(
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() => new(
         Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
         Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },
         ToggleReviewingPane: () => { }, ToggleRevealFormatting: () => { }, OpenFindReplaceDialog: () => { },

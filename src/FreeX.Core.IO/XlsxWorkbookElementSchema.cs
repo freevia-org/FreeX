@@ -69,6 +69,23 @@ internal sealed class XlsxWorkbookLeafElementSchema
 internal static class XlsxWorkbookLeafElementNormalizer
 {
     /// <summary>
+    /// Normalizes a known workbook leaf element using the schema registered for its local name.
+    /// </summary>
+    public static bool Normalize(XElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        if (!XlsxWorkbookLeafElementSchemas.ByLocalName.TryGetValue(
+                element.Name.LocalName,
+                out var schema))
+        {
+            throw new InvalidOperationException(
+                $"No workbook leaf-element schema is registered for '{element.Name.LocalName}'.");
+        }
+
+        return Normalize(element, schema);
+    }
+
+    /// <summary>
     /// Normalizes <paramref name="element"/> according to <paramref name="schema"/>:
     /// removes disallowed attributes, applies per-attribute value rules, optionally removes
     /// child nodes. Returns <c>true</c> if any change was made.

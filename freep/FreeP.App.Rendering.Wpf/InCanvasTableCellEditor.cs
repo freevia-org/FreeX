@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -20,9 +21,6 @@ namespace FreeP.App.Rendering.Wpf;
 /// On double-click of a table cell: opens a <see cref="TextBox"/> positioned over
 /// the cell (same approach as <see cref="InCanvasTextEditor"/> for shapes).  On commit
 /// (Escape / focus-loss) writes the text back via <c>SetTableCellText</c> on the bus.
-///
-/// Right-click: surfaces a context menu (Insert Row Above/Below, Insert Column
-/// Left/Right, Delete Row, Delete Column, Merge Cells, Split Cell).
 ///
 /// Tab and Shift+Tab navigation use the shared table-cell navigation planner.
 /// </summary>
@@ -63,7 +61,6 @@ public sealed class InCanvasTableCellEditor
         _onClipboardWriteFailed = onClipboardWriteFailed;
 
         _canvas.MouseLeftButtonDown += OnCanvasMouseDown;
-        _canvas.MouseRightButtonDown += OnCanvasRightMouseDown;
 
         _editor.SelectionChanged        += (_, _) => RefreshHighlight();
         _editor.ActiveTableCellChanged  += (_, _) => RefreshHighlight();
@@ -134,6 +131,9 @@ public sealed class InCanvasTableCellEditor
             VerticalScrollBarVisibility   = ScrollBarVisibility.Hidden,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
         };
+        AutomationProperties.SetAutomationId(
+            _cellTextBox,
+            PresentationSemanticIdentityCatalog.RichTextEditorInputAutomationId);
 
         Canvas.SetLeft(_cellTextBox, placement.Left);
         Canvas.SetTop (_cellTextBox, placement.Top);
@@ -233,95 +233,6 @@ public sealed class InCanvasTableCellEditor
                 e.Handled = true;
             }
         }
-    }
-
-    private void OnCanvasRightMouseDown(object sender, MouseButtonEventArgs e)
-    {
-        var slide = _editor.CurrentSlide;
-        if (slide is null || _editor.Presentation is null) return;
-
-        var xf      = _canvas.CurrentTransform;
-        var pt      = e.GetPosition(_canvas);
-        var slidePt = xf.ScreenToSlide(pt.X, pt.Y);
-
-        uint? hitId = ShapeHitTester.HitTest(slide, _editor.Presentation, slidePt.X, slidePt.Y);
-        if (!hitId.HasValue) return;
-
-        var shape = ShapeHitTester.FindShape(slide, hitId.Value);
-        if (shape?.Kind != SlideShapeKind.Table || shape.Table is null) return;
-
-        // Set active cell at right-click position.
-        var cellHit = TableCellHitTester.HitTest(shape, slidePt.X, slidePt.Y);
-        if (cellHit.HasValue)
-            _editor.SetActiveTableCell(cellHit.Value.Row, cellHit.Value.Col);
-
-        // Build context menu.
-        var cm = BuildTableContextMenu(shape);
-        _canvas.ContextMenu = cm;
-        cm.IsOpen = true;
-        e.Handled = true;
-    }
-
-    private ContextMenu BuildTableContextMenu(SlideShape shape)
-    {
-        var cm = new ContextMenu();
-
-        void Add(string header, Action action)
-        {
-            var mi = new MenuItem { Header = header };
-            mi.Click += (_, _) => action();
-            cm.Items.Add(mi);
-        }
-
-        Add("Insert Row Above",    () => { _editor.Select(shape.Id); _editor.InsertRowAbove(); });
-        Add("Insert Row Below",    () => { _editor.Select(shape.Id); _editor.InsertRowBelow(); });
-        cm.Items.Add(new Separator());
-        Add("Insert Column Left",  () => { _editor.Select(shape.Id); _editor.InsertColumnLeft(); });
-        Add("Insert Column Right", () => { _editor.Select(shape.Id); _editor.InsertColumnRight(); });
-        cm.Items.Add(new Separator());
-        Add("Delete Row",          () => { _editor.Select(shape.Id); _editor.DeleteRow(); });
-        Add("Delete Column",       () => { _editor.Select(shape.Id); _editor.DeleteColumn(); });
-        cm.Items.Add(new Separator());
-
-        // Merge Cells — needs at least a 2-cell region; we use active cell + neighbours as
-        // a simple default (merge active cell with the one to its right if available).
-        var table = shape.Table!;
-        var ac = _editor.ActiveTableCell;
-        bool canMerge = ac.HasValue &&
-            (ac.Value.Col + 1 < table.ColumnWidthsEmu.Count ||
-             ac.Value.Row + 1 < table.Rows.Count);
-        bool canSplit = ac.HasValue && table.Rows.Count > ac.Value.Row &&
-            table.Rows[ac.Value.Row].Cells.ElementAtOrDefault(ac.Value.Col) is { } cc &&
-            (cc.GridSpan > 1 || cc.RowSpan > 1);
-
-        var mergeMi = new MenuItem { Header = "Merge with Right Cell", IsEnabled = canMerge };
-        if (canMerge && ac.HasValue)
-        {
-            int r = ac.Value.Row, c = ac.Value.Col;
-            // Merge with cell to the right (or below if last column).
-            int r2 = r, c2 = c + 1 < table.ColumnWidthsEmu.Count ? c + 1 : c;
-            int r2b = r + 1 < table.Rows.Count && c2 == c ? r + 1 : r;
-            mergeMi.Click += (_, _) =>
-            {
-                _editor.Select(shape.Id);
-                _editor.MergeTableCells(r, c, r2b, c2);
-            };
-        }
-        cm.Items.Add(mergeMi);
-
-        var splitMi = new MenuItem { Header = "Split Cell", IsEnabled = canSplit };
-        if (canSplit && ac.HasValue)
-        {
-            int r = ac.Value.Row, c = ac.Value.Col;
-            splitMi.Click += (_, _) =>
-            {
-                _editor.Select(shape.Id);
-                _editor.SplitTableCell(r, c);
-            };
-        }
-        cm.Items.Add(splitMi);
-
-        return cm;
     }
 
     // ── Ribbon format application (10A SEAM) ──────────────────────────────────
@@ -463,34 +374,27 @@ public sealed class InCanvasTableCellEditor
         }
     }
 
-    private void OnCellTextBoxPreviewKeyDown(object sender, KeyEventArgs e)
+    private async void OnCellTextBoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) != 0 &&
             _cellTextBox is not null &&
             TryGetCurrentCellTextBody() is { } currentBody)
         {
-            if (e.Key == Key.C)
+            if (e.Key is Key.C or Key.X or Key.V)
             {
-                e.Handled = WpfRichTextClipboardAdapter.TryCopy(_cellTextBox, currentBody, out var copyError);
-                if (!e.Handled && copyError is not null)
-                    _onClipboardWriteFailed?.Invoke("Copy", copyError);
-                return;
-            }
-
-            if (e.Key == Key.X)
-            {
-                e.Handled = WpfRichTextClipboardAdapter.TryCut(_cellTextBox, currentBody, out var cutError);
-                if (!e.Handled && cutError is not null)
-                    _onClipboardWriteFailed?.Invoke("Cut", cutError);
-                return;
-            }
-
-            if (e.Key == Key.V)
-            {
-                e.Handled = WpfRichTextClipboardAdapter.TryPaste(
+                var result = await WpfRichTextClipboardAdapter.HandlePreviewKeyDownAsync(
+                    e,
                     _cellTextBox,
-                    currentBody,
-                    out _);
+                    currentBody);
+                if (e.Key is Key.C or Key.X &&
+                    !result.Handled &&
+                    result.FailureMessage is { } failureMessage)
+                    _onClipboardWriteFailed?.Invoke(
+                        PresentationShellTextCatalog.Resolve(
+                            e.Key == Key.X
+                                ? PresentationShellTextCatalog.EditCutCommand
+                                : PresentationShellTextCatalog.EditCopyCommand),
+                        failureMessage);
                 return;
             }
         }

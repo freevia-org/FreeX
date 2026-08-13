@@ -37,9 +37,9 @@ public sealed class MailMergeFindRecipientParityTests
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain(
-            "Select recipients first (Mailings > Select Recipients), then find a recipient.");
+            "ValidateMailMergeOperationAsync(MailMergeOperation.FindRecipient)");
         source.Should().Contain("await FreeWInfoDialog.ShowAsync(this, result.Message);");
-        source.Should().Contain("await FreeWInfoDialog.ShowAsync(\n                this,");
+        source.Should().Contain("await FreeWInfoDialog.ShowAsync(this, validation.Message);");
         source.Should().NotContain("_status.Text = result.Message;");
     }
 

@@ -2,12 +2,18 @@ using FreeX.Core.Calc;
 
 namespace FreeX.App.Services;
 
-public enum WorkbookGoalSeekStatus
+public sealed record WorkbookGoalSeekProposal(
+    GoalSeekRequest Request,
+    GoalSeekResult? SeekResult,
+    string? ErrorMessage)
 {
-    Applied,
-    NotConverged,
-    InvalidRequest,
-    ApplyFailed
+    public bool Success => SeekResult is not null && ErrorMessage is null;
+
+    public static WorkbookGoalSeekProposal Invalid(GoalSeekRequest request, string errorMessage) =>
+        new(request, null, errorMessage);
+
+    public static WorkbookGoalSeekProposal Ready(GoalSeekRequest request, GoalSeekResult seekResult) =>
+        new(request, seekResult, null);
 }
 
 public sealed record WorkbookGoalSeekResult(

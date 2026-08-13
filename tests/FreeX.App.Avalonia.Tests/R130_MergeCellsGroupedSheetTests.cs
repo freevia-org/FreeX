@@ -1,5 +1,4 @@
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -69,7 +68,7 @@ public sealed class R130_MergeCellsGroupedSheetTests
                 var range = new GridRange(new CellAddress(sheet1.Id, 20, 2), new CellAddress(sheet1.Id, 20, 3)); // B20:C20
                 window.Session.SelectRange(range);
 
-                var task = InvokePrivateTaskAsync(window, "MergeSelectedRangeAsync");
+                var task = window.MergeSelectedRangeForTestAsync();
                 await DrainInputAsync();
                 await task;
 
@@ -125,7 +124,7 @@ public sealed class R130_MergeCellsGroupedSheetTests
                 var range = new GridRange(new CellAddress(sheet1.Id, 20, 2), new CellAddress(sheet1.Id, 20, 3));
                 window.Session.SelectRange(range);
 
-                var task = InvokePrivateTaskAsync(window, "MergeSelectedRangeAsync");
+                var task = window.MergeSelectedRangeForTestAsync();
                 await DrainInputAsync();
 
                 // THE DEFECT: because only the active sheet (Sheet1, empty) was analyzed, the pre-fix
@@ -175,7 +174,7 @@ public sealed class R130_MergeCellsGroupedSheetTests
                 var range = new GridRange(new CellAddress(sheet1.Id, 20, 2), new CellAddress(sheet1.Id, 21, 3)); // B20:C21
                 window.Session.SelectRange(range);
 
-                var task = InvokePrivateTaskAsync(window, "MergeAcrossSelectedRangeAsync");
+                var task = window.MergeAcrossSelectedRangeForTestAsync();
                 await DrainInputAsync();
                 await task;
 
@@ -228,7 +227,7 @@ public sealed class R130_MergeCellsGroupedSheetTests
                 var range = new GridRange(new CellAddress(sheet1.Id, 20, 2), new CellAddress(sheet1.Id, 20, 3)); // B20:C20, empty on Sheet1
                 window.Session.SelectRange(range);
 
-                var task = InvokePrivateTaskAsync(window, "MergeAcrossSelectedRangeAsync");
+                var task = window.MergeAcrossSelectedRangeForTestAsync();
                 await DrainInputAsync();
 
                 window.OwnedWindows.Should().ContainSingle(
@@ -278,7 +277,7 @@ public sealed class R130_MergeCellsGroupedSheetTests
                 window.Session.CommitCellText("active-sheet-only").Success.Should().BeTrue();
                 window.Session.SelectRange(range);
 
-                var task = InvokePrivateTaskAsync(window, "MergeSelectedRangeAsync");
+                var task = window.MergeSelectedRangeForTestAsync();
                 await DrainInputAsync();
 
                 window.OwnedWindows.Should().ContainSingle("the active sheet itself still has content that would be lost");
@@ -301,17 +300,6 @@ public sealed class R130_MergeCellsGroupedSheetTests
             return true;
         }, CancellationToken.None);
     }
-
-    private static Task InvokePrivateAsync(MainWindow window, string methodName, params object[] args)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        return (Task)method.Invoke(window, args)!;
-    }
-
-    private static Task InvokePrivateTaskAsync(MainWindow window, string methodName, params object[] args) =>
-        InvokePrivateAsync(window, methodName, args);
 
     private static async Task DrainInputAsync()
     {

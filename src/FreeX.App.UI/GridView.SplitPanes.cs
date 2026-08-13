@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 using FreeX.App.Presentation.GridInteraction;
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -153,43 +154,16 @@ public partial class GridView
         // hit-testing must match it or every click misaligns by the gutter's height once columns
         // are grouped (r49 outline-gutter fix).
         var colHeaderHeight = CalculateColumnHeaderHeight(viewport);
-        if (pos.X < rowHeaderWidth || pos.Y < colHeaderHeight)
-            return null;
-
-        if (viewport.SplitPanes is { } splitPanes)
-        {
-            var dividerLayout = CalculateSplitDividerLayout(viewport);
-            var horizontalY = dividerLayout.HorizontalY;
-            var verticalX = dividerLayout.VerticalX;
-            var region = HitTestSplitPaneRegion(dividerLayout, pos);
-            var topRows = splitPanes.TopRows ?? [];
-            var leftColumns = splitPanes.LeftColumns ?? [];
-            var topRightColumns = splitPanes.TopRightColumns ?? viewport.ColMetrics;
-            var bottomLeftRows = splitPanes.BottomLeftRows ?? viewport.RowMetrics;
-
-            var rows = region switch
-            {
-                SplitPaneRegion.TopLeft or SplitPaneRegion.TopRight => topRows,
-                SplitPaneRegion.BottomLeft => bottomLeftRows,
-                _ => viewport.RowMetrics
-            };
-            var cols = region switch
-            {
-                SplitPaneRegion.TopLeft or SplitPaneRegion.BottomLeft => leftColumns,
-                SplitPaneRegion.TopRight => topRightColumns,
-                _ => viewport.ColMetrics
-            };
-            var rowOrigin = region is SplitPaneRegion.BottomLeft or SplitPaneRegion.BottomRight && horizontalY.HasValue
-                ? horizontalY.Value
-                : colHeaderHeight;
-            var colOrigin = region is SplitPaneRegion.TopRight or SplitPaneRegion.BottomRight && verticalX.HasValue
-                ? verticalX.Value
-                : rowHeaderWidth;
-
-            return HitTestMetrics(sheetId, pos, rows, cols, rowOrigin, colOrigin);
-        }
-
-        return HitTestMetrics(sheetId, pos, viewport.RowMetrics, viewport.ColMetrics, colHeaderHeight, rowHeaderWidth);
+        return ViewportGeometryPlanner.HitTestCell(
+            viewport,
+            sheetId,
+            new LayoutPoint(pos.X, pos.Y),
+            new ViewportGeometrySettings(
+                rowHeaderWidth,
+                colHeaderHeight,
+                MetricPlacement: ViewportMetricPlacement.MetricOffsets,
+                HitTestEdges: ViewportHitTestEdgeBehavior.ExclusiveEnd,
+                SplitColumnHeaderHeight: ColHeaderHeight));
     }
 
     public static SplitPaneRegion HitTestSplitPaneRegion(ViewportModel viewport, Point pos)
@@ -260,47 +234,6 @@ public partial class GridView
 
     private static ColMetric? FindColMetric(IReadOnlyList<ColMetric> metrics, uint column) =>
         metrics.FirstOrDefault(metric => metric.Col == column);
-
-    private static CellAddress? HitTestMetrics(
-        SheetId sheetId,
-        Point pos,
-        IReadOnlyList<RowMetric> rows,
-        IReadOnlyList<ColMetric> cols,
-        double rowOrigin,
-        double colOrigin)
-    {
-        uint? row = null;
-        uint? col = null;
-        foreach (var rm in rows)
-        {
-            var top = rm.TopOffset + rowOrigin;
-            if (pos.Y < top)
-                break;
-
-            if (pos.Y < top + rm.Height)
-            {
-                row = rm.Row;
-                break;
-            }
-        }
-
-        foreach (var cm in cols)
-        {
-            var left = cm.LeftOffset + colOrigin;
-            if (pos.X < left)
-                break;
-
-            if (pos.X < left + cm.Width)
-            {
-                col = cm.Col;
-                break;
-            }
-        }
-
-        return row.HasValue && col.HasValue
-            ? new CellAddress(sheetId, row.Value, col.Value)
-            : null;
-    }
 
     public static SplitPaneClipRects CalculateSplitPaneClipRects(
         ViewportModel viewport,

@@ -2,9 +2,8 @@ using System.Windows.Automation;
 using System.Windows;
 using System.Windows.Controls;
 using System.Globalization;
-using Free.Shared.Opc;
 using FreeW.App.Presentation.Dialogs;
-using FreeW.Core.Model;
+using Free.Shared.Opc;
 
 namespace FreeW.App.Host;
 
@@ -15,73 +14,35 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class PropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly TextBox _title = new() { MinWidth = 280 };
-    private readonly TextBox _author = new() { MinWidth = 280 };
-    private readonly TextBox _subject = new() { MinWidth = 280 };
-    private readonly TextBox _keywords = new() { MinWidth = 280 };
-    private readonly TextBox _category = new() { MinWidth = 280 };
-    private readonly TextBox _contentStatus = new() { MinWidth = 280 };
-    private readonly TextBox _language = new() { MinWidth = 280 };
-    private readonly TextBox _version = new() { MinWidth = 280 };
-    private readonly TextBox _comments = new()
-    {
-        MinWidth = 280,
-        MinHeight = 60,
-        AcceptsReturn = true,
-        TextWrapping = TextWrapping.Wrap,
-        VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-    };
-    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Properties;
+    private static readonly Free.Shared.Shell.DialogFocusPlan<string> FocusPlan = FreeWDialogFocusPlanner.Properties;
+    private readonly DocumentPropertiesDialogSession _session;
+    private readonly Dictionary<DocumentPropertiesDialogField, TextBox> _editors = [];
 
     public DocumentPropertiesDialogValues? Result { get; private set; }
 
     public PropertiesDialog(Window owner, DocumentProperties properties)
     {
+        _session = new DocumentPropertiesDialogSession(properties, CultureInfo.CurrentCulture);
         Owner = owner;
-        Title = "Document Properties";
+        Title = _session.Surface.Title;
         Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _title.Text = properties.Title ?? string.Empty;
-        _author.Text = properties.Author ?? string.Empty;
-        _subject.Text = properties.Subject ?? string.Empty;
-        _keywords.Text = properties.Keywords ?? string.Empty;
-        _comments.Text = properties.Comments ?? string.Empty;
-        _category.Text = properties.Category ?? string.Empty;
-        _contentStatus.Text = properties.ContentStatus ?? string.Empty;
-        _language.Text = properties.Language ?? string.Empty;
-        _version.Text = properties.Version ?? string.Empty;
-        AutomationProperties.SetAutomationId(_title, FocusPlan.InitialFocusTargetAutomationId);
-        AutomationProperties.SetAutomationId(_author, "DocumentPropertiesAuthor");
-        AutomationProperties.SetAutomationId(_subject, "DocumentPropertiesSubject");
-        AutomationProperties.SetAutomationId(_category, "DocumentPropertiesCategory");
-        AutomationProperties.SetAutomationId(_keywords, "DocumentPropertiesKeywords");
-        AutomationProperties.SetAutomationId(_comments, "DocumentPropertiesComments");
-        AutomationProperties.SetAutomationId(_contentStatus, "DocumentPropertiesContentStatus");
-        AutomationProperties.SetAutomationId(_language, "DocumentPropertiesLanguage");
-        AutomationProperties.SetAutomationId(_version, "DocumentPropertiesVersion");
-
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < 12; i++)
+        for (var i = 0; i < _session.Surface.Fields.Count; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, "Title:", _title);
-        AddRow(grid, 1, "Author:", _author);
-        AddRow(grid, 2, "Subject:", _subject);
-        AddRow(grid, 3, "Category:", _category);
-        AddRow(grid, 4, "Keywords:", _keywords);
-        AddRow(grid, 5, "Comments:", _comments);
-        AddRow(grid, 6, "Status:", _contentStatus);
-        AddRow(grid, 7, "Language:", _language);
-        AddRow(grid, 8, "Version:", _version);
-        AddRow(grid, 9, "Last saved by:", ReadOnlyValue(properties.LastModifiedBy, "DocumentPropertiesLastModifiedBy"));
-        AddRow(grid, 10, "Created:", ReadOnlyValue(FormatDate(properties.Created), "DocumentPropertiesCreated"));
-        AddRow(grid, 11, "Modified:", ReadOnlyValue(FormatDate(properties.Modified), "DocumentPropertiesModified"));
+        for (var row = 0; row < _session.Surface.Fields.Count; row++)
+        {
+            var spec = _session.Surface.Fields[row];
+            FrameworkElement field = spec.IsEditable ? CreateEditor(spec) : ReadOnlyValue(spec);
+            AddRow(grid, row, spec.Label, field);
+        }
 
         // Reuse the shared OK/Cancel button row (accelerators, automation names, shell strings; Cancel is
         // IsCancel so Esc/Cancel closes). Single source of truth shared with FreeX's dialogs.
@@ -96,40 +57,54 @@ internal sealed class PropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void FocusTitle()
     {
+        var title = _editors[DocumentPropertiesDialogField.Title];
         if (FocusPlan.SelectAllOnFocus)
-            DialogFocus.FocusAndSelect(_title);
+            DialogFocus.FocusAndSelect(title);
         else
-            DialogFocus.Focus(_title);
+            DialogFocus.Focus(title);
     }
 
     private void Commit()
     {
-        Result = DocumentPropertiesDialogValues.FromInput(
-            _title.Text,
-            _author.Text,
-            _subject.Text,
-            _keywords.Text,
-            _comments.Text,
-            _category.Text,
-            _contentStatus.Text,
-            _language.Text,
-            _version.Text);
+        var plan = _session.PlanCommit(accepted: true, CaptureInput());
+        if (!plan.ShouldExecuteCommand)
+            return;
+
+        Result = plan.Values;
         DialogResult = true;
     }
 
-    private static TextBlock ReadOnlyValue(string? value, string automationId)
+    private TextBox CreateEditor(DocumentPropertiesDialogFieldSpec spec)
+    {
+        var editor = new TextBox
+        {
+            MinWidth = 280,
+            Text = spec.Value,
+            MinHeight = spec.IsMultiline ? 60 : 0,
+            AcceptsReturn = spec.IsMultiline,
+            TextWrapping = spec.IsMultiline ? TextWrapping.Wrap : TextWrapping.NoWrap,
+            VerticalScrollBarVisibility = spec.IsMultiline ? ScrollBarVisibility.Auto : ScrollBarVisibility.Hidden,
+        };
+        AutomationProperties.SetAutomationId(editor, spec.AutomationId);
+        _editors.Add(spec.Field, editor);
+        return editor;
+    }
+
+    private static TextBlock ReadOnlyValue(DocumentPropertiesDialogFieldSpec spec)
     {
         var text = new TextBlock
         {
-            Text = string.IsNullOrWhiteSpace(value) ? "-" : value,
+            Text = spec.Value,
             VerticalAlignment = VerticalAlignment.Center
         };
-        AutomationProperties.SetAutomationId(text, automationId);
+        AutomationProperties.SetAutomationId(text, spec.AutomationId);
         return text;
     }
 
-    private static string? FormatDate(DateTimeOffset? value) =>
-        value?.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
+    private DocumentPropertiesDialogInput CaptureInput() =>
+        DocumentPropertiesDialogInput.Capture(Text);
+
+    private string? Text(DocumentPropertiesDialogField field) => _editors[field].Text;
 
     private static void AddRow(Grid grid, int row, string label, FrameworkElement field)
     {

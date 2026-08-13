@@ -47,7 +47,7 @@ public sealed class PagedEditFlagTests
     [Fact]
     public void ViewRibbon_ContainsPagedEditCommand_InViewsGroup()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var viewTab = definition.FindTab("view");
 
         viewTab.Should().NotBeNull("the View tab must exist in the ribbon");

@@ -79,30 +79,6 @@ public static class AutoCorrectEngine
     public static AutoCorrectResult Evaluate(string? textBefore, char justTyped) =>
         Evaluate(textBefore, justTyped, AutoCorrectOptions.Default);
 
-    /// <summary>
-    /// Look up <paramref name="word"/> (case-insensitively) in <paramref name="table"/>. A match returns the
-    /// stored replacement, but with a leading capital re-applied when the typed word was capitalized
-    /// (<c>Teh</c>→<c>The</c>) — matching Word, which preserves an initial capital on a lowercase entry.
-    /// </summary>
-    public static bool TryReplace(string word, IReadOnlyList<AutoCorrectReplacement> table, out string replacement)
-    {
-        replacement = string.Empty;
-        if (table is null || word.Length == 0)
-            return false;
-
-        foreach (var entry in table)
-        {
-            if (entry?.Replace is null || entry.With is null)
-                continue;
-            if (!string.Equals(entry.Replace, word, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            replacement = MatchLeadingCase(word, entry.Replace, entry.With);
-            return true;
-        }
-        return false;
-    }
-
     // Find the table entry whose key is a boundary-anchored, case-insensitive suffix of <textBefore> (so a
     // key may contain its own punctuation: "(c)", "-->"). The longest matching key wins, so a more specific
     // entry beats a shorter one. <matchedToken> is the exact typed text matched (its length is what the

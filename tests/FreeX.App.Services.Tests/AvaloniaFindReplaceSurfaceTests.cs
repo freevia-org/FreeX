@@ -25,8 +25,11 @@ public sealed class AvaloniaFindReplaceSurfaceTests
         source.Should().Contain("var optionsHeader = new Button");
         source.Should().Contain("AutomationProperties.SetAutomationId(optionsHeader, \"FindReplaceOptionsExpander\")");
         source.Should().Contain("optionsContent.IsVisible = !optionsContent.IsVisible;");
-        source.Should().Contain("? Fr(\"FindReplace_OptionsExpanded\", \"Options <<\")");
-        source.Should().Contain(": Fr(\"FindReplace_Options\", \"Options >>\")");
+        source.Should().Contain("? Fr(FindReplaceDialogText.OptionsExpanded)");
+        source.Should().Contain(": Fr(FindReplaceDialogText.Options)");
+        source.Should().Contain("FindReplaceDialogSchema.WithinChoices");
+        source.Should().Contain("FindReplaceDialogSchema.SearchChoices");
+        source.Should().Contain("FindReplaceDialogSchema.LookInChoices");
         source.Should().Contain("AutomationProperties.SetName(optionsHeader, optionsHeaderText.Text);");
         source.Should().Contain("private static ColumnDefinitions FindReplaceResultColumns()");
         source.Should().Contain("FindReplaceDialogPlanner.ResultBookColumnWidth");

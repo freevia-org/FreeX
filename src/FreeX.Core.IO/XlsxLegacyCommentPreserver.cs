@@ -16,39 +16,20 @@ internal static class XlsxLegacyCommentPreserver
     private static readonly XNamespace ExcelVmlNs = "urn:schemas-microsoft-com:office:excel";
     private static readonly XNamespace OfficeNs = "urn:schemas-microsoft-com:office:office";
 
-    public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive, Workbook workbook)
+    public static void Preserve(
+        Workbook workbook,
+        XlsxSourcePackagePreservationContext? context)
     {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
-        var sourceWorkbookRelsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
-        var targetWorkbookRelsEntry = targetArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (sourceWorkbookEntry is null || sourceWorkbookRelsEntry is null ||
-            targetWorkbookEntry is null || targetWorkbookRelsEntry is null)
-        {
+        if (context is null)
             return;
-        }
 
-        var sourceWorkbookXml = XlsxPackageXmlEditor.LoadXml(sourceWorkbookEntry);
-        var targetWorkbookXml = XlsxPackageXmlEditor.LoadXml(targetWorkbookEntry);
-        var sourceWorkbookRels = XlsxRelationshipReader.LoadTargets(
-            sourceArchive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var targetWorkbookRels = XlsxRelationshipReader.LoadTargets(
-            targetArchive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-
-        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+        var sourceArchive = context.SourceArchive;
+        var targetArchive = context.TargetArchive;
+        var workbookNs = context.WorkbookNs;
+        var relNs = context.RelNs;
+        var packageRelNs = context.PackageRelNs;
+        var sourceSheets = context.SourceSheets;
+        var targetSheets = context.TargetSheets;
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
         {
@@ -64,7 +45,7 @@ internal static class XlsxLegacyCommentPreserver
             if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
                 continue;
 
-            var sourceWorksheetXml = XlsxPackageXmlEditor.LoadXml(sourceWorksheetEntry);
+            var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceWorksheetPath)!;
             var sourceCommentsPath = GetLegacyCommentPartPath(sourceArchive, sourceWorksheetPath, packageRelNs);
             if (sourceCommentsPath is null)
                 continue;
@@ -181,10 +162,8 @@ internal static class XlsxLegacyCommentPreserver
             XlsxLegacyCommentFontNormalizer.SanitizeRunFontNames(reconciledCommentsXml);
             ReplacePackageXmlPart(targetArchive, sourceCommentsPath, reconciledCommentsXml);
 
-            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
-            var targetWorksheetRelsXml = targetArchive.GetEntry(targetWorksheetRelsPath) is { } targetWorksheetRelsEntry
-                ? XlsxPackageXmlEditor.LoadXml(targetWorksheetRelsEntry)
-                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            var (targetWorksheetRelsPath, targetWorksheetRelsXml) =
+                context.LoadOrCreateTargetRelationships(targetWorksheetPath);
             EnsureSingleRelationshipForPackagePart(
                 targetWorksheetRelsXml,
                 packageRelNs,
@@ -210,7 +189,7 @@ internal static class XlsxLegacyCommentPreserver
                 workbookNs,
                 ReadSourceThreadedCommentsByCell(sourceArchive, sourceWorksheetPath));
 
-            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
+            context.ReplaceTargetPartXml(targetWorksheetRelsPath, targetWorksheetRelsXml);
 
             var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
             var targetRoot = targetWorksheetXml.Root;
@@ -220,7 +199,7 @@ internal static class XlsxLegacyCommentPreserver
             targetRoot.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
             if (!string.IsNullOrWhiteSpace(preservedVmlRelId))
                 SetSingleLegacyDrawingMarker(targetRoot, workbookNs, relNs, preservedVmlRelId);
-            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+            context.ReplaceTargetPartXml(targetWorksheetPath, targetWorksheetXml);
 
         }
     }

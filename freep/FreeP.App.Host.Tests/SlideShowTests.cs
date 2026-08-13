@@ -1573,22 +1573,21 @@ public sealed class ParagraphRangeOverlayPrecedenceTests
                 "stepping back from the landing slide must navigate to slide 0 and run DisplayCurrentSlide -> PrepareAnimationOverlay for it");
             window.Controller.CurrentSlideIndex.Should().Be(0, "the animated shape's slide must now be current");
 
-            var rangeField = typeof(SlideShowWindow).GetField(
-                "_paragraphRangeAnimElements", BindingFlags.NonPublic | BindingFlags.Instance);
-            var naiveField = typeof(SlideShowWindow).GetField(
-                "_paragraphAnimElements", BindingFlags.NonPublic | BindingFlags.Instance);
-            rangeField.Should().NotBeNull("PrepareAnimationOverlay's ranged-overlay dictionary must still exist");
-            naiveField.Should().NotBeNull("PrepareAnimationOverlay's naive per-paragraph dictionary must still exist");
+            var targetField = typeof(SlideShowWindow).GetField(
+                "_animationTargets", BindingFlags.NonPublic | BindingFlags.Instance);
+            targetField.Should().NotBeNull(
+                "PrepareAnimationOverlay must retain its shared animation target registry");
+            var targets = (SlideShowAnimationTargetRegistry<FrameworkElement>)targetField!.GetValue(window)!;
+            var availability = targets.BuildAvailability();
 
-            var rangedElements = (System.Collections.IDictionary)rangeField!.GetValue(window)!;
-            var naiveElements = (System.Collections.IDictionary)naiveField!.GetValue(window)!;
-
-            rangedElements.Count.Should().Be(2,
+            availability.ParagraphRangeAnimations.Should().HaveCount(2,
                 "the explicit per-paragraph ranged timing must drive playback when both it and the bldLst marker are present on the same shape");
-            rangedElements.Contains(rangeAnim0).Should().BeTrue("the first paragraph's ranged animation must have its own overlay element");
-            rangedElements.Contains(rangeAnim1).Should().BeTrue("the second paragraph's ranged animation must have its own overlay element");
+            availability.ParagraphRangeAnimations.Should().Contain(rangeAnim0,
+                "the first paragraph's ranged animation must have its own overlay target");
+            availability.ParagraphRangeAnimations.Should().Contain(rangeAnim1,
+                "the second paragraph's ranged animation must have its own overlay target");
 
-            naiveElements.Contains(shapeId).Should().BeFalse(
+            availability.ParagraphCounts.Should().NotContainKey(shapeId,
                 "the naive bldLst-only split must NOT run once richer ranged timing already covers every paragraph of the shape");
         }
         finally
@@ -1776,20 +1775,21 @@ public sealed partial class SlideShowMainWindowCustomShowTests
             presentation.Slides.Add(new Slide { Title = "Intro" });
             presentation.Slides.Add(new Slide { Title = "Deep dive" });
             presentation.Slides.Add(new Slide { Title = "Appendix" });
+            var customShows = new SlideShowCustomShowSession(() => window.Editor);
 
-            var create = window.CreateCustomShow(
+            var create = customShows.Create(
                 "  Executive review  ",
                 new[] { presentation.Slides[2].Id, "missing-slide", presentation.Slides[0].Id });
-            var rename = window.RenameCustomShow(create.CustomShowIndex, "Board review");
-            var updateSlides = window.UpdateCustomShowSlides(
+            var rename = customShows.Rename(create.CustomShowIndex, "Board review");
+            var updateSlides = customShows.UpdateSlides(
                 create.CustomShowIndex,
                 new[] { presentation.Slides[1].Id, presentation.Slides[2].Id });
-            var moveSlide = window.MoveCustomShowSlide(
+            var moveSlide = customShows.MoveSlide(
                 create.CustomShowIndex,
                 sourceSlideIndex: 0,
                 sourceSlideId: presentation.Slides[1].Id,
                 targetSlideIndex: 1);
-            var plan = window.BuildCustomShowAuthoringPlan();
+            var plan = customShows.BuildAuthoringPlan();
 
             create.Succeeded.Should().BeTrue();
             rename.Succeeded.Should().BeTrue();
@@ -1802,7 +1802,7 @@ public sealed partial class SlideShowMainWindowCustomShowTests
             plan.CustomShows.Should().ContainSingle().Which.Name.Should().Be("Board review");
             plan.AvailableSlides.Select(slide => slide.Title).Should().Equal("Intro", "Deep dive", "Appendix");
 
-            var delete = window.DeleteCustomShow(create.CustomShowIndex);
+            var delete = customShows.Delete(create.CustomShowIndex);
 
             delete.Succeeded.Should().BeTrue();
             presentation.CustomShows.Should().BeEmpty();
@@ -1824,13 +1824,14 @@ public sealed partial class SlideShowMainWindowCustomShowTests
             presentation.Slides.Clear();
             presentation.Slides.Add(new Slide { Title = "Intro" });
             presentation.Slides.Add(new Slide { Title = "Deep dive" });
+            var customShows = new SlideShowCustomShowSession(() => window.Editor);
 
-            var create = window.CreateCustomShow(
+            var create = customShows.Create(
                 "Executive review",
                 new[] { presentation.Slides[0].Id, presentation.Slides[1].Id });
             create.Succeeded.Should().BeTrue();
 
-            dialog = new CustomShowDialog(window);
+            dialog = new CustomShowDialog(customShows);
 
             dialog.RenderedCustomShowCount.Should().Be(1);
             dialog.RenderedSlideOptionCount.Should().Be(2);
@@ -1878,8 +1879,9 @@ public sealed partial class SlideShowMainWindowCustomShowTests
             presentation.Slides.Add(new Slide { Title = "Intro" });
             presentation.Slides.Add(new Slide { Title = "Deep dive" });
             presentation.Slides.Add(new Slide { Title = "Appendix" });
+            var customShows = new SlideShowCustomShowSession(() => window.Editor);
 
-            var create = window.CreateCustomShow(
+            var create = customShows.Create(
                 "Executive review",
                 new[]
                 {
@@ -1889,7 +1891,7 @@ public sealed partial class SlideShowMainWindowCustomShowTests
                 });
             create.Succeeded.Should().BeTrue();
 
-            dialog = new CustomShowDialog(window);
+            dialog = new CustomShowDialog(customShows);
 
             var plan = dialog.DragReorderCustomShowSlideForTests(
                 sourceSlideIndex: 0,
@@ -1915,25 +1917,8 @@ public sealed partial class SlideShowMainWindowCustomShowTests
         }
     }
 
-    private static string FindRepoFile(params string[] relativeParts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var parts = new string[relativeParts.Length + 1];
-            parts[0] = directory.FullName;
-            relativeParts.CopyTo(parts, 1);
-
-            var candidate = Path.Combine(parts);
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException(
-            "Could not locate repository file.",
-            Path.Combine(relativeParts));
-    }
+    private static string FindRepoFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.Find(relativeParts);
 }
 
 // Wave 16C: SlideShowMediaController tests
@@ -2103,18 +2088,14 @@ public sealed class SlideShowMediaControllerTests
     [Fact]
     public void TransitionSoundTempFile_WriteAndDelete_UsesOneOwnedFile()
     {
-        var path = TransitionSoundTempFile.Write(new byte[] { 1, 2, 3 }, "audio/wav");
+        using var temporaryFile = TransitionSoundTempFile.Write(new byte[] { 1, 2, 3 }, "audio/wav");
+        var path = temporaryFile.Path;
 
-        try
-        {
-            path.Should().EndWith(".wav");
-            File.Exists(path).Should().BeTrue();
-            File.Exists(path[..^4] + ".tmp").Should().BeFalse();
-        }
-        finally
-        {
-            TransitionSoundTempFile.Delete(path);
-        }
+        path.Should().EndWith(".wav");
+        File.Exists(path).Should().BeTrue();
+        File.Exists(path[..^4] + ".tmp").Should().BeFalse();
+
+        temporaryFile.Release();
 
         File.Exists(path).Should().BeFalse();
     }

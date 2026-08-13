@@ -8,6 +8,5 @@ public sealed partial class SymbolPickerDialogSourceTests
         DialogSourceTestSupport.ReadHostSourcesWithSeparator(
             string.Empty,
             "SymbolPickerDialog.cs",
-            "SymbolPickerDialog.Layout.cs",
-            "SymbolPickerDialog.Catalog.cs");
+            "SymbolPickerDialog.Layout.cs");
 }

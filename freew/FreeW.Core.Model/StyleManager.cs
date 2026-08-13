@@ -11,31 +11,26 @@ namespace FreeW.Core.Model;
 public static class StyleManager
 {
     /// <summary>
-    /// Built-in style ids that are guarded even though they are not (yet) part of
-    /// <see cref="BuiltInStyles.Gallery"/> — the Caption / Index / Table-of-Figures styles the outline
-    /// and TOC/TOF tooling seed directly. Guarding them keeps the built-in catalog intact so existing
-    /// documents and that tooling keep resolving.
+    /// Every guarded built-in style id: the authoritative gallery plus supplemental Caption / Index /
+    /// Table-of-Figures and deeper outline styles seeded by their dedicated tooling.
     /// </summary>
-    public static readonly IReadOnlySet<string> BuiltInStyleIds = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "Normal",
-        "Heading1", "Heading2", "Heading3", "Heading4", "Heading5", "Heading6",
-        "Title", "Subtitle", "Quote",
-        "Caption",
-        "IndexHeading", "IndexEntry",
-        "TableOfFiguresHeading", "TableOfFiguresEntry",
-    };
+    public static readonly IReadOnlySet<string> BuiltInStyleIds = BuiltInStyles.Gallery
+        .Select(descriptor => descriptor.Id)
+        .Concat(
+        [
+            "Heading5", "Heading6",
+            "Caption",
+            "IndexHeading", "IndexEntry",
+            "TableOfFiguresHeading", "TableOfFiguresEntry",
+        ])
+        .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>
-    /// True when <paramref name="styleId"/> names a guarded built-in style: either listed explicitly in
-    /// <see cref="BuiltInStyleIds"/>, or present in the authoritative <see cref="BuiltInStyles.Gallery"/>
-    /// (every style the app can seed via Home &gt; Styles, e.g. Strong, Emphasis, NoSpacing,
-    /// ListParagraph, IntenseQuote). Deriving from the gallery means this can never drift out of sync
-    /// with what the app actually offers as a built-in — Word never allows deleting any of these, and
-    /// deleting one here would silently strip formatting from any content still referencing its id.
+    /// True when <paramref name="styleId"/> names a guarded built-in style. Gallery membership is derived
+    /// into <see cref="BuiltInStyleIds"/>, so the delete guard cannot drift from styles the app can seed.
     /// </summary>
     public static bool IsBuiltIn(string styleId) =>
-        styleId is not null && (BuiltInStyleIds.Contains(styleId) || BuiltInStyles.Find(styleId) is not null);
+        styleId is not null && BuiltInStyleIds.Contains(styleId);
 
     /// <summary>
     /// Create a new custom paragraph style from <paramref name="name"/>, give it a collision-free id

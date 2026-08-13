@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using FluentAssertions;
 using FreeX.Core.Calc;
@@ -97,49 +96,27 @@ public sealed class R88_CustomViewWindowStateInvalidationTests
     private sealed class CustomViewWindowStateHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly FieldInfo _workbookField;
-        private readonly FieldInfo _commandBusField;
-        private readonly MethodInfo _getEffectiveViewState;
-        private readonly MethodInfo _syncWindowViewState;
-        private readonly MethodInfo _applyCustomViewWorkbookViewState;
 
         private CustomViewWindowStateHarness(MainWindow window)
         {
             _window = window;
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
-            _commandBusField = typeof(MainWindow)
-                .GetField("_commandBus", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_commandBus");
-            _getEffectiveViewState = typeof(MainWindow)
-                .GetMethod("GetEffectiveViewState", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "GetEffectiveViewState");
-            _syncWindowViewState = typeof(MainWindow)
-                .GetMethod("SyncWindowViewState", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SyncWindowViewState");
-            _applyCustomViewWorkbookViewState = typeof(MainWindow)
-                .GetMethod("ApplyCustomViewWorkbookViewState", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ApplyCustomViewWorkbookViewState");
         }
 
         // MainWindow_Loaded unconditionally calls CreateNewWorkbook() (unless adopting a shared
         // document via a WorkbookWindowRegistry, which this harness doesn't provide), replacing
         // whatever workbook was passed into the constructor -- so the live workbook/sheet must be
-        // read fresh via reflection AFTER Show()/Loaded has run (mirrors
+        // read fresh from the session AFTER Show()/Loaded has run (mirrors
         // R31_ViewportSelectionLogicTests.ViewportSelectionHarness).
-        private Workbook LiveWorkbook =>
-            (Workbook)(_workbookField.GetValue(_window)
-                ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
+        private Workbook LiveWorkbook => _window.Session.Workbook;
 
         public Sheet Sheet => LiveWorkbook.Sheets[0];
         public SheetId SheetId => Sheet.Id;
 
-        public CommandOutcome ExecuteCommand(IWorkbookCommand command)
+        public WorkbookCellEditResult ExecuteCommand(IWorkbookCommand command)
         {
-            var bus = (ICommandBus)(_commandBusField.GetValue(_window)
-                ?? throw new InvalidOperationException("MainWindow command bus is not initialized."));
-            var outcome = bus.Execute(LiveWorkbook.Id, command);
+            var outcome = command is SaveCustomViewCommand or ApplyCustomViewCommand or DeleteCustomViewCommand
+                ? _window.Session.ExecuteCustomViewCommand(command)
+                : _window.Session.ExecuteCommandPreservingSelection(command);
             PumpDispatcher();
             return outcome;
         }
@@ -147,16 +124,15 @@ public sealed class R88_CustomViewWindowStateInvalidationTests
         public void SyncWindowViewState()
         {
             IReadOnlyList<SheetId> targetSheetIds = [SheetId];
-            _syncWindowViewState.Invoke(_window, [targetSheetIds]);
+            _window.SyncWindowViewStateForTest(targetSheetIds);
         }
 
         public WorksheetViewStateSnapshot GetEffectiveViewState() =>
-            (WorksheetViewStateSnapshot)(_getEffectiveViewState.Invoke(_window, [Sheet])
-                ?? throw new InvalidOperationException("GetEffectiveViewState returned null."));
+            _window.GetEffectiveViewStateForTest(Sheet);
 
         public void ApplyCustomViewWorkbookViewState()
         {
-            _applyCustomViewWorkbookViewState.Invoke(_window, []);
+            _window.ApplyCustomViewWorkbookViewStateForTest();
             PumpDispatcher();
         }
 

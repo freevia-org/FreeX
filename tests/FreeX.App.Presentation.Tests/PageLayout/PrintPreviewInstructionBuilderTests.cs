@@ -31,7 +31,8 @@ public sealed class PrintPreviewInstructionBuilderTests
             TextBoxes: [],
             HeaderRuns: [],
             FooterRuns: [],
-            Pictures: []);
+            Pictures: [],
+            Comments: []);
 
     [Fact]
     public void Build_AlwaysPaintsPageBackgroundFirst()

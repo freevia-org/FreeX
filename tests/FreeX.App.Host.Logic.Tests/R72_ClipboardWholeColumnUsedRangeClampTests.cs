@@ -1,6 +1,6 @@
-using System.Collections;
 using System.Reflection;
 using FluentAssertions;
+using FreeX.App.Presentation.Editing;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -131,30 +131,24 @@ public sealed class R72_ClipboardWholeColumnUsedRangeClampTests
         });
     }
 
-    // The internal clipboard is a private nested record (MainWindow.InternalClipboard) -- read its
-    // SourceRange/Cells via reflection rather than `dynamic`, since dynamic member binding still
-    // enforces the enclosing type's own accessibility (private) from this test assembly.
-    private static object GetInternalClipboardObject(MainWindow window)
+    private static WorkbookClipboardSnapshot GetInternalClipboard(MainWindow window)
     {
-        var field = typeof(MainWindow).GetField("_internalClipboard", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingFieldException(nameof(MainWindow), "_internalClipboard");
-        return field.GetValue(window)
-            ?? throw new InvalidOperationException("_internalClipboard was null after ExecuteCopy");
+        var field = typeof(MainWindow).GetField(
+                "_workbookClipboardSession",
+                BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(nameof(MainWindow), "_workbookClipboardSession");
+        var session = (WorkbookClipboardSession)field.GetValue(window)!;
+        return session.Content
+            ?? throw new InvalidOperationException("The shared clipboard session was empty after ExecuteCopy.");
     }
 
     private static GridRange GetInternalClipboardSourceRange(MainWindow window)
     {
-        var clip = GetInternalClipboardObject(window);
-        var property = clip.GetType().GetProperty("SourceRange")
-            ?? throw new MissingMemberException("InternalClipboard", "SourceRange");
-        return (GridRange)property.GetValue(clip)!;
+        return GetInternalClipboard(window).SourceRange;
     }
 
     private static int GetInternalClipboardCellsCount(MainWindow window)
     {
-        var clip = GetInternalClipboardObject(window);
-        var property = clip.GetType().GetProperty("Cells")
-            ?? throw new MissingMemberException("InternalClipboard", "Cells");
-        return ((ICollection)property.GetValue(clip)!).Count;
+        return GetInternalClipboard(window).Cells.Count;
     }
 }

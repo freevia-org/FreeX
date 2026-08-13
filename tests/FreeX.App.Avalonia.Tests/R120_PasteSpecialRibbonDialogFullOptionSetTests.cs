@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 
+using FreeX.App.Presentation.Editing;
 using FreeX.Core.Commands;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -25,8 +26,8 @@ namespace FreeX.App.Avalonia.Tests;
 /// MainWindow-partial dialog fix of this exact "reachable via one surface but not another" shape).
 ///
 /// The remaining tests drive the REAL, unmodified production dialog end-to-end via the new
-/// <c>PasteSpecialDialogSmokeProbe</c> test seam (same convention as
-/// <c>ShowFormatCellsInputDialogAsync</c>'s <c>launchSmokeProbe</c>): <c>PromptPasteSpecialModeAsync</c>
+/// <c>PasteSpecialDialogInspection</c> test seam (same convention as
+/// <c>ShowFormatCellsInputDialogAsync</c>'s <c>inspectionCallback</c>): <c>PromptPasteSpecialModeAsync</c>
 /// itself never touches the OS clipboard (only the caller, <c>ShowPasteSpecialDialogAsync</c>, does,
 /// after the dialog closes -- see its <c>Cells</c>-family clipboard dispatch), so the dialog's real
 /// RadioButtons/CheckBoxes/Buttons can be exercised directly with headless input, proving the composed
@@ -42,12 +43,15 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
     private static string ReadMergePasteSource() =>
         TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("src", "FreeX.App.Avalonia", "MainWindow.MergePaste.cs");
 
+    private static string ReadPlannerSource() =>
+        TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("src", "FreeX.App.Presentation", "Editing", "PasteSpecialPlanner.cs");
+
     // ---- Fail-before/pass-after proof (source-based; compiles and runs unmodified against the
     // pre-fix 4-option dialog, so it demonstrably flips from failing to passing) ----------------------
     [Fact]
     public void PasteSpecialDialogSource_ExposesFullOptionSet()
     {
-        var source = ReadMergePasteSource();
+        var source = ReadPlannerSource();
 
         // Previously-unreachable content kinds (only reachable via the Paste split-button submenu).
         source.Should().Contain("\"PasteSpecialAllExceptBordersRadio\"");
@@ -79,7 +83,7 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
     [Fact]
     public void PasteSpecialDialogSource_StillExposesOriginalFourOptions()
     {
-        var source = ReadMergePasteSource();
+        var source = ReadPlannerSource();
 
         source.Should().Contain("\"PasteSpecialAllRadio\"");
         source.Should().Contain("\"PasteSpecialValuesRadio\"");
@@ -87,35 +91,47 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
         source.Should().Contain("\"PasteSpecialFormatsRadio\"");
     }
 
-    // Family completeness (per the r119/r120 FAMILY RULE): every PasteSpecialDialogActionKind member
-    // that ShowPasteSpecialDialogAsync's dispatch switch must route to its existing execution method.
+    // Family completeness: the renderer dispatches every shared execution action to its existing native
+    // clipboard realization method.
     [Fact]
     public void ShowPasteSpecialDialogAsyncSource_DispatchesEveryActionKind()
     {
         var source = ReadMergePasteSource();
 
-        source.Should().Contain("case PasteSpecialDialogActionKind.Comments:");
-        source.Should().Contain("case PasteSpecialDialogActionKind.Validation:");
-        source.Should().Contain("case PasteSpecialDialogActionKind.ColumnWidths:");
-        source.Should().Contain("case PasteSpecialDialogActionKind.Text:");
-        source.Should().Contain("case PasteSpecialDialogActionKind.UnicodeText:");
-        source.Should().Contain("case PasteSpecialDialogActionKind.Picture:");
-        source.Should().Contain("case PasteSpecialDialogActionKind.LinkedPicture:");
-        source.Should().Contain("case PasteSpecialDialogActionKind.Link:");
-        source.Should().Contain("await PasteCommentsFromClipboardAsync(option.Label);");
-        source.Should().Contain("await PasteDataValidationFromClipboardAsync(option.Label);");
-        source.Should().Contain("await PasteColumnWidthsFromClipboardAsync(option.Label);");
-        source.Should().Contain("await PasteSpecialExternalTextFromClipboardAsync(option.Label);");
-        source.Should().Contain("await PastePictureFromClipboardAsync(option.Label, linkedPicture: false);");
-        source.Should().Contain("await PastePictureFromClipboardAsync(option.Label, linkedPicture: true);");
-        source.Should().Contain("await PasteLinkFromClipboardAsync(option.Label);");
+        source.Should().Contain("var plan = PasteSpecialPlanner.CreatePlan(selection);");
+        source.Should().Contain("case PasteSpecialAction.Comments:");
+        source.Should().Contain("case PasteSpecialAction.Validation:");
+        source.Should().Contain("case PasteSpecialAction.ColumnWidths:");
+        source.Should().Contain("case PasteSpecialAction.ExternalText:");
+        source.Should().Contain("case PasteSpecialAction.Picture:");
+        source.Should().Contain("case PasteSpecialAction.LinkedPicture:");
+        source.Should().Contain("case PasteSpecialAction.Link:");
+        source.Should().Contain("await PasteCommentsFromClipboardAsync(plan.Label);");
+        source.Should().Contain("await PasteDataValidationFromClipboardAsync(plan.Label);");
+        source.Should().Contain("await PasteColumnWidthsFromClipboardAsync(plan.Label);");
+        source.Should().Contain("await PasteSpecialExternalTextFromClipboardAsync(plan.Label);");
+        source.Should().Contain("await PastePictureFromClipboardAsync(plan.Label, linkedPicture: false);");
+        source.Should().Contain("await PastePictureFromClipboardAsync(plan.Label, linkedPicture: true);");
+        source.Should().Contain("await PasteLinkFromClipboardAsync(plan.Label);");
+    }
+
+    [Fact]
+    public void PasteSpecialDialogSource_ConsumesSharedSurfaceAndResultPolicy()
+    {
+        var source = ReadMergePasteSource();
+
+        source.Should().Contain("var surface = PasteSpecialPlanner.Surface;");
+        source.Should().Contain("PasteSpecialPlanner.CreateSelection(");
+        source.Should().Contain("PasteSpecialPlanner.CreatePasteLinkSelection()");
+        source.Should().NotContain("PasteSpecialDialogOptions =");
+        source.Should().NotContain("enum PasteSpecialDialogActionKind");
     }
 
     // ---- Real production dialog, driven end-to-end (no clipboard touched by this method itself) -----
     [Fact]
     public async Task PasteSpecialDialog_ValuesAndNumberFormatsWithTransposeSkipBlanksAndAddOperation_ComposesIntoOneSelection()
     {
-        MainWindow.PasteSpecialDialogSelection? selection = null;
+        PasteSpecialDialogSelection? selection = null;
 
         await Session.Dispatch(async () =>
         {
@@ -150,9 +166,10 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
 
         selection.Should().NotBeNull(
             "checking the previously-unreachable 'Values and Number Formats' radio plus Transpose/Skip Blanks/Add must still produce a selection");
-        selection!.Option.Kind.Should().Be(MainWindow.PasteSpecialDialogActionKind.Cells);
-        selection.Option.Mode.Should().Be(PasteCellsMode.All);
-        selection.Option.ContentKind.Should().Be(PasteSpecialContentKind.ValuesAndNumberFormats);
+        var plan = PasteSpecialPlanner.CreatePlan(selection!);
+        plan.Action.Should().Be(PasteSpecialAction.Paste);
+        plan.PasteMode.Should().Be(PasteMode.All);
+        plan.Options.ContentKind.Should().Be(PasteSpecialContentKind.ValuesAndNumberFormats);
         selection.Transpose.Should().BeTrue();
         selection.SkipBlanks.Should().BeTrue();
         selection.Operation.Should().Be(PasteSpecialOperation.Add);
@@ -166,7 +183,7 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
         // UnicodeText/Picture/LinkedPicture/Link all share this exact "look up the radio, return its
         // Option unchanged" mechanic -- see ShowPasteSpecialDialogAsyncSource_DispatchesEveryActionKind
         // above for full-family source coverage of the switch that consumes it).
-        MainWindow.PasteSpecialDialogSelection? selection = null;
+        PasteSpecialDialogSelection? selection = null;
 
         await Session.Dispatch(async () =>
         {
@@ -192,14 +209,15 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
         }, CancellationToken.None);
 
         selection.Should().NotBeNull();
-        selection!.Option.Kind.Should().Be(MainWindow.PasteSpecialDialogActionKind.Comments);
-        selection.Option.Label.Should().Be("Comments and Notes");
+        var plan = PasteSpecialPlanner.CreatePlan(selection!);
+        plan.Action.Should().Be(PasteSpecialAction.Comments);
+        plan.Label.Should().Be("Comments and Notes");
     }
 
     [Fact]
     public async Task PasteSpecialDialog_PasteLinkButton_ClosesWithTheLinkActionKindRegardlessOfCheckedRadio()
     {
-        MainWindow.PasteSpecialDialogSelection? selection = null;
+        PasteSpecialDialogSelection? selection = null;
 
         await Session.Dispatch(async () =>
         {
@@ -223,7 +241,7 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
         }, CancellationToken.None);
 
         selection.Should().NotBeNull();
-        selection!.Option.Kind.Should().Be(MainWindow.PasteSpecialDialogActionKind.Link);
+        PasteSpecialPlanner.CreatePlan(selection!).Action.Should().Be(PasteSpecialAction.Link);
     }
 
     // No-regression sibling: the ORIGINAL default behaviour (open the dialog, change nothing, click OK)
@@ -232,7 +250,7 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
     [Fact]
     public async Task PasteSpecialDialog_DefaultNoEditOk_StillResolvesToPlainAllWithNoOptionsSet()
     {
-        MainWindow.PasteSpecialDialogSelection? selection = null;
+        PasteSpecialDialogSelection? selection = null;
 
         await Session.Dispatch(async () =>
         {
@@ -255,9 +273,10 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
         }, CancellationToken.None);
 
         selection.Should().NotBeNull();
-        selection!.Option.Kind.Should().Be(MainWindow.PasteSpecialDialogActionKind.Cells);
-        selection.Option.Mode.Should().Be(PasteCellsMode.All);
-        selection.Option.ContentKind.Should().Be(PasteSpecialContentKind.Default);
+        var plan = PasteSpecialPlanner.CreatePlan(selection!);
+        plan.Action.Should().Be(PasteSpecialAction.Paste);
+        plan.PasteMode.Should().Be(PasteMode.All);
+        plan.Options.ContentKind.Should().Be(PasteSpecialContentKind.Default);
         selection.Transpose.Should().BeFalse();
         selection.SkipBlanks.Should().BeFalse();
         selection.KeepSourceColumnWidths.Should().BeFalse();
@@ -268,7 +287,7 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
     public async Task PasteSpecialDialog_CancelButton_ReturnsNull()
     {
         var receivedCallback = false;
-        MainWindow.PasteSpecialDialogSelection? selection = null;
+        PasteSpecialDialogSelection? selection = null;
 
         await Session.Dispatch(async () =>
         {

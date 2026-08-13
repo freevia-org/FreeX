@@ -19,7 +19,8 @@ internal sealed class SmartArtEditDialog : FreeWDialogWindow
 
     private SmartArtEditDialog(SmartArt seed)
     {
-        Title = "Edit SmartArt Text";
+        var text = SmartArtDialogPlanner.ResolveText(UiText.Get);
+        Title = text.EditTitle;
         Width = 430;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -58,9 +59,9 @@ internal sealed class SmartArtEditDialog : FreeWDialogWindow
             Spacing = 6,
             Children =
             {
-                new TextBlock { Text = "Layout type:" },
+                new TextBlock { Text = text.LayoutLabel },
                 _kindBox,
-                new TextBlock { Text = "One shape per line:", Margin = new Thickness(0, 8, 0, 0) },
+                new TextBlock { Text = text.EditNodeTextLabel, Margin = new Thickness(0, 8, 0, 0) },
                 _nodeTextBox,
                 _status,
                 AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 10, 0, 0)),
@@ -91,9 +92,10 @@ internal sealed class SmartArtEditDialog : FreeWDialogWindow
                 kind,
                 (_nodeTextBox.Text ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries),
                 out var result,
-                out var errorMessage))
+                out var errorMessage,
+                UiText.Get))
         {
-            _status.Text = errorMessage ?? SmartArtDialogPlanner.EmptyNodesValidationMessage;
+            _status.Text = errorMessage ?? SmartArtDialogPlanner.ResolveText(UiText.Get).EmptyNodesValidationMessage;
             return;
         }
         Close(result);

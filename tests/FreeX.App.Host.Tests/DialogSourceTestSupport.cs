@@ -18,7 +18,7 @@ internal static class DialogSourceTestSupport
 
     public static string ReadHostSourceFile(params string[] relativeParts) =>
         WorkspaceFileLocator.ReadAllText(
-            new[] { "src", "FreeX.App.Host" }.Concat(relativeParts).ToArray());
+            HostSourceRoot(relativeParts[0]).Concat(relativeParts).ToArray());
 
     public static string ReadAppUiSources(params string[] fileNames) =>
         ReadAppUiSourcesWithSeparator(Environment.NewLine, fileNames);
@@ -28,7 +28,7 @@ internal static class DialogSourceTestSupport
 
     public static string FindHostSourceFile(params string[] relativeParts) =>
         WorkspaceFileLocator.Find(
-            new[] { "src", "FreeX.App.Host" }.Concat(relativeParts).ToArray());
+            HostSourceRoot(relativeParts[0]).Concat(relativeParts).ToArray());
 
     public static string FindHostSourceDirectory(params string[] relativeParts) =>
         Path.GetDirectoryName(FindHostSourceFile(relativeParts))
@@ -93,7 +93,13 @@ internal static class DialogSourceTestSupport
     }
 
     private static string ReadHostSource(string fileName) =>
-        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", fileName);
+        WorkspaceFileLocator.ReadAllText([.. HostSourceRoot(fileName), fileName]);
+
+    private static string[] HostSourceRoot(string fileName) =>
+        fileName is "ParityCapture.cs" or "MainWindow.NameBoxParityCapture.cs" ||
+        fileName.StartsWith("MainWindow.ScreenshotTour", StringComparison.Ordinal)
+            ? ["tools", "FreeX.ParityCapture.Wpf", "Capture"]
+            : ["src", "FreeX.App.Host"];
 
     public static string ReadLocalizationSources(params string[] fileNames) =>
         SourceTextTestSupport.ReadSources(ReadLocalizationSource, fileNames);
@@ -123,6 +129,9 @@ internal static class DialogSourceTestSupport
 
     public static string ReadSharedAppServicesSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", fileName);
+
+    public static string ReadSharedRibbonWpfSource(string fileName) =>
+        WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.Ribbon.Wpf", fileName);
 
     public static string ReadAppServicesRibbonSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "Ribbon", fileName);

@@ -15,7 +15,8 @@ public sealed class ProofingLanguageCatalogSourceGuardTests
             "Ribbon",
             "FreeWRibbonCommands.cs"));
 
-        source.Should().Contain("ProofingLanguageDialogPlanner.Build(current)");
+        source.Should().Contain("ProofingLanguageDialogPlanner.Build(current, UiText.Get)");
+        source.Should().Contain("Title = plan.Text.Title");
         source.Should().NotContain("private static readonly (string Tag, string Label)[] Languages");
     }
 
@@ -29,17 +30,12 @@ public sealed class ProofingLanguageCatalogSourceGuardTests
             "Ribbon",
             "FreeWRibbonCommands.cs"));
 
-        source.Should().Contain("ProofingLanguageDialogPlanner.Build(current)");
+        source.Should().Contain("ProofingLanguageDialogPlanner.Build(current, UiText.Get)");
         source.Should().Contain("choice.DisplayText");
+        source.Should().Contain("Content = plan.Text.OkLabel");
         source.Should().NotContain("Content = $\"{choice.Label} [{choice.Tag}]\"");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FreeW.slnx")))
-            dir = dir.Parent;
-
-        return dir?.FullName ?? throw new InvalidOperationException("Could not find repository root.");
-    }
+    private static string FindRepositoryRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
 }

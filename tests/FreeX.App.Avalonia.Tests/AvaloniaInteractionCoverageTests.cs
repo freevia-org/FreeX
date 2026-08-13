@@ -1,6 +1,7 @@
 using Avalonia.Headless;
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -68,7 +69,7 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Equal(631, rows.Length);
         Assert.Equal(309, rows.Count(row => row.Kind != nameof(RibbonMenuItem)));
         Assert.Equal(322, rows.Count(row => row.Kind == nameof(RibbonMenuItem)));
-        Assert.Equal(588, rows.Select(row => row.CommandId).Distinct().Count());
+        Assert.Equal(595, rows.Select(row => row.CommandId).Distinct().Count());
         Assert.Equal(74, definition.Tabs.Sum(tab => tab.Groups.Count));
 
         var runner = File.ReadAllText(RepoFile("tools", "Run-FreeXLinuxInteractionValidation.ps1"));
@@ -385,8 +386,8 @@ public sealed class AvaloniaInteractionCoverageTests
                 Assert.IsNotType<DisabledNoOpRibbonCommand>(drawCommand);
                 Assert.IsAssignableFrom<IRibbonStatefulCommand>(drawCommand);
             }
-            var unresolved = AvaloniaRibbonComposition
-                .EnumerateCommandIds(AvaloniaRibbonComposition.BuildDefinition())
+            var unresolved = FreeXRibbonCommandCatalog
+                .Enumerate(AvaloniaRibbonComposition.BuildDefinition())
                 .Distinct()
                 .Where(id => !registry.TryGet(id, out var command) || command is EmptyRibbonCommand)
                 .Select(id => id.Value)
@@ -404,13 +405,6 @@ public sealed class AvaloniaInteractionCoverageTests
         }, CancellationToken.None);
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

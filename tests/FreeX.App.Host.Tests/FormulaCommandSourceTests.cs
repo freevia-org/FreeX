@@ -9,7 +9,7 @@ public sealed class FormulaCommandSourceTests
     // declarative model (FreeXRibbon.Build()) and their Click handler from the generated
     // FreeXRibbonHandlerMap. The InlineData below is (declarative command id, label, key tip, handler).
     [Theory]
-    [InlineData("AutoSum#FormulasAutoSumPickerBtn_Click", "AutoSum", "U", "FormulasAutoSumPickerBtn_Click")]
+    [InlineData(FreeXRibbonCommandIds.FormulasAutoSum, "AutoSum", "U", "FormulasAutoSumPickerBtn_Click")]
     [InlineData("Recently Used", "Recently Used", "RU", "FormulaRecentlyUsedBtn_Click")]
     [InlineData("Financial", "Financial", "Y", "FormulaFinancialBtn_Click")]
     [InlineData("Logical Functions", "Logical Functions", "L", "FormulaLogicalBtn_Click")]
@@ -17,7 +17,7 @@ public sealed class FormulaCommandSourceTests
     [InlineData("Date & Time", "Date & Time", "DT", "FormulaDateBtn_Click")]
     [InlineData("Lookup & Reference", "Lookup & Reference", "K", "FormulaLookupBtn_Click")]
     [InlineData("Math & Trig", "Math & Trig", "MT", "FormulaMathBtn_Click")]
-    [InlineData("More Functions#FormulaMoreBtn_Click", "More Functions", "MF", "FormulaMoreBtn_Click")]
+    [InlineData(FreeXRibbonCommandIds.FormulasMoreFunctions, "More Functions", "MF", "FormulaMoreBtn_Click")]
     public void FunctionLibraryCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string commandId,
         string label,
@@ -41,14 +41,14 @@ public sealed class FormulaCommandSourceTests
 
         xaml.Should().Contain("x:Name=\"FormulaBarFxButton\"");
         xaml.Should().Contain("Click=\"InsertFunctionBtn_Click\"");
-        xaml.Should().Contain("local:RibbonTooltip.KeyTip=\"FX\"");
-        xaml.Should().Contain("local:RibbonMetadata.CommandName=\"Insert Function\"");
+        xaml.Should().Contain("ribbonWpf:RibbonTooltip.KeyTip=\"FX\"");
+        xaml.Should().Contain("ribbonWpf:RibbonMetadata.CommandName=\"Insert Function\"");
     }
 
     [Theory]
     [InlineData("Trace Precedents", "Trace Precedents", "TP", "TracePrecedentsBtn_Click")]
     [InlineData("Trace Dependents", "Trace Dependents", "TD", "TraceDependentsBtn_Click")]
-    [InlineData("Remove Arrows#RemoveArrowsBtn_Click", "Remove Arrows", "RA", "RemoveArrowsBtn_Click")]
+    [InlineData(FreeXRibbonCommandIds.FormulasRemoveArrows, "Remove Arrows", "RA", "RemoveArrowsBtn_Click")]
     [InlineData("Show Formulas", "Show Formulas", "SF", "ShowFormulasBtn_Click")]
     [InlineData("Error Checking", "Error Checking", "EC", "ErrorCheckBtn_Click")]
     [InlineData("Evaluate Formula", "Evaluate Formula", "V", "EvaluateFormulaBtn_Click")]
@@ -92,7 +92,8 @@ public sealed class FormulaCommandSourceTests
         nameManagerSource.Should().Contain("new NamedRangeDialog(");
         source.Should().Contain("new NameDefinitionDialog(");
         source.Should().Contain("request => ApplyNameDefinitionSelection(dialog, request)");
-        source.Should().Contain("new DefineNamedRangeCommand(");
+        source.Should().Contain("var plan = definedNames.PlanSave(draft);");
+        source.Should().Contain("DefinedNameUiPolicy.BuildScopeOptions(definedNames.ScopeChoices)");
         source.Should().NotContain("new NamedRangeDialog(",
             "Define Name should open a creation flow instead of duplicating Name Manager");
         source.Should().Contain("new CreateNamesFromSelectionDialog { Owner = this }");
@@ -101,8 +102,8 @@ public sealed class FormulaCommandSourceTests
         source.Should().Contain("new PasteNamesDialog(items)");
         source.Should().Contain("PasteNamesPlanner.TryBuildPasteListEdits(range.Start, items, out var edits, out var error)");
         source.Should().Contain("DescribePasteNamesListError(error)");
-        source.Should().Contain("PasteNamesListError.NotEnoughColumns => UiText.Get(\"PasteNames_NotEnoughColumnsMessage\")");
-        source.Should().Contain("PasteNamesListError.NotEnoughRows => UiText.Get(\"PasteNames_NotEnoughRowsMessage\")");
+        source.Should().Contain("DefinedNameUiPolicy.GetPasteNamesListErrorResourceKey(error, DefinedNameUiProfile.Wpf)");
+        source.Should().Contain("DefinedNameUiPolicy.PlanUseInFormula(");
         source.Should().Contain("FormulaInsertionService.InsertDefinedName(");
         source.Should().Contain("BeginFormulaBarFormulaEdit(result.Text, result.CaretIndex);");
         source.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>())");

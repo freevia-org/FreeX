@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using FreeX.App.Presentation.FormulaAuditing;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -71,8 +72,8 @@ public sealed partial class MainWindow
         RefreshShell(UiText.Get("TableLoc_RemovedAllTraceArrows"));
     }
 
-    // Called from BuildDrawingObjectOverlay so the arrows are painted onto the same overlay Canvas
-    // that hosts charts / drawing objects, using the same coordinate mapping (TryGetDisplayedCellBounds).
+    // Called from BuildDrawingObjectOverlay so the portable trace plan is painted onto the same
+    // overlay Canvas that hosts charts and drawing objects.
     private void AddFormulaTraceArrowOverlay(Canvas overlay, ViewportModel viewport)
     {
         if (_formulaTraceArrows.Count == 0)
@@ -81,34 +82,23 @@ public sealed partial class MainWindow
         var showHeadings = _session.IsShowingHeadings;
         var zoomFactor = GetActiveZoomFactor();
         var activeSheetId = _session.ActiveSheet.Id;
+        var projection = FormulaTraceViewportProjection.FromSequentialVisibleMetrics(
+            showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0,
+            showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0,
+            zoomFactor,
+            MinimumDisplayedColumnWidth,
+            MinimumDisplayedRowHeight);
+        var layouts = FormulaTraceOverlayPlanner.CalculateLayouts(
+            viewport,
+            _formulaTraceArrows,
+            activeSheetId,
+            projection,
+            FormulaTraceOverlayProfiles.Avalonia);
 
-        var segments = new List<FormulaTraceArrowSegment>();
-        foreach (var arrow in _formulaTraceArrows)
-        {
-            // The viewport renders a single sheet; only draw arrows whose endpoints are both on it.
-            if (arrow.From.Sheet != activeSheetId || arrow.To.Sheet != activeSheetId)
-                continue;
-
-            if (!TryGetDisplayedCellBounds(viewport, arrow.From, showHeadings, zoomFactor,
-                    out var fromLeft, out var fromTop, out var fromWidth, out var fromHeight))
-                continue;
-
-            if (!TryGetDisplayedCellBounds(viewport, arrow.To, showHeadings, zoomFactor,
-                    out var toLeft, out var toTop, out var toWidth, out var toHeight))
-                continue;
-
-            var start = new Point(fromLeft + fromWidth / 2, fromTop + fromHeight / 2);
-            var end = new Point(toLeft + toWidth / 2, toTop + toHeight / 2);
-            if (start == end)
-                continue;
-
-            segments.Add(new FormulaTraceArrowSegment(start, end, arrow.Kind));
-        }
-
-        if (segments.Count == 0)
+        if (layouts.Count == 0)
             return;
 
-        var arrowVisual = new FormulaTraceArrowControl(segments)
+        var arrowVisual = new FormulaTraceArrowControl(layouts)
         {
             Width = overlay.Width,
             Height = overlay.Height,
@@ -119,72 +109,66 @@ public sealed partial class MainWindow
         overlay.Children.Add(arrowVisual);
     }
 
-    private readonly record struct FormulaTraceArrowSegment(Point Start, Point End, FormulaTraceArrowKind Kind);
-
     private sealed class FormulaTraceArrowControl : Control
     {
-        private static readonly IBrush PrecedentBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 102, 51));
-        private static readonly IBrush DependentBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 86, 179));
-        private const double ArrowHeadLength = 10;
-        private const double ArrowHeadHalfWidth = 5;
-        private const double DotRadius = 3;
+        private static readonly FormulaTraceOverlayStyle Style = FormulaTraceOverlayProfiles.Avalonia.Style;
+        private static readonly IBrush PrecedentBrush = CreateBrush(Style.PrecedentColor);
+        private static readonly IBrush DependentBrush = CreateBrush(Style.DependentColor);
 
-        private readonly IReadOnlyList<FormulaTraceArrowSegment> _segments;
+        private readonly IReadOnlyList<FormulaTraceArrowLayout> _layouts;
 
-        public FormulaTraceArrowControl(IReadOnlyList<FormulaTraceArrowSegment> segments)
+        public FormulaTraceArrowControl(IReadOnlyList<FormulaTraceArrowLayout> layouts)
         {
-            _segments = segments;
+            _layouts = layouts;
         }
 
         public override void Render(DrawingContext context)
         {
-            foreach (var segment in _segments)
+            foreach (var layout in _layouts)
             {
-                var brush = segment.Kind == FormulaTraceArrowKind.Dependent ? DependentBrush : PrecedentBrush;
-                var pen = new Pen(brush, 1.5);
+                var brush = ResolveBrush(Style.ResolveColor(layout.ArrowKind));
+                var pen = new Pen(brush, Style.StrokeWidth);
+                var start = ToAvaloniaPoint(layout.Start);
+                var end = ToAvaloniaPoint(layout.End);
 
-                context.DrawLine(pen, segment.Start, segment.End);
+                context.DrawLine(pen, start, end);
 
                 // Filled dot at the source (Excel renders a bullet at the precedent/source end).
-                context.DrawEllipse(brush, null, segment.Start, DotRadius, DotRadius);
+                context.DrawEllipse(brush, null, start, Style.SourceMarkerRadius, Style.SourceMarkerRadius);
 
                 // Filled triangular arrowhead pointing at the target cell.
-                DrawArrowHead(context, brush, segment.Start, segment.End);
+                DrawArrowHead(context, brush, layout.Start, layout.End);
             }
         }
 
-        private static void DrawArrowHead(DrawingContext context, IBrush brush, Point start, Point end)
+        private static void DrawArrowHead(
+            DrawingContext context,
+            IBrush brush,
+            LayoutPoint start,
+            LayoutPoint end)
         {
-            var dx = end.X - start.X;
-            var dy = end.Y - start.Y;
-            var length = Math.Sqrt(dx * dx + dy * dy);
-            if (length < 0.001)
+            var arrowHead = FormulaTraceOverlayGeometryPlanner.CalculateArrowHead(start, end, Style);
+            if (!arrowHead.IsVisible)
                 return;
-
-            var ux = dx / length;
-            var uy = dy / length;
-
-            // Base of the arrowhead, ArrowHeadLength back from the tip along the line.
-            var baseX = end.X - ux * ArrowHeadLength;
-            var baseY = end.Y - uy * ArrowHeadLength;
-
-            // Perpendicular unit vector.
-            var px = -uy;
-            var py = ux;
-
-            var left = new Point(baseX + px * ArrowHeadHalfWidth, baseY + py * ArrowHeadHalfWidth);
-            var right = new Point(baseX - px * ArrowHeadHalfWidth, baseY - py * ArrowHeadHalfWidth);
 
             var geometry = new StreamGeometry();
             using (var ctx = geometry.Open())
             {
-                ctx.BeginFigure(end, isFilled: true);
-                ctx.LineTo(left);
-                ctx.LineTo(right);
+                ctx.BeginFigure(ToAvaloniaPoint(arrowHead.Tip), isFilled: true);
+                ctx.LineTo(ToAvaloniaPoint(arrowHead.Left));
+                ctx.LineTo(ToAvaloniaPoint(arrowHead.Right));
                 ctx.EndFigure(isClosed: true);
             }
 
             context.DrawGeometry(brush, null, geometry);
         }
+
+        private static IBrush CreateBrush(FormulaTraceColor color) =>
+            new ImmutableSolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+
+        private static IBrush ResolveBrush(FormulaTraceColor color) =>
+            color == Style.DependentColor ? DependentBrush : PrecedentBrush;
+
+        private static Point ToAvaloniaPoint(LayoutPoint point) => new(point.X, point.Y);
     }
 }

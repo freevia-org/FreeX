@@ -11,8 +11,8 @@ namespace FreeP.App.Host.Tests;
 /// Wave 4C: Tests for the Transitions and Animations ribbon tabs.
 ///
 /// Verifies:
-/// - FreePRibbon.Build() includes the expected tabs, groups and command ids.
-/// - FreePRibbonCommands: invoking transition commands sets Editor.CurrentSlideTransition correctly.
+/// - FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf) includes the expected tabs, groups and command ids.
+/// - The portable host composer sets Editor.CurrentSlideTransition correctly.
 /// - Invoking an animation command adds to Editor.CurrentSlideAnimations.
 /// - "Apply To All" propagates the current slide's transition to every slide.
 /// - Reorder (Move Earlier / Move Later) reorders the animation list.
@@ -41,16 +41,21 @@ public class RibbonTransitionsAnimationsTests
         Action? onStart = null, Action? onCurrent = null, Action? onCustomShows = null,
         Action? onRehearseTimings = null, Action? onRecordTimings = null,
         Action? onTransitionSound = null, Action? onSlideShowSettings = null)
-        => FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        => FreePRibbonTestRegistry.Compose(
             editor,
-            onStart,
-            onCurrent,
-            onRehearseTimings,
-            onRecordTimings,
-            onCustomShows: onCustomShows,
-            onTransitionSound: onTransitionSound,
-            onSlideShowSettings: onSlideShowSettings);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    StartSlideShowFromBeginning = onStart,
+                    StartSlideShowFromCurrent = onCurrent,
+                    RehearseTimings = onRehearseTimings,
+                    RecordTimings = onRecordTimings,
+                    OpenCustomShows = onCustomShows,
+                    PickTransitionSound = onTransitionSound,
+                    OpenSlideShowSettings = onSlideShowSettings,
+                },
+            });
 
     /// <summary>Executes a registered command by id.</summary>
     private static void Exec(RibbonCommandRegistry registry, string id, RibbonCommandContext? context = null)
@@ -65,21 +70,21 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void RibbonBuild_ContainsTransitionsTab()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         Assert.Contains(def.Tabs, t => t.Id == "transitions");
     }
 
     [Fact]
     public void RibbonBuild_ContainsAnimationsTab()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         Assert.Contains(def.Tabs, t => t.Id == "animations");
     }
 
     [Fact]
     public void TransitionsTab_ContainsTransitionGalleryGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         Assert.Contains(tab.Groups, g => g.Id == "transition-gallery");
     }
@@ -87,7 +92,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void TransitionsTab_ContainsTimingGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         Assert.Contains(tab.Groups, g => g.Id == "transition-timing");
     }
@@ -95,7 +100,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void TransitionTimingGroup_ContainsSoundAuthoringCommands()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         var group = tab.Groups.Single(g => g.Id == "transition-timing");
 
@@ -106,7 +111,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void TransitionsTab_ContainsSlideShowGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         Assert.Contains(tab.Groups, g => g.Id == "slideshow-from-transitions");
     }
@@ -114,7 +119,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void AnimationsTab_ContainsAnimationEffectsGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "animations");
         Assert.Contains(tab.Groups, g => g.Id == "animation-effects");
     }
@@ -122,7 +127,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void AnimationsTab_ContainsTimingGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "animations");
         Assert.Contains(tab.Groups, g => g.Id == "animation-timing");
     }
@@ -130,7 +135,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void TransitionGalleryGroup_ContainsFadeCommandId()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         var group = tab.Groups.Single(g => g.Id == "transition-gallery");
         // At least one control must carry the freep.transition.fade id.
@@ -140,7 +145,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void SlideShowGroup_ContainsFromBeginningAndFromCurrent()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         var group = tab.Groups.Single(g => g.Id == "slideshow-from-transitions");
         Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.from-beginning");
@@ -284,7 +289,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void TransitionMoreMenu_ContainsEveryExtendedKind()
     {
-        var tab = FreePRibbon.Build().Tabs.Single(t => t.Id == "transitions");
+        var tab = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf).Tabs.Single(t => t.Id == "transitions");
         var group = tab.Groups.Single(g => g.Id == "transition-more");
         var dropdown = Assert.IsType<RibbonDropdown>(
             group.Controls.Single(control => control.CommandId.Value == "freep.transition.more"));
@@ -295,34 +300,34 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
-    public void Cmd_TransitionDuration_UsesRibbonContextSelectedValue()
+    public void Cmd_TransitionDuration_UsesStableRibbonChoiceValue()
     {
         var (ed, _) = MakeSession();
         var reg = MakeRegistry(ed);
         Exec(reg, "freep.transition.fade");
 
-        Exec(reg, "freep.transition.duration", RibbonCommandContext.ForSelectedValue("1.50s"));
+        Exec(reg, "freep.transition.duration", RibbonCommandContext.ForSelectedValue("transition-duration.1500ms"));
 
         Assert.Equal(TransitionKind.Fade, ed.CurrentSlideTransition?.Kind);
         Assert.Equal(1500, ed.CurrentSlideTransition?.DurationMs);
     }
 
     [Fact]
-    public void Cmd_TransitionAdvanceAfter_UsesRibbonContextSelectedValue()
+    public void Cmd_TransitionAdvanceAfter_UsesStableRibbonChoiceValue()
     {
         var (ed, _) = MakeSession();
         var reg = MakeRegistry(ed);
         Exec(reg, "freep.transition.fade");
 
-        Exec(reg, "freep.transition.advance-after", RibbonCommandContext.ForSelectedValue("3s"));
+        Exec(reg, "freep.transition.advance-after", RibbonCommandContext.ForSelectedValue("transition-advance-after.3000ms"));
 
         Assert.Equal(3000, ed.CurrentSlideTransition?.AdvanceAfterMs);
     }
 
     [Fact]
-    public void FreePRibbonCommands_source_routes_transitions_through_shared_planner()
+    public void FreePRibbonCommandWorkflow_source_routes_transitions_through_shared_planner()
     {
-        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs"));
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs"));
 
         Assert.Contains("PresentationTransitionCommandPlanner.BuiltInPlans", source);
         Assert.Contains("PresentationTransitionCommandPlanner.TryApply", source);
@@ -331,9 +336,9 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
-    public void FreePRibbonCommands_source_routes_animations_through_shared_planner()
+    public void FreePRibbonCommandWorkflow_source_routes_animations_through_shared_planner()
     {
-        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs"));
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs"));
 
         Assert.Contains("PresentationAnimationCommandPlanner.BuiltInPlans", source);
         Assert.Contains("PresentationAnimationCommandPlanner.TryApply", source);
@@ -524,7 +529,7 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
-    public void Cmd_AnimTiming_UsesSelectedRibbonValues()
+    public void Cmd_AnimTiming_UsesStableRibbonChoiceValues()
     {
         var (ed, pres) = MakeSession();
         var shapeId = pres.Slides[0].Shapes[0].Id;
@@ -539,9 +544,9 @@ public class RibbonTransitionsAnimationsTests
         });
 
         var reg = MakeRegistry(ed);
-        Exec(reg, "freep.anim.trigger", RibbonCommandContext.ForSelectedValue("After Previous"));
-        Exec(reg, "freep.anim.duration", RibbonCommandContext.ForSelectedValue("1.50s"));
-        Exec(reg, "freep.anim.delay", RibbonCommandContext.ForSelectedValue("0.25s"));
+        Exec(reg, "freep.anim.trigger", RibbonCommandContext.ForSelectedValue("animation-trigger.after-previous"));
+        Exec(reg, "freep.anim.duration", RibbonCommandContext.ForSelectedValue("animation-duration.1500ms"));
+        Exec(reg, "freep.anim.delay", RibbonCommandContext.ForSelectedValue("animation-delay.250ms"));
 
         Assert.Equal(AnimationTrigger.AfterPrevious, ed.CurrentSlideAnimations[0].Trigger);
         Assert.Equal(1500, ed.CurrentSlideAnimations[0].DurationMs);

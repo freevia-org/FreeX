@@ -43,11 +43,11 @@ public sealed class ErrorCheckingDialogSourceTests
         formulaSource.Should().Contain("ShowOptionsDialog(OptionsDialogInitialSection.FormulaErrorChecking)");
         backstageSource.Should().Contain("private void ShowOptionsDialog(OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General)");
         // Updated for the J26 fix: the dialog now also seeds from the live workbook's calculation
-        // settings (OptionsDialogCalculationSettings.FromWorkbook) instead of only the persisted
+        // settings (CalculationOptionsDialogState.FromWorkbook) instead of only the persisted
         // app options, so File > Options > Formulas reflects the workbook's actual CalculationMode.
         backstageSource.Should().Contain("_workbook.DisabledFormulaErrorCodes,");
         backstageSource.Should().Contain("initialSection,");
-        backstageSource.Should().Contain("OptionsDialogCalculationSettings.FromWorkbook(_workbook));");
+        backstageSource.Should().Contain("CalculationOptionsDialogState.FromWorkbook(_workbook),");
         backstageSource.Should().Contain("private void ErrorCheckingOptionsBtn_Click(object sender, RoutedEventArgs e)");
     }
 
@@ -56,16 +56,17 @@ public sealed class ErrorCheckingDialogSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
         var avaloniaSource = WorkspaceFileLocator.ReadAllText(
-            "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
         var avaloniaDialogSource = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Avalonia", "MainWindow.ErrorChecking.cs");
 
-        source.Should().Contain("ErrorCheckingDialogPlanner.CreateParityIssues(sheetId)");
+        source.Should().Contain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
         source.Should().Contain("targetSurfaceId, \"dialog.ErrorChecking\"");
         source.Should().Contain("private static IReadOnlyList<FormulaErrorIssue> CreateErrorCheckingIssues(SheetId sheetId) =>");
-        source.Should().Contain("ErrorCheckingDialogPlanner.CreateParityIssues(sheetId);");
+        source.Should().Contain("ErrorCheckingParityFixture.CreateIssues(sheetId);");
         avaloniaSource.Should().Contain("(\"dialog.ErrorChecking\", () => ShowErrorCheckingParityDialogAsync()),");
-        avaloniaDialogSource.Should().Contain("ErrorCheckingDialogPlanner.CreateParityIssues(sheetId)");
+        avaloniaSource.Should().Contain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
+        avaloniaDialogSource.Should().NotContain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
         avaloniaDialogSource.Should().NotContain("CreateErrorCheckingIssues(sheetId)");
     }
 
@@ -79,7 +80,7 @@ public sealed class ErrorCheckingDialogSourceTests
 
         var errorCheckingItem = FindErrorCheckingOptionsMenuItem();
         errorCheckingItem.KeyTip.Should().Be("O");
-        FreeXRibbonHandlerMap.Handlers.Should().ContainKey("Error Checking Options")
+        FreeXRibbonHandlerMap.Handlers.Should().ContainKey(FreeXRibbonCommandIds.FormulasErrorCheckingOptions)
             .WhoseValue.Should().Be("ErrorCheckingOptionsBtn_Click");
 
         optionsSource.Should().Contain("public enum OptionsDialogInitialSection");
@@ -294,7 +295,10 @@ public sealed class ErrorCheckingDialogSourceTests
         errorChecking.Should().NotBeNull("the Formulas tab must expose the Error Checking dropdown");
 
         var optionsItem = errorChecking!.Menu.Items
-            .FirstOrDefault(item => string.Equals(item.CommandId?.Value, "Error Checking Options", StringComparison.Ordinal));
+            .FirstOrDefault(item => string.Equals(
+                item.CommandId?.Value,
+                FreeXRibbonCommandIds.FormulasErrorCheckingOptions,
+                StringComparison.Ordinal));
         optionsItem.Should().NotBeNull("the Error Checking dropdown must expose the Options command");
         return optionsItem!;
     }

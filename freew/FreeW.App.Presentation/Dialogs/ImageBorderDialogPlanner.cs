@@ -6,7 +6,8 @@ namespace FreeW.App.Presentation.Dialogs;
 public enum ImageBorderDialogField
 {
     Color,
-    Width
+    Width,
+    Style
 }
 
 public sealed record ImageBorderDialogInitialState(
@@ -35,6 +36,19 @@ public static partial class ImageBorderDialogPlanner
         "Enter a valid 6-digit hex color (e.g. FF0000) or leave blank to remove the border.";
     public const string WidthValidationMessage = "Enter a positive border width in points.";
 
+    public static DialogSurfaceSpec<ImageBorderDialogField> Surface { get; } = new(
+        Title: "Picture Border",
+        AutomationId: "ImageBorderDialog",
+        AutomationName: "Picture Border",
+        Fields:
+        [
+            new(ImageBorderDialogField.Color, "Color (hex, empty = no border):", "ImageBorderColorTextBox", "Picture border color"),
+            new(ImageBorderDialogField.Width, "Width (pt):", "ImageBorderWidthTextBox", "Picture border width"),
+            new(ImageBorderDialogField.Style, "Style:", "ImageBorderStyleComboBox", "Picture border style"),
+        ],
+        SupportingText: "Color: 6-digit RGB hex, e.g. 000000 for black. Leave blank to remove the border.",
+        ValidationAutomationId: "ImageBorderValidationText");
+
     public static readonly IReadOnlyList<ImageDialogChoice<string>> DashItems =
     [
         new("solid", "solid"),
@@ -56,7 +70,7 @@ public static partial class ImageBorderDialogPlanner
 
         return new ImageBorderDialogInitialState(
             ColorText: FormatColorText(colorHex),
-            WidthText: FormatPoints(widthPt > 0 ? widthPt : DefaultWidthPt, culture),
+            WidthText: DialogNumericTextPolicy.FormatPoints(widthPt > 0 ? widthPt : DefaultWidthPt, culture),
             DashIndex: IndexOf(DashItems, string.IsNullOrEmpty(dash) ? "solid" : dash));
     }
 
@@ -87,7 +101,7 @@ public static partial class ImageBorderDialogPlanner
             return false;
         }
 
-        if (!TryParsePositive(input.WidthText, culture, out var width))
+        if (!DialogNumericTextPolicy.TryParsePositiveDouble(input.WidthText, culture, out var width))
         {
             validation = new ImageBorderValidation(ImageBorderDialogField.Width, WidthValidationMessage);
             return false;
@@ -103,18 +117,6 @@ public static partial class ImageBorderDialogPlanner
 
     public static string FormatColorText(string? colorHex) =>
         (colorHex ?? string.Empty).Trim().TrimStart('#');
-
-    public static string FormatPoints(double value, CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-        return value.ToString("0.##", culture);
-    }
-
-    private static bool TryParsePositive(string? text, CultureInfo culture, out double value)
-    {
-        var trimmed = (text ?? string.Empty).Trim();
-        return double.TryParse(trimmed, NumberStyles.Float, culture, out value) && value > 0;
-    }
 
     private static ImageDialogChoice<TValue> ChoiceAt<TValue>(
         IReadOnlyList<ImageDialogChoice<TValue>> choices,

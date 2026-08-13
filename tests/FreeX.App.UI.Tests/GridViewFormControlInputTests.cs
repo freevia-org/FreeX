@@ -1,6 +1,7 @@
 using System.Windows;
 using FluentAssertions;
 using FreeX.App.UI;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI.Tests;
@@ -74,7 +75,7 @@ public sealed class GridViewFormControlInputTests
 
             captured.Should().NotBeNull("the checkbox was hit");
             captured!.Control.Should().BeSameAs(control);
-            captured.Region.Should().Be(FormControlClickRegion.Body);
+            captured.Gesture.Should().Be(FormControlGesture.Body);
         });
     }
 
@@ -104,7 +105,7 @@ public sealed class GridViewFormControlInputTests
 
             captured.Should().NotBeNull();
             captured!.Control.Should().BeSameAs(control);
-            captured.Region.Should().Be(FormControlClickRegion.StepUp);
+            captured.Gesture.Should().Be(FormControlGesture.StepUp);
         });
     }
 
@@ -133,7 +134,7 @@ public sealed class GridViewFormControlInputTests
 
             captured.Should().NotBeNull();
             captured!.Control.Should().BeSameAs(control);
-            captured.Region.Should().Be(FormControlClickRegion.StepDown);
+            captured.Gesture.Should().Be(FormControlGesture.StepDown);
         });
     }
 

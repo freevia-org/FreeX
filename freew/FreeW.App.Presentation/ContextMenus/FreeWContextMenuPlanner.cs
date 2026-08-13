@@ -159,6 +159,19 @@ public static class FreeWContextMenuPlanner
         return RibbonMenu.Empty;
     }
 
+    public static Run? ApplyContentControlCommand(
+        Run run,
+        RibbonCommandId commandId,
+        DateTime? today = null)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        if (TryParseIndex(commandId, ContentChoicePrefix, out var choiceIndex))
+            return ContentControlInteractionPlanner.SelectItem(run, choiceIndex);
+        if (TryParseIndex(commandId, ContentDatePrefix, out var dateIndex))
+            return ContentControlInteractionPlanner.SelectRelativeDate(run, dateIndex, today);
+        return null;
+    }
+
     public static RibbonMenu BuildOutline(IReadOnlyList<Block> blocks, int blockIndex, bool isCollapsed)
     {
         ArgumentNullException.ThrowIfNull(blocks);

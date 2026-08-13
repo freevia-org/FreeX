@@ -42,7 +42,7 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousAutoFilter = CloneAutoFilter(sheet.AutoFilter);
+        _previousAutoFilter = WorksheetAutoFilterCloner.Clone(sheet.AutoFilter);
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
         _previousActiveValueFilterColumns = sheet.ActiveValueFilterColumns.Count == 0
             ? null
@@ -76,7 +76,7 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
     public void Revert(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        sheet.AutoFilter = CloneAutoFilter(_previousAutoFilter);
+        sheet.AutoFilter = WorksheetAutoFilterCloner.Clone(_previousAutoFilter);
         sheet.FilterHiddenRows.Clear();
         if (_previousFilterHiddenRows is not null)
             sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
@@ -100,62 +100,4 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
         }
     }
 
-    private static WorksheetAutoFilterModel? CloneAutoFilter(WorksheetAutoFilterModel? autoFilter)
-    {
-        if (autoFilter is null)
-            return null;
-
-        var clone = new WorksheetAutoFilterModel(autoFilter.Reference, autoFilter.NativeXml)
-        {
-            NativeAttributes = CloneReadOnlyDictionary(autoFilter.NativeAttributes),
-            NativeChildXmls = autoFilter.NativeChildXmls?.ToArray()
-        };
-        clone.FilterColumns.AddRange(autoFilter.FilterColumns.Select(CloneAutoFilterColumn));
-        return clone;
-    }
-
-    private static WorksheetAutoFilterColumnModel CloneAutoFilterColumn(WorksheetAutoFilterColumnModel column) =>
-        new(
-            column.ColumnId,
-            column.Values.ToArray(),
-            column.IncludeBlank,
-            column.CustomFilters.Select(CloneAutoFilterCustomFilter).ToArray(),
-            column.CustomFiltersAnd,
-            column.CustomFiltersAndRaw,
-            CloneReadOnlyDictionary(column.NativeCustomFiltersAttributes),
-            CloneAutoFilterTop10(column.Top10),
-            CloneAutoFilterDynamicFilter(column.DynamicFilter),
-            CloneAutoFilterColorFilter(column.ColorFilter),
-            CloneAutoFilterIconFilter(column.IconFilter),
-            column.DateGroups.Select(CloneAutoFilterDateGroup).ToArray(),
-            CloneReadOnlyDictionary(column.NativeFiltersAttributes),
-            column.NativeFilterXmls.ToArray(),
-            CloneReadOnlyDictionary(column.NativeAttributes));
-
-    private static WorksheetAutoFilterCustomFilterModel CloneAutoFilterCustomFilter(
-        WorksheetAutoFilterCustomFilterModel filter) =>
-        new(filter.Operator, filter.Value, CloneReadOnlyDictionary(filter.NativeAttributes));
-
-    private static WorksheetAutoFilterDateGroupItemModel CloneAutoFilterDateGroup(
-        WorksheetAutoFilterDateGroupItemModel dateGroup) =>
-        dateGroup with { NativeAttributes = CloneReadOnlyDictionary(dateGroup.NativeAttributes) };
-
-    private static WorksheetAutoFilterTop10Model? CloneAutoFilterTop10(WorksheetAutoFilterTop10Model? top10) =>
-        top10 is null ? null : top10 with { NativeAttributes = CloneReadOnlyDictionary(top10.NativeAttributes) };
-
-    private static WorksheetAutoFilterDynamicFilterModel? CloneAutoFilterDynamicFilter(
-        WorksheetAutoFilterDynamicFilterModel? dynamicFilter) =>
-        dynamicFilter is null ? null : dynamicFilter with { NativeAttributes = CloneReadOnlyDictionary(dynamicFilter.NativeAttributes) };
-
-    private static WorksheetAutoFilterColorFilterModel? CloneAutoFilterColorFilter(
-        WorksheetAutoFilterColorFilterModel? colorFilter) =>
-        colorFilter is null ? null : colorFilter with { NativeAttributes = CloneReadOnlyDictionary(colorFilter.NativeAttributes) };
-
-    private static WorksheetAutoFilterIconFilterModel? CloneAutoFilterIconFilter(
-        WorksheetAutoFilterIconFilterModel? iconFilter) =>
-        iconFilter is null ? null : iconFilter with { NativeAttributes = CloneReadOnlyDictionary(iconFilter.NativeAttributes) };
-
-    private static IReadOnlyDictionary<string, string>? CloneReadOnlyDictionary(
-        IReadOnlyDictionary<string, string>? source) =>
-        source is null ? null : new Dictionary<string, string>(source, StringComparer.Ordinal);
 }

@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Editing;
@@ -9,23 +10,16 @@ namespace FreeW.App.Host.Editing;
 /// Screen-capture helpers backing Insert &gt; Illustrations &gt; Screenshot (Screen Clipping). The
 /// region capture uses GDI+ <see cref="Graphics.CopyFromScreen(int, int, int, int, Size)"/> against the
 /// virtual screen, encodes the result to PNG, and the bytes are inserted through the exact same
-/// <see cref="DocumentView.InsertImage"/> path as Insert Picture. The bitmap→<see cref="InlineImage"/>
-/// conversion is factored out as a pure, headlessly testable helper.
+/// <see cref="DocumentView.InsertImage"/> path as Insert Picture. PNG decoding remains native while
+/// portable image-model construction is delegated to the shared presentation factory.
 /// </summary>
 internal static class ScreenshotCapture
 {
-    private const double PxPerPoint = 96.0 / 72.0;
-
-    /// <summary>
-    /// Cap matching Insert Picture so a full-screen clip fits the page rather than overflowing it.
-    /// </summary>
-    private const double MaxWidthPt = 400;
-
     /// <summary>
     /// Converts PNG bytes (e.g. a screen clip) to an <see cref="InlineImage"/>, deriving the point
     /// width/height from the PNG's pixel dimensions (96 DPI device-independent pixels → points) and
-    /// capping the width to <see cref="MaxWidthPt"/> with the aspect ratio preserved — exactly the
-    /// conversion Insert Picture applies. The bytes are stored verbatim as <see cref="ImageFormat.Png"/>.
+    /// applying the shared screen-clip insertion plan. The bytes are stored verbatim as
+    /// <see cref="ImageFormat.Png"/>.
     /// </summary>
     /// <exception cref="ArgumentException">The bytes are empty or not a decodable image.</exception>
     public static InlineImage PngToInlineImage(byte[] pngBytes)
@@ -48,19 +42,7 @@ internal static class ScreenshotCapture
             throw new ArgumentException("Screenshot bytes are not a valid image.", nameof(pngBytes), ex);
         }
 
-        var widthPt = pixelWidth / PxPerPoint;
-        var heightPt = pixelHeight / PxPerPoint;
-        if (widthPt > MaxWidthPt && widthPt > 0)
-        {
-            heightPt *= MaxWidthPt / widthPt;
-            widthPt = MaxWidthPt;
-        }
-
-        return new InlineImage(pngBytes, widthPt, heightPt, FreeW.Core.Model.ImageFormat.Png)
-        {
-            OriginalPixelWidth  = pixelWidth,
-            OriginalPixelHeight = pixelHeight,
-        };
+        return ScreenClipImageFactory.Create(pngBytes, pixelWidth, pixelHeight);
     }
 
     /// <summary>

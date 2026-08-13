@@ -82,6 +82,60 @@ public sealed class TableOfAuthoritiesDialogPlannerTests
             .Should().Be(0);
     }
 
+    [Fact]
+    public void PlanAcceptance_ProjectsNativeControlStateIntoOptions()
+    {
+        var categories = TableOfAuthoritiesDialogPlanner.BuildCategoryChoices();
+        var leaders = TableOfAuthoritiesDialogPlanner.BuildTabLeaderChoices();
+
+        var acceptance = TableOfAuthoritiesDialogPlanner.PlanAcceptance(
+            new TableOfAuthoritiesDialogInput(
+                UsePassim: true,
+                KeepOriginalFormatting: null,
+                categories.Single(choice => choice.Category == CitationCategory.Rules),
+                leaders.Single(choice => choice.Leader == ToaTabLeader.Underline)));
+
+        acceptance.IsAccepted.Should().BeTrue();
+        acceptance.Validation.Should().BeNull();
+        acceptance.Options.Should().BeEquivalentTo(new ToaOptions
+        {
+            UsePassim = true,
+            KeepOriginalFormatting = false,
+            CategoryFilter = CitationCategory.Rules,
+            TabLeader = ToaTabLeader.Underline
+        });
+    }
+
+    [Fact]
+    public void PlanAcceptance_RejectsMissingCategorySelection()
+    {
+        var leader = TableOfAuthoritiesDialogPlanner.BuildTabLeaderChoices()[0];
+
+        var acceptance = TableOfAuthoritiesDialogPlanner.PlanAcceptance(
+            new TableOfAuthoritiesDialogInput(false, false, null, leader));
+
+        acceptance.IsAccepted.Should().BeFalse();
+        acceptance.Options.Should().BeNull();
+        acceptance.Validation.Should().Be(new TableOfAuthoritiesDialogValidation(
+            TableOfAuthoritiesDialogField.Category,
+            TableOfAuthoritiesDialogPlanner.MissingCategoryMessage));
+    }
+
+    [Fact]
+    public void PlanAcceptance_RejectsMissingTabLeaderSelection()
+    {
+        var category = TableOfAuthoritiesDialogPlanner.BuildCategoryChoices()[0];
+
+        var acceptance = TableOfAuthoritiesDialogPlanner.PlanAcceptance(
+            new TableOfAuthoritiesDialogInput(false, false, category, null));
+
+        acceptance.IsAccepted.Should().BeFalse();
+        acceptance.Options.Should().BeNull();
+        acceptance.Validation.Should().Be(new TableOfAuthoritiesDialogValidation(
+            TableOfAuthoritiesDialogField.TabLeader,
+            TableOfAuthoritiesDialogPlanner.MissingTabLeaderMessage));
+    }
+
     [Theory]
     [InlineData("initial", false, false, null, ToaTabLeader.Dots)]
     [InlineData("populated", true, true, CitationCategory.Statutes, ToaTabLeader.Dashes)]
@@ -99,5 +153,44 @@ public sealed class TableOfAuthoritiesDialogPlannerTests
         options.KeepOriginalFormatting.Should().Be(keepOriginalFormatting);
         options.CategoryFilter.Should().Be(categoryFilter);
         options.TabLeader.Should().Be(tabLeader);
+    }
+}
+
+public sealed class TableOfAuthoritiesDialogSourceOwnershipTests
+{
+    [Fact]
+    public void Renderers_DelegateAcceptancePolicyToPortablePlanner()
+    {
+        var wpf = ReadSource("freew", "FreeW.App.Host", "TableOfAuthoritiesDialog.cs");
+        var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "TableOfAuthoritiesDialog.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("TableOfAuthoritiesDialogPlanner.CreateSession(");
+            source.Should().Contain("_session.PlanAcceptance()");
+            source.Should().NotContain("new TableOfAuthoritiesDialogState(");
+            source.Should().NotContain("TableOfAuthoritiesDialogPlanner.BuildOptions(");
+            source.Should().NotContain("new TableOfAuthoritiesDialogInput(");
+            source.Should().NotContain("TableOfAuthoritiesDialogPlanner.PlanAcceptance(");
+            source.Should().NotContain("?.Leader ?? ToaTabLeader.Dots");
+        }
+    }
+
+    [Fact]
+    public void PortablePlanner_HasNoRendererDependencies()
+    {
+        var source = ReadSource(
+            "freew", "FreeW.App.Presentation", "Ribbon", "TableOfAuthoritiesDialogPlanner.cs");
+
+        source.Should().NotContain("using Avalonia");
+        source.Should().NotContain("using System.Windows");
+        source.Should().NotContain("Avalonia.Controls");
+        source.Should().NotContain("System.Windows.Controls");
+    }
+
+    private static string ReadSource(params string[] parts)
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        return File.ReadAllText(Path.Combine(new[] { root }.Concat(parts).ToArray()));
     }
 }

@@ -7,15 +7,20 @@ public sealed class PhysicalSmartArtAuthoringSourceTests
     [Fact]
     public void PhysicalSmartArtAuthoringLane_IsExplicitlyOptInAndUsesNativeProbeContract()
     {
-        var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var renderer = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var tool = File.ReadAllText(RepoFile(
+            "freep", "TestSupport", "Validation.Avalonia", "PhysicalFixtureValidation.cs"));
 
-        source.Should().Contain("FREEP_PHYSICAL_SMARTART_TEXT_PANE_SEED");
-        source.Should().Contain("SeedPhysicalSmartArtTextPaneIfRequested();");
-        source.Should().Contain("Editor.CurrentSlide.Shapes.FirstOrDefault(shape => shape.SmartArt is not null)");
-        source.Should().Contain("ShowSmartArtTextPane();");
+        renderer.Should().NotContain("FREEP_PHYSICAL_SMARTART_TEXT_PANE_SEED");
+        renderer.Should().NotContain("SeedPhysicalSmartArtTextPaneIfRequested");
+        tool.Should().Contain("--physical-smartart-text-pane-fixture");
+        tool.Should().Contain(".FirstOrDefault(shape => shape.SmartArt is not null)");
+        tool.Should().Contain("access.ShowSmartArtTextPane();");
 
         var runner = File.ReadAllText(RepoFile("tools", "Run-FreePSmartArtAuthoringValidation.ps1"));
-        runner.Should().Contain("FREEP_PHYSICAL_SMARTART_TEXT_PANE_SEED=1");
+        runner.Should().Contain("\"-Host\", \"Validation\"");
+        runner.Should().Contain("--physical-smartart-text-pane-fixture");
+        runner.Should().NotContain("FREEP_PHYSICAL_SMARTART_TEXT_PANE_SEED");
         runner.Should().Contain("two fresh harness-owned FreeP processes");
         runner.Should().NotContain("undo, redo");
         runner.Should().Contain("smartart-outline-apply-undo-redo");
@@ -36,13 +41,7 @@ public sealed class PhysicalSmartArtAuthoringSourceTests
         probe.Should().Contain("xclip -selection clipboard -out");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-            directory = directory.Parent;
-
-        directory.Should().NotBeNull();
-        return Path.Combine([directory!.FullName, .. parts]);
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeP.slnx", parts);
 }

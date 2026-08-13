@@ -19,18 +19,6 @@ public class RibbonWpfRendererTests
         public void Execute(RibbonCommandContext context) => Invocations++;
     }
 
-    private sealed class RecordingHandler
-    {
-        public object? Sender { get; private set; }
-        public int Invocations { get; private set; }
-
-        public void Handle(object sender, RoutedEventArgs e)
-        {
-            Sender = sender;
-            Invocations++;
-        }
-    }
-
     [Fact]
     public void AdaptivePanel_CollapsesLowestPriorityGroupsFirst_WhenNarrow()
     {
@@ -174,7 +162,7 @@ public class RibbonWpfRendererTests
             .Tab("t", "T", "T", tab => tab
                 .Group("g", "G", "G", 1, g => g
                     .Medium("Shape Effects", "Shape Effects", RibbonCommandIconKind.RibbonShape, "FX",
-                        menu: m => m.Item("Shadow", "Shadow", "S").Separator().Item("Glow", "Glow", "G"))))
+                        menu: m => m.Item("Shadow", "Shadow", RibbonCommandIconKind.Effects, "S").Separator().Item("Glow", "Glow", "G"))))
             .Build();
 
         StaTestRunner.Run(() =>
@@ -192,6 +180,7 @@ public class RibbonWpfRendererTests
             menu.Should().NotBeNull();
             menu!.IsOpen.Should().BeTrue();
             var shadowItem = menu.Items.OfType<MenuItem>().First(mi => Equals(mi.Header, "Shadow"));
+            shadowItem.Icon.Should().BeAssignableTo<FrameworkElement>();
             shadowItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         });
 
@@ -298,24 +287,6 @@ public class RibbonWpfRendererTests
         });
 
         cut.Invocations.Should().Be(1);
-    }
-
-    [Fact]
-    public void WpfReflectiveRibbonCommand_UsesRenderedSenderBeforeFallback()
-    {
-        var handler = new RecordingHandler();
-        var method = typeof(RecordingHandler).GetMethod(nameof(RecordingHandler.Handle))!;
-        var fallbackSender = new object();
-        var renderedSender = new object();
-        var command = new WpfReflectiveRibbonCommand(handler, method, fallbackSender);
-
-        command.Execute(new RibbonCommandContext(new Dictionary<string, object?>
-        {
-            [RibbonWpfRenderer.SenderKey] = renderedSender
-        }));
-
-        handler.Invocations.Should().Be(1);
-        handler.Sender.Should().BeSameAs(renderedSender);
     }
 
     [Fact]

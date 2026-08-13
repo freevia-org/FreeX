@@ -16,6 +16,17 @@ public sealed record FreeWEditorStatusSnapshot(
     bool IncludeSectionStatus = true,
     bool IsEdited = false);
 
+public sealed record FreeWEditorStatusContext(
+    TextDocument Document,
+    int CurrentPage = 1,
+    int TotalPages = 1,
+    int CurrentSection = 1,
+    int TotalSections = 1,
+    string? SelectionText = null,
+    bool IncludePageStatus = true,
+    bool IncludeSectionStatus = true,
+    bool IsEdited = false);
+
 public sealed record FreeWEditorStatusPlan(
     string PageStatus,
     string SectionStatus,
@@ -24,6 +35,31 @@ public sealed record FreeWEditorStatusPlan(
 
 public static class FreeWEditorStatusPlanner
 {
+    public static FreeWEditorStatusPlan Build(FreeWEditorStatusContext context) =>
+        Build(Project(context));
+
+    public static FreeWEditorStatusSnapshot Project(FreeWEditorStatusContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(context.Document);
+
+        var stats = string.IsNullOrEmpty(context.SelectionText)
+            ? WordCount.Of(context.Document)
+            : DocumentStats.Empty;
+        return new FreeWEditorStatusSnapshot(
+            stats.Words,
+            stats.CharactersWithSpaces,
+            stats.Paragraphs,
+            context.CurrentPage,
+            context.TotalPages,
+            context.CurrentSection,
+            context.TotalSections,
+            context.SelectionText,
+            context.IncludePageStatus,
+            context.IncludeSectionStatus,
+            context.IsEdited);
+    }
+
     public static FreeWEditorStatusPlan Build(FreeWEditorStatusSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);

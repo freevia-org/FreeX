@@ -42,16 +42,13 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
 $manifestEvidenceHelper = Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1"
 $null = . $manifestEvidenceHelper
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-family-input-probes.sh"
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/family-x11-validation.schema.json"
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
+$resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 $appKey = $App.ToLowerInvariant()
 
 $probeParameters = @{
@@ -69,47 +66,18 @@ $probeParameters = @{
     }
 }[$App]
 
-function Invoke-External {
-    param(
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [string]$WorkingDirectory = $repoRoot
-    )
-
-    Push-Location $WorkingDirectory
-    try {
-        & $FilePath @Arguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "$FilePath exited with code $LASTEXITCODE."
-        }
-    } finally {
-        Pop-Location
-    }
-}
-
 function Assert-ManifestContract {
     param(
         [Parameter(Mandatory = $true)][string]$ManifestPath,
         [Parameter(Mandatory = $true)][string]$EvidenceDirectory
     )
 
-    if (-not (Test-Path -LiteralPath $schemaPath -PathType Leaf)) {
-        throw "Manifest schema is missing: $schemaPath"
-    }
-
-    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
-    if ($schema.'$schema' -notmatch "json-schema.org") {
-        throw "Manifest contract reference is not a JSON Schema document."
-    }
-
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-    if ($manifest.schemaVersion -ne 1 -or
-        $manifest.suite -ne "family-linux-physical-baseline" -or
-        $manifest.platform -ne "linux" -or
-        $manifest.shell -ne "avalonia" -or
-        $manifest.app -ne $App -or
-        $manifest.baseline -ne $true -or
-        $manifest.coverage.exhaustive -ne $false -or
+    $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "family-linux-physical-baseline"; platform = "linux"
+        shell = "avalonia"; app = $App; baseline = $true
+    }) -FailureMessage "Manifest header does not satisfy the family physical-baseline contract."
+    if ($manifest.coverage.exhaustive -ne $false -or
         $manifest.parameters.fileSurface -ne $probeParameters.FileSurface -or
         $manifest.parameters.ribbonTabKey -ne $probeParameters.RibbonTabKey -or
         $manifest.parameters.fileKey -ne $probeParameters.FileKey -or
@@ -202,49 +170,16 @@ function Assert-ManifestContract {
         }
     }
 
-    $passed = @($results | Where-Object { $_.status -eq "passed" }).Count
-    $failed = @($results | Where-Object { $_.status -eq "failed" }).Count
-    if ($manifest.summary.total -ne $results.Count -or
-        $manifest.summary.passed -ne $passed -or
-        $manifest.summary.failed -ne $failed) {
-        throw "Manifest summary does not match its result rows."
-    }
+    Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal $results.Count
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
-    foreach ($result in $results) {
-        if ($result.category -ne "physical-x11-smoke" -or
-            $result.evidenceLevel -ne "physical-x11-input" -or
-            @($result.evidence).Count -lt 1) {
-            throw "Result '$($result.id)' is missing physical evidence metadata."
-        }
-        foreach ($evidence in @($result.evidence)) {
-            $evidenceName = [string]$evidence
-            if (-not $fileMap.ContainsKey($evidenceName)) {
-                throw "Result '$($result.id)' references missing evidence '$evidence'."
-            }
-            if ($fileMap[$evidenceName].Length -le 0) {
-                throw "Result '$($result.id)' references empty evidence '$evidence'."
-            }
-        }
-    }
+    Assert-ManifestResultEvidence -Results $results -FileMap $fileMap `
+        -Category "physical-x11-smoke" -EvidenceLevel "physical-x11-input"
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $fileMap
 
-    foreach ($screenshot in @($manifest.screenshots)) {
-        $screenshotName = [string]$screenshot.name
-        if (-not $fileMap.ContainsKey($screenshotName)) {
-            throw "Manifest references missing screenshot '$($screenshot.name)'."
-        }
-        if ($fileMap[$screenshotName].Length -le 0) {
-            throw "Manifest references empty screenshot '$($screenshot.name)'."
-        }
-    }
-
-    $manifest | Add-Member -NotePropertyName contractValidation -NotePropertyValue ([pscustomobject]@{
-            status = "passed"
-            validator = "tools/Run-FamilyLinuxInteractionValidation.ps1"
-            contractReference = "tools/LinuxInteractiveDocker/family-x11-validation.schema.json"
-        }) -Force
-    $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
-    return $manifest
+    return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
+        -Validator "tools/Run-FamilyLinuxInteractionValidation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/family-x11-validation.schema.json"
 }
 
 if (-not (Test-Path -LiteralPath $probeSource -PathType Leaf)) {
@@ -264,16 +199,16 @@ try {
         $startArguments += @("-PublishDir", $PublishDir)
     }
     if ($App -eq "FreeP") {
-        # This must be present on the application container, not only on the probe
-        # docker exec process, so the opt-in fixture hook can seed the live app.
-        $startArguments += @("-AppEnvironment", "FREEP_PHYSICAL_ANIMATION_PANE_SEED=1")
+        $startArguments += @(
+            "-Host", "Validation",
+            "-AppArgument", "--physical-animation-pane-fixture")
     }
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
     if ($App -eq "FreeW") { $startArguments += "-CupsDryRun" }
 
-    Invoke-External -FilePath "powershell.exe" -Arguments $startArguments
+    Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
     $started = $true
 
     $currentSessionPath = Join-Path $resolvedOutputRoot "$appKey/current-session.json"
@@ -467,11 +402,11 @@ try {
 } finally {
     if ($started -and -not $KeepContainer) {
         try {
-            Invoke-External -FilePath "powershell.exe" -Arguments @(
+            Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", $App, "-Port", "$Port",
                 "-OutputDir", $resolvedOutputRoot
-            )
+            ) -WorkingDirectory $repoRoot
         } catch {
             Write-Warning "Could not stop harness-owned $App container on port ${Port}: $($_.Exception.Message)"
         }

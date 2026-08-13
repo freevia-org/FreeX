@@ -14,7 +14,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void SelectDataSourceDialog_NormalizesSourceRangeAndCategoryState()
     {
-        var result = SelectDataSourceDialog.CreateResult("  A1:D12  ", true);
+        var result = SelectDataSourcePlanner.CreateResult("  A1:D12  ", true);
 
         result.SourceRangeText.Should().Be("A1:D12");
         result.FirstColumnIsCategories.Should().BeTrue();
@@ -26,9 +26,10 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("SelectDataSourceDialog.Planning.cs");
 
-        source.Should().Contain("SelectDataSourcePlanner.CreateResult");
         source.Should().Contain("SelectDataSourcePlanner.InferPreviewEntries");
-        source.Should().Contain("SelectDataSourcePlanner.CreateRangeSelectionRequest");
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("SelectDataSourceDialog.cs");
+        dialogSource.Should().Contain("SelectDataSourcePlanner.CreateResult");
+        dialogSource.Should().Contain("SelectDataSourcePlanner.CreateRangeSelectionRequest");
         source.Should().NotContain("ParsedRangeReference");
         source.Should().NotContain("TryParseCellReference");
         source.Should().NotContain("CellAddress.");
@@ -132,14 +133,14 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void SelectDataSourceDialog_HiddenEmptyCellsMessageBoxUsesDialogOwner()
+    public void SelectDataSourceDialog_HiddenEmptyCellsDialogUsesDialogOwner()
     {
         var source = ReadChartDialogSource();
         var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("Window.GetWindow(dependencyObject)");
-        dialogSource.Should().Contain("DialogMessageHelper.ShowInfo(owner,");
-        dialogSource.Should().Contain("SelectDataSourcePlanner.HiddenEmptyCellsTitleResourceKey");
+        dialogSource.Should().Contain("new HiddenEmptyCellSettingsDialog(");
+        dialogSource.Should().Contain("{ Owner = owner }");
         dialogSource.Should().NotContain("MessageBox.Show(");
     }
 

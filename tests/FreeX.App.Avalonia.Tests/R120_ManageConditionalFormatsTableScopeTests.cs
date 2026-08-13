@@ -7,7 +7,7 @@ using Avalonia.Headless;
 
 using FluentAssertions;
 
-using FreeX.App.Avalonia.Dialogs;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -109,7 +109,7 @@ public sealed class R120_ManageConditionalFormatsTableScopeTests
                         // has already run by the time this setter returns.
                         probe.ScopeBox.SelectedIndex = tableItemIndex;
                         tableScopeSelected = true;
-                        shownAfterTableScope = (probe.ListBox.ItemsSource as IEnumerable<ConditionalFormatRuleListItem>)?
+                        shownAfterTableScope = (probe.ListBox.ItemsSource as IEnumerable<ManageConditionalFormatRuleProjection>)?
                             .Select(item => item.Id)
                             .ToList();
                     }
@@ -191,7 +191,7 @@ public sealed class R120_ManageConditionalFormatsTableScopeTests
                     {
                         probe.ScopeBox.SelectedIndex = selectionIndex;
                         selectionScopeSelected = true;
-                        shownAfterSelectionScope = (probe.ListBox.ItemsSource as IEnumerable<ConditionalFormatRuleListItem>)?
+                        shownAfterSelectionScope = (probe.ListBox.ItemsSource as IEnumerable<ManageConditionalFormatRuleProjection>)?
                             .Select(item => item.Id)
                             .ToList();
                     }

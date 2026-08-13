@@ -1,6 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
-using FreeW.Core.Model;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
@@ -9,10 +9,11 @@ namespace FreeW.App.Host;
 /// (Sort by + Then by × 2), with per-key sort type (Text / Number / Date) and direction
 /// (Ascending / Descending), plus global case-sensitive and header-row toggles. Built on the shared
 /// <see cref="Free.Shared.Ribbon.Wpf.DialogWindow"/> + dialog helpers so it matches the rest of
-/// FreeW/FreeX's dialogs. Returns the chosen <see cref="SortChoice"/>, or null if cancelled.
+/// FreeW/FreeX's dialogs. Returns the shared <see cref="SortDialogResult"/>, or null if cancelled.
 /// </summary>
 internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly SortDialogSession _session;
     // Per-key controls: type box and ascending radio.
     private readonly ComboBox   _type1;
     private readonly RadioButton _asc1;
@@ -24,47 +25,57 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly CheckBox   _useKey3;
     private readonly CheckBox   _caseSensitive;
     private readonly CheckBox   _hasHeaderRow;
-    private SortChoice? _result;
+    private SortDialogResult? _result;
 
-    private SortDialog(Window? owner, string subjectLabel)
+    private SortDialog(Window? owner, bool forTable)
     {
+        _session = new SortDialogSession(forTable);
         Owner = owner;
-        Title = "Sort";
+        Title = SortDialogPlanner.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        System.Windows.Automation.AutomationProperties.SetAutomationId(this, SortDialogPlanner.AutomationId);
 
-        _type1 = TypeCombo();
+        _type1 = TypeCombo(_session.TypeChoices);
         _asc1  = AscRadio();
         var desc1 = DescRadio();
 
-        _useKey2 = new CheckBox { Content = "Then by", Margin = new Thickness(0, 8, 0, 4) };
-        _type2 = TypeCombo();
+        _useKey2 = new CheckBox { Content = SortDialogPlanner.ThenByLabel, Margin = new Thickness(0, 8, 0, 4) };
+        _type2 = TypeCombo(_session.TypeChoices);
         _asc2  = AscRadio();
         var desc2 = DescRadio();
-        SetKeyEnabled(_type2, _asc2, desc2, enabled: false);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_type2, SortDialogPlanner.Key2TypeAutomationId);
 
-        _useKey3 = new CheckBox { Content = "Then by (2nd)", Margin = new Thickness(0, 8, 0, 4) };
-        _type3 = TypeCombo();
+        _useKey3 = new CheckBox { Content = SortDialogPlanner.ThenBySecondLabel, Margin = new Thickness(0, 8, 0, 4) };
+        _type3 = TypeCombo(_session.TypeChoices);
         _asc3  = AscRadio();
         var desc3 = DescRadio();
-        SetKeyEnabled(_type3, _asc3, desc3, enabled: false);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_type1, SortDialogPlanner.Key1TypeAutomationId);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_type3, SortDialogPlanner.Key3TypeAutomationId);
 
-        _caseSensitive = new CheckBox { Content = "Case sensitive",        Margin = new Thickness(0, 10, 0, 4) };
-        _hasHeaderRow  = new CheckBox { Content = "My list has a header row", Margin = new Thickness(0, 0, 0, 0) };
+        _caseSensitive = new CheckBox { Content = SortDialogPlanner.CaseSensitiveLabel, Margin = new Thickness(0, 10, 0, 4) };
+        _hasHeaderRow  = new CheckBox { Content = SortDialogPlanner.HeaderRowLabel, Margin = new Thickness(0, 0, 0, 0) };
 
-        _useKey2.Checked   += (_, _) => SetKeyEnabled(_type2, _asc2, desc2, enabled: true);
-        _useKey2.Unchecked += (_, _) => SetKeyEnabled(_type2, _asc2, desc2, enabled: false);
-        _useKey3.Checked   += (_, _) => SetKeyEnabled(_type3, _asc3, desc3, enabled: true);
-        _useKey3.Unchecked += (_, _) => SetKeyEnabled(_type3, _asc3, desc3, enabled: false);
+        void ApplyEnabledState()
+        {
+            var state = _session.PlanEnabledState(_useKey2.IsChecked == true, _useKey3.IsChecked == true);
+            SetKeyEnabled(_type2, _asc2, desc2, state.Key2Enabled);
+            SetKeyEnabled(_type3, _asc3, desc3, state.Key3Enabled);
+        }
+        ApplyEnabledState();
+        _useKey2.Checked += (_, _) => ApplyEnabledState();
+        _useKey2.Unchecked += (_, _) => ApplyEnabledState();
+        _useKey3.Checked += (_, _) => ApplyEnabledState();
+        _useKey3.Unchecked += (_, _) => ApplyEnabledState();
 
         var panel = new StackPanel { Margin = new Thickness(14) };
-        panel.Children.Add(new TextBlock { Text = subjectLabel, Margin = new Thickness(0, 0, 0, 10) });
+        panel.Children.Add(new TextBlock { Text = _session.Prompt, Margin = new Thickness(0, 0, 0, 10) });
 
         // Key 1: Sort by
-        panel.Children.Add(new TextBlock { Text = "Sort by", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        panel.Children.Add(new TextBlock { Text = SortDialogPlanner.SortByLabel, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
         panel.Children.Add(KeyRow(_type1));
         panel.Children.Add(_asc1);
         panel.Children.Add(desc1);
@@ -92,28 +103,27 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Loaded += (_, _) => _type1.Focus();
     }
 
-    private static ComboBox TypeCombo()
+    private static ComboBox TypeCombo<TValue>(IReadOnlyList<SortDialogChoice<TValue>> choices)
     {
         var box = new ComboBox { MinWidth = 120, Margin = new Thickness(0, 0, 0, 4) };
-        box.Items.Add("Text");
-        box.Items.Add("Number");
-        box.Items.Add("Date");
+        foreach (var choice in choices)
+            box.Items.Add(choice.Label);
         box.SelectedIndex = 0;
         return box;
     }
 
     private static RadioButton AscRadio() =>
-        new() { Content = "Ascending",  IsChecked = true, Margin = new Thickness(4, 0, 8, 4) };
+        new() { Content = SortDialogPlanner.AscendingLabel, IsChecked = true, Margin = new Thickness(4, 0, 8, 4) };
 
     private static RadioButton DescRadio() =>
-        new() { Content = "Descending", Margin = new Thickness(4, 0, 0, 4) };
+        new() { Content = SortDialogPlanner.DescendingLabel, Margin = new Thickness(4, 0, 0, 4) };
 
     private static StackPanel KeyRow(ComboBox typeBox)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
         row.Children.Add(new TextBlock
         {
-            Text = "Type:",
+            Text = SortDialogPlanner.TypeLabel,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0)
         });
@@ -128,29 +138,19 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         desc.IsEnabled    = enabled;
     }
 
-    private static SortKind KindOf(ComboBox typeBox) => typeBox.SelectedIndex switch
-    {
-        1 => SortKind.Number,
-        2 => SortKind.Date,
-        _ => SortKind.Text,
-    };
-
     private void Accept()
     {
-        var key1 = new SortKey(KindOf(_type1), _asc1.IsChecked == true);
-        SortKey? key2 = _useKey2.IsChecked == true
-            ? new SortKey(KindOf(_type2), _asc2.IsChecked == true)
-            : null;
-        SortKey? key3 = _useKey3.IsChecked == true
-            ? new SortKey(KindOf(_type3), _asc3.IsChecked == true)
-            : null;
-
-        _result = new SortChoice(
-            key1,
-            key2,
-            key3,
+        _result = _session.PlanAcceptance(new SortDialogInput(
+            _type1.SelectedIndex,
+            _asc1.IsChecked == true,
+            _useKey2.IsChecked == true,
+            _type2.SelectedIndex,
+            _asc2.IsChecked == true,
+            _useKey3.IsChecked == true,
+            _type3.SelectedIndex,
+            _asc3.IsChecked == true,
             _caseSensitive.IsChecked == true,
-            _hasHeaderRow.IsChecked == true);
+            _hasHeaderRow.IsChecked == true));
         Close();
     }
 
@@ -159,36 +159,10 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     /// the caret's column vs. sorting selected paragraphs). Returns the chosen options, or null if
     /// cancelled.
     /// </summary>
-    public static SortChoice? Prompt(Window? owner, bool forTable)
+    public static SortDialogResult? Prompt(Window? owner, bool forTable)
     {
-        var label = forTable
-            ? "Sort the table rows by the current column:"
-            : "Sort the selected paragraphs:";
-        var dialog = new SortDialog(owner, label);
+        var dialog = new SortDialog(owner, forTable);
         dialog.ShowDialog();
         return dialog._result;
     }
-}
-
-/// <summary>
-/// A single sort key: the data type (<see cref="SortKind"/>) and whether it sorts ascending or descending.
-/// </summary>
-internal readonly record struct SortKey(SortKind Kind, bool Ascending);
-
-/// <summary>
-/// The options captured by <see cref="SortDialog"/>: up to three sort keys, a case-sensitive toggle, and
-/// a header-row flag. <see cref="Key1"/> is always present; <see cref="Key2"/> and <see cref="Key3"/> are
-/// null when the corresponding "Then by" checkbox was unchecked.
-/// </summary>
-internal readonly record struct SortChoice(
-    SortKey Key1,
-    SortKey? Key2,
-    SortKey? Key3,
-    bool CaseSensitive,
-    bool HasHeaderRow)
-{
-    /// <summary>The primary sort type (shortcut for <c>Key1.Kind</c>).</summary>
-    public SortKind Kind      => Key1.Kind;
-    /// <summary>The primary sort direction (shortcut for <c>Key1.Ascending</c>).</summary>
-    public bool     Ascending => Key1.Ascending;
 }

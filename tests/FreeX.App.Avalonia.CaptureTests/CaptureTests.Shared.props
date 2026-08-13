@@ -1,6 +1,6 @@
 <Project>
   <ItemGroup>
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\tools\FreeX.ParityCapture.Avalonia\FreeX.ParityCapture.Avalonia.csproj" />
     <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
     <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />

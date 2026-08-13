@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -67,12 +66,9 @@ public sealed class DialogInteractionValidationTests
     [Fact]
     public async Task AuditedWpfModelessDialogs_KeepOwnerInteractiveAndReturnFromProductionOpeners()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-modeless-dialog-contract-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-modeless-dialog-contract-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -116,18 +112,6 @@ public sealed class DialogInteractionValidationTests
                 }
             }, CancellationToken.None);
         }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Test cleanup must not hide the interaction contract result.
-            }
-        }
     }
 
     [Fact]
@@ -146,9 +130,9 @@ public sealed class DialogInteractionValidationTests
                 owner.Session.ActiveSheet.ThreadedComments[commentAddress] =
                     new FreeX.Core.Model.ThreadedComment("Modeless contract comment");
 
-                await InvokePrivateTaskAsync(owner, "ShowFindDialogAsync");
+                await owner.ShowFindDialogForTestAsync();
                 var findReplace = FindOwnedWindow(owner, "FindReplaceDialog");
-                await InvokePrivateTaskAsync(owner, "ShowReplaceDialogAsync");
+                await owner.ShowReplaceDialogForTestAsync();
                 FindOwnedWindow(owner, "FindReplaceDialog").Should().BeSameAs(findReplace);
                 findReplace.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex.Should().Be(1);
                 findReplace.GetVisualDescendants().OfType<Button>().Single(button =>
@@ -156,23 +140,23 @@ public sealed class DialogInteractionValidationTests
                     .IsVisible.Should().BeTrue();
                 findReplace.Close();
 
-                await InvokePrivateTaskAsync(owner, "ShowWatchWindowDialogAsync");
+                await owner.ShowWatchWindowDialogForTestAsync();
                 var watch = FindOwnedWindow(owner, "WatchWindowDialog");
-                await InvokePrivateTaskAsync(owner, "ShowWatchWindowDialogAsync");
+                await owner.ShowWatchWindowDialogForTestAsync();
                 FindOwnedWindow(owner, "WatchWindowDialog").Should().BeSameAs(watch);
                 watch.Close();
 
-                await InvokePrivateTaskAsync(owner, "ShowErrorCheckingParityDialogAsync");
-                await InvokePrivateTaskAsync(owner, "ShowErrorCheckingParityDialogAsync");
+                await owner.ShowErrorCheckingParityDialogForTestAsync();
+                await owner.ShowErrorCheckingParityDialogForTestAsync();
                 var errorCheckingWindows = owner.OwnedWindows
                     .Where(window => AutomationProperties.GetAutomationId(window) == "ErrorCheckingDialog")
                     .ToList();
                 errorCheckingWindows.Should().HaveCount(2, "WPF creates a fresh modeless error-checking window per command");
                 errorCheckingWindows.ForEach(window => window.Close());
 
-                await InvokePrivateTaskAsync(owner, "ShowCommentsListAsync");
+                await owner.ShowCommentsListForTestAsync();
                 var comments = FindOwnedWindow(owner, "ReviewCommentListWindow");
-                await InvokePrivateTaskAsync(owner, "ShowCommentsListAsync");
+                await owner.ShowCommentsListForTestAsync();
                 FindOwnedWindow(owner, "ReviewCommentListWindow").Should().BeSameAs(comments);
 
                 owner.AllowCloseWithoutDirtyPromptForParityCapture();
@@ -381,13 +365,4 @@ public sealed class DialogInteractionValidationTests
         owner.OwnedWindows.Single(window =>
             string.Equals(AutomationProperties.GetAutomationId(window), automationId, StringComparison.Ordinal));
 
-    private static Task InvokePrivateTaskAsync(MainWindow owner, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName,
-            BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Missing production dialog opener {methodName}.");
-        return method.Invoke(owner, null) as Task
-            ?? throw new InvalidOperationException($"Production dialog opener {methodName} did not return Task.");
-    }
 }

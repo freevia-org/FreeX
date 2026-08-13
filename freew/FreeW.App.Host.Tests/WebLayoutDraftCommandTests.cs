@@ -1,4 +1,5 @@
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 using Xunit;
@@ -22,7 +23,7 @@ public sealed class WebLayoutDraftCommandTests
         return doc;
     }
 
-    // Build the registry the same way MainWindow does: the View commands drive DocumentView.SetViewMode and
+    // Build the registry the same way MainWindow does: the View ports drive DocumentView.SetViewMode and
     // their active-state predicates read back DocumentView.ViewMode.
     private static (RibbonCommandRegistry Registry, DocumentView View) Build()
     {
@@ -31,15 +32,17 @@ public sealed class WebLayoutDraftCommandTests
         var store = new RibbonStateStore();
 
         var registry = FreeWRibbonCommands.Build(
-            view, store, onPrintPreview: null, onToggleNavPane: null, isNavPaneVisible: null,
-            onToggleReadMode: null, isReadModeActive: null,
-            () => view.SetViewMode(DocumentViewMode.PrintLayout),
-            () => view.ViewMode == DocumentViewMode.PrintLayout,
-            onToggleOutlineView: null, isOutlineViewActive: null, onZoomDialog: null,
-            onWebLayout: () => view.SetViewMode(DocumentViewMode.WebLayout),
-            isWebLayoutActive: () => view.ViewMode == DocumentViewMode.WebLayout,
-            onDraftView: () => view.SetViewMode(DocumentViewMode.Draft),
-            isDraftViewActive: () => view.ViewMode == DocumentViewMode.Draft);
+            view,
+            store,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                SetPrintLayout = () => view.SetViewMode(DocumentViewMode.PrintLayout),
+                IsPrintLayoutActive = () => view.ViewMode == DocumentViewMode.PrintLayout,
+                SetWebLayout = () => view.SetViewMode(DocumentViewMode.WebLayout),
+                IsWebLayoutActive = () => view.ViewMode == DocumentViewMode.WebLayout,
+                SetDraftView = () => view.SetViewMode(DocumentViewMode.Draft),
+                IsDraftViewActive = () => view.ViewMode == DocumentViewMode.Draft,
+            });
 
         return (registry, view);
     }

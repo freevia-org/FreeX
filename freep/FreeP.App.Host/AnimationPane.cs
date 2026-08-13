@@ -2,7 +2,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeP.App.Compositor;
-using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
@@ -35,53 +34,32 @@ namespace FreeP.App.Host;
 /// WPF control that displays and edits the animation list for the current slide.
 /// Host it in MainWindow as a right-side dock (see 16B SEAM regions in MainWindow).
 /// </summary>
-public sealed class AnimationPane : Border
+public sealed partial class AnimationPane : Border
 {
     // ── Colors (mirrors the FreeP orange theme) ───────────────────────────────────
 
-    private static readonly Brush BackBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)));
-    private static readonly Brush HeaderBg     = Freeze(new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)));
+    private static Brush BackBrush => FreePBrushes.DisabledSurface;
+    private static Brush HeaderBg => FreePBrushes.Accent;
     private static readonly Brush HeaderFg     = Freeze(new SolidColorBrush(Colors.White));
-    private static readonly Brush RowNormal    = Freeze(new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)));
-    private static readonly Brush RowSelected  = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0xE0, 0xD6)));
-    private static readonly Brush RowBorder    = Freeze(new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)));
-    private static readonly Brush TextBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22)));
-    private static readonly Brush MutedBrush   = Freeze(new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)));
-    private static readonly Brush ButtonBg     = Freeze(new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)));
+    private static Brush RowNormal => FreePBrushes.PaneSurface;
+    private static Brush RowSelected => FreePBrushes.AnimationSelectedSurface;
+    private static Brush RowBorder => FreePBrushes.GridBorder;
+    private static Brush TextBrush => FreePBrushes.AnimationText;
+    private static Brush MutedBrush => FreePBrushes.PaneMutedText;
+    private static Brush ButtonBg => FreePBrushes.CardBorder;
 
     // ── Fields ────────────────────────────────────────────────────────────────────
 
     private readonly EditingSession _editor;
+    private readonly AnimationPaneSession _session;
     private readonly Action<AnimationPanePlaybackSessionPlan>? _onPreview;
     private readonly Action? _onAccessibilityChanged;
     private readonly Action<int>? _onEditMotionPath;
 
     private readonly StackPanel _listPanel;
     private readonly StackPanel _playbackControlsPanel;
-    private int _selectedRowIndex = -1;   // -1 = none
-    private AnimationPanePlaybackSessionPlan? _playbackSessionPlan;
-    private AnimationPanePlaybackWorkflowEvidencePlan? _playbackWorkflowEvidencePlan;
 
-    internal AnimationPaneTimelinePlan CurrentTimelinePlanForTest => BuildTimelinePlan();
-    internal AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEditForTest(
-        int animationIndex,
-        string optionId)
-        => ApplyEffectOptionMutation(animationIndex, optionId);
-    internal AnimationPaneEasingMutationPlan ApplyAnimationPaneEasingEditForTest(
-        int animationIndex,
-        string? accelerationText,
-        string? decelerationText)
-        => ApplyEasingMutation(animationIndex, accelerationText, decelerationText);
-    internal AnimationPanePlaybackSessionPlan? CurrentPlaybackSessionPlanForTest => _playbackSessionPlan;
-    internal AnimationPanePlaybackWorkflowEvidencePlan? CurrentPlaybackWorkflowEvidencePlanForTest =>
-        _playbackWorkflowEvidencePlan;
-    internal IReadOnlyList<AnimationPanePlaybackControlDescriptor> CurrentPlaybackControlsForTest =>
-        BuildTimelinePlan().PlaybackControls;
-    internal AnimationPaneWorkflowViewPlan CurrentWorkflowViewPlanForTest => BuildWorkflowViewPlan();
-    internal AnimationPaneWorkflowEvidencePlan CurrentWorkflowEvidencePlanForTest =>
-        AnimationPanePlanner.BuildWorkflowEvidencePlan(BuildTimelinePlan(), _editor.CurrentSlideIndex);
-    internal IReadOnlyList<FrameworkElement> AccessibilityItemsForTests =>
-        _listPanel.Children.OfType<FrameworkElement>().ToArray();
+    internal AnimationPaneTimelinePlan CurrentTimelinePlan => BuildTimelinePlan();
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
@@ -99,6 +77,7 @@ public sealed class AnimationPane : Border
         Action<int>? onEditMotionPath = null)
     {
         _editor    = editor    ?? throw new ArgumentNullException(nameof(editor));
+        _session = new AnimationPaneSession(() => _editor);
         _onPreview = onPreview;
         _onAccessibilityChanged = onAccessibilityChanged;
         _onEditMotionPath = onEditMotionPath;
@@ -146,7 +125,7 @@ public sealed class AnimationPane : Border
     {
         var title = new TextBlock
         {
-            Text              = "Animation Pane",
+            Text              = _session.ControlSchema.Heading,
             FontSize          = 12,
             FontWeight        = FontWeights.SemiBold,
             Foreground        = HeaderFg,
@@ -188,7 +167,7 @@ public sealed class AnimationPane : Border
         RenderPlaybackControls(plan);
         if (!plan.HasAnimations)
         {
-            var viewPlan = BuildWorkflowViewPlan(plan);
+            var viewPlan = _session.WorkflowEvidence!.View;
             _listPanel.Children.Add(new TextBlock
             {
                 Text       = viewPlan.EmptyMessage,
@@ -200,8 +179,6 @@ public sealed class AnimationPane : Border
             _onAccessibilityChanged?.Invoke();
             return;
         }
-
-        _selectedRowIndex = plan.SelectedIndex;
 
         foreach (var item in plan.Items)
         {
@@ -225,7 +202,7 @@ public sealed class AnimationPane : Border
                 IsEnabled       = control.IsEnabled,
                 Padding         = new Thickness(6, 2, 6, 2),
                 Margin          = new Thickness(0, 4, 6, 4),
-                Background      = Freeze(new SolidColorBrush(Color.FromRgb(0x8F, 0x37, 0x21))),
+                Background      = FreePBrushes.AccentDark,
                 Foreground      = Freeze(new SolidColorBrush(Colors.White)),
                 BorderThickness = new Thickness(0),
                 FontSize        = 12,
@@ -238,45 +215,17 @@ public sealed class AnimationPane : Border
     private void ExecutePlaybackControl(AnimationPanePlaybackControlDescriptor control)
         => ExecutePlaybackControl(control, invokePreview: true);
 
-    internal AnimationPanePlaybackSessionPlan ExecutePlaybackControlForTest(
-        AnimationPanePlaybackControlKind controlKind)
-    {
-        var control = BuildTimelinePlan()
-            .PlaybackControls
-            .First(candidate => candidate.Kind == controlKind);
-        return ExecutePlaybackControl(control, invokePreview: false);
-    }
-
-    internal AnimationPaneReorderMutationPlan MoveAnimationForTest(int animationIndex, int offset)
-        => ApplyReorderMutation(animationIndex, offset);
-
     private AnimationPanePlaybackSessionPlan ExecutePlaybackControl(
         AnimationPanePlaybackControlDescriptor control,
         bool invokePreview)
     {
-        var timeline = BuildTimelinePlan();
-        _playbackSessionPlan = AnimationPanePlanner.BuildPlaybackSessionPlan(timeline, control.Kind);
-        _playbackWorkflowEvidencePlan = AnimationPanePlanner.BuildPlaybackWorkflowEvidencePlan(
-            timeline,
-            _playbackSessionPlan,
-            Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>(),
-            _editor.CurrentSlideIndex);
+        var transition = _session.ExecutePlayback(control.Kind);
         Rebuild();
 
-        if (!control.IsEnabled)
-            return _playbackSessionPlan;
+        if (invokePreview && transition.ShouldStartPreview)
+            _onPreview?.Invoke(transition.Playback);
 
-        switch (control.Kind)
-        {
-            case AnimationPanePlaybackControlKind.PreviewCurrentSlide:
-            case AnimationPanePlaybackControlKind.PlayFromSelected:
-            case AnimationPanePlaybackControlKind.PlayCurrentSlide:
-                if (invokePreview)
-                    _onPreview?.Invoke(_playbackSessionPlan);
-                break;
-        }
-
-        return _playbackSessionPlan;
+        return transition.Playback;
     }
 
     // ── Row construction ──────────────────────────────────────────────────────────
@@ -284,6 +233,7 @@ public sealed class AnimationPane : Border
     private UIElement BuildRow(AnimationPaneTimelineItemPlan item)
     {
         bool selected = item.IsSelected;
+        var controls = _session.BuildItemControlPlan(item, _onEditMotionPath is not null);
 
         // ── Order number ────────────────────────────────────────────────────────
         var orderLabel = new TextBlock
@@ -331,24 +281,15 @@ public sealed class AnimationPane : Border
             Width             = 104,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = item.EffectOptions.CanApply
-                ? "Effect options"
-                : item.EffectOptions.DisabledReason,
-            IsEnabled         = item.EffectOptions.CanApply,
-            Visibility        = item.EffectOptions.Options.Count > 0
+            ToolTip           = controls.EffectOptions.ToolTip,
+            IsEnabled         = controls.EffectOptions.IsEnabled,
+            Visibility        = controls.EffectOptions.IsVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed,
         };
-        foreach (var option in item.EffectOptions.Options)
-            effectOptionCombo.Items.Add(option.DisplayText);
-        for (var i = 0; i < item.EffectOptions.Options.Count; i++)
-        {
-            if (item.EffectOptions.Options[i].IsSelected)
-            {
-                effectOptionCombo.SelectedIndex = i;
-                break;
-            }
-        }
+        foreach (var option in controls.EffectOptions.Options)
+            effectOptionCombo.Items.Add(option.Label);
+        effectOptionCombo.SelectedIndex = controls.EffectOptions.SelectedIndex;
 
         var wheelSpokeCombo = new ComboBox
         {
@@ -356,22 +297,15 @@ public sealed class AnimationPane : Border
             Width             = 86,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = "Wheel spokes",
-            IsEnabled         = item.EffectOptions.CanApply,
-            Visibility        = item.EffectOptions.WheelSpokeOptions.Count > 0
+            ToolTip           = controls.WheelSpokes.ToolTip,
+            IsEnabled         = controls.WheelSpokes.IsEnabled,
+            Visibility        = controls.WheelSpokes.IsVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed,
         };
-        foreach (var option in item.EffectOptions.WheelSpokeOptions)
-            wheelSpokeCombo.Items.Add(option.DisplayText);
-        for (var i = 0; i < item.EffectOptions.WheelSpokeOptions.Count; i++)
-        {
-            if (item.EffectOptions.WheelSpokeOptions[i].IsSelected)
-            {
-                wheelSpokeCombo.SelectedIndex = i;
-                break;
-            }
-        }
+        foreach (var option in controls.WheelSpokes.Options)
+            wheelSpokeCombo.Items.Add(option.Label);
+        wheelSpokeCombo.SelectedIndex = controls.WheelSpokes.SelectedIndex;
 
         // ── Trigger dropdown ────────────────────────────────────────────────────
         var triggerCombo = new ComboBox
@@ -380,11 +314,11 @@ public sealed class AnimationPane : Border
             Width             = 110,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = "Trigger",
+            ToolTip           = controls.Trigger.ToolTip,
         };
-        foreach (var label in AnimationPanePlanner.TriggerLabels)
-            triggerCombo.Items.Add(label);
-        triggerCombo.SelectedIndex = item.TriggerIndex;
+        foreach (var option in controls.Trigger.Options)
+            triggerCombo.Items.Add(option.Label);
+        triggerCombo.SelectedIndex = controls.Trigger.SelectedIndex;
 
         var repeatCombo = new ComboBox
         {
@@ -392,70 +326,48 @@ public sealed class AnimationPane : Border
             Width = 82,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2),
-            ToolTip = "Repeat count",
+            ToolTip = controls.Repeat.ToolTip,
         };
-        foreach (var value in new[] { "1", "2", "3", "4", "Indefinitely" })
-            repeatCombo.Items.Add(value);
-        repeatCombo.SelectedItem = AnimationPanePlanner.FormatRepeat(
-            item.RepeatCount,
-            item.RepeatIndefinitely);
+        foreach (var option in controls.Repeat.Options)
+            repeatCombo.Items.Add(option.Label);
+        repeatCombo.SelectedIndex = controls.Repeat.SelectedIndex;
 
         var autoReverseCheck = new CheckBox
         {
-            IsChecked = item.AutoReverse,
+            IsChecked = controls.AutoReverse.IsChecked,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2),
-            ToolTip = "Auto-reverse between repeats",
+            ToolTip = controls.AutoReverse.Descriptor.ToolTip,
         };
 
         // Capture by value for the closure.
         int capturedIndex = item.Index;
         effectOptionCombo.SelectionChanged += (_, _) =>
         {
-            if (effectOptionCombo.SelectedIndex < 0
-                || effectOptionCombo.SelectedIndex >= item.EffectOptions.Options.Count)
-            {
-                return;
-            }
-
-            var option = item.EffectOptions.Options[effectOptionCombo.SelectedIndex];
-            ApplyEffectOptionMutation(capturedIndex, option.Id);
+            if (controls.EffectOptions.ResolveOptionId(effectOptionCombo.SelectedIndex) is { } optionId)
+                ApplyEffectOptionMutation(capturedIndex, optionId);
         };
 
         wheelSpokeCombo.SelectionChanged += (_, _) =>
         {
-            if (wheelSpokeCombo.SelectedIndex < 0
-                || wheelSpokeCombo.SelectedIndex >= item.EffectOptions.WheelSpokeOptions.Count)
-            {
-                return;
-            }
-
-            var option = item.EffectOptions.WheelSpokeOptions[wheelSpokeCombo.SelectedIndex];
-            ApplyEffectOptionMutation(capturedIndex, option.Id);
+            if (controls.WheelSpokes.ResolveOptionId(wheelSpokeCombo.SelectedIndex) is { } optionId)
+                ApplyEffectOptionMutation(capturedIndex, optionId);
         };
 
         triggerCombo.SelectionChanged += (_, _) =>
         {
-            var plan = AnimationPanePlanner.BuildTriggerMutationPlan(
-                _editor.CurrentSlideAnimations,
-                capturedIndex,
-                triggerCombo.SelectedIndex);
-            AnimationPanePlanner.TryApplyTimingMutation(_editor, plan);
+            _session.ApplyTrigger(capturedIndex, triggerCombo.SelectedIndex);
         };
 
         void ApplyRepeat()
         {
-            var plan = AnimationPanePlanner.BuildRepeatMutationPlan(
-                _editor.CurrentSlideAnimations,
+            var plan = _session.ApplyRepeat(
                 capturedIndex,
                 repeatCombo.SelectedItem as string,
                 autoReverseCheck.IsChecked == true);
-            if (!AnimationPanePlanner.TryApplyRepeatMutation(_editor, plan)
-                && plan.DisabledReason is not null)
+            if (!plan.ShouldApply && plan.DisabledReason is not null)
             {
-                repeatCombo.SelectedItem = AnimationPanePlanner.FormatRepeat(
-                    plan.RepeatCount,
-                    plan.RepeatIndefinitely);
+                repeatCombo.SelectedItem = plan.DisplayText;
                 autoReverseCheck.IsChecked = plan.AutoReverse;
             }
         }
@@ -467,54 +379,48 @@ public sealed class AnimationPane : Border
         // ── Duration field ──────────────────────────────────────────────────────
         var durationBox = new TextBox
         {
-            Text              = item.DurationText,
+            Text              = controls.Duration.Text,
             FontSize          = 10,
             Width             = 48,
             VerticalAlignment = VerticalAlignment.Center,
             Padding           = new Thickness(2, 1, 2, 1),
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = "Duration (seconds)",
+            ToolTip           = controls.Duration.Descriptor.ToolTip,
         };
         durationBox.LostFocus += (_, _) =>
         {
-            var plan = AnimationPanePlanner.BuildDurationMutationPlan(
-                _editor.CurrentSlideAnimations,
-                capturedIndex,
-                durationBox.Text);
-            if (!AnimationPanePlanner.TryApplyTimingMutation(_editor, plan))
+            var plan = _session.ApplyDuration(capturedIndex, durationBox.Text);
+            if (!plan.ShouldApply)
                 durationBox.Text = plan.DisplayText;
         };
 
         var delayBox = new TextBox
         {
-            Text              = item.DelayText,
+            Text              = controls.Delay.Text,
             FontSize          = 10,
             Width             = 48,
             VerticalAlignment = VerticalAlignment.Center,
             Padding           = new Thickness(2, 1, 2, 1),
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = "Delay (seconds)",
+            ToolTip           = controls.Delay.Descriptor.ToolTip,
         };
         delayBox.LostFocus += (_, _) =>
         {
-            var plan = AnimationPanePlanner.BuildDelayMutationPlan(
-                _editor.CurrentSlideAnimations,
-                capturedIndex,
-                delayBox.Text);
-            if (!AnimationPanePlanner.TryApplyTimingMutation(_editor, plan))
+            var plan = _session.ApplyDelay(capturedIndex, delayBox.Text);
+            if (!plan.ShouldApply)
                 delayBox.Text = plan.DisplayText;
         };
 
         TextBox? decelerationBox = null;
         var accelerationBox = new TextBox
         {
-            Text = AnimationPanePlanner.FormatEasing(item.Acceleration),
+            Text = controls.SmoothStart.Text,
             FontSize = 10,
             Width = 48,
             VerticalAlignment = VerticalAlignment.Center,
             Padding = new Thickness(2, 1, 2, 1),
             Margin = new Thickness(2, 2, 2, 2),
-            ToolTip = "Smooth start",
+            ToolTip = controls.SmoothStart.Descriptor.ToolTip,
         };
         accelerationBox.LostFocus += (_, _) =>
         {
@@ -528,13 +434,13 @@ public sealed class AnimationPane : Border
 
         decelerationBox = new TextBox
         {
-            Text = AnimationPanePlanner.FormatEasing(item.Deceleration),
+            Text = controls.SmoothEnd.Text,
             FontSize = 10,
             Width = 48,
             VerticalAlignment = VerticalAlignment.Center,
             Padding = new Thickness(2, 1, 2, 1),
             Margin = new Thickness(2, 2, 2, 2),
-            ToolTip = "Smooth end",
+            ToolTip = controls.SmoothEnd.Descriptor.ToolTip,
         };
         decelerationBox.LostFocus += (_, _) =>
         {
@@ -557,8 +463,8 @@ public sealed class AnimationPane : Border
             Margin              = new Thickness(1),
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
-            IsEnabled           = item.CanMoveEarlier,
-            ToolTip             = "Move earlier",
+            IsEnabled           = controls.MoveEarlier.IsEnabled,
+            ToolTip             = controls.MoveEarlier.ToolTip,
             VerticalAlignment   = VerticalAlignment.Center,
         };
         upBtn.Click += (_, _) =>
@@ -577,8 +483,8 @@ public sealed class AnimationPane : Border
             Margin              = new Thickness(1),
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
-            IsEnabled           = item.CanMoveLater,
-            ToolTip             = "Move later",
+            IsEnabled           = controls.MoveLater.IsEnabled,
+            ToolTip             = controls.MoveLater.ToolTip,
             VerticalAlignment   = VerticalAlignment.Center,
         };
         downBtn.Click += (_, _) =>
@@ -595,10 +501,11 @@ public sealed class AnimationPane : Border
             Height              = 18,
             Padding             = new Thickness(0),
             Margin              = new Thickness(1),
-            Foreground          = Freeze(new SolidColorBrush(Color.FromRgb(0xC0, 0x20, 0x20))),
+            Foreground          = FreePBrushes.AnimationDanger,
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
-            ToolTip             = "Remove animation",
+            IsEnabled           = controls.Remove.IsEnabled,
+            ToolTip             = controls.Remove.ToolTip,
             VerticalAlignment   = VerticalAlignment.Center,
         };
         removeBtn.Click += (_, _) =>
@@ -606,9 +513,6 @@ public sealed class AnimationPane : Border
             ApplyRemoveMutation(capturedIndex);
         };
 
-        var paragraphBuildPlan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
-            _editor.CurrentSlide,
-            item.ShapeId);
         var paragraphBuildBtn = new Button
         {
             Content             = "¶",
@@ -619,25 +523,23 @@ public sealed class AnimationPane : Border
             Margin              = new Thickness(1),
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
-            IsEnabled           = paragraphBuildPlan.ShouldApply,
-            ToolTip             = paragraphBuildPlan.DisabledReason ?? paragraphBuildPlan.DisplayText,
+            IsEnabled           = controls.ParagraphBuild.IsEnabled,
+            ToolTip             = controls.ParagraphBuild.ToolTip,
             VerticalAlignment   = VerticalAlignment.Center,
         };
         paragraphBuildBtn.Click += (_, _) =>
         {
-            var plan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
-                _editor.CurrentSlide,
-                item.ShapeId);
-            if (AnimationPanePlanner.TryApplyParagraphBuildMutation(_editor, plan))
+            var plan = _session.ToggleParagraphBuild(item.ShapeId);
+            if (plan.ShouldApply)
                 Rebuild();
         };
 
         Button? editMotionPathBtn = null;
-        if (item.Kind == AnimationKind.Motion && _onEditMotionPath is not null)
+        if (controls.EditMotionPath.IsVisible && _onEditMotionPath is not null)
         {
             editMotionPathBtn = new Button
             {
-                Content = "Edit",
+                Content = controls.EditMotionPath.Descriptor.Label,
                 FontSize = 9,
                 MinWidth = 34,
                 Height = 18,
@@ -645,7 +547,8 @@ public sealed class AnimationPane : Border
                 Margin = new Thickness(1),
                 Background = ButtonBg,
                 BorderThickness = new Thickness(1),
-                ToolTip = "Edit motion path geometry",
+                IsEnabled = controls.EditMotionPath.IsEnabled,
+                ToolTip = controls.EditMotionPath.ToolTip,
                 VerticalAlignment = VerticalAlignment.Center,
             };
             editMotionPathBtn.Click += (_, _) => _onEditMotionPath(item.Index);
@@ -721,20 +624,18 @@ public sealed class AnimationPane : Border
         };
         PresentationPaneAccessibilityAdapter.ApplyItem(
             row,
-            PresentationPaneAccessibilityPlanner.AnimationPaneId,
-            item.Index,
-            item.ShapeName,
-            selected ? "Selected" : "Not selected");
+            PresentationPaneAccessibilityPlanner.PlanItem(
+                PresentationPaneAccessibilityPlanner.AnimationPaneId,
+                item.Index,
+                item.ShapeName,
+                selected,
+                PresentationPaneAccessibilityPlanner.BuildAnimationKey(item.ShapeId, item.Index)));
 
         // Click → select this row and select the shape on the canvas.
         row.MouseLeftButtonDown += (sender, _) =>
         {
-            _selectedRowIndex = capturedIndex;
+            _session.SelectAnimation(capturedIndex);
             UpdateRowHighlights();
-
-            var anims = _editor.CurrentSlideAnimations;
-            if (capturedIndex < anims.Count)
-                _editor.Select(anims[capturedIndex].ShapeId);
         };
 
         return row;
@@ -744,12 +645,9 @@ public sealed class AnimationPane : Border
         int animationIndex,
         string optionId)
     {
-        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
-            _editor.CurrentSlideAnimations,
-            animationIndex,
-            optionId);
-        if (AnimationPanePlanner.TryApplyEffectOptionMutation(_editor, plan))
-        Rebuild();
+        var plan = _session.ApplyEffectOption(animationIndex, optionId);
+        if (plan.ShouldApply)
+            Rebuild();
         return plan;
     }
 
@@ -758,12 +656,8 @@ public sealed class AnimationPane : Border
         string? accelerationText,
         string? decelerationText)
     {
-        var plan = AnimationPanePlanner.BuildEasingMutationPlan(
-            _editor.CurrentSlideAnimations,
-            animationIndex,
-            accelerationText,
-            decelerationText);
-        if (AnimationPanePlanner.TryApplyEasingMutation(_editor, plan))
+        var plan = _session.ApplyEasing(animationIndex, accelerationText, decelerationText);
+        if (plan.ShouldApply)
             Rebuild();
         return plan;
     }
@@ -776,7 +670,7 @@ public sealed class AnimationPane : Border
         for (int i = 0; i < _listPanel.Children.Count; i++)
         {
             if (_listPanel.Children[i] is Border b && b.Tag is int rowIdx)
-                b.Background = rowIdx == _selectedRowIndex ? RowSelected : RowNormal;
+                b.Background = rowIdx == _session.SelectedAnimationIndex ? RowSelected : RowNormal;
         }
     }
 
@@ -784,27 +678,14 @@ public sealed class AnimationPane : Border
 
     private AnimationPaneReorderMutationPlan ApplyReorderMutation(int animationIndex, int offset)
     {
-        var plan = AnimationPanePlanner.BuildReorderMutationPlan(
-            _editor.CurrentSlideAnimations,
-            animationIndex,
-            offset);
-        if (AnimationPanePlanner.TryApplyReorderMutation(_editor, plan))
-            _selectedRowIndex = plan.SelectedAnimationIndex;
-
-        return plan;
+        return _session.MoveAnimation(animationIndex, offset);
     }
-
-    internal AnimationPaneRemoveMutationPlan RemoveAnimationForTest(int animationIndex) =>
-        ApplyRemoveMutation(animationIndex);
 
     private AnimationPaneRemoveMutationPlan ApplyRemoveMutation(int animationIndex)
     {
-        var plan = AnimationPanePlanner.BuildRemoveMutationPlan(
-            _editor.CurrentSlideAnimations,
-            animationIndex);
-        if (AnimationPanePlanner.TryApplyRemoveMutation(_editor, plan))
+        var plan = _session.RemoveAnimation(animationIndex);
+        if (plan.ShouldApply)
         {
-            _selectedRowIndex = plan.SelectedAnimationIndex;
             Rebuild();
         }
 
@@ -812,17 +693,13 @@ public sealed class AnimationPane : Border
     }
 
     private AnimationPaneTimelinePlan BuildTimelinePlan()
-        => AnimationPanePlanner.BuildTimelinePlan(
-            _editor.CurrentSlide,
-            _editor.SelectedShapeIds,
-            _selectedRowIndex,
-            isPlaybackRunning: _playbackSessionPlan?.IsRunning == true);
+        => _session.Refresh();
 
     private AnimationPaneWorkflowViewPlan BuildWorkflowViewPlan()
-        => BuildWorkflowViewPlan(BuildTimelinePlan());
-
-    private AnimationPaneWorkflowViewPlan BuildWorkflowViewPlan(AnimationPaneTimelinePlan plan)
-        => AnimationPanePlanner.BuildWorkflowViewPlan(plan, _editor.CurrentSlideIndex);
+    {
+        BuildTimelinePlan();
+        return _session.WorkflowEvidence!.View;
+    }
 
     // ── Static freeze helper ──────────────────────────────────────────────────────
 

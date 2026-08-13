@@ -125,4 +125,43 @@ public sealed class PivotFieldListPaneBuilderTests
 
         result.Select(f => f.Caption).Should().BeEquivalentTo("Product", "Quarter", "Units", "Amount");
     }
+
+    [Fact]
+    public void BuildAvailableFields_KeepsEveryHeaderAndMarksPlacedSourceFields()
+    {
+        var areas = PivotFieldLayoutPlanner.Capture(BuildPivot());
+
+        var fields = PivotFieldListPaneBuilder.BuildAvailableFields(Headers, areas);
+
+        fields.Select(field => field.SourceFieldIndex).Should().Equal(0, 1, 2, 3, 4);
+        fields.Select(field => field.Caption).Should().Equal(Headers);
+        fields.Select(field => field.IsChecked).Should().Equal(true, true, true, true, false);
+    }
+
+    [Fact]
+    public void FilterAvailableFields_PreservesIdentityAndCheckedState()
+    {
+        var fields = PivotFieldListPaneBuilder.BuildAvailableFields(
+            Headers,
+            PivotFieldLayoutPlanner.Capture(BuildPivot()));
+
+        var result = PivotFieldListPaneBuilder.FilterAvailableFields(fields, "unit");
+
+        result.Should().Equal(new PivotAvailableFieldItemModel(4, "Units", false));
+    }
+
+    [Fact]
+    public void GetItemCaption_InterpretsRendererItemsWithoutRendererWrappers()
+    {
+        PivotFieldListPaneBuilder.GetItemCaption("Region").Should().Be("Region");
+        PivotFieldListPaneBuilder.GetItemCaption(new PivotAvailableFieldItemModel(3, "Amount", true))
+            .Should()
+            .Be("Amount");
+        PivotFieldListPaneBuilder.GetItemCaption(new PivotFieldListItemModel(3, "Sum of Amount", PivotFieldBucket.Values))
+            .Should()
+            .Be("Sum of Amount");
+        PivotFieldListPaneBuilder.GetItemCaption(new PivotAvailableFieldItemModel(3, "  ", true))
+            .Should()
+            .BeNull();
+    }
 }

@@ -131,23 +131,7 @@ public sealed record PageSetupDialogFields
     public WorksheetPrintComments PrintComments { get; init; } = WorksheetPrintComments.None;
     public WorksheetPageOrder PageOrder { get; init; } = WorksheetPageOrder.DownThenOver;
 
-    /// <summary>Header/footer center text (the dialog edits center-only presets; left/right preserved).</summary>
-    public WorksheetHeaderFooter Header { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter Footer { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter FirstPageHeader { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter FirstPageFooter { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter EvenPageHeader { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter EvenPageFooter { get; init; } = new("", "", "");
-    public WorksheetHeaderFooterPictureSet HeaderPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet FooterPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet FirstPageHeaderPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet FirstPageFooterPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet EvenPageHeaderPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet EvenPageFooterPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public bool DifferentFirstPage { get; init; }
-    public bool DifferentOddEvenPages { get; init; }
-    public bool ScaleHeaderFooterWithDocument { get; init; } = true;
-    public bool AlignHeaderFooterWithMargins { get; init; } = true;
+    public HeaderFooterEditorState HeaderFooter { get; init; } = HeaderFooterEditorState.Empty;
 }
 
 /// <summary>
@@ -211,64 +195,33 @@ public static class PageSetupDialogModel
         new(WorksheetPrintComments.AsDisplayed, "PageSetup_CommentsAsDisplayed"),
     ];
 
-    /// <summary>The Page Setup header center presets the dialog offers. The value is the persisted token text; "" means none.</summary>
-    public static IReadOnlyList<PageSetupChoice<string>> HeaderPresetChoices { get; } =
-    [
-        new("", "PageSetup_None"),
-        new("&[Page]", "PageSetup_Page1"),
-        new("Page &[Page] of &[Pages]", "PageSetup_Page1Of"),
-        new("&[Tab]", "PageSetup_Sheet1"),
-        new("&[File]", "PageSetup_Book1"),
-        new("&[File]", "PageSetup_Book1Xlsx"),
-        new("&[File], &[Tab]", "PageSetup_Book1XlsxSheet1"),
-        new("Confidential, Page &[Page]", "PageSetup_ConfidentialPage1"),
-        new("&[Date], Page &[Page]", "PageSetup_DatePage1"),
-        new("&[Tab]", "PageSetup_SheetName"),
-        new("&[File]", "PageSetup_FileName"),
-        new("&[Path]&[File]", "PageSetup_FilePath"),
-    ];
+    /// <summary>The Page Setup header center presets the dialog offers.</summary>
+    public static IReadOnlyList<HeaderFooterPresetChoice> HeaderPresetChoices { get; } =
+        HeaderFooterPresetCatalog.HeaderChoices;
 
-    /// <summary>The Page Setup footer center presets the dialog offers. The value is the persisted token text; "" means none.</summary>
-    public static IReadOnlyList<PageSetupChoice<string>> FooterPresetChoices { get; } =
-    [
-        new("", "PageSetup_None"),
-        new("&[Page]", "PageSetup_Page1"),
-        new("Page &[Page] of &[Pages]", "PageSetup_Page1Of"),
-        new("&[Tab]", "PageSetup_Sheet1"),
-        new("&[File]", "PageSetup_Book1"),
-        new("&[File]", "PageSetup_Book1Xlsx"),
-        new("&[File], &[Tab]", "PageSetup_Book1XlsxSheet1"),
-        new("&[Date]", "PageSetup_Date"),
-        new("&[Time]", "PageSetup_Time"),
-        new("&[Date], Page &[Page]", "PageSetup_DatePage1"),
-        new("&[Path]&[File]", "PageSetup_FilePath"),
-        new("&[File]", "PageSetup_FileName"),
-    ];
+    /// <summary>The Page Setup footer center presets the dialog offers.</summary>
+    public static IReadOnlyList<HeaderFooterPresetChoice> FooterPresetChoices { get; } =
+        HeaderFooterPresetCatalog.FooterChoices;
 
-    /// <summary>The compact cross-platform Page Setup preset catalog used by shells that render one shared header/footer list.</summary>
-    public static IReadOnlyList<PageSetupChoice<string>> HeaderFooterPresetChoices { get; } =
-    [
-        new("", "PageSetup_None"),
-        new("&[Page]", "PageSetup_PresetPage"),
-        new("Page &[Page] of &[Pages]", "PageSetup_PresetPageOf"),
-        new("&[Tab]", "PageSetup_PresetSheetName"),
-        new("&[File]", "PageSetup_PresetFileName"),
-        new("&[File], &[Tab]", "PageSetup_PresetFileSheet"),
-        new("&[Date]", "PageSetup_PresetDate"),
-        new("&[Time]", "PageSetup_PresetTime"),
-        new("&[Date], Page &[Page]", "PageSetup_PresetDatePage"),
-        new("Confidential, Page &[Page]", "PageSetup_PresetConfidential"),
-        new("&[Path]&[File]", "PageSetup_PresetFilePath"),
-    ];
+    /// <summary>The compact cross-platform Page Setup preset catalog used by shells that render one shared list.</summary>
+    public static IReadOnlyList<HeaderFooterPresetChoice> HeaderFooterPresetChoices { get; } =
+        HeaderFooterPresetCatalog.CompactChoices;
 
     /// <summary>The compact preset values in display order. Prefer the choice catalogs when labels are needed.</summary>
     public static IReadOnlyList<string> HeaderFooterPresets { get; } =
         HeaderFooterPresetChoices.Select(choice => choice.Value).ToArray();
 
-    public static int HeaderFooterPresetIndex(IReadOnlyList<PageSetupChoice<string>> choices, string centerText) =>
-        ChoiceIndex(choices, centerText, "");
+    public static int HeaderFooterPresetIndex(IReadOnlyList<HeaderFooterPresetChoice> choices, string centerText)
+    {
+        var exactIndex = HeaderFooterPresetExactIndex(choices, centerText);
+        if (exactIndex >= 0)
+            return exactIndex;
 
-    public static int HeaderFooterPresetExactIndex(IReadOnlyList<PageSetupChoice<string>> choices, string centerText)
+        var noneIndex = HeaderFooterPresetExactIndex(choices, "");
+        return noneIndex >= 0 ? noneIndex : choices.Count > 0 ? 0 : -1;
+    }
+
+    public static int HeaderFooterPresetExactIndex(IReadOnlyList<HeaderFooterPresetChoice> choices, string centerText)
     {
         ArgumentNullException.ThrowIfNull(choices);
 
@@ -281,8 +234,10 @@ public static class PageSetupDialogModel
         return -1;
     }
 
-    public static string HeaderFooterPresetValue(IReadOnlyList<PageSetupChoice<string>> choices, int selectedIndex) =>
-        ChoiceValue(choices, selectedIndex, "");
+    public static string HeaderFooterPresetValue(IReadOnlyList<HeaderFooterPresetChoice> choices, int selectedIndex) =>
+        choices is null
+            ? throw new ArgumentNullException(nameof(choices))
+            : selectedIndex >= 0 && selectedIndex < choices.Count ? choices[selectedIndex].Value : "";
 
     public static string BuildHeaderFooterPreview(WorksheetHeaderFooter value, string noneText)
     {
@@ -393,22 +348,7 @@ public static class PageSetupDialogModel
             PrintErrorValue = sheet.PrintErrorValue,
             PrintComments = sheet.PrintComments,
             PageOrder = sheet.PageOrder,
-            Header = sheet.PageHeader,
-            Footer = sheet.PageFooter,
-            FirstPageHeader = sheet.FirstPageHeader,
-            FirstPageFooter = sheet.FirstPageFooter,
-            EvenPageHeader = sheet.EvenPageHeader,
-            EvenPageFooter = sheet.EvenPageFooter,
-            HeaderPictures = sheet.PageHeaderPictures.DeepClone(),
-            FooterPictures = sheet.PageFooterPictures.DeepClone(),
-            FirstPageHeaderPictures = sheet.FirstPageHeaderPictures.DeepClone(),
-            FirstPageFooterPictures = sheet.FirstPageFooterPictures.DeepClone(),
-            EvenPageHeaderPictures = sheet.EvenPageHeaderPictures.DeepClone(),
-            EvenPageFooterPictures = sheet.EvenPageFooterPictures.DeepClone(),
-            DifferentFirstPage = sheet.DifferentFirstPageHeaderFooter,
-            DifferentOddEvenPages = sheet.DifferentOddEvenHeaderFooter,
-            ScaleHeaderFooterWithDocument = sheet.HeaderFooterScaleWithDocument,
-            AlignHeaderFooterWithMargins = sheet.HeaderFooterAlignWithMargins,
+            HeaderFooter = HeaderFooterEditorState.FromSheet(sheet),
         };
     }
 
@@ -453,24 +393,7 @@ public static class PageSetupDialogModel
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(fields);
 
-        return new SetHeaderFooterCommand(
-            targetSheetId,
-            fields.Header,
-            fields.Footer,
-            fields.FirstPageHeader,
-            fields.FirstPageFooter,
-            fields.EvenPageHeader,
-            fields.EvenPageFooter,
-            fields.DifferentFirstPage,
-            fields.DifferentOddEvenPages,
-            fields.ScaleHeaderFooterWithDocument,
-            fields.AlignHeaderFooterWithMargins,
-            fields.HeaderPictures,
-            fields.FooterPictures,
-            fields.FirstPageHeaderPictures,
-            fields.FirstPageFooterPictures,
-            fields.EvenPageHeaderPictures,
-            fields.EvenPageFooterPictures);
+        return PageSetupCommandFactory.BuildHeaderFooterCommand(targetSheetId, fields.HeaderFooter);
     }
 
     /// <summary>
@@ -619,25 +542,7 @@ public static class PageSetupDialogModel
             PrintQualityDpi = printQualityDpi,
             PrintErrorValue = fields.PrintErrorValue,
             PrintComments = fields.PrintComments,
-            HeaderFooter = new PageSetupHeaderFooterRequest
-            {
-                Header = fields.Header,
-                Footer = fields.Footer,
-                FirstPageHeader = fields.FirstPageHeader,
-                FirstPageFooter = fields.FirstPageFooter,
-                EvenPageHeader = fields.EvenPageHeader,
-                EvenPageFooter = fields.EvenPageFooter,
-                DifferentFirstPage = fields.DifferentFirstPage,
-                DifferentOddEvenPages = fields.DifferentOddEvenPages,
-                ScaleHeaderFooterWithDocument = fields.ScaleHeaderFooterWithDocument,
-                AlignHeaderFooterWithMargins = fields.AlignHeaderFooterWithMargins,
-                HeaderPictures = fields.HeaderPictures,
-                FooterPictures = fields.FooterPictures,
-                FirstPageHeaderPictures = fields.FirstPageHeaderPictures,
-                FirstPageFooterPictures = fields.FirstPageFooterPictures,
-                EvenPageHeaderPictures = fields.EvenPageHeaderPictures,
-                EvenPageFooterPictures = fields.EvenPageFooterPictures,
-            }
+            HeaderFooter = fields.HeaderFooter.DeepClone()
         });
     }
 

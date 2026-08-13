@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 
 using Avalonia.Controls;
@@ -60,11 +59,7 @@ public sealed class DialogTabCycleLogicalGraphTests
 
     private static void ConfigureTabCycle(Window dialog, Control root)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "ConfigureDialogTabCycle",
-            BindingFlags.Static | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("ConfigureDialogTabCycle was not found.");
-        method.Invoke(null, new object[] { dialog, root });
+        MainWindow.ConfigureDialogTabCycleForTest(dialog, root);
     }
 
     private static void AssertStep(

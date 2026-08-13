@@ -11,9 +11,11 @@
 
   <ItemGroup>
     <PackageReference Include="SkiaSharp" />
+    <ProjectReference Include="..\..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
     <ProjectReference Include="..\..\FreeW.Core.IO\FreeW.Core.IO.csproj" />
     <ProjectReference Include="..\..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
+    <ProjectReference Include="..\..\tests\FreeW.VisualEvidence.TestSupport\FreeW.VisualEvidence.TestSupport.csproj" />
     <ProjectReference Include="..\..\FreeW.App.Host\FreeW.App.Host.csproj" />
   </ItemGroup>
 

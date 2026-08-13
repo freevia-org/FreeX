@@ -1,10 +1,217 @@
 using FluentAssertions;
+using Free.Shared.Shell;
 using FreeX.App.Presentation.Shell;
 
 namespace FreeX.App.Presentation.Tests.Shell;
 
 public sealed class WorkbookKeyboardShortcutCatalogTests
 {
+    private static readonly KeyboardCommandShortcut[] ExpectedApplicationCommands =
+    [
+        KeyboardCommandShortcut.CreateTable,
+        KeyboardCommandShortcut.InsertCurrentDate,
+        KeyboardCommandShortcut.InsertCurrentTime,
+        KeyboardCommandShortcut.ToggleOutlineSymbols,
+        KeyboardCommandShortcut.PasteName,
+        KeyboardCommandShortcut.NameManager,
+        KeyboardCommandShortcut.CreateNamesFromSelection,
+        KeyboardCommandShortcut.SpellCheck,
+        KeyboardCommandShortcut.RestoreWorkbookWindow,
+        KeyboardCommandShortcut.MoveWorkbookWindow,
+        KeyboardCommandShortcut.SizeWorkbookWindow,
+        KeyboardCommandShortcut.SwitchToNextWorkbookWindow,
+        KeyboardCommandShortcut.SwitchToPreviousWorkbookWindow,
+        KeyboardCommandShortcut.MinimizeWorkbookWindow,
+        KeyboardCommandShortcut.MaximizeOrRestoreWorkbookWindow,
+        KeyboardCommandShortcut.RebuildDependenciesAndCalculate,
+        KeyboardCommandShortcut.OpenErrorChecking,
+        KeyboardCommandShortcut.ToggleFormulaBarExpansion,
+        KeyboardCommandShortcut.ToggleFilter,
+        KeyboardCommandShortcut.ReapplyFilter,
+        KeyboardCommandShortcut.QuickAnalysis,
+        KeyboardCommandShortcut.InsertEmbeddedChart,
+        KeyboardCommandShortcut.InsertChartSheet,
+        KeyboardCommandShortcut.GroupSelection,
+        KeyboardCommandShortcut.UngroupSelection,
+        KeyboardCommandShortcut.OpenFormatCellsFont,
+        KeyboardCommandShortcut.NewNote,
+        KeyboardCommandShortcut.NewThreadedComment,
+        KeyboardCommandShortcut.EditInFormulaBar,
+        KeyboardCommandShortcut.ZoomIn,
+        KeyboardCommandShortcut.ZoomOut,
+        KeyboardCommandShortcut.CopyFormulaFromAbove,
+        KeyboardCommandShortcut.CopyValueFromAbove,
+        KeyboardCommandShortcut.ScrollActiveCellIntoView,
+        KeyboardCommandShortcut.CycleSelectionCorner,
+        KeyboardCommandShortcut.SelectDirectPrecedents,
+        KeyboardCommandShortcut.SelectDirectDependents,
+        KeyboardCommandShortcut.SelectAllPrecedents,
+        KeyboardCommandShortcut.SelectAllDependents,
+        KeyboardCommandShortcut.ClearSelectionAndEdit,
+        KeyboardCommandShortcut.CloseWorkbook,
+        KeyboardCommandShortcut.OpenActiveDropdown,
+    ];
+
+    [Fact]
+    public void SharedResolverOwnsLookupAndDispatchBehavior()
+    {
+        var resolver = new ApplicationKeyboardShortcutCatalog<ProbeCommand, ProbeKey, ProbeModifiers>(
+        [
+            new(ProbeCommand.Open, ProbeKey.O, ProbeModifiers.Control),
+            new(ProbeCommand.Save, ProbeKey.S, ProbeModifiers.Control | ProbeModifiers.Shift),
+        ]);
+
+        resolver.Resolve(ProbeKey.O, ProbeModifiers.Control).Should().Be(ProbeCommand.Open);
+        resolver.Resolve(ProbeKey.O, ProbeModifiers.None).Should().BeNull();
+
+        ProbeCommand? dispatched = null;
+        resolver.TryDispatch(
+                ProbeKey.S,
+                ProbeModifiers.Control | ProbeModifiers.Shift,
+                command => dispatched = command)
+            .Should().BeTrue();
+        dispatched.Should().Be(ProbeCommand.Save);
+
+        resolver.TryDispatch(ProbeKey.S, ProbeModifiers.None, _ => dispatched = ProbeCommand.Open)
+            .Should().BeFalse();
+        dispatched.Should().Be(ProbeCommand.Save);
+    }
+
+    [Fact]
+    public void SharedResolverRejectsNullCatalogAndDispatcher()
+    {
+        var create = () => new ApplicationKeyboardShortcutCatalog<ProbeCommand, ProbeKey, ProbeModifiers>(null!);
+        create.Should().Throw<ArgumentNullException>().WithParameterName("shortcuts");
+
+        var resolver = new ApplicationKeyboardShortcutCatalog<ProbeCommand, ProbeKey, ProbeModifiers>([]);
+        var dispatch = () => resolver.TryDispatch(ProbeKey.O, ProbeModifiers.Control, null!);
+        dispatch.Should().Throw<ArgumentNullException>().WithParameterName("dispatch");
+    }
+
+    [Fact]
+    public void ProductCatalogsProjectIntoTheSharedResolver()
+    {
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var freeX = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Presentation",
+            "Shell",
+            "WorkbookKeyboardShortcutCatalog.cs"));
+        var freeW = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "freew",
+            "FreeW.App.Presentation",
+            "Shell",
+            "FreeWKeyboardShortcutCatalog.cs"));
+        var freeP = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "freep",
+            "FreeP.App.Presentation",
+            "FreePShellInteractionCatalog.cs"));
+
+        freeX.Should().Contain("ApplicationKeyboardShortcutCatalog<");
+        freeX.Should().Contain("WindowsRoutes.TryResolve(key, modifiers, out route)");
+        freeX.Should().Contain("NativeMenuRoutes.TryResolve(key, modifiers, out route)");
+        freeX.Should().NotContain("foreach (var rule in Rules)");
+
+        foreach (var source in new[] { freeW, freeP })
+        {
+            source.Should().Contain("ApplicationKeyboardShortcutCatalog<");
+            source.Should().Contain("Resolver.TryDispatch(key, modifiers, dispatch)");
+            source.Should().NotContain("foreach (var shortcut in Shortcuts)");
+        }
+    }
+
+    [Fact]
+    public void ApplicationCommandCatalog_OwnsAllFortyTwoCrossRendererRoutes()
+    {
+        WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts.Should().HaveCount(47);
+        WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts
+            .Select(shortcut => shortcut.Command)
+            .Distinct()
+            .Should().BeEquivalentTo(ExpectedApplicationCommands);
+
+        WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts
+            .GroupBy(shortcut => (shortcut.Key, shortcut.Modifiers))
+            .Should().OnlyContain(group => group.Count() == 1);
+
+        foreach (var shortcut in WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts)
+        {
+            WorkbookKeyboardShortcutCatalog.TryGetApplicationCommand(
+                    shortcut.Key,
+                    shortcut.Modifiers,
+                    out var resolved)
+                .Should().BeTrue();
+            resolved.Should().Be(shortcut.Command);
+        }
+    }
+
+    [Fact]
+    public void NativeRenderers_OnlyConvertAndDispatchApplicationCommandCatalog()
+    {
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Host",
+            "KeyboardShortcutMatcher.CommandRules.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.KeyboardParity.cs"));
+
+        wpf.Should().Contain("WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts");
+        wpf.Should().NotContain("new(KeyboardCommandShortcut.CreateTable");
+        wpf.Should().NotContain("new(KeyboardCommandShortcut.RebuildDependenciesAndCalculate");
+        avalonia.Should().Contain("WorkbookKeyboardShortcutCatalog.TryGetApplicationCommand(");
+        avalonia.Should().NotContain("AvaloniaHostShortcut");
+        avalonia.Should().NotContain("R(Key.T, Ctrl");
+        avalonia.Should().NotContain("R(Key.F9, CtrlAltShift");
+    }
+
+    [Theory]
+    [InlineData("A", WorkbookShortcutKey.A)]
+    [InlineData("OemPlus", WorkbookShortcutKey.OemPlus)]
+    [InlineData("PageDown", WorkbookShortcutKey.PageDown)]
+    public void TryParseKeyName_MapsCanonicalPlatformEnumNames(
+        string keyName,
+        WorkbookShortcutKey expected)
+    {
+        WorkbookKeyboardShortcutCatalog.TryParseKeyName(keyName, out var key).Should().BeTrue();
+        key.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("NumPad2", WorkbookShortcutKey.D2)]
+    [InlineData("Add", WorkbookShortcutKey.OemPlus)]
+    [InlineData("Subtract", WorkbookShortcutKey.OemMinus)]
+    [InlineData("Decimal", WorkbookShortcutKey.OemPeriod)]
+    [InlineData("Next", WorkbookShortcutKey.PageDown)]
+    [InlineData("Prior", WorkbookShortcutKey.PageUp)]
+    [InlineData("Oem1", WorkbookShortcutKey.OemSemicolon)]
+    [InlineData("Oem4", WorkbookShortcutKey.OemOpenBrackets)]
+    [InlineData("Oem6", WorkbookShortcutKey.OemCloseBrackets)]
+    [InlineData("Oem7", WorkbookShortcutKey.OemQuotes)]
+    public void TryParseKeyName_MapsPlatformAliases(
+        string keyName,
+        WorkbookShortcutKey expected)
+    {
+        WorkbookKeyboardShortcutCatalog.TryParseKeyName(keyName, out var key).Should().BeTrue();
+        key.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("a")]
+    [InlineData("Space")]
+    public void TryParseKeyName_RejectsUnsupportedKeys(string? keyName)
+    {
+        WorkbookKeyboardShortcutCatalog.TryParseKeyName(keyName, out _).Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(WorkbookShortcutKey.N, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.NewWorkbook)]
     [InlineData(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenWorkbook)]
@@ -95,6 +302,21 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     }
 
     [Fact]
+    public void WindowsAndNativeMenuRoutesRemainIndependent()
+    {
+        WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(
+                WorkbookShortcutKey.N,
+                WorkbookShortcutModifiers.Meta,
+                out _)
+            .Should().BeFalse();
+        WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(
+                WorkbookShortcutKey.F12,
+                WorkbookShortcutModifiers.Control,
+                out _)
+            .Should().BeFalse();
+    }
+
+    [Fact]
     public void WindowsChords_AreUnique()
     {
         var duplicateChords = WorkbookKeyboardShortcutCatalog.Rules
@@ -134,5 +356,25 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
             .ToArray();
 
         uncategorizedRoutes.Should().BeEmpty();
+    }
+
+    private enum ProbeCommand
+    {
+        Open,
+        Save,
+    }
+
+    private enum ProbeKey
+    {
+        O,
+        S,
+    }
+
+    [Flags]
+    private enum ProbeModifiers
+    {
+        None = 0,
+        Control = 1,
+        Shift = 2,
     }
 }

@@ -43,7 +43,7 @@ $avaloniaPaths = @(
     "freew\FreeW.App.Avalonia\PageSetupDialog.cs",
     "freew\FreeW.App.Avalonia\ParagraphDialog.cs",
     "freew\FreeW.App.Avalonia\PageLayoutDialogs.cs",
-    "freew\FreeW.Ribbon.Definitions\FreeWAvaloniaRibbonDefinition.cs"
+    "freew\FreeW.Ribbon.Definitions\FreeWCanonicalRibbonTabs.cs"
 )
 $wpfSource = Read-SourceSet $wpfPaths
 $avaloniaSource = Read-SourceSet $avaloniaPaths
@@ -64,7 +64,7 @@ $contracts = @(
         validation = "PageSetupDialogPlanner validates non-negative margins/distances and positive geometry."
         resultApplication = "PageLayoutCommandPlanner applies the full result through one SetPageSettingsCommand and one layout refresh."
         sharedPolicy = "PageSetupDialogPlanner; PageLayoutCommandPlanner"
-        wpfTokens = @("PageSetupDialog.ToPresentationResult", "new SetPageSettingsCommand(settings, sectionIndex)", 'PageSetting("freew.orientation"')
+        wpfTokens = @("PageSetupDialog.ToPresentationResult", "PageLayoutCommandPlanner.ApplyPageSetupResult(page, planned)", "PageSetting(FreeWRibbonCommandAction.Orientation")
         avaloniaTokens = @("PageSetupDialog.ShowAndApplyAsync", "PageLayoutCommandPlanner.ApplyPageSetupResult", "OpenMorePaperSizesDialog")
         tests = $pairedTests
     },
@@ -76,8 +76,8 @@ $contracts = @(
         validation = "ColumnsDialogPlanner validates count 1-12 and non-negative spacing and owns unequal-width presets."
         resultApplication = "The selected page settings are committed through one undoable page-settings command."
         sharedPolicy = "ColumnsDialogPlanner; PageLayoutCommandPlanner"
-        wpfTokens = @("ColumnsDialog.Prompt", "PageLayoutCommandPlanner.ApplyColumnsResult", '"freew.columns-more"')
-        avaloniaTokens = @("class ColumnsDialog", "ColumnsDialogPlanner.TryBuildResult", '"freew.columns-more"')
+        wpfTokens = @("ColumnsDialog.Prompt", "PageLayoutCommandPlanner.ApplyColumnsResult", "FreeWRibbonCommandAction.ColumnsMore")
+        avaloniaTokens = @("class ColumnsDialog", "new ColumnsDialogSession", "_session.PlanAcceptance(", "FreeWRibbonCommandAction.ColumnsMore")
         tests = $pairedTests
     },
     [ordered]@{
@@ -88,7 +88,7 @@ $contracts = @(
         validation = "SectionBreakKind constrains section modes and editor insertion guards the active selection."
         resultApplication = "One document command inserts each break and invalidates layout."
         sharedPolicy = "Core break model and editor command bus"
-        wpfTokens = @('"freew.column-break"', '"freew.section-break-even-page"')
+        wpfTokens = @("FreeWRibbonCommandAction.ColumnBreak", "FreeWRibbonCommandAction.SectionBreakEvenPage")
         avaloniaTokens = @("editor.InsertColumnBreak", "SectionBreakKind.OddPage")
         tests = @("freew/FreeW.App.Avalonia.Tests/PageSetupDialogTests.cs", "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs")
     },
@@ -112,8 +112,8 @@ $contracts = @(
         validation = "CustomParagraphSpacingDialogPlanner owns ranges, field-specific errors, and spacing-set construction."
         resultApplication = "The accepted document spacing set applies through the existing document-wide spacing command."
         sharedPolicy = "CustomParagraphSpacingDialogPlanner"
-        wpfTokens = @("CustomParagraphSpacingDialog.Prompt", '"freew.custom-paragraph-spacing"')
-        avaloniaTokens = @("class CustomParagraphSpacingDialog", "OpenCustomParagraphSpacingDialog", '"freew.custom-paragraph-spacing"')
+        wpfTokens = @("CustomParagraphSpacingDialog.Prompt", "FreeWRibbonCommandAction.CustomParagraphSpacing")
+        avaloniaTokens = @("class CustomParagraphSpacingDialog", "OpenCustomParagraphSpacingDialog", "FreeWRibbonCommandAction.CustomParagraphSpacing")
         tests = $pairedTests
     },
     [ordered]@{
@@ -124,8 +124,8 @@ $contracts = @(
         validation = "DropCapOptionsDialogPlanner owns position mapping, defaults, and bounded lines/distance."
         resultApplication = "Accepted position applies or clears the current paragraph drop cap in one selection-scoped command."
         sharedPolicy = "DropCapOptionsDialogPlanner; DropCap model helper"
-        wpfTokens = @("global::FreeW.App.Host.DropCapOptionsDialog.Prompt", '"freew.drop-cap-options"')
-        avaloniaTokens = @("class DropCapOptionsDialog", "DropCapOptionsDialogPlanner.BuildResult", '"freew.drop-cap-options"')
+        wpfTokens = @("global::FreeW.App.Host.DropCapOptionsDialog.Prompt", "FreeWRibbonCommandAction.DropCapOptions")
+        avaloniaTokens = @("class DropCapOptionsDialog", "_session.PlanAcceptance(", "FreeWRibbonCommandAction.DropCapOptions")
         tests = $pairedTests
     },
     [ordered]@{
@@ -136,8 +136,8 @@ $contracts = @(
         validation = "HyphenationOptionsDialogPlanner validates zone and consecutive-limit values; ManualHyphenationPlanner owns candidate order and valid break positions."
         resultApplication = "Backed settings apply through one undoable page-settings command; accepted manual breaks apply as one undoable U+00AD body-text command."
         sharedPolicy = "HyphenationOptionsDialogPlanner; ManualHyphenationPlanner; ApplyManualHyphenationCommand"
-        wpfTokens = @("HyphenationOptionsDialog.Prompt", 'PageSetting("freew.hyphenation"', "ManualHyphenationPlanner.CreateSession", "ApplyManualHyphenation(session.Edits)")
-        avaloniaTokens = @("class HyphenationOptionsDialog", '"freew.hyphenation-options"', "class ManualHyphenationDialog", "ManualHyphenationPlanner.CreateSession", "ApplyManualHyphenation(session.Edits)")
+        wpfTokens = @("HyphenationOptionsDialog.Prompt", "PageSetting(FreeWRibbonCommandAction.Hyphenation", "ManualHyphenationPlanner.CreateSession", "ApplyManualHyphenation(session.Edits)")
+        avaloniaTokens = @("class HyphenationOptionsDialog", "OpenHyphenationOptionsDialog", "class ManualHyphenationDialog", "ManualHyphenationPlanner.CreateSession", "ApplyManualHyphenation(session.Edits)")
         tests = $pairedTests
     },
     [ordered]@{
@@ -148,8 +148,8 @@ $contracts = @(
         validation = "LineNumberOptionsDialogPlanner validates positive Start At and Count By values."
         resultApplication = "Mode, start, and count apply through one undoable page-settings command and one layout refresh."
         sharedPolicy = "LineNumberOptionsDialogPlanner; PageLayoutCommandPlanner"
-        wpfTokens = @("LineNumberOptionsDialog.Prompt", 'PageSetting("freew.line-numbers"', "IsLineNumberModeChecked")
-        avaloniaTokens = @("class LineNumberOptionsDialog", '"freew.line-numbers-options"', "ApplyLineNumberOptions")
+        wpfTokens = @("LineNumberOptionsDialog.Prompt", "PageSetting(FreeWRibbonCommandAction.LineNumbers", "IsLineNumberModeChecked")
+        avaloniaTokens = @("class LineNumberOptionsDialog", "OpenLineNumberOptionsDialog", "ApplyLineNumberOptions")
         tests = $pairedTests
     }
 )

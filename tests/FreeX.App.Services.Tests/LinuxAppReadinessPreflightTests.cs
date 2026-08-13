@@ -18,6 +18,9 @@ public sealed class LinuxAppReadinessPreflightTests
         script.Should().Contain("linux-app.yml");
         script.Should().Contain("NeutralArgument = \"--launch-smoke\"");
         script.Should().Contain("Test-LinuxPublicPreviewReadiness.ps1");
+        script.Should().Contain("Run-PackagedProductLaunchProbe.sh");
+        script.Should().Contain("--executable \"$published/FreeX\"");
+        script.Should().Contain("Linux workflow must exercise the published product apphost before recording launch_smoke_status=passed.");
         // The static lane must reject macOS-only machinery leaking into the Linux workflow.
         script.Should().Contain("codesign");
         script.Should().Contain("notarytool");
@@ -40,9 +43,24 @@ public sealed class LinuxAppReadinessPreflightTests
     }
 
     [Fact]
+    public void PackagedProductProbe_WaitsForProductReadinessAndTargetsOnlyItsChild()
+    {
+        var script = File.ReadAllText(RepositoryFileLocator.Find("tools", "Run-PackagedProductLaunchProbe.sh"));
+
+        script.Should().Contain("\"$executable\" \"${app_arguments[@]}\" >\"$log_path\" 2>&1 &");
+        script.Should().Contain("grep -R -F -q \"$readiness_marker\" \"$readiness_root\"");
+        script.Should().Contain("process_is_active \"$probe_pid\"");
+        script.Should().Contain("kill \"$probe_pid\"");
+        script.Should().Contain("packaged_product_launch_status=passed");
+        script.Should().NotContain("FreeX.Validation.Avalonia");
+        script.Should().NotContain("pkill");
+        script.Should().NotContain("killall");
+    }
+
+    [Fact]
     public void LaunchSmokeSource_ExposesPlatformNeutralAliases()
     {
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
 
         smokeSource.Should().Contain("public const string NeutralArgument = \"--launch-smoke\";");
         smokeSource.Should().Contain("public const string NeutralDiagnosticsDirectoryArgument = \"--launch-smoke-diagnostics-dir\";");
@@ -68,13 +86,13 @@ public sealed class LinuxAppReadinessPreflightTests
         runner.Should().Contain("\"--init\"");
         runner.Should().Contain("io.github.tony-xmelon.freex.linux-interactive");
         runner.Should().Contain("Container '$containerName' exists but is not owned by this harness.");
-        runner.Should().Contain("freex-linux-interactive-app-$appKey");
+        runner.Should().Contain("freex-linux-interactive-app-$publishKey-$workspaceKey");
         runner.Should().Contain("$workspaceKey`:current");
         runner.Should().Contain("SHA256");
         runner.Should().Contain("& tar -czf $archivePath -C $publishDir .");
         runner.Should().Contain("COPY app.tar.gz /tmp/app.tar.gz");
         runner.Should().Contain("Docker image '$appImage' exists but is not owned by this harness.");
-        runner.Should().Contain("FreeX-LinuxInteractive/$workspaceKey/$appKey/publish/linux-x64");
+        runner.Should().Contain("FreeX-LinuxInteractive/$workspaceKey/$publishKey/publish/linux-x64");
         runner.Should().Contain("@(\"stop\", \"--timeout\", \"10\", $containerName) -AllowFailure");
         runner.Should().Contain("$null -ne (Get-OwnedContainerStatus)");
         runner.Should().NotContain("@(\"stop\", \"--time\", \"10\", $containerName)");

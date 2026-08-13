@@ -1,11 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="..\..\src\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
+    <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,6 +22,11 @@
     <Using Include="Xunit" />
     <Using Include="Free.Shared.Drawing" />
     <Using Include="FreeX.App.Presentation.FormulaBar" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\SharedTestInfrastructure\FreeX\RibbonRuntimeCatalogPlanner.cs" Link="TestSupport\RibbonRuntimeCatalogPlanner.cs" />
+    <Compile Include="..\..\tools\FreeX.ParityCapture.Avalonia\Capture\BackstageInfoParityProjection.cs" Link="Capture\BackstageInfoParityProjection.cs" />
   </ItemGroup>
 
   <PropertyGroup>

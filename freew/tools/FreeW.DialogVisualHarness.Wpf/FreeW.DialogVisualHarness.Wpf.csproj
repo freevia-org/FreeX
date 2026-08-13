@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\FreeW.DialogVisualHarness\FreeW.DialogVisualHarness.csproj" />
-    <ProjectReference Include="..\..\FreeW.App.Host\FreeW.App.Host.csproj" />
+    <ProjectReference Include="..\..\FreeW.App.Host\FreeW.App.Host.csproj"
+                      AdditionalProperties="FreeWDialogHarnessSupport=true" />
   </ItemGroup>
 </Project>

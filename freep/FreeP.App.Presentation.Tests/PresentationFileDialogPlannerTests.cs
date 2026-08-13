@@ -58,6 +58,7 @@ public sealed class PresentationFileDialogPlannerTests
     [InlineData("deck.fxp", "deck.fxp", true)]
     [InlineData("deck.PPTX", "deck.PPTX", true)]
     [InlineData("deck.txt", "", false)]
+    [InlineData("bad\0deck.pptx", "", false)]
     public void TryResolveSavePickerPath_UsesSupportedExtensionsAndDefault(
         string path,
         string expectedPath,
@@ -182,6 +183,12 @@ public sealed class PresentationFileDialogPlannerTests
         var presentationText = PresentationFileTextResources.Presentation;
 
         PresentationFileTextResources.PictureFileTypeName.Should().Be("Images");
+        PresentationFileTextResources.VideoExportFailed.Should().Be("Video export failed.");
+        PresentationFileTextResources.PrintJobFallbackName.Should().Be("FreeP presentation");
+        PresentationFileTextResources.NormalizePrintJobName("  Quarterly review  ")
+            .Should().Be("Quarterly review");
+        PresentationFileTextResources.NormalizePrintJobName("  ")
+            .Should().Be("FreeP presentation");
         presentationText.OpenPickerTitle.Should().Be("Open Presentation");
         presentationText.SavePickerTitle.Should().Be("Save Presentation");
         presentationText.FallbackDisplayName.Should().Be("Presentation");
@@ -194,7 +201,5 @@ public sealed class PresentationFileDialogPlannerTests
         SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(presentationText, presentationText.OpenCommand)
             .Should().Be("Open failed: selected file is not available as a local path.");
         SisterAppFileTextPlanner.FormatSaved(presentationText, "Deck.pptx").Should().Be("Saved Deck.pptx");
-        SisterAppFileTextPlanner.Presentation.OpenPickerTitle.Should().Be(presentationText.OpenPickerTitle);
-        SisterAppFileTextPlanner.FormatSaved("Deck.pptx").Should().Be("Saved Deck.pptx");
     }
 }

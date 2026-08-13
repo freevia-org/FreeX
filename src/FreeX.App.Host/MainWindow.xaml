@@ -5,6 +5,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:ui="clr-namespace:FreeX.App.UI;assembly=FreeX.App.UI"
         xmlns:local="clr-namespace:FreeX.App.Host"
+        xmlns:ribbonWpf="clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf"
+        xmlns:presentation="clr-namespace:FreeX.App.Presentation.Shell;assembly=FreeX.App.Presentation"
         xmlns:model="clr-namespace:FreeX.Core.Model;assembly=FreeX.Core.Model"
         mc:Ignorable="d"
         Title="FreeX"
@@ -212,23 +214,6 @@
                     <StackPanel Orientation="Horizontal"/>
                 </ItemsPanelTemplate>
             </TabControl.ItemsPanel>
-            <TabItem x:Name="FileTab" Header="{local:Loc Key=MainWindow_Header_File}" local:RibbonTooltip.KeyTip="F" local:RibbonMetadata.CatalogId="FileTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Home}" local:RibbonTooltip.KeyTip="H" local:RibbonMetadata.CatalogId="HomeTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Insert}" local:RibbonTooltip.KeyTip="N" local:RibbonMetadata.CatalogId="InsertTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Draw}" local:RibbonTooltip.KeyTip="J" local:RibbonMetadata.CatalogId="DrawTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_PageLayout}" local:RibbonTooltip.KeyTip="P" local:RibbonMetadata.CatalogId="PageLayoutTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Formulas}" local:RibbonTooltip.KeyTip="M" local:RibbonMetadata.CatalogId="FormulasTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Data}" local:RibbonTooltip.KeyTip="A" local:RibbonMetadata.CatalogId="DataTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Review}" local:RibbonTooltip.KeyTip="R" local:RibbonMetadata.CatalogId="ReviewTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_View}" local:RibbonTooltip.KeyTip="W" local:RibbonMetadata.CatalogId="ViewTab" />
-            <TabItem x:Name="ShapeFormatTab" Header="{local:Loc Key=MainWindow_Header_ShapeFormat}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JS" local:RibbonMetadata.CatalogId="ShapeFormatTab" />
-            <TabItem x:Name="PictureFormatTab" Header="{local:Loc Key=MainWindow_Header_PictureFormat}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JP" local:RibbonMetadata.CatalogId="PictureFormatTab" />
-            <TabItem x:Name="ChartDesignTab" Header="{local:Loc Key=MainWindow_Header_ChartDesign}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JC" local:RibbonMetadata.CatalogId="ChartDesignTab" />
-            <TabItem x:Name="ChartFormatTab" Header="{local:Loc Key=MainWindow_Text_Format}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JF" local:RibbonMetadata.CatalogId="ChartFormatTab" />
-            <TabItem x:Name="TableDesignTab" Header="{local:Loc Key=MainWindow_Header_TableDesign}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JT" local:RibbonMetadata.CatalogId="TableDesignTab" />
-            <TabItem x:Name="PivotTableAnalyzeTab" Header="{local:Loc Key=MainWindow_Header_PivotTableAnalyze}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JA" local:RibbonMetadata.CatalogId="PivotTableAnalyzeTab" />
-            <TabItem x:Name="PivotTableDesignTab" Header="{local:Loc Key=MainWindow_Header_Design}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JD" local:RibbonMetadata.CatalogId="PivotTableDesignTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Help}" local:RibbonTooltip.KeyTip="Y" local:RibbonMetadata.CatalogId="HelpTab" />
         </TabControl>
 
         <Border x:Name="BelowRibbonQatRoot"
@@ -284,10 +269,10 @@
                             AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_CancelFormulaBarEdit}"
                             AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_CancelFormulaBarEdit}"
                             AutomationProperties.AutomationId="FormulaBarCancelButton"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_CancelFormulaBarEdit}"
-                            local:RibbonTooltip.KeyTip="FC"
-                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CancelFormulaBarEdit}"
-                            local:RibbonMetadata.CommandName="Cancel Formula Bar Edit">
+                            ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_CancelFormulaBarEdit}"
+                            ribbonWpf:RibbonTooltip.KeyTip="FC"
+                            ribbonWpf:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CancelFormulaBarEdit}"
+                            ribbonWpf:RibbonMetadata.CommandName="Cancel Formula Bar Edit">
                         <Path Data="M4,4 L12,12 M12,4 L4,12"
                               Width="16" Height="16"
                               Stroke="#C00000"
@@ -306,10 +291,10 @@
                             AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_EnterFormulaBarEdit}"
                             AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_EnterFormulaBarEdit}"
                             AutomationProperties.AutomationId="FormulaBarEnterButton"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_EnterFormulaBarEdit}"
-                            local:RibbonTooltip.KeyTip="FE"
-                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_EnterFormulaBarEdit}"
-                            local:RibbonMetadata.CommandName="Enter Formula Bar Edit">
+                            ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_EnterFormulaBarEdit}"
+                            ribbonWpf:RibbonTooltip.KeyTip="FE"
+                            ribbonWpf:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_EnterFormulaBarEdit}"
+                            ribbonWpf:RibbonMetadata.CommandName="Enter Formula Bar Edit">
                         <Path Data="M3,8 L6,11 L13,4"
                               Width="16" Height="16"
                               Stroke="#008000"
@@ -328,9 +313,9 @@
                             Padding="2,0" VerticalAlignment="Center" Margin="0" Cursor="Hand"
                             FontSize="12" FontStyle="Italic"
                             Click="InsertFunctionBtn_Click"
-                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InsertFunction}"
-                            local:RibbonTooltip.KeyTip="FX"
-                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SearchForAndInsertAFunctionIntoTheSelectedCell}" local:RibbonMetadata.CommandName="Insert Function"/>
+                            ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InsertFunction}"
+                            ribbonWpf:RibbonTooltip.KeyTip="FX"
+                            ribbonWpf:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SearchForAndInsertAFunctionIntoTheSelectedCell}" ribbonWpf:RibbonMetadata.CommandName="Insert Function"/>
                 </StackPanel>
 
                 <Grid Grid.Column="2">
@@ -369,9 +354,9 @@
                         AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ExpandFormulaBar}"
                         AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor}"
                         AutomationProperties.AutomationId="FormulaBarExpandBtn"
-                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ExpandFormulaBar}"
-                        local:RibbonTooltip.KeyTip="BX"
-                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ExpandTheFormulaBarToAMultiLineEditor}" local:RibbonMetadata.CommandName="Expand Formula Bar">
+                        ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ExpandFormulaBar}"
+                        ribbonWpf:RibbonTooltip.KeyTip="BX"
+                        ribbonWpf:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ExpandTheFormulaBarToAMultiLineEditor}" ribbonWpf:RibbonMetadata.CommandName="Expand Formula Bar">
                     <Path Data="M2,2 L6,6 L10,2"
                           Width="12" Height="8"
                           Stroke="#1F1F1F"
@@ -454,7 +439,7 @@
                                 DockPanel.Dock="Right"
                                 Padding="0"
                                 Click="PivotFieldListCloseBtn_Click"
-                                AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ClosePivotTableFields}" local:RibbonMetadata.CommandName="X"/>
+                                AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ClosePivotTableFields}" ribbonWpf:RibbonMetadata.CommandName="X"/>
                         <TextBlock Text="{local:Loc Key=MainWindow_Text_PivotTableFields}"
                                    FontWeight="SemiBold"
                                    FontSize="14"
@@ -489,25 +474,25 @@
                                 <CheckBox Content="{Binding Caption}"
                                           IsChecked="{Binding IsChecked}"
                                           Click="PivotAvailableFieldCheckBox_Click"
-                                          local:RibbonTooltip.Title="{Binding Caption}"
-                                          local:RibbonTooltip.KeyTip="F"
-                                          local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddOrRemoveThisFieldFromTheActivePivotTableLayout}"
-                                          AutomationProperties.Name="{Binding Caption}" local:RibbonMetadata.CommandName="{Binding Caption}"/>
+                                          ribbonWpf:RibbonTooltip.Title="{Binding Caption}"
+                                          ribbonWpf:RibbonTooltip.KeyTip="F"
+                                          ribbonWpf:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddOrRemoveThisFieldFromTheActivePivotTableLayout}"
+                                          AutomationProperties.Name="{Binding Caption}" ribbonWpf:RibbonMetadata.CommandName="{Binding Caption}"/>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
 
                     <StackPanel Grid.Row="4" Margin="0,6,0,6">
                         <UniformGrid Columns="5">
-                            <Button Content="{local:Loc Key=MainWindow_Content_Rows}" Click="PivotFieldToRowsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToRows}" local:RibbonMetadata.CommandName="Rows"/>
-                            <Button Content="{local:Loc Key=MainWindow_Content_Columns}" Click="PivotFieldToColumnsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToColumns}" local:RibbonMetadata.CommandName="Columns"/>
-                            <Button Content="{local:Loc Key=MainWindow_Content_Values}" Click="PivotFieldToValuesBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToValues}" local:RibbonMetadata.CommandName="Values"/>
-                            <Button Content="{local:Loc Key=MainWindow_Content_Filters}" Click="PivotFieldToFiltersBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToFilters}" local:RibbonMetadata.CommandName="Filters"/>
+                            <Button Content="{local:Loc Key=MainWindow_Content_Rows}" Click="PivotFieldToRowsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToRows}" ribbonWpf:RibbonMetadata.CommandName="Rows"/>
+                            <Button Content="{local:Loc Key=MainWindow_Content_Columns}" Click="PivotFieldToColumnsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToColumns}" ribbonWpf:RibbonMetadata.CommandName="Columns"/>
+                            <Button Content="{local:Loc Key=MainWindow_Content_Values}" Click="PivotFieldToValuesBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToValues}" ribbonWpf:RibbonMetadata.CommandName="Values"/>
+                            <Button Content="{local:Loc Key=MainWindow_Content_Filters}" Click="PivotFieldToFiltersBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AddSelectedPivotTableFieldToFilters}" ribbonWpf:RibbonMetadata.CommandName="Filters"/>
                             <Button Content="{local:Loc Key=MainWindow_Content_Remove}" Click="PivotFieldRemoveBtn_Click" Margin="1" MinHeight="24"
                                     AllowDrop="True"
                                     DragOver="PivotFieldRemoveDropZone_DragOver"
                                     Drop="PivotFieldRemoveDropZone_Drop"
-                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_RemoveSelectedPivotTableField}" local:RibbonMetadata.CommandName="Remove"/>
+                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_RemoveSelectedPivotTableField}" ribbonWpf:RibbonMetadata.CommandName="Remove"/>
                         </UniformGrid>
                         <DockPanel Margin="0,6,0,0" LastChildFill="False">
                             <CheckBox x:Name="PivotFieldListDeferLayoutCheckBox"
@@ -515,17 +500,17 @@
                                       VerticalAlignment="Center"
                                       DockPanel.Dock="Left"
                                       Click="PivotFieldListDeferLayoutCheckBox_Click"
-                                      local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DeferLayoutUpdate}"
-                                      local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_QueuePivotTableFieldLayoutChangesUntilYouChooseUpdate}"
-                                      local:RibbonTooltip.KeyTip="DU"
-                                      AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_DeferPivotTableLayoutUpdate}" local:RibbonMetadata.CommandName="Defer Layout Update"/>
+                                      ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DeferLayoutUpdate}"
+                                      ribbonWpf:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_QueuePivotTableFieldLayoutChangesUntilYouChooseUpdate}"
+                                      ribbonWpf:RibbonTooltip.KeyTip="DU"
+                                      AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_DeferPivotTableLayoutUpdate}" ribbonWpf:RibbonMetadata.CommandName="Defer Layout Update"/>
                             <Button x:Name="PivotFieldListUpdateBtn"
                                     Content="{local:Loc Key=MainWindow_Content_Update}"
                                     MinWidth="72"
                                     MinHeight="24"
                                     DockPanel.Dock="Right"
                                     Click="PivotFieldListUpdateBtn_Click"
-                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_UpdatePivotTableLayout}" local:RibbonMetadata.CommandName="Update"/>
+                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_UpdatePivotTableLayout}" ribbonWpf:RibbonMetadata.CommandName="Update"/>
                         </DockPanel>
                     </StackPanel>
 
@@ -627,7 +612,7 @@
                                     DockPanel.Dock="Right"
                                     Padding="0"
                                     Click="SlicerTimelinePaneCloseBtn_Click"
-                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_CloseSlicersAndTimelines}" local:RibbonMetadata.CommandName="X"/>
+                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_CloseSlicersAndTimelines}" ribbonWpf:RibbonMetadata.CommandName="X"/>
                             <TextBlock Text="{local:Loc Key=MainWindow_Text_SlicersAndTimelines}"
                                        FontWeight="SemiBold"
                                        FontSize="14"
@@ -696,7 +681,7 @@
                                                     IsEnabled="{Binding HasActiveFilter}"
                                                     Margin="0,6,0,0"
                                                     MinHeight="24"
-                                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ClearSlicerFilter}" local:RibbonMetadata.CommandName="Clear Filter"/>
+                                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ClearSlicerFilter}" ribbonWpf:RibbonMetadata.CommandName="Clear Filter"/>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>
@@ -730,10 +715,10 @@
                                             </UniformGrid>
                                             <UniformGrid Columns="2" Margin="0,6,0,0">
                                                 <Button Content="{local:Loc Key=MainWindow_Content_Apply}" Click="TimelineApplyButton_Click" MinHeight="24" Margin="0,0,3,0"
-                                                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ApplyTimelineFilter}" local:RibbonMetadata.CommandName="Apply"/>
+                                                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ApplyTimelineFilter}" ribbonWpf:RibbonMetadata.CommandName="Apply"/>
                                                 <Button Content="{local:Loc Key=MainWindow_Content_Clear}" Click="TimelineClearButton_Click" MinHeight="24" Margin="3,0,0,0"
                                                         IsEnabled="{Binding HasActiveFilter}"
-                                                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ClearTimelineFilter}" local:RibbonMetadata.CommandName="Clear"/>
+                                                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ClearTimelineFilter}" ribbonWpf:RibbonMetadata.CommandName="Clear"/>
                                             </UniformGrid>
                                         </StackPanel>
                                     </Border>
@@ -795,9 +780,9 @@
                         Panel.ZIndex="9"
                         AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ScrollTabsLeft}"
                         AutomationProperties.AutomationId="SheetNavLeftBtn"
-                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ScrollTabsLeft}"
-                        local:RibbonTooltip.KeyTip="SL"
-                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScrollTheSheetTabListToTheLeft}" local:RibbonMetadata.CommandName="Scroll Tabs Left">
+                        ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ScrollTabsLeft}"
+                        ribbonWpf:RibbonTooltip.KeyTip="SL"
+                        ribbonWpf:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScrollTheSheetTabListToTheLeft}" ribbonWpf:RibbonMetadata.CommandName="Scroll Tabs Left">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border x:Name="NavHitArea"
@@ -1002,9 +987,9 @@
                                 Click="AddSheetButton_Click"
                                 Loaded="SheetTabsScroller_Loaded"
                                 SizeChanged="SheetTabsScroller_SizeChanged"
-                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InsertSheet}"
-                                local:RibbonTooltip.KeyTip="IS"
-                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddANewSheetToTheWorkbook}" local:RibbonMetadata.CommandName="Insert Sheet">
+                                ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InsertSheet}"
+                                ribbonWpf:RibbonTooltip.KeyTip="IS"
+                                ribbonWpf:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddANewSheetToTheWorkbook}" ribbonWpf:RibbonMetadata.CommandName="Insert Sheet">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Grid Background="Transparent"
@@ -1068,9 +1053,9 @@
                         Panel.ZIndex="9"
                         AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ScrollTabsRight}"
                         AutomationProperties.AutomationId="SheetNavRightBtn"
-                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ScrollTabsRight}"
-                        local:RibbonTooltip.KeyTip="SR"
-                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScrollTheSheetTabListToTheRight}" local:RibbonMetadata.CommandName="Scroll Tabs Right">
+                        ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ScrollTabsRight}"
+                        ribbonWpf:RibbonTooltip.KeyTip="SR"
+                        ribbonWpf:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScrollTheSheetTabListToTheRight}" ribbonWpf:RibbonMetadata.CommandName="Scroll Tabs Right">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border x:Name="NavHitArea"
@@ -1231,19 +1216,19 @@
                             Margin="0,0,10,0"
                             VerticalAlignment="Center" Cursor="Hand"
                             ToolTip="{local:Loc Key=MainWindow_ToolTip_UpdateReady}"
-                            AutomationProperties.AutomationId="UpdateReadyIndicator"
+                            AutomationProperties.AutomationId="{x:Static presentation:FreeXAutomationIdCatalog.RibbonShellUpdateReadyIndicator}"
                             AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_UpdateReady}">
                         <TextBlock Text="{local:Loc Key=MainWindow_Content_UpdateReady}" Foreground="White" Opacity="0.75" FontSize="11"/>
                     </Button>
                     <TextBlock x:Name="StatusCapsLockText" Text="{local:Loc Key=StatusBar_CapsLock}" Foreground="White"
                                FontSize="{DynamicResource FreeXStatusBarTextFontSize}" VerticalAlignment="Center"
                                Margin="0,0,10,0" Visibility="Collapsed"
-                               AutomationProperties.AutomationId="StatusCapsLockText"
+                               AutomationProperties.AutomationId="{x:Static presentation:FreeXAutomationIdCatalog.RibbonShellStatusCapsLockText}"
                                AutomationProperties.Name="{local:Loc Key=StatusBar_CapsLock}"/>
                     <TextBlock x:Name="StatusNumLockText" Text="{local:Loc Key=StatusBar_NumLock}" Foreground="White"
                                FontSize="{DynamicResource FreeXStatusBarTextFontSize}" VerticalAlignment="Center"
                                Margin="0,0,10,0" Visibility="Collapsed"
-                               AutomationProperties.AutomationId="StatusNumLockText"
+                               AutomationProperties.AutomationId="{x:Static presentation:FreeXAutomationIdCatalog.RibbonShellStatusNumLockText}"
                                AutomationProperties.Name="{local:Loc Key=StatusBar_NumLock}"/>
                     <StackPanel x:Name="StatusViewShortcutControls"
                                 Orientation="Horizontal"
@@ -1257,7 +1242,7 @@
                                       AutomationProperties.Name="{local:Loc Key=MainWindow_Content_Normal}"
                                       AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ShowTheWorksheetInTheStandardEditingView}"
                                       AutomationProperties.AutomationId="StatusNormalViewButton"
-                                      local:RibbonMetadata.CommandName="Normal">
+                                      ribbonWpf:RibbonMetadata.CommandName="Normal">
                             <local:RibbonIcon Kind="Grid" IconSize="15"
                                               Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
                         </ToggleButton>
@@ -1269,7 +1254,7 @@
                                       AutomationProperties.Name="{local:Loc Key=MainWindow_Content_PageLayout}"
                                       AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ShowTheSheetWithPrintLayoutBoundaries}"
                                       AutomationProperties.AutomationId="StatusPageLayoutViewButton"
-                                      local:RibbonMetadata.CommandName="Page Layout">
+                                      ribbonWpf:RibbonMetadata.CommandName="Page Layout">
                             <local:RibbonIcon Kind="Page" IconSize="15"
                                               Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
                         </ToggleButton>
@@ -1281,7 +1266,7 @@
                                       AutomationProperties.Name="{local:Loc Key=MainWindow_Content_PageBreakPreview}"
                                       AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ShowManualPageBreaksAndPrintAreaBoundariesWhileEditing}"
                                       AutomationProperties.AutomationId="StatusPageBreakPreviewButton"
-                                      local:RibbonMetadata.CommandName="Page Break Preview">
+                                      ribbonWpf:RibbonMetadata.CommandName="Page Break Preview">
                             <local:RibbonIcon Kind="PageBreak" IconSize="15"
                                               Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
                         </ToggleButton>
@@ -1318,8 +1303,8 @@
                                     AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomOut}"
                                     AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_DecreaseWorksheetZoom}"
                                     AutomationProperties.AutomationId="StatusZoomOutButton"
-                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ZoomOut}"
-                                    local:RibbonTooltip.KeyTip="SZ" local:RibbonMetadata.CommandName="Zoom Out">
+                                    ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ZoomOut}"
+                                    ribbonWpf:RibbonTooltip.KeyTip="SZ" ribbonWpf:RibbonMetadata.CommandName="Zoom Out">
                                 <Grid Width="14" Height="14" SnapsToDevicePixels="True">
                                     <Rectangle Width="12" Height="2"
                                                HorizontalAlignment="Center"
@@ -1341,8 +1326,8 @@
                                     AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomIn}"
                                     AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_IncreaseWorksheetZoom}"
                                     AutomationProperties.AutomationId="StatusZoomInButton"
-                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ZoomIn}"
-                                    local:RibbonTooltip.KeyTip="SX" local:RibbonMetadata.CommandName="Zoom In">
+                                    ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ZoomIn}"
+                                    ribbonWpf:RibbonTooltip.KeyTip="SX" ribbonWpf:RibbonMetadata.CommandName="Zoom In">
                                 <Grid Width="14" Height="14" SnapsToDevicePixels="True">
                                     <Rectangle Width="12" Height="2"
                                                HorizontalAlignment="Center"
@@ -1415,7 +1400,7 @@
                 <Border Grid.Row="1" Padding="40,18,40,6">
                     <StackPanel>
                         <DockPanel LastChildFill="False" Margin="0,0,0,10">
-                            <TextBlock DockPanel.Dock="Left" Text="{local:Loc Key=MainWindow_Text_New}"
+                            <TextBlock DockPanel.Dock="Left" Text="{local:Loc Key=Common_New}"
                                        FontSize="14" FontWeight="SemiBold" Foreground="#1F1F1F"/>
                             <Button DockPanel.Dock="Right" Content="{local:Loc Key=MainWindow_Content_MoreTemplatesExcluded}"
                                     Background="Transparent" BorderThickness="0" Padding="0"
@@ -1425,16 +1410,16 @@
                                     AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_MoreTemplatesUnavailable}"
                                     AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OnlineTemplateDiscoveryDependsOnAnExternalMicrosoftTemplateServiceAndIsE_D9AF02A3}"
                                     Click="SsMoreTemplatesBtn_Click"
-                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_MoreTemplatesExcluded}"
-                                    local:RibbonTooltip.KeyTip="MT"
-                                    local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OnlineTemplateDiscoveryDependsOnAnExternalMicrosoftTemplateServiceAndIsE_FB222BC1}" local:RibbonMetadata.CommandName="More Templates Excluded"/>
+                                    ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_MoreTemplatesExcluded}"
+                                    ribbonWpf:RibbonTooltip.KeyTip="MT"
+                                    ribbonWpf:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OnlineTemplateDiscoveryDependsOnAnExternalMicrosoftTemplateServiceAndIsE_FB222BC1}" ribbonWpf:RibbonMetadata.CommandName="More Templates Excluded"/>
                         </DockPanel>
 
                         <StackPanel Orientation="Horizontal">
                             <!-- Blank workbook card -->
                             <Button Click="SsBlankWorkbook_Click" Cursor="Hand" Margin="0,0,16,0"
-                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_BlankWorkbook}"
-                                    local:RibbonTooltip.KeyTip="B1" local:RibbonMetadata.CommandName="Blank Workbook">
+                                    ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_BlankWorkbook}"
+                                    ribbonWpf:RibbonTooltip.KeyTip="B1" ribbonWpf:RibbonMetadata.CommandName="Blank Workbook">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border x:Name="cardBg" Background="Transparent" Padding="4">
@@ -1853,10 +1838,10 @@
                                     AutomationProperties.AutomationId="BackstagePrintNowButton"
                                     AutomationProperties.Name="{local:Loc Key=PrintPreview_PrintAutomationName}"
                                     AutomationProperties.HelpText="{local:Loc Key=PrintPreview_PrintHelpText}"
-                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Print}"
-                                    local:RibbonTooltip.KeyTip="V"
-                                    local:RibbonTooltip.Description="{local:Loc Key=PrintPreview_PrintToolTip}"
-                                    local:RibbonMetadata.CommandName="Print"/>
+                                    ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Print}"
+                                    ribbonWpf:RibbonTooltip.KeyTip="V"
+                                    ribbonWpf:RibbonTooltip.Description="{local:Loc Key=PrintPreview_PrintToolTip}"
+                                    ribbonWpf:RibbonMetadata.CommandName="Print"/>
                                 <TextBlock Text="{local:Loc Key=MainWindow_Text_Print}"
                                            FontSize="13" FontWeight="SemiBold" Foreground="#555"
                                            Margin="0,0,0,8"/>

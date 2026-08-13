@@ -36,7 +36,6 @@ internal static class TextBodyFlowDocumentConverter
     // WPF uses DIPs; PowerPoint font size is in points. 1pt = 96/72 DIPs.
     private const double PtToDip = 96.0 / 72.0;
     private const double DipToPt = 72.0 / 96.0;
-    private const double EmuPerDip = 9525.0;
 
     // ── TextBody → FlowDocument ───────────────────────────────────────────────
 
@@ -73,26 +72,23 @@ internal static class TextBodyFlowDocumentConverter
             return doc;
         }
 
-        var markerState = new PresentationListMarkerContinuationState();
-        foreach (var mp in body.Paragraphs)
+        var visualPlan = InCanvasRichTextVisualPlanner.Create(body);
+        for (int paragraphIndex = 0; paragraphIndex < body.Paragraphs.Count; paragraphIndex++)
         {
-            var inheritedStyle = body.LstStyle?.Resolve(mp.Level);
-            var effectiveAlign = mp.Align
-                ?? inheritedStyle?.Align
-                ?? body.DefaultParaAlign;
-            long? effectiveMarginLeftEmu = mp.MarginLeftEmu ?? inheritedStyle?.MarginLeftEmu;
-            long? effectiveIndentEmu = mp.IndentEmu ?? inheritedStyle?.IndentEmu;
+            var mp = body.Paragraphs[paragraphIndex];
+            var paragraphPlan = visualPlan.Paragraphs[paragraphIndex];
             var wp = new WpfParagraph
             {
-                // Remove default paragraph margins so rendering stays tight.
-                Margin = new Thickness(0),
-                FlowDirection = ResolveFlowDirection(body, mp)
-            };
-
-            // Paragraph alignment.
-            if (effectiveAlign.HasValue)
-            {
-                wp.TextAlignment = effectiveAlign.Value switch
+                Margin = new Thickness(
+                    paragraphPlan.MarginLeftDip,
+                    paragraphPlan.SpaceBeforeDip,
+                    0,
+                    paragraphPlan.SpaceAfterDip),
+                TextIndent = paragraphPlan.TextIndentDip,
+                FlowDirection = paragraphPlan.RightToLeft
+                    ? FlowDirection.RightToLeft
+                    : FlowDirection.LeftToRight,
+                TextAlignment = paragraphPlan.Alignment switch
                 {
                     TextAlign.Left        => TextAlignment.Left,
                     TextAlign.Center      => TextAlignment.Center,
@@ -100,41 +96,24 @@ internal static class TextBodyFlowDocumentConverter
                     TextAlign.Justify     => TextAlignment.Justify,
                     TextAlign.Distributed => TextAlignment.Justify,
                     _                     => TextAlignment.Left
-                };
-            }
+                },
+            };
 
-            if (effectiveMarginLeftEmu.HasValue)
-            {
-                wp.Margin = new Thickness(effectiveMarginLeftEmu.Value / EmuPerDip, 0, 0, 0);
-            }
-
-            if (effectiveIndentEmu.HasValue)
-                wp.TextIndent = effectiveIndentEmu.Value / EmuPerDip;
-
-            ApplyInheritedRunStyle(wp, inheritedStyle);
-
-            if (mp.SpaceBeforePt.HasValue || mp.SpaceAfterPt.HasValue)
-            {
-                wp.Margin = new Thickness(
-                    wp.Margin.Left,
-                    mp.SpaceBeforePt.HasValue ? mp.SpaceBeforePt.Value * PtToDip : 0,
-                    0,
-                    mp.SpaceAfterPt.HasValue  ? mp.SpaceAfterPt.Value  * PtToDip : 0);
-            }
+            ApplyInheritedRunStyle(wp, paragraphPlan.InheritedRunStyle);
 
             if (mp.Runs.Count == 0)
             {
                 // Preserve empty paragraph as a run with no text.
-                if (CreateDisplayOnlyBullet(body, mp, markerState, fallbackFontSizePt) is { } emptyMarker)
+                if (CreateDisplayOnlyBullet(paragraphPlan, fallbackFontSizePt) is { } emptyMarker)
                     wp.Inlines.Add(emptyMarker);
                 wp.Inlines.Add(new WpfRun(string.Empty));
             }
             else
             {
-                if (CreateDisplayOnlyBullet(body, mp, markerState, fallbackFontSizePt) is { } marker)
+                if (CreateDisplayOnlyBullet(paragraphPlan, fallbackFontSizePt) is { } marker)
                     wp.Inlines.Add(marker);
                 foreach (var mr in mp.Runs)
-                    wp.Inlines.Add(ModelRunToWpfRun(mr, inheritedStyle));
+                    wp.Inlines.Add(ModelRunToWpfRun(mr, paragraphPlan.InheritedRunStyle.IsPresent));
             }
 
             doc.Blocks.Add(wp);
@@ -192,7 +171,7 @@ internal static class TextBodyFlowDocumentConverter
             bool isSplitContinuation = sourceParaIndex >= 0
                 && !consumedSourceParagraphs.Add(sourceParaIndex);
             var mp = sourceParaIndex >= 0
-                ? InCanvasRichTextParagraphEditPlanner.CloneParagraphMetadata(
+                ? TextBodyModelCloner.CloneParagraphMetadata(
                     originalBody!.Paragraphs[sourceParaIndex],
                     clearAutoNumStartAtSpecified: isSplitContinuation)
                 : new ModelParagraph();
@@ -359,9 +338,11 @@ internal static class TextBodyFlowDocumentConverter
             ? FlowDirection.RightToLeft
             : FlowDirection.LeftToRight;
 
-    private static void ApplyInheritedRunStyle(WpfParagraph paragraph, TextStyleLevel? style)
+    private static void ApplyInheritedRunStyle(
+        WpfParagraph paragraph,
+        InCanvasInheritedRunStylePlan style)
     {
-        if (style is null)
+        if (!style.IsPresent)
             return;
 
         if (style.FontSizePt is > 0)
@@ -370,11 +351,8 @@ internal static class TextBodyFlowDocumentConverter
             paragraph.FontWeight = style.Bold.Value ? FontWeights.Bold : FontWeights.Normal;
         if (style.Italic.HasValue)
             paragraph.FontStyle = style.Italic.Value ? FontStyles.Italic : FontStyles.Normal;
-        if (!string.IsNullOrWhiteSpace(style.LatinFont)
-            && !style.LatinFont.StartsWith("+", StringComparison.Ordinal))
-        {
-            paragraph.FontFamily = new FontFamily(style.LatinFont);
-        }
+        if (!string.IsNullOrWhiteSpace(style.FontFamily))
+            paragraph.FontFamily = new FontFamily(style.FontFamily);
 
         if (style.Color is { } color)
         {
@@ -384,7 +362,7 @@ internal static class TextBodyFlowDocumentConverter
         }
     }
 
-    private static Inline ModelRunToWpfRun(ModelRun mr, TextStyleLevel? inheritedStyle = null)
+    private static Inline ModelRunToWpfRun(ModelRun mr, bool hasInheritedStyle = false)
     {
         if (mr.InlineTable is { } inlineTable)
         {
@@ -397,7 +375,8 @@ internal static class TextBodyFlowDocumentConverter
         if (mr.InlineOleObject is { } ole)
         {
             var label = string.IsNullOrWhiteSpace(ole.ClassName)
-                ? "OLE object"
+                ? PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.InlineOleObjectFallbackLabel)
                 : ole.ClassName;
             var border = new Border
             {
@@ -479,9 +458,9 @@ internal static class TextBodyFlowDocumentConverter
         // flow through and keeps inherited-bold runs from becoming local Normal values.
         // The key correction is the Y4 fix: map only FontWeights.Bold → mr.Bold; SemiBold/DemiBold
         // must NOT become Bold on the round-trip.
-        if (mr.BoldSet || mr.Bold || inheritedStyle is null)
+        if (mr.BoldSet || mr.Bold || !hasInheritedStyle)
             wr.FontWeight = mr.Bold ? FontWeights.Bold : FontWeights.Normal;
-        if (mr.ItalicSet || mr.Italic || inheritedStyle is null)
+        if (mr.ItalicSet || mr.Italic || !hasInheritedStyle)
             wr.FontStyle = mr.Italic ? FontStyles.Italic : FontStyles.Normal;
 
         // Underline + Strikethrough as TextDecorations.
@@ -526,96 +505,38 @@ internal static class TextBodyFlowDocumentConverter
     private static Grid CreateInlineTableEditor(InlineTableInfo info)
     {
         var table = info.Table;
-        double spacingDip = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
-        var columnWidths = Enumerable.Range(0, Math.Max(1, table.ColumnWidthsEmu.Count))
-            .Select(column => column < table.ColumnWidthsEmu.Count
-                ? Math.Max(24, table.ColumnWidthsEmu[column] / 9525.0)
-                : 72)
-            .ToArray();
-        for (int column = 0; column + 1 < columnWidths.Length; column++)
-            columnWidths[column] += spacingDip;
+        var layout = InlineTableLogicalGridPlan.CreateLayout(table);
         var grid = new Grid
         {
             Tag = info.Clone(),
             Background = Brushes.Transparent,
-            HorizontalAlignment = ToWpfHorizontalAlignment(
-                table.Rows.FirstOrDefault()?.HorizontalAlignment),
-            Margin = new Thickness(
-                Math.Clamp(table.RichTextLeftIndentPt.GetValueOrDefault() * PtToDip, -1000, 1000),
-                0,
-                0,
-                0),
+            HorizontalAlignment = ToWpfHorizontalAlignment(layout.FrameAlignment),
+            Margin = new Thickness(layout.LeftIndentDip, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        int columnCount = columnWidths.Length;
-        for (int column = 0; column < columnCount; column++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(columnWidths[column]) });
-
-        double tableWidth = columnWidths.Sum();
-        var logicalGrid = InlineTableLogicalGridPlan.Create(table);
-        for (int rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        foreach (var column in layout.Columns)
         {
-            var row = table.Rows[rowIndex];
-            double rowOffset = GetHorizontalOffset(row, columnWidths, tableWidth);
-            double height = row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24;
-            var rowDefinition = new RowDefinition();
-            if (row.HeightRule == TableRowHeightRule.AtLeast && row.HeightEmu > 0)
+            grid.ColumnDefinitions.Add(new ColumnDefinition
             {
-                rowDefinition.Height = GridLength.Auto;
-                rowDefinition.MinHeight = height;
-            }
-            else
-            {
-                rowDefinition.Height = new GridLength(height);
-            }
-            grid.RowDefinitions.Add(rowDefinition);
-            foreach (var logicalCell in logicalGrid.Cells.Where(cell => cell.RowIndex == rowIndex))
-            {
-                var cell = logicalCell.Cell;
-                int columnIndex = logicalCell.ColumnIndex;
-                var textBox = new TextBox
-                {
-                    Text = cell.TextBody is null
-                        ? string.Empty
-                        : InCanvasTextEditPlanner.ExtractPlainText(cell.TextBody),
-                    Tag = new InlineTableCellBinding(
-                        logicalCell.RowIndex,
-                        logicalCell.ColumnIndex,
-                        logicalCell.SourceCellIndex,
-                        cell),
-                    AcceptsReturn = true,
-                    BorderThickness = new Thickness(0.5),
-                    BorderBrush = Brushes.Gray,
-                    Margin = columnIndex + Math.Max(1, cell.GridSpan) < columnCount
-                        ? new Thickness(0, 0, spacingDip, 0)
-                        : new Thickness(0),
-                    Padding = new Thickness(
-                        cell.InsetLeftPt.GetValueOrDefault() * PtToDip,
-                        cell.InsetTopPt.GetValueOrDefault() * PtToDip,
-                        cell.InsetRightPt.GetValueOrDefault() * PtToDip,
-                        cell.InsetBottomPt.GetValueOrDefault() * PtToDip),
-                    VerticalContentAlignment = cell.Anchor switch
-                    {
-                        TableCellAnchor.Middle => VerticalAlignment.Center,
-                        TableCellAnchor.Bottom => VerticalAlignment.Bottom,
-                        _ => VerticalAlignment.Top,
-                    },
-                    RenderTransform = rowOffset > 0
-                        ? new TranslateTransform(rowOffset, 0)
-                        : null,
-                };
-                if (cell.Fill is ShapeFill.Solid solid)
-                    textBox.Background = new SolidColorBrush(
-                        Color.FromArgb(solid.Color.Alpha, solid.Color.Resolved.R,
-                            solid.Color.Resolved.G, solid.Color.Resolved.B));
-                Grid.SetRow(textBox, rowIndex);
-                Grid.SetColumn(textBox, Math.Min(columnIndex, columnCount - 1));
-                Grid.SetColumnSpan(textBox, Math.Min(Math.Max(1, cell.GridSpan), columnCount - columnIndex));
-                Grid.SetRowSpan(textBox, Math.Min(Math.Max(1, cell.RowSpan), table.Rows.Count - rowIndex));
-                textBox.PreviewKeyDown += (_, args) =>
-                    OnInlineTableCellPreviewKeyDown(grid, info, textBox, args);
-                grid.Children.Add(textBox);
-            }
+                Width = new GridLength(column.TrackWidthDip),
+            });
+        }
+
+        foreach (var row in layout.Rows)
+            grid.RowDefinitions.Add(CreateInlineTableRowDefinition(row));
+
+        foreach (var placement in layout.Cells)
+        {
+            var textBox = CreateInlineTableCellTextBox(
+                placement,
+                layout.Rows[placement.RowIndex].HorizontalOffsetDip);
+            Grid.SetRow(textBox, placement.RowIndex);
+            Grid.SetColumn(textBox, placement.ColumnIndex);
+            Grid.SetColumnSpan(textBox, placement.ColumnSpan);
+            Grid.SetRowSpan(textBox, placement.RowSpan);
+            textBox.PreviewKeyDown += (_, args) =>
+                OnInlineTableCellPreviewKeyDown(grid, info, textBox, args);
+            grid.Children.Add(textBox);
         }
         return grid;
     }
@@ -680,42 +601,22 @@ internal static class TextBodyFlowDocumentConverter
     {
         var table = info.Table;
         int rowIndex = table.Rows.Count;
-        int columnCount = Math.Max(1, grid.ColumnDefinitions.Count);
         var row = InlineTableLogicalGridPlan.CreateAppendRow(table);
         table.Rows.Add(row);
 
-        double spacingDip = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
-        var widths = grid.ColumnDefinitions
-            .Select(definition => definition.Width.IsAbsolute
-                ? definition.Width.Value
-                : 72)
-            .ToArray();
-        double rowOffset = GetHorizontalOffset(row, widths, widths.Sum());
-        double height = row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24;
-        var rowDefinition = new RowDefinition();
-        if (row.HeightRule == TableRowHeightRule.AtLeast && row.HeightEmu > 0)
-        {
-            rowDefinition.Height = GridLength.Auto;
-            rowDefinition.MinHeight = height;
-        }
-        else
-        {
-            rowDefinition.Height = new GridLength(height);
-        }
-        grid.RowDefinitions.Add(rowDefinition);
+        var layout = InlineTableLogicalGridPlan.CreateLayout(table);
+        var rowLayout = layout.Rows[rowIndex];
+        grid.RowDefinitions.Add(CreateInlineTableRowDefinition(rowLayout));
 
-        for (int column = 0; column < columnCount; column++)
+        foreach (var placement in layout.Cells.Where(cell => cell.RowIndex == rowIndex))
         {
-            var cell = row.Cells[column];
             var textBox = CreateInlineTableCellTextBox(
-                cell,
-                rowIndex,
-                column,
-                spacingDip,
-                columnCount,
-                rowOffset);
+                placement,
+                rowLayout.HorizontalOffsetDip);
             Grid.SetRow(textBox, rowIndex);
-            Grid.SetColumn(textBox, column);
+            Grid.SetColumn(textBox, placement.ColumnIndex);
+            Grid.SetColumnSpan(textBox, placement.ColumnSpan);
+            Grid.SetRowSpan(textBox, placement.RowSpan);
             textBox.PreviewKeyDown += (_, args) =>
                 OnInlineTableCellPreviewKeyDown(grid, info, textBox, args);
             grid.Children.Add(textBox);
@@ -723,24 +624,25 @@ internal static class TextBodyFlowDocumentConverter
     }
 
     private static TextBox CreateInlineTableCellTextBox(
-        ModelTableCell cell,
-        int rowIndex,
-        int columnIndex,
-        double spacingDip,
-        int columnCount,
-        double rowOffset)
+        InlineTableCellPlacement placement,
+        double horizontalOffsetDip)
     {
+        var cell = placement.Cell;
         var textBox = new TextBox
         {
             Text = cell.TextBody is null
                 ? string.Empty
                 : InCanvasTextEditPlanner.ExtractPlainText(cell.TextBody),
-            Tag = new InlineTableCellBinding(rowIndex, columnIndex, columnIndex, cell),
+            Tag = new InlineTableCellBinding(
+                placement.RowIndex,
+                placement.ColumnIndex,
+                placement.SourceCellIndex,
+                cell),
             AcceptsReturn = true,
             BorderThickness = new Thickness(0.5),
             BorderBrush = Brushes.Gray,
-            Margin = columnIndex + Math.Max(1, cell.GridSpan) < columnCount
-                ? new Thickness(0, 0, spacingDip, 0)
+            Margin = placement.TrailingSpacingDip > 0
+                ? new Thickness(0, 0, placement.TrailingSpacingDip, 0)
                 : new Thickness(0),
             Padding = new Thickness(
                 cell.InsetLeftPt.GetValueOrDefault() * PtToDip,
@@ -753,8 +655,8 @@ internal static class TextBodyFlowDocumentConverter
                 TableCellAnchor.Bottom => VerticalAlignment.Bottom,
                 _ => VerticalAlignment.Top,
             },
-            RenderTransform = rowOffset > 0
-                ? new TranslateTransform(rowOffset, 0)
+            RenderTransform = horizontalOffsetDip > 0
+                ? new TranslateTransform(horizontalOffsetDip, 0)
                 : null,
         };
         if (cell.Fill is ShapeFill.Solid solid)
@@ -764,28 +666,18 @@ internal static class TextBodyFlowDocumentConverter
         return textBox;
     }
 
-    private static double GetHorizontalOffset(
-        ModelTableRow row,
-        IReadOnlyList<double> columnWidths,
-        double tableWidth)
+    private static RowDefinition CreateInlineTableRowDefinition(InlineTableRowLayout row)
     {
-        int columnIndex = 0;
-        double rowWidth = 0;
-        foreach (var cell in row.Cells)
+        if (row.UsesMinimumHeight)
         {
-            int span = Math.Max(1, cell.GridSpan);
-            for (int index = 0; index < span && columnIndex + index < columnWidths.Count; index++)
-                rowWidth += columnWidths[columnIndex + index];
-            columnIndex += span;
+            return new RowDefinition
+            {
+                Height = GridLength.Auto,
+                MinHeight = row.MinimumHeightDip,
+            };
         }
 
-        double extra = Math.Max(0, tableWidth - rowWidth);
-        return row.HorizontalAlignment switch
-        {
-            TableRowHorizontalAlignment.Center => extra / 2,
-            TableRowHorizontalAlignment.Right => extra,
-            _ => 0,
-        };
+        return new RowDefinition { Height = new GridLength(row.HeightDip) };
     }
 
     private static HorizontalAlignment ToWpfHorizontalAlignment(
@@ -893,70 +785,12 @@ internal static class TextBodyFlowDocumentConverter
         }));
 
     private static Inline? CreateDisplayOnlyBullet(
-        TextBody body,
-        ModelParagraph paragraph,
-        PresentationListMarkerContinuationState markerState,
+        InCanvasRichTextVisualParagraph paragraph,
         double fallbackFontSizePt)
     {
-        if (paragraph.BulletSuppressed)
+        double markerSizePt = paragraph.BulletFontSizePt ?? fallbackFontSizePt;
+        if (paragraph.BulletKind == BulletKind.Image)
         {
-            markerState.Break();
-            return null;
-        }
-
-        var seedRun = paragraph.Runs.FirstOrDefault(run => !string.IsNullOrEmpty(run.Text))
-            ?? paragraph.Runs.FirstOrDefault();
-        var style = body.LstStyle?.Resolve(paragraph.Level);
-        bool inheritsStyleBullet = paragraph.BulletKind == BulletKind.None
-            && style?.BulletKind is { };
-        BulletKind effectiveKind = inheritsStyleBullet
-            ? style!.BulletKind!.Value
-            : paragraph.BulletKind;
-        string? effectiveChar = inheritsStyleBullet
-            ? style!.BulletChar
-            : paragraph.BulletChar;
-        AutoNumType effectiveAutoNumType = inheritsStyleBullet
-            ? style!.AutoNumType
-            : paragraph.AutoNumType;
-        ThemeAwareColor? effectiveColor = inheritsStyleBullet
-            ? (style!.BulletColorFollowsText ? null : style.BulletColor)
-            : (paragraph.BulletColorFollowsText ? null : paragraph.BulletColor);
-        string? effectiveFont = inheritsStyleBullet
-            ? (style!.BulletFontFollowsText ? null : style.BulletFontFamily)
-            : (paragraph.BulletFontFollowsText ? null : paragraph.BulletFontFamily);
-        double? effectiveSizePt = inheritsStyleBullet
-            ? (style!.BulletSizeFollowsText ? null : style.BulletSizePt)
-            : (paragraph.BulletSizeFollowsText ? null : paragraph.BulletSizePt);
-        int? effectiveSizePct = inheritsStyleBullet
-            ? (style!.BulletSizeFollowsText ? null : style.BulletSizePct)
-            : (paragraph.BulletSizeFollowsText ? null : paragraph.BulletSizePct);
-        double markerSizePt = effectiveSizePt
-            ?? (effectiveSizePct is > 0 && seedRun?.FontSizePt is > 0
-                ? seedRun.FontSizePt.Value * effectiveSizePct.Value / 100000.0
-                : seedRun?.FontSizePt)
-            ?? fallbackFontSizePt;
-        string? markerText = null;
-        if (effectiveKind == BulletKind.Char)
-        {
-            markerText = effectiveChar ?? "•";
-            markerState.Break();
-        }
-        else if (effectiveKind == BulletKind.Auto)
-        {
-            int value = markerState.Next(
-                paragraph.Level,
-                effectiveAutoNumType,
-                paragraph.AutoNumStartAt,
-                paragraph.AutoNumStartAtSpecified);
-            markerText = markerState.FormatTemplate(
-                paragraph.Level,
-                effectiveAutoNumType,
-                value,
-                paragraph.AutoNumTextTemplate);
-        }
-        else if (effectiveKind == BulletKind.Image)
-        {
-            markerState.Break();
             if (paragraph.BulletImage is not { Bytes.Length: > 0 } image
                 || LoadBitmap(image.Bytes) is not { } bitmap)
                 return null;
@@ -971,24 +805,18 @@ internal static class TextBodyFlowDocumentConverter
                     IsHitTestVisible = false,
                 });
         }
-        else
-        {
-            markerState.Break();
-            return null;
-        }
-
-        if (string.IsNullOrEmpty(markerText))
+        if (paragraph.BulletKind is not (BulletKind.Char or BulletKind.Auto)
+            || string.IsNullOrEmpty(paragraph.BulletText))
             return null;
 
         var marker = new TextBlock
         {
-            Text = markerText + " ",
+            Text = paragraph.BulletText + " ",
             FontFamily = new FontFamily(
-                effectiveFont
-                ?? seedRun?.FontFamily
+                paragraph.BulletFontFamily
                 ?? InCanvasRichTextEditorDefaults.FallbackFontFamily),
             FontSize = markerSizePt * PtToDip,
-            Foreground = ResolveModelColor(effectiveColor ?? seedRun?.Color) is { } effectiveBrushColor
+            Foreground = ResolveModelColor(paragraph.BulletColor) is { } effectiveBrushColor
                 ? new SolidColorBrush(effectiveBrushColor)
                 : Brushes.Black,
             IsHitTestVisible = false,
@@ -1157,12 +985,7 @@ internal static class TextBodyFlowDocumentConverter
             }
         }
 
-        // WPF exposes only the enabled/disabled decoration, so retain an authored
-        // DrawingML variant when an unchanged source run still has the decoration.
-        if (mr.Underline && originalRun?.UnderlineStyleToken is not null)
-            mr.UnderlineStyleToken = originalRun.UnderlineStyleToken;
-        if (mr.Strikethrough && originalRun?.StrikeStyleToken is not null)
-            mr.StrikeStyleToken = originalRun.StrikeStyleToken;
+        TextRunEditRoundTripPlanner.PreserveSourceOnlyMetadata(mr, originalRun);
 
         // Y2: read Foreground LOCAL value only.
         // When unset (inherited), carry the ORIGINAL run's Color (incl. SchemeColor ref) through
@@ -1196,19 +1019,6 @@ internal static class TextBodyFlowDocumentConverter
             // Foreground is inherited — preserve the original run's Color (may be null or a
             // SchemeColor ref such as accent1) rather than synthesizing a new sRGB.
             mr.Color = originalRun?.Color;
-        }
-
-        // FlowDocument has no native representation for DrawingML run effects. When the
-        // reconstructed inline is paired with an unchanged source run, carry the
-        // renderer-neutral effect state through the WPF editing round-trip.
-        if (originalRun is not null)
-        {
-            mr.TextFill = originalRun.TextFill;
-            mr.TextOutline = originalRun.TextOutline;
-            mr.TextShadow = originalRun.TextShadow;
-            mr.TextReflection = originalRun.TextReflection;
-            mr.TextGlow = originalRun.TextGlow;
-            mr.TextSoftEdge = originalRun.TextSoftEdge;
         }
 
         for (DependencyObject? parent = inline.Parent;

@@ -24,4 +24,5 @@
   <data name="Common_Ok" xml:space="preserve"><value>_OK</value></data>
   <data name="Common_WarningTitle" xml:space="preserve"><value>Avertissement</value></data>
   <data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve"><value>Anglais (États-Unis)</value></data>
+  <data name="Options_AppLanguageSystemDefault" xml:space="preserve"><value>Utiliser la langue du systeme</value></data>
 </root>

@@ -41,7 +41,7 @@ public sealed class CellAlignmentTests
         }
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { },
             Save: () => { },
@@ -114,7 +114,7 @@ public sealed class CellAlignmentTests
     [Fact]
     public void Table_layout_tab_contains_9_cell_alignment_buttons()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var layoutTab = definition.FindTab("table-layout");
         layoutTab.Should().NotBeNull("table-layout contextual tab must exist");
 
@@ -131,8 +131,8 @@ public sealed class CellAlignmentTests
     public void Every_cell_align_ribbon_command_is_in_the_registry()
     {
         // Cross-check: every control in the table-alignment group resolves in the registry.
-        var definition = FreeWRibbon.BuildDefinition();
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
 
         var alignmentGroup = definition.FindTab("table-layout")!
             .Groups.First(g => g.Id == "table-alignment");

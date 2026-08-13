@@ -42,20 +42,7 @@
                                Margin="0,0,8,0"/>
                         <ComboBox x:Name="HeaderPresetBox"
                                   Grid.Column="1"
-                                  SelectionChanged="HeaderPresetBox_SelectionChanged">
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_None}" Tag=""/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Page1}" Tag="&amp;[Page]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Page1Of}" Tag="Page &amp;[Page] of &amp;[Pages]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Sheet1}" Tag="&amp;[Tab]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Book1}" Tag="&amp;[File]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Book1Xlsx}" Tag="&amp;[File]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Book1XlsxSheet1}" Tag="&amp;[File], &amp;[Tab]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_ConfidentialPage1}" Tag="Confidential, Page &amp;[Page]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_DatePage1}" Tag="&amp;[Date], Page &amp;[Page]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_SheetName}" Tag="&amp;[Tab]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_FileName}" Tag="&amp;[File]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_FilePath}" Tag="&amp;[Path]&amp;[File]"/>
-                        </ComboBox>
+                                  SelectionChanged="HeaderPresetBox_SelectionChanged"/>
                     </Grid>
 
                     <ScrollViewer Grid.Row="1"
@@ -252,20 +239,7 @@
                                Margin="0,0,8,0"/>
                         <ComboBox x:Name="FooterPresetBox"
                                   Grid.Column="1"
-                                  SelectionChanged="FooterPresetBox_SelectionChanged">
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_None}" Tag=""/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Page1}" Tag="&amp;[Page]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Page1Of}" Tag="Page &amp;[Page] of &amp;[Pages]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Sheet1}" Tag="&amp;[Tab]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Book1}" Tag="&amp;[File]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Book1Xlsx}" Tag="&amp;[File]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Book1XlsxSheet1}" Tag="&amp;[File], &amp;[Tab]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Date}" Tag="&amp;[Date]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_Time}" Tag="&amp;[Time]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_DatePage1}" Tag="&amp;[Date], Page &amp;[Page]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_FilePath}" Tag="&amp;[Path]&amp;[File]"/>
-                            <ComboBoxItem Content="{local:Loc Key=HeaderFooter_FileName}" Tag="&amp;[File]"/>
-                        </ComboBox>
+                                  SelectionChanged="FooterPresetBox_SelectionChanged"/>
                     </Grid>
 
                     <ScrollViewer Grid.Row="1"

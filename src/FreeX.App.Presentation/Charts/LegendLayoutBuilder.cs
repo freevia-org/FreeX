@@ -137,7 +137,7 @@ internal static class LegendLayoutBuilder
             var labels = new List<(int, string)>();
             for (var i = 0; i < request.Categories.Count; i++)
             {
-                if (IsPieLegendEntryDeleted(chart, i))
+                if (ChartRenderPolicyPlanner.IsPieLegendEntryDeleted(chart, i))
                     continue;
                 labels.Add((i, request.Categories[i]));
             }
@@ -147,53 +147,11 @@ internal static class LegendLayoutBuilder
         var entries = new List<(int, string)>(request.Series.Count);
         foreach (var series in request.Series)
         {
-            if (IsLegendEntryDeleted(chart, series.SeriesIndex))
+            if (ChartRenderPolicyPlanner.IsLegendEntryDeleted(chart, series.SeriesIndex))
                 continue;
             entries.Add((series.SeriesIndex, series.Name ?? $"Series {series.SeriesIndex + 1}"));
         }
         return entries;
     }
 
-    /// <summary>
-    /// Returns true when the series with chart-XML index <paramref name="seriesIndex"/> has its
-    /// legend entry marked deleted via <c>&lt;c:legendEntry&gt;&lt;c:delete val="1"/&gt;</c> (Excel's
-    /// way to hide helper series from the legend). Mirrors the WPF host's
-    /// ChartRenderer.SeriesFormatting.IsLegendEntryDeleted: the legend-entry idx is a legend-position
-    /// index (declaration order), resolved to the series' own idx via <see cref="ChartModel.SeriesPlotOrder"/>
-    /// when populated, otherwise matched directly (legacy single-plot-group case).
-    /// </summary>
-    private static bool IsLegendEntryDeleted(ChartModel chart, int seriesIndex)
-    {
-        var entries = chart.LegendEntries;
-        var plotOrder = chart.SeriesPlotOrder;
-        for (var i = 0; i < entries.Count; i++)
-        {
-            var entry = entries[i];
-            var resolvedSeriesIndex = plotOrder.Count > 0 && entry.Index >= 0 && entry.Index < plotOrder.Count
-                ? plotOrder[entry.Index]
-                : entry.Index;
-            if (resolvedSeriesIndex == seriesIndex)
-                return entry.IsDeleted == true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Returns true when the pie/doughnut point at <paramref name="pointIndex"/> has its legend
-    /// entry marked deleted. Unlike <see cref="IsLegendEntryDeleted"/> (series legends), pie/doughnut
-    /// charts have exactly one plotted series, so each &lt;c:legendEntry&gt; idx is the point/category
-    /// index directly -- there is no series-plot-order indirection to resolve.
-    /// </summary>
-    private static bool IsPieLegendEntryDeleted(ChartModel chart, int pointIndex)
-    {
-        var entries = chart.LegendEntries;
-        for (var i = 0; i < entries.Count; i++)
-        {
-            if (entries[i].Index == pointIndex)
-                return entries[i].IsDeleted == true;
-        }
-
-        return false;
-    }
 }

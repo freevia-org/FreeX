@@ -299,7 +299,7 @@ public sealed record NumberFormatMetadata(
             return new NumberFormatMetadata(NumberFormatCategory.General);
 
         var code = formatCode.Trim();
-        var firstSection = SplitTopLevel(code)[0];
+        var firstSection = NumberFormatSectionTokenizer.Split(code)[0];
         var decimals = DecimalPlacesIn(firstSection);
         var negativeStyle = DetectNegativeStyle(code);
         var thousands = firstSection.Contains("#,##", StringComparison.Ordinal)
@@ -461,8 +461,8 @@ public sealed record NumberFormatMetadata(
 
     private static NegativeNumberStyle DetectNegativeStyle(string code)
     {
-        var sections = SplitTopLevel(code);
-        if (sections.Count < 2)
+        var sections = NumberFormatSectionTokenizer.Split(code);
+        if (sections.Length < 2)
             return NegativeNumberStyle.Minus;
 
         var negativeSection = sections[1];
@@ -477,49 +477,4 @@ public sealed record NumberFormatMetadata(
         };
     }
 
-    /// <summary>Splits a format string into its top-level <c>;</c>-delimited sections, honoring quotes and brackets.</summary>
-    private static List<string> SplitTopLevel(string format)
-    {
-        var sections = new List<string>();
-        var builder = new System.Text.StringBuilder();
-        var inQuote = false;
-        var inBracket = false;
-
-        for (var i = 0; i < format.Length; i++)
-        {
-            var c = format[i];
-            if (c == '"' && !inBracket)
-            {
-                inQuote = !inQuote;
-                builder.Append(c);
-            }
-            else if (c == '\\' && !inQuote && i + 1 < format.Length)
-            {
-                builder.Append(c);
-                builder.Append(format[++i]);
-            }
-            else if (c == '[' && !inQuote)
-            {
-                inBracket = true;
-                builder.Append(c);
-            }
-            else if (c == ']' && !inQuote)
-            {
-                inBracket = false;
-                builder.Append(c);
-            }
-            else if (c == ';' && !inQuote && !inBracket)
-            {
-                sections.Add(builder.ToString());
-                builder.Clear();
-            }
-            else
-            {
-                builder.Append(c);
-            }
-        }
-
-        sections.Add(builder.ToString());
-        return sections;
-    }
 }

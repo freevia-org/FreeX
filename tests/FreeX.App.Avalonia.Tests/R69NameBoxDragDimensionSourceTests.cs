@@ -1,6 +1,8 @@
 using System.IO;
 using System.Linq;
 using FluentAssertions;
+using FreeX.App.Presentation.GridInteraction;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -24,22 +26,19 @@ public sealed class R69NameBoxDragDimensionSourceTests
 
         method.Should().Contain("_session.SelectAnchoredRange(anchor, address);");
         method.Should().Contain("if (!_cellAddressBoxHasPendingEdit)");
-        method.Should().Contain("_cellAddressText.Text = FormatDragSelectionDimensionText(_session.SelectedRange);");
+        method.Should().Contain("_cellAddressText.Text = GridSelectionNavigationPlanner.FormatDragDimensionText(_session.SelectedRange);");
         method.Should().Contain("_cellSelectionDragShowedDimensionText = true;");
     }
 
     [Fact]
-    public void FormatDragSelectionDimensionTextFormatsRowsByColumns()
+    public void SharedDragDimensionProjectionFormatsRowsByColumns()
     {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sheet = new Workbook("Book1").AddSheet("Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 5, 4));
 
-        var helper = source[
-            source.IndexOf("private static string FormatDragSelectionDimensionText(", System.StringComparison.Ordinal)..
-            source.IndexOf("private static string FormatFillCellsAction(", System.StringComparison.Ordinal)];
-
-        helper.Should().Contain("range.End.Row - range.Start.Row + 1");
-        helper.Should().Contain("range.End.Col - range.Start.Col + 1");
-        helper.Should().Contain("$\"{rowCount}R x {colCount}C\"");
+        GridSelectionNavigationPlanner.FormatDragDimensionText(range).Should().Be("4R x 3C");
     }
 
     // No-regression: once the drag ends (a normal release, or an interrupted pointer-capture
@@ -82,15 +81,6 @@ public sealed class R69NameBoxDragDimensionSourceTests
         beginDrag.Should().Contain("_cellSelectionDragShowedDimensionText = false;");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

@@ -74,6 +74,9 @@ public static class ShapeTransformPlanner
     public static ShapeAffineTransform PlanShapeTransform(DrawOp.Shape shape) =>
         PlanShapeTransform(shape.BoundsDip, shape.RotationDeg, shape.FlipH, shape.FlipV);
 
+    public static ShapeAffineTransform PlanPictureTransform(DrawOp.Picture picture) =>
+        PlanShapeTransform(picture.DestDip, picture.RotationDeg, picture.FlipH, picture.FlipV);
+
     /// <summary>
     /// Produces the single transform used to render a shape, including its ordinary
     /// DrawingML transform and any supported 3-D scene-camera projection.

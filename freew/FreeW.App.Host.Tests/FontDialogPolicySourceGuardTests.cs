@@ -5,23 +5,25 @@ namespace FreeW.App.Host.Tests;
 public sealed class FontDialogPolicySourceGuardTests
 {
     [Fact]
-    public void FontDialog_DelegatesCatalogsStateValidationAndResultConstructionToPresentationPlanner()
+    public void FontDialog_DelegatesInteractionStateAndAcceptanceToPresentationSession()
     {
         var source = ReadHostSource("FontDialog.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("FontDialogPlanner.BuildInitialState(");
+        source.Should().Contain("FontDialogPlanner.CreateSession(");
+        source.Should().Contain("session.InitialState");
+        source.Should().Contain("session.PlanAcceptance(FontDialogPlanner.CaptureControlState(");
+        source.Should().Contain("session.PlanVerticalAlignmentToggle(");
         source.Should().Contain("FontDialogPlanner.SizeChoices");
         source.Should().Contain("FontDialogPlanner.ColorChoices");
         source.Should().Contain("FontDialogPlanner.LigatureChoices");
         source.Should().Contain("FontDialogPlanner.NumberFormChoices");
         source.Should().Contain("FontDialogPlanner.NumberSpacingChoices");
-        source.Should().Contain("new FontDialogInput(");
-        source.Should().Contain("FontDialogPlanner.TryBuildResult(");
-        source.Should().Contain("Double strikethrough");
-        source.Should().Contain("state.DoubleStrikethrough");
-        source.Should().Contain("Content = \"Hidden\"");
-        source.Should().Contain("state.Hidden");
+        source.Should().Contain("var surface = FontDialogPlanner.Surface;");
+        source.Should().Contain("foreach (var spec in surface.Effects)");
+        source.Should().Contain("state.EffectValue(spec.Kind)");
+        source.Should().Contain("foreach (var kind in surface.Tabs[0].Fields)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(fields[spec.Kind], spec.AutomationId)");
     }
 
     [Fact]
@@ -42,12 +44,18 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().NotContain("double.TryParse(");
         source.Should().NotContain("int.TryParse(");
         source.Should().NotContain("NumberStyles.");
+        source.Should().NotContain("new FontDialogInput(");
+        source.Should().NotContain("new FontDialogControlState(");
+        source.Should().NotContain("FontDialogPlanner.TryBuildResult(");
         source.Should().NotContain("current with");
         source.Should().NotContain("FontSizePt   =");
         source.Should().NotContain("ColorHex     =");
         source.Should().NotContain("CharacterSpacingPt =");
         source.Should().NotContain("KerningMinSizePt   =");
         source.Should().NotContain("StylisticSet       =");
+        source.Should().NotContain("Title = \"Font\"");
+        source.Should().NotContain("FontRow(fontPanel, \"Font family:\"");
+        source.Should().NotContain("FontRow(advPanel, \"Character spacing (pt):\"");
         source.Should().NotContain(FontSizeValidationMessage);
         source.Should().NotContain(StylisticSetValidationMessage);
     }

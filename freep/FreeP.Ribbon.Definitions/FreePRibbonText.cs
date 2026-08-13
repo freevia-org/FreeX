@@ -9,7 +9,7 @@ internal static class FreePRibbonText
 
     public static string FileGroupLabel => Get("Ribbon_Group_File_Label");
     public static string FileGroupKeyTip => Get("Ribbon_Group_File_KeyTip");
-    public static string FileNewLabel => Get("Ribbon_Command_FileNew_Label");
+    public static string FileNewLabel => Get("Common_New");
     public static string FileNewKeyTip => Get("Ribbon_Command_FileNew_KeyTip");
     public static string FileOpenLabel => Get("Ribbon_Command_FileOpen_Label");
     public static string FileOpenKeyTip => Get("Ribbon_Command_FileOpen_KeyTip");
@@ -47,7 +47,7 @@ internal static class FreePRibbonText
     public static string FontFamilyKeyTip => Get("Ribbon_Command_FontFamily_KeyTip");
     public static string FontSizeLabel => Get("Ribbon_Command_FontSize_Label");
     public static string FontSizeKeyTip => Get("Ribbon_Command_FontSize_KeyTip");
-    public static string FontColorLabel => Get("Ribbon_Command_FontColor_Label");
+    public static string FontColorLabel => Get("Common_FontColor");
     public static string FontColorKeyTip => Get("Ribbon_Command_FontColor_KeyTip");
     public static string TextAutoFitLabel => Get("Ribbon_Command_TextAutoFit_Label");
     public static string TextAutoFitKeyTip => Get("Ribbon_Command_TextAutoFit_KeyTip");
@@ -152,7 +152,7 @@ internal static class FreePRibbonText
     public static string SlideShowSetupLabel => Get("Ribbon_Command_SlideShowSetup_Label");
     public static string SlideShowSetupKeyTip => Get("Ribbon_Command_SlideShowSetup_KeyTip");
 
-    public static string InsertTabLabel => Get("Ribbon_Tab_Insert_Label");
+    public static string InsertTabLabel => Get("Common_Insert");
     public static string InsertTabKeyTip => Get("Ribbon_Tab_Insert_KeyTip");
 
     public static string TextGroupLabel => Get("Ribbon_Group_Text_Label");
@@ -440,7 +440,7 @@ internal static class FreePRibbonText
     public static RibbonText ArrangeDistributeVerticalCommand { get; } = new("Ribbon_Command_ArrangeDistributeVertical_Label", "Ribbon_Command_ArrangeDistributeVertical_KeyTip");
 
     public static RibbonText DesignTab { get; } = new("Ribbon_Tab_Design_Label", "Ribbon_Tab_Design_KeyTip");
-    public static RibbonText ThemesGroup { get; } = new("Ribbon_Group_Themes_Label", "Ribbon_Group_Themes_KeyTip");
+    public static RibbonText ThemesGroup { get; } = new("Common_Themes", "Ribbon_Group_Themes_KeyTip");
     public static RibbonText ThemeOfficeCommand { get; } = new("Ribbon_Command_ThemeOffice_Label", "Ribbon_Command_ThemeOffice_KeyTip");
     public static RibbonText ThemeBerlinCommand { get; } = new("Ribbon_Command_ThemeBerlin_Label", "Ribbon_Command_ThemeBerlin_KeyTip");
     public static RibbonText ThemeFacetCommand { get; } = new("Ribbon_Command_ThemeFacet_Label", "Ribbon_Command_ThemeFacet_KeyTip");
@@ -732,7 +732,7 @@ internal static class FreePRibbonText
     public static RibbonText ViewGridlinesCommand { get; } = new("Ribbon_Command_ViewGridlines_Label", "Ribbon_Command_ViewGridlines_KeyTip");
     public static RibbonText ViewGuidesCommand { get; } = new("Ribbon_Command_ViewGuides_Label", "Ribbon_Command_ViewGuides_KeyTip");
     public static RibbonText ViewSelectionPaneCommand { get; } = new("Ribbon_Command_ViewSelectionPane_Label", "Ribbon_Command_ViewSelectionPane_KeyTip");
-    public static RibbonText ViewZoomGroup { get; } = new("Ribbon_Group_ViewZoom_Label", "Ribbon_Group_ViewZoom_KeyTip");
+    public static RibbonText ViewZoomGroup { get; } = new("Common_Zoom", "Ribbon_Group_ViewZoom_KeyTip");
     public static RibbonText ViewZoomCommand { get; } = new("Ribbon_Command_ViewZoom_Label", "Ribbon_Command_ViewZoom_KeyTip");
     public static RibbonText ViewFitToWindowCommand { get; } = new("Ribbon_Command_ViewFitToWindow_Label", "Ribbon_Command_ViewFitToWindow_KeyTip");
 

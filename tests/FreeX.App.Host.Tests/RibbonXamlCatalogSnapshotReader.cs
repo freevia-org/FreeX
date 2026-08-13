@@ -13,34 +13,24 @@ namespace FreeX.App.Host.Tests;
 internal static class RibbonXamlCatalogSnapshotReader
 {
     private static readonly XNamespace Presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-    private static readonly XNamespace Xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
-    private static readonly XNamespace Local = "clr-namespace:FreeX.App.Host";
+    private static readonly XNamespace RibbonWpf =
+        "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
 
     public static RibbonCatalog ReadMainWindow() => BuildCatalog(FreeXRibbon.Build());
 
     /// <summary>
-    /// The top-level ribbon tab shells (header, key tip, contextual visibility) exactly as the live
-    /// keytip router sees them: read from the <c>RibbonTabs</c> <c>TabItem</c>s in <c>MainWindow.xaml</c>.
-    /// Those tab headers survived the declarative cutover (only the group <em>content</em> was stripped),
-    /// and unlike the declarative catalog they still carry the File tab and the contextual J-prefixed key
-    /// tips that <see cref="RibbonTopLevelKeyTipRouter"/> routes. Groups are intentionally empty here.
+    /// The top-level ribbon tab shells exactly as the live keytip router sees them. MainWindow creates
+    /// these shells from the same definition, so the test projection must not reintroduce an XAML catalog.
     /// </summary>
     public static IReadOnlyList<RibbonTabDefinition> ReadMainWindowTabShells()
     {
-        var path = DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml");
-        var document = XDocument.Load(path);
-        var ribbonTabs = document
-            .Descendants(Presentation + "TabControl")
-            .Single(element => (string?)element.Attribute(Xaml + "Name") == "RibbonTabs");
-
-        return ribbonTabs
-            .Elements(Presentation + "TabItem")
+        return FreeXRibbon.Build().Tabs
             .Select(tab => new RibbonTabDefinition(
-                LocalizedXamlTestSupport.ResolveLocalizedValue((string?)tab.Attribute("Header")) ?? "",
-                (string?)tab.Attribute(Local + "RibbonMetadata.CatalogId"),
-                (string?)tab.Attribute(Xaml + "Name"),
-                (string?)tab.Attribute(Local + "RibbonTooltip.KeyTip"),
-                string.Equals((string?)tab.Attribute("Visibility"), "Collapsed", StringComparison.Ordinal),
+                tab.Header,
+                tab.Id,
+                tab.Id,
+                tab.KeyTip,
+                tab.IsContextual,
                 []))
             .ToArray();
     }
@@ -57,7 +47,7 @@ internal static class RibbonXamlCatalogSnapshotReader
             BuildCatalog(FreeXRibbon.Build()),
             document.Descendants().Attributes("Click").Count(),
             document.Descendants().Attributes("AutomationProperties.AutomationId").Count(),
-            document.Descendants().Attributes(Local + "RibbonTooltip.KeyTip").Count());
+            document.Descendants().Attributes(RibbonWpf + "RibbonTooltip.KeyTip").Count());
     }
 
     private static RibbonCatalog BuildCatalog(SharedRibbon.RibbonDefinition definition) =>
@@ -65,7 +55,7 @@ internal static class RibbonXamlCatalogSnapshotReader
 
     private static RibbonTabDefinition ConvertTab(SharedRibbon.RibbonTab tab) =>
         new(
-            tab.Header,
+            tab.Context?.Label ?? tab.Header,
             tab.Id,
             tab.Id,
             tab.KeyTip,
@@ -88,12 +78,7 @@ internal static class RibbonXamlCatalogSnapshotReader
 
     private static RibbonCommandDefinition ConvertCommand(SharedRibbon.RibbonControl control)
     {
-        // A declarative CommandId may encode its legacy click handler as "Name#HandlerName_Click"
-        // (the renderer routes these to the existing MainWindow handlers); split the two apart.
-        var rawId = control.CommandId.Value;
-        var hashIndex = rawId.IndexOf('#');
-        var commandName = hashIndex >= 0 ? rawId[..hashIndex] : rawId;
-        var clickHandler = hashIndex >= 0 ? rawId[(hashIndex + 1)..] : null;
+        var commandName = control.CommandId.Value;
         var width = control is SharedRibbon.RibbonComboBox combo ? combo.Width : null;
 
         return new RibbonCommandDefinition(
@@ -102,7 +87,7 @@ internal static class RibbonXamlCatalogSnapshotReader
             string.IsNullOrEmpty(commandName) ? null : commandName,
             control.KeyTip,
             control.TooltipDescription,
-            string.IsNullOrEmpty(clickHandler) ? null : clickHandler,
+            ClickHandler: null,
             control.Label,
             IsEnabled: null,
             IsExplicitlyDisabled: false,

@@ -35,15 +35,27 @@ public class TextSearchTests
         hits.Should().Equal((0, 3), (4, 3), (14, 3));
     }
 
-    [Fact]
-    public void FindAll_WholeWord_HonoursUnderscoreAndDigitBoundaries()
+    [Theory]
+    [InlineData("xcat")]
+    [InlineData("catx")]
+    [InlineData("_cat")]
+    [InlineData("cat_")]
+    [InlineData("9cat")]
+    [InlineData("cat9")]
+    [InlineData("\u03B2cat")]
+    [InlineData("cat\u03B2")]
+    [InlineData("\u0661cat")]
+    [InlineData("cat\u0661")]
+    public void FindAll_WholeWord_RejectsAdjacentWordCharacters(string haystack)
     {
-        // Underscore and digits are word characters, so neither of these is a whole-word "cat".
-        TextSearch.FindAll("cat_dog", "cat", matchCase: false, wholeWord: true).Should().BeEmpty();
-        TextSearch.FindAll("cat9", "cat", matchCase: false, wholeWord: true).Should().BeEmpty();
+        TextSearch.FindAll(haystack, "cat", matchCase: false, wholeWord: true).Should().BeEmpty();
+    }
 
-        // Punctuation is a boundary, so this one matches.
-        TextSearch.FindAll("(cat)", "cat", matchCase: false, wholeWord: true).Should().Equal((1, 3));
+    [Fact]
+    public void FindAll_WholeWord_AcceptsPunctuationBoundaries()
+    {
+        TextSearch.FindAll("cat,cat.cat/cat", "cat", matchCase: false, wholeWord: true)
+            .Should().Equal((0, 3), (4, 3), (8, 3), (12, 3));
     }
 
     [Fact]
@@ -79,6 +91,9 @@ public class TextSearchTests
     [InlineData("xcat", 1, 3, false)]    // word char before
     [InlineData("catx", 0, 3, false)]    // word char after
     [InlineData("_cat", 1, 3, false)]    // underscore before
+    [InlineData("\u03B2cat", 1, 3, false)] // Unicode letter before
+    [InlineData("cat\u0661", 0, 3, false)] // Unicode digit after
+    [InlineData("\u2014cat\u2014", 1, 3, true)] // Unicode punctuation boundaries
     public void IsWholeWordMatch_RespectsBoundaries(string text, int start, int length, bool expected)
     {
         TextSearch.IsWholeWordMatch(text, start, length).Should().Be(expected);

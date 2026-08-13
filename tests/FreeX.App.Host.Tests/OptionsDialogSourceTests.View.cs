@@ -18,12 +18,9 @@ public sealed partial class OptionsDialogSourceTests
         xaml.Should().Contain("x:Name=\"OptFormulaBarExpanded\"");
         source.Should().Contain("OptShowFormulaBar.IsChecked = _opts.ShowFormulaBar");
         source.Should().Contain("OptFormulaBarExpanded.IsChecked = _opts.FormulaBarExpanded");
-        // R123: OkBtn_Click now computes each edited value into a local `editedX` before deciding
-        // (against _opts) whether to apply it onto the freshly-reloaded `opts` -- see
-        // FreeXOptionsDialogMultiWindowSaveTests -- so the assignment is no longer a plain
-        // object-initializer line.
-        source.Should().Contain("editedShowFormulaBar = OptShowFormulaBar.IsChecked == true");
-        source.Should().Contain("editedFormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
+        source.Should().Contain("OptShowFormulaBar.IsChecked == true,");
+        source.Should().Contain("formulaBarExpanded: OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
+        source.Should().Contain("var saveResult = _dialogSession.Commit(");
     }
 
     [Fact]
@@ -38,7 +35,7 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("private void ShowFormulaBar_Changed(object sender, RoutedEventArgs e)");
         source.Should().Contain("private void UpdateFormulaBarExpandedState()");
         source.Should().Contain("OptFormulaBarExpanded.IsEnabled = OptShowFormulaBar.IsChecked == true;");
-        source.Should().Contain("editedFormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
+        source.Should().Contain("formulaBarExpanded: OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
     }
 
     [Fact]
@@ -46,7 +43,7 @@ public sealed partial class OptionsDialogSourceTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new FreeXOptions
+            var dialog = new OptionsDialog(new AppOptions
             {
                 ShowFormulaBar = false,
                 FormulaBarExpanded = true

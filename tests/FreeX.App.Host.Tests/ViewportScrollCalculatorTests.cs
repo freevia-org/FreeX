@@ -6,21 +6,21 @@ using Xunit.Abstractions;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
+public sealed class WorkbookViewportScrollPlannerTests(ITestOutputHelper output)
 {
     [Fact]
     public void CalculateViewportOrigin_DoesNotScrollToFrozenPaneBoundary()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1") { FrozenRows = 1, FrozenCols = 1 };
 
-        ViewportScrollCalculator.CalculateViewportOrigin(sheet, verticalScrollValue: 1, horizontalScrollValue: 1)
+        WorkbookViewportScrollPlanner.CalculateViewportOrigin(sheet, verticalScrollValue: 1, horizontalScrollValue: 1)
             .Should().Be((2u, 2u));
     }
 
     [Fact]
     public void CalculateScrollbarArrowSmallIncrement_ExpandsAndMovesAtMaximum()
     {
-        ViewportScrollCalculator.CalculateScrollbarArrowSmallIncrement(
+        WorkbookViewportScrollPlanner.CalculateScrollbarArrowSmallIncrement(
                 currentValue: 40,
                 currentMaximum: 40,
                 smallChange: 1,
@@ -31,7 +31,7 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
     [Fact]
     public void CalculateWheelScroll_ExtendsForwardAtCurrentMaximumWithoutOvershootingViewportOrigin()
     {
-        ViewportScrollCalculator.CalculateWheelScroll(
+        WorkbookViewportScrollPlanner.CalculateWheelScroll(
                 currentValue: 40,
                 currentMaximum: 40,
                 wheelNotches: -1,
@@ -44,7 +44,7 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
     [Fact]
     public void CalculateDragAutoScroll_ExtendsForwardAtCurrentMaximumWithoutOvershootingViewportOrigin()
     {
-        ViewportScrollCalculator.CalculateDragAutoScroll(
+        WorkbookViewportScrollPlanner.CalculateDragAutoScroll(
                 currentValue: 40,
                 currentMaximum: 40,
                 direction: 1,
@@ -57,7 +57,7 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
     [Fact]
     public void CalculateDragAutoScroll_MovesBackwardWithoutChangingMaximum()
     {
-        ViewportScrollCalculator.CalculateDragAutoScroll(
+        WorkbookViewportScrollPlanner.CalculateDragAutoScroll(
                 currentValue: 40,
                 currentMaximum: 80,
                 direction: -1,
@@ -70,9 +70,9 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
     [Fact]
     public void CalculateWheelScroll_UsesNormalizedTouchpadDeltaForSmallVerticalMovement()
     {
-        var notches = ViewportScrollCalculator.NormalizeWheelNotches(-30);
+        var notches = WorkbookViewportScrollPlanner.NormalizeWheelNotches(-30);
 
-        ViewportScrollCalculator.CalculateWheelScroll(
+        WorkbookViewportScrollPlanner.CalculateWheelScroll(
                 currentValue: 1,
                 currentMaximum: 40,
                 wheelNotches: notches,
@@ -88,9 +88,9 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
-        source.Should().Contain("ViewportScrollCalculator.NormalizeWheelNotches(e.Delta)");
-        source.Should().Contain("ViewportScrollCalculator.CalculateWheelScroll");
-        ViewportScrollCalculator.NormalizeWheelNotches(240)
+        source.Should().Contain("WorkbookViewportScrollPlanner.NormalizeWheelNotches(e.Delta)");
+        source.Should().Contain("WorkbookViewportScrollPlanner.CalculateWheelScroll");
+        WorkbookViewportScrollPlanner.NormalizeWheelNotches(240)
             .Should().Be(WorkbookViewportScrollPlanner.NormalizeWheelNotches(240),
                 "the WPF route must remain a thin facade over the shared wheel authority");
     }
@@ -123,7 +123,7 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
             source.IndexOf("private void EnsureCellVisible", StringComparison.Ordinal)..
             source.IndexOf("// \u2500\u2500 Navigation helpers", StringComparison.Ordinal)];
 
-        ensureCellVisible.Should().Contain("ViewportScrollCalculator.PlanCellReveal(");
+        ensureCellVisible.Should().Contain("WorkbookViewportScrollPlanner.PlanCellReveal(");
         ensureCellVisible.Should().Contain("VerticalScroll.Maximum = plan.Vertical.Maximum;");
         ensureCellVisible.Should().Contain("HorizontalScroll.Maximum = plan.Horizontal.Maximum;");
         ensureCellVisible.Should().NotContain("GetScrollableRowWindow");
@@ -140,13 +140,13 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
     [InlineData(240, 2)]
     public void NormalizeWheelNotches_PreservesHighResolutionTouchpadDeltas(int delta, int expected)
     {
-        ViewportScrollCalculator.NormalizeWheelNotches(delta).Should().Be(expected);
+        WorkbookViewportScrollPlanner.NormalizeWheelNotches(delta).Should().Be(expected);
     }
 
     [Fact]
     public void CalculateScrollbarMaximumForUsedRange_ReturnsToUsedRangeWhenScrolledBack()
     {
-        ViewportScrollCalculator.CalculateScrollbarMaximumForUsedRange(
+        WorkbookViewportScrollPlanner.CalculateScrollbarMaximumForUsedRange(
                 usedMax: 20,
                 visibleSpan: 40,
                 currentScrollValue: 1,

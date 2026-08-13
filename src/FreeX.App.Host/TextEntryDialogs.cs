@@ -78,7 +78,7 @@ public class TextEntryDialog : Window
         string.Concat(title.Where(char.IsLetterOrDigit)) + "TextBox";
 
     private static string CreateHelpText(string label) =>
-        $"Enter {CreateAutomationName(label).ToLowerInvariant()}.";
+        UiText.Format("TextEntry_EnterValueHelpTextFormat", CreateAutomationName(label));
 
     private void FocusInitialKeyboardTarget()
     {

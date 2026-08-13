@@ -47,11 +47,11 @@ internal static class XlsxNativeXmlMerger
 
         var existingChildrenByKey = targetElement
             .Elements()
-            .GroupBy(ElementIdentityKey, StringComparer.Ordinal)
+            .GroupBy(GetElementIdentityKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         foreach (var sourceChild in sourceElement.Elements())
         {
-            var key = ElementIdentityKey(sourceChild);
+            var key = GetElementIdentityKey(sourceChild);
             if (existingChildrenByKey.TryGetValue(key, out var targetChild))
             {
                 // Children are merged with no modeled-attribute exclusions, as before: the exclusion
@@ -134,7 +134,7 @@ internal static class XlsxNativeXmlMerger
         return clone;
     }
 
-    private static string ElementIdentityKey(XElement element)
+    internal static string GetElementIdentityKey(XElement element)
     {
         var address = element.Attribute("pane")?.Value
             ?? element.Attribute("sqref")?.Value

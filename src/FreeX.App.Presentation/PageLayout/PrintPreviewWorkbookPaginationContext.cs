@@ -161,8 +161,11 @@ public sealed class PrintPreviewWorkbookPaginationContext
         var entry = _entries[pageIndex];
         if (entry.Info.Kind == PrintPreviewWorkbookPageKind.Worksheet)
         {
-            var layout = BuildPage(pageIndex);
-            return layout is null ? null : PrintPreviewInstructionBuilder.Build(layout);
+            var plan = entry.SheetContext?.BuildContentPlan(
+                entry.Info.SheetPageIndex,
+                entry.Info.PrintedPageNumber,
+                PageCount);
+            return plan is null ? null : PrintPreviewInstructionBuilder.Build(plan);
         }
 
         var metrics = entry.Metrics ?? throw new InvalidOperationException("Comment page metrics are missing.");

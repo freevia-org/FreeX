@@ -5,6 +5,28 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class FindReplaceDialogPlannerTests
 {
     [Fact]
+    public void Surface_ProvidesSharedFieldsActionsMetricsAndAutomationNames()
+    {
+        var surface = FindReplaceDialogPlanner.Surface;
+
+        surface.Title.Should().Be("Find & Replace");
+        surface.Fields.Select(field => field.Kind).Should().Equal(
+            FindReplaceDialogFieldKind.Find,
+            FindReplaceDialogFieldKind.Replace);
+        surface.Actions.Select(action => action.Kind).Should().Equal(
+            FindReplaceDialogActionKind.FindNext,
+            FindReplaceDialogActionKind.Replace,
+            FindReplaceDialogActionKind.ReplaceAll,
+            FindReplaceDialogActionKind.Close);
+        surface.Options.Should().BeSameAs(FindReplaceDialogPlanner.OptionChoices);
+        surface.Metrics.WindowWidth.Should().Be(420);
+        surface.Fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.AutomationId));
+        surface.Options.Should().OnlyContain(option => !string.IsNullOrWhiteSpace(option.AutomationId));
+        surface.Actions.Should().OnlyContain(action => !string.IsNullOrWhiteSpace(action.AutomationId));
+        surface.GoToButtonAutomationId.Should().Be("FindReplaceGoToButton");
+    }
+
+    [Fact]
     public void OptionChoices_ExposeWordFindReplaceOptionsInDisplayOrder()
     {
         FindReplaceDialogPlanner.OptionChoices.Select(choice => choice.Kind)
@@ -240,11 +262,99 @@ public sealed class FindReplaceDialogPlannerTests
         match.Should().Be(new FindReplaceMatch(0, 6, 3));
     }
 
+    [Theory]
+    [InlineData("the", 0, 0, 0, 0, 3)]
+    [InlineData("the", 0, 3, 1, 11, 3)]
+    [InlineData("quick", 1, 0, 0, 4, 5)]
+    [InlineData("QUICK", 0, 0, 0, 4, 5)]
+    public void FindNextMatch_DefaultOptionsFindAndWrapCaseInsensitively(
+        string query,
+        int fromBlock,
+        int fromOffset,
+        int expectedBlock,
+        int expectedStart,
+        int expectedLength)
+    {
+        var match = FindReplaceDialogPlanner.FindNextMatch(
+            BuildTwoParagraphDocument(),
+            query,
+            new FindReplaceSearchOptions(),
+            fromBlock,
+            fromOffset);
+
+        match.Should().Be(new FindReplaceMatch(expectedBlock, expectedStart, expectedLength));
+    }
+
+    [Fact]
+    public void FindNextMatch_ReturnsNullWhenTextIsAbsent()
+    {
+        FindReplaceDialogPlanner.FindNextMatch(
+                BuildTwoParagraphDocument(),
+                "zebra",
+                new FindReplaceSearchOptions(),
+                fromBlock: 0,
+                fromOffset: 0)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildGoToTargets_ProjectsStartEndHeadingsAndBookmarksInParityOrder()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Title") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Body") { BookmarkName = "BodyTarget" });
+
+        var targets = FindReplaceDialogPlanner.BuildGoToTargets(doc);
+
+        targets.Select(target => target.Kind).Should().Equal(
+            FindReplaceGoToTargetKind.DocumentStart,
+            FindReplaceGoToTargetKind.DocumentEnd,
+            FindReplaceGoToTargetKind.Heading,
+            FindReplaceGoToTargetKind.Bookmark);
+        targets.Select(target => target.Label).Should().Equal(
+            "Document start",
+            "Document end",
+            "  Title",
+            "Bookmark: BodyTarget");
+        targets.Select(target => target.BlockIndex).Should().Equal(0, 1, 0, 1);
+    }
+
+    [Theory]
+    [InlineData(FindReplaceGoToTargetKind.DocumentStart, 99, 0, "Document start")]
+    [InlineData(FindReplaceGoToTargetKind.DocumentEnd, 0, 3, "Document end")]
+    [InlineData(FindReplaceGoToTargetKind.Heading, 2, 2, "Heading")]
+    [InlineData(FindReplaceGoToTargetKind.Bookmark, 99, 3, "Bookmark: Last")]
+    public void PlanGoTo_ResolvesPortableBlockAndStatus(
+        FindReplaceGoToTargetKind kind,
+        int requestedBlock,
+        int expectedBlock,
+        string label)
+    {
+        var plan = FindReplaceDialogPlanner.PlanGoTo(
+            new FindReplaceGoToTarget(kind, requestedBlock, $"  {label}  "),
+            blockCount: 4);
+
+        plan.Should().NotBeNull();
+        plan!.BlockIndex.Should().Be(expectedBlock);
+        plan.Label.Should().Be(label);
+        plan.StatusText.Should().Be($"Jumped to {label}.");
+    }
+
     private static TextDocument BuildSampleDoc(string text)
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         doc.Blocks.Add(new Paragraph { Runs = { new Run(text) } });
+        return doc;
+    }
+
+    private static TextDocument BuildTwoParagraphDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("the quick brown fox"));
+        doc.Blocks.Add(new Paragraph("jumps over the lazy dog"));
         return doc;
     }
 }

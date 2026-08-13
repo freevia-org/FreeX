@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -17,8 +18,10 @@ namespace FreeP.App.Host;
 /// OK calls <see cref="EditingSession.SetShapeHyperlink"/> (undoable).
 /// Cancel discards.
 /// </summary>
-public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly HyperlinkDialogSession _session;
+
     // ── Controls ──────────────────────────────────────────────────────────────────
 
     private readonly RadioButton _urlRadio;
@@ -33,7 +36,7 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     /// <summary>
     /// The hyperlink the user confirmed, or null if they cancelled or selected "none".
     /// </summary>
-    public Hyperlink? Result { get; private set; }
+    public Hyperlink? Result => _session.Result;
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
@@ -50,12 +53,16 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     public HyperlinkDialog(HyperlinkDialogRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        _session = new HyperlinkDialogSession(request);
+        var surface = _session.Surface;
 
-        Title                 = "Insert Hyperlink";
+        Title                 = surface.Title;
         Width                 = 420;
         SizeToContent         = SizeToContent.Height;
         ResizeMode            = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        AutomationProperties.SetName(this, surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
 
         // ── Layout grid ────────────────────────────────────────────────────────
 
@@ -70,8 +77,19 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         // Radio buttons for link type
-        _urlRadio   = new RadioButton { Content = "Web address:", IsChecked = true, Margin = new Thickness(0, 0, 0, 4) };
-        _slideRadio = new RadioButton { Content = "Slide in this presentation:", Margin = new Thickness(0, 0, 0, 8) };
+        _urlRadio = new RadioButton
+        {
+            Content = surface.TargetLabel(HyperlinkDialogTargetKind.Url),
+            IsChecked = true,
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+        _slideRadio = new RadioButton
+        {
+            Content = surface.TargetLabel(HyperlinkDialogTargetKind.Slide),
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        PresentationDialogControlAdapter.ApplySemantic(_urlRadio, surface.TargetField(HyperlinkDialogTargetKind.Url));
+        PresentationDialogControlAdapter.ApplySemantic(_slideRadio, surface.TargetField(HyperlinkDialogTargetKind.Slide));
 
         var radioPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
         radioPanel.Children.Add(_urlRadio);
@@ -81,48 +99,65 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.Children.Add(radioPanel);
 
         // URL box
-        var urlLabel = new Label { Content = "URL:", VerticalAlignment = VerticalAlignment.Center };
+        var urlField = surface.Field(HyperlinkDialogField.Url);
+        var urlLabel = new Label { Content = urlField.Label, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetRow(urlLabel, 1); Grid.SetColumn(urlLabel, 0);
         grid.Children.Add(urlLabel);
 
         _urlBox = new TextBox { Margin = new Thickness(0, 0, 0, 4), VerticalAlignment = VerticalAlignment.Center };
+        PresentationDialogControlAdapter.ApplySemantic(_urlBox, urlField);
         Grid.SetRow(_urlBox, 1); Grid.SetColumn(_urlBox, 1);
         grid.Children.Add(_urlBox);
 
         // Slide ComboBox
-        var slideLabel = new Label { Content = "Target slide:", VerticalAlignment = VerticalAlignment.Center };
+        var slideField = surface.Field(HyperlinkDialogField.Slide);
+        var slideLabel = new Label { Content = slideField.Label, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetRow(slideLabel, 2); Grid.SetColumn(slideLabel, 0);
         grid.Children.Add(slideLabel);
 
         _slideCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 4), VerticalAlignment = VerticalAlignment.Center };
-        foreach (var option in request.SlideOptions)
+        PresentationDialogControlAdapter.ApplySemantic(_slideCombo, slideField);
+        foreach (var option in _session.SlideOptions)
         {
             _slideCombo.Items.Add(option);
         }
-        _slideCombo.SelectedIndex = request.SelectedSlideIndex;
+        _slideCombo.SelectedIndex = _session.State.SelectedSlideIndex;
         Grid.SetRow(_slideCombo, 2); Grid.SetColumn(_slideCombo, 1);
         grid.Children.Add(_slideCombo);
 
         // Tooltip box
-        var tooltipLabel = new Label { Content = "Tooltip:", VerticalAlignment = VerticalAlignment.Center };
+        var tooltipField = surface.Field(HyperlinkDialogField.Tooltip);
+        var tooltipLabel = new Label { Content = tooltipField.Label, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetRow(tooltipLabel, 3); Grid.SetColumn(tooltipLabel, 0);
         grid.Children.Add(tooltipLabel);
 
         _tooltipBox = new TextBox { Margin = new Thickness(0, 0, 0, 8), VerticalAlignment = VerticalAlignment.Center };
+        PresentationDialogControlAdapter.ApplySemantic(_tooltipBox, tooltipField);
         Grid.SetRow(_tooltipBox, 3); Grid.SetColumn(_tooltipBox, 1);
         grid.Children.Add(_tooltipBox);
 
         _validationText = new TextBlock
         {
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xB7, 0x47, 0x2A)),
+            Foreground = FreePBrushes.Accent,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 8),
         };
+        PresentationDialogControlAdapter.ApplySemantic(_validationText, surface.Field(HyperlinkDialogField.Validation));
         Grid.SetRow(_validationText, 4);
         Grid.SetColumnSpan(_validationText, 2);
         grid.Children.Add(_validationText);
 
-        var buttonRow = DialogButtonRowFactory.Create(OnOk, buttonWidth: 75);
+        var buttonRow = DialogButtonRowFactory.Create(
+            OnOk,
+            buttonWidth: 75,
+            acceptContent: surface.AcceptLabel,
+            cancelContent: surface.CancelLabel);
+        ApplyAction(
+            (Button)buttonRow.Children[0],
+            surface.Action(HyperlinkDialogAction.Accept));
+        ApplyAction(
+            (Button)buttonRow.Children[1],
+            surface.Action(HyperlinkDialogAction.Cancel));
         Grid.SetRow(buttonRow, 5); Grid.SetColumnSpan(buttonRow, 2);
         grid.Children.Add(buttonRow);
 
@@ -130,64 +165,51 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         // ── Event wiring ────────────────────────────────────────────────────────
 
-        _urlRadio.Checked   += (_, _) => UpdateEnabled();
-        _slideRadio.Checked += (_, _) => UpdateEnabled();
-
         // ── Pre-fill from current hyperlink ─────────────────────────────────────
 
-        var initial = request.InitialState;
-        _urlRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Url;
-        _slideRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Slide;
-        _urlBox.Text = initial.UrlText;
-        _tooltipBox.Text = initial.TooltipText;
+        var state = _session.State;
+        RenderInputState(state);
 
-        UpdateEnabled();
+        _urlRadio.Checked += (_, _) => RenderTargetState(
+            _session.SelectTarget(HyperlinkDialogTargetKind.Url));
+        _slideRadio.Checked += (_, _) => RenderTargetState(
+            _session.SelectTarget(HyperlinkDialogTargetKind.Slide));
+        _urlBox.TextChanged += (_, _) => _session.SetUrlText(_urlBox.Text);
+        _slideCombo.SelectionChanged += (_, _) => _session.SelectSlide(_slideCombo.SelectedIndex);
+        _tooltipBox.TextChanged += (_, _) => _session.SetTooltipText(_tooltipBox.Text);
+
     }
 
     // ── Enabled state ─────────────────────────────────────────────────────────────
 
-    private void UpdateEnabled()
+    private void RenderTargetState(HyperlinkDialogViewState state)
     {
-        bool isUrl = _urlRadio.IsChecked == true;
-        _urlBox.IsEnabled    = isUrl;
-        _slideCombo.IsEnabled = !isUrl;
+        _urlBox.IsEnabled = state.IsUrlInputEnabled;
+        _slideCombo.IsEnabled = state.IsSlideInputEnabled;
+    }
+
+    private void RenderInputState(HyperlinkDialogViewState state)
+    {
+        _urlRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Url;
+        _slideRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Slide;
+        _urlBox.Text = state.UrlText;
+        _slideCombo.SelectedIndex = state.SelectedSlideIndex;
+        _tooltipBox.Text = state.TooltipText;
+        RenderTargetState(state);
     }
 
     // ── OK handler ────────────────────────────────────────────────────────────────
-
-    internal bool ApplyForVisualEvidence(
-        HyperlinkDialogTargetKind targetKind,
-        string url,
-        int selectedSlideIndex,
-        string tooltip)
-    {
-        _urlRadio.IsChecked = targetKind == HyperlinkDialogTargetKind.Url;
-        _slideRadio.IsChecked = targetKind == HyperlinkDialogTargetKind.Slide;
-        _urlBox.Text = url;
-        _slideCombo.SelectedIndex = selectedSlideIndex;
-        _tooltipBox.Text = tooltip;
-        UpdateEnabled();
-        return Apply(showValidationDialog: false);
-    }
 
     private void OnOk() => Apply(showValidationDialog: true);
 
     private bool Apply(bool showValidationDialog)
     {
-        var targetKind = _urlRadio.IsChecked == true
-            ? HyperlinkDialogTargetKind.Url
-            : HyperlinkDialogTargetKind.Slide;
-        var selectedSlideId = (_slideCombo.SelectedItem as HyperlinkDialogSlideOption)?.Id;
-        var plan = HyperlinkDialogPlanner.BuildResult(
-            targetKind,
-            _urlBox.Text,
-            selectedSlideId,
-            _tooltipBox.Text);
+        var plan = _session.TryAccept();
 
         if (!plan.ShouldApply)
         {
             var validation = plan.Validation!;
-            _validationText.Text = validation.Message;
+            _validationText.Text = _session.State.ValidationText;
             if (showValidationDialog)
                 DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption);
             FocusField(validation.FocusField);
@@ -195,7 +217,6 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         }
 
         _validationText.Text = string.Empty;
-        Result = plan.Result;
         if (IsLoaded)
             DialogResult = true;
         return true;
@@ -207,6 +228,14 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             DialogFocus.FocusAndSelect(_urlBox);
         else if (field == HyperlinkDialogField.Slide)
             _slideCombo.Focus();
+    }
+
+    private static void ApplyAction(
+        DependencyObject control,
+        PresentationDialogActionPlan<HyperlinkDialogAction> action)
+    {
+        AutomationProperties.SetName(control, action.AccessibleName);
+        AutomationProperties.SetAutomationId(control, action.AutomationId);
     }
 
     // ── Helper record ─────────────────────────────────────────────────────────────

@@ -156,4 +156,29 @@ public static class PresentationViewZoomPlanner
         state.Mode == PresentationViewZoomMode.FitToWindow
             ? 1.0
             : NormalizeZoomPercent(state.ZoomPercent) / 100.0;
+
+    public static SlideTransformCore PlanStageTransform(
+        double renderWidth,
+        double renderHeight,
+        double slideWidthDip,
+        double slideHeightDip,
+        PresentationViewZoomState state)
+    {
+        var fit = SlideTransformCore.Compute(
+            renderWidth,
+            renderHeight,
+            slideWidthDip,
+            slideHeightDip);
+        double multiplier = StageScaleMultiplierFor(state);
+        if (Math.Abs(multiplier - 1.0) < 0.0001)
+            return fit;
+
+        double scale = fit.Scale * multiplier;
+        return new SlideTransformCore(
+            scale,
+            (renderWidth - slideWidthDip * scale) / 2.0,
+            (renderHeight - slideHeightDip * scale) / 2.0,
+            slideWidthDip,
+            slideHeightDip);
+    }
 }

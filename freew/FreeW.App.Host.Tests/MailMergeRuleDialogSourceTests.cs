@@ -10,11 +10,21 @@ public sealed class MailMergeRuleDialogSourceTests
         var source = File.ReadAllText(
             Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
 
-        source.Should().Contain("MailMergeRuleDialogPlanner.GetConditionOperators()");
-        source.Should().Contain("MailMergeRuleDialogPlanner.GetConditionOperator(");
-        source.Should().Contain("MailMergeRuleDialogPlanner.IsComparisonValueEnabled(");
-        source.Should().Contain("MailMergeRuleDialogPlanner.CreateIfResult(");
-        source.Should().Contain("MailMergeRuleDialogPlanner.CreateConditionResult(");
+        source.Should().Contain("new MailMergeRuleConditionDialogSession(request.FieldNames)");
+        source.Should().Contain("session.ConditionOperators");
+        source.Should().Contain("session.SelectOperator(opCombo.SelectedIndex)");
+        source.Should().Contain("session.IsComparisonValueEnabled");
+        source.Should().Contain("session.AcceptIf(");
+        source.Should().Contain("session.AcceptCondition(");
+        source.Should().Contain("new MailMergeRuleNameValueDialogSession()");
+        source.Should().Contain("session.Accept(nameBox.Text, valueBox.Text)");
+        source.Should().Contain("MailMergeRuleDialogPlanner.CreateRequest(");
+        source.Should().Contain("session.Data?.Header,");
+        source.Should().Contain("UiText.Get);");
+        source.Should().Contain("MailMergeRuleAuthoringWorkflow.RunAsync(");
+        source.Should().Contain("ShowMergeRuleDialog(Window.GetWindow(editor), dialogRequest)");
+        source.Should().NotContain("MailMergeRuleAuthoringPlanner.CreateIfPlan(");
+        source.Should().NotContain("MailMergeRuleAuthoringPlanner.CreateConditionPlan(");
         source.Should().NotContain("private static readonly (MergeConditionOperator Op, string Label)[] ConditionOperators");
         source.Should().NotContain("private sealed record MergeRuleIfResult");
         source.Should().NotContain("private sealed record MergeRuleCondResult");

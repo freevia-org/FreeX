@@ -13,6 +13,30 @@ public readonly record struct FormulaPointModeSelection(
     string SheetName,
     GridRange Range);
 
+public enum FormulaPointModeSelectionMode
+{
+    Replace,
+    Append,
+}
+
+/// <summary>
+/// Host-neutral selection plan prepared for the workbook that owns the formula edit. The owner
+/// receives the already-normalized external workbook qualifier and only applies the text edit.
+/// </summary>
+public readonly record struct FormulaPointModeEditSelection(
+    string SheetName,
+    GridRange Range,
+    string? ExternalWorkbookName,
+    FormulaPointModeSelectionMode Mode,
+    bool ExtendSelection);
+
+public enum FormulaPointModeCommand
+{
+    Commit,
+    Cancel,
+    CycleReference,
+}
+
 /// <summary>
 /// Host-neutral surface used by WPF and Avalonia to route a point-mode gesture to the window
 /// that owns the formula edit. The source window remains responsible for painting its selection;
@@ -24,10 +48,7 @@ public interface IFormulaPointModeWorkbookWindow
     string WorkbookName { get; }
     bool HasActiveFormulaPointMode { get; }
 
-    bool AcceptFormulaPointModeSelection(
-        FormulaPointModeSelection selection,
-        bool append,
-        bool extendSelection);
+    bool AcceptFormulaPointModeSelection(FormulaPointModeEditSelection selection);
 
     void ShowFormulaPointModeSourceSelection(GridRange range);
 
@@ -45,6 +66,28 @@ public interface IFormulaPointModeWorkbookWindow
 /// </summary>
 public static class FormulaPointModeWorkbookResolver
 {
+    public static bool TryCreateSelection(
+        Workbook workbook,
+        GridRange range,
+        out FormulaPointModeSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+
+        var sheet = workbook.GetSheet(range.Start.Sheet);
+        if (sheet is null)
+        {
+            selection = default;
+            return false;
+        }
+
+        selection = new FormulaPointModeSelection(
+            workbook.Id,
+            workbook.Name,
+            sheet.Name,
+            range);
+        return true;
+    }
+
     public static IFormulaPointModeWorkbookWindow? ResolveOwner(
         IEnumerable<IFormulaPointModeWorkbookWindow> windows,
         IFormulaPointModeWorkbookWindow sourceWindow)
@@ -70,25 +113,34 @@ public static class FormulaPointModeWorkbookResolver
         if (owner is null)
             return false;
 
-        var accepted = owner.AcceptFormulaPointModeSelection(selection, append, extendSelection);
+        var editSelection = new FormulaPointModeEditSelection(
+            selection.SheetName,
+            selection.Range,
+            selection.WorkbookId == owner.DocumentId ? null : selection.WorkbookName,
+            append ? FormulaPointModeSelectionMode.Append : FormulaPointModeSelectionMode.Replace,
+            extendSelection);
+        var accepted = owner.AcceptFormulaPointModeSelection(editSelection);
         if (accepted && !ReferenceEquals(owner, sourceWindow))
             sourceWindow.ShowFormulaPointModeSourceSelection(selection.Range);
 
         return accepted;
     }
 
-    public static bool TryRouteCommit(
+    public static bool TryRouteCommand(
         IEnumerable<IFormulaPointModeWorkbookWindow> windows,
-        IFormulaPointModeWorkbookWindow sourceWindow) =>
-        ResolveOwner(windows, sourceWindow)?.CommitOwnedFormulaPointModeEdit() == true;
+        IFormulaPointModeWorkbookWindow sourceWindow,
+        FormulaPointModeCommand command)
+    {
+        var owner = ResolveOwner(windows, sourceWindow);
+        if (owner is null)
+            return false;
 
-    public static bool TryRouteCancel(
-        IEnumerable<IFormulaPointModeWorkbookWindow> windows,
-        IFormulaPointModeWorkbookWindow sourceWindow) =>
-        ResolveOwner(windows, sourceWindow)?.CancelOwnedFormulaPointModeEdit() == true;
-
-    public static bool TryRouteReferenceCycle(
-        IEnumerable<IFormulaPointModeWorkbookWindow> windows,
-        IFormulaPointModeWorkbookWindow sourceWindow) =>
-        ResolveOwner(windows, sourceWindow)?.CycleOwnedFormulaPointModeReference() == true;
+        return command switch
+        {
+            FormulaPointModeCommand.Commit => owner.CommitOwnedFormulaPointModeEdit(),
+            FormulaPointModeCommand.Cancel => owner.CancelOwnedFormulaPointModeEdit(),
+            FormulaPointModeCommand.CycleReference => owner.CycleOwnedFormulaPointModeReference(),
+            _ => false,
+        };
+    }
 }

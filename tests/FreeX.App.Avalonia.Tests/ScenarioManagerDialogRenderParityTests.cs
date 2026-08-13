@@ -12,12 +12,9 @@ public sealed class ScenarioManagerDialogRenderParityTests
     [Fact]
     public async Task ScenarioManager_CapturesCanonicalFrameWithWpfButtonSurfaceAndNoBottomClip()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-scenario-manager-render-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-scenario-manager-render-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -57,10 +54,6 @@ public sealed class ScenarioManagerDialogRenderParityTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
         }
     }
 
@@ -109,16 +102,4 @@ public sealed class ScenarioManagerDialogRenderParityTests
         return false;
     }
 
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
-        }
-        catch (IOException)
-        {
-            // The capture writer may still be releasing a file on a slower host.
-        }
-    }
 }

@@ -21,6 +21,14 @@ public sealed record HyphenationOptionsDialogResult(
     int ConsecutiveLimit,
     bool HyphenateCaps);
 
+public enum HyphenationOptionsDialogField
+{
+    Automatic,
+    Zone,
+    ConsecutiveLimit,
+    HyphenateCaps,
+}
+
 public static class HyphenationOptionsDialogPlanner
 {
     public const string Title = "Hyphenation";
@@ -30,6 +38,23 @@ public static class HyphenationOptionsDialogPlanner
     public const string HyphenateCapsLabel = "Hyphenate words in CAPS";
     public const string ValidationMessage =
         "Enter a non-negative hyphenation zone and a non-negative consecutive-hyphen limit (0 = no limit).";
+    public const string AutomationId = "HyphenationOptionsDialog";
+    public const string AutomaticAutomationId = "HyphenationAutomatic";
+    public const string ZoneAutomationId = "HyphenationZone";
+    public const string ConsecutiveLimitAutomationId = "HyphenationConsecutiveLimit";
+    public const string HyphenateCapsAutomationId = "HyphenationCaps";
+
+    public static DialogSurfaceSpec<HyphenationOptionsDialogField> Surface { get; } = new(
+        Title,
+        AutomationId,
+        Title,
+        [
+            new(HyphenationOptionsDialogField.Automatic, AutomaticLabel, AutomaticAutomationId, "Automatic hyphenation"),
+            new(HyphenationOptionsDialogField.Zone, ZoneLabel, ZoneAutomationId, "Hyphenation zone"),
+            new(HyphenationOptionsDialogField.ConsecutiveLimit, ConsecutiveLimitLabel, ConsecutiveLimitAutomationId, "Consecutive hyphen limit"),
+            new(HyphenationOptionsDialogField.HyphenateCaps, HyphenateCapsLabel, HyphenateCapsAutomationId, "Hyphenate words in capitals"),
+        ],
+        ValidationAutomationId: "HyphenationValidationMessage");
 
     public static HyphenationOptionsInitialState BuildInitialState(PageSettings page, CultureInfo culture)
     {
@@ -38,8 +63,8 @@ public static class HyphenationOptionsDialogPlanner
 
         return new HyphenationOptionsInitialState(
             AutoHyphenation: page.AutoHyphenation,
-            ZoneText: FormatNumber(page.HyphenationZonePt, culture),
-            ConsecutiveLimitText: FormatNumber(page.ConsecutiveHyphenLimit, culture),
+            ZoneText: DialogNumericTextPolicy.FormatPoints(page.HyphenationZonePt, culture),
+            ConsecutiveLimitText: DialogNumericTextPolicy.FormatPoints(page.ConsecutiveHyphenLimit, culture),
             HyphenateCaps: !page.DoNotHyphenateCaps);
     }
 
@@ -55,8 +80,8 @@ public static class HyphenationOptionsDialogPlanner
         result = null;
         errorMessage = null;
 
-        if (!TryParseNonNegative(input.ZoneText, culture, out var zone) ||
-            !TryParseNonNegative(input.ConsecutiveLimitText, culture, out var limitValue))
+        if (!DialogNumericTextPolicy.TryParseNonNegativeDouble(input.ZoneText, culture, out var zone) ||
+            !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.ConsecutiveLimitText, culture, out var limitValue))
         {
             errorMessage = ValidationMessage;
             return false;
@@ -70,15 +95,4 @@ public static class HyphenationOptionsDialogPlanner
         return true;
     }
 
-    public static string FormatNumber(double value, CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-        return value.ToString("0.##", culture);
-    }
-
-    private static bool TryParseNonNegative(string? text, CultureInfo culture, out double value)
-    {
-        var trimmed = (text ?? string.Empty).Trim();
-        return double.TryParse(trimmed, NumberStyles.Float, culture, out value) && value >= 0;
-    }
 }

@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.App.Host;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -36,7 +37,7 @@ public sealed class R50_NameManagerNamedFormulaCrudTests
                 var viewModels = GetListedNames(dialog);
 
                 viewModels.Should().Contain(
-                    vm => vm.Name == "TaxRate" && vm.RefersTo == "0.0825",
+                    vm => vm.Name == "TaxRate" && vm.RefersTo == "=0.0825",
                     "named formulas/constants must be visible in the Name Manager just like named ranges");
             }
             finally
@@ -66,7 +67,7 @@ public sealed class R50_NameManagerNamedFormulaCrudTests
                 var viewModels = GetListedNames(dialog);
 
                 viewModels.Should().Contain(vm => vm.Name == "Sales" && vm.RefersTo == "Sheet1!A1:A2");
-                viewModels.Should().Contain(vm => vm.Name == "TaxRate" && vm.RefersTo == "0.0825");
+                viewModels.Should().Contain(vm => vm.Name == "TaxRate" && vm.RefersTo == "=0.0825");
             }
             finally
             {
@@ -140,10 +141,10 @@ public sealed class R50_NameManagerNamedFormulaCrudTests
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
-    private static List<NamedRangeViewModel> GetListedNames(NamedRangeDialog dialog) =>
+    private static List<DefinedNameRow> GetListedNames(NamedRangeDialog dialog) =>
         DialogSourceTestSupport.GetPrivateField<ListView>(dialog, "NamesList")
             .ItemsSource!
-            .Cast<NamedRangeViewModel>()
+            .Cast<DefinedNameRow>()
             .ToList();
 
     private static void InvokeDefineOrUpdateName(
@@ -158,6 +159,9 @@ public sealed class R50_NameManagerNamedFormulaCrudTests
         method.Invoke(dialog, [definition, originalName, originalScope, originalScopeSheetId]);
     }
 
-    private static ICommandBus CreateCommandBus(Workbook workbook) =>
-        new CommandBus(_ => new TestCommandContext(workbook));
+    private static Func<IWorkbookCommand, CommandOutcome> CreateCommandBus(Workbook workbook)
+    {
+        var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
+        return command => commandBus.Execute(workbook.Id, command);
+    }
 }

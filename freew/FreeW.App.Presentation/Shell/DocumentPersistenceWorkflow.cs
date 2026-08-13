@@ -14,6 +14,7 @@ public sealed class DocumentPersistenceWorkflow
 {
     public const string DefaultSaveExtension = ".docx";
     public const string DefaultFallbackDisplayName = "Document";
+    private const string PdfImportMimeType = "application/pdf";
 
     private readonly IReadOnlyList<IDocumentFileAdapter> _adapters;
     private readonly IReadOnlyList<IDocumentFileAdapter> _pdfImportAdapters;
@@ -40,7 +41,10 @@ public sealed class DocumentPersistenceWorkflow
             DocumentFormatCapabilityPlanner.BuildFixedLayoutExportFormats(includeXpsExport));
 
     public bool CanOpenPath(string path) =>
-        DocumentFileFormatResolver.FindOpenAdapter(_adapters, Path.GetExtension(path), out _) is not null;
+        DocumentFileFormatResolver.FindOpenAdapter(
+            _adapters,
+            FilePathPolicy.GetExtensionOrEmpty(path),
+            out _) is not null;
 
     public bool TryGetSaveFormat(string extension, out FileFormatDescriptor? format) =>
         DocumentFileFormatResolver.FindSaveAdapter(_adapters, extension, out format) is not null;
@@ -56,6 +60,17 @@ public sealed class DocumentPersistenceWorkflow
 
     public FileOpenDialogPlan BuildPdfImportDialogPlan(string allSupportedName = "PDF documents") =>
         DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(_pdfImportAdapters, allSupportedName);
+
+    public FileOpenPickerPlan BuildPdfImportPickerPlan()
+    {
+        var plan = DocumentFileDialogRequestPlanner.BuildOpenPickerPlan(_pdfImportAdapters);
+        // The command already scopes the picker to PDF, so omit the redundant aggregate row.
+        return new FileOpenPickerPlan(
+            plan.FileTypes
+                .Skip(1)
+                .Select(type => type with { MimeTypes = [PdfImportMimeType] })
+                .ToArray());
+    }
 
     public FileSaveDialogPlan BuildSaveDialogPlan(
         string? currentPath,
@@ -91,8 +106,9 @@ public sealed class DocumentPersistenceWorkflow
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, Path.GetExtension(path), out var format)
-            ?? throw new InvalidOperationException($"FreeW has no reader for \"{Path.GetExtension(path)}\" files.");
+        var extension = FilePathPolicy.GetExtensionOrEmpty(path);
+        var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, extension, out var format)
+            ?? throw new InvalidOperationException($"FreeW has no reader for \"{extension}\" files.");
 
         using var stream = File.OpenRead(path);
         var document = adapter.Load(stream);
@@ -115,7 +131,7 @@ public sealed class DocumentPersistenceWorkflow
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        var extension = Path.GetExtension(path);
+        var extension = FilePathPolicy.GetExtensionOrEmpty(path);
         var adapter = DocumentFileFormatResolver.FindOpenAdapter(_pdfImportAdapters, extension, out var format)
             ?? throw new InvalidOperationException(
                 $"FreeW can import text only from \".pdf\" files, not \"{extension}\".");
@@ -131,7 +147,7 @@ public sealed class DocumentPersistenceWorkflow
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        var chosenExtension = Path.GetExtension(path);
+        var chosenExtension = FilePathPolicy.GetExtensionOrEmpty(path);
         var adapter = FileDialogSaveSelectionResolver.ResolveAdapter(
             _adapters,
             static candidate => candidate.Formats,
@@ -166,23 +182,12 @@ public sealed class DocumentPersistenceWorkflow
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        var tempPath = ExportAtomicWriter.CreateTempPath(target.Path);
-        try
-        {
-            using (var stream = File.Create(tempPath))
-                target.Adapter.Save(document, stream);
+        using var temporaryFile = AtomicFileWriter.CreateTempLease(target.Path);
+        using (var stream = temporaryFile.OpenWrite())
+            target.Adapter.Save(document, stream);
 
-            ExportAtomicWriter.ReplaceTarget(tempPath, target.Path);
-        }
-        catch
-        {
-            if (File.Exists(tempPath))
-            {
-                try { File.Delete(tempPath); } catch { /* best effort */ }
-            }
-
-            throw;
-        }
+        AtomicFileWriter.ReplaceTarget(temporaryFile.Path, target.Path);
+        temporaryFile.Commit();
     }
 
     private static string ResolveSaveExtension(string? currentPath, string? preferredExtension)
@@ -191,9 +196,9 @@ public sealed class DocumentPersistenceWorkflow
         if (normalizedPreferred.Length > 0)
             return normalizedPreferred;
 
-        return string.IsNullOrWhiteSpace(currentPath)
-            ? DefaultSaveExtension
-            : Path.GetExtension(currentPath);
+        return FilePathPolicy.TryGetExtension(currentPath, out var currentExtension)
+            ? currentExtension
+            : DefaultSaveExtension;
     }
 
     private static bool AdapterOwnsFormat(IDocumentFileAdapter adapter, FileFormatDescriptor selectedFormat) =>

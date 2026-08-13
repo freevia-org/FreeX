@@ -14,15 +14,10 @@ namespace FreeP.App.Host.Tests;
 /// </summary>
 public sealed class NotesSlideTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.NotesTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.NotesTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public NotesSlideTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -470,15 +465,7 @@ public sealed class NotesSlideTests : IDisposable
         }
     }
 
-    private static string FindCorpusFile(string fileName)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus", fileName);
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException($"Could not locate the RenderCompare corpus file '{fileName}'.");
-    }
+    private static string FindCorpusFile(string fileName) =>
+        TestWorkspaceFileLocator.FindFileFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus", fileName);
 }

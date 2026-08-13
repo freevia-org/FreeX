@@ -54,7 +54,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Symbol",
+            Title = UiText.Get("SymbolPicker_Symbol"),
             Width = SymbolPickerCatalogPlanner.DialogWidth,
             Height = SymbolPickerCatalogPlanner.DialogHeight,
             MinWidth = 760,
@@ -108,7 +108,7 @@ public sealed partial class MainWindow
             ApplySelection(
                 special.Symbol,
                 special.Name,
-                "Special Characters",
+                UiText.Get("SymbolPicker_SpecialCharactersAutomationName"),
                 special.CodeText);
 
         var fontBox = new ComboBox
@@ -172,7 +172,7 @@ public sealed partial class MainWindow
         var recentPanel = new DockPanel { Margin = new Thickness(0, 8, 0, 0), LastChildFill = true };
         var recentLabel = new TextBlock
         {
-            Text = "Recently used symbols",
+            Text = UiText.Get("SymbolPicker_RecentlyUsedSymbols"),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             VerticalAlignment = VerticalAlignment.Center,
@@ -190,7 +190,9 @@ public sealed partial class MainWindow
             recentGrid.Children.Clear();
             foreach (var symbol in recentSymbols)
             {
-                var entry = SymbolPickerCatalogPlanner.CreateSymbolEntry(symbol, "Recently used symbols");
+                var entry = SymbolPickerCatalogPlanner.CreateSymbolEntry(
+                    symbol,
+                    UiText.Get("SymbolPicker_RecentlyUsedSymbols"));
                 recentGrid.Children.Add(CreateSymbolCell(entry, SelectCatalogEntry, AcceptAndClose, compact: true));
             }
         }
@@ -241,7 +243,7 @@ public sealed partial class MainWindow
                 symbolGrid.Children.Add(cell);
             }
 
-            resultCount.Text = $"Symbols shown: {plan.Entries.Count}";
+            resultCount.Text = UiText.Format("SymbolPicker_SearchResultCountFormat", plan.Entries.Count);
             if (plan.SelectedEntry is { } selectedEntry)
                 SelectCatalogEntry(selectedEntry);
             else
@@ -257,8 +259,8 @@ public sealed partial class MainWindow
         {
             Items =
             {
-                new TabItem { Header = "Symbols", Content = symbolsPanel },
-                new TabItem { Header = "Special Characters", Content = specialPanel },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("SymbolPicker_SymbolsTab")), Content = symbolsPanel },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("SymbolPicker_SpecialCharactersTab")), Content = specialPanel },
             },
         };
         AutomationProperties.SetAutomationId(tabs, "SymbolPickerTabs");
@@ -276,14 +278,14 @@ public sealed partial class MainWindow
 
         var insert = new Button
         {
-            Content = "Insert",
+            Content = StripDisplayMnemonic(UiText.Get("SymbolPicker_InsertButton")),
             MinWidth = 84,
             IsDefault = true,
         };
         ApplySymbolButtonChrome(insert, 84, isDefault: true);
         var cancel = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             MinWidth = 84,
             IsCancel = true,
         };
@@ -318,8 +320,11 @@ public sealed partial class MainWindow
         var current = FormatEditText(_session.ActiveSheet.GetCell(_session.ActiveCell), _session.ActiveCell);
         var result = _session.CommitCellText(current + selection.Symbol);
         RefreshShell(result.Success
-            ? $"Inserted {selection.Symbol} into {FormatCellReference(_session.ActiveCell)}"
-            : result.ErrorMessage ?? "Could not insert the symbol.");
+            ? UiText.Format(
+                "SymbolPicker_InsertedIntoCellFormat",
+                selection.Symbol,
+                FormatCellReference(_session.ActiveCell))
+            : result.ErrorMessage ?? UiText.Get("SymbolPicker_CouldNotInsertSymbol"));
     }
 
     private static Grid CreateSymbolChooserGrid(ComboBox fontBox, ComboBox subsetBox, TextBox searchBox)
@@ -329,9 +334,21 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 0, 0, 8),
             ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,*,Auto,*"),
         };
-        AddSymbolChooserField(grid, 0, "Font:", fontBox);
-        AddSymbolChooserField(grid, 2, "Subset:", subsetBox);
-        AddSymbolChooserField(grid, 4, "Search:", searchBox);
+        AddSymbolChooserField(
+            grid,
+            0,
+            StripDisplayMnemonic(UiText.Get("SymbolPicker_FontLabel")),
+            fontBox);
+        AddSymbolChooserField(
+            grid,
+            2,
+            StripDisplayMnemonic(UiText.Get("SymbolPicker_SubsetLabel")),
+            subsetBox);
+        AddSymbolChooserField(
+            grid,
+            4,
+            StripDisplayMnemonic(UiText.Get("SymbolPicker_SearchLabel")),
+            searchBox);
         return grid;
     }
 
@@ -396,12 +413,12 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 12, 0, 0),
             Children =
             {
-                new TextBlock { Text = "Character code:", FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("SymbolPicker_CharacterCodeLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = VerticalAlignment.Center },
             },
         };
         var goButton = new Button
         {
-            Content = "Go",
+            Content = StripDisplayMnemonic(UiText.Get("SymbolPicker_GoButton")),
             MinWidth = 64,
             Margin = new Thickness(0, 6, 0, 0),
         };
@@ -428,11 +445,11 @@ public sealed partial class MainWindow
                     Child = preview,
                 },
                 selectedName,
-                new TextBlock { Text = "Subset:", FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 14, 0, 0) },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("SymbolPicker_SubsetLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 14, 0, 0) },
                 selectedSubset,
                 codeRow,
                 selectedCode,
-                new TextBlock { Text = "from: Unicode (hex)", FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = UiText.Get("SymbolPicker_FromUnicodeHex"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 6, 0, 0) },
                 goButton,
             },
         };

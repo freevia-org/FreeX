@@ -54,7 +54,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Insert Function",
+            Title = UiText.Get("MainWindow_Content_InsertFunction"),
             Width = 560,
             Height = 470,
             MinWidth = 460,
@@ -66,9 +66,9 @@ public sealed partial class MainWindow
 
         var searchBox = new TextBox { MinWidth = 260 };
         ApplyFnTextBoxChrome(searchBox);
-        AutomationProperties.SetName(searchBox, "Search for a function");
+        AutomationProperties.SetName(searchBox, ResolveInsertFunctionLabel("InsertFunction_SearchForAFunction"));
         AutomationProperties.SetAutomationId(searchBox, "InsertFunctionSearchBox");
-        AutomationProperties.SetHelpText(searchBox, "Type to filter functions by name or description.");
+        AutomationProperties.SetHelpText(searchBox, UiText.Get("InsertFunction_SearchHelpText"));
 
         var categoryBox = new ComboBox
         {
@@ -77,12 +77,12 @@ public sealed partial class MainWindow
             MinWidth = 220,
         };
         ApplyFnComboBoxChrome(categoryBox);
-        AutomationProperties.SetName(categoryBox, "Or select a category");
+        AutomationProperties.SetName(categoryBox, ResolveInsertFunctionLabel("InsertFunction_OrSelectACategory"));
         AutomationProperties.SetAutomationId(categoryBox, "InsertFunctionCategoryBox");
 
         var listBox = new ListBox { MinHeight = 160 };
         ApplyFnListBoxStyle(listBox);
-        AutomationProperties.SetName(listBox, "Select a function");
+        AutomationProperties.SetName(listBox, ResolveInsertFunctionLabel("InsertFunction_SelectAFunction"));
         AutomationProperties.SetAutomationId(listBox, "InsertFunctionListBox");
 
         var syntaxText = new TextBlock
@@ -91,7 +91,7 @@ public sealed partial class MainWindow
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(syntaxText, "Function syntax");
+        AutomationProperties.SetName(syntaxText, UiText.Get("InsertFunction_FunctionSyntaxAutomationName"));
         AutomationProperties.SetAutomationId(syntaxText, "InsertFunctionSyntaxText");
 
         var descriptionText = new TextBlock
@@ -101,7 +101,7 @@ public sealed partial class MainWindow
             MinHeight = 40,
             Foreground = Brush(96, 96, 96),
         };
-        AutomationProperties.SetName(descriptionText, "Function description");
+        AutomationProperties.SetName(descriptionText, UiText.Get("InsertFunction_FunctionDescriptionAutomationName"));
         AutomationProperties.SetAutomationId(descriptionText, "InsertFunctionDescriptionText");
 
         void RefreshList()
@@ -133,21 +133,21 @@ public sealed partial class MainWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             MinWidth = 80,
             IsEnabled = false,
         };
         ApplyFnButtonChrome(okButton, minWidth: 80, isDefault: true);
-        AutomationProperties.SetName(okButton, "OK");
+        AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
         AutomationProperties.SetAutomationId(okButton, "InsertFunctionOkButton");
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             MinWidth = 80,
         };
         ApplyFnButtonChrome(cancelButton, minWidth: 80);
-        AutomationProperties.SetName(cancelButton, "Cancel");
+        AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
         AutomationProperties.SetAutomationId(cancelButton, "InsertFunctionCancelButton");
 
         void Accept()
@@ -196,9 +196,9 @@ public sealed partial class MainWindow
             Spacing = 10,
             Children =
             {
-                CreateInsertFunctionField("Search for a function", searchBox),
-                CreateInsertFunctionField("Or select a category", categoryBox),
-                new TextBlock { Text = "Select a function:", FontSize = 12 },
+                CreateInsertFunctionField(ResolveInsertFunctionLabel("InsertFunction_SearchForAFunction"), searchBox),
+                CreateInsertFunctionField(ResolveInsertFunctionLabel("InsertFunction_OrSelectACategory"), categoryBox),
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("InsertFunction_SelectAFunction")), FontSize = 12 },
             },
         };
         DockPanel.SetDock(header, Dock.Top);
@@ -230,7 +230,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Function Arguments",
+            Title = UiText.Get("FunctionArguments_Title"),
             Width = 520,
             Height = Math.Max(300, Math.Min(620, 220 + (arguments.Count * 58))),
             MinWidth = 440,
@@ -245,9 +245,9 @@ public sealed partial class MainWindow
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(previewText, "Formula result");
+        AutomationProperties.SetName(previewText, UiText.Get("FunctionArguments_FormulaResultAutomationName"));
         AutomationProperties.SetAutomationId(previewText, "FunctionArgumentsPreviewText");
-        AutomationProperties.SetHelpText(previewText, "The formula inserted when you choose OK.");
+        AutomationProperties.SetHelpText(previewText, UiText.Get("FunctionArguments_FormulaResultHelpText"));
 
         void UpdatePreview() =>
             previewText.Text = FunctionArgumentCatalog.BuildPreview(
@@ -273,7 +273,9 @@ public sealed partial class MainWindow
                 Margin = new Thickness(6, 0, 0, 0),
             };
             ApplyFnButtonChrome(referencePicker, minWidth: 30);
-            AutomationProperties.SetName(referencePicker, $"Select worksheet reference for {argument.Name}");
+            AutomationProperties.SetName(
+                referencePicker,
+                UiText.Format("FunctionArguments_SelectWorksheetReferenceAutomationNameFormat", argument.Name));
             AutomationProperties.SetAutomationId(referencePicker, $"FunctionArgumentReferencePicker{argumentIndex}");
 
             var editorRow = new AvaloniaGrid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -307,20 +309,20 @@ public sealed partial class MainWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             MinWidth = 76,
         };
         ApplyFnButtonChrome(okButton, minWidth: 76, isDefault: true);
-        AutomationProperties.SetName(okButton, "OK");
+        AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
         AutomationProperties.SetAutomationId(okButton, "FunctionArgumentsOkButton");
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             MinWidth = 76,
         };
         ApplyFnButtonChrome(cancelButton, minWidth: 76);
-        AutomationProperties.SetName(cancelButton, "Cancel");
+        AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
         AutomationProperties.SetAutomationId(cancelButton, "FunctionArgumentsCancelButton");
 
         void Accept()
@@ -421,6 +423,9 @@ public sealed partial class MainWindow
                 control,
             },
         };
+
+    private static string ResolveInsertFunctionLabel(string resourceKey) =>
+        StripDisplayMnemonic(UiText.Get(resourceKey)).TrimEnd(':');
 
     // ── Visual chrome helpers (InsertFunction / FunctionArguments dialogs) ────
 

@@ -519,28 +519,11 @@ public sealed partial class Sheet
 
     private static DataValidation CloneDataValidation(DataValidation dv, SheetId newId, string sourceSheetName, string newSheetName)
     {
-        var clone = new DataValidation
-        {
-            AppliesTo         = RemapRange(dv.AppliesTo, newId),
-            Type              = dv.Type,
-            Operator          = dv.Operator,
-            Formula1          = RewriteSameSheetQualifiedFormula(dv.Formula1, sourceSheetName, newSheetName),
-            Formula2          = RewriteSameSheetQualifiedFormula(dv.Formula2, sourceSheetName, newSheetName),
-            AllowBlank        = dv.AllowBlank,
-            ShowDropdown      = dv.ShowDropdown,
-            AlertStyle        = dv.AlertStyle,
-            ShowInputMessage  = dv.ShowInputMessage,
-            ShowErrorMessage  = dv.ShowErrorMessage,
-            ErrorTitle        = dv.ErrorTitle,
-            ErrorMessage      = dv.ErrorMessage,
-            PromptTitle       = dv.PromptTitle,
-            PromptMessage     = dv.PromptMessage,
-            NativeAttributes  = dv.NativeAttributes,
-            NativeChildXmls   = dv.NativeChildXmls,
-            NativeContainerAttributes = dv.NativeContainerAttributes,
-            NativeContainerChildXmls = dv.NativeContainerChildXmls
-        };
-        clone.AdditionalRanges.AddRange(dv.AdditionalRanges.Select(range => RemapRange(range, newId)));
+        var clone = dv.CloneWithNewIdentity(
+            RemapRange(dv.AppliesTo, newId),
+            dv.AdditionalRanges.Select(range => RemapRange(range, newId)));
+        clone.Formula1 = RewriteSameSheetQualifiedFormula(dv.Formula1, sourceSheetName, newSheetName);
+        clone.Formula2 = RewriteSameSheetQualifiedFormula(dv.Formula2, sourceSheetName, newSheetName);
         return clone;
     }
 

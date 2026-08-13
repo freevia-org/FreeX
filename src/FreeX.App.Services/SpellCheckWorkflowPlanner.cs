@@ -103,14 +103,14 @@ public static class SpellCheckWorkflowPlanner
 
     public static IReadOnlyList<SpellingIssue> FilterIssues(
         IEnumerable<SpellingIssue> issues,
-        ISet<string> ignoredWords,
-        ISet<SpellingIssueKey> ignoredIssues)
+        ISet<string>? ignoredWords,
+        ISet<SpellingIssueKey>? ignoredIssues)
     {
         var filtered = new List<SpellingIssue>();
         foreach (var issue in issues)
         {
             if (ContainsIgnoredWord(ignoredWords, issue.Word) ||
-                ignoredIssues.Contains(CreateIssueKey(issue)))
+                ignoredIssues?.Contains(CreateIssueKey(issue)) == true)
             {
                 continue;
             }
@@ -135,8 +135,11 @@ public static class SpellCheckWorkflowPlanner
     public static SpellingIssueKey CreateIssueKey(SpellingIssue issue) =>
         new(issue.Address, issue.Word, issue.Source, issue.ReplyIndex, issue.StartIndex);
 
-    private static bool ContainsIgnoredWord(IEnumerable<string> ignoredWords, string word)
+    private static bool ContainsIgnoredWord(IEnumerable<string>? ignoredWords, string word)
     {
+        if (ignoredWords is null)
+            return false;
+
         foreach (var ignoredWord in ignoredWords)
         {
             if (string.Equals(ignoredWord, word, StringComparison.OrdinalIgnoreCase))

@@ -11,7 +11,7 @@ namespace FreeW.App.Avalonia;
 /// Speech backends are paused by suspending or signalling the exact owned child process.
 /// Backends without that capability remain honest and report it as unsupported.
 /// </summary>
-public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
+public sealed partial class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
 {
     private readonly object _gate = new();
     private readonly Func<string, SpeechBackend?> _backendFactory;
@@ -44,15 +44,6 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
 
     /// <summary>Whether the selected platform backend supports process-level pause/resume.</summary>
     public bool SupportsPause => TryCreateBackend(string.Empty)?.SupportsPause == true;
-
-    internal int? OwnedProcessIdForSmoke
-    {
-        get
-        {
-            lock (_gate)
-                return _process?.ProcessId;
-        }
-    }
 
     public void SpeakAsync(string text, Action onCompleted)
     {

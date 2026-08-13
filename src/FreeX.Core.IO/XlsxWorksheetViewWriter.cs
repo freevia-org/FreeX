@@ -326,7 +326,7 @@ internal static class XlsxWorksheetViewWriter
                 continue;
 
             var characterWidth = sheet.ColumnWidths.TryGetValue(col, out var width) ? width : sheet.DefaultColumnWidth;
-            widthPixels += CharacterWidthToPixels(characterWidth);
+            widthPixels += ExcelColumnWidthConverter.ColumnWidthToPixels(characterWidth);
         }
 
         return FormatTwips(widthPixels);
@@ -335,18 +335,6 @@ internal static class XlsxWorksheetViewWriter
     private static string FormatTwips(double pixels) =>
         Math.Max(0, Math.Round(pixels * TwipsPerPixel, MidpointRounding.AwayFromZero))
             .ToString(CultureInfo.InvariantCulture);
-
-    // Mirrors FreeX.Core.Calc.ColumnWidthPixelMapper.ColumnWidthToPixels (duplicated here rather
-    // than adding a Core.IO -> Core.Calc project reference for a single small formula).
-    private static double CharacterWidthToPixels(double width)
-    {
-        if (!double.IsFinite(width) || width <= 0)
-            return 0;
-
-        return width < 1
-            ? Math.Round(width * 12.0, MidpointRounding.AwayFromZero)
-            : Math.Round(width * 7.0 + 5.0, MidpointRounding.AwayFromZero);
-    }
 
     private static XDocument LoadXml(ZipArchiveEntry entry)
     {

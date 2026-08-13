@@ -1,3 +1,5 @@
+using Free.Shared.IO;
+
 namespace FreeX.Core.Model;
 
 public enum ExportFileFormat
@@ -18,7 +20,7 @@ public sealed record ExportPathPlan(
 public static class ExportPathPlanner
 {
     public static ExportFileFormat InferFormat(string path) =>
-        string.Equals(TryGetExtension(path, out var extension) ? extension : "", ".xps", StringComparison.OrdinalIgnoreCase)
+        string.Equals(FilePathPolicy.GetExtensionOrEmpty(path), ".xps", StringComparison.OrdinalIgnoreCase)
             ? ExportFileFormat.Xps
             : ExportFileFormat.Pdf;
 
@@ -53,97 +55,14 @@ public static class ExportPathPlanner
 
     private static string NormalizePath(string path, ExportFileFormat format, bool forceMatchingExtension)
     {
-        if (!forceMatchingExtension && TryGetExtension(path, out _))
+        if (!forceMatchingExtension && FilePathPolicy.TryGetExtension(path, out _))
             return path;
 
-        return TryChangeExtension(path, format == ExportFileFormat.Xps ? ".xps" : ".pdf", out var normalized)
+        return FilePathPolicy.TryChangeExtension(path, format == ExportFileFormat.Xps ? ".xps" : ".pdf", out var normalized)
             ? normalized
             : path;
     }
 
-    private static bool TryGetExtension(string path, out string extension)
-    {
-        if (HasInvalidPathChars(path))
-        {
-            extension = "";
-            return false;
-        }
-
-        try
-        {
-            extension = Path.GetExtension(path) ?? "";
-            return !string.IsNullOrEmpty(extension);
-        }
-        catch (ArgumentException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            extension = "";
-            return false;
-        }
-    }
-
-    private static bool TryChangeExtension(string path, string extension, out string normalizedPath)
-    {
-        if (HasInvalidPathChars(path))
-        {
-            normalizedPath = path;
-            return false;
-        }
-
-        try
-        {
-            normalizedPath = Path.ChangeExtension(path, extension) ?? path;
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            normalizedPath = path;
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            normalizedPath = path;
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            normalizedPath = path;
-            return false;
-        }
-    }
-
-    private static bool HasInvalidPathChars(string path) =>
-        path.IndexOf('\0') >= 0;
-
-    private static bool PathsEqual(string left, string right)
-    {
-        try
-        {
-            left = Path.GetFullPath(left);
-            right = Path.GetFullPath(right);
-        }
-        catch (ArgumentException)
-        {
-        }
-        catch (NotSupportedException)
-        {
-        }
-        catch (PathTooLongException)
-        {
-        }
-
-        return string.Equals(left, right, PathComparison);
-    }
-
-    private static StringComparison PathComparison =>
-        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+    private static bool PathsEqual(string left, string right) =>
+        FilePathPolicy.AreEquivalent(left, right);
 }

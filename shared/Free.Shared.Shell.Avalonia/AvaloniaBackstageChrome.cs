@@ -10,6 +10,9 @@ namespace Free.Shared.Shell.Avalonia;
 
 public sealed record AvaloniaBackstageChromeStyle(IBrush PrimaryInk, IBrush SecondaryInk)
 {
+    public IBrush? ActionInk { get; init; }
+    public IBrush? ScrollTrackBrush { get; init; }
+    public IBrush? ScrollThumbBrush { get; init; }
     public IBrush SeparatorBrush { get; init; } = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD));
     public double HeadingFontSize { get; init; } = BackstageVisualContract.Pane.HeadingFontSize;
     public Thickness HeadingMargin { get; init; } = ToThickness(BackstageVisualContract.Pane.HeadingMargin);
@@ -19,6 +22,7 @@ public sealed record AvaloniaBackstageChromeStyle(IBrush PrimaryInk, IBrush Seco
     public Thickness DetailGridMargin { get; init; } = ToThickness(BackstageVisualContract.Pane.DetailGridMargin);
     public Thickness DetailLabelMargin { get; init; } = ToThickness(BackstageVisualContract.Pane.DetailGridMargin);
     public Thickness DetailValueMargin { get; init; } = ToThickness(BackstageVisualContract.Pane.DetailGridMargin);
+    public double DetailLabelColumnWidth { get; init; } = BackstageVisualContract.Pane.DetailLabelColumnWidth;
     public double DetailFontSize { get; init; } = BackstageVisualContract.Pane.DetailFontSize;
     public double ActionFontSize { get; init; } = BackstageVisualContract.Pane.ActionFontSize;
     public double ActionDescriptionFontSize { get; init; } = BackstageVisualContract.Pane.ActionDescriptionFontSize;
@@ -217,7 +221,7 @@ public static class AvaloniaBackstageChrome
         {
             Text = text,
             FontWeight = FontWeight.SemiBold,
-            FontSize = BackstageVisualContract.Pane.HeadingFontSize,
+            FontSize = style.HeadingFontSize,
             Foreground = style.PrimaryInk,
             Margin = style.HeadingMargin,
         };
@@ -261,12 +265,18 @@ public static class AvaloniaBackstageChrome
         return block;
     }
 
-    public static Grid CreateDetailGrid() =>
+    public static Grid CreateDetailGrid() => CreateDetailGrid(AvaloniaBackstageChromeStyle.FromContract());
+
+    public static Grid CreateDetailGrid(AvaloniaBackstageChromeStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        return
         new()
         {
-            ColumnDefinitions = new ColumnDefinitions($"{BackstageVisualContract.Pane.DetailLabelColumnWidth},*"),
-            Margin = ToThickness(BackstageVisualContract.Pane.DetailGridMargin),
+            ColumnDefinitions = new ColumnDefinitions($"{style.DetailLabelColumnWidth},*"),
+            Margin = style.DetailGridMargin,
         };
+    }
 
     public static void AddDetailRow(
         Grid grid,
@@ -316,7 +326,7 @@ public static class AvaloniaBackstageChrome
         ArgumentNullException.ThrowIfNull(spec.Rows);
         ArgumentNullException.ThrowIfNull(style);
 
-        var grid = CreateDetailGrid();
+        var grid = CreateDetailGrid(style);
         foreach (var row in spec.Rows)
         {
             AddDetailRow(grid, row.Label, row.Value, row.ValueAutomationId, style);
@@ -406,7 +416,7 @@ public static class AvaloniaBackstageChrome
         var label = new TextBlock
         {
             Text = spec.Label,
-            Foreground = style.PrimaryInk,
+            Foreground = style.ActionInk ?? style.PrimaryInk,
             FontWeight = FontWeight.Medium,
             FontSize = style.ActionFontSize,
         };

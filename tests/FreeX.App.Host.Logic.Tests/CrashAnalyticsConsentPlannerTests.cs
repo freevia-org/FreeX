@@ -1,9 +1,9 @@
 using FluentAssertions;
-using FreeX.App.Host;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed class CrashAnalyticsConsentPlannerTests
+public sealed class CrashAnalyticsConsentWorkflowPlannerTests
 {
     [Theory]
     [InlineData(false, false, false, true)]
@@ -16,25 +16,21 @@ public sealed class CrashAnalyticsConsentPlannerTests
         bool disabledByEnvironment,
         bool expected)
     {
-        var options = new FreeXOptions { CrashAnalyticsPrompted = prompted };
-        var crashOptions = new AppCrashAnalyticsOptions(
-            endpointMissing ? null : "https://public@example.ingest.sentry.io/1",
-            IsEnabled: false,
-            IsDisabledByEnvironment: disabledByEnvironment);
-
-        CrashAnalyticsConsentPlanner.ShouldPrompt(options, crashOptions).Should().Be(expected);
+        CrashAnalyticsConsentWorkflowPlanner.ShouldPrompt(
+                prompted,
+                endpointMissing ? null : "https://public@example.ingest.sentry.io/1",
+                disabledByEnvironment)
+            .Should().Be(expected);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ApplyConsent_MarksUserPromptedAndStoresChoice(bool enabled)
+    [Fact]
+    public void AppStartup_MarksUserPromptedAndStoresChoice()
     {
-        var options = new FreeXOptions();
+        var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
 
-        CrashAnalyticsConsentPlanner.ApplyConsent(options, enabled);
-
-        options.CrashAnalyticsEnabled.Should().Be(enabled);
-        options.CrashAnalyticsPrompted.Should().BeTrue();
+        source.Should().Contain("optionsRuntimeSession.MutateFresh(latestOptions =>");
+        source.Should().Contain("latestOptions.CrashAnalyticsEnabled = accepted;");
+        source.Should().Contain("latestOptions.CrashAnalyticsPrompted = true;");
+        source.Should().Contain("CrashAnalyticsConsentWorkflowPlanner.ShouldPrompt(");
     }
 }

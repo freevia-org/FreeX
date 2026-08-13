@@ -20,6 +20,26 @@ public sealed class PivotFieldFilterSourceTests
     }
 
     [Fact]
+    public void ItemFilterDialog_DelegatesSelectionStateToPortablePivotUi()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));
+        var applicationSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "PivotUI",
+            "PivotApplicationSession.Configuration.cs"));
+
+        source.Should().Contain("PivotFieldFilterSummary.CreateState(");
+        source.Should().Contain("PivotApplication.PlanFieldItemSelection(");
+        source.Should().NotContain(".CreateFieldSelectionState(");
+        applicationSource.Should().Contain(".CreateFieldSelectionState(pivot, area, sourceFieldIndex)");
+        applicationSource.Should().Contain(".WithSelectedItems(selectedItems)");
+        source.Should().NotContain("CloneFieldsWithSelection");
+        source.Should().NotContain("FindFieldSelection");
+        source.Should().NotContain("field with { SelectedItem");
+    }
+
+    [Fact]
     public void ItemFilterDialog_UsesLocalizedNoFilterAndExactValueFieldOwnership()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));
@@ -29,6 +49,25 @@ public sealed class PivotFieldFilterSourceTests
         source.Should().Contain("UiText.Get(\"PivotFieldFilter_NoValueFilter\")");
         source.Should().Contain("filter.SourceFieldIndex == target.SourceFieldIndex");
         source.Should().NotContain("filter.SourceFieldIndex is null || filter.SourceFieldIndex == target.SourceFieldIndex");
+    }
+
+    [Fact]
+    public void PivotChartContextMenu_ConsumesSharedFilterStateWithoutChangingVisibleHeaders()
+    {
+        var source = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.PivotChartContextMenus.cs"));
+
+        source.Should().Contain("PivotFieldFilterSummary.CreateState(");
+        source.Should().Contain("var hasFilter = filterState.HasStoredFilter;");
+        source.Should().Contain("SelectItemsHeader: \"Select Items...\"");
+        source.Should().Contain("ClearFilterHeader: $\"Clear Filters from {target.FieldCaption}\"");
+        source.Should().Contain("PivotUiPlanner.ResolvePivotChartFieldArea(");
+        source.Should().NotContain("pivot.LabelFilters.Any(");
+        source.Should().NotContain("pivot.ValueFilters.Any(");
+        source.Should().NotContain("pivot.PageFields.Any(field => field.SourceFieldIndex");
+        source.Should().NotContain("pivot.ColumnFields.Any(field => field.SourceFieldIndex");
     }
 
     [Fact]
@@ -56,21 +95,23 @@ public sealed class PivotFieldFilterSourceTests
     [Fact]
     public void ParityPivotFixture_UsesWpfPartialSelectionAndMemberOrder()
     {
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var filterSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));
+        var itemReaderSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "SlicerTimeline",
+            "PivotFieldItemsReader.cs"));
 
         captureSource.Should().Contain("new PivotFieldModel(0, SelectedItems: [\"North\", \"South\"])");
         captureSource.Should().Contain("exposeActiveFilterActions: false");
         filterSource.Should().Contain("ResolveSelectAllState(");
-        filterSource.Should().Contain("members.OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase)");
+        filterSource.Should().Contain("PivotApplication.ReadSourceItems(");
+        itemReaderSource.Should().Contain("new HashSet<string>(StringComparer.CurrentCultureIgnoreCase)");
+        itemReaderSource.Should().Contain("values.OrderBy(value => value, StringComparer.CurrentCultureIgnoreCase)");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(directory) && !File.Exists(Path.Combine(directory, "FreeX.slnx")))
-            directory = Directory.GetParent(directory)?.FullName;
-
-        return Path.Combine(directory ?? throw new DirectoryNotFoundException("Repository root not found."), Path.Combine(parts));
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeX.slnx", parts);
 }

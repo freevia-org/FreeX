@@ -23,7 +23,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetFullPath($OutputDir) } else { [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir)) }
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+$resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 $fixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx"
 $fixtureFileName = Split-Path -Leaf $fixturePath
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
@@ -43,62 +44,33 @@ $requiredIds = @(
     "paste-after-cut-restores-editable-shapes"
 )
 
-function Invoke-External {
-    param([Parameter(Mandatory = $true)][string]$FilePath, [Parameter(Mandatory = $true)][string[]]$Arguments, [string]$WorkingDirectory = $repoRoot)
-    Push-Location $WorkingDirectory
-    try { & $FilePath @Arguments; if ($LASTEXITCODE -ne 0) { throw "$FilePath exited with code $LASTEXITCODE." } }
-    finally { Pop-Location }
-}
-
-function Add-ResultEvidence {
-    param([Parameter(Mandatory = $true)]$Result, [Parameter(Mandatory = $true)][string[]]$Names)
-    $evidence = [System.Collections.Generic.List[string]]::new()
-    foreach ($name in @($Result.evidence) + $Names) {
-        if (-not [string]::IsNullOrWhiteSpace([string]$name) -and -not $evidence.Contains([string]$name)) { $evidence.Add([string]$name) }
-    }
-    $Result.evidence = $evidence.ToArray()
-}
-
 function Assert-ManifestContract {
     param([Parameter(Mandatory = $true)][string]$ManifestPath, [Parameter(Mandatory = $true)][string]$EvidenceDirectory)
-    if (-not (Test-Path -LiteralPath $schemaPath -PathType Leaf)) { throw "Manifest schema is missing: $schemaPath" }
-    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
-    if ($schema.'$schema' -notmatch "json-schema.org") { throw "Manifest contract reference is not a JSON Schema document." }
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-    if ($manifest.contractValidation.status -ne "pending") { throw "Probe must leave contractValidation pending until the runner passes strict validation." }
+    $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath
+    Assert-ManifestContractPending -Manifest $manifest
     $scope = "physical FreeP clipboard shortcut evidence lane"
-    if ($manifest.schemaVersion -ne 1 -or $manifest.suite -ne "freep-linux-clipboard-shortcut-physical" -or
-        $manifest.platform -ne "linux" -or $manifest.shell -ne "avalonia" -or $manifest.app -ne "FreeP" -or
-        $manifest.baseline -ne $false -or $manifest.appSurface -ne "document-editor-clipboard-shortcuts" -or
-        $manifest.coverage.exhaustive -ne $false -or $manifest.coverage.scope -ne $scope -or
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "freep-linux-clipboard-shortcut-physical"; platform = "linux"
+        shell = "avalonia"; app = "FreeP"; baseline = $false; appSurface = "document-editor-clipboard-shortcuts"
+    }) -FailureMessage "FreeP clipboard shortcut manifest header does not satisfy its dedicated contract."
+    if ($manifest.coverage.exhaustive -ne $false -or $manifest.coverage.scope -ne $scope -or
         $manifest.window.pattern -ne $fixtureFileName -or $manifest.window.visible -ne $true -or
         ([string]$manifest.window.title).IndexOf($fixtureFileName, [StringComparison]::Ordinal) -lt 0 -or
         ([string]$manifest.window.title).IndexOf("FreeP", [StringComparison]::OrdinalIgnoreCase) -lt 0) { throw "FreeP clipboard shortcut manifest header does not satisfy its dedicated contract." }
 
     $results = @($manifest.results)
-    $ids = @($results | ForEach-Object { [string]$_.id })
-    if ($results.Count -ne 8 -or $ids.Count -ne ($ids | Select-Object -Unique).Count -or
-        [string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) { throw "Manifest must contain exactly the eight required unique result rows in contract order." }
-    $passed = @($results | Where-Object { $_.status -eq "passed" }).Count
-    $failed = @($results | Where-Object { $_.status -eq "failed" }).Count
-    if ($manifest.summary.total -ne 8 -or $manifest.summary.passed -ne $passed -or $manifest.summary.failed -ne $failed -or ($passed + $failed) -ne 8) { throw "Manifest summary does not match its eight result rows." }
+    Assert-ManifestResultIds -Results $results -ExpectedIds $requiredIds `
+        -FailureMessage "Manifest must contain exactly the eight required unique result rows in contract order."
+    Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 8 `
+        -RequireCompleteStatuses -FailureMessage "Manifest summary does not match its eight result rows."
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
-    foreach ($result in $results) {
-        if ($result.category -ne "physical-x11-clipboard-shortcut" -or $result.evidenceLevel -ne "physical-x11-input" -or
-            @($result.evidence).Count -lt 1 -or [string]::IsNullOrWhiteSpace([string]$result.note) -or $result.status -notin @("passed", "failed")) { throw "Result '$($result.id)' is missing strict physical evidence metadata or has an invalid status." }
-        foreach ($evidence in @($result.evidence)) {
-            $name = [string]$evidence
-            if ([string]::IsNullOrWhiteSpace($name) -or [IO.Path]::IsPathRooted($name) -or [IO.Path]::GetFileName($name) -ne $name -or $name.Contains("/") -or $name.Contains("\") -or -not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) { throw "Result '$($result.id)' references missing, empty, or non-basename evidence '$name'." }
-        }
-    }
-    foreach ($screenshot in @($manifest.screenshots)) {
-        $name = [string]$screenshot.name
-        if ($screenshot.kind -ne "screenshot" -or [string]::IsNullOrWhiteSpace($name) -or [IO.Path]::IsPathRooted($name) -or [IO.Path]::GetFileName($name) -ne $name -or $name.Contains("/") -or $name.Contains("\") -or -not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) { throw "Manifest references missing, empty, or non-basename screenshot '$name'." }
-    }
-    $manifest | Add-Member -NotePropertyName contractValidation -NotePropertyValue ([pscustomobject]@{ status = "passed"; validator = "tools/Run-FreePClipboardShortcutValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freep-clipboard-shortcut-validation.schema.json" }) -Force
-    $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
-    return $manifest
+    Assert-ManifestResultEvidence -Results $results -FileMap $fileMap `
+        -Category "physical-x11-clipboard-shortcut" -EvidenceLevel "physical-x11-input" -RequireNote
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $fileMap -RequireKind
+    return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
+        -Validator "tools/Run-FreePClipboardShortcutValidation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/freep-clipboard-shortcut-validation.schema.json" -JsonDepth 16
 }
 
 if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) { throw "Fixture was not found: $fixturePath" }
@@ -109,7 +81,7 @@ try {
     $startArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Start", "-App", "FreeP", "-Port", "$Port", "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi", "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot, "-DocumentPath", $fixturePath)
     if (-not [string]::IsNullOrWhiteSpace($PublishDir)) { $startArguments += @("-PublishDir", $PublishDir) }
     if ($SkipPublish) { $startArguments += "-SkipPublish" }; if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }; if ($Replace) { $startArguments += "-Replace" }
-    Invoke-External -FilePath "powershell.exe" -Arguments $startArguments; $started = $true
+    Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot; $started = $true
     $sessionMetadataPath = Join-Path $resolvedOutputRoot "freep/current-session.json"
     if (-not (Test-Path -LiteralPath $sessionMetadataPath -PathType Leaf)) { throw "Generic runner did not write current session metadata: $sessionMetadataPath" }
     $session = Get-Content -LiteralPath $sessionMetadataPath -Raw | ConvertFrom-Json
@@ -142,7 +114,7 @@ try {
         $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
         $copyResult = @($manifest.results | Where-Object { $_.id -eq "clipboard-copy-x11-preserves-source" })[0]
         if ($null -eq $copyResult) { throw "Probe manifest is missing clipboard-copy-x11-preserves-source." }
-        Add-ResultEvidence -Result $copyResult -Names @("fixture-source-before.sha256.txt", "fixture-source-after.sha256.txt", "fixture-mounted-before.sha256.txt", "fixture-mounted-after.sha256.txt", "fixture-host-mounted-after.sha256.txt")
+        Add-VisualEvidenceResultReferences -Result $copyResult -Names @("fixture-source-before.sha256.txt", "fixture-source-after.sha256.txt", "fixture-mounted-before.sha256.txt", "fixture-mounted-after.sha256.txt", "fixture-host-mounted-after.sha256.txt")
         $hashPaths = [ordered]@{ "source-before" = $sourceBefore; "source-after" = $sourceAfter; "mounted-before" = (Join-Path $evidenceDirectory "fixture-mounted-before.sha256.txt"); "mounted-after" = (Join-Path $evidenceDirectory "fixture-mounted-after.sha256.txt"); "host-mounted-after" = $mountedAfter }
         $hashes = @{}; $hashFailures = [System.Collections.Generic.List[string]]::new()
         foreach ($entry in $hashPaths.GetEnumerator()) { if (-not (Test-Path -LiteralPath $entry.Value -PathType Leaf)) { $hashFailures.Add("$($entry.Key) hash artifact is missing"); continue }; if ((Get-Item -LiteralPath $entry.Value).Length -le 0) { $hashFailures.Add("$($entry.Key) hash artifact is empty"); continue }; $value = (Get-Content -LiteralPath $entry.Value -Raw).Trim(); if ($value -notmatch '^[0-9a-f]{64}$') { $hashFailures.Add("$($entry.Key) hash is not an exact lowercase 64-hex value"); continue }; $hashes[$entry.Key] = $value }
@@ -157,5 +129,5 @@ try {
     Write-Host "Manifest contract validation: $($manifest.contractValidation.status)"; Write-Host "Results: $($manifest.summary.passed) passed, $($manifest.summary.failed) failed, $($manifest.summary.total) total"; Write-Host "Manifest: $manifestPath"; Write-Host "Fixture: $fixturePath"
     if ($probeExitCode -ne 0 -or $manifest.summary.failed -gt 0) { throw "FreeP clipboard shortcut validation failed with probe exit code $probeExitCode and $($manifest.summary.failed) failed result(s). Evidence retained at $manifestPath." }
 } finally {
-    if ($started -and -not $KeepContainer) { try { Invoke-External -FilePath "powershell.exe" -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) } catch { Write-Warning "Could not stop harness-owned FreeP container on port ${Port}: $($_.Exception.Message)" } } elseif ($started) { Write-Host "Container retained by request on port $Port." }
+    if ($started -and -not $KeepContainer) { try { Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot } catch { Write-Warning "Could not stop harness-owned FreeP container on port ${Port}: $($_.Exception.Message)" } } elseif ($started) { Write-Host "Container retained by request on port $Port." }
 }

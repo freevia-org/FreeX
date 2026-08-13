@@ -19,35 +19,34 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     private CommentListWindow? _reviewCommentsWindow;
-    private CommentListWindow? _reviewNotesWindow;
 
     private void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
     {
         if (!TryCommitPendingSpellCheckEdit())
             return;
 
-        var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options.SpellCheckCustomDictionaryWords);
-        var ignoredWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var ignoredIssues = new HashSet<SpellingIssueKey>();
-
-        while (true)
-        {
-            var scan = SpellCheckWorkflowPlanner.ScanWorksheet(
-                _workbook,
-                _currentSheetId,
-                customDictionary,
-                ignoredWords,
-                ignoredIssues);
-            if (scan.IsComplete)
+        var controller = new SpellCheckSessionController(new SpellCheckSessionAdapter(
+            () => _workbook,
+            () => _currentSheetId,
+            () => _options.SpellCheckCustomDictionaryWords,
+            command =>
             {
-                _messageService.ShowInfo(
-                    UiText.Get("MainWindowMessage_SpellCheckComplete"),
-                    UiText.Get("MainWindowMessage_SpellCheckTitle"));
-                return;
-            }
+                var success = TryExecuteCommand(command, "Spell Check", out var outcome);
+                return new SpellCheckCommandExecutionResult(
+                    success,
+                    outcome.ErrorMessage,
+                    outcome.IsNoOp);
+            },
+            () => MutateRuntimeOptions(options =>
+            {
+                options.SpellCheckCustomDictionaryWords =
+                    _options.SpellCheckCustomDictionaryWords.ToList();
+            })));
+        var transition = controller.Start();
 
-            var issues = scan.Issues;
-            var issue = issues[0];
+        while (transition.RequiresReview)
+        {
+            var issue = transition.Issue!;
             SetActiveCell(issue.Address);
             EnsureCellVisible(issue.Address);
             UpdateViewport();
@@ -55,56 +54,28 @@ public partial class MainWindow
 
             var dialog = new SpellCheckDialog(issue.Word, issue.Suggestion) { Owner = this };
             if (dialog.ShowDialog() != true)
+            {
+                controller.Apply(new(SpellCheckSessionAction.Stop));
                 return;
-
-            if (dialog.Result.Action == SpellCheckDialogAction.Ignore)
-            {
-                ignoredIssues.Add(SpellCheckWorkflowPlanner.CreateIssueKey(issue));
-                continue;
             }
 
-            if (dialog.Result.Action == SpellCheckDialogAction.IgnoreAll)
+            transition = controller.Apply(dialog.Result);
+            if (dialog.Result.Action is SpellCheckSessionAction.Change or SpellCheckSessionAction.ChangeAll &&
+                transition.Status != SpellCheckSessionStatus.Failed)
             {
-                ignoredWords.Add(issue.Word);
-                continue;
-            }
-
-            if (dialog.Result.Action == SpellCheckDialogAction.Add)
-            {
-                if (SpellCheckWorkflowPlanner.AddCustomDictionaryWord(
-                        _options.SpellCheckCustomDictionaryWords,
-                        customDictionary,
-                        issue.Word))
-                    _options.Save();
-
-                continue;
-            }
-
-            var replacement = dialog.Result.Replacement ?? issue.Suggestion;
-
-            if (dialog.Result.Action == SpellCheckDialogAction.ReplaceAll)
-            {
-                var command = SpellCheckWorkflowPlanner.BuildReplaceAllCommand(issues, issue.Word, replacement);
-                if (command is not null && !TryExecuteSpellCheckCommand(command))
-                    return;
-
                 RefreshSpellCheckEditorState(issue.Address);
                 UpdateViewport();
                 RefreshStatusBar();
-                continue;
             }
+        }
 
-            if (!TryExecuteSpellCheckCommand(SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, replacement)))
-                return;
-
-            RefreshSpellCheckEditorState(issue.Address);
-            UpdateViewport();
-            RefreshStatusBar();
+        if (transition.Status == SpellCheckSessionStatus.Complete)
+        {
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_SpellCheckComplete"),
+                UiText.Get("MainWindowMessage_SpellCheckTitle"));
         }
     }
-
-    private bool TryExecuteSpellCheckCommand(IWorkbookCommand command) =>
-        TryExecuteCommand(command, "Spell Check");
 
     private void RefreshSpellCheckEditorState(CellAddress address)
     {
@@ -117,7 +88,7 @@ public partial class MainWindow
     private void WorkbookStatisticsBtn_Click(object sender, RoutedEventArgs e)
     {
         var statistics = WorkbookStatisticsService.GetStatistics(_workbook);
-        var dialog = new WorkbookStatisticsDialog(statistics) { Owner = this };
+        var dialog = new WorkbookStatisticsDialog(statistics, _platformClipboard) { Owner = this };
         dialog.ShowDialog();
     }
 
@@ -214,20 +185,7 @@ public partial class MainWindow
 
     private void SheetGrid_ThreadedCommentInlineEditSubmitted(object? sender, GridThreadedCommentInlineEditSubmittedEventArgs e)
     {
-        var result = e.Result;
-        var mutation = ReviewSessionController.ApplyThreadedComment(
-            new ThreadedCommentDialogResult(
-                result.RootText,
-                result.ReplyText,
-                result.IsResolved,
-                result.Action switch
-                {
-                    GridThreadedCommentEditAction.EditReply => ThreadedCommentDialogAction.EditReply,
-                    GridThreadedCommentEditAction.DeleteReply => ThreadedCommentDialogAction.DeleteReply,
-                    _ => ThreadedCommentDialogAction.ApplyThread,
-                },
-                result.ReplyIndex,
-                result.ReplyEditText));
+        var mutation = ReviewSessionController.ApplyThreadedComment(e.Result);
         if (!mutation.Success)
         {
             e.KeepOpen = true;
@@ -338,7 +296,7 @@ public partial class MainWindow
     private CommentListWindow ShowOrRefreshCommentListWindow(
         CommentListWindow? window,
         string title,
-        IReadOnlyList<CommentListWindowItem> items,
+        IReadOnlyList<CommentListRowPlan> items,
         Action<CommentListWindow?> setWindow)
     {
         if (window is null || !window.IsLoaded)
@@ -358,16 +316,20 @@ public partial class MainWindow
 
     private void ExecuteShowHideNote(CellAddress address)
     {
-        var cmd = new ShowHideCommentCommand(_currentSheetId, address);
-        if (TryExecuteCommand(cmd, "Show/Hide Note"))
-            UpdateViewport();
+        var result = ReviewSessionController.ToggleNoteVisibility(address);
+        if (!result.Success)
+            return;
+
+        ApplyReviewRefreshPlan(result.RefreshPlan);
     }
 
     private void ExecuteShowAllNotes()
     {
-        var cmd = new ShowAllNotesCommand(_currentSheetId);
-        if (TryExecuteCommand(cmd, "Show All Notes"))
-            UpdateViewport();
+        var result = ReviewSessionController.ToggleAllNotesVisibility();
+        if (!result.Success)
+            return;
+
+        ApplyReviewRefreshPlan(result.RefreshPlan);
     }
 
     private void NavigateThreadedComment(bool previous)
@@ -440,7 +402,7 @@ public partial class MainWindow
             return;
 
         _reviewCommentsWindow?.Refresh(CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments));
-        _reviewNotesWindow?.Refresh(CommentListWindow.CreateNoteItems(sheet.Comments));
+        RefreshExternalReviewWindows(sheet);
     }
 
     private void ProtectSheetBtn_Click(object sender, RoutedEventArgs e)
@@ -448,35 +410,31 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
+        var state = ProtectionSession.ProjectSheet(sheet);
         string? unprotectPassword = null;
-        if (sheet.IsProtected && !TryConfirmSheetUnprotectPassword(sheet, out unprotectPassword))
+        if (state.IsProtected && !TryConfirmSheetUnprotectPassword(sheet, out unprotectPassword))
             return;
 
-        var result = ProtectionDialogPlanner.CreateSheetResult(
-            sheet.IsProtected,
-            unprotectPassword,
-            SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions());
-        if (!sheet.IsProtected)
+        var options = state.Options with { Password = unprotectPassword };
+        if (!state.IsProtected)
         {
             var dialog = new PasswordProtectionDialog(
                 UiText.Get("MainWindowMessage_ProtectSheetTitle"),
                 UiText.Get("MainWindowMessage_OptionalPasswordLabel")) { Owner = this };
             if (dialog.ShowDialog() != true) return;
-            result = ProtectionDialogPlanner.CreateSheetResult(
-                sheet.IsProtected,
+            options = ProtectSheetOptions.FromCorePermissions(
+                dialog.SelectedSheetPermissions,
                 dialog.Password,
-                dialog.SelectedSheetPermissions);
+                dialog.Password);
         }
 
-        var action = SheetProtectionWorkflow.CreateCommand(sheet, result);
-        var outcome = _commandBus.Execute(_workbook.Id, action.Command);
+        var outcome = ProtectionSession.ExecuteSheet(sheet, options);
         if (!outcome.Success)
-        {
-            ShowCommandError(outcome, action.Title);
             return;
-        }
 
-        _messageService.ShowInfo(action.SuccessMessage, action.Title);
+        _messageService.ShowInfo(
+            UiText.Get(outcome.SuccessMessageResourceKey),
+            UiText.Get(outcome.TitleResourceKey));
         RefreshSheetTabs();
     }
 
@@ -488,8 +446,9 @@ public partial class MainWindow
 
     private void ProtectWorkbookBtn_Click(object sender, RoutedEventArgs e)
     {
+        var state = ProtectionSession.ProjectWorkbook();
         string? pwd = null;
-        if (!_workbook.IsStructureProtected)
+        if (!state.IsStructureProtected)
         {
             var dialog = new PasswordProtectionDialog(
                 UiText.Get("MainWindowMessage_ProtectWorkbookTitle"),
@@ -502,11 +461,13 @@ public partial class MainWindow
             return;
         }
 
-        var action = WorkbookProtectionWorkflow.CreateCommand(_workbook, pwd);
-        if (!TryExecuteCommand(action.Command, action.Title))
+        var outcome = ProtectionSession.ExecuteWorkbook(pwd);
+        if (!outcome.Success)
             return;
 
-        _messageService.ShowInfo(action.SuccessMessage, action.Title);
+        _messageService.ShowInfo(
+            UiText.Get(outcome.SuccessMessageResourceKey),
+            UiText.Get(outcome.TitleResourceKey));
         RefreshWorkbookProtectionUi();
         RefreshSheetTabs();
     }
@@ -553,61 +514,27 @@ public partial class MainWindow
             sheet.AllowEditRangePasswords) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
-        IWorkbookCommand? command = null;
-        string? successMessage = null;
-        switch (dialog.Result)
-        {
-            case { Action: AllowEditRangeAction.Add, Range: { } range }:
-                command = new CompositeWorkbookCommand(
-                    "Allow Edit Range",
-                    [
-                        new AllowEditRangeCommand(_currentSheetId, range),
-                        new SetAllowEditRangePasswordCommand(_currentSheetId, range, dialog.RangePassword)
-                    ]);
-                successMessage = UiText.Format("MainWindowMessage_AllowEditRangeAdded", range);
-                break;
-            case { Action: AllowEditRangeAction.Modify, PreviousRange: { } previousRange, Range: { } range }:
-                var modifyCommands = new List<IWorkbookCommand>
-                {
-                    new RemoveAllowEditRangeCommand(_currentSheetId, previousRange),
-                    new AllowEditRangeCommand(_currentSheetId, range)
-                };
-                // Only touch the stored password when the user actually typed into the password box
-                // this time (RangePasswordChanged); a modify with the box left blank keeps whatever
-                // password (if any) the range already had, matching Excel and AllowEditRangeDialog's
-                // own contract for RangePasswordChanged.
-                if (dialog.RangePasswordChanged)
-                {
-                    modifyCommands.Add(new SetAllowEditRangePasswordCommand(_currentSheetId, range, dialog.RangePassword));
-                }
-                else if (!range.Equals(previousRange) && sheet.AllowEditRangePasswords.TryGetValue(previousRange, out var carriedPassword))
-                {
-                    // The range's key changed (e.g. its bounds were edited) but the password was left
-                    // untouched -- carry the existing password over to the new key so it is not lost.
-                    modifyCommands.Add(new SetAllowEditRangePasswordCommand(_currentSheetId, range, carriedPassword));
-                }
-                command = new CompositeWorkbookCommand("Modify Allow Edit Range", modifyCommands);
-                successMessage = UiText.Format("MainWindowMessage_AllowEditRangeModified", range);
-                break;
-            case { Action: AllowEditRangeAction.Remove, Range: { } range }:
-                command = new CompositeWorkbookCommand(
-                    "Remove Allow Edit Range",
-                    [
-                        new RemoveAllowEditRangeCommand(_currentSheetId, range),
-                        new SetAllowEditRangePasswordCommand(_currentSheetId, range, null)
-                    ]);
-                successMessage = UiText.Format("MainWindowMessage_AllowEditRangeRemoved", range);
-                break;
-            case { Action: AllowEditRangeAction.Clear }:
-                command = new ClearAllowEditRangesCommand(_currentSheetId);
-                successMessage = UiText.Get("MainWindowMessage_AllowEditRangesCleared");
-                break;
-        }
-
-        if (command is null || successMessage is null)
+        var plan = AllowEditRangePlanner.CreateCommandPlan(
+            _currentSheetId,
+            dialog.Result,
+            dialog.RangePassword,
+            dialog.RangePasswordChanged,
+            sheet.AllowEditRangePasswords);
+        if (plan is null)
             return;
 
-        if (!TryExecuteCommand(command, "Allow Users to Edit Ranges"))
+        var successMessage = plan switch
+        {
+            { Action: AllowEditRangeAction.Add, Range: { } range } =>
+                UiText.Format("MainWindowMessage_AllowEditRangeAdded", range),
+            { Action: AllowEditRangeAction.Modify, Range: { } range } =>
+                UiText.Format("MainWindowMessage_AllowEditRangeModified", range),
+            { Action: AllowEditRangeAction.Remove, Range: { } range } =>
+                UiText.Format("MainWindowMessage_AllowEditRangeRemoved", range),
+            _ => UiText.Get("MainWindowMessage_AllowEditRangesCleared")
+        };
+
+        if (!TryExecuteCommand(plan.Command, "Allow Users to Edit Ranges"))
             return;
 
         _messageService.ShowInfo(successMessage, UiText.Get("MainWindowMessage_AllowEditRangesTitle"));
@@ -727,7 +654,13 @@ public partial class MainWindow
 
         try
         {
-            System.Windows.Clipboard.SetText(diagnosticsText);
+            var write = _platformClipboard.WriteAsync(
+                    new PlatformClipboardContent(Text: diagnosticsText))
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+            if (!write.IsSuccess)
+                throw new InvalidOperationException(write.ErrorMessage);
             _diagnostics?.RecordEvent("diagnostics_copied", new Dictionary<string, string?>
             {
                 ["source"] = "help"
@@ -758,11 +691,11 @@ public partial class MainWindow
 
     private void OpenExternalHelpLink(string url, string title)
     {
-        var result = ExternalUrlLauncher.Open(url);
-        if (result == ExternalUrlLaunchResult.Launched)
+        var result = DesktopExternalUriLauncher.Open(url);
+        if (result == ExternalUriLaunchResult.Launched)
             return;
 
-        var reason = result == ExternalUrlLaunchResult.BlockedScheme
+        var reason = result == ExternalUriLaunchResult.BlockedScheme
             ? UiText.Get("MainWindowMessage_ExternalLinkBlockedScheme")
             : UiText.Get("MainWindowMessage_ExternalLinkCouldNotBeOpened");
         ShowOwnedMessage(

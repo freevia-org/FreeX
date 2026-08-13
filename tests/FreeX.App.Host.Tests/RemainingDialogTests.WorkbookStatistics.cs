@@ -51,8 +51,8 @@ public sealed partial class RemainingDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("WorkbookStatisticsDialog.cs");
 
-        source.Should().Contain("const string copyContent = \"_Copy to Clipboard\";");
-        source.Should().Contain("AutomationProperties.SetAutomationId(copy, \"WorkbookStatisticsCopyButton\");");
+        source.Should().Contain("var copyContent = UiText.Get(\"WorkbookStatistics_CopyToClipboard\");");
+        source.Should().Contain("FreeXAutomationIdCatalog.WorkbookStatisticsCopyButton");
         source.Should().Contain("copy.Click += (_, _) => CopyMessageToClipboard(message);");
         source.Should().Contain("Content = UiText.Ok");
         source.Should().Contain("IsDefault = true");
@@ -85,17 +85,17 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("IsReadOnly = true");
         source.Should().Contain("AcceptsReturn = true");
         source.Should().Contain("AutomationProperties.SetName(statisticsBlock, UiText.Get(\"WorkbookStatistics_WorkbookStatistics\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(statisticsBlock, \"WorkbookStatisticsSummary\");");
+        source.Should().Contain("FreeXAutomationIdCatalog.WorkbookStatisticsSummary");
         source.Should().Contain("AutomationProperties.SetHelpText(statisticsBlock, UiText.Get(\"WorkbookStatistics_SummarizesSheetCellFormulaCommentAndObjectCountsForTheWorkbook\"));");
     }
 
     [Fact]
-    public void WorkbookStatisticsDialog_CopyButtonUsesWindowsClipboard()
+    public void WorkbookStatisticsDialog_CopyButtonUsesSharedPlatformClipboard()
     {
         var source = DialogSourceTestSupport.ReadHostSources("WorkbookStatisticsDialog.cs");
 
-        source.Should().Contain("Clipboard.SetText(message, TextDataFormat.UnicodeText);");
-        source.Should().Contain("Clipboard.Flush();");
+        source.Should().Contain("_platformClipboard.WriteAsync(new PlatformClipboardContent(Text: message))");
+        source.Should().Contain(".AsTask()");
         source.Should().Contain("IsClipboardUnavailableException");
     }
 }

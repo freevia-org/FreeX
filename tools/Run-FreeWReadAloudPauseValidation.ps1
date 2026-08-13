@@ -3,7 +3,7 @@
   Runs FreeW's production Avalonia Read Aloud pause/resume smoke in the Linux Docker harness.
 
 .DESCRIPTION
-  Starts an owned FreeW Ubuntu desktop container with the headless smoke argument. The production
+  Starts an owned FreeW validation host in an Ubuntu desktop container with the headless smoke argument. The production
   Avalonia engine drives an owned espeak-ng child that synthesizes to a temporary WAV file, pauses
   and resumes it using the exact child PID, then stops it. The retained app log is the evidence;
   no audio device or audible output is required.
@@ -35,6 +35,7 @@ try {
     $cleanupRequired = $true
     $runnerArguments = @(
         "-Action", "Start", "-App", "FreeW", "-Port", "$Port",
+        "-Host", "Validation",
         "-OutputDir", $resolvedOutput, "-SessionMetadataPath", $metadataPath,
         "-AppArgument", "--read-aloud-pause-smoke"
     )

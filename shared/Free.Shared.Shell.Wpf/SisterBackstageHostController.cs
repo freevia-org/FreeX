@@ -18,6 +18,7 @@ public sealed record SisterBackstageHostSpec(
 /// </summary>
 public sealed class SisterBackstageHostController
 {
+    private readonly BackstageActionBinder _dismissBeforeDispatch;
     private BackstageViewShell? _shell;
 
     public SisterBackstageHostController(UserControl host, SisterBackstageHostSpec spec)
@@ -28,6 +29,7 @@ public sealed class SisterBackstageHostController
         ArgumentNullException.ThrowIfNull(spec.BuildEntries);
         ArgumentNullException.ThrowIfNull(spec.OnClosed);
 
+        _dismissBeforeDispatch = BackstageActionBinder.DismissBefore(Hide);
         var entries = SisterBackstageEntryBuilder.Build(spec.BuildEntries(this));
         _shell = new BackstageViewShell(host, spec.Theme.Accent, entries, spec.OnClosed, spec.Chrome);
     }
@@ -47,38 +49,15 @@ public sealed class SisterBackstageHostController
     public Action FrameCommand(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        return action;
+        return BackstageActionBinder.Identity.Bind(action);
     }
 
-    public Action HideThen(Action action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-        return () =>
-        {
-            Hide();
-            action();
-        };
-    }
+    public Action HideThen(Action action) => _dismissBeforeDispatch.Bind(action);
 
-    public Action<T> HideThen<T>(Action<T> action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-        return value =>
-        {
-            Hide();
-            action(value);
-        };
-    }
+    public Action<T> HideThen<T>(Action<T> action) => _dismissBeforeDispatch.Bind(action);
 
-    public Action<T1, T2> HideThen<T1, T2>(Action<T1, T2> action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-        return (first, second) =>
-        {
-            Hide();
-            action(first, second);
-        };
-    }
+    public Action<T1, T2> HideThen<T1, T2>(Action<T1, T2> action) =>
+        _dismissBeforeDispatch.Bind(action);
 
     private BackstageViewShell Shell => _shell
         ?? throw new InvalidOperationException("Backstage host controller has not finished initializing.");

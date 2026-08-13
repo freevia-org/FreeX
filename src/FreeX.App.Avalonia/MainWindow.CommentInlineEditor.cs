@@ -53,7 +53,7 @@ public sealed partial class MainWindow
         EnsureInlineEditorAddressVisible(target.Address);
         _inlineNoteEditAddress = target.Address;
         _inlineNoteEditInitialText = target.NoteText;
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         Dispatcher.UIThread.Post(FocusInlineNoteEditor, DispatcherPriority.Input);
     }
 
@@ -74,7 +74,7 @@ public sealed partial class MainWindow
         EnsureInlineEditorAddressVisible(target.Address);
         _inlineThreadedCommentEditAddress = target.Address;
         _inlineThreadedCommentEditExisting = existing ?? target.ThreadedComment;
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         Dispatcher.UIThread.Post(FocusInlineThreadedCommentEditor, DispatcherPriority.Input);
     }
 
@@ -136,7 +136,7 @@ public sealed partial class MainWindow
             Child = BuildInlineNotePanel(address),
         };
         AutomationProperties.SetAutomationId(editor, "WorksheetNoteInlineEditor");
-        AutomationProperties.SetName(editor, "Note");
+        AutomationProperties.SetName(editor, UiText.Get("GridInlineComment_NoteAutomationName"));
         Canvas.SetLeft(editor, placement.HorizontalOffset);
         Canvas.SetTop(editor, placement.VerticalOffset);
         overlay.Children.Add(editor);
@@ -147,7 +147,7 @@ public sealed partial class MainWindow
         var panel = new StackPanel();
         panel.Children.Add(new TextBlock
         {
-            Text = $"Note - {FormatCellReference(address)}",
+            Text = UiText.Format("GridInlineComment_NoteTitleFormat", FormatCellReference(address)),
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,
             FontWeight = FontWeight.SemiBold,
@@ -178,7 +178,7 @@ public sealed partial class MainWindow
             ScrollViewer.HorizontalScrollBarVisibilityProperty,
             global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled);
         AutomationProperties.SetAutomationId(_inlineNoteEditBox, "GridNoteInlineTextBox");
-        AutomationProperties.SetName(_inlineNoteEditBox, "Note");
+        AutomationProperties.SetName(_inlineNoteEditBox, UiText.Get("GridInlineComment_NoteAutomationName"));
         _inlineNoteEditBox.KeyDown += InlineNoteTextBoxKeyDown;
         panel.Children.Add(_inlineNoteEditBox);
 
@@ -265,7 +265,7 @@ public sealed partial class MainWindow
         var panel = new StackPanel();
         panel.Children.Add(new TextBlock
         {
-            Text = $"Comment - {cellRef}",
+            Text = UiText.Format("GridInlineComment_CommentTitleFormat", cellRef),
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,
             FontWeight = FontWeight.SemiBold,
@@ -558,7 +558,7 @@ public sealed partial class MainWindow
         var text = (_inlineNoteEditBox?.Text ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(text))
         {
-            ShowInlineNoteError("Enter a note.");
+            ShowInlineNoteError(UiText.Get("GridInlineComment_EnterNoteMessage"));
             _inlineNoteEditBox?.Focus();
             return;
         }
@@ -681,14 +681,14 @@ public sealed partial class MainWindow
     private void CancelThreadedCommentInlineEdit()
     {
         ClearInlineThreadedCommentEditorState();
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         FocusShellRegion(ShellFocusTarget.Worksheet);
     }
 
     private void CancelNoteInlineEdit()
     {
         ClearInlineNoteEditorState();
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         FocusShellRegion(ShellFocusTarget.Worksheet);
     }
 

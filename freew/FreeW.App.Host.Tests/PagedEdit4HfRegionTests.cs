@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using Xunit;
@@ -410,7 +411,7 @@ public sealed class PagedEdit4HfRegionTests
         var doc = BuildDocWithHeader("Header Text");
         var (panel, _) = BuildPanel(doc);
 
-        var focused = panel.FocusInPageHfRegion("header");
+        var focused = panel.FocusInPageHfRegion(HeaderFooterSlotKind.Header);
         focused.Should().BeTrue(
             "FocusInPageHfRegion must return true when the 'header' slot sub-editor exists");
     }
@@ -427,7 +428,7 @@ public sealed class PagedEdit4HfRegionTests
 
         var (panel, _) = BuildPanel(doc);
 
-        var focused = panel.FocusInPageHfRegion("first-header");
+        var focused = panel.FocusInPageHfRegion(HeaderFooterSlotKind.FirstHeader);
         focused.Should().BeFalse(
             "FocusInPageHfRegion must return false when the 'first-header' slot is not in any page box");
     }

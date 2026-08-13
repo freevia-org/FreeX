@@ -34,36 +34,6 @@ public sealed class DataValidationPresetPlannerTests
     }
 
     [Fact]
-    public void CreateDefaultRule_CreatesRangeScopedDialogDraftWithoutDropdownForNonListTypes()
-    {
-        var sheetId = SheetId.New();
-        var range = new GridRange(
-            new CellAddress(sheetId, 2, 2),
-            new CellAddress(sheetId, 4, 5));
-
-        var listRule = DataValidationPresetPlanner.CreateDefaultRule(DvType.List, range);
-        var wholeNumberRule = DataValidationPresetPlanner.CreateDefaultRule(DvType.WholeNumber, range);
-
-        listRule.AppliesTo.Should().Be(range);
-        listRule.Type.Should().Be(DvType.List);
-        listRule.Operator.Should().Be(DvOperator.Between);
-        listRule.Formula1.Should().Be("");
-        listRule.Formula2.Should().Be("");
-        listRule.AllowBlank.Should().BeTrue();
-        listRule.ShowDropdown.Should().BeTrue();
-        listRule.AlertStyle.Should().Be(DvAlertStyle.Stop);
-        listRule.ShowInputMessage.Should().BeTrue();
-        listRule.ShowErrorMessage.Should().BeTrue();
-        listRule.AdditionalRanges.Should().BeEmpty();
-
-        wholeNumberRule.AppliesTo.Should().Be(range);
-        wholeNumberRule.Type.Should().Be(DvType.WholeNumber);
-        wholeNumberRule.ShowDropdown.Should().BeFalse();
-        wholeNumberRule.Formula1.Should().Be("");
-        wholeNumberRule.Formula2.Should().Be("");
-    }
-
-    [Fact]
     public void CreateSelectionSummary_ReportsUniformRuleAndReturnsClonedActiveRule()
     {
         var workbook = CreateWorkbook();

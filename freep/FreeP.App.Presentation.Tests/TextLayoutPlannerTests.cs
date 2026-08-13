@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using Free.Shared.Drawing;
@@ -827,6 +828,225 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void SplitColumnText_UsesGreedyWordWrappingAndCollapsesParagraphBreaks()
+    {
+        var measured = new List<string>();
+
+        var lines = TextLayoutPlanner.SplitColumnText(
+            "  alpha\r\nbeta   gamma ",
+            maxWidthDip: 10,
+            wrap: true,
+            text =>
+            {
+                measured.Add(text);
+                return text.Length;
+            });
+
+        lines.Should().Equal("alpha beta", "gamma");
+        measured.Should().Equal("alpha beta", "alpha beta gamma");
+        TextLayoutPlanner.SplitColumnText("a\r\nb", 1, false, _ => 100)
+            .Should().Equal("a\r\nb");
+        TextLayoutPlanner.SplitColumnText(" \r\n ", 10, true, text => text.Length)
+            .Should().Equal(string.Empty);
+    }
+
+    [Fact]
+    public void CloneParagraphWithText_PreservesFragmentFormattingAndParagraphSemantics()
+    {
+        var tabStops = new[] { new ResolvedTabStop { PositionDip = 42 } };
+        var run = new ResolvedRun
+        {
+            Text = "original",
+            FontFamily = "Aptos",
+            FontSizePt = 14,
+            BaselineOffset = 30000,
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            Strikethrough = true,
+            Color = new SrgbColor(1, 2, 3),
+            TextShadow = new ResolvedRunShadow()
+        };
+        var paragraph = new ResolvedParagraph
+        {
+            Runs = new[] { run },
+            Align = TextAlign.Center,
+            RightToLeft = true,
+            Level = 2,
+            BulletKind = BulletKind.Char,
+            BulletChar = "*",
+            SpaceBeforePt = 3,
+            SpaceAfterPt = 4,
+            TabStops = tabStops,
+            BulletText = "*",
+            BulletColor = new SrgbColor(4, 5, 6),
+            BulletFontFamily = "Wingdings",
+            BulletFontSizePt = 9,
+            IndentDip = 12,
+            HangingDip = 5
+        };
+
+        var fragment = TextLayoutPlanner.CloneParagraphWithText(paragraph, run, "fragment");
+
+        fragment.Should().NotBeSameAs(paragraph);
+        fragment.Runs.Should().ContainSingle();
+        fragment.Runs[0].Should().NotBeSameAs(run);
+        fragment.Runs[0].Text.Should().Be("fragment");
+        fragment.Runs[0].FontFamily.Should().Be(run.FontFamily);
+        fragment.Runs[0].BaselineOffset.Should().Be(run.BaselineOffset);
+        fragment.Runs[0].TextShadow.Should().BeSameAs(run.TextShadow);
+        fragment.Align.Should().Be(paragraph.Align);
+        fragment.RightToLeft.Should().BeTrue();
+        fragment.TabStops.Should().BeSameAs(tabStops);
+        fragment.BulletText.Should().Be(paragraph.BulletText);
+        fragment.IndentDip.Should().Be(paragraph.IndentDip);
+        run.Text.Should().Be("original");
+    }
+
+    [Fact]
+    public void PlanBaselineLines_PreservesGreedyTokensCrLfAndLineGeometry()
+    {
+        var paragraph = new ResolvedParagraph
+        {
+            Runs = new[] { new ResolvedRun { Text = "ab cd\r\n  ef" } }
+        };
+
+        var lines = TextLayoutPlanner.PlanBaselineLines(
+            paragraph,
+            startX: 10,
+            startY: 20,
+            maxWidthDip: 3,
+            (_, text, _) => new TextBaselineFragmentMeasure(text.Length, 3, 4));
+
+        lines.Select(line => string.Concat(line.Fragments.Select(fragment => fragment.Text)))
+            .Should().Equal("ab ", "cd", "ef");
+        lines.Select(line => line.TopY).Should().Equal(20, 24, 28);
+        lines.Select(line => line.BaselineY).Should().Equal(23, 27, 31);
+        lines.SelectMany(line => line.Fragments).Select(fragment => fragment.Y)
+            .Should().Equal(20, 20, 24, 28);
+    }
+
+    [Fact]
+    public void PlanBaselineLines_SplitsOversizedTokensAndAdvancesEmptyLinesOneDip()
+    {
+        var paragraph = new ResolvedParagraph
+        {
+            Runs = new[] { new ResolvedRun { Text = "\nabcd", FontSizePt = 12, BaselineOffset = 25000 } }
+        };
+
+        var lines = TextLayoutPlanner.PlanBaselineLines(
+            paragraph,
+            startX: 5,
+            startY: 10,
+            maxWidthDip: 2,
+            (_, text, _) => new TextBaselineFragmentMeasure(text.Length, 3, 4));
+
+        lines.Should().HaveCount(3);
+        lines[0].Fragments.Should().BeEmpty();
+        lines[0].TopY.Should().Be(10);
+        lines[1].TopY.Should().Be(11);
+        lines.Skip(1)
+            .Select(line => string.Concat(line.Fragments.Select(fragment => fragment.Text)))
+            .Should().Equal("ab", "cd");
+        lines[1].Fragments[0].Y.Should().Be(7);
+    }
+
+    [Fact]
+    public void PlanInlineBaselineLine_AlignsMixedTextAndMathMetrics()
+    {
+        var paragraph = ParagraphWithRuns("text", "fraction", "tail");
+        var measures = new[]
+        {
+            new TextInlineRunMeasure(4, 5, 7),
+            new TextInlineRunMeasure(6, 12, 16),
+            new TextInlineRunMeasure(3, 7, 9),
+        };
+
+        var line = TextLayoutPlanner.PlanInlineBaselineLine(
+            paragraph,
+            startX: 10,
+            startY: 20,
+            availableWidthDip: 0,
+            (runIndex, _, _) => measures[runIndex]);
+
+        line.TopY.Should().Be(20);
+        line.BaselineY.Should().Be(32);
+        line.WidthDip.Should().Be(13);
+        line.HeightDip.Should().Be(16);
+        line.Runs.Select(run => run.RunIndex).Should().Equal(0, 1, 2);
+        line.Runs.Select(run => run.X).Should().Equal(10, 14, 20);
+        line.Runs.Select(run => run.Y).Should().Equal(27, 20, 25);
+        line.Runs.Should().OnlyContain(run => run.Y + run.AscentDip == line.BaselineY);
+    }
+
+    [Fact]
+    public void PlanInlineBaselineLine_UsesNativeCallbackWidthsWithoutNormalization()
+    {
+        var paragraph = ParagraphWithRuns("text", "math");
+
+        TextInlineBaselineLinePlan Plan(double textWidth, double mathWidth) =>
+            TextLayoutPlanner.PlanInlineBaselineLine(
+                paragraph,
+                startX: 5,
+                startY: 8,
+                availableWidthDip: 0,
+                (runIndex, _, _) => new TextInlineRunMeasure(
+                    runIndex == 0 ? textWidth : mathWidth,
+                    runIndex == 0 ? 4 : 9,
+                    runIndex == 0 ? 6 : 12));
+
+        var wpfMetrics = Plan(textWidth: 4, mathWidth: 6);
+        var avaloniaMetrics = Plan(textWidth: 3.5, mathWidth: 5.25);
+
+        wpfMetrics.WidthDip.Should().Be(10);
+        wpfMetrics.Runs[1].X.Should().Be(9);
+        avaloniaMetrics.WidthDip.Should().Be(8.75);
+        avaloniaMetrics.Runs[1].X.Should().Be(8.5);
+        avaloniaMetrics.BaselineY.Should().Be(wpfMetrics.BaselineY);
+    }
+
+    [Fact]
+    public void PlanInlineBaselineLine_PreservesEmptyRunsAndRtlVisualOrder()
+    {
+        var paragraph = new ResolvedParagraph
+        {
+            RightToLeft = true,
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "\u05d0" },
+                new ResolvedRun(),
+                new ResolvedRun { Text = "LTR" },
+            }
+        };
+        var measures = new[]
+        {
+            new TextInlineRunMeasure(4, 7, 9),
+            new TextInlineRunMeasure(3, 0, 0),
+            new TextInlineRunMeasure(5, 4, 6),
+        };
+        var measuredDirections = new List<bool>();
+
+        var line = TextLayoutPlanner.PlanInlineBaselineLine(
+            paragraph,
+            startX: 100,
+            startY: 20,
+            availableWidthDip: 0,
+            (runIndex, _, rightToLeft) =>
+            {
+                measuredDirections.Add(rightToLeft);
+                return measures[runIndex];
+            });
+
+        measuredDirections.Should().Equal(true, true, false);
+        line.BaselineY.Should().Be(27);
+        line.WidthDip.Should().Be(12);
+        line.HeightDip.Should().Be(9);
+        line.Runs.Select(run => run.RunIndex).Should().Equal(2, 1, 0);
+        line.Runs.Select(run => run.X).Should().Equal(100, 105, 108);
+        line.Runs.Select(run => run.Y).Should().Equal(23, 27, 20);
+    }
+
+    [Fact]
     public void ApplyAutoFitPlan_RetainsAuthoredBaselineToken()
     {
         var text = new ResolvedTextLayout
@@ -1011,6 +1231,54 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void PlanTabLeaderFill_OwnsGlyphCountSpanAndText()
+    {
+        var measuredGlyph = '\0';
+
+        var plan = TextLayoutPlanner.PlanTabLeaderFill(
+            TabStopLeader.Dots,
+            startX: 12,
+            endX: 35,
+            glyph =>
+            {
+                measuredGlyph = glyph;
+                return 5;
+            });
+
+        measuredGlyph.Should().Be('.');
+        plan.ShouldDraw.Should().BeTrue();
+        plan.Glyph.Should().Be('.');
+        plan.GlyphCount.Should().Be(4);
+        plan.StartX.Should().Be(12);
+        plan.EndX.Should().Be(35);
+        plan.SpanWidth.Should().Be(23);
+        plan.Text.Should().Be("....");
+    }
+
+    [Theory]
+    [InlineData(TabStopLeader.None, 0, 20, 5)]
+    [InlineData(TabStopLeader.Dots, 0, 0.5, 5)]
+    [InlineData(TabStopLeader.Dots, 20, 10, 5)]
+    [InlineData(TabStopLeader.Dots, 0, 20, 0)]
+    [InlineData(TabStopLeader.Dots, 0, 20, double.NaN)]
+    public void PlanTabLeaderFill_SuppressesInvalidOrUnpaintableSpans(
+        TabStopLeader leader,
+        double startX,
+        double endX,
+        double glyphWidth)
+    {
+        var plan = TextLayoutPlanner.PlanTabLeaderFill(
+            leader,
+            startX,
+            endX,
+            _ => glyphWidth);
+
+        plan.ShouldDraw.Should().BeFalse();
+        plan.GlyphCount.Should().Be(0);
+        plan.Text.Should().BeEmpty();
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_DelegateTextLayoutMathToSharedPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
@@ -1021,13 +1289,13 @@ public sealed class TextLayoutPlannerTests
 
         wpf.Should().Contain("TextLayoutPlanner.GetTextArea");
         wpf.Should().Contain("TextLayoutPlanner.PlanTableCellText");
-        wpf.Should().Contain("TextLayoutPlanner.PlanBodyText");
-        wpf.Should().Contain("TextLayoutPlanner.GetColumnLayout");
-        wpf.Should().Contain("TextLayoutPlanner.PlanColumns");
+        wpf.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
+        wpf.Should().Contain("TextLayoutPlanner.PlanMeasuredColumns<FormattedText>");
+        wpf.Should().Contain("TextLayoutPlanner.PlanMeasuredContinuousColumnFlow<FormattedText>");
         wpf.Should().Contain("TextLayoutPlanner.PlanNormalAutoFitOverflow");
         wpf.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
-        wpf.Should().Contain("TextLayoutPlanner.GetAutoFitCapacityHeight");
         wpf.Should().Contain("TextLayoutPlanner.PlanTabStops");
+        wpf.Should().Contain("TextLayoutPlanner.PlanTabLeaderFill(");
         wpf.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
         wpf.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
         wpf.Should().Contain("placement.Bullet");
@@ -1040,20 +1308,22 @@ public sealed class TextLayoutPlannerTests
         wpf.Should().NotContain("const double DefaultSpacingDip");
         wpf.Should().NotContain("const double DefaultTabDip");
         wpf.Should().NotContain("Math.Floor(relX /");
+        wpf.Should().NotContain("Math.Floor(width / glyphWidth)");
+        wpf.Should().NotContain("new string(glyph, count)");
         wpf.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
         wpf.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
 
         avalonia.Should().Contain("TextLayoutPlanner.GetTextArea");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTableCellText");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanBodyText");
-        avalonia.Should().Contain("TextLayoutPlanner.GetColumnLayout");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanColumns");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanMeasuredColumns<FormattedText>");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanMeasuredContinuousColumnFlow<FormattedText>");
         avalonia.Should().Contain("TextLayoutPlanner.PlanNormalAutoFitOverflow");
         avalonia.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
         wpf.Should().Contain("DrawTabLeaderWpf");
         avalonia.Should().Contain("DrawTabLeaderAvalonia");
-        avalonia.Should().Contain("TextLayoutPlanner.GetAutoFitCapacityHeight");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTabStops");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanTabLeaderFill(");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
         avalonia.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
         avalonia.Should().Contain("placement.Bullet");
@@ -1066,8 +1336,187 @@ public sealed class TextLayoutPlannerTests
         avalonia.Should().NotContain("const double DefaultSpacingDip");
         avalonia.Should().NotContain("const double DefaultTabDip");
         avalonia.Should().NotContain("Math.Floor(relX /");
+        avalonia.Should().NotContain("Math.Floor(width / glyphWidth)");
+        avalonia.Should().NotContain("new string(glyph, count)");
         avalonia.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
         avalonia.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
+    }
+
+    [Fact]
+    public void PlanMeasuredBodyText_OwnsAutoFitRemeasurementArtifactsAndRenderRoutes()
+    {
+        var requests = new List<TextParagraphMeasurementRequest>();
+        var text = new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.Normal,
+            Paragraphs = new[]
+            {
+                new ResolvedParagraph
+                {
+                    Runs = new[] { new ResolvedRun { Text = "Left\tRight", FontSizePt = 20 } }
+                },
+                new ResolvedParagraph()
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanMeasuredBodyText(
+            text,
+            new LayoutRect(0, 0, 100, 60),
+            request =>
+            {
+                requests.Add(request);
+                return new TextNativeMeasurement<string>(
+                    $"{request.ParagraphIndex}:{request.Paragraph.Runs[0].FontSizePt:F1}",
+                    HeightDip: 120);
+            });
+
+        requests.Should().HaveCount(2);
+        requests.Should().OnlyContain(request => !request.UseIdealMetrics);
+        plan.AutoFit.Mode.Should().Be(TextAutoFitOverflowMode.RuntimeShrink);
+        plan.RenderText.Paragraphs[0].Runs[0].FontSizePt.Should().Be(12);
+        plan.Artifacts.Should().ContainKey(0).WhoseValue.Should().Be("0:12.0");
+        plan.Artifacts.Should().NotContainKey(1);
+        plan.Layout.Paragraphs.Should().ContainSingle();
+        plan.Layout.Paragraphs[0].RenderRoute.Should().Be(TextParagraphRenderRoute.Tabs);
+    }
+
+    [Fact]
+    public void PlanMeasuredColumns_OwnsColumnCapacityRemeasurementAndFinalArtifacts()
+    {
+        var requests = new List<TextParagraphMeasurementRequest>();
+        var text = new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.Normal,
+            ColumnCount = 2,
+            ColumnSpacingDip = 10,
+            InsetLeftDip = 0,
+            InsetRightDip = 0,
+            InsetTopDip = 0,
+            InsetBottomDip = 0,
+            Paragraphs = new[]
+            {
+                new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "Baseline", FontSizePt = 20, BaselineOffset = 1000 }
+                    }
+                }
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanMeasuredColumns(
+            text,
+            new LayoutRect(0, 0, 210, 50),
+            request =>
+            {
+                requests.Add(request);
+                return new TextNativeMeasurement<string>(
+                    request.Paragraph.Runs[0].FontSizePt.ToString("F1", CultureInfo.InvariantCulture),
+                    HeightDip: 160);
+            });
+
+        requests.Should().HaveCount(2);
+        requests.Should().OnlyContain(request =>
+            Math.Abs(request.MaxWidthDip - 100) < 0.001 && !request.UseIdealMetrics);
+        plan.AutoFit.Mode.Should().Be(TextAutoFitOverflowMode.RuntimeShrink);
+        plan.Artifacts[0].Should().Be("12.5");
+        plan.Layout.Paragraphs[0].RenderRoute.Should().Be(TextParagraphRenderRoute.Baseline);
+    }
+
+    [Fact]
+    public void PlanMeasuredContinuousColumnFlow_OwnsSplitMeasureAndPlacementLifecycle()
+    {
+        var phases = new List<TextColumnMeasurementPhase>();
+        var text = new ResolvedTextLayout
+        {
+            ColumnCount = 2,
+            ColumnSpacingDip = 10,
+            Wrap = true,
+            InsetLeftDip = 0,
+            InsetRightDip = 0,
+            InsetTopDip = 0,
+            InsetBottomDip = 0,
+            Paragraphs = new[] { Paragraph("one two three") }
+        };
+
+        var plan = TextLayoutPlanner.PlanMeasuredContinuousColumnFlow(
+            text,
+            new LayoutRect(0, 0, 80, 20),
+            request =>
+            {
+                phases.Add(request.Phase);
+                var value = request.Paragraph.Runs[0].Text;
+                return new TextNativeMeasurement<string>(
+                    $"{request.Phase}:{value}",
+                    HeightDip: 12,
+                    WidthDip: value.Length * 10);
+            },
+            _ => 0.5);
+
+        plan.IsApplicable.Should().BeTrue();
+        plan.Lines.Should().HaveCount(2);
+        plan.Lines.Select(line => line.Paragraph.Runs[0].Text)
+            .Should().Equal("one two", "three");
+        plan.Lines.Select(line => line.Placement.ColumnIndex).Should().Equal(0, 1);
+        plan.Lines.Should().OnlyContain(line =>
+            line.HorizontalScale == 0.5 &&
+            line.Artifact.StartsWith("Render:", StringComparison.Ordinal));
+        phases.Should().Contain(TextColumnMeasurementPhase.WrapProbe);
+        phases.Count(phase => phase == TextColumnMeasurementPhase.LineLayout).Should().Be(2);
+        phases.Count(phase => phase == TextColumnMeasurementPhase.Render).Should().Be(2);
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaSlideCanvases_DelegateMeasuredTextOrchestrationAndKeepNativeDrawing()
+    {
+        var sources = new[]
+        {
+            ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs"),
+            ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs")
+        };
+
+        foreach (var source in sources)
+        {
+            source.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
+            source.Should().Contain("TextLayoutPlanner.PlanMeasuredColumns<FormattedText>");
+            source.Should().Contain("TextLayoutPlanner.PlanMeasuredContinuousColumnFlow<FormattedText>");
+            source.Should().Contain("switch (placement.RenderRoute)");
+            source.Should().Contain("TextLayoutPlanner.PlanBaselineLines");
+            source.Should().NotContain("TextLayoutPlanner.SplitColumnText(");
+            source.Should().NotContain("TextLayoutPlanner.CloneParagraphWithText(");
+            source.Should().NotContain("private static IReadOnlyList<string> SplitColumnText");
+            source.Should().NotContain("private static ResolvedParagraph CloneParagraphWithText");
+            source.Should().NotContain("private static List<BaselineLine> BuildBaselineLines");
+            source.Should().NotContain("private sealed class BaselineLine");
+        }
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaSlideCanvases_DelegateInlineBaselinePlacementAndKeepNativeRendering()
+    {
+        var renderers = new[]
+        {
+            (
+                Source: ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs"),
+                DrawMathOp: "DrawMathOpWpf"),
+            (
+                Source: ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs"),
+                DrawMathOp: "DrawMathOpAvalonia"),
+        };
+
+        foreach (var renderer in renderers)
+        {
+            renderer.Source.Should().Contain("TextLayoutPlanner.PlanInlineBaselineLine");
+            renderer.Source.Should().Contain(
+                "new TextInlineRunMeasure(metrics.Width, metrics.Ascent, metrics.Height)");
+            renderer.Source.Should().Contain("BuildSingleRunFormattedTextAt(");
+            renderer.Source.Should().Contain("MathBoxRenderPlanner.Plan(");
+            renderer.Source.Should().Contain(renderer.DrawMathOp);
+            renderer.Source.Should().NotContain("internal static double ComputeBaselineY");
+            renderer.Source.Should().NotContain("internal static double ComputeRunTopY");
+            renderer.Source.Should().NotContain("lineAscent = Math.Max(lineAscent");
+        }
     }
 
     [Fact]
@@ -1122,11 +1571,13 @@ public sealed class TextLayoutPlannerTests
     [Fact]
     public void WpfAndAvaloniaImportedBulletBodyOrigin_ConsumeSharedPolicy()
     {
+        var planner = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "TextLayoutPlanner.cs");
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
         var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
 
-        wpf.Should().Contain("TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY");
-        avalonia.Should().Contain("TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY");
+        planner.Should().Contain("- ResolveImportedAptosBodyOriginOffsetY(text)");
+        wpf.Should().NotContain("TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY");
+        avalonia.Should().NotContain("TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY");
         wpf.Should().NotContain("ImportedAptosBodyOriginOffsetY = 6.0");
         avalonia.Should().NotContain("ImportedAptosBodyOriginOffsetY = 6.0");
         wpf.Should().NotContain("UsesImportedAptosBodyOrigin");
@@ -1143,14 +1594,14 @@ public sealed class TextLayoutPlannerTests
             "SlideCanvas.cs");
 
         wpf.Should().Contain("TextLayoutPlanner.GetTextArea");
-        wpf.Should().Contain("TextLayoutPlanner.PlanBodyText");
+        wpf.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
         wpf.Should().NotContain("InsetLeftPt");
         wpf.Should().NotContain("InsetTopPt");
         wpf.Should().NotContain("InsetRightPt");
         wpf.Should().NotContain("InsetBottomPt");
 
         avalonia.Should().Contain("TextLayoutPlanner.GetTextArea");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanBodyText");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
         avalonia.Should().NotContain("InsetLeftPt");
         avalonia.Should().NotContain("InsetTopPt");
         avalonia.Should().NotContain("InsetRightPt");
@@ -1200,24 +1651,6 @@ public sealed class TextLayoutPlannerTests
     private static TextGlyphMeasure MeasureStackedGlyph(ResolvedRun run, string text) =>
         new(text == "B" ? 20 : 10, 8);
 
-    private static string ReadWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var parts = new string[relativeParts.Length + 1];
-            parts[0] = directory.FullName;
-            relativeParts.CopyTo(parts, 1);
-
-            var candidate = Path.Combine(parts);
-            if (File.Exists(candidate))
-                return File.ReadAllText(candidate);
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(
-            "Could not locate workspace file.",
-            Path.Combine(relativeParts));
-    }
+    private static string ReadWorkspaceFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

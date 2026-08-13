@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.Editing;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -92,16 +93,15 @@ public sealed partial class MainWindow
         var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
         if (contentPlan.WouldLoseContent)
         {
-            var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-            if (choice == MergeCellsWarningChoice.Cancel)
+            var decision = CellMergePlanner.ResolveContentChoice(
+                await ShowMergeCellsContentWarningDialogAsync(contentPlan));
+            if (!decision.ShouldProceed)
             {
                 RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
                 return;
             }
 
-            contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                ? MergeCellContentResolution.ConcatenateAllCells
-                : MergeCellContentResolution.KeepFirstCell;
+            contentResolution = decision.Resolution;
         }
 
         var rangeReference = FormatRangeReference(range);
@@ -121,13 +121,15 @@ public sealed partial class MainWindow
             foreach (var area in areas)
             {
                 var sheetArea = GroupedSheetRangePlanner.RemapRangeToSheet(area, sheetId);
-                areaCommands.Add(BuildMergeWithoutCenterCommand(sheet, sheetId, sheetArea, contentResolution));
+                areaCommands.Add(CellMergePlanner.CreateMergeCellsCommand(
+                    sheet,
+                    sheetId,
+                    sheetArea,
+                    contentResolution));
             }
         }
 
-        var command = areaCommands.Count == 1
-            ? areaCommands[0]
-            : new CompositeWorkbookCommand("Merge Cells", areaCommands);
+        var command = CellMergePlanner.WrapCommands("Merge Cells", areaCommands);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -191,22 +193,20 @@ public sealed partial class MainWindow
         var contentPlan = AnalyzeGroupedSheetMergeContent(areas, perRow: true);
         if (contentPlan.WouldLoseContent)
         {
-            var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-            if (choice == MergeCellsWarningChoice.Cancel)
+            var decision = CellMergePlanner.ResolveContentChoice(
+                await ShowMergeCellsContentWarningDialogAsync(contentPlan));
+            if (!decision.ShouldProceed)
             {
                 RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
                 return;
             }
 
-            contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                ? MergeCellContentResolution.ConcatenateAllCells
-                : MergeCellContentResolution.KeepFirstCell;
+            contentResolution = decision.Resolution;
         }
 
         // Build one composite per (grouped sheet, disjoint area) pair, each containing one horizontal
         // per-row merge for that area's own column span remapped onto that sheet. An area that is
-        // itself single-column contributes nothing (BuildMergeWithoutCenterCommand degrades to a no-op
-        // composite for a CellCount<=1 range). Ungrouped selections resolve to a single-sheet loop since
+        // itself single-column contributes nothing. Ungrouped selections resolve to a single-sheet loop since
         // GetCurrentGroupedEditSheetIds() returns just the active sheet.
         var targetSheetIds = _session.GetCurrentGroupedEditSheetIds();
         var areaCommands = new List<IWorkbookCommand>();
@@ -223,22 +223,11 @@ public sealed partial class MainWindow
 
                 var sheetArea = GroupedSheetRangePlanner.RemapRangeToSheet(area, sheetId);
 
-                var rowCommands = new List<IWorkbookCommand>();
-                for (var row = sheetArea.Start.Row; row <= sheetArea.End.Row; row++)
-                {
-                    var rowRange = new GridRange(
-                        new CellAddress(sheetId, row, sheetArea.Start.Col),
-                        new CellAddress(sheetId, row, sheetArea.End.Col));
-
-                    // Per-row merge with no centering, using the resolution chosen (once) above. Pass
-                    // allowUnmergeToggle: false so an already-merged row of the exact target shape is left
-                    // merged (a no-op re-merge) instead of being toggled back off by this per-row re-invocation.
-                    rowCommands.Add(BuildMergeWithoutCenterCommand(
-                        sheet, sheetId, rowRange, contentResolution, allowUnmergeToggle: false));
-                }
-
-                if (rowCommands.Count > 0)
-                    areaCommands.Add(rowCommands.Count == 1 ? rowCommands[0] : new CompositeWorkbookCommand("Merge Across", rowCommands));
+                areaCommands.Add(CellMergePlanner.CreateMergeAcrossCommand(
+                    sheet,
+                    sheetId,
+                    sheetArea,
+                    contentResolution));
             }
         }
 
@@ -249,9 +238,7 @@ public sealed partial class MainWindow
         }
 
         var rangeReference = FormatRangeReference(range);
-        var command = areaCommands.Count == 1
-            ? areaCommands[0]
-            : new CompositeWorkbookCommand("Merge Across", areaCommands);
+        var command = CellMergePlanner.WrapCommands("Merge Across", areaCommands);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -261,37 +248,6 @@ public sealed partial class MainWindow
         }
 
         RefreshShell(UiText.Format("TableLoc_MergedAcross", rangeReference));
-    }
-
-    /// <summary>
-    /// Builds the command(s) to merge <paramref name="range"/> into one region WITHOUT re-centering.
-    /// Delegates to <see cref="FreeX.App.Services.CellMergePlanner.CreateFormatCellsMergeCommands"/>
-    /// (mergeCells: true) rather than duplicating its merge/concatenate logic here. For the direct
-    /// "Merge Cells" gesture (the <paramref name="allowUnmergeToggle"/> default of <c>true</c>),
-    /// re-invoking on a selection that is already fully covered by an existing merged region unmerges it
-    /// instead of failing with "Range overlaps an existing merged region.". The per-row loop in
-    /// <see cref="MergeAcrossSelectedRangeAsync"/> passes <c>allowUnmergeToggle: false</c> instead, since
-    /// "Merge Across" must always leave the selection uniformly merged per row -- an already-merged row
-    /// of the exact target shape falls through to a no-op re-merge rather than being toggled back off.
-    /// The center <see cref="ApplyStyleCommand"/> that
-    /// <see cref="FreeX.App.Services.CellMergePlanner.CreateMergeAndCenterCommands(Sheet?, SheetId, GridRange, MergeCellContentResolution)"/>
-    /// appends is filtered out by CreateFormatCellsMergeCommands for the concatenate path, and never
-    /// added on the keep-first-cell path, so no re-centering leaks in here. A degenerate (single-cell)
-    /// range produces a no-op composite, which the edit service treats as a successful empty command.
-    /// </summary>
-    private static IWorkbookCommand BuildMergeWithoutCenterCommand(
-        Sheet sheet,
-        SheetId sheetId,
-        GridRange range,
-        MergeCellContentResolution contentResolution,
-        bool allowUnmergeToggle = true)
-    {
-        var commands = CellMergePlanner.CreateFormatCellsMergeCommands(
-            sheet, sheetId, range, mergeCells: true, contentResolution, allowUnmergeToggle);
-
-        return commands.Count == 1
-            ? commands[0]
-            : new CompositeWorkbookCommand("Merge Cells", commands);
     }
 
     /// <summary>
@@ -315,7 +271,9 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task ShowPasteSpecialDialogAsync()
     {
-        if (PasteSpecialWorkflowOverrideForTest is { } workflowOverride)
+        Func<Task>? workflowOverride = null;
+        ResolvePasteSpecialWorkflowOverride(ref workflowOverride);
+        if (workflowOverride is not null)
         {
             await workflowOverride();
             return;
@@ -334,152 +292,60 @@ public sealed partial class MainWindow
             return;
         }
 
-        var option = selection.Option;
-        switch (option.Kind)
+        var plan = PasteSpecialPlanner.CreatePlan(selection);
+        switch (plan.Action)
         {
-            case PasteSpecialDialogActionKind.Comments:
-                await PasteCommentsFromClipboardAsync(option.Label);
+            case PasteSpecialAction.Comments:
+                await PasteCommentsFromClipboardAsync(plan.Label);
                 return;
-            case PasteSpecialDialogActionKind.Validation:
-                await PasteDataValidationFromClipboardAsync(option.Label);
+            case PasteSpecialAction.Validation:
+                await PasteDataValidationFromClipboardAsync(plan.Label);
                 return;
-            case PasteSpecialDialogActionKind.ColumnWidths:
-                await PasteColumnWidthsFromClipboardAsync(option.Label);
+            case PasteSpecialAction.ColumnWidths:
+                await PasteColumnWidthsFromClipboardAsync(plan.Label);
                 return;
-            case PasteSpecialDialogActionKind.Text:
-            case PasteSpecialDialogActionKind.UnicodeText:
-                await PasteSpecialExternalTextFromClipboardAsync(option.Label);
+            case PasteSpecialAction.ExternalText:
+                await PasteSpecialExternalTextFromClipboardAsync(plan.Label);
                 return;
-            case PasteSpecialDialogActionKind.Picture:
-                await PastePictureFromClipboardAsync(option.Label, linkedPicture: false);
+            case PasteSpecialAction.Picture:
+                await PastePictureFromClipboardAsync(plan.Label, linkedPicture: false);
                 return;
-            case PasteSpecialDialogActionKind.LinkedPicture:
-                await PastePictureFromClipboardAsync(option.Label, linkedPicture: true);
+            case PasteSpecialAction.LinkedPicture:
+                await PastePictureFromClipboardAsync(plan.Label, linkedPicture: true);
                 return;
-            case PasteSpecialDialogActionKind.Link:
-                await PasteLinkFromClipboardAsync(option.Label);
+            case PasteSpecialAction.Link:
+                await PasteLinkFromClipboardAsync(plan.Label);
                 return;
             default:
-                var pasteOptions = new PasteSpecialOptions(
-                    Transpose: selection.Transpose,
-                    Operation: selection.Operation,
-                    SkipBlanks: selection.SkipBlanks,
-                    ContentKind: option.ContentKind);
-                await PasteSpecialClipboardTextAsync(option.Mode, pasteOptions, option.Label, selection.KeepSourceColumnWidths);
+                await PasteSpecialClipboardTextAsync(
+                    ClipboardPastePlanner.ToCorePasteMode(plan.PasteMode),
+                    plan.Options,
+                    plan.Label,
+                    plan.KeepColumnWidths);
                 return;
         }
     }
 
-    internal Func<Task>? PasteSpecialWorkflowOverrideForTest { get; set; }
+    partial void ResolvePasteSpecialWorkflowOverride(ref Func<Task>? handler);
 
     /// <summary>
-    /// Which existing execution method a content-kind radio in the ribbon's Paste Special dialog routes
-    /// to. <see cref="Cells"/> is the composable family (goes through <see cref="PasteSpecialClipboardTextAsync"/>
-    /// together with the Skip Blanks/Transpose/Keep Source Column Widths checkboxes and the Operation
-    /// group); every other member is a fixed, non-composable action mirroring one submenu item in
-    /// <see cref="CreatePasteSpecialMenuItems"/>.
+    /// Shows the native dialog and returns the shared typed selection, or <c>null</c>. The shared
+    /// catalog supplies content order, action policy, labels, stable identities, and default state.
     /// </summary>
-    internal enum PasteSpecialDialogActionKind
-    {
-        Cells,
-        Comments,
-        Validation,
-        ColumnWidths,
-        Text,
-        UnicodeText,
-        Picture,
-        LinkedPicture,
-        Link,
-    }
-
-    internal sealed record PasteSpecialDialogOption(
-        string Label,
-        string AutomationId,
-        PasteSpecialDialogActionKind Kind,
-        PasteCellsMode Mode = PasteCellsMode.All,
-        PasteSpecialContentKind ContentKind = PasteSpecialContentKind.Default);
-
-    internal sealed record PasteSpecialDialogSelection(
-        PasteSpecialDialogOption Option,
-        bool SkipBlanks,
-        bool Transpose,
-        bool KeepSourceColumnWidths,
-        PasteSpecialOperation Operation);
-
-    /// <summary>
-    /// Test-only hook (matching the established SmokeProbe convention used by
-    /// <c>ShowFormatCellsInputDialogAsync</c>/<c>ShowFindDialogAsync</c>/etc. in MainWindow.cs) exposing
-    /// the real, production content-kind radios / checkboxes / operation radios / footer buttons of the
-    /// ribbon's Paste Special dialog so a headless test can drive them directly -- the OS clipboard itself
-    /// (<c>IClipboard</c>) is <c>[NotClientImplementable]</c> so cannot be doubled in a headless test (see
-    /// the R66/R68 rationale on <see cref="TryGetClipboardTextAsync"/>), but this probe fires from the
-    /// dialog's own <c>Opened</c> event, before any clipboard access happens, so it can still exercise the
-    /// real dialog end-to-end for everything up to (and including) the OK-click selection decision.
-    /// </summary>
-    internal sealed record PasteSpecialDialogSmokeProbe(
-        Window Dialog,
-        IReadOnlyList<RadioButton> ContentRadios,
-        CheckBox SkipBlanksBox,
-        CheckBox TransposeBox,
-        CheckBox KeepColumnWidthsBox,
-        IReadOnlyList<RadioButton> OperationRadios,
-        Button PasteLinkButton,
-        Button OkButton,
-        Button CancelButton);
-
-    /// <summary>
-    /// The content-kind radio list for the ribbon's Paste Special dialog, in the same order as (and
-    /// covering every entry of) the Paste split-button's Paste Special submenu built by
-    /// <see cref="CreatePasteSpecialMenuItems"/>, minus the Transpose / Skip Blanks / the four math
-    /// Operation entries there -- this dialog exposes those as composable checkboxes and an Operation
-    /// group instead (see <see cref="PromptPasteSpecialModeAsync"/>), so they can be combined with any
-    /// <see cref="PasteSpecialDialogActionKind.Cells"/> content kind, matching Excel and
-    /// <see cref="FreeX.App.Host.PasteSpecialDialog"/>.
-    /// </summary>
-    private static readonly PasteSpecialDialogOption[] PasteSpecialDialogOptions =
-    [
-        new("All", "PasteSpecialAllRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All),
-        new("Values", "PasteSpecialValuesRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.Values),
-        new("Formulas", "PasteSpecialFormulasRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.Formulas),
-        new("Formats", "PasteSpecialFormatsRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.Formats),
-        new("Comments and Notes", "PasteSpecialCommentsRadio", PasteSpecialDialogActionKind.Comments),
-        new("Validation", "PasteSpecialValidationRadio", PasteSpecialDialogActionKind.Validation),
-        new("All Except Borders", "PasteSpecialAllExceptBordersRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.AllExceptBorders),
-        new("All Merging Conditional Formats", "PasteSpecialAllMergingConditionalFormatsRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.AllMergingConditionalFormats),
-        new("Column Widths", "PasteSpecialColumnWidthsRadio", PasteSpecialDialogActionKind.ColumnWidths),
-        new("Formulas and Number Formats", "PasteSpecialFormulasAndNumberFormatsRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.FormulasAndNumberFormats),
-        new("Values and Number Formats", "PasteSpecialValuesAndNumberFormatsRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.ValuesAndNumberFormats),
-        new("Values and Source Formatting", "PasteSpecialValuesAndSourceFormattingRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.ValuesAndSourceFormatting),
-        new("Text", "PasteSpecialTextRadio", PasteSpecialDialogActionKind.Text),
-        new("Unicode Text", "PasteSpecialUnicodeTextRadio", PasteSpecialDialogActionKind.UnicodeText),
-        new("Picture", "PasteSpecialPictureRadio", PasteSpecialDialogActionKind.Picture),
-        new("Linked Picture", "PasteSpecialLinkedPictureRadio", PasteSpecialDialogActionKind.LinkedPicture),
-    ];
-
-    private static readonly PasteSpecialDialogOption PasteSpecialPasteLinkOption =
-        new("Paste Link", "PasteSpecialPasteLinkButton", PasteSpecialDialogActionKind.Link);
-
-    /// <summary>
-    /// Shows the Paste Special dialog and returns the selected content kind plus checkbox/operation state,
-    /// or <c>null</c> if cancelled. The "Paste Link" footer button (matching WPF/Excel) closes the dialog
-    /// with a dedicated <see cref="PasteSpecialDialogActionKind.Link"/> selection regardless of which
-    /// content-kind radio is checked, mirroring <see cref="CreatePasteSpecialMenuItems"/>'s standalone
-    /// "Paste Link" submenu entry.
-    /// </summary>
-    internal async Task<PasteSpecialDialogSelection?> PromptPasteSpecialModeAsync(
-        Action<PasteSpecialDialogSmokeProbe>? launchSmokeProbe = null)
+    internal async Task<PasteSpecialDialogSelection?> PromptPasteSpecialModeAsync()
     {
         PasteSpecialDialogSelection? result = null;
+        var surface = PasteSpecialPlanner.Surface;
 
         var dialog = new Window
         {
-            Title = UiText.Get("TableLoc_PasteSpecialTitle"),
+            Title = surface.Title.ResolveAvalonia(UiText.Get),
             Width = 420,
             Height = 600,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
-        AutomationProperties.SetAutomationId(dialog, "PasteSpecialDialog");
+        AutomationProperties.SetAutomationId(dialog, surface.AutomationId);
 
         var root = new StackPanel
         {
@@ -489,7 +355,7 @@ public sealed partial class MainWindow
 
         root.Children.Add(new TextBlock
         {
-            Text = UiText.Get("TableLoc_PasteSpecialPasteLabel"),
+            Text = surface.PasteGroup.ResolveAvalonia(UiText.Get),
             FontWeight = FontWeight.SemiBold,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -497,17 +363,18 @@ public sealed partial class MainWindow
 
         var radios = new List<RadioButton>();
         var optionsPanel = new StackPanel { Spacing = 4 };
-        foreach (var option in PasteSpecialDialogOptions)
+        foreach (var choice in surface.AvaloniaChoices)
         {
             var radio = new RadioButton
             {
-                Content = option.Label,
+                Content = choice.AvaloniaLabel,
                 GroupName = "PasteSpecialMode",
-                IsChecked = option == PasteSpecialDialogOptions[0],
-                Tag = option,
+                IsChecked = choice.IsDefault,
+                IsEnabled = choice.IsEnabled,
+                Tag = choice,
             };
             ApplyDataOpsRadioButtonChrome(radio);
-            AutomationProperties.SetAutomationId(radio, option.AutomationId);
+            AutomationProperties.SetAutomationId(radio, choice.AvaloniaAutomationId);
             radios.Add(radio);
             optionsPanel.Children.Add(radio);
         }
@@ -518,17 +385,9 @@ public sealed partial class MainWindow
             Content = optionsPanel,
         });
 
-        var skipBlanksBox = new CheckBox { Content = "Skip Blanks" };
-        ApplyDataOpsCheckBoxChrome(skipBlanksBox);
-        AutomationProperties.SetAutomationId(skipBlanksBox, "PasteSpecialSkipBlanksBox");
-
-        var transposeBox = new CheckBox { Content = "Transpose" };
-        ApplyDataOpsCheckBoxChrome(transposeBox);
-        AutomationProperties.SetAutomationId(transposeBox, "PasteSpecialTransposeBox");
-
-        var keepColumnWidthsBox = new CheckBox { Content = "Keep Source Column Widths" };
-        ApplyDataOpsCheckBoxChrome(keepColumnWidthsBox);
-        AutomationProperties.SetAutomationId(keepColumnWidthsBox, "PasteSpecialKeepColumnWidthsBox");
+        var skipBlanksBox = CreateAvaloniaToggle(surface.GetToggle(PasteSpecialToggleKind.SkipBlanks));
+        var transposeBox = CreateAvaloniaToggle(surface.GetToggle(PasteSpecialToggleKind.Transpose));
+        var keepColumnWidthsBox = CreateAvaloniaToggle(surface.GetToggle(PasteSpecialToggleKind.KeepColumnWidths));
 
         var checkboxPanel = new StackPanel { Spacing = 4 };
         checkboxPanel.Children.Add(skipBlanksBox);
@@ -538,20 +397,11 @@ public sealed partial class MainWindow
 
         root.Children.Add(new TextBlock
         {
-            Text = "Operation",
+            Text = surface.OperationGroup.ResolveAvalonia(UiText.Get),
             FontWeight = FontWeight.SemiBold,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         });
-
-        var operationChoices = new (PasteSpecialOperation Operation, string Label, string AutomationId)[]
-        {
-            (PasteSpecialOperation.None, "None", "PasteSpecialOperationNoneRadio"),
-            (PasteSpecialOperation.Add, "Add", "PasteSpecialOperationAddRadio"),
-            (PasteSpecialOperation.Subtract, "Subtract", "PasteSpecialOperationSubtractRadio"),
-            (PasteSpecialOperation.Multiply, "Multiply", "PasteSpecialOperationMultiplyRadio"),
-            (PasteSpecialOperation.Divide, "Divide", "PasteSpecialOperationDivideRadio"),
-        };
 
         var operationRadios = new List<RadioButton>();
         var operationGrid = new Grid();
@@ -560,76 +410,81 @@ public sealed partial class MainWindow
         for (var i = 0; i < 3; i++)
             operationGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        for (var i = 0; i < operationChoices.Length; i++)
+        foreach (var operation in surface.Operations.OrderBy(descriptor => descriptor.Order))
         {
-            var choice = operationChoices[i];
             var radio = new RadioButton
             {
-                Content = choice.Label,
+                Content = operation.AvaloniaLabel,
                 GroupName = "PasteSpecialOperation",
-                IsChecked = choice.Operation == PasteSpecialOperation.None,
-                Tag = choice.Operation,
+                IsChecked = operation.IsDefault,
+                IsEnabled = operation.IsEnabled,
+                Tag = operation.Operation,
             };
             ApplyDataOpsRadioButtonChrome(radio);
-            AutomationProperties.SetAutomationId(radio, choice.AutomationId);
-            Grid.SetRow(radio, i / 2);
-            Grid.SetColumn(radio, i % 2);
+            AutomationProperties.SetAutomationId(radio, operation.AvaloniaAutomationId);
+            Grid.SetRow(radio, operation.Placement.Row);
+            Grid.SetColumn(radio, operation.Placement.Column);
             operationRadios.Add(radio);
             operationGrid.Children.Add(radio);
         }
 
         root.Children.Add(operationGrid);
 
+        var pasteLinkAction = surface.GetAction(PasteSpecialDialogActionKind.PasteLink);
         var pasteLinkButton = new Button
         {
-            Content = "Paste Link",
+            Content = pasteLinkAction.ResolveAvaloniaLabel(UiText.Get),
             MinWidth = 82,
+            IsEnabled = pasteLinkAction.IsEnabled,
         };
         ApplyDataOpsButtonChrome(pasteLinkButton);
-        AutomationProperties.SetAutomationId(pasteLinkButton, "PasteSpecialPasteLinkButton");
+        AutomationProperties.SetAutomationId(pasteLinkButton, pasteLinkAction.AvaloniaAutomationId);
         pasteLinkButton.Click += (_, _) =>
         {
-            result = new PasteSpecialDialogSelection(
-                PasteSpecialPasteLinkOption, SkipBlanks: false, Transpose: false, KeepSourceColumnWidths: false, Operation: PasteSpecialOperation.None);
+            result = PasteSpecialPlanner.CreatePasteLinkSelection();
             dialog.Close();
         };
 
+        var acceptAction = surface.GetAction(PasteSpecialDialogActionKind.Accept);
         var okButton = new Button
         {
-            Content = UiText.Get("TableLoc_OK"),
+            Content = acceptAction.ResolveAvaloniaLabel(UiText.Get),
             MinWidth = 82,
-            IsDefault = true,
+            IsDefault = acceptAction.IsDefault,
+            IsEnabled = acceptAction.IsEnabled,
         };
-        ApplyDataOpsButtonChrome(okButton, isDefault: true);
-        AutomationProperties.SetAutomationId(okButton, "PasteSpecialOkButton");
+        ApplyDataOpsButtonChrome(okButton, isDefault: acceptAction.IsDefault);
+        AutomationProperties.SetAutomationId(okButton, acceptAction.AvaloniaAutomationId);
         okButton.Click += (_, _) =>
         {
             var selected = radios.FirstOrDefault(r => r.IsChecked == true);
-            if (selected?.Tag is PasteSpecialDialogOption option)
+            if (selected?.Tag is PasteSpecialChoiceDescriptor choice)
             {
                 var operation = PasteSpecialOperation.None;
                 if (operationRadios.FirstOrDefault(r => r.IsChecked == true) is { Tag: PasteSpecialOperation selectedOperation })
                     operation = selectedOperation;
 
-                result = new PasteSpecialDialogSelection(
-                    option,
-                    SkipBlanks: skipBlanksBox.IsChecked == true,
-                    Transpose: transposeBox.IsChecked == true,
-                    KeepSourceColumnWidths: keepColumnWidthsBox.IsChecked == true,
-                    Operation: operation);
+                result = PasteSpecialPlanner.CreateSelection(
+                    choice.Mode,
+                    operation,
+                    skipBlanks: skipBlanksBox.IsChecked == true,
+                    transpose: transposeBox.IsChecked == true,
+                    keepColumnWidths: keepColumnWidthsBox.IsChecked == true);
             }
 
             dialog.Close();
         };
 
+        var cancelAction = surface.GetAction(PasteSpecialDialogActionKind.Cancel);
         var cancelButton = new Button
         {
-            Content = UiText.Get("TableLoc_Cancel"),
+            Content = cancelAction.ResolveAvaloniaLabel(UiText.Get),
             MinWidth = 82,
-            IsCancel = true,
+            IsCancel = cancelAction.IsCancel,
+            IsEnabled = cancelAction.IsEnabled,
         };
         ApplyDataOpsButtonChrome(cancelButton);
-        AutomationProperties.SetAutomationId(cancelButton, "PasteSpecialCancelButton");
+        AutomationProperties.SetAutomationId(cancelButton, cancelAction.AvaloniaAutomationId);
         cancelButton.Click += (_, _) =>
         {
             result = null;
@@ -650,18 +505,31 @@ public sealed partial class MainWindow
 
         dialog.Content = root;
         dialog.Opened += (_, _) => okButton.Focus();
-        if (launchSmokeProbe is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                RunLaunchSmokeDialogProbe(
-                    dialog,
-                    () => launchSmokeProbe(new PasteSpecialDialogSmokeProbe(
-                        dialog, radios, skipBlanksBox, transposeBox, keepColumnWidthsBox, operationRadios, pasteLinkButton, okButton, cancelButton)));
-            };
-        }
+        AttachOptionalPasteSpecialDialogObservation(
+            dialog,
+            radios,
+            skipBlanksBox,
+            transposeBox,
+            keepColumnWidthsBox,
+            operationRadios,
+            pasteLinkButton,
+            okButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    private static CheckBox CreateAvaloniaToggle(PasteSpecialToggleDescriptor toggle)
+    {
+        var checkBox = new CheckBox
+        {
+            Content = toggle.AvaloniaLabel,
+            IsChecked = toggle.IsCheckedByDefault,
+            IsEnabled = toggle.IsEnabled,
+        };
+        ApplyDataOpsCheckBoxChrome(checkBox);
+        AutomationProperties.SetAutomationId(checkBox, toggle.AvaloniaAutomationId);
+        return checkBox;
     }
 }

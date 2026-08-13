@@ -10,6 +10,10 @@ using Avalonia.Platform.Storage;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Localization;
+using FreeX.App.Presentation.Calculation;
+using Free.Shared.Localization;
+using FreeX.App.Presentation.Options;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
@@ -23,8 +27,8 @@ namespace FreeX.App.Avalonia;
 /// <summary>
 /// File ▸ Options — the Avalonia/macOS shell's Options (Settings) dialog. The Windows host already has
 /// a multi-tab <c>OptionsDialog</c> editing the shared <see cref="AppOptions"/> model; this is the
-/// portable shell's counterpart. It edits the same <see cref="AppOptions"/> (loaded/saved through
-/// <see cref="AppOptionsStore"/>), so settings persist across launches and are shared with the host.
+/// portable shell's counterpart. It edits the same <see cref="AppOptions"/> through the shared
+/// <see cref="FreeXOptionsRuntimeSession"/>, so settings persist across launches and are shared with the host.
 ///
 /// <para>
 /// The dialog is a left category list (General / Formulas / Proofing / View / Save) plus a right panel,
@@ -37,6 +41,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private readonly FreeXOptionsRuntimeSession _optionsRuntimeSession;
+
     private static AvaloniaCompactDialogChromeStyle OptionsDialogChromeStyle => new(FormulaBarFontFamily);
 
     // ── File ▸ Options entry point ──────────────────────────────────────────────
@@ -54,11 +60,12 @@ public sealed partial class MainWindow
 
         // Edit a snapshot loaded from the shared store during normal use. The capture route swaps
         // in a deterministic shared fixture so paired screenshots do not inherit user-local state.
-        var current = App.ParityCaptureOptions is null
-            ? AppOptionsStore.Load()
-            : OptionsDialogParityFixture.Create();
-        var quickAccessCommandIds = QuickAccessToolbarCatalog.NormalizeCommandIds(current.QuickAccessToolbarCommands).ToList();
-        var customDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(current.SpellCheckCustomDictionaryWords);
+        var current = App.ExternalOptionsFixtureFactory?.Invoke()
+            ?? _optionsRuntimeSession.Reload();
+        var optionsDialogSession = _optionsRuntimeSession.BeginDialog(current);
+        current = optionsDialogSession.OpenSnapshot;
+        var quickAccessSession = optionsDialogSession.QuickAccessToolbar;
+        var customDictionaryEditor = optionsDialogSession.CustomDictionary;
         var warningText = new TextBlock
         {
             Foreground = Brush(180, 30, 30),
@@ -153,7 +160,9 @@ public sealed partial class MainWindow
         // not a persisted app-wide default — seed them from the live session's workbook so the
         // dialog reflects whatever the ribbon's Calculation Options last set on this workbook
         // (matching Excel), not the stale on-disk AppOptions.AutoCalculate.
-        var workbookAutoCalculate = !CalculationModeIsManual;
+        var workbook = _session.Workbook;
+        var calculationState = CalculationOptionsDialogState.FromWorkbook(workbook);
+        var workbookAutoCalculate = calculationState.AutoCalculate;
         var calcAutoButton = new RadioButton { Content = UiText.Get("Options_CalcAutomatic"), GroupName = "OptionsCalcMode", IsChecked = workbookAutoCalculate };
         ApplyOptionsRadioButtonChrome(calcAutoButton);
         AutomationProperties.SetAutomationId(calcAutoButton, "OptionsCalcAutomaticButton");
@@ -161,7 +170,6 @@ public sealed partial class MainWindow
         ApplyOptionsRadioButtonChrome(calcManualButton);
         AutomationProperties.SetAutomationId(calcManualButton, "OptionsCalcManualButton");
 
-        var workbook = _session.Workbook;
         var iterativeBox = new CheckBox { Content = OptionsText("Options_EnableIterativeCalculation"), IsChecked = workbook.IterativeCalculation };
         ApplyOptionsCheckBoxChrome(iterativeBox);
         AutomationProperties.SetAutomationId(iterativeBox, "OptionsIterativeCalculationCheckBox");
@@ -242,7 +250,7 @@ public sealed partial class MainWindow
         {
             Width = OptionsDialogPlanner.ProofingContentWidth,
             Height = OptionsDialogPlanner.ProofingWordsListHeight,
-            ItemsSource = customDictionaryWords.ToList(),
+            ItemsSource = customDictionaryEditor.Model.Words,
         };
         ApplyOptionsListBoxChrome(proofingWordsList);
         AutomationProperties.SetName(proofingWordsList, OptionsText("Options_CustomDictionaryWordsAutomationName"));
@@ -267,35 +275,39 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(proofingRemoveButton, "ProofingCustomDictionaryRemoveWordButton");
         AutomationProperties.SetHelpText(proofingRemoveButton, OptionsText("Options_CustomDictionaryRemoveWordHelpText"));
 
-        var proofingClearButton = new Button { Content = OptionsText("Options_CustomDictionaryClearAllButton"), Width = OptionsDialogPlanner.ProofingClearWordsButtonWidth, Height = OptionsDialogPlanner.ButtonHeight, IsEnabled = customDictionaryWords.Count > 0 };
+        var proofingClearButton = new Button { Content = OptionsText("Options_CustomDictionaryClearAllButton"), Width = OptionsDialogPlanner.ProofingClearWordsButtonWidth, Height = OptionsDialogPlanner.ButtonHeight, IsEnabled = customDictionaryEditor.Model.CanClear };
         ApplyOptionsButtonChrome(proofingClearButton, OptionsDialogPlanner.ProofingClearWordsButtonWidth);
         AutomationProperties.SetName(proofingClearButton, OptionsText("Options_CustomDictionaryClearAllButtonAutomationName"));
         AutomationProperties.SetAutomationId(proofingClearButton, "ProofingCustomDictionaryClearWordsButton");
         AutomationProperties.SetHelpText(proofingClearButton, OptionsText("Options_CustomDictionaryClearAllHelpText"));
 
-        void RefreshProofingWords(string? selectedWord = null)
+        void RefreshProofingWords()
         {
-            var previous = selectedWord ?? proofingWordsList.SelectedItem as string;
-            proofingWordsList.ItemsSource = customDictionaryWords.ToList();
-            if (!string.IsNullOrWhiteSpace(previous))
-            {
-                proofingWordsList.SelectedItem = customDictionaryWords.FirstOrDefault(
-                    word => string.Equals(word, previous, StringComparison.OrdinalIgnoreCase));
-            }
-
-            proofingRemoveButton.IsEnabled = proofingWordsList.SelectedItem is string;
-            proofingClearButton.IsEnabled = customDictionaryWords.Count > 0;
+            var model = customDictionaryEditor.Model;
+            proofingWordsList.ItemsSource = model.Words;
+            proofingWordsList.SelectedItem = model.SelectedWord;
+            proofingRemoveButton.IsEnabled = model.CanRemove;
+            proofingClearButton.IsEnabled = model.CanClear;
         }
 
         void UpdateProofingButtons()
         {
-            proofingAddButton.IsEnabled = AppOptions.NormalizeSpellCheckCustomDictionaryWord(proofingWordBox.Text) is not null;
-            proofingRemoveButton.IsEnabled = proofingWordsList.SelectedItem is string;
-            proofingClearButton.IsEnabled = customDictionaryWords.Count > 0;
+            var model = customDictionaryEditor.Model;
+            proofingAddButton.IsEnabled = model.CanAdd;
+            proofingRemoveButton.IsEnabled = model.CanRemove;
+            proofingClearButton.IsEnabled = model.CanClear;
         }
 
-        proofingWordBox.TextChanged += (_, _) => UpdateProofingButtons();
-        proofingWordsList.SelectionChanged += (_, _) => UpdateProofingButtons();
+        proofingWordBox.TextChanged += (_, _) =>
+        {
+            customDictionaryEditor.SetPendingWord(proofingWordBox.Text);
+            UpdateProofingButtons();
+        };
+        proofingWordsList.SelectionChanged += (_, _) =>
+        {
+            customDictionaryEditor.SelectWord(proofingWordsList.SelectedItem as string);
+            UpdateProofingButtons();
+        };
         proofingWordBox.KeyDown += (_, args) =>
         {
             if (args.Key is not (Key.Enter or Key.Return) || !proofingAddButton.IsEnabled)
@@ -306,32 +318,23 @@ public sealed partial class MainWindow
         };
         proofingAddButton.Click += (_, _) =>
         {
-            if (SpellCheckWorkflowPlanner.AddCustomDictionaryWord(customDictionaryWords, new HashSet<string>(customDictionaryWords, StringComparer.OrdinalIgnoreCase), proofingWordBox.Text ?? string.Empty))
-            {
-                var added = AppOptions.NormalizeSpellCheckCustomDictionaryWord(proofingWordBox.Text);
-                proofingWordBox.Clear();
-                RefreshProofingWords(added);
-            }
-            else
-            {
-                customDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(customDictionaryWords);
-                proofingWordBox.Clear();
-                RefreshProofingWords();
-            }
+            customDictionaryEditor.SetPendingWord(proofingWordBox.Text);
+            customDictionaryEditor.AddPendingWord();
+            proofingWordBox.Clear();
+            RefreshProofingWords();
         };
         proofingRemoveButton.Click += (_, _) =>
         {
             if (proofingWordsList.SelectedItem is not string selected)
                 return;
 
-            var nextWord = SpellCheckWorkflowPlanner.RemoveCustomDictionaryWordAndSelectNext(
-                customDictionaryWords,
-                selected);
-            RefreshProofingWords(nextWord);
+            customDictionaryEditor.SelectWord(selected);
+            customDictionaryEditor.RemoveSelectedWord();
+            RefreshProofingWords();
         };
         proofingClearButton.Click += (_, _) =>
         {
-            SpellCheckWorkflowPlanner.ClearCustomDictionaryWords(customDictionaryWords);
+            customDictionaryEditor.Clear();
             RefreshProofingWords();
             proofingWordBox.Focus();
         };
@@ -372,7 +375,10 @@ public sealed partial class MainWindow
             },
         };
         var autoCorrectButton = OptionsButton(OptionsText("Options_AutoCorrectOptions2"), OptionsDialogPlanner.ProofingAutoCorrectButtonWidth);
-        autoCorrectButton.Click += (_, _) => ShowOptionsWarning(UiText.Get("DeferredCommand_AutoCorrectOptions_Body"));
+        var autoCorrectMessage = DeferredCommandMessageResolver.Resolve(
+            DeferredCommandMessagePlanner.AutoCorrectOptions(),
+            AvaloniaPlannerTextResources.Text);
+        autoCorrectButton.Click += (_, _) => ShowOptionsWarning(autoCorrectMessage.Body);
 
         var proofingChecks = new StackPanel
         {
@@ -546,12 +552,7 @@ public sealed partial class MainWindow
                 OptionsText("Options_ObjectsDisplayPlaceholders"),
                 OptionsText("Options_ObjectsDisplayNothing"),
             },
-            selectedIndex: current.ObjectsDisplay switch
-            {
-                AppOptionsObjectDisplay.Placeholders => 1,
-                AppOptionsObjectDisplay.Nothing => 2,
-                _ => 0,
-            },
+            selectedIndex: OptionsDialogPlanner.ObjectDisplayToIndex(current.ObjectsDisplay),
             isEnabled: true,
             minWidth: OptionsDialogPlanner.AdvancedObjectsControlWidth);
         AutomationProperties.SetAutomationId(objectsDisplayBox, "OptionsObjectsDisplayComboBox");
@@ -639,7 +640,7 @@ public sealed partial class MainWindow
                 "QuickAccessToolbarMoveUpButton" => "Options_QuickAccessMoveUpHelpText",
                 "QuickAccessToolbarMoveDownButton" => "Options_QuickAccessMoveDownHelpText",
                 "QuickAccessToolbarResetButton" => "Options_QuickAccessResetHelpText",
-                "QuickAccessToolbarImportExportButton" => "Options_QuickAccessImportExportHelpText",
+                FreeXAutomationIdCatalog.QuickAccessToolbarImportExportButton => "Options_QuickAccessImportExportHelpText",
                 _ => null,
             };
             if (helpKey is not null)
@@ -652,27 +653,29 @@ public sealed partial class MainWindow
         var quickAccessMoveUpButton = MakeQuickAccessButton(OptionsText("Options_MoveUp"), "QuickAccessToolbarMoveUpButton");
         var quickAccessMoveDownButton = MakeQuickAccessButton(OptionsText("Options_MoveDown"), "QuickAccessToolbarMoveDownButton");
         var quickAccessResetButton = MakeQuickAccessButton(OptionsText("Options_Reset"), "QuickAccessToolbarResetButton");
-        var quickAccessImportExportButton = MakeQuickAccessButton(OptionsText("Options_ImportExport"), "QuickAccessToolbarImportExportButton", 130);
+        var quickAccessImportExportButton = MakeQuickAccessButton(
+            OptionsText("Options_ImportExport"),
+            FreeXAutomationIdCatalog.QuickAccessToolbarImportExportButton,
+            130);
         quickAccessImportExportButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
 
         void UpdateQuickAccessButtons()
         {
             quickAccessAddButton.IsEnabled = quickAccessAvailableList.SelectedItem is OptionsQuickAccessCommandChoice;
-            quickAccessRemoveButton.IsEnabled = quickAccessSelectedList.SelectedItem is OptionsQuickAccessCommandChoice && quickAccessCommandIds.Count > 1;
+            quickAccessRemoveButton.IsEnabled = quickAccessSelectedList.SelectedItem is OptionsQuickAccessCommandChoice && quickAccessSession.CommandIds.Count > 1;
             quickAccessMoveUpButton.IsEnabled = quickAccessSelectedList.SelectedIndex > 0;
-            quickAccessMoveDownButton.IsEnabled = quickAccessSelectedList.SelectedIndex >= 0 && quickAccessSelectedList.SelectedIndex < quickAccessCommandIds.Count - 1;
+            quickAccessMoveDownButton.IsEnabled = quickAccessSelectedList.SelectedIndex >= 0 && quickAccessSelectedList.SelectedIndex < quickAccessSession.CommandIds.Count - 1;
         }
 
         void RefreshQuickAccessLists(string? selectedAvailableId = null, string? selectedCommandId = null)
         {
             var filter = quickAccessSearchBox.Text?.Trim() ?? string.Empty;
-            var available = QuickAccessToolbarCustomizationPlanner.FilterAvailable(
-                    quickAccessCommandIds,
+            var available = quickAccessSession.FilterAvailable(
                     filter,
                     command => [UiText.Get(command.TitleResourceKey), UiText.Get(command.DescriptionResourceKey)])
                 .Select(command => new OptionsQuickAccessCommandChoice(command.Id, UiText.Get(command.TitleResourceKey)))
                 .ToList();
-            var selected = quickAccessCommandIds
+            var selected = quickAccessSession.CommandIds
                 .Select(id => QuickAccessToolbarCatalog.TryGet(id, out var command) ? command : null)
                 .Where(command => command is not null)
                 .Select(command => new OptionsQuickAccessCommandChoice(command!.Id, UiText.Get(command.TitleResourceKey)))
@@ -690,39 +693,30 @@ public sealed partial class MainWindow
         {
             if (quickAccessAvailableList.SelectedItem is not OptionsQuickAccessCommandChoice choice)
                 return;
-            quickAccessCommandIds = QuickAccessToolbarCustomizationPlanner.Apply(
-                quickAccessCommandIds,
-                choice.Id,
-                QuickAccessToolbarCustomizationAction.Add).ToList();
+            quickAccessSession.Apply(choice.Id, QuickAccessToolbarCustomizationAction.Add);
             RefreshQuickAccessLists(selectedCommandId: choice.Id);
         }
 
         void RemoveQuickAccessCommand()
         {
-            if (quickAccessSelectedList.SelectedItem is not OptionsQuickAccessCommandChoice choice || quickAccessCommandIds.Count <= 1)
+            if (quickAccessSelectedList.SelectedItem is not OptionsQuickAccessCommandChoice choice || quickAccessSession.CommandIds.Count <= 1)
                 return;
-            var index = quickAccessCommandIds.FindIndex(id => string.Equals(id, choice.Id, StringComparison.OrdinalIgnoreCase));
+            var index = quickAccessSession.IndexOf(choice.Id);
             if (index < 0)
                 return;
-            quickAccessCommandIds = QuickAccessToolbarCustomizationPlanner.Apply(
-                quickAccessCommandIds,
-                choice.Id,
-                QuickAccessToolbarCustomizationAction.Remove).ToList();
-            var nextIndex = Math.Clamp(index, 0, quickAccessCommandIds.Count - 1);
-            RefreshQuickAccessLists(selectedCommandId: quickAccessCommandIds[nextIndex]);
+            quickAccessSession.Apply(choice.Id, QuickAccessToolbarCustomizationAction.Remove);
+            var nextIndex = Math.Clamp(index, 0, quickAccessSession.CommandIds.Count - 1);
+            RefreshQuickAccessLists(selectedCommandId: quickAccessSession.CommandIds[nextIndex]);
         }
 
         void MoveQuickAccessCommand(int delta)
         {
             if (quickAccessSelectedList.SelectedItem is not OptionsQuickAccessCommandChoice choice)
                 return;
-            var index = quickAccessCommandIds.FindIndex(id => string.Equals(id, choice.Id, StringComparison.OrdinalIgnoreCase));
+            var index = quickAccessSession.IndexOf(choice.Id);
             if (index < 0)
                 return;
-            quickAccessCommandIds = QuickAccessToolbarCustomizationPlanner.Move(
-                quickAccessCommandIds,
-                choice.Id,
-                delta).ToList();
+            quickAccessSession.Move(choice.Id, delta);
             RefreshQuickAccessLists(selectedCommandId: choice.Id);
         }
 
@@ -768,8 +762,8 @@ public sealed partial class MainWindow
         quickAccessMoveDownButton.Click += (_, _) => MoveQuickAccessCommand(1);
         quickAccessResetButton.Click += (_, _) =>
         {
-            quickAccessCommandIds = QuickAccessToolbarCustomizationPlanner.Reset().ToList();
-            RefreshQuickAccessLists(selectedCommandId: quickAccessCommandIds[0]);
+            quickAccessSession.Reset();
+            RefreshQuickAccessLists(selectedCommandId: quickAccessSession.CommandIds[0]);
         };
 
         async Task ImportQuickAccessCustomizationAsync()
@@ -780,7 +774,7 @@ public sealed partial class MainWindow
                     StorageProvider,
                     AvaloniaFilePickerOpenRequest.FromFileTypes(
                         OptionsText("Options_QuickAccessToolbar"),
-                        [new FilePickerFileType("FreeX Quick Access Toolbar")
+                        [new FilePickerFileType(OptionsText("Options_QuickAccessToolbarFileType"))
                         {
                             Patterns = QuickAccessToolbarCustomizationFile.FilePickerPatterns,
                         }]));
@@ -790,18 +784,17 @@ public sealed partial class MainWindow
                 {
                     if (string.IsNullOrWhiteSpace(picker.LocalPath))
                     {
-                        ShowOptionsWarning("Quick Access Toolbar import requires a local file path.");
+                        ShowOptionsWarning(OptionsText("Options_QuickAccessImportRequiresLocalPath"));
                         return;
                     }
-                    var result = QuickAccessToolbarCustomizationFile.TryLoad(picker.LocalPath);
+                    var result = quickAccessSession.TryImport(picker.LocalPath);
                     if (!result.Success || result.Customization is null)
                     {
-                        ShowOptionsWarning(result.ErrorMessage ?? "Could not import Quick Access Toolbar customization.");
+                        ShowOptionsWarning(result.ErrorMessage ?? OptionsText("Options_QuickAccessImportFailed"));
                         return;
                     }
-                    quickAccessCommandIds = result.Customization.CommandIds.ToList();
-                    quickAccessBelowRibbonBox.IsChecked = result.Customization.QuickAccessToolbarBelowRibbon;
-                    RefreshQuickAccessLists(selectedCommandId: quickAccessCommandIds[0]);
+                    quickAccessBelowRibbonBox.IsChecked = quickAccessSession.QuickAccessToolbarBelowRibbon;
+                    RefreshQuickAccessLists(selectedCommandId: quickAccessSession.CommandIds[0]);
                 }
             }
             catch (Exception ex)
@@ -818,7 +811,7 @@ public sealed partial class MainWindow
                     StorageProvider,
                     AvaloniaFilePickerSaveRequest.FromFileTypes(
                         OptionsText("Options_QuickAccessToolbar"),
-                        [new FilePickerFileType("FreeX Quick Access Toolbar")
+                        [new FilePickerFileType(OptionsText("Options_QuickAccessToolbarFileType"))
                         {
                             Patterns = QuickAccessToolbarCustomizationFile.FilePickerPatterns,
                         }],
@@ -831,14 +824,11 @@ public sealed partial class MainWindow
                 using (picker)
                 {
                     string? errorMessage = null;
+                    quickAccessSession.SetPlacement(quickAccessBelowRibbonBox.IsChecked == true);
                     if (string.IsNullOrWhiteSpace(picker.LocalPath) ||
-                        !QuickAccessToolbarCustomizationFile.TrySave(
-                            picker.LocalPath,
-                            quickAccessCommandIds,
-                            quickAccessBelowRibbonBox.IsChecked == true,
-                            out errorMessage))
+                        !quickAccessSession.TryExport(picker.LocalPath, out errorMessage))
                     {
-                        ShowOptionsWarning(errorMessage ?? "Quick Access Toolbar export requires a local file path.");
+                        ShowOptionsWarning(errorMessage ?? OptionsText("Options_QuickAccessExportRequiresLocalPath"));
                     }
                 }
             }
@@ -849,10 +839,10 @@ public sealed partial class MainWindow
         }
 
         var importItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ImportMenuHeader.TrimStart('_') };
-        AutomationProperties.SetAutomationId(importItem, "QuickAccessToolbarImportCustomizationMenuItem");
+        AutomationProperties.SetAutomationId(importItem, FreeXAutomationIdCatalog.QuickAccessToolbarImportCustomizationMenuItem);
         importItem.Click += async (_, _) => await ImportQuickAccessCustomizationAsync();
         var exportItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ExportMenuHeader.TrimStart('_') };
-        AutomationProperties.SetAutomationId(exportItem, "QuickAccessToolbarExportCustomizationMenuItem");
+        AutomationProperties.SetAutomationId(exportItem, FreeXAutomationIdCatalog.QuickAccessToolbarExportCustomizationMenuItem);
         exportItem.Click += async (_, _) => await ExportQuickAccessCustomizationAsync();
         var quickAccessImportExportMenu = new ContextMenu { Items = { importItem, exportItem } };
         quickAccessImportExportButton.Click += (_, _) => quickAccessImportExportMenu.Open(quickAccessImportExportButton);
@@ -1131,22 +1121,15 @@ public sealed partial class MainWindow
 
         bool ApplyFormulaErrorCheckingOptions()
         {
-            foreach (var rule in FormulaErrorCheckingRuleCatalog.SupportedRules)
+            var requestedDisabledErrorCodes = errorRuleBoxes
+                .Where(entry => entry.Value.IsChecked != true)
+                .Select(entry => entry.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var outcome = CalculationWorkflow.ChangeFormulaErrorRules(
+                requestedDisabledErrorCodes);
+            if (!outcome.Success)
             {
-                if (!errorRuleBoxes.TryGetValue(rule.ErrorCode, out var box))
-                    continue;
-
-                var shouldDisable = box.IsChecked != true;
-                var isDisabled = workbook.DisabledFormulaErrorCodes.Contains(rule.ErrorCode);
-                if (shouldDisable == isDisabled)
-                    continue;
-
-                var result = _session.ExecuteReviewCommand(
-                    new SetFormulaErrorCheckingRuleCommand(rule.ErrorCode, enabled: !shouldDisable));
-                if (result.Success)
-                    continue;
-
-                warningText.Text = result.ErrorMessage ?? UiText.Get("Options_SaveFailed");
+                warningText.Text = outcome.ErrorMessage ?? UiText.Get("Options_SaveFailed");
                 warningText.IsVisible = true;
                 return false;
             }
@@ -1177,21 +1160,16 @@ public sealed partial class MainWindow
                      OptionsDialogPlanner.IndexToAfterEnterDirection(afterEnterDirectionBox.SelectedIndex),
                      out var input,
                      out var inputError,
-                     objectsDisplay: objectsDisplayBox.SelectedIndex switch
-                     {
-                         1 => AppOptionsObjectDisplay.Placeholders,
-                         2 => AppOptionsObjectDisplay.Nothing,
-                         _ => AppOptionsObjectDisplay.All,
-                     },
+                     objectsDisplay: OptionsDialogPlanner.IndexToObjectDisplay(objectsDisplayBox.SelectedIndex),
                     collapseRibbonAutomatically: collapseRibbonBox.IsChecked == true,
                     appLanguage: languageOptions.Count > 0 && languageBox.SelectedIndex >= 0 && languageBox.SelectedIndex < languageOptions.Count
                         ? AppLanguageCatalog.NormalizeCultureName(languageOptions[languageBox.SelectedIndex].CultureName)
                         : current.AppLanguage,
                     crashAnalyticsEnabled: crashAnalyticsBox.IsChecked == true))
             {
-                warningText.Text = inputError == OptionsDialogPlanner.OptionsInputError.InvalidFontSize
-                    ? UiText.Get("Options_InvalidFontSizeMessage")
-                    : UiText.Get("Options_InvalidSheetCountMessage");
+                warningText.Text = OptionsDialogPlanner
+                    .DescribeInputError(inputError, OptionsValidationTextProfile.Avalonia)
+                    .Message.Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 return false;
             }
@@ -1207,47 +1185,40 @@ public sealed partial class MainWindow
                     out var maxChange,
                     out var calculationInputError))
             {
-                warningText.Text = UiText.Get(
-                    calculationInputError == CalculationOptionsInputError.InvalidMaxIterations
-                        ? "Options_InvalidMaxIterationsMessage"
-                        : "Options_InvalidMaxChangeMessage");
+                warningText.Text = OptionsValidationPresentationPlanner
+                    .DescribeCalculationInput(calculationInputError)
+                    .Message.Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 return false;
             }
 
-            var projected = OptionsDialogPlanner.Project(current, input);
-            projected.EnableFillHandleAndCellDragAndDrop = advancedFillHandleBox.IsChecked == true;
-            projected.QuickAccessToolbarBelowRibbon = quickAccessBelowRibbonBox.IsChecked == true;
-            projected.QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(quickAccessCommandIds).ToList();
-            projected.SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(customDictionaryWords);
-            projected.NormalizePersistedCollections();
+            var calculationSubmission = CalculationOptionsSubmissionPlanner.Plan(
+                calculationState,
+                input.AutoCalculate,
+                iterativeEnabled,
+                maxIterations,
+                maxChange);
 
-            // Reload the freshest on-disk options immediately before saving and merge onto it only the
-            // fields this dialog session actually edited (see OptionsDialogPlanner.MergeOntoFreshLoad),
-            // instead of saving `projected` -- built purely from `current`, this dialog's open-time
-            // snapshot -- as the whole document. AppOptions (options.json) is shared by every open
-            // window/process: without this reload, a second MainWindow opened via View > New Window
-            // (each independently loads its own AppOptions snapshot -- see
-            // MainWindow.WindowManagement.cs's NewWindow()) or this window's own right-click "Add to
-            // Quick Access Toolbar"/"Customize Status Bar" menus (which already reload-before-mutate)
-            // would have any change they persisted while this dialog was open silently discarded on OK
-            // (last-writer-wins / lost update). Mirrors the WPF host's OK handler (OptionsDialog.xaml.cs).
-            var merged = OptionsDialogPlanner.MergeOntoFreshLoad(AppOptionsStore.Load(), current, projected);
-            if (!AppOptionsStore.Save(merged))
+            var saveResult = optionsDialogSession.Commit(
+                input,
+                enableFillHandleAndCellDragAndDrop: advancedFillHandleBox.IsChecked == true,
+                enableAutoCompleteForCellValues: advancedAutoCompleteBox.IsChecked == true,
+                quickAccessToolbarBelowRibbon: quickAccessBelowRibbonBox.IsChecked == true);
+            if (!saveResult.IsPersisted)
             {
-                warningText.Text = merged.LastPersistenceError ?? UiText.Get("Options_SaveFailed");
+                warningText.Text = saveResult.PersistenceError ?? UiText.Get("Options_SaveFailed");
                 warningText.IsVisible = true;
                 return false;
             }
 
-            current = merged;
-            _avaloniaQuickAccessOptions = AppOptionsStore.Load();
+            current = saveResult.Options;
+            _avaloniaQuickAccessOptions = current;
             RebuildAvaloniaQuickAccessToolbar();
             if (!ApplyFormulaErrorCheckingOptions())
                 return false;
 
             ApplyLiveOptions(input);
-            ApplyLiveIterativeCalculationOptions(iterativeEnabled, maxIterations, maxChange);
+            ApplyCalculationOptionsSubmission(calculationSubmission);
             return true;
         }
 
@@ -1323,7 +1294,7 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Applies the cheap, immediately-visible options to the live session: gridlines, headings,
-    /// formula-bar visibility and calculation mode. The persisted fields (default font/size/sheet-count,
+    /// and formula-bar visibility. The persisted fields (default font/size/sheet-count,
     /// default format, proofing rules) take effect on the next workbook/launch.
     /// </summary>
     private void ApplyLiveOptions(OptionsDialogPlanner.OptionsDialogInput input)
@@ -1345,43 +1316,23 @@ public sealed partial class MainWindow
             _cellAddressText.IsVisible = input.ShowFormulaBar;
         }
 
-        var wantManual = !input.AutoCalculate;
-        if (CalculationModeIsManual != wantManual)
-            SetCalculationMode(wantManual ? WorkbookCalculationMode.Manual : WorkbookCalculationMode.Automatic);
-
         RefreshShell(UiText.Get("Options_Saved"));
     }
 
-    private const int DefaultMaxCalculationIterations = 100;
-    private const double DefaultMaxCalculationChange = 0.001;
+    private const int DefaultMaxCalculationIterations = CalculationCommandPolicy.DefaultMaxCalculationIterations;
+    private const double DefaultMaxCalculationChange = CalculationCommandPolicy.DefaultMaxCalculationChange;
 
     /// <summary>
-    /// Applies the dialog's iterative-calculation fields to the live workbook via the undoable
-    /// <see cref="SetIterativeCalculationOptionsCommand"/>, but only when the values actually
-    /// differ from the workbook's current settings — the fields were seeded from the live
-    /// workbook, so this only fires on a genuine user edit.
+    /// Applies the shared calculation-options submission and renders its native feedback.
     /// </summary>
-    private void ApplyLiveIterativeCalculationOptions(bool enabled, int maxIterations, double maxChange)
+    private void ApplyCalculationOptionsSubmission(CalculationOptionsSubmission? submission)
     {
-        var workbook = _session.Workbook;
-        if (workbook.IterativeCalculation == enabled &&
-            (workbook.MaxCalculationIterations ?? DefaultMaxCalculationIterations) == maxIterations &&
-            (workbook.MaxCalculationChange ?? DefaultMaxCalculationChange) == maxChange)
-        {
-            return;
-        }
-
-        var result = _session.ExecuteReviewCommand(new SetIterativeCalculationOptionsCommand(enabled, maxIterations, maxChange));
-        if (!result.Success)
-        {
-            RefreshShell(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotChangeCalcMode"));
-            return;
-        }
-
-        // Toggling iterative calculation changes whether circular-reference cells resolve at all
-        // (Excel re-evaluates them the moment the setting changes), so any existing #CIRCULAR!
-        // cells would otherwise stay stale until an unrelated edit forces a recalc.
-        _session.RecalculateWorkbook();
+        var outcome = CalculationOptionsSubmissionCoordinator.Apply(CalculationWorkflow, submission);
+        if (outcome.ModeOutcome is { } modeOutcome)
+            ApplyCalculationWorkflowOutcome(modeOutcome);
+        if (outcome.IterativeOutcome is { Success: false } iterativeOutcome)
+            RefreshShell(iterativeOutcome.ErrorMessage ?? UiText.Get(
+                iterativeOutcome.FailureResourceKey ?? CalculationCommandPolicy.FailureResourceKey));
     }
 
     private static void ApplyOptionsButtonChrome(Button button, double minWidth, bool isDefault = false)
@@ -1466,93 +1417,7 @@ public sealed partial class MainWindow
     }
 
     private static string OptionsText(string resourceKey) =>
-        NormalizeOptionAccessText(UiText.Get(resourceKey)) is { } localized && !LooksLikeMissingResource(localized)
-            ? localized
-            : resourceKey switch
-            {
-                "Options_CategoryLanguage" => "Language",
-                "Options_CategoryEaseOfAccess" => "Ease of Access",
-                "Options_CategoryAdvanced" => "Advanced",
-                "Options_CategoryCustomizeRibbon" => "Customize Ribbon",
-                "Options_CategoryQuickAccessToolbar" => "Quick Access Toolbar",
-                "Options_CategoryAddIns" => "Add-ins",
-                "Options_CategoryTrustCenter" => "Trust Center",
-                "Options_GeneralOptionsForWorkingWithFreeX" => "General options for working with FreeX.",
-                "Options_UserInterfaceOptions" => "User Interface options",
-                "Options_CollapseTheRibbonAutomatically" => "Collapse the ribbon automatically",
-                "Options_WhenCreatingNewWorkbooks" => "When creating new workbooks",
-                "Options_DefaultFont" => "Default font:",
-                "Options_FontSize" => "Font size:",
-                "Options_IncludeThisManySheets" => "Include this many sheets:",
-                "Options_PersonalizeYourCopyOfFreeX" => "Personalize your copy of FreeX",
-                "Options_UserName" => "User name:",
-                "Options_CalculationOptions" => "Calculation options",
-                "Options_WorkbookCalculation" => "Workbook Calculation",
-                "Options_InManualModePressF9ToRecalculateTheWorkbook" => "In Manual mode, press F9 to recalculate the workbook.",
-                "Options_EnableIterativeCalculation" => "Enable iterative calculation",
-                "Options_MaximumIterations" => "Maximum Iterations",
-                "Options_MaximumChange" => "Maximum Change",
-                "Options_WorkingWithFormulas" => "Working with formulas",
-                "Options_EnableAutoCompleteForCellValues" => "Enable AutoComplete for cell values",
-                "Options_EnableFillHandleAndCellDragAndDrop" => "Enable fill handle and cell drag-and-drop",
-                "Options_ErrorCheckingRules" => "Error Checking Rules",
-                "Options_EnableBackgroundErrorChecksFor" => "Enable background error checks for:",
-                "Options_AutoCorrectOptions" => "AutoCorrect options",
-                "Options_CheckSpellingAsYouType" => "Check spelling as you type",
-                "Options_FlagRepeatedWords" => "Flag repeated words",
-                "Options_CustomDictionary" => "Custom dictionary",
-                "Options_CustomDictionaryDescription" => "FreeX spell check treats words in this list as correct.",
-                "Options_WorkbookViewOptions" => "Workbook view options",
-                "Options_ExpandFormulaBar" => "Expand formula bar",
-                "Options_SaveWorkbooks" => "Save workbooks",
-                "Options_SaveFilesInThisFormat" => "Save files in this format:",
-                "Options_FileLocations" => "File locations",
-                "Options_RecentFilesLocation" => "Recent files location:",
-                "Options_ChooseDisplayLanguage" => "Choose display language",
-                "Options_AppLanguage" => "App language:",
-                "Options_AppLanguageSystemDefault" => "Use system default",
-                "Options_AppLanguageEnglishUnitedStates" => "English (United States)",
-                "Options_AppLanguageRestartNotice" => "Some open windows may keep their current language until you restart FreeX.",
-                "Options_EaseOfAccessOptions" => "Ease of Access options",
-                "Options_ProvideFeedbackWithSound" => "Provide feedback with sound",
-                "Options_ShowQuickAnalysisOptionsOnSelection" => "Show Quick Analysis options on selection",
-                "Options_OptimizeDisplayForAccessibility" => "Optimize display for accessibility",
-                "Options_EditingOptions" => "Editing options",
-                "Options_AfterPressingEnterMoveSelection" => "After pressing Enter, move selection",
-                "Options_Direction" => "Direction:",
-                "Options_AfterEnterDirectionDown" => "Down",
-                "Options_AfterEnterDirectionRight" => "Right",
-                "Options_AfterEnterDirectionUp" => "Up",
-                "Options_AfterEnterDirectionLeft" => "Left",
-                "Options_DisplayOptionsForThisWorkbook" => "Display options for this workbook",
-                "Options_ForObjectsShow" => "For objects, show:",
-                "Options_ObjectsDisplayAll" => "All",
-                "Options_ObjectsDisplayPlaceholders" => "Placeholders",
-                "Options_ObjectsDisplayNothing" => "Nothing",
-                "Options_CustomizeTheRibbon" => "Customize the Ribbon",
-                "Options_ChooseCommandsFromPopularCommands" => "Choose commands from: Popular Commands",
-                "Options_ImportExport" => "Import/Export...",
-                "Options_CustomizeTheQuickAccessToolbar" => "Customize the Quick Access Toolbar",
-                "Options_ShowQuickAccessToolbarBelowTheRibbon" => "Show Quick Access Toolbar below the Ribbon",
-                "Options_QuickAccessToolbarCommands" => "Quick Access Toolbar commands:",
-                "Options_ViewAndManageAddIns" => "View and manage Add-ins",
-                "Options_ActiveApplicationAddIns" => "Active Application Add-ins",
-                "Options_Go" => "Go...",
-                "Options_TrustCenter2" => "Trust Center",
-                "Options_SecurityAndPrivacySettingsForFreeX" => "Security and privacy settings for FreeX.",
-                "Options_SendOptInCrashReports" => "Send opt-in crash reports",
-                "Options_CrashReportsAreSentOnlyWhenThisOptionIsEnabledAndTheTest" => "Crash reports are sent only when this option is enabled and the tester build is configured with a crash analytics endpoint.",
-                "Options_LocalTesterDiagnostics" => "Local tester diagnostics",
-                "Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr" => "FreeX writes local usage events and crash files to %LOCALAPPDATA%\\FreeX\\Diagnostics. These files stay on this computer unless you attach them to an issue.",
-                "Options_TrustCenterSettings" => "Trust Center Settings...",
-                _ => resourceKey,
-            };
-
-    private static string NormalizeOptionAccessText(string text) =>
-        text.Replace("_", string.Empty, StringComparison.Ordinal);
-
-    private static bool LooksLikeMissingResource(string text) =>
-        text.StartsWith("[[", StringComparison.Ordinal) && text.EndsWith("]]", StringComparison.Ordinal);
+        StripDisplayMnemonic(UiText.Get(resourceKey));
 
     private sealed record OptionsQuickAccessCommandChoice(string Id, string Label)
     {

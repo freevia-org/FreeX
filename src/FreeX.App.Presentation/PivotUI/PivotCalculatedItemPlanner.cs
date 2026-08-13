@@ -56,6 +56,16 @@ public static class PivotCalculatedItemPlanner
         return result;
     }
 
+    /// <summary>Projects non-empty source headers into field options while preserving source indexes.</summary>
+    public static IReadOnlyList<CalculatedItemField> AvailableSourceFields(IReadOnlyList<string> headers)
+    {
+        ArgumentNullException.ThrowIfNull(headers);
+        return headers
+            .Select((name, index) => new CalculatedItemField(index, name?.Trim() ?? string.Empty))
+            .Where(field => field.Caption.Length > 0)
+            .ToList();
+    }
+
     /// <summary>The source-field captions available to insert as formula references.</summary>
     public static IReadOnlyList<string> AvailableFieldReferences(IReadOnlyList<string> headers)
         => PivotCalculatedFieldPlanner.AvailableFieldReferences(headers);

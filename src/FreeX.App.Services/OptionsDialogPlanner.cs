@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Linq;
+using Free.Shared.Localization;
+using FreeX.App.Presentation.Options;
 
 namespace FreeX.App.Services;
 
@@ -14,11 +16,18 @@ namespace FreeX.App.Services;
 /// <see cref="AppOptions.AutoCalculate"/>, how the default-format picker index maps to the format string,
 /// which fields the dialog does NOT edit and must therefore be carried over verbatim) in one shared place,
 /// so the Avalonia view is pure UI and macOS inherits identical behaviour. The numeric validation mirrors
-/// the host's <c>OptionsInputParser</c>; the projection reuses the <see cref="AppOptions"/> normalizers.
+/// the shared parser entry points below; the projection reuses the <see cref="AppOptions"/> normalizers.
 /// </para>
 /// </summary>
 public static class OptionsDialogPlanner
 {
+    public static ValidationPresentationDescriptor<OptionsValidationFocusTarget> DescribeInputError(
+        OptionsInputError error,
+        OptionsValidationTextProfile profile) =>
+        OptionsValidationPresentationPlanner.DescribeGeneralInput(
+            error == OptionsInputError.InvalidFontSize,
+            profile);
+
     /// <summary>The fixed outer window width used by the WPF Options dialog.</summary>
     public const double WindowWidth = 760;
 
@@ -130,6 +139,14 @@ public static class OptionsDialogPlanner
         bool? CollapseRibbonAutomatically = null,
         string? AppLanguage = null,
         bool? CrashAnalyticsEnabled = null);
+
+    public sealed record OptionsDialogSupplementalInput(
+        bool EnableFillHandleAndCellDragAndDrop,
+        bool EnableAutoCompleteForCellValues,
+        bool QuickAccessToolbarBelowRibbon,
+        IReadOnlyList<string> QuickAccessToolbarCommands,
+        IReadOnlyList<string> SpellCheckCustomDictionaryWords,
+        bool? FormulaBarExpanded = null);
 
     /// <summary>Font names offered in the Options dialog's default-font picker (parity with the WPF host).</summary>
     public static IReadOnlyList<string> FontNames { get; } =
@@ -291,9 +308,30 @@ public static class OptionsDialogPlanner
             QuickAccessToolbarCommands = existing.QuickAccessToolbarCommands,
             CrashAnalyticsEnabled = input.CrashAnalyticsEnabled ?? existing.CrashAnalyticsEnabled,
             CrashAnalyticsPrompted = existing.CrashAnalyticsPrompted || input.CrashAnalyticsEnabled == true,
-            PdfExportLanguage = existing.PdfExportLanguage,
+            PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(existing.PdfExportLanguage),
         };
 
+        options.NormalizePersistedCollections();
+        return options;
+    }
+
+    public static AppOptions Project(
+        AppOptions existing,
+        OptionsDialogInput input,
+        OptionsDialogSupplementalInput supplemental)
+    {
+        ArgumentNullException.ThrowIfNull(supplemental);
+        ArgumentNullException.ThrowIfNull(supplemental.QuickAccessToolbarCommands);
+        ArgumentNullException.ThrowIfNull(supplemental.SpellCheckCustomDictionaryWords);
+
+        var options = Project(existing, input);
+        options.EnableFillHandleAndCellDragAndDrop = supplemental.EnableFillHandleAndCellDragAndDrop;
+        options.EnableAutoCompleteForCellValues = supplemental.EnableAutoCompleteForCellValues;
+        options.QuickAccessToolbarBelowRibbon = supplemental.QuickAccessToolbarBelowRibbon;
+        options.QuickAccessToolbarCommands = supplemental.QuickAccessToolbarCommands.ToList();
+        options.SpellCheckCustomDictionaryWords = supplemental.SpellCheckCustomDictionaryWords.ToList();
+        if (supplemental.FormulaBarExpanded is { } formulaBarExpanded)
+            options.FormulaBarExpanded = input.ShowFormulaBar && formulaBarExpanded;
         options.NormalizePersistedCollections();
         return options;
     }
@@ -401,6 +439,20 @@ public static class OptionsDialogPlanner
         2 => AppOptionsEnterDirection.Up,
         3 => AppOptionsEnterDirection.Left,
         _ => AppOptionsEnterDirection.Down,
+    };
+
+    public static int ObjectDisplayToIndex(AppOptionsObjectDisplay display) => display switch
+    {
+        AppOptionsObjectDisplay.Placeholders => 1,
+        AppOptionsObjectDisplay.Nothing => 2,
+        _ => 0,
+    };
+
+    public static AppOptionsObjectDisplay IndexToObjectDisplay(int index) => index switch
+    {
+        1 => AppOptionsObjectDisplay.Placeholders,
+        2 => AppOptionsObjectDisplay.Nothing,
+        _ => AppOptionsObjectDisplay.All,
     };
 
     /// <summary>Resolves the default-font picker index, falling back to Calibri when the saved font is custom.</summary>

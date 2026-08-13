@@ -46,6 +46,15 @@ $avaloniaSource = Read-SourceSet @(
     "freew\FreeW.App.Avalonia\TableOfAuthoritiesDialog.cs",
     "freew\FreeW.App.Avalonia\ThesaurusPane.cs"
 )
+$sharedSource = Read-SourceSet @(
+    "freew\FreeW.App.Presentation\Ribbon\FreeWStatefulToggleCommand.cs",
+    "freew\FreeW.App.Presentation\Ribbon\ThesaurusPaneSession.cs",
+    "freew\FreeW.App.Presentation\Ribbon\ThesaurusPresentationPlanner.cs",
+    "freew\FreeW.App.Presentation\Dialogs\MultilevelListDialogPlanner.cs",
+    "freew\FreeW.App.Presentation\Dialogs\MultilevelListDialogSession.cs",
+    "freew\FreeW.App.Presentation\Editing\DocumentReferenceEditingCoordinator.cs",
+    "freew\FreeW.App.Presentation\Ribbon\TableOfAuthoritiesRegionPlanner.cs"
+)
 
 function New-Workflow {
     param(
@@ -62,7 +71,8 @@ function New-Workflow {
         [string[]]$AvaloniaSources,
         [string[]]$Tests,
         [string[]]$RequiredWpfTokens,
-        [string[]]$RequiredAvaloniaTokens
+        [string[]]$RequiredAvaloniaTokens,
+        [string[]]$RequiredSharedTokens = @()
     )
 
     foreach ($token in $RequiredWpfTokens) {
@@ -73,6 +83,11 @@ function New-Workflow {
     foreach ($token in $RequiredAvaloniaTokens) {
         if (-not $avaloniaSource.Contains($token)) {
             throw "Avalonia semantic/lifecycle token '$token' is missing for workflow '$Id'."
+        }
+    }
+    foreach ($token in $RequiredSharedTokens) {
+        if (-not $sharedSource.Contains($token)) {
+            throw "Shared semantic/lifecycle token '$token' is missing for workflow '$Id'."
         }
     }
 
@@ -106,8 +121,9 @@ $workflows = @(
         -WpfSources @("freew/FreeW.App.Host/MainWindow.cs", "freew/FreeW.App.Host/Ribbon/FreeWRibbonCommands.cs", "freew/FreeW.App.Host/Editing/DocumentView.cs") `
         -AvaloniaSources @("freew/FreeW.App.Avalonia/MainWindow.cs", "freew/FreeW.App.Avalonia/NotesPane.cs", "freew/FreeW.App.Avalonia/Editing/DocumentView.cs") `
         -Tests @("freew/FreeW.App.Host.Tests/EditableNotesPaneTests.cs", "freew/FreeW.App.Avalonia.Tests/EditingReferenceParityTests.cs") `
-        -RequiredWpfTokens @("FreeWStatefulToggleCommand", "FootnoteEndnoteOptionsDialog.Prompt", "MoveToNextFootnote") `
-        -RequiredAvaloniaTokens @("FreeWStatefulToggleCommand", "NoteTextDialog.ShowAsync", "_notesPane.Toggle", "ReplaceNoteContent", "MoveToPreviousEndnote", "ApplyFootnoteEndnoteOptions")
+        -RequiredWpfTokens @("referenceCommands.BindToggle(FreeWRibbonCommandAction.ShowNotes", "FootnoteEndnoteOptionsDialog.Prompt", "MoveToNextFootnote") `
+        -RequiredAvaloniaTokens @("family.BindToggle(FreeWRibbonCommandAction.ShowNotes", "NoteTextDialog.ShowAsync", "_notesPane.Toggle", "ReplaceNoteContent", "MoveToPreviousEndnote", "ApplyFootnoteEndnoteOptions") `
+        -RequiredSharedTokens @("public sealed class FreeWStatefulToggleCommand")
 
     New-Workflow -Id "insert.date-time" `
         -Triggers @("freew.date-time") `
@@ -151,8 +167,9 @@ $workflows = @(
         -WpfSources @("freew/FreeW.App.Host/TableOfAuthoritiesDialog.cs", "freew/FreeW.App.Host/Editing/DocumentView.cs") `
         -AvaloniaSources @("freew/FreeW.App.Avalonia/TableOfAuthoritiesDialog.cs", "freew/FreeW.App.Avalonia/MainWindow.cs", "freew/FreeW.App.Avalonia/Editing/DocumentView.cs") `
         -Tests @("freew/FreeW.App.Host.Tests/TableOfAuthoritiesDialogTests.cs", "freew/FreeW.App.Avalonia.Tests/EditingReferenceParityTests.cs") `
-        -RequiredWpfTokens @("TableOfAuthoritiesDialog.Prompt", "BuildRefreshPlan") `
-        -RequiredAvaloniaTokens @("TableOfAuthoritiesDialog.ShowAsync", "InsertTableOfAuthorities(options)", "RefreshTableOfAuthorities")
+        -RequiredWpfTokens @("TableOfAuthoritiesDialog.Prompt", "ReferenceEdits.RefreshTableOfAuthorities(") `
+        -RequiredAvaloniaTokens @("TableOfAuthoritiesDialog.ShowAsync", "InsertTableOfAuthorities(commit.Options!)", "ReferenceEdits.RefreshTableOfAuthorities(") `
+        -RequiredSharedTokens @("BuildRefreshPlanWithTableAddresses", "ApplyStabilizedTableOfAuthoritiesRegion")
 
     New-Workflow -Id "home.multilevel-list" `
         -Triggers @("freew.multilevel-define") `
@@ -166,8 +183,9 @@ $workflows = @(
         -WpfSources @("freew/FreeW.App.Host/MultilevelListDialog.cs") `
         -AvaloniaSources @("freew/FreeW.App.Avalonia/MultilevelListDialog.cs", "freew/FreeW.App.Avalonia/MainWindow.cs") `
         -Tests @("freew/FreeW.App.Host.Tests/HomeDialogDepthTests.cs", "freew/FreeW.App.Presentation.Tests/Dialogs/MultilevelListDialogPlannerTests.cs", "freew/FreeW.App.Avalonia.Tests/EditingReferenceParityTests.cs") `
-        -RequiredWpfTokens @("MultilevelListDialogPlanner.BuildInitialState", "MultilevelListDialogPlanner.TryBuildResult") `
-        -RequiredAvaloniaTokens @("MultilevelListDialogPlanner.BuildInitialState", "MultilevelListDialogPlanner.TryBuildResult", "ApplyMultiLevelListDefinition")
+        -RequiredWpfTokens @("MultilevelListDialogPlanner.CreateSession", "session.PlanAcceptance()") `
+        -RequiredAvaloniaTokens @("MultilevelListDialogPlanner.CreateSession", "_session.PlanAcceptance()", "ApplyMultiLevelListDefinition") `
+        -RequiredSharedTokens @("public sealed class MultilevelListDialogSession", "MultilevelListDialogPlanner.TryBuildResult")
 
     New-Workflow -Id "insert.bookmark-manager" `
         -Triggers @("freew.bookmark-manager") `
@@ -196,8 +214,9 @@ $workflows = @(
         -WpfSources @("freew/FreeW.App.Host/ThesaurusPane.cs", "freew/FreeW.App.Host/MainWindow.cs") `
         -AvaloniaSources @("freew/FreeW.App.Avalonia/ThesaurusPane.cs", "freew/FreeW.App.Avalonia/MainWindow.cs") `
         -Tests @("freew/FreeW.App.Host.Tests/ThesaurusAndBalloonsTests.cs", "freew/FreeW.App.Avalonia.Tests/EditingReferenceParityTests.cs") `
-        -RequiredWpfTokens @("ToggleThesaurusPane", "ThesaurusPresentationPlanner.Lookup", "Clipboard.SetText") `
-        -RequiredAvaloniaTokens @("FreeWKeyboardCommand.Thesaurus: ToggleThesaurusPane", "ThesaurusPresentationPlanner.Lookup", "ReplaceCurrentProofingWord", "await clipboard.SetTextAsync")
+        -RequiredWpfTokens @("ToggleThesaurusPane", "_session.Refresh(", "_session.PlanAction(", "_platformClipboard.WriteAsync") `
+        -RequiredAvaloniaTokens @("Thesaurus: ToggleThesaurusPane", "_session.Refresh(", "_session.PlanAction(", "ReplaceCurrentProofingWord", "await _copyText(intent.Text)") `
+        -RequiredSharedTokens @("public sealed class ThesaurusPaneSession", "ThesaurusPresentationPlanner.Lookup")
 )
 
 $remainingGaps = @(

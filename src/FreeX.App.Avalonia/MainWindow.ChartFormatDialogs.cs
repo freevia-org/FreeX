@@ -156,13 +156,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(issue switch
-                {
-                    ChartDataLabelsParseIssue.BorderThickness => UiText.Get("ChartDataLabels_InvalidBorderThicknessMessage"),
-                    ChartDataLabelsParseIssue.FontSize => UiText.Get("ChartDataLabels_InvalidFontSizeMessage"),
-                    ChartDataLabelsParseIssue.Angle => UiText.Get("ChartDataLabels_InvalidAngleMessage"),
-                    _ => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                });
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -289,9 +283,11 @@ public sealed partial class MainWindow
 
     // ---- Format Axis (real, SetChartLayoutCommand via ChartAxisPlanner) -------------------------------
 
-    private Task ShowChartXAxisFormatDialog() => ShowChartAxisFormatDialog(useXAxis: true, "X Axis");
+    private Task ShowChartXAxisFormatDialog() =>
+        ShowChartAxisFormatDialog(useXAxis: true, UiText.Get("ChartAxisFormat_XAxisTitle"));
 
-    private Task ShowChartYAxisFormatDialog() => ShowChartAxisFormatDialog(useXAxis: false, "Y Axis");
+    private Task ShowChartYAxisFormatDialog() =>
+        ShowChartAxisFormatDialog(useXAxis: false, UiText.Get("ChartAxisFormat_YAxisTitle"));
 
     private async Task ShowChartAxisFormatDialog(bool useXAxis, string commandLabel)
     {
@@ -420,7 +416,7 @@ public sealed partial class MainWindow
         // WPF ChartAxisFormatDialog selects the minimum editor when the dialog is loaded. Keep the
         // equivalent Avalonia target explicit because this dialog's controls are nested in scrollable
         // group boxes and are not reliably discovered by generic first-control focus.
-        var dialog = NewChartDialog($"Format {commandLabel}", "ChartAxisFormatDialog", minimumBox);
+        var dialog = NewChartDialog(commandLabel, "ChartAxisFormatDialog", minimumBox);
         dialog.SizeToContent = SizeToContent.Manual;
         dialog.Width = 432;
         dialog.Height = 720;
@@ -461,21 +457,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(issue switch
-                {
-                    ChartAxisFormatParseIssue.Maximum => UiText.Get("ChartAxisFormat_InvalidMaximumMessage"),
-                    ChartAxisFormatParseIssue.MajorUnit => UiText.Get("ChartAxisFormat_InvalidMajorUnitMessage"),
-                    ChartAxisFormatParseIssue.MinorUnit => UiText.Get("ChartAxisFormat_InvalidMinorUnitMessage"),
-                    ChartAxisFormatParseIssue.MajorGridlineColor => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                    ChartAxisFormatParseIssue.MinorGridlineColor => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                    ChartAxisFormatParseIssue.GridlineThickness => UiText.Get("ChartAxisFormat_InvalidGridlineWidthMessage"),
-                    ChartAxisFormatParseIssue.LabelTextColor => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                    ChartAxisFormatParseIssue.LabelFontSize => UiText.Get("ChartAxisFormat_InvalidLabelFontSizeMessage"),
-                    ChartAxisFormatParseIssue.LabelAngle => UiText.Get("ChartAxisFormat_InvalidLabelAngleMessage"),
-                    ChartAxisFormatParseIssue.LineColor => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                    ChartAxisFormatParseIssue.LineThickness => UiText.Get("ChartAxisFormat_InvalidAxisLineWidthMessage"),
-                    _ => UiText.Get("ChartAxisFormat_InvalidMinimumMessage"),
-                });
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -773,12 +755,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(issue switch
-                {
-                    ChartSeriesFormatParseIssue.StrokeThickness => UiText.Get("ChartSeriesFormat_InvalidLineWidthMessage"),
-                    ChartSeriesFormatParseIssue.MarkerSize => UiText.Get("ChartSeriesFormat_InvalidMarkerSizeMessage"),
-                    _ => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                });
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -976,13 +953,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(issue switch
-                {
-                    ChartTrendlineDialogParseIssue.Order => UiText.Get("ChartTrendline_InvalidOrderMessage"),
-                    ChartTrendlineDialogParseIssue.Color => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                    ChartTrendlineDialogParseIssue.Thickness => UiText.Get("ChartTrendline_InvalidWidthMessage"),
-                    _ => UiText.Get("ChartTrendline_InvalidPeriodMessage"),
-                });
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -1158,11 +1129,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(issue switch
-                {
-                    ChartErrorBarsParseIssue.Value => UiText.Get("ChartErrorBars_InvalidValueMessage"),
-                    _ => UiText.Get("ChartErrorBars_InvalidValueMessage"),
-                });
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -1370,8 +1337,8 @@ public sealed partial class MainWindow
 
     private static string DescribeColor(string label, CellColor? color) =>
         color is { } c
-            ? $"{label}: #{c.R:X2}{c.G:X2}{c.B:X2}"
-            : $"{label}: (default)";
+            ? UiText.Format("ChartColor_DescriptionFormat", label, $"#{c.R:X2}{c.G:X2}{c.B:X2}")
+            : UiText.Format("ChartColor_DefaultDescriptionFormat", label);
 
     private static string FormatOptionalColorText(CellColor? color) =>
         color is { } c ? $"#{c.R:X2}{c.G:X2}{c.B:X2}" : "none";

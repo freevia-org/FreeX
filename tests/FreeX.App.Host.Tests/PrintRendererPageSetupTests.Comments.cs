@@ -181,6 +181,7 @@ public sealed partial class PrintRendererPageSetupTests
             var a1 = new CellAddress(sheet.Id, 1, 1);
             var b2 = new CellAddress(sheet.Id, 2, 2);
             sheet.SetCell(a1, new TextValue("Total"));
+            sheet.SetCell(b2, new TextValue("Threaded anchor"));
             sheet.Comments[a1] = "Visible note";
             sheet.ThreadedComments[b2] = new ThreadedComment("Review total", "Quinn");
             sheet.PrintComments = WorksheetPrintComments.AtEnd;
@@ -196,12 +197,19 @@ public sealed partial class PrintRendererPageSetupTests
                     "A1: Visible note",
                     "B2: Quinn: Review total");
 
-            overlays.Should().ContainEquivalentOf(
-                new { Text = "Comments", X = 48.0, Y = 48.0, FontSize = 14.0, Bold = true });
-            overlays.Should().ContainEquivalentOf(
-                new { Text = "A1: Visible note", X = 48.0, Y = 82.0, FontSize = 9.0, Bold = false });
-            overlays.Should().ContainEquivalentOf(
-                new { Text = "B2: Quinn: Review total", X = 48.0, Y = 100.0, FontSize = 9.0, Bold = false });
+            var title = overlays.Single(overlay => overlay.Text == "Comments");
+            var note = overlays.Single(overlay => overlay.Text == "A1: Visible note");
+            var threaded = overlays.Single(overlay => overlay.Text == "B2: Quinn: Review total");
+            title.FontSize.Should().Be(14.0);
+            title.Bold.Should().BeTrue();
+            note.FontSize.Should().Be(9.0);
+            note.Bold.Should().BeFalse();
+            threaded.FontSize.Should().Be(9.0);
+            threaded.Bold.Should().BeFalse();
+            note.X.Should().BeApproximately(title.X, 0.01);
+            threaded.X.Should().BeApproximately(title.X, 0.01);
+            note.Y.Should().BeApproximately(title.Y + 34.0, 0.01);
+            threaded.Y.Should().BeApproximately(note.Y + 18.0, 0.01);
         });
     }
 
@@ -290,6 +298,7 @@ public sealed partial class PrintRendererPageSetupTests
             for (uint row = 1; row <= 90; row++)
             {
                 var address = new CellAddress(sheet.Id, row, 1);
+                sheet.SetCell(address, new TextValue($"Row {row}"));
                 sheet.Comments[address] = $"Comment {row}";
             }
             sheet.PrintComments = WorksheetPrintComments.AtEnd;
@@ -327,8 +336,13 @@ public sealed partial class PrintRendererPageSetupTests
     {
         var rendererSource = DialogSourceTestSupport.ReadHostSources("PrintRenderer.cs");
         var commentsSource = DialogSourceTestSupport.ReadHostSources("PrintRenderer.Comments.cs");
+        var contentPlannerSource = DialogSourceTestSupport.ReadPresentationSources(
+            "PageLayout",
+            "WorksheetPrintPageContentPlanner.cs");
 
-        rendererSource.Should().Contain("PrintCommentSummaryPlanner.BuildPages(");
+        rendererSource.Should().Contain("WorksheetPrintPageContentPlanner.BuildCommentSummaryPages(");
+        rendererSource.Should().NotContain("PrintCommentSummaryPlanner.BuildPages(");
+        contentPlannerSource.Should().Contain("PrintCommentSummaryPlanner.BuildPages(");
         commentsSource.Should().Contain("PrintCommentSummaryPlanner.WrapOverlayText(");
         commentsSource.Should().NotContain(".Chunk(");
         commentsSource.Should().NotContain(".Concat(threadedComments");

@@ -59,8 +59,9 @@ public sealed partial class MainWindow
         (key, args) => UiText.Format(key, args));
 
     private async Task ShowPrintPreviewDialogAsync(
-        string? fixturePrinterName = null,
-        IReadOnlyList<PrintPreviewParityPage>? parityPages = null)
+        string? printerNameOverride = null,
+        int? externalPageCount = null,
+        Func<int, Control>? externalPageViewFactory = null)
     {
         await WaitForPendingDirtyWorkbookGateAsync();
 
@@ -72,90 +73,45 @@ public sealed partial class MainWindow
 
         ClearSelectedDrawingObject();
 
-        var sheet = _session.ActiveSheet;
-        if (!PrintPreviewPaginationContext.TryCreate(_session.Workbook, sheet, PrintPreviewTextMeasurer, out var context, ResolveWorkbookDirectoryForHeaderFooter()))
+        AvaloniaPrintPreviewPaginationContext context;
+        if (externalPageViewFactory is not null)
+        {
+            if (externalPageCount is null or <= 0)
+                throw new ArgumentOutOfRangeException(nameof(externalPageCount));
+
+            context = AvaloniaPrintPreviewPaginationContext.Empty();
+        }
+        else if (!PrintPreviewPaginationContext.TryCreate(
+                     _session.Workbook,
+                     _session.ActiveSheet,
+                     PrintPreviewTextMeasurer,
+                     out var sheetContext,
+                     ResolveWorkbookDirectoryForHeaderFooter()))
         {
             ShowEditIssue(UiText.Get("ShellLoc_NothingToPreview"));
             return;
         }
-
-        await ShowPrintPreviewWindowCoreAsync(
-            AvaloniaPrintPreviewPaginationContext.FromSheetContext(context),
-            fixturePrinterName,
-            parityPages);
-    }
-
-    /// <summary>
-    /// Seeds the active sheet with the "Parity Demo / Revenue by region" report used by the parity
-    /// capture so the Linux preview renders the same column-aligned grid as the Windows ground truth:
-    /// a bold title, a dimmed subtitle, a bold header row, and four data rows whose Revenue column is
-    /// currency-formatted. Without this seed the active sheet still holds the leftover Text-to-Columns
-    /// demo cells (raw "North,Widget,120" strings in column F), which previewed as comma-joined CSV
-    /// text instead of a laid-out table. A tight A1:D8 print area constrains the preview to the report.
-    /// </summary>
-    private void SeedPrintPreviewParityReport()
-    {
-        var workbook = _session.Workbook;
-        var sheet = _session.ActiveSheet;
-
-        var titleStyle = workbook.RegisterStyle(new CellStyle { Bold = true, FontSize = 16 });
-        var subtitleStyle = workbook.RegisterStyle(new CellStyle
+        else
         {
-            FontColor = new CellColor(112, 112, 112),
-        });
-        var headerStyle = workbook.RegisterStyle(new CellStyle { Bold = true });
-        var currencyStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "$#,##0" });
-
-        // Clear any leftover cells (e.g. the Text-to-Columns CSV demo in column F) inside the report
-        // print area so they cannot bleed into the previewed grid.
-        for (uint row = 1; row <= 8; row++)
-            for (uint col = 1; col <= 6; col++)
-                sheet.SetCell(new CellAddress(sheet.Id, row, col), Cell.FromValue(BlankValue.Instance));
-
-        SetReportCell(sheet, 1, 1, new TextValue("Parity Demo"), titleStyle);
-        SetReportCell(sheet, 2, 1, new TextValue("Revenue by region"), subtitleStyle);
-
-        var headers = new[] { "Region", "Product", "Units", "Revenue" };
-        for (var col = 0; col < headers.Length; col++)
-            SetReportCell(sheet, 4, (uint)(col + 1), new TextValue(headers[col]), headerStyle);
-
-        (string Region, string Product, double Units, double Revenue)[] rows =
-        {
-            ("North", "Widget", 120, 12480),
-            ("South", "Gadget", 85, 8925),
-            ("East", "Sprocket", 200, 21700),
-            ("West", "Gizmo", 64, 6080),
-        };
-
-        for (var i = 0; i < rows.Length; i++)
-        {
-            var row = (uint)(5 + i);
-            var data = rows[i];
-            SetReportCell(sheet, row, 1, new TextValue(data.Region), StyleId.Default);
-            SetReportCell(sheet, row, 2, new TextValue(data.Product), StyleId.Default);
-            SetReportCell(sheet, row, 3, new NumberValue(data.Units), StyleId.Default);
-            SetReportCell(sheet, row, 4, new NumberValue(data.Revenue), currencyStyle);
+            context = AvaloniaPrintPreviewPaginationContext.FromSheetContext(sheetContext);
         }
 
-        sheet.PrintArea = new GridRange(
-            new CellAddress(sheet.Id, 1, 1),
-            new CellAddress(sheet.Id, 8, 4));
-    }
-
-    private static void SetReportCell(Sheet sheet, uint row, uint col, ScalarValue value, StyleId styleId)
-    {
-        var cell = Cell.FromValue(value);
-        cell.StyleId = styleId;
-        sheet.SetCell(new CellAddress(sheet.Id, row, col), cell);
+        await ShowPrintPreviewWindowCoreAsync(
+            context,
+            printerNameOverride,
+            externalPageCount,
+            externalPageViewFactory);
     }
 
     private async Task ShowPrintPreviewWindowCoreAsync(
         AvaloniaPrintPreviewPaginationContext context,
-        string? fixturePrinterName = null,
-        IReadOnlyList<PrintPreviewParityPage>? parityPages = null)
+        string? printerNameOverride = null,
+        int? externalPageCount = null,
+        Func<int, Control>? externalPageViewFactory = null)
     {
-        var printerName = fixturePrinterName ?? PrintPreviewDefaultPrinterName;
-        var pageCount = parityPages?.Count ?? context.PageCount;
+        var hasExternalPageSource = externalPageViewFactory is not null;
+        var printerName = printerNameOverride ?? PrintPreviewDefaultPrinterName;
+        var pageCount = externalPageCount ?? context.PageCount;
         var navigator = PrintPreviewPageNavigator.Create(pageCount);
         // Ephemeral print-job settings (Print What / Sides / Collation / Copies / Printer / page
         // range / ignore print area) tracked across the settings-rail's own controls -- see
@@ -245,7 +201,10 @@ public sealed partial class MainWindow
 
         void Render()
         {
-            pageHost.Child = BuildPreviewDocumentViewerSurface(context, navigator.CurrentIndex, parityPages);
+            pageHost.Child = BuildPreviewDocumentViewerSurface(
+                context,
+                navigator.CurrentIndex,
+                externalPageViewFactory);
             pageNumberBox.Text = (navigator.CurrentIndex + 1).ToString(CultureInfo.InvariantCulture);
             pageStatusText.Text = PrintPreviewNavigationState.Create(navigator.CurrentIndex + 1, pageCount).StatusText;
             firstButton.IsEnabled = navigator.CanGoPrevious;
@@ -261,7 +220,7 @@ public sealed partial class MainWindow
         // stale layout for a setting the user just changed (R118-print-preview-settings-rail-wiring).
         void RepaginateAndRender()
         {
-            if (parityPages is null)
+            if (!hasExternalPageSource)
             {
                 var ignorePrintArea = currentSettings.PrintWhat is PrintWhat.Selection || currentSettings.IgnorePrintArea;
                 AvaloniaPrintPreviewPaginationContext updatedContext;
@@ -386,31 +345,30 @@ public sealed partial class MainWindow
             documentToolbar,
             pageHost,
             PrintPreviewSurfacePlanner.CreateFindBarPlan(PrintPreviewSettingsTextResolver));
-        // The parity fixture path (a static, pre-rendered set of pages captured for cross-platform
-        // screenshot comparison) has no live sheet/session behind it, so its rail stays the
-        // read-only snapshot it always was. A real preview is backed by the live active sheet and
-        // its settings rail is fully interactive (R118-print-preview-settings-rail-wiring) --
+        // An externally supplied static page source has no live sheet/session behind it, so its rail
+        // stays read-only. A real preview is backed by the live active sheet and its settings rail is
+        // fully interactive (R118-print-preview-settings-rail-wiring) --
         // previously canUpdatePrintPreviewSettings was hardcoded false even for real previews, which
         // left every control (Print What/Sides/Collation/Orientation/Paper Size/Margins/Scaling/
         // Ignore Print Area/Print Options) wired to nothing.
         var settingsRail = CreatePrintPreviewSettingsRail(
             PrintPreviewSurfacePlanner.CreateSettingsRailPlan(
-                parityPages is null ? _session.ActiveSheet : null,
-                parityPages is null ? pageCount : 1,
+                hasExternalPageSource ? null : _session.ActiveSheet,
+                hasExternalPageSource ? 1 : pageCount,
                 printerName,
                 currentSettings,
                  // Match WPF's PrintRenderer.RenderWorksheet(printRangeOverride: selectionRange,
                  // ignorePrintArea: true) when the user switches the live preview to Selection.
                  hasSelection: HasPrintSelection(_session.SelectedRange),
-                canUpdatePrintPreviewSettings: parityPages is null,
+                canUpdatePrintPreviewSettings: !hasExternalPageSource,
                 PrintPreviewSettingsTextResolver),
-            parityPages is null
-                ? new PrintPreviewSettingsRailInteraction(
+            hasExternalPageSource
+                ? null
+                : new PrintPreviewSettingsRailInteraction(
                     _session.ActiveSheet.Id,
                     () => currentSettings,
                     updated => currentSettings = updated,
-                    RepaginateAndRender)
-                : null);
+                    RepaginateAndRender));
         var topToolbar = CreatePrintPreviewTopToolbar(
             topToolbarPlan,
             exportButton,
@@ -442,7 +400,8 @@ public sealed partial class MainWindow
         dialog.Opened += (_, _) =>
         {
             Render();
-            exportButton.Focus();
+            if (PrintPreviewDialogPlanner.InitialFocusCommand == PrintPreviewToolbarCommand.Print)
+                exportButton.Focus();
         };
 
         await dialog.ShowDialog(this);
@@ -1165,15 +1124,14 @@ public sealed partial class MainWindow
     private static Control BuildPreviewDocumentViewerSurface(
         AvaloniaPrintPreviewPaginationContext context,
         int pageIndex,
-        IReadOnlyList<PrintPreviewParityPage>? parityPages = null)
+        Func<int, Control>? externalPageViewFactory = null)
     {
         var surface = new Border
         {
             Background = PrintPreviewSurfaceBackground,
             Padding = new Thickness(PrintPreviewSurfacePlanner.PreviewPageLeftPadding, 5, 84, 8),
-            Child = parityPages is null
-                ? BuildPreviewPageView(context, pageIndex)
-                : BuildPreviewParityPageView(parityPages[pageIndex]),
+            Child = externalPageViewFactory?.Invoke(pageIndex)
+                ?? BuildPreviewPageView(context, pageIndex),
         };
 
         return new ScrollViewer
@@ -1182,66 +1140,6 @@ public sealed partial class MainWindow
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = surface,
-        };
-    }
-
-    private static Control BuildPreviewParityPageView(PrintPreviewParityPage page)
-    {
-        var canvas = new Canvas
-        {
-            Width = PrintPreviewParityFixture.PageWidth,
-            Height = PrintPreviewParityFixture.PageHeight,
-            Background = Brushes.White,
-            ClipToBounds = true,
-        };
-        AutomationProperties.SetAutomationId(canvas, PrintPreviewDialogPlanner.PageCanvasAutomationId);
-
-        foreach (var run in page.TextRuns)
-        {
-            var text = new TextBlock
-            {
-                Text = run.Text,
-                FontFamily = FormulaBarFontFamily,
-                FontSize = run.FontSize,
-                FontWeight = run.Bold ? FontWeight.SemiBold : FontWeight.Normal,
-                Foreground = PreviewBrush(run.Color),
-                TextWrapping = TextWrapping.NoWrap,
-            };
-            Canvas.SetLeft(text, run.Left);
-            Canvas.SetTop(text, run.Top);
-            canvas.Children.Add(text);
-        }
-
-        var paper = new Grid
-        {
-            ClipToBounds = true,
-            Children =
-            {
-                canvas,
-                new Border
-                {
-                    BorderBrush = Brushes.Black,
-                    BorderThickness = new Thickness(1),
-                    IsHitTestVisible = false,
-                },
-            },
-        };
-
-        return new Border
-        {
-            Width = PrintPreviewParityFixture.PageWidth,
-            Height = PrintPreviewParityFixture.PageHeight,
-            Background = Brushes.White,
-            BoxShadow = new BoxShadows(new BoxShadow
-            {
-                OffsetX = 4,
-                OffsetY = 4,
-                Blur = 0,
-                Color = Color.FromArgb(89, 0, 0, 0),
-            }),
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-            VerticalAlignment = AvaloniaVerticalAlignment.Top,
-            Child = paper,
         };
     }
 

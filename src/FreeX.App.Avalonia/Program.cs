@@ -1,10 +1,12 @@
 using Avalonia;
 using Avalonia.Fonts.Inter;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
 
-internal static class Program
+internal static partial class Program
 {
     [STAThread]
     public static int Main(string[] args)
@@ -14,83 +16,64 @@ internal static class Program
         // Info.plist, so no install hooks are wired here.
         Velopack.VelopackApp.Build().Run();
 
-        if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode))
-            return smokeExitCode;
+        return RunApplication(args, diagnosticsDirectory: null, externalStartupCoordinator: null);
+    }
 
-        if (!MacOsLaunchSmokeOptions.TryParse(
-                args,
-                out var launchSmokeOptions,
-                out var startupArguments,
-                out var launchSmokeError))
-        {
-            Console.Error.WriteLine(launchSmokeError);
-            return 1;
-        }
+    internal static int RunPivotRuntimeObservationHost(
+        IReadOnlyList<string> startupArguments,
+        Action<MainWindow.PivotRuntimeObservationAccessAdapter> externalStartupCoordinator) =>
+        RunApplication(
+            startupArguments.ToArray(),
+            diagnosticsDirectory: null,
+            (window, _) => externalStartupCoordinator(window.CreatePivotRuntimeObservationAccessAdapter()));
 
-        // Additive headless surface-capture mode (--parity-capture <outDir>). Parsed out of the
-        // launch-smoke-filtered arguments so it composes with the existing modes without disturbing them.
-        if (!ParityCaptureOptions.TryParse(
-                startupArguments,
-                out var parityCaptureOptions,
-                out startupArguments,
-                out var parityCaptureError))
+    private static int RunApplication(
+        string[] startupArguments,
+        string? diagnosticsDirectory,
+        Action<MainWindow, LocalAppDiagnostics?>? externalStartupCoordinator)
+    {
+        LocalAppDiagnostics? diagnostics = null;
+        return SisterAvaloniaProgramRunner.Run(
+            startupArguments,
+            new SisterAvaloniaProgramSpec(
+                FreeXApplicationStartupDescriptor.ProductIdentity,
+                SisterAvaloniaLaunchPreparation.Continue,
+                arguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(arguments))
         {
-            Console.Error.WriteLine(parityCaptureError);
-            return 1;
-        }
-
-        // Additive headless grid-range capture mode (--parity-grid <xlsx> <range> <outDir>).
-        if (!GridCaptureOptions.TryParse(
-                startupArguments,
-                out var gridCaptureOptions,
-                out startupArguments,
-                out var gridCaptureError))
-        {
-            Console.Error.WriteLine(gridCaptureError);
-            return 1;
-        }
-
-        if (!InteractionValidationOptions.TryParse(
-                startupArguments,
-                out var interactionValidationOptions,
-                out startupArguments,
-                out var interactionValidationError))
-        {
-            Console.Error.WriteLine(interactionValidationError);
-            return 1;
-        }
-
-        var diagnostics = AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory);
-        diagnostics.RegisterUnhandledExceptionHandlers();
-        diagnostics.RecordEvent("app_start", new Dictionary<string, string?>
-        {
-            ["source"] = "avalonia",
-            ["scope"] = "app",
-            ["status"] = "starting"
-        });
-
-        App.StartupArguments = startupArguments;
-        App.LaunchSmokeOptions = launchSmokeOptions;
-        App.ParityCaptureOptions = parityCaptureOptions;
-        App.GridCaptureOptions = gridCaptureOptions;
-        App.InteractionValidationOptions = interactionValidationOptions;
-        App.Diagnostics = diagnostics;
-        try
-        {
-            BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
-            diagnostics.RecordEvent("app_exit", new Dictionary<string, string?>
+            CreateDiagnostics = () =>
             {
-                ["source"] = "avalonia",
-                ["scope"] = "app",
-                ["status"] = "completed"
-            });
-            return 0;
-        }
-        catch (Exception ex)
-        {
-            diagnostics.RecordCrash(ex, "avalonia_startup");
-            throw;
-        }
+                diagnostics = LocalAppDiagnostics.Create(
+                    AppHelpInfo.GetVersionText(typeof(Program).Assembly),
+                    diagnosticsDirectory);
+                return new SisterAvaloniaProgramDiagnostics(
+                    () => diagnostics.RegisterCrashHandlers(),
+                    (exception, source) => diagnostics.RecordCrash(exception, source));
+            },
+            BeforeRun = () =>
+            {
+                var activeDiagnostics = diagnostics
+                    ?? throw new InvalidOperationException("FreeX diagnostics were not initialized.");
+                activeDiagnostics.RecordEvent("app_start", new Dictionary<string, string?>
+                {
+                    ["source"] = "avalonia",
+                    ["scope"] = "app",
+                    ["status"] = "starting"
+                });
+
+                App.StartupArguments = startupArguments;
+                App.ExternalStartupCoordinator = externalStartupCoordinator;
+                App.Diagnostics = activeDiagnostics;
+            },
+            AfterRun = _ =>
+                (diagnostics ?? throw new InvalidOperationException("FreeX diagnostics were not initialized."))
+                .RecordEvent("app_exit", new Dictionary<string, string?>
+                {
+                    ["source"] = "avalonia",
+                    ["scope"] = "app",
+                    ["status"] = "completed"
+                }),
+            CompletedExitCode = 0
+        });
     }
 
     public static AppBuilder BuildAvaloniaApp() =>

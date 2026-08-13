@@ -45,6 +45,7 @@ public sealed class ViewCommandSourceTests
     public void ViewWindowHandlers_RouteThroughExpectedPlannersAndCommands()
     {
         var source = ReadHostSourceFile("MainWindow.ViewCommands.cs");
+        var sessionSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "WorkbookSession.cs");
 
         source.Should().Contain("ArrangeAllMenuPlanner.IsChecked(item.Tag, _workbook.WindowArrangement)");
         source.Should().Contain("ArrangeAllMenuPlanner.TryParseArrangement(");
@@ -59,10 +60,14 @@ public sealed class ViewCommandSourceTests
         source.Should().NotContain("ViewWindowCommandBtn_Click");
         SourceMethodExtractor.ExtractMethodSource(source, "private void FreezePanesPickerBtn_Click(")
             .Should().Contain("OpenRibbonContextMenu(btn, cm);");
-        source.Should().Contain("new SetFreezePanesCommand(_currentSheetId, frozenRows, frozenCols)");
+        source.Should().Contain("ApplyFreezePanes(_session.FreezePanesAtActiveCell)");
+        source.Should().Contain("ApplyFreezePanes(_session.UnfreezePanes)");
+        source.Should().Contain("_session.SetFreezePanes(frozenRows, frozenCols)");
         source.Should().Contain("private void FreezeAtSelectionMenuItem_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("private void UnfreezeAllMenuItem_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("new SetSplitPanesCommand(sheetId, splitRow, splitColumn)");
+        source.Should().Contain("_session.SetSplitPanes(nextRow, nextColumn)");
+        sessionSource.Should().Contain("new SetFreezePanesCommand(ActiveSheet.Id, frozenRows, frozenCols)");
+        sessionSource.Should().Contain("new SetSplitPanesCommand(sheetId, splitRow, splitColumn)");
     }
 
     [Fact]

@@ -4,16 +4,12 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $validationErrors = New-Object System.Collections.Generic.List[string]
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
 
-    $validationErrors.Add($Message)
-    if ($env:GITHUB_ACTIONS -eq "true") {
-        $escaped = $Message.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
-        Write-Host "::error title=Linux app readiness::$escaped"
-    }
-    Write-Error $Message -ErrorAction Continue
+    Add-ToolValidationError -Errors $validationErrors -Message $Message -GitHubTitle "Linux app readiness"
 }
 
 function Assert-True {
@@ -114,10 +110,20 @@ Assert-FileContains -Path $appImageScript -Needles @(
 )
 
 # Avalonia project keeps the platform-neutral launch-smoke alias.
-$smokeSource = Get-RepoFile @("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs")
+$smokeSource = Get-RepoFile @("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs")
 Assert-FileContains -Path $smokeSource -Needles @(
     'public const string NeutralArgument = "--launch-smoke";',
     'public const string NeutralDiagnosticsDirectoryArgument = "--launch-smoke-diagnostics-dir";'
+)
+
+$packagedProductLaunchProbe = Get-RepoFile @("tools", "Run-PackagedProductLaunchProbe.sh")
+Assert-FileContains -Path $packagedProductLaunchProbe -Needles @(
+    '"$executable" "${app_arguments[@]}" >"$log_path" 2>&1 &',
+    'grep -R -F -q "$readiness_marker" "$readiness_root"',
+    'process_is_active "$probe_pid"',
+    'kill "$probe_pid"',
+    'packaged_product_launch_status=passed',
+    'packaged_product_executable=$executable'
 )
 
 # Linux workflow markers.
@@ -129,9 +135,15 @@ Assert-FileContains -Path $workflow -Needles @(
     "runner: ubuntu-latest",
     "runner: ubuntu-24.04-arm",
     "dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj",
+    "dotnet publish tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj",
     "--self-contained true",
     "-p:UseAppHost=true",
     "--packaging-smoke",
+    '"$validation_published/FreeX.Validation.Avalonia" --packaging-smoke',
+    "bash tools/Run-PackagedProductLaunchProbe.sh",
+    '--executable "$published/FreeX"',
+    'grep -Fqx "packaged_product_launch_status=passed" "$packaged_product_launch_report"',
+    'grep -Fqx "packaged_product_executable=$published/FreeX" "$packaged_product_launch_report"',
     "xvfb-run -a",
     "--launch-smoke",
     "desktop-file-validate",
@@ -146,10 +158,21 @@ Assert-FileContains -Path $workflow -Needles @(
 # The macOS-only signing/notarization machinery must not leak into the Linux lane.
 if (Test-Path -LiteralPath $workflow) {
     $workflowContent = Get-Content -LiteralPath $workflow -Raw
+    $productProbeIndex = $workflowContent.IndexOf('bash tools/Run-PackagedProductLaunchProbe.sh', [System.StringComparison]::Ordinal)
+    $launchPassedIndex = $workflowContent.IndexOf('echo "launch_smoke_status=passed"', [System.StringComparison]::Ordinal)
+    Assert-True ($productProbeIndex -ge 0 -and $productProbeIndex -lt $launchPassedIndex) "Linux workflow must exercise the published product apphost before recording launch_smoke_status=passed."
     foreach ($forbidden in @("codesign", "notarytool", "MACOS_CODESIGN", "lsregister", "spctl")) {
         Assert-True (-not $workflowContent.Contains($forbidden)) "Linux workflow must not contain macOS-only token: $forbidden"
     }
 }
+
+$releaseWorkflow = Get-RepoFile @(".github", "workflows", "linux-release.yml")
+Assert-FileContains -Path $releaseWorkflow -Needles @(
+    '"$validation_published/FreeX.Validation.Avalonia" --packaging-smoke',
+    "bash tools/Run-PackagedProductLaunchProbe.sh",
+    '--executable "$published/FreeX"',
+    'packaged_product_launch_status=passed'
+)
 
 # Readiness validator present.
 $readinessTool = Get-RepoFile @("tools", "Test-LinuxPublicPreviewReadiness.ps1")

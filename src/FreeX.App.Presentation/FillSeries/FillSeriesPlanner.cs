@@ -1,6 +1,7 @@
 using System.Globalization;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using Free.Shared.Localization;
 
 namespace FreeX.App.Presentation.FillSeries;
 
@@ -61,6 +62,12 @@ public enum FillSeriesInputFocusTarget
     StopValue,
 }
 
+public enum FillSeriesValidationTextProfile
+{
+    Wpf,
+    Avalonia,
+}
+
 /// <summary>
 /// Portable (no UI) backing logic for the Fill ▸ Series dialog (Home ▸ Fill ▸ Series). It parses and
 /// validates the step/stop inputs and builds the linear / growth / date cell edits over a range, reading the
@@ -92,6 +99,37 @@ public static class FillSeriesPlanner
         error == FillSeriesInputError.InvalidStop
             ? FillSeriesInputFocusTarget.StopValue
             : FillSeriesInputFocusTarget.StepValue;
+
+    public static ValidationPresentationDescriptor<FillSeriesInputFocusTarget> DescribeInputError(
+        FillSeriesInputError error,
+        FillSeriesValidationTextProfile profile)
+    {
+        var resourceKey = (profile, error) switch
+        {
+            (FillSeriesValidationTextProfile.Wpf, FillSeriesInputError.InvalidStop) =>
+                "FillSeriesStep_InvalidStopMessage",
+            (FillSeriesValidationTextProfile.Wpf, _) =>
+                "FillSeriesStep_InvalidStepMessage",
+            (FillSeriesValidationTextProfile.Avalonia, FillSeriesInputError.InvalidStop) =>
+                "FillSeries_InvalidStop",
+            _ => "FillSeries_InvalidStep",
+        };
+
+        return new(
+            LocalizedTextDescriptor.Resource(resourceKey),
+            FocusTargetFor(error));
+    }
+
+    public static LocalizedTextDescriptor DescribeNoSeed() =>
+        LocalizedTextDescriptor.Resource("FillSeries_NoSeed");
+
+    public static LocalizedTextDescriptor DescribeCommandFailure(string? errorMessage) =>
+        errorMessage is null
+            ? LocalizedTextDescriptor.Resource("FillSeries_Failed")
+            : LocalizedTextDescriptor.Literal(errorMessage);
+
+    public static LocalizedTextDescriptor DescribeSuccess(string rangeReference) =>
+        LocalizedTextDescriptor.Resource("FillSeries_Filled", rangeReference);
 
     /// <summary>
     /// Parses a step value, accepting the invariant decimal form and the current UI culture (so a typed

@@ -15,31 +15,18 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
-    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Properties;
-    private readonly TextBox _title = new() { MinWidth = 280 };
-    private readonly TextBox _author = new() { MinWidth = 280 };
-    private readonly TextBox _subject = new() { MinWidth = 280 };
-    private readonly TextBox _keywords = new() { MinWidth = 280 };
-    private readonly TextBox _category = new() { MinWidth = 280 };
-    private readonly TextBox _contentStatus = new() { MinWidth = 280 };
-    private readonly TextBox _language = new() { MinWidth = 280 };
-    private readonly TextBox _version = new() { MinWidth = 280 };
-    private readonly TextBox _comments = new()
-    {
-        MinWidth = 280,
-        MinHeight = 72,
-        AcceptsReturn = true,
-        TextWrapping = TextWrapping.Wrap,
-    };
+    private static readonly Free.Shared.Shell.DialogFocusPlan<string> FocusPlan = FreeWDialogFocusPlanner.Properties;
+    private readonly DocumentPropertiesDialogSession _session;
+    private readonly Dictionary<DocumentPropertiesDialogField, TextBox> _editors = [];
 
     public bool Accepted { get; private set; }
     public DocumentPropertiesDialogValues? Result { get; private set; }
 
     public PropertiesDialog(DocumentProperties properties)
     {
-        ArgumentNullException.ThrowIfNull(properties);
+        _session = new DocumentPropertiesDialogSession(properties, CultureInfo.CurrentCulture);
 
-        Title = "Document Properties";
+        Title = _session.Surface.Title;
         Width = 480;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -47,39 +34,25 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
         ShowInTaskbar = false;
         AutomationProperties.SetAutomationId(this, "DocumentPropertiesDialog");
 
-        _title.Text = properties.Title ?? string.Empty;
-        _author.Text = properties.Author ?? string.Empty;
-        _subject.Text = properties.Subject ?? string.Empty;
-        _keywords.Text = properties.Keywords ?? string.Empty;
-        _comments.Text = properties.Comments ?? string.Empty;
-        _category.Text = properties.Category ?? string.Empty;
-        _contentStatus.Text = properties.ContentStatus ?? string.Empty;
-        _language.Text = properties.Language ?? string.Empty;
-        _version.Text = properties.Version ?? string.Empty;
-
         var grid = new Grid
         {
             Margin = new Thickness(16, 12, 16, 8),
             ColumnDefinitions = new ColumnDefinitions("Auto,*"),
         };
-        AddRow(grid, 0, "Title:", _title, FocusPlan.InitialFocusTargetAutomationId);
-        AddRow(grid, 1, "Author:", _author, "DocumentPropertiesAuthor");
-        AddRow(grid, 2, "Subject:", _subject, "DocumentPropertiesSubject");
-        AddRow(grid, 3, "Category:", _category, "DocumentPropertiesCategory");
-        AddRow(grid, 4, "Keywords:", _keywords, "DocumentPropertiesKeywords");
-        AddRow(grid, 5, "Comments:", _comments, "DocumentPropertiesComments");
-        AddRow(grid, 6, "Status:", _contentStatus, "DocumentPropertiesContentStatus");
-        AddRow(grid, 7, "Language:", _language, "DocumentPropertiesLanguage");
-        AddRow(grid, 8, "Version:", _version, "DocumentPropertiesVersion");
-        AddReadOnlyRow(grid, 9, "Last saved by:", properties.LastModifiedBy, "DocumentPropertiesLastModifiedBy");
-        AddReadOnlyRow(grid, 10, "Created:", FormatDate(properties.Created), "DocumentPropertiesCreated");
-        AddReadOnlyRow(grid, 11, "Modified:", FormatDate(properties.Modified), "DocumentPropertiesModified");
+        for (var row = 0; row < _session.Surface.Fields.Count; row++)
+        {
+            var spec = _session.Surface.Fields[row];
+            if (spec.IsEditable)
+                AddRow(grid, row, spec, CreateEditor(spec));
+            else
+                AddReadOnlyRow(grid, row, spec);
+        }
 
-        var ok = new Button { Content = "OK", IsDefault = true };
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 84, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "DocumentPropertiesOkButton");
         ok.Click += (_, _) => Commit();
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = UiText.Get("Common_CancelText"), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 84);
         AutomationProperties.SetAutomationId(cancel, "DocumentPropertiesCancelButton");
         cancel.Click += (_, _) => Close();
@@ -100,38 +73,52 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
 
     private void FocusTitle()
     {
+        var title = _editors[DocumentPropertiesDialogField.Title];
         if (FocusPlan.SelectAllOnFocus)
-            AvaloniaCompactDialogChrome.FocusAndSelect(_title);
+            AvaloniaCompactDialogChrome.FocusAndSelect(title);
         else
-            _title.Focus();
+            title.Focus();
     }
 
     private void Commit()
     {
-        Result = DocumentPropertiesDialogValues.FromInput(
-            _title.Text,
-            _author.Text,
-            _subject.Text,
-            _keywords.Text,
-            _comments.Text,
-            _category.Text,
-            _contentStatus.Text,
-            _language.Text,
-            _version.Text);
+        var plan = _session.PlanCommit(accepted: true, CaptureInput());
+        if (!plan.ShouldExecuteCommand)
+            return;
+
+        Result = plan.Values;
         Accepted = true;
         Close();
     }
 
-    private static void AddRow(Grid grid, int row, string label, TextBox field, string automationId)
+    private TextBox CreateEditor(DocumentPropertiesDialogFieldSpec spec)
+    {
+        var editor = new TextBox
+        {
+            MinWidth = 280,
+            MinHeight = spec.IsMultiline ? 72 : 0,
+            AcceptsReturn = spec.IsMultiline,
+            TextWrapping = spec.IsMultiline ? TextWrapping.Wrap : TextWrapping.NoWrap,
+            Text = spec.Value,
+        };
+        AutomationProperties.SetAutomationId(editor, spec.AutomationId);
+        _editors.Add(spec.Field, editor);
+        return editor;
+    }
+
+    private static void AddRow(
+        Grid grid,
+        int row,
+        DocumentPropertiesDialogFieldSpec spec,
+        TextBox field)
     {
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         AvaloniaCompactDialogChrome.ApplyTextBox(field, DialogChromeStyle);
         field.Margin = new Thickness(0, 4, 0, 4);
-        AutomationProperties.SetAutomationId(field, automationId);
 
         var caption = new TextBlock
         {
-            Text = label,
+            Text = spec.Label,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, 10, 10, 0),
         };
@@ -144,20 +131,20 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
         grid.Children.Add(field);
     }
 
-    private static void AddReadOnlyRow(Grid grid, int row, string label, string? value, string automationId)
+    private static void AddReadOnlyRow(Grid grid, int row, DocumentPropertiesDialogFieldSpec spec)
     {
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         var field = new TextBlock
         {
-            Text = string.IsNullOrWhiteSpace(value) ? "-" : value,
+            Text = spec.Value,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 8, 0, 4),
         };
-        AutomationProperties.SetAutomationId(field, automationId);
+        AutomationProperties.SetAutomationId(field, spec.AutomationId);
 
         var caption = new TextBlock
         {
-            Text = label,
+            Text = spec.Label,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, 10, 10, 0),
         };
@@ -170,7 +157,9 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
         grid.Children.Add(field);
     }
 
-    private static string? FormatDate(DateTimeOffset? value) =>
-        value?.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
+    private DocumentPropertiesDialogInput CaptureInput() =>
+        DocumentPropertiesDialogInput.Capture(Text);
+
+    private string? Text(DocumentPropertiesDialogField field) => _editors[field].Text;
 
 }

@@ -4,8 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-using FreeX.App.Avalonia.Pivot;
-using FreeX.Core.Commands;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -15,8 +14,8 @@ namespace FreeX.App.Avalonia;
 /// <summary>
 /// Insert ▸ Slicer / Insert ▸ Timeline for the active PivotTable. Both commands resolve the active (or first)
 /// pivot on the active sheet, present a compact field picker (checkbox list for slicers, single-select list for
-/// timelines), then create one <see cref="SlicerModel"/> per chosen field via <see cref="AddSlicerCommand"/> /
-/// <see cref="AddTimelineCommand"/> through the shared review-command path. The core command validates that a
+/// timelines), then create one <see cref="SlicerModel"/> per chosen field through shared application plans.
+/// The Core command behind each plan validates that a
 /// timeline field actually contains dates and surfaces an error if not; the shell relays that message rather
 /// than crashing. When no pivot is present, the shell just shows an explanatory status line.
 /// </summary>
@@ -54,7 +53,8 @@ public sealed partial class MainWindow
             return;
         }
 
-        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+        var headers = PivotApplication.ReadSourceHeaders(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot));
         if (headers.Count == 0)
         {
             RefreshShell(UiText.Get("PivotLoc_NoFieldsToSlice"));
@@ -191,7 +191,8 @@ public sealed partial class MainWindow
             return;
         }
 
-        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+        var headers = PivotApplication.ReadSourceHeaders(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot));
         if (headers.Count == 0)
         {
             RefreshShell(UiText.Get("PivotLoc_NoFieldsForTimeline"));
@@ -317,7 +318,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Creates one slicer per selected field through <see cref="AddSlicerCommand"/>. Each name is made unique
+    /// Creates one slicer per selected field through the shared Pivot application session. Each name is made unique
     /// against the workbook's existing slicers. Returns false (with a message) on the first command rejection so
     /// the dialog can keep the picker open.
     /// </summary>
@@ -328,11 +329,14 @@ public sealed partial class MainWindow
         foreach (var field in fields)
         {
             var name = MakeUniqueControlName(field, _session.Workbook.Slicers.Select(s => s.Name));
-            var command = new AddSlicerCommand(name, pivot.Name, field);
-            var result = _session.ExecuteReviewCommand(command);
-            if (!result.Success)
+            var outcome = PivotApplication.Execute(
+                PivotApplication.PlanInsertSlicer(
+                    new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                    name,
+                    field));
+            if (!outcome.Success)
             {
-                error = result.ErrorMessage ?? UiText.Format("PivotLoc_CouldNotInsertSlicer", field);
+                error = outcome.Message?.Detail ?? UiText.Format("PivotLoc_CouldNotInsertSlicer", field);
                 if (applied > 0)
                     RefreshShell(UiText.Format("PivotLoc_InsertedSlicersCount", applied));
                 return false;
@@ -346,7 +350,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Creates one timeline per selected field through <see cref="AddTimelineCommand"/>. The core command rejects
+    /// Creates one timeline per selected field through the shared Pivot application session. Core rejects
     /// fields that do not contain dates ("Timeline source field must contain dates."); that message is surfaced
     /// verbatim. Returns false on the first rejection.
     /// </summary>
@@ -357,11 +361,14 @@ public sealed partial class MainWindow
         foreach (var field in fields)
         {
             var name = MakeUniqueControlName(field, _session.Workbook.Timelines.Select(t => t.Name));
-            var command = new AddTimelineCommand(name, pivot.Name, field);
-            var result = _session.ExecuteReviewCommand(command);
-            if (!result.Success)
+            var outcome = PivotApplication.Execute(
+                PivotApplication.PlanInsertTimeline(
+                    new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                    name,
+                    field));
+            if (!outcome.Success)
             {
-                error = result.ErrorMessage ?? UiText.Format("PivotLoc_CouldNotInsertTimeline", field);
+                error = outcome.Message?.Detail ?? UiText.Format("PivotLoc_CouldNotInsertTimeline", field);
                 if (applied > 0)
                     RefreshShell(UiText.Format("PivotLoc_InsertedTimelinesCount", applied));
                 return false;

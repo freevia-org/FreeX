@@ -6,6 +6,8 @@ using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -31,6 +33,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.LinuxXamlPackage);
 
     private readonly InCanvasRichTextEditBuffer _buffer;
+    private readonly IPlatformClipboard _clipboard;
     private readonly AvaloniaRichTextEditingSurface _richTextView;
     private readonly string _fallbackFontFamily;
     private readonly double _fallbackFontSizePt;
@@ -59,7 +62,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
         string fallbackFontFamily = InCanvasRichTextEditorDefaults.FallbackFontFamily,
         double fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt,
         Func<bool, bool>? navigateInlineTableCell = null,
-        Action? cancelInlineTableCellEdit = null)
+        Action? cancelInlineTableCellEdit = null,
+        IPlatformClipboard? clipboard = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fallbackFontFamily);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(fallbackFontSizePt);
@@ -97,15 +101,31 @@ internal sealed class AvaloniaRichTextEditor : Grid
             SelectionForegroundBrush = Brushes.Transparent,
             Opacity = 0,
         };
-        AutomationProperties.SetAutomationId(InputBox, "FreePRichTextEditorInput");
+        _clipboard = clipboard ?? new AvaloniaPlatformClipboard(
+            () => TopLevel.GetTopLevel(InputBox)?.Clipboard);
+        AutomationProperties.SetAutomationId(
+            InputBox,
+            PresentationSemanticIdentityCatalog.RichTextEditorInputAutomationId);
 
-        _copyContextMenuItem = new MenuItem { Header = "Copy" };
+        _copyContextMenuItem = new MenuItem
+        {
+            Header = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCopyCommand),
+        };
         _copyContextMenuItem.Click += async (_, _) => { _ = await CopySelectionAsync(); };
-        _cutContextMenuItem = new MenuItem { Header = "Cut" };
+        _cutContextMenuItem = new MenuItem
+        {
+            Header = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCutCommand),
+        };
         _cutContextMenuItem.Click += async (_, _) => { _ = await CutSelectionAsync(); };
-        _pasteContextMenuItem = new MenuItem { Header = "Paste" };
+        _pasteContextMenuItem = new MenuItem
+        {
+            Header = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditPasteCommand),
+        };
         _pasteContextMenuItem.Click += async (_, _) => { _ = await PasteClipboardAsync(); };
-        var selectAllContextMenuItem = new MenuItem { Header = "Select All" };
+        var selectAllContextMenuItem = new MenuItem
+        {
+            Header = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditSelectAllCommand),
+        };
         selectAllContextMenuItem.Click += (_, _) =>
         {
             SelectionStart = 0;
@@ -231,15 +251,15 @@ internal sealed class AvaloniaRichTextEditor : Grid
         return _buffer.CreateClipboardPayload(Selection);
     }
 
-    internal async Task<bool> CopySelectionAsync() =>
+    internal async Task<bool> CopySelectionAsync(CancellationToken cancellationToken = default) =>
         !ReferenceEquals(EditingTarget, this)
-            ? await EditingTarget.CopySelectionAsync()
-            : await WriteRichClipboardAsync(CreateClipboardPayload());
+            ? await EditingTarget.CopySelectionAsync(cancellationToken)
+            : await WriteRichClipboardAsync(CreateClipboardPayload(), cancellationToken);
 
-    internal async Task<bool> CutSelectionAsync()
+    internal async Task<bool> CutSelectionAsync(CancellationToken cancellationToken = default)
     {
         if (!ReferenceEquals(EditingTarget, this))
-            return await EditingTarget.CutSelectionAsync();
+            return await EditingTarget.CutSelectionAsync(cancellationToken);
 
         if (Selection.IsCollapsed)
         {
@@ -249,7 +269,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
             return false;
         }
 
-        if (!await WriteRichClipboardAsync(CreateClipboardPayload()))
+        if (!await WriteRichClipboardAsync(CreateClipboardPayload(), cancellationToken))
             return false;
         int caret;
         _buffer.ReplaceSelectionWithPlainText(Selection, string.Empty, out caret);
@@ -257,20 +277,18 @@ internal sealed class AvaloniaRichTextEditor : Grid
         return true;
     }
 
-    internal async Task<bool> PasteClipboardAsync()
+    internal async Task<bool> PasteClipboardAsync(CancellationToken cancellationToken = default)
     {
         if (!ReferenceEquals(EditingTarget, this))
-            return await EditingTarget.PasteClipboardAsync();
+            return await EditingTarget.PasteClipboardAsync(cancellationToken);
 
-        var clipboard = TopLevel.GetTopLevel(InputBox)?.Clipboard;
-        if (clipboard is null)
+        var read = await PresentationRichTextClipboardWorkflow.ReadAsync(
+            _clipboard,
+            cancellationToken);
+        if (!read.IsSuccess || read.Value is null)
             return false;
 
-        using var transfer = await clipboard.TryGetDataAsync();
-        if (transfer is null)
-            return false;
-
-        return await PasteDataTransferAsync(transfer);
+        return ApplyClipboardContent(read.Value);
     }
 
     internal async Task<bool> PasteDataTransferAsync(IAsyncDataTransfer transfer)
@@ -280,60 +298,27 @@ internal sealed class AvaloniaRichTextEditor : Grid
         if (!ReferenceEquals(EditingTarget, this))
             return await EditingTarget.PasteDataTransferAsync(transfer);
 
-        byte[]? richBytes = await TryGetValueAsync(
+        var read = await AvaloniaPlatformClipboard.ReadDataTransferAsync(
             transfer,
-            OperatingSystem.IsWindows() ? RichTextPlatformFormat : RichTextFormat);
-        richBytes ??= await TryGetValueAsync(
-            transfer,
-            OperatingSystem.IsWindows() ? RichTextFormat : RichTextPlatformFormat);
-        var payload = InCanvasRichClipboardPlanner.Deserialize(richBytes);
-        if (payload is not null)
-        {
-            _buffer.ApplyClipboardPayload(payload, Selection, out var caret);
-            ApplyBufferText(caret);
-            return true;
-        }
+            PresentationClipboardPlatformMapper.RichTextReadRequest);
+        var content = read.IsSuccess && read.Value is not null
+            ? PresentationClipboardPlatformMapper.FromPlatformContent(read.Value)
+            : new PresentationClipboardContent();
+        return ApplyClipboardContent(content);
+    }
 
-        byte[]? xamlBytes = await TryGetValueAsync(
-            transfer,
-            OperatingSystem.IsWindows()
-                ? ExternalXamlPackageWindowsFormat
-                : ExternalXamlPackageLinuxFormat);
-        xamlBytes ??= await TryGetValueAsync(
-            transfer,
-            OperatingSystem.IsWindows()
-                ? ExternalXamlPackageLinuxFormat
-                : ExternalXamlPackageWindowsFormat);
-        var xamlPayload = ExternalXamlClipboardPlanner.TryParseXamlPackage(xamlBytes);
-        if (xamlPayload is not null)
-        {
-            _buffer.ApplyClipboardPayload(xamlPayload, Selection, out var xamlCaret);
-            ApplyBufferText(xamlCaret);
-            return true;
-        }
-
-        byte[]? rtfBytes = await TryGetValueAsync(
-            transfer,
-            OperatingSystem.IsWindows() ? ExternalRtfWindowsFormat : ExternalRtfLinuxFormat);
-        rtfBytes ??= await TryGetValueAsync(
-            transfer,
-            OperatingSystem.IsWindows() ? ExternalRtfLinuxFormat : ExternalRtfWindowsFormat);
-        var externalPayload = ExternalRichTextClipboardPlanner.TryParseRtf(rtfBytes);
-        if (externalPayload is not null)
-        {
-            _buffer.ApplyClipboardPayload(externalPayload, Selection, out var rtfCaret);
-            ApplyBufferText(rtfCaret);
-            return true;
-        }
-
-        string? text = null;
-        try { text = await transfer.TryGetTextAsync(); }
-        catch { }
-        if (text is null)
+    private bool ApplyClipboardContent(PresentationClipboardContent content)
+    {
+        var resolution = InCanvasRichClipboardFormatResolver.Resolve(content);
+        if (resolution.Payload is null)
             return false;
 
-        _buffer.ReplaceSelectionWithPlainText(Selection, text, out var textCaret);
-        ApplyBufferText(textCaret);
+        int caret;
+        if (resolution.Source == PresentationClipboardPasteSource.Text)
+            _buffer.ReplaceSelectionWithPlainText(Selection, content.Text!, out caret);
+        else
+            _buffer.ApplyClipboardPayload(resolution.Payload, Selection, out caret);
+        ApplyBufferText(caret);
         return true;
     }
 
@@ -547,8 +532,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         bool hasSelection = !selection.IsCollapsed;
         _copyContextMenuItem.IsEnabled = hasSelection;
         _cutContextMenuItem.IsEnabled = hasSelection;
-        _pasteContextMenuItem.IsEnabled =
-            TopLevel.GetTopLevel(InputBox)?.Clipboard is not null;
+        _pasteContextMenuItem.IsEnabled = _clipboard.IsAvailable;
     }
 
     private void SynchronizeText() =>
@@ -745,7 +729,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
             fallbackFontFamily: _fallbackFontFamily,
             fallbackFontSizePt: _fallbackFontSizePt,
             navigateInlineTableCell: NavigateInlineTableCell,
-            cancelInlineTableCellEdit: CancelInlineTableCellEdit)
+            cancelInlineTableCellEdit: CancelInlineTableCellEdit,
+            clipboard: _clipboard)
         {
             Width = Math.Max(1, hit.Bounds.Width),
             Height = Math.Max(1, hit.Bounds.Height),
@@ -786,7 +771,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
                 if (rowIndex < table.Rows.Count)
                     continue;
 
-                table.Rows.Add(CloneTableRow(pending.Rows[index]));
+                table.Rows.Add(pending.Rows[index].Clone());
             }
         }
     }
@@ -818,38 +803,6 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
         table = null!;
         return false;
-    }
-
-    private static TableRow CloneTableRow(TableRow source)
-    {
-        var row = new TableRow
-        {
-            HeightEmu = source.HeightEmu,
-            HeightRule = source.HeightRule,
-            HorizontalAlignment = source.HorizontalAlignment,
-        };
-        foreach (var sourceCell in source.Cells)
-        {
-            row.Cells.Add(new TableCell
-            {
-                TextBody = sourceCell.TextBody is null
-                    ? null
-                    : new InCanvasRichTextEditBuffer(sourceCell.TextBody).Body,
-                Fill = sourceCell.Fill,
-                Borders = sourceCell.Borders,
-                GridSpan = sourceCell.GridSpan,
-                RowSpan = sourceCell.RowSpan,
-                HMerge = sourceCell.HMerge,
-                VMerge = sourceCell.VMerge,
-                InsetLeftPt = sourceCell.InsetLeftPt,
-                InsetRightPt = sourceCell.InsetRightPt,
-                InsetTopPt = sourceCell.InsetTopPt,
-                InsetBottomPt = sourceCell.InsetBottomPt,
-                Anchor = sourceCell.Anchor,
-            });
-        }
-
-        return row;
     }
 
     private sealed class PendingInlineTableRows(int logicalPosition, int firstRowIndex)
@@ -1120,7 +1073,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
         FocusEditor();
     }
 
-    private async Task<bool> WriteRichClipboardAsync(InCanvasRichClipboardPayload payload)
+    private async Task<bool> WriteRichClipboardAsync(
+        InCanvasRichClipboardPayload payload,
+        CancellationToken cancellationToken)
     {
         if (payload.PlainText.Length == 0)
         {
@@ -1130,31 +1085,15 @@ internal sealed class AvaloniaRichTextEditor : Grid
             return false;
         }
 
-        var clipboard = TopLevel.GetTopLevel(InputBox)?.Clipboard;
-        if (clipboard is null)
-        {
-            _lastWriteFailureMessage = "The window does not have a system clipboard.";
-            return false;
-        }
-
-        var transfer = BuildRichTextDataTransfer(payload);
-        try
-        {
-            await clipboard.SetDataAsync(transfer);
-            try { await clipboard.FlushAsync(); }
-            catch { }
-            _lastWriteFailureMessage = null;
-            return true;
-        }
-        catch (Exception ex)
-        {
-            ((IDisposable)transfer).Dispose();
-            // The OS clipboard write failed (locked by another process, unsupported format, etc.).
-            // Record the message so the caller can surface it instead of the user believing the
-            // in-place copy/cut succeeded and later pasting stale data.
-            _lastWriteFailureMessage = ex.Message;
-            return false;
-        }
+        var result = await PresentationRichTextClipboardWorkflow.WriteAsync(
+            _clipboard,
+            CreateClipboardContent(payload),
+            NativeRichTextScope,
+            NativeXamlPackageFormat,
+            NativeRtfFormat,
+            cancellationToken);
+        _lastWriteFailureMessage = result.IsSuccess ? null : result.ErrorMessage;
+        return result.IsSuccess;
     }
 
     /// <summary>
@@ -1165,37 +1104,34 @@ internal sealed class AvaloniaRichTextEditor : Grid
     internal static DataTransfer BuildRichTextDataTransfer(InCanvasRichClipboardPayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
+        return AvaloniaPlatformClipboard.BuildDataTransfer(
+            PresentationClipboardPlatformMapper.ToPlatformContent(
+                CreateClipboardContent(payload),
+                NativeRichTextScope,
+                NativeXamlPackageFormat,
+                NativeRtfFormat),
+            out _);
+    }
 
-        var item = new DataTransferItem();
-        var bytes = InCanvasRichClipboardPlanner.Serialize(payload);
-        if (OperatingSystem.IsWindows())
-            item.Set(RichTextPlatformFormat, bytes);
-        else
-            item.Set(RichTextFormat, bytes);
-
-        item.Set(
-            OperatingSystem.IsWindows() ? ExternalRtfWindowsFormat : ExternalRtfLinuxFormat,
+    private static PresentationClipboardContent CreateClipboardContent(
+        InCanvasRichClipboardPayload payload) =>
+        PresentationRichTextClipboardWorkflow.CreateWriteContent(
+            payload,
+            ExternalXamlClipboardPlanner.SerializeXamlPackage(payload),
             ExternalRichTextClipboardPlanner.SerializeRtf(payload));
-        item.Set(
-            OperatingSystem.IsWindows()
-                ? ExternalXamlPackageWindowsFormat
-                : ExternalXamlPackageLinuxFormat,
-            ExternalXamlClipboardPlanner.SerializeXamlPackage(payload));
-        item.SetText(payload.PlainText);
 
-        var transfer = new DataTransfer();
-        transfer.Add(item);
-        return transfer;
-    }
+    private static PlatformClipboardFormatScope NativeRichTextScope =>
+        OperatingSystem.IsWindows()
+            ? PlatformClipboardFormatScope.Platform
+            : PlatformClipboardFormatScope.Application;
 
-    private static async Task<T?> TryGetValueAsync<T>(
-        IAsyncDataTransfer transfer,
-        DataFormat<T> format)
-        where T : class
-    {
-        try { return await transfer.TryGetValueAsync(format); }
-        catch { return null; }
-    }
+    private static string NativeXamlPackageFormat => OperatingSystem.IsWindows()
+        ? PresentationClipboardFormats.WindowsXamlPackage
+        : PresentationClipboardFormats.LinuxXamlPackage;
+
+    private static string NativeRtfFormat => OperatingSystem.IsWindows()
+        ? PresentationClipboardFormats.WindowsRtf
+        : PresentationClipboardFormats.LinuxRtf;
 
     private void SelectWord(int logicalPosition)
     {

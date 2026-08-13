@@ -1,10 +1,13 @@
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
@@ -72,6 +75,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     private readonly Panel _pageHost;
     private readonly DocumentView _sourceEditor;  // kept for repagination
     private readonly PaginatedPageLayoutMode _layoutMode;
+    private readonly IPlatformClipboard _platformClipboard;
     private DispatcherTimer? _repaginateTimer;
 
     // ── Phase 3b-2: cross-page selection and undo ─────────────────────────────────────────────────
@@ -96,11 +100,17 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     private PaginatedEditorPanel(
         DocumentView sourceEditor,
         List<PageBox> boxes,
-        PaginatedPageLayoutMode layoutMode)
+        PaginatedPageLayoutMode layoutMode,
+        IPlatformClipboard? platformClipboard)
     {
         _sourceEditor = sourceEditor;
         _pageBoxes = boxes;
         _layoutMode = layoutMode;
+        _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(
+            sourceEditor.Dispatcher,
+            new WpfPlatformClipboardOptions(
+                MaxWriteAttempts: 1,
+                FlushAfterWrite: false));
         _pageHost = BuildPageHost(layoutMode);
         foreach (var box in boxes)
         {
@@ -146,7 +156,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     internal static PaginatedEditorPanel Build(
         DocumentView sourceEditor,
         PaginatedPageLayoutMode layoutMode = PaginatedPageLayoutMode.Vertical,
-        bool includeParityBlankPages = false)
+        bool includeParityBlankPages = false,
+        IPlatformClipboard? platformClipboard = null)
     {
         var model = sourceEditor.Model;
 
@@ -251,8 +262,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 pageSection.PageSettings,
                 shards[bodyPageIndex],
                 sourceModel: model,
-                headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
-                footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
+                headerSlot: slots.Header, headerSlotKind: slots.HeaderSlot,
+                footerSlot: slots.Footer, footerSlotKind: slots.FooterSlot,
                 pageCount: totalBoxCount,
                 pageNumberText: pageNumberDisplay[physicalPage.PhysicalPageIndex].Text,
                 sectionOrdinal: pageSection.SectionIndex + 1,
@@ -289,7 +300,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             boxes[i].NextBox = i < boxes.Count - 1 ? boxes[i + 1] : null;
         }
 
-        return new PaginatedEditorPanel(sourceEditor, boxes, layoutMode);
+        return new PaginatedEditorPanel(sourceEditor, boxes, layoutMode, platformClipboard);
     }
 
     private static Panel BuildPageHost(PaginatedPageLayoutMode layoutMode)
@@ -476,14 +487,19 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// Swallows the failure gracefully after all retries are exhausted so a locked clipboard never
     /// crashes the editor — the panel clipboard (<see cref="LastCopiedText"/>) is always set regardless.
     /// </summary>
-    private static void SetClipboardTextWithRetry(string text)
+    private void SetClipboardTextWithRetry(string text)
     {
         const int MaxAttempts = 3;
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
             try
             {
-                System.Windows.Clipboard.SetText(text);
+                var result = _platformClipboard.WriteAsync(new PlatformClipboardContent(Text: text))
+                    .AsTask()
+                    .GetAwaiter()
+                    .GetResult();
+                if (!result.IsSuccess)
+                    throw new ExternalException(result.ErrorMessage);
                 return; // success
             }
             catch when (attempt < MaxAttempts - 1)
@@ -517,14 +533,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     internal bool PasteAtCaret()
     {
         // Only handle when there is text on the system clipboard.
-        string text;
-        try
-        {
-            if (!System.Windows.Clipboard.ContainsText())
-                return false;
-            text = System.Windows.Clipboard.GetText();
-        }
-        catch { return false; }
+        var read = _platformClipboard.ReadTextAsync().AsTask().GetAwaiter().GetResult();
+        if (read.Status != PlatformClipboardReadStatus.Success || read.Value is not { } text)
+            return false;
 
         if (text.Length == 0)
             return false;
@@ -748,8 +759,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 pageNumberDisplayRep[i].LogicalPageNumber);
             var box = new PageBox(i + 1, pageSection.PageSettings, shards[i],
                 sourceModel: model,
-                headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
-                footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
+                headerSlot: slots.Header, headerSlotKind: slots.HeaderSlot,
+                footerSlot: slots.Footer, footerSlotKind: slots.FooterSlot,
                 pageCount: totalBoxCountRep,
                 pageNumberText: pageNumberDisplayRep[i].Text,
                 sectionOrdinal: pageSection.SectionIndex + 1,
@@ -893,8 +904,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 pageNumberDisplayReb[i].LogicalPageNumber);
             var box = new PageBox(i + 1, pageSection.PageSettings, shards[i],
                 sourceModel: model,
-                headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
-                footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
+                headerSlot: slots.Header, headerSlotKind: slots.HeaderSlot,
+                footerSlot: slots.Footer, footerSlotKind: slots.FooterSlot,
                 pageCount: totalBoxCountReb,
                 pageNumberText: pageNumberDisplayReb[i].Text,
                 sectionOrdinal: pageSection.SectionIndex + 1,
@@ -993,9 +1004,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             Array.Empty<System.Windows.Documents.Block>(),
             sourceModel: model,
             headerSlot: slots.Header,
-            headerSlotName: slots.HeaderSlotName,
+            headerSlotKind: slots.HeaderSlot,
             footerSlot: slots.Footer,
-            footerSlotName: slots.FooterSlotName,
+            footerSlotKind: slots.FooterSlot,
             pageCount: bodyPageCount + 1,
             pageNumberText: pageNumberDisplay.Text,
             sectionOrdinal: endnoteSection.SectionIndex + 1,
@@ -1061,7 +1072,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// <see cref="TextDocument.FinalSectionHeadersFooters"/>.
     /// </para>
     ///
-    /// <para>Deduplication key is <c>(owning HF instance identity, slot name)</c>, tracked separately
+    /// <para>Deduplication key is <c>(owning HF instance identity, shared slot identity)</c>, tracked separately
     /// for header and footer, so that each distinct section+slot pair is committed exactly once even
     /// if multiple page boxes share the same slot (e.g. all non-first pages of section 2 share the
     /// "header" slot for that section).</para>
@@ -1071,8 +1082,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // Fallback HF used when a box has no owner set (should not happen after Build/Repaginate).
         var docLevelHf = _sourceEditor.Model.FinalSectionHeadersFooters;
 
-        // Deduplication key: (owning section HF instance identity, slot name).
-        var committedSlots = new HashSet<(SectionHeadersFooters hf, string slot)>();
+    // Deduplication key: (section HF instance identity, shared slot identity).
+    var committedSlots = new HashSet<(SectionHeadersFooters hf, HeaderFooterSlotKind slot)>();
 
         foreach (var box in _pageBoxes)
         {
@@ -1080,34 +1091,34 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             var footerHf = box.FooterOwnerSectionHf ?? docLevelHf;
 
             // Commit header slot (once per owning-section+slot pair).
-            if (box.HeaderSlotName is { } hName && committedSlots.Add((headerHf, hName)))
+            if (box.HeaderSlot is { } headerSlot && committedSlots.Add((headerHf, headerSlot)))
                 box.CommitHeaderSlot(helperEditor, headerHf);
 
             // Commit footer slot independently -- it may own to a different section than the header.
-            if (box.FooterSlotName is { } fName && committedSlots.Add((footerHf, fName)))
+            if (box.FooterSlot is { } footerSlot && committedSlots.Add((footerHf, footerSlot)))
                 box.CommitFooterSlot(helperEditor, footerHf);
         }
     }
 
     /// <summary>
-    /// Focuses the in-page header or footer region for a given slot name.  Used to route the
+    /// Focuses the in-page header or footer region for a given shared slot. Used to route the
     /// <c>freew.hf-edit-*</c> ribbon commands to the in-page sub-editor when PagedEdit is active,
     /// instead of opening the docked pane.
     ///
     /// <para>Returns <c>true</c> when a matching sub-editor was found and focused; <c>false</c>
     /// when the slot is not currently visible (e.g. first-header but DifferentFirstPage is off).</para>
     /// </summary>
-    internal bool FocusInPageHfRegion(string slotName)
+    internal bool FocusInPageHfRegion(HeaderFooterSlotKind slot)
     {
-        // Find the first page box whose header or footer sub-editor matches the slot name.
+        // Find the first page box whose header or footer sub-editor matches the slot.
         foreach (var box in _pageBoxes)
         {
-            if (box.HeaderSlotName == slotName && box.HeaderSubEditor is { } hSub)
+            if (box.HeaderSlot == slot && box.HeaderSubEditor is { } hSub)
             {
                 hSub.Focus();
                 return true;
             }
-            if (box.FooterSlotName == slotName && box.FooterSubEditor is { } fSub)
+            if (box.FooterSlot == slot && box.FooterSubEditor is { } fSub)
             {
                 fSub.Focus();
                 return true;
@@ -1433,40 +1444,5 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         {
             return null;
         }
-    }
-
-    // ── Phase 3a even-distribution sharding (kept for reference; no longer called) ────────────────
-
-    /// <summary>
-    /// Distributes <paramref name="blocks"/> across <paramref name="pageCount"/> page slots as
-    /// evenly as possible (round-robin assignment).  Superseded by <see cref="ShardByPageAssignment"/>
-    /// in Phase 3b-1; retained here for reference only.
-    /// </summary>
-    internal static IReadOnlyList<IReadOnlyList<System.Windows.Documents.Block>> ShardBlocks(
-        IReadOnlyList<System.Windows.Documents.Block> blocks,
-        int pageCount)
-    {
-        var result = new List<List<System.Windows.Documents.Block>>(pageCount);
-        for (var i = 0; i < pageCount; i++)
-            result.Add([]);
-
-        if (blocks.Count == 0 || pageCount <= 0)
-        {
-            if (result.Count == 0)
-                result.Add([]);
-            return result;
-        }
-
-        var baseCount = blocks.Count / pageCount;
-        var remainder = blocks.Count % pageCount;
-        var blockIndex = 0;
-        for (var p = 0; p < pageCount; p++)
-        {
-            var count = baseCount + (p < remainder ? 1 : 0);
-            for (var j = 0; j < count && blockIndex < blocks.Count; j++, blockIndex++)
-                result[p].Add(blocks[blockIndex]);
-        }
-
-        return result;
     }
 }

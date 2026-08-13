@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
@@ -34,7 +35,7 @@ public sealed class ChartSmartArtContextualTabTests
         catch (Exception) { return false; }
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { },
@@ -86,7 +87,7 @@ public sealed class ChartSmartArtContextualTabTests
     [Fact]
     public void Ribbon_definition_includes_chart_and_smartart_contextual_tabs()
     {
-        var def = FreeWRibbon.BuildDefinition();
+        var def = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var ctx = def.ContextualTabs.ToList();
 
         ctx.Any(t => t.Id == "chart-design").Should().BeTrue("chart-design tab must be defined");
@@ -170,7 +171,14 @@ public sealed class ChartSmartArtContextualTabTests
             var dialogOpenCount = 0;
             var registry = FreeWAvaloniaRibbonCommands.Build(
                 view,
-                NoopCallbacks() with { OpenChartSizeDialog = () => dialogOpenCount++ });
+                NoopCallbacks() with
+                {
+                    ShowChartSizeDialogAsync = _ =>
+                    {
+                        dialogOpenCount++;
+                        return ValueTask.FromResult<ChartSizeDialogResult?>(null);
+                    },
+                });
 
             registry.TryGet(new RibbonCommandId("freew.chart-size"), out var primary)
                 .Should().BeTrue();
@@ -199,7 +207,14 @@ public sealed class ChartSmartArtContextualTabTests
             var dialogOpenCount = 0;
             var registry = FreeWAvaloniaRibbonCommands.Build(
                 view,
-                NoopCallbacks() with { OpenChartSizeDialog = () => dialogOpenCount++ });
+                NoopCallbacks() with
+                {
+                    ShowChartSizeDialogAsync = _ =>
+                    {
+                        dialogOpenCount++;
+                        return ValueTask.FromResult<ChartSizeDialogResult?>(null);
+                    },
+                });
 
             registry.TryGet(new RibbonCommandId("freew.chart-size"), out var command)
                 .Should().BeTrue();
@@ -216,8 +231,8 @@ public sealed class ChartSmartArtContextualTabTests
     [Fact]
     public void Every_contextual_ribbon_command_is_registered()
     {
-        var def = FreeWRibbon.BuildDefinition();
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var def = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
 
         var ids = def.Tabs
             .SelectMany(t => t.Groups)
@@ -619,10 +634,10 @@ public sealed class ChartSmartArtContextualTabTests
                 "Updated");
             var callbacks = NoopCallbacks() with
             {
-                OpenChartEditDataDialog = () =>
+                ShowChartDataDialogAsync = selectedChart =>
                 {
-                    seed = view.SelectedFloatingChart();
-                    view.ReplaceSelectedChartData(replacement);
+                    seed = selectedChart;
+                    return ValueTask.FromResult<Chart?>(replacement);
                 },
             };
             var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
@@ -654,10 +669,11 @@ public sealed class ChartSmartArtContextualTabTests
             var invoked = 0;
             var callbacks = NoopCallbacks() with
             {
-                OpenChartEditDataDialog = () =>
+                ShowChartDataDialogAsync = selectedChart =>
                 {
                     invoked++;
-                    view.SelectedFloatingChart().Should().BeSameAs(chart);
+                    selectedChart.Should().BeSameAs(view.SelectedFloatingChart());
+                    return ValueTask.FromResult<Chart?>(null);
                 },
             };
             var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
@@ -687,7 +703,14 @@ public sealed class ChartSmartArtContextualTabTests
 
             var registry = FreeWAvaloniaRibbonCommands.Build(
                 view,
-                NoopCallbacks() with { OpenChartSizeDialog = () => dialogOpenCount++ });
+                NoopCallbacks() with
+                {
+                    ShowChartSizeDialogAsync = _ =>
+                    {
+                        dialogOpenCount++;
+                        return ValueTask.FromResult<ChartSizeDialogResult?>(null);
+                    },
+                });
             registry.TryGet(new RibbonCommandId("freew.chart-size"), out var cmd);
             cmd!.Execute(RibbonCommandContext.ForSelectedValue("400 x 300"));
             widthAfter = chart.WidthPt;
@@ -857,7 +880,7 @@ public sealed class ChartSmartArtContextualTabTests
     [Fact]
     public void SmartArt_contextual_tab_exposes_all_shared_commands_and_style_catalog()
     {
-        var tab = FreeWRibbon.BuildDefinition().FindTab("smartart-design")!;
+        var tab = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("smartart-design")!;
         var commandIds = tab.Groups.SelectMany(group => group.Controls)
             .Select(GetCommandId)
             .Where(id => id is not null)
@@ -967,7 +990,14 @@ public sealed class ChartSmartArtContextualTabTests
             var dialogOpened = false;
             var registry = FreeWAvaloniaRibbonCommands.Build(
                 view,
-                NoopCallbacks() with { OpenSmartArtEditDialog = () => dialogOpened = true });
+                NoopCallbacks() with
+                {
+                    ShowSmartArtEditDialogAsync = _ =>
+                    {
+                        dialogOpened = true;
+                        return ValueTask.FromResult<SmartArt?>(null);
+                    },
+                });
 
             registry.TryGet(new RibbonCommandId("freew.smartart-edit-text"), out var edit).Should().BeTrue();
             edit!.Execute(RibbonCommandContext.Empty);

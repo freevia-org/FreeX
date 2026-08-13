@@ -25,7 +25,7 @@ public sealed class ReadingOrderPaneVisualParitySourceTests
             "private Control BuildReadingOrderItemCard",
             StringComparison.Ordinal);
         var methodEnd = source.IndexOf(
-            "private static string BuildReadingOrderAltTextLine",
+            "private static void SetTextIfChanged",
             methodStart,
             StringComparison.Ordinal);
 
@@ -35,6 +35,7 @@ public sealed class ReadingOrderPaneVisualParitySourceTests
 
         source.Should().Contain("itemsScroll.SetValue(ScrollViewer.AllowAutoHideProperty, false)");
         method.Should().Contain("Spacing = 2");
+        method.Should().Contain("item.AltTextDisplayText");
         source.Should().Contain("Height = PresentationReadingOrderPaneVisualMetrics.ActionButtonHeight");
         source.Should().Contain("Width = PresentationReadingOrderPaneVisualMetrics.MoveEarlierButtonWidth");
         wpfSource.Should().Contain("MinWidth = PresentationReadingOrderPaneVisualMetrics.MoveEarlierButtonWidth");

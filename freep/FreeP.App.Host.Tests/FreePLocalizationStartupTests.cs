@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using Free.Shared.Shell;
+using FreeP.App.Compositor;
 using FreeP.App.Localization;
 
 namespace FreeP.App.Host.Tests;
@@ -49,6 +50,9 @@ public sealed class FreePLocalizationStartupTests : IDisposable
         BackstageStrings.Current.Get("Backstage_Recent_RemoveAutomationHelpText")
             .Should()
             .Contain("presentation");
+        BackstageStrings.Current.Get(FreePBackstagePaneResourceKeys.OptionsEditText)
+            .Should()
+            .Be("Modifier les options…");
     }
 
     [Fact]
@@ -82,18 +86,6 @@ public sealed class FreePLocalizationStartupTests : IDisposable
         composition.Should().NotContain("DefaultBackstageStrings.Instance");
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var directory = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(directory))
-        {
-            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = Directory.GetParent(directory)?.FullName;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

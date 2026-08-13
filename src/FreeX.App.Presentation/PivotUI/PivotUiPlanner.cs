@@ -10,6 +10,61 @@ public sealed record PivotFieldListPanePlan(PivotTableModel? PivotTable)
 public sealed record PivotShowDetailsTarget(string PivotTableName, CellAddress PivotCell);
 
 /// <summary>
+/// Area-scoped Pivot field selection plus detached layout lists for the next filter command.
+/// </summary>
+public sealed record PivotFieldSelectionState(
+    PivotHeaderArea Area,
+    int SourceFieldIndex,
+    IReadOnlyList<string> SelectedItems,
+    bool HasStoredSelection,
+    IReadOnlyList<PivotFieldModel> RowFields,
+    IReadOnlyList<PivotFieldModel> ColumnFields,
+    IReadOnlyList<PivotFieldModel> PageFields)
+{
+    public PivotFieldSelectionState WithSelectedItems(IReadOnlyList<string>? selectedItems)
+    {
+        var selection = HasTargetField() && selectedItems is { Count: > 0 }
+            ? selectedItems.ToList()
+            : null;
+        return this with
+        {
+            SelectedItems = selection ?? [],
+            HasStoredSelection = selection is { Count: > 0 },
+            RowFields = UpdateFields(RowFields, PivotHeaderArea.Row, selection),
+            ColumnFields = UpdateFields(ColumnFields, PivotHeaderArea.Column, selection),
+            PageFields = UpdateFields(PageFields, PivotHeaderArea.Page, selection)
+        };
+    }
+
+    private bool HasTargetField() =>
+        Area switch
+        {
+            PivotHeaderArea.Row => RowFields.Any(IsTargetField),
+            PivotHeaderArea.Column => ColumnFields.Any(IsTargetField),
+            PivotHeaderArea.Page => PageFields.Any(IsTargetField),
+            _ => false
+        };
+
+    private bool IsTargetField(PivotFieldModel field) => field.SourceFieldIndex == SourceFieldIndex;
+
+    private IReadOnlyList<PivotFieldModel> UpdateFields(
+        IReadOnlyList<PivotFieldModel> fields,
+        PivotHeaderArea area,
+        IReadOnlyList<string>? selectedItems) =>
+        Area != area
+            ? fields
+            : fields
+                .Select(field => field.SourceFieldIndex == SourceFieldIndex
+                    ? field with
+                    {
+                        SelectedItem = selectedItems is { Count: 1 } ? selectedItems[0] : null,
+                        SelectedItems = selectedItems
+                    }
+                    : field)
+                .ToList();
+}
+
+/// <summary>
 /// UI-free PivotTable interaction planning shared by desktop hosts. Renderers own controls and localized
 /// labels; this planner owns pivot lookup, field captions, filter parsing, layout mutation helpers, and
 /// selection reconciliation.
@@ -238,19 +293,53 @@ public static class PivotUiPlanner
     public static PivotFieldModel FindExistingPivotField(PivotTableModel pivotTable, int sourceFieldIndex) =>
         FindFirstLayoutField(pivotTable, sourceFieldIndex) ?? new PivotFieldModel(sourceFieldIndex);
 
-    public static List<PivotFieldModel> SetFieldSelectedItems(
-        IReadOnlyList<PivotFieldModel> fields,
-        int sourceFieldIndex,
-        IReadOnlyList<string>? selectedItems) =>
-        fields
-            .Select(field => SourceFieldIndexEquals(field, sourceFieldIndex)
-                ? field with
-                {
-                    SelectedItem = selectedItems is { Count: 1 } ? selectedItems[0] : null,
-                    SelectedItems = selectedItems
-                }
-                : field)
-            .ToList();
+    public static PivotHeaderArea ResolvePivotChartFieldArea(
+        PivotTableModel pivotTable,
+        int sourceFieldIndex)
+    {
+        ArgumentNullException.ThrowIfNull(pivotTable);
+
+        if (FindFirstLayoutField(pivotTable.PageFields, sourceFieldIndex) is not null)
+            return PivotHeaderArea.Page;
+        if (FindFirstLayoutField(pivotTable.ColumnFields, sourceFieldIndex) is not null)
+            return PivotHeaderArea.Column;
+
+        return PivotHeaderArea.Row;
+    }
+
+    public static PivotFieldSelectionState CreateFieldSelectionState(
+        PivotTableModel pivotTable,
+        PivotHeaderArea area,
+        int sourceFieldIndex)
+    {
+        ArgumentNullException.ThrowIfNull(pivotTable);
+
+        var rowFields = pivotTable.RowFields.ToList();
+        var columnFields = pivotTable.ColumnFields.ToList();
+        var pageFields = pivotTable.PageFields.ToList();
+        var fields = area switch
+        {
+            PivotHeaderArea.Row => rowFields,
+            PivotHeaderArea.Column => columnFields,
+            PivotHeaderArea.Page => pageFields,
+            _ => []
+        };
+        var field = FindFirstLayoutField(fields, sourceFieldIndex);
+        var selectedItems = field?.SelectedItems is { Count: > 0 } items
+            ? items.ToList()
+            : PivotFieldFilterSummary.IsExplicitSelection(field?.SelectedItem)
+                ? [field!.SelectedItem!]
+                : [];
+
+        return new PivotFieldSelectionState(
+            area,
+            sourceFieldIndex,
+            selectedItems,
+            field?.SelectedItems is { Count: > 0 } || !string.IsNullOrWhiteSpace(field?.SelectedItem),
+            rowFields,
+            columnFields,
+            pageFields);
+    }
 
     public static bool FieldListCaptionMatchesSearch(string caption, string? searchText)
     {

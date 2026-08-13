@@ -131,8 +131,9 @@ public sealed class R71_RetireWorkbookCallSitesTests
             var registry = new WorkbookWindowRegistry();
             var documentState = new WorkbookDocumentState();
             RecalcEngine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+            var commandBus = new CommandBus(_ => new TestCommandContext(workbookRef.Current));
 
-            _primary = CreateWindow(workbookRef, registry, documentState, RecalcEngine);
+            _primary = CreateWindow(workbookRef, registry, documentState, RecalcEngine, commandBus);
             _primary.Show();
             PumpDispatcher();
 
@@ -140,7 +141,13 @@ public sealed class R71_RetireWorkbookCallSitesTests
             // its own fresh Book1 and registered itself: this window's HasWindowForDocument check
             // now finds the primary, so it adopts the shared workbook instead of creating its own
             // (Excel "New Window" semantics, H39).
-            _secondary = CreateWindow(workbookRef, registry, documentState, RecalcEngine);
+            _secondary = CreateWindow(
+                workbookRef,
+                registry,
+                documentState,
+                RecalcEngine,
+                commandBus,
+                _primary.Session.CreateSiblingView(600, 800));
             _secondary.Show();
             PumpDispatcher();
 
@@ -151,18 +158,21 @@ public sealed class R71_RetireWorkbookCallSitesTests
             WorkbookRef workbookRef,
             WorkbookWindowRegistry registry,
             WorkbookDocumentState documentState,
-            RecalcEngine engine) =>
+            RecalcEngine engine,
+            ICommandBus commandBus,
+            WorkbookSession? session = null) =>
             new MainWindow(
                 NullLogger<MainWindow>.Instance,
                 new ViewportService(),
-                new CommandBus(_ => new TestCommandContext(workbookRef.Current)),
+                commandBus,
                 engine,
                 [],
                 workbookRef,
                 workbookRef.Current,
                 new RecordingUserMessageService(),
                 documentState,
-                windowRegistry: registry);
+                windowRegistry: registry,
+                workbookSession: session);
 
         public void RecalculatePrimary() => Invoke(_primary, "RecalculateWorkbook");
 

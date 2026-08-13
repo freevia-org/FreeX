@@ -2,6 +2,8 @@ using FreeW.App.Host;
 using FreeW.Core.Model;
 using Xunit;
 using FluentAssertions;
+using System.Reflection;
+using System.Windows.Controls;
 
 namespace FreeW.App.Host.Tests;
 
@@ -20,10 +22,10 @@ public sealed class TableOfAuthoritiesDialogTests
         var result = dlg.AcceptForTest();
 
         result.Should().NotBeNull();
-        result!.Options.UsePassim.Should().BeFalse();
-        result.Options.KeepOriginalFormatting.Should().BeFalse();
-        result.Options.CategoryFilter.Should().BeNull();
-        result.Options.TabLeader.Should().Be(ToaTabLeader.Dots);
+        result!.UsePassim.Should().BeFalse();
+        result.KeepOriginalFormatting.Should().BeFalse();
+        result.CategoryFilter.Should().BeNull();
+        result.TabLeader.Should().Be(ToaTabLeader.Dots);
     }
 
     [StaFact]
@@ -33,7 +35,7 @@ public sealed class TableOfAuthoritiesDialogTests
         var result = dlg.AcceptForTest();
 
         result.Should().NotBeNull();
-        result!.Options.UsePassim.Should().BeTrue();
+        result!.UsePassim.Should().BeTrue();
     }
 
     [StaFact]
@@ -43,7 +45,7 @@ public sealed class TableOfAuthoritiesDialogTests
         var result = dlg.AcceptForTest();
 
         result.Should().NotBeNull();
-        result!.Options.KeepOriginalFormatting.Should().BeTrue();
+        result!.KeepOriginalFormatting.Should().BeTrue();
     }
 
     [StaFact]
@@ -53,7 +55,7 @@ public sealed class TableOfAuthoritiesDialogTests
         var result = dlg.AcceptForTest();
 
         result.Should().NotBeNull();
-        result!.Options.CategoryFilter.Should().Be(CitationCategory.Statutes);
+        result!.CategoryFilter.Should().Be(CitationCategory.Statutes);
     }
 
     [StaFact]
@@ -63,7 +65,7 @@ public sealed class TableOfAuthoritiesDialogTests
         var result = dlg.AcceptForTest();
 
         result.Should().NotBeNull();
-        result!.Options.TabLeader.Should().Be(ToaTabLeader.Dashes);
+        result!.TabLeader.Should().Be(ToaTabLeader.Dashes);
     }
 
     [StaFact]
@@ -77,10 +79,10 @@ public sealed class TableOfAuthoritiesDialogTests
         var result = dlg.AcceptForTest();
 
         result.Should().NotBeNull();
-        result!.Options.UsePassim.Should().BeTrue();
-        result.Options.KeepOriginalFormatting.Should().BeTrue();
-        result.Options.CategoryFilter.Should().Be(CitationCategory.Cases);
-        result.Options.TabLeader.Should().Be(ToaTabLeader.None);
+        result!.UsePassim.Should().BeTrue();
+        result.KeepOriginalFormatting.Should().BeTrue();
+        result.CategoryFilter.Should().Be(CitationCategory.Cases);
+        result.TabLeader.Should().Be(ToaTabLeader.None);
     }
 
     [StaFact]
@@ -96,7 +98,19 @@ public sealed class TableOfAuthoritiesDialogTests
         var result = dlg.AcceptForTest();
 
         result.Should().NotBeNull();
-        result!.Options.Should().BeEquivalentTo(
+        result.Should().BeEquivalentTo(
             FreeW.App.Presentation.Ribbon.TableOfAuthoritiesDialogPlanner.BuildOptions(state));
+    }
+
+    [StaFact]
+    public void Dialog_DoesNotAcceptWhenLeaderSelectionIsMissing()
+    {
+        var dlg = TableOfAuthoritiesDialog.CreateForTest();
+        var leader = (ComboBox)(typeof(TableOfAuthoritiesDialog)
+            .GetField("_leaderCombo", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(dlg)!);
+        leader.SelectedIndex = -1;
+
+        dlg.AcceptForTest().Should().BeNull();
     }
 }

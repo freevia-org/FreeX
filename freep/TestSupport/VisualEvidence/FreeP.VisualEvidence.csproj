@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+    <RootNamespace>FreeP.VisualEvidence</RootNamespace>
+  </PropertyGroup>
+  <Import Project="..\..\..\tools\ToolProjects.props" />
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FreeP.VisualEvidence.Wpf" />
+    <InternalsVisibleTo Include="FreeP.VisualEvidence.Avalonia" />
+    <InternalsVisibleTo Include="FreeP.RenderCompare" />
+    <InternalsVisibleTo Include="FreeP.RenderCompare.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
+    <ProjectReference Include="..\..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
+    <ProjectReference Include="..\..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="..\..\..\tools\Free.ToolsShared\Free.ToolsShared.csproj" />
+  </ItemGroup>
+
+</Project>

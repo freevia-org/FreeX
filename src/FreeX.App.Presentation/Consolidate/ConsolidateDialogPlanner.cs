@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using Free.Shared.Localization;
 
 namespace FreeX.App.Presentation.Consolidate;
 
@@ -41,10 +42,7 @@ public static class ConsolidateDialogPlanner
     public static IReadOnlyList<(ConsolidateFunction Function, string Label)> FunctionChoices => FunctionChoiceValues;
 
     public static IReadOnlyList<string> SplitSourceRangeText(string sourceRangesText) =>
-        sourceRangesText
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(item => !string.IsNullOrWhiteSpace(item))
-            .ToList();
+        WorkbookRangeTextCodec.SplitReferences(sourceRangesText, allowSemicolon: true);
 
     public static string JoinSourceRanges(IEnumerable<string> sourceRanges) =>
         string.Join("; ", sourceRanges.Select(item => item.Trim()).Where(item => item.Length > 0));
@@ -319,7 +317,6 @@ public static class ConsolidateDialogPlanner
         }
 
         var ranges = new List<GridRange>(sourceReferences.Count);
-        var sources = new List<ConsolidateSource>(sourceReferences.Count);
         foreach (var reference in sourceReferences)
         {
             if (!parseReference(reference, out var sourceRange))
@@ -328,15 +325,13 @@ public static class ConsolidateDialogPlanner
                 return false;
             }
 
-            var sheet = workbook.GetSheet(sourceRange.Start.Sheet);
-            if (sheet is null)
+            if (workbook.GetSheet(sourceRange.Start.Sheet) is null)
             {
                 issue = new ConsolidateDialogIssue(ConsolidateDialogIssueKind.InvalidSourceRange, reference);
                 return false;
             }
 
             ranges.Add(sourceRange);
-            sources.Add(ConsolidateSource.FromGrid(ConsolidateApplyPlanner.ReadSource(sheet, sourceRange)));
         }
 
         if (!HaveSameSize(ranges))
@@ -352,7 +347,52 @@ public static class ConsolidateDialogPlanner
             return false;
         }
 
-        var destinationSheet = workbook.GetSheet(destinationRange.Start.Sheet);
+        return TryPlanApply(workbook, ranges, destinationRange.Start, options, out plan, out issue);
+    }
+
+    public static bool TryPlanApply(
+        Workbook workbook,
+        IReadOnlyList<GridRange> sourceRanges,
+        CellAddress destinationCell,
+        ConsolidateOptions options,
+        out ConsolidateApplyPlan plan,
+        out ConsolidateDialogIssue issue)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(sourceRanges);
+        ArgumentNullException.ThrowIfNull(options);
+
+        plan = default!;
+        issue = ConsolidateDialogIssue.None;
+
+        if (sourceRanges.Count == 0)
+        {
+            issue = new ConsolidateDialogIssue(ConsolidateDialogIssueKind.NoSourceRanges);
+            return false;
+        }
+
+        if (!HaveSameSize(sourceRanges))
+        {
+            issue = new ConsolidateDialogIssue(ConsolidateDialogIssueKind.MismatchedSourceSizes);
+            return false;
+        }
+
+        var ranges = new List<GridRange>(sourceRanges.Count);
+        var sources = new List<ConsolidateSource>(sourceRanges.Count);
+        foreach (var sourceRange in sourceRanges)
+        {
+            var sheet = workbook.GetSheet(sourceRange.Start.Sheet);
+            if (sheet is null)
+            {
+                issue = new ConsolidateDialogIssue(ConsolidateDialogIssueKind.InvalidSourceRange);
+                return false;
+            }
+
+            ranges.Add(sourceRange);
+            sources.Add(ConsolidateSource.FromGrid(ConsolidateApplyPlanner.ReadSource(sheet, sourceRange)));
+        }
+
+        var destinationSheet = workbook.GetSheet(destinationCell.Sheet);
         if (destinationSheet is null)
         {
             issue = new ConsolidateDialogIssue(ConsolidateDialogIssueKind.InvalidDestinationCell);
@@ -366,7 +406,7 @@ public static class ConsolidateDialogPlanner
             return false;
         }
 
-        var edits = ConsolidateApplyPlanner.MapToEdits(destinationSheet.Id, result, destinationRange.Start);
+        var edits = ConsolidateApplyPlanner.MapToEdits(destinationSheet.Id, result, destinationCell);
         if (edits.Count != result.Cells.Count)
         {
             issue = new ConsolidateDialogIssue(ConsolidateDialogIssueKind.OutsideWorksheetBounds);
@@ -374,7 +414,7 @@ public static class ConsolidateDialogPlanner
         }
 
         var overwrites = ConsolidateApplyPlanner.FindOverwriteTargets(destinationSheet, edits);
-        plan = new ConsolidateApplyPlan(ranges, destinationRange.Start, options, result, edits, overwrites);
+        plan = new ConsolidateApplyPlan(ranges, destinationCell, options, result, edits, overwrites);
         return true;
     }
 
@@ -382,6 +422,80 @@ public static class ConsolidateDialogPlanner
         ConsolidateRangeSelectionTarget target,
         string currentText) =>
         new(target, currentText.Trim(), CollapseDialog: true);
+
+    public static ValidationPresentationDescriptor<ConsolidateDialogFocusTarget> DescribeIssue(
+        ConsolidateDialogIssue issue,
+        ConsolidateDialogMessageContext context,
+        ConsolidateDialogTextProfile profile)
+    {
+        var focusTarget = issue.Kind == ConsolidateDialogIssueKind.InvalidDestinationCell
+            ? ConsolidateDialogFocusTarget.Destination
+            : ConsolidateDialogFocusTarget.Reference;
+
+        return new(
+            profile == ConsolidateDialogTextProfile.Wpf
+                ? DescribeWpfIssue(issue, context)
+                : DescribeAvaloniaIssue(issue, context),
+            focusTarget);
+    }
+
+    public static ValidationPresentationDescriptor<ConsolidateDialogFocusTarget> DescribePendingReference(
+        ConsolidateDialogTextProfile profile) =>
+        new(
+            LocalizedTextDescriptor.Resource("Consolidate_AddTheReferenceBeforeClickingOk"),
+            ConsolidateDialogFocusTarget.Reference);
+
+    private static LocalizedTextDescriptor DescribeWpfIssue(
+        ConsolidateDialogIssue issue,
+        ConsolidateDialogMessageContext context)
+    {
+        if (context == ConsolidateDialogMessageContext.AddReference)
+        {
+            return issue.Kind == ConsolidateDialogIssueKind.InvalidSourceRange &&
+                   !string.IsNullOrWhiteSpace(issue.InvalidPart)
+                ? LocalizedTextDescriptor.Resource("Consolidate_EnterValidSourceRangeWithPart", issue.InvalidPart)
+                : LocalizedTextDescriptor.Resource("Consolidate_EnterValidSourceRange");
+        }
+
+        return issue.Kind switch
+        {
+            ConsolidateDialogIssueKind.InvalidSourceRange when !string.IsNullOrWhiteSpace(issue.InvalidPart) =>
+                LocalizedTextDescriptor.Resource("Consolidate_EnterValidSourceRangeWithPart", issue.InvalidPart),
+            ConsolidateDialogIssueKind.MismatchedSourceSizes =>
+                LocalizedTextDescriptor.Resource("Consolidate_SourceRangesMustBeSameSize"),
+            ConsolidateDialogIssueKind.InvalidDestinationCell =>
+                LocalizedTextDescriptor.Resource("Consolidate_EnterValidDestinationCell"),
+            _ => LocalizedTextDescriptor.Resource("Consolidate_EnterAtLeastOneValidSourceRange")
+        };
+    }
+
+    private static LocalizedTextDescriptor DescribeAvaloniaIssue(
+        ConsolidateDialogIssue issue,
+        ConsolidateDialogMessageContext context)
+    {
+        if (context == ConsolidateDialogMessageContext.AddReference)
+        {
+            return LocalizedTextDescriptor.Resource(
+                issue.Kind == ConsolidateDialogIssueKind.DuplicateSourceReference
+                    ? "TableLoc_ConsolidateSourceAlreadyListed"
+                    : "TableLoc_ConsolidateEnterValidSource");
+        }
+
+        return issue.Kind switch
+        {
+            ConsolidateDialogIssueKind.InvalidSourceRange when !string.IsNullOrWhiteSpace(issue.InvalidPart) =>
+                LocalizedTextDescriptor.Resource("TableLoc_ConsolidateCannotResolveSource", issue.InvalidPart),
+            ConsolidateDialogIssueKind.MismatchedSourceSizes =>
+                LocalizedTextDescriptor.Resource("Consolidate_SourceRangesMustBeSameSize"),
+            ConsolidateDialogIssueKind.InvalidDestinationCell =>
+                LocalizedTextDescriptor.Resource("TableLoc_ConsolidateEnterValidDestination"),
+            ConsolidateDialogIssueKind.NoOutput =>
+                LocalizedTextDescriptor.Resource("TableLoc_ConsolidateNoOutput"),
+            ConsolidateDialogIssueKind.OutsideWorksheetBounds =>
+                LocalizedTextDescriptor.Resource("TableLoc_ConsolidateOutsideBounds"),
+            _ => LocalizedTextDescriptor.Resource("TableLoc_ConsolidateAddAtLeastOne")
+        };
+    }
 
     private static List<string> NormalizeReferences(IEnumerable<string> sourceRanges) =>
         sourceRanges.Select(item => item.Trim()).Where(item => item.Length > 0).ToList();

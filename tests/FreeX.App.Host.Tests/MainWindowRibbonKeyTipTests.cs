@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.IO;
 using System.Windows;
 using System.Windows.Automation;
@@ -8,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Shell;
 using FluentAssertions;
 using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -23,35 +23,12 @@ public sealed partial class MainWindowRibbonKeyTipTests
 {
     private sealed class MainWindowHarness : IDisposable
     {
+        // Clipboard-isolated tests run on a dedicated STA, so each dispatcher needs its own WPF window.
+        [ThreadStatic]
         private static SharedMainWindowSession? SharedSession;
 
         private readonly MainWindow _window;
         private readonly Workbook _workbook;
-        private readonly MethodInfo _enterKeyTipMode;
-        private readonly MethodInfo _handleActiveRibbonKeyTip;
-        private readonly MethodInfo _tryHandleDirectRibbonKeyTip;
-        private readonly MethodInfo _tryHandleFocusedRibbonKeyboardNavigation;
-        private readonly MethodInfo _isInsideRibbonSurface;
-        private readonly MethodInfo _getVisibleKeyTipElements;
-        private readonly MethodInfo _updateRibbonCompactMode;
-        private readonly MethodInfo _updateViewport;
-        private readonly MethodInfo _updateSsRecentList;
-        private readonly MethodInfo _refreshSheetProtectionUi;
-        private readonly MethodInfo _hideStartScreen;
-        private readonly MethodInfo _rebuildQuickAccessToolbar;
-        private readonly MethodInfo _zoomCustomMenuItemClick;
-        private readonly MethodInfo _setActiveCell;
-        private readonly PropertyInfo _selectionAnchorProperty;
-        private readonly FieldInfo _selectionCursorField;
-        private readonly MethodInfo _applyPivotFieldListLayout;
-        private readonly MethodInfo _movePivotFieldToZone;
-        private readonly Type _pivotFieldDropZoneType;
-        private readonly Type _scopeType;
-        private readonly FieldInfo _scopeField;
-        private readonly FieldInfo _activeMenuField;
-        private readonly FieldInfo _recentFilesField;
-        private readonly FieldInfo _optionsField;
-        private readonly MethodInfo _refreshReviewCommentNoteCommandStates;
         private readonly RecordingUserMessageService _messageService;
 
         private MainWindowHarness(
@@ -62,57 +39,6 @@ public sealed partial class MainWindowRibbonKeyTipTests
             _window = window;
             _workbook = workbook;
             _messageService = messageService;
-            _enterKeyTipMode = typeof(MainWindow).GetMethod("EnterRibbonKeyTipMode", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "EnterRibbonKeyTipMode");
-            _handleActiveRibbonKeyTip = typeof(MainWindow).GetMethod("HandleActiveRibbonKeyTip", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "HandleActiveRibbonKeyTip");
-            _tryHandleDirectRibbonKeyTip = typeof(MainWindow).GetMethod("TryHandleDirectRibbonKeyTip", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleDirectRibbonKeyTip");
-            _tryHandleFocusedRibbonKeyboardNavigation = typeof(MainWindow).GetMethod("TryHandleFocusedRibbonKeyboardNavigation", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFocusedRibbonKeyboardNavigation");
-            _isInsideRibbonSurface = typeof(MainWindow).GetMethod("IsInsideRibbonSurface", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "IsInsideRibbonSurface");
-            _getVisibleKeyTipElements = typeof(MainWindow).GetMethod("GetVisibleKeyTipElements", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "GetVisibleKeyTipElements");
-            _updateRibbonCompactMode = typeof(MainWindow).GetMethod("UpdateRibbonCompactMode", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateRibbonCompactMode");
-            _updateViewport = typeof(MainWindow).GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
-            _updateSsRecentList = typeof(MainWindow).GetMethod("UpdateSsRecentList", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateSsRecentList");
-            _refreshSheetProtectionUi = typeof(MainWindow).GetMethod("RefreshSheetProtectionUi", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "RefreshSheetProtectionUi");
-            _hideStartScreen = typeof(MainWindow).GetMethod("HideStartScreen", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "HideStartScreen");
-            _rebuildQuickAccessToolbar = typeof(MainWindow).GetMethod("RebuildQuickAccessToolbar", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "RebuildQuickAccessToolbar");
-            _zoomCustomMenuItemClick = typeof(MainWindow).GetMethod("ZoomCustomMenuItem_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ZoomCustomMenuItem_Click");
-            _setActiveCell = typeof(MainWindow).GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-            _selectionAnchorProperty = typeof(MainWindow).GetProperty("_selectionAnchor", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMemberException(nameof(MainWindow), "_selectionAnchor");
-            _selectionCursorField = typeof(MainWindow).GetField("_selectionCursor", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_selectionCursor");
-            _applyPivotFieldListLayout = typeof(MainWindow).GetMethod("ApplyPivotFieldListLayout", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ApplyPivotFieldListLayout");
-            _movePivotFieldToZone = typeof(MainWindow).GetMethod("MovePivotFieldToZone", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "MovePivotFieldToZone");
-            _pivotFieldDropZoneType = typeof(MainWindow).GetNestedType("PivotFieldDropZone", BindingFlags.NonPublic)
-                ?? throw new MissingMemberException(nameof(MainWindow), "PivotFieldDropZone");
-            _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
-                ?? throw new MissingMemberException(nameof(MainWindow), "RibbonKeyTipScope");
-            _scopeField = typeof(MainWindow).GetField("_ribbonKeyTipScope", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_ribbonKeyTipScope");
-            _activeMenuField = typeof(MainWindow).GetField("_activeRibbonKeyTipMenu", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_activeRibbonKeyTipMenu");
-            _recentFilesField = typeof(MainWindow).GetField("_recentFiles", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_recentFiles");
-            _optionsField = typeof(MainWindow).GetField("_options", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_options");
-            _refreshReviewCommentNoteCommandStates = typeof(MainWindow).GetMethod(
-                "RefreshReviewCommentNoteCommandStates", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "RefreshReviewCommentNoteCommandStates");
         }
 
         public string? SelectedRibbonTabHeader =>
@@ -120,7 +46,10 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 ? tab.Header?.ToString()
                 : null;
 
-        public string KeyTipScope => _scopeField.GetValue(_window)?.ToString() ?? "";
+        public string KeyTipScope => KeyTipSession.Scope.ToString();
+
+        private FreeXRibbonKeyTipInputSession KeyTipSession =>
+            _window.RibbonKeyTipSessionForTest;
 
         public bool? IsToggleChecked(string name) =>
             (_window.FindName(name) as System.Windows.Controls.Primitives.ToggleButton)?.IsChecked;
@@ -179,7 +108,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public bool FocusedElementIsInsideRibbon =>
             Keyboard.FocusedElement is DependencyObject focusedElement &&
-            (bool)_isInsideRibbonSurface.Invoke(_window, [focusedElement])!;
+            _window.IsInsideRibbonSurfaceForTest(focusedElement);
 
         public bool FocusedElementIsWorksheet =>
             ReferenceEquals(Keyboard.FocusedElement, _window.FindName("SheetGrid"));
@@ -348,8 +277,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
                 // Keep _selectionAnchor/_selectionCursor consistent with the reset selection so a
                 // prior SelectRange's anchor doesn't linger into the next test (see SelectRange).
-                _selectionAnchorProperty.SetValue(_window, address);
-                _selectionCursorField.SetValue(_window, address);
+                _window.SelectionAnchorForTest = address;
+                _window.SelectionCursorForTest = address;
             }
             PumpDispatcher();
         }
@@ -405,8 +334,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 // Leaving the anchor stale makes anchor-driven commands -- Freeze Panes and Split
                 // -- resolve their position from the previous active cell (e.g. A1) instead of this
                 // selection, so mirror the anchor/cursor here to model a genuine selection.
-                _selectionAnchorProperty.SetValue(_window, start);
-                _selectionCursorField.SetValue(_window, end);
+                _window.SelectionAnchorForTest = start;
+                _window.SelectionCursorForTest = end;
             }
 
             PumpDispatcher();
@@ -415,7 +344,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
         public void SetActiveCell(uint row, uint col)
         {
             var sheet = _workbook.Sheets[0];
-            _setActiveCell.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            _window.SetActiveCellForTest(new CellAddress(sheet.Id, row, col));
             _window.UpdateLayout();
             PumpDispatcher();
         }
@@ -427,7 +356,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
         // current selection). Anchor-driven ribbon commands -- Freeze Panes and Split -- resolve
         // their position from this cell, so tests assert it stays in sync with SelectRange.
         public (uint Row, uint Col)? SelectionAnchor =>
-            _selectionAnchorProperty.GetValue(_window) is CellAddress addr ? (addr.Row, addr.Col) : null;
+            _window.SelectionAnchorForTest is CellAddress addr ? (addr.Row, addr.Col) : null;
 
         public GridRange ActivePivotVisibleRange =>
             PivotUiPlanner.VisiblePivotRange(_workbook.Sheets[0].PivotTables[0]);
@@ -435,31 +364,28 @@ public sealed partial class MainWindowRibbonKeyTipTests
         public IReadOnlyList<string> PivotListItems(string listName) =>
             (_window.FindName(listName) as ListBox)?.Items
                 .Cast<object>()
-                .Select(item => PivotUiHostHelpers.GetFieldListCaption(item) ?? item.ToString() ?? string.Empty)
+                .Select(item => PivotFieldListPaneBuilder.GetItemCaption(item) ?? item.ToString() ?? string.Empty)
                 .Where(item => item.Length > 0)
                 .ToList() ?? [];
 
         public void ApplyPivotLayoutWithoutRowFields()
         {
             var pivot = _workbook.Sheets[0].PivotTables[0];
-            _applyPivotFieldListLayout.Invoke(
-                _window,
-                [
-                    pivot,
-                    Array.Empty<PivotFieldModel>(),
-                    Array.Empty<PivotFieldModel>(),
-                    Array.Empty<PivotFieldModel>(),
-                    pivot.DataFields.ToList(),
-                    true
-                ]);
+            _window.ApplyPivotFieldListLayoutForTest(
+                pivot,
+                Array.Empty<PivotFieldModel>(),
+                Array.Empty<PivotFieldModel>(),
+                Array.Empty<PivotFieldModel>(),
+                pivot.DataFields.ToList(),
+                true);
             _window.UpdateLayout();
             PumpDispatcher();
         }
 
         public void MoveAvailablePivotFieldTo(string caption, string zoneName)
         {
-            var zone = Enum.Parse(_pivotFieldDropZoneType, zoneName);
-            _movePivotFieldToZone.Invoke(_window, [caption, zone, -1, null]);
+            var zone = Enum.Parse<PivotFieldBucket>(zoneName);
+            _window.MovePivotFieldToZoneForTest(caption, zone);
             _window.UpdateLayout();
             PumpDispatcher();
         }
@@ -495,10 +421,10 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public void ConfigureQuickAccessToolbar(IReadOnlyList<string> commandIds, bool belowRibbon)
         {
-            var options = (FreeXOptions)_optionsField.GetValue(_window)!;
+            var options = _window.OptionsForTest;
             options.QuickAccessToolbarCommands = commandIds.ToList();
             options.QuickAccessToolbarBelowRibbon = belowRibbon;
-            _rebuildQuickAccessToolbar.Invoke(_window, null);
+            _window.RebuildQuickAccessToolbarForTest();
             _window.UpdateLayout();
             PumpDispatcher();
         }
@@ -537,7 +463,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
             // ApplyReviewRefreshPlan, which re-syncs the Review command states (Next/Previous
             // Note/Comment, Delete Note/Comment, Convert to Comments) from the sheet -- mirror
             // that here since this helper mutates the sheet model directly, bypassing that path.
-            _refreshReviewCommentNoteCommandStates.Invoke(_window, null);
+            _window.RefreshReviewCommentNoteCommandStatesForTest();
             PumpDispatcher();
         }
 
@@ -546,7 +472,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
             var sheet = _workbook.Sheets[0];
             sheet.ThreadedComments[new CellAddress(sheet.Id, row, col)] = new ThreadedComment(text);
             // See AddNote above (R127-review-delete-enablement-1).
-            _refreshReviewCommentNoteCommandStates.Invoke(_window, null);
+            _window.RefreshReviewCommentNoteCommandStatesForTest();
             PumpDispatcher();
         }
 
@@ -596,9 +522,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public IReadOnlyList<string> VisibleCommandKeyTips(string keyTip)
         {
-            var scope = Enum.Parse(_scopeType, "Commands");
-            var elements = ((System.Collections.IEnumerable)_getVisibleKeyTipElements.Invoke(_window, [scope])!)
-                .OfType<FrameworkElement>()
+            var elements = _window.VisibleKeyTipElementsForTest(FreeXRibbonKeyTipInputScope.Commands)
                 .Where(element => string.Equals(RibbonTooltip.GetKeyTip(element), keyTip, StringComparison.OrdinalIgnoreCase))
                 .Select(element => RibbonTooltip.GetTitle(element) ?? element.Name ?? element.GetType().Name)
                 .ToList();
@@ -607,9 +531,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public IReadOnlyList<string> VisibleCommandKeyTipDump()
         {
-            var scope = Enum.Parse(_scopeType, "Commands");
-            return ((System.Collections.IEnumerable)_getVisibleKeyTipElements.Invoke(_window, [scope])!)
-                .OfType<FrameworkElement>()
+            return _window.VisibleKeyTipElementsForTest(FreeXRibbonKeyTipInputScope.Commands)
                 .Select(element => $"{RibbonTooltip.GetKeyTip(element)}:{RibbonTooltip.GetTitle(element) ?? element.Name ?? element.GetType().Name}")
                 .Order(StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -734,9 +656,9 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public void ShowPivotContextualTabs()
         {
-            if (_window.FindName("PivotTableAnalyzeTab") is TabItem analyzeTab)
+            if (FindRibbonTab("PivotTableAnalyzeTab") is { } analyzeTab)
                 analyzeTab.Visibility = Visibility.Visible;
-            if (_window.FindName("PivotTableDesignTab") is TabItem designTab)
+            if (FindRibbonTab("PivotTableDesignTab") is { } designTab)
                 designTab.Visibility = Visibility.Visible;
 
             _window.UpdateLayout();
@@ -745,18 +667,18 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public void RefreshViewport()
         {
-            _updateViewport.Invoke(_window, null);
+            _window.UpdateViewportForTest();
             _window.UpdateLayout();
             PumpDispatcher();
         }
 
         public bool ContextualTabIsVisible(string name) =>
-            (_window.FindName(name) as TabItem)?.Visibility == Visibility.Visible;
+            FindRibbonTab(name)?.Visibility == Visibility.Visible;
 
         public bool PivotFieldListPaneIsVisible =>
             (_window.FindName("PivotFieldListPane") as FrameworkElement)?.Visibility == Visibility.Visible;
 
-        private ContextMenu? ActiveMenu => _activeMenuField.GetValue(_window) as ContextMenu;
+        private ContextMenu? ActiveMenu => _window.ActiveRibbonKeyTipMenuForTest;
 
         private IEnumerable<ButtonBase> SelectedRibbonCommandButtons()
         {
@@ -810,9 +732,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
             window.UpdateLayout();
             PumpDispatcher();
 
-            var createNewWorkbook = typeof(MainWindow).GetMethod("CreateNewWorkbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CreateNewWorkbook");
-            createNewWorkbook.Invoke(window, null);
+            window.CreateNewWorkbookForTest();
             configureWorkbook?.Invoke(session.WorkbookRef.Current);
 
             var harness = new MainWindowHarness(window, session.WorkbookRef.Current, session.MessageService);
@@ -861,7 +781,6 @@ public sealed partial class MainWindowRibbonKeyTipTests
             _window.WindowState = WindowState.Normal;
             _window.Width = width;
             _window.UpdateLayout();
-            _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
 
@@ -880,13 +799,12 @@ public sealed partial class MainWindowRibbonKeyTipTests
             _window.UpdateLayout();
             PumpDispatcher();
             PumpDispatcher();
-            _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
 
         public void SetRecentFiles(IEnumerable<string> recentPaths, IEnumerable<string> pinnedPaths)
         {
-            var store = (RecentFilesStore)_recentFilesField.GetValue(_window)!;
+            var store = _window.RecentFilesForTest;
             store.Entries.Clear();
             store.Entries.AddRange(recentPaths.Select(path => new RecentFileEntry
             {
@@ -900,32 +818,32 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 LastOpened = DateTimeOffset.UtcNow,
                 IsPinned = true
             }));
-            _updateSsRecentList.Invoke(_window, [""]);
+            _window.UpdateRecentFilesForTest();
             PumpDispatcher();
         }
 
         public void RefreshSheetProtectionUi()
         {
-            _refreshSheetProtectionUi.Invoke(_window, null);
+            _window.RefreshSheetProtectionUiForTest();
             PumpDispatcher();
         }
 
         public void EnterKeyTipScope(string scope)
         {
-            var value = Enum.Parse(_scopeType, scope);
-            _enterKeyTipMode.Invoke(_window, [value]);
+            var value = Enum.Parse<FreeXRibbonKeyTipInputScope>(scope);
+            _window.EnterRibbonKeyTipModeForTest(value);
             PumpDispatcher();
         }
 
         public void HandleKeyTip(Key key)
         {
-            _handleActiveRibbonKeyTip.Invoke(_window, [key]);
+            _window.HandleActiveRibbonKeyTipForTest(key);
             PumpDispatcher();
         }
 
         public bool HandleDirectTopLevelKeyTip(Key key)
         {
-            var handled = (bool)_tryHandleDirectRibbonKeyTip.Invoke(_window, [key])!;
+            var handled = _window.TryHandleDirectRibbonKeyTipForTest(key);
             PumpDispatcher();
             return handled;
         }
@@ -949,7 +867,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
             {
                 RoutedEvent = Keyboard.PreviewKeyDownEvent
             };
-            var handled = (bool)_tryHandleFocusedRibbonKeyboardNavigation.Invoke(_window, [args])!;
+            var handled = _window.TryHandleFocusedRibbonKeyboardNavigationForTest(args);
             PumpDispatcher();
             return handled;
         }
@@ -1002,7 +920,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
                     zoomDialog.Close();
                 }));
 
-            _zoomCustomMenuItemClick.Invoke(_window, [_window, new RoutedEventArgs()]);
+            _window.OpenCustomZoomDialogForTest();
             PumpDispatcher();
         }
 
@@ -1010,12 +928,12 @@ public sealed partial class MainWindowRibbonKeyTipTests
         {
             _window.Activate();
             _messageService.Clear();
-            _hideStartScreen.Invoke(_window, null);
+            _window.HideStartScreenForTest();
             ConfigureQuickAccessToolbar(QuickAccessToolbarCatalog.DefaultCommandIds, belowRibbon: false);
             if (ActiveMenu is { } activeMenu)
                 activeMenu.IsOpen = false;
-            _scopeField.SetValue(_window, Enum.Parse(_scopeType, "None"));
-            _activeMenuField.SetValue(_window, null);
+            KeyTipSession.Cancel();
+            _window.ActiveRibbonKeyTipMenuForTest = null;
             if (_window.FindName("KeyTipOverlay") is Canvas overlay)
             {
                 overlay.Children.Clear();
@@ -1028,15 +946,21 @@ public sealed partial class MainWindowRibbonKeyTipTests
             }
             if (_window.FindName("NumberFormatBox") is ComboBox numberFormatBox)
                 numberFormatBox.IsDropDownOpen = false;
-            if (_window.FindName("ShapeFormatTab") is TabItem shapeFormatTab)
+            if (FindRibbonTab("ShapeFormatTab") is { } shapeFormatTab)
                 shapeFormatTab.Visibility = Visibility.Collapsed;
-            if (_window.FindName("PictureFormatTab") is TabItem pictureFormatTab)
+            if (FindRibbonTab("PictureFormatTab") is { } pictureFormatTab)
                 pictureFormatTab.Visibility = Visibility.Collapsed;
             SelectActiveCell();
             _window.UpdateLayout();
-            _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
+
+        private TabItem? FindRibbonTab(string catalogId) =>
+            (_window.FindName("RibbonTabs") as TabControl)?.Items
+                .OfType<TabItem>()
+                .FirstOrDefault(tab =>
+                    RibbonMetadata.TryGetCatalogId(tab, out var candidate) &&
+                    string.Equals(candidate, catalogId, StringComparison.Ordinal));
 
         public void Dispose()
         {

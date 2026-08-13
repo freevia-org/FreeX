@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.CustomViews;
 
 namespace FreeX.App.Host.Tests;
 
@@ -40,7 +41,11 @@ public sealed partial class CustomViewsDialogXamlTests
     {
         CustomViewNameDialog.CreateResult("  Quarter Close  ", includePrintSettings: false, includeHiddenRowsColumnsAndFilterSettings: true)
             .Should()
-            .Be(new CustomViewNameDialogResult("Quarter Close", IncludePrintSettings: false, IncludeHiddenRowsColumnsAndFilterSettings: true));
+            .Be(new CustomViewsPlanner.NameSubmission("Quarter Close", IncludePrintSettings: false, IncludeHiddenRowsColumnsAndFilterSettings: true));
+
+        var source = DialogSourceTestSupport.ReadHostSources("CustomViewNameDialog.cs");
+        source.Should().Contain("public CustomViewsPlanner.NameSubmission Result");
+        source.Should().NotContain("CustomViewNameDialogResult");
     }
 
     [Fact]

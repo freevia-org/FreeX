@@ -22,11 +22,7 @@ public static class QuickAnalysisPlanner
 
     public static QuickAnalysisHoverPreview BuildHoverPreview(GridRange selection, QuickAnalysisOption option)
     {
-        var previewRange = option.PreviewKind is QuickAnalysisPreviewKind.Total or QuickAnalysisPreviewKind.Sparkline
-            ? new GridRange(
-                new CellAddress(selection.Start.Sheet, selection.Start.Row, selection.End.Col + 1),
-                new CellAddress(selection.Start.Sheet, selection.End.Row, selection.End.Col + 1))
-            : selection;
+        var previewRange = BuildPreviewRange(selection, option.PreviewKind);
 
         return new QuickAnalysisHoverPreview(
             previewRange,
@@ -41,11 +37,7 @@ public static class QuickAnalysisPlanner
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        var previewRange = item.PreviewKind is QuickAnalysisPreviewKind.Total or QuickAnalysisPreviewKind.Sparkline
-            ? new GridRange(
-                new CellAddress(selection.Start.Sheet, selection.Start.Row, selection.End.Col + 1),
-                new CellAddress(selection.Start.Sheet, selection.End.Row, selection.End.Col + 1))
-            : selection;
+        var previewRange = BuildPreviewRange(selection, item.PreviewKind);
 
         return new QuickAnalysisDisplayHoverPreview(
             previewRange,
@@ -54,6 +46,19 @@ public static class QuickAnalysisPlanner
             item.PreviewText,
             item.Route,
             item.PreviewVisual);
+    }
+
+    private static GridRange BuildPreviewRange(GridRange selection, QuickAnalysisPreviewKind previewKind)
+    {
+        if (previewKind is not (QuickAnalysisPreviewKind.Total or QuickAnalysisPreviewKind.Sparkline) ||
+            selection.End.Col >= CellAddress.MaxCol)
+        {
+            return selection;
+        }
+
+        return new GridRange(
+            new CellAddress(selection.Start.Sheet, selection.Start.Row, selection.End.Col + 1),
+            new CellAddress(selection.Start.Sheet, selection.End.Row, selection.End.Col + 1));
     }
 }
 

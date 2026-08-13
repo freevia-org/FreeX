@@ -99,8 +99,7 @@ public partial class MainWindow
         if (_suppressAppViewOptionSync) return;
         if (sender is not System.Windows.Controls.CheckBox chk || FormulaBarBorder is null) return;
 
-        _options.ShowFormulaBar = chk.IsChecked == true;
-        _options.Save();
+        MutateRuntimeOptions(options => options.ShowFormulaBar = chk.IsChecked == true);
         FormulaBarBorder.Visibility = _options.ShowFormulaBar ? Visibility.Visible : Visibility.Collapsed;
 
         // Show Formula Bar is an Excel-instance-wide display preference, not scoped to this
@@ -169,7 +168,7 @@ public partial class MainWindow
     private void CustomViewsBtn_Click(object sender, RoutedEventArgs e)
     {
         SyncWorkbookActiveSheetIndex();
-        var dialog = new CustomViewsDialog(_workbook, _commandBus) { Owner = this };
+        var dialog = new CustomViewsDialog(_workbook, ExecuteCustomViewDialogCommand) { Owner = this };
         dialog.ShowDialog();
         if (dialog.ViewApplied)
         {
@@ -342,29 +341,23 @@ public partial class MainWindow
     }
     private void FreezeAtSelectionMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        // Freeze relative to the true active/anchor cell (R14-accessibility-automation-2), not
-        // SelectedRange's normalized top-left Start -- an upward/leftward extension moves Start
-        // away from the anchor Excel actually freezes around (R51-commands-freeze-split-view-3-1).
-        var anchor = _selectionAnchor ?? range.Start;
-        SetFreezePanes(
-            (uint)Math.Max(0, (int)anchor.Row - 1),
-            (uint)Math.Max(0, (int)anchor.Col - 1));
+        if (SheetGrid.SelectedRange is null) return;
+        ApplyFreezePanes(_session.FreezePanesAtActiveCell);
     }
     private void FreezeTopRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        SetFreezePanes(1, 0);
+        ApplyFreezePanes(_session.FreezeTopRow);
     }
     private void FreezeFirstColMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        SetFreezePanes(0, 1);
+        ApplyFreezePanes(_session.FreezeFirstColumn);
     }
     private void UnfreezeAllMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        SetFreezePanes(0, 0);
+        ApplyFreezePanes(_session.UnfreezePanes);
     }
 
-    private void SetFreezePanes(uint frozenRows, uint frozenCols)
+    private void ApplyFreezePanes(Func<WorkbookCellEditResult> execute)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
 
@@ -380,14 +373,13 @@ public partial class MainWindow
         // unaffected.
         var (preTopRow, preLeftCol) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
 
-        var outcome = _commandBus.Execute(
-            _workbook.Id,
-            new SetFreezePanesCommand(_currentSheetId, frozenRows, frozenCols));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Freeze Panes");
+        if (!TryExecuteWorksheetLayout(
+                execute,
+                "Freeze Panes"))
             return;
-        }
+
+        var frozenRows = _session.GetEffectiveFrozenRows();
+        var frozenCols = _session.GetEffectiveFrozenCols();
 
         // This window chose the new Freeze Panes state -- remember it as THIS window's own state
         // (R89-freeze-split-per-window-1), exactly like SetWorksheetViewMode/the View-tab toggles:
@@ -411,6 +403,9 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void SetFreezePanes(uint frozenRows, uint frozenCols) =>
+        ApplyFreezePanes(() => _session.SetFreezePanes(frozenRows, frozenCols));
+
     private void SplitViewBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -422,34 +417,12 @@ public partial class MainWindow
         var viewState = GetEffectiveViewState(sheet);
         var wasSplit = viewState.SplitRow is not null || viewState.SplitColumn is not null;
 
-        uint? splitRow = null;
-        uint? splitColumn = null;
-        if (!wasSplit && SheetGrid.SelectedRange is { } range)
-        {
-            // Split relative to the true active/anchor cell, not SelectedRange's normalized
-            // top-left Start (same fix as Freeze Panes -- R51-commands-freeze-split-view-3-2).
-            var anchor = _selectionAnchor ?? range.Start;
-            splitRow = anchor.Row > 1 ? anchor.Row : null;
-            splitColumn = anchor.Col > 1 ? anchor.Col : null;
-
-            // Excel's Split command is never a no-op: when the active cell is A1 (row 1, col 1 --
-            // the only case where both of the above resolve to null, since row/col can't be < 1),
-            // there is no row/column context to derive a split position from, so Excel falls back
-            // to splitting the visible window into 4 roughly-equal panes at its midpoint instead of
-            // silently doing nothing (R60-commands-freeze-split-6-2).
-            if (splitRow is null && splitColumn is null && SheetGrid.Viewport is { } viewport)
-            {
-                if (viewport.RowMetrics.Count > 1)
-                    splitRow = viewport.RowMetrics[viewport.RowMetrics.Count / 2].Row;
-                if (viewport.ColMetrics.Count > 1)
-                    splitColumn = viewport.ColMetrics[viewport.ColMetrics.Count / 2].Col;
-            }
-        }
-
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        if (!TryExecuteGroupedSheetCommand(
-                "Split",
-                sheetId => new SetSplitPanesCommand(sheetId, splitRow, splitColumn)))
+        var viewportRows = SheetGrid.Viewport?.RowMetrics;
+        var viewportColumns = SheetGrid.Viewport?.ColMetrics;
+        if (!TryExecuteWorksheetLayout(
+                () => _session.ToggleSplitPanesAtActiveCell(viewportRows, viewportColumns),
+                "Split"))
             return;
 
         // This window chose the new Split state -- remember it as THIS window's own state
@@ -481,9 +454,9 @@ public partial class MainWindow
         if (nextRow == viewState.SplitRow && nextColumn == viewState.SplitColumn)
             return;
 
-        if (!TryExecuteGroupedSheetCommand(
-                "Split",
-                sheetId => new SetSplitPanesCommand(sheetId, nextRow, nextColumn)))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SetSplitPanes(nextRow, nextColumn),
+                "Split"))
             return;
 
         SyncWindowViewState([_currentSheetId]);
@@ -717,8 +690,7 @@ public partial class MainWindow
     private void FormulaBarExpandBtn_Click(object sender, RoutedEventArgs e)
     {
         _formulaBarExpanded = !_formulaBarExpanded;
-        _options.FormulaBarExpanded = _formulaBarExpanded;
-        _options.Save();
+        MutateRuntimeOptions(options => options.FormulaBarExpanded = _formulaBarExpanded);
         ApplyFormulaBarExpansion();
     }
 

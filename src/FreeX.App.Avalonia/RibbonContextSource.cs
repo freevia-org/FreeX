@@ -11,13 +11,12 @@ namespace FreeX.App.Avalonia;
 /// Activation keys match the shared FreeX ribbon definition (chart.selected / picture.selected /
 /// shape.selected / table.active / pivot.active).
 /// </summary>
-internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
+internal sealed partial class AvaloniaRibbonContextSource : IRibbonContextSource
 {
     // Drawing-object selection contributes at most one key at a time; table/pivot are independent flags.
     private string? _drawingObjectKey;
     private bool _tableActive;
     private bool _pivotActive;
-    private string? _parityCaptureActivationKey;
 
     public RibbonContextState Current { get; private set; } = RibbonContextState.None;
 
@@ -26,7 +25,7 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
     /// <summary>A drawing object was selected: map its kind to the contextual tab's activation key.</summary>
     public void OnDrawingObjectSelected(SelectionPaneObjectKind kind)
     {
-        if (_parityCaptureActivationKey is not null)
+        if (ShouldSuppressOptionalContextMutation())
             return;
         SetDrawingObjectKey(DrawingObjectContextualRibbonPlanner.ResolveActivationKey(kind));
     }
@@ -34,7 +33,7 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
     /// <summary>The active cell entered/left a structured table.</summary>
     public void OnTableActive(bool active)
     {
-        if (_parityCaptureActivationKey is not null)
+        if (ShouldSuppressOptionalContextMutation())
             return;
         if (_tableActive == active)
             return;
@@ -45,7 +44,7 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
     /// <summary>The active cell entered/left a PivotTable.</summary>
     public void OnPivotActive(bool active)
     {
-        if (_parityCaptureActivationKey is not null)
+        if (ShouldSuppressOptionalContextMutation())
             return;
         if (_pivotActive == active)
             return;
@@ -59,19 +58,9 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
     /// </summary>
     public void OnSelectionCleared()
     {
-        if (_parityCaptureActivationKey is not null)
+        if (ShouldSuppressOptionalContextMutation())
             return;
         SetDrawingObjectKey(null);
-    }
-
-    /// <summary>
-    /// Capture-only override used by the visual parity runner to render each contextual tab at a stable size.
-    /// Normal app interaction continues to flow through the selection/table/pivot callbacks above.
-    /// </summary>
-    internal void SetParityCaptureContext(string? activationKey)
-    {
-        _parityCaptureActivationKey = activationKey;
-        Recompute();
     }
 
     private void SetDrawingObjectKey(string? key)
@@ -84,13 +73,6 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
 
     private void Recompute()
     {
-        if (_parityCaptureActivationKey is { } captureKey)
-        {
-            Current = RibbonContextState.None.With(captureKey);
-            ContextChanged?.Invoke(this, EventArgs.Empty);
-            return;
-        }
-
         var state = RibbonContextState.None;
         if (_drawingObjectKey is not null)
             state = state.With(_drawingObjectKey);
@@ -99,7 +81,19 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
         if (_pivotActive)
             state = state.With(DrawingObjectContextualRibbonPlanner.PivotContextKey);
 
+        ApplyOptionalContextOverride(ref state);
         Current = state;
         ContextChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    private bool ShouldSuppressOptionalContextMutation()
+    {
+        var suppress = false;
+        ConfigureOptionalContextMutation(ref suppress);
+        return suppress;
+    }
+
+    partial void ConfigureOptionalContextMutation(ref bool suppress);
+
+    partial void ApplyOptionalContextOverride(ref RibbonContextState state);
 }

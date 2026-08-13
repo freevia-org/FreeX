@@ -1,4 +1,5 @@
 using FreeW.Core.Model;
+using FreeW.App.Presentation.Editing;
 
 namespace FreeW.App.Presentation.Ribbon;
 
@@ -136,19 +137,16 @@ public static class CommentListPlanner
             for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
             {
                 var row = table.Rows[rowIndex];
-                var gridColumnIndex = 0;
-                foreach (var cell in row.Cells)
+                foreach (var projected in TableGridProjection.ProjectRow(row))
                 {
-                    for (var paragraphIndex = 0; paragraphIndex < cell.Paragraphs.Count; paragraphIndex++)
+                    for (var paragraphIndex = 0; paragraphIndex < projected.Cell.Paragraphs.Count; paragraphIndex++)
                     {
                         yield return new ParagraphAddress(
-                            cell.Paragraphs[paragraphIndex],
+                            projected.Cell.Paragraphs[paragraphIndex],
                             rowIndex,
-                            gridColumnIndex,
+                            projected.StartColumn,
                             paragraphIndex);
                     }
-
-                    gridColumnIndex += Math.Max(1, cell.GridSpan);
                 }
             }
         }

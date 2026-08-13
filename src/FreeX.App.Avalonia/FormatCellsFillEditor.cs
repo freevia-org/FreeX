@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using FreeX.App.Presentation;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 using Free.Shared.Shell.Avalonia;
@@ -532,26 +533,10 @@ internal sealed class FormatCellsFillEditor
     private static IBrush Brush(CellColor color) =>
         new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
 
-    private static string FormatRgb(CellColor color) => $"{color.R},{color.G},{color.B}";
+    private static string FormatRgb(CellColor color) => ColorInputParser.FormatRgbColor(color);
 
-    private static bool TryParseColor(string text, out CellColor color)
-    {
-        if (CellColorPalettePlanner.TryParseHexColor(text, out color))
-            return true;
-
-        var parts = text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 3 &&
-            byte.TryParse(parts[0], out var r) &&
-            byte.TryParse(parts[1], out var g) &&
-            byte.TryParse(parts[2], out var b))
-        {
-            color = new CellColor(r, g, b);
-            return true;
-        }
-
-        color = default;
-        return false;
-    }
+    private static bool TryParseColor(string text, out CellColor color) =>
+        ColorInputParser.TryParseColorText(text, out color);
 
     private static bool TryParseOrEmpty(string? text, out CellColor color, out bool invalid)
     {

@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
 
 $resolvedRoot = Resolve-ToolRepoPath -Path $EvidenceRoot -RepoRoot $repoRoot
 $resolvedManifest = Resolve-ToolRepoPath -Path $ManifestPath -RepoRoot $repoRoot
@@ -72,7 +73,7 @@ function Test-RecordedImage {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) {
             throw "$Label image is missing or empty: $relativePath"
         }
-        $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actualHash = Get-VisualEvidenceFileSha256 -Path $path
         if ($actualHash -ne $expectedHash) {
             throw "$Label hash is stale for '$relativePath': expected $expectedHash, actual $actualHash."
         }
@@ -118,7 +119,7 @@ foreach ($comparison in $summary.comparisons) {
         @($comparison.avaloniaClientImagePath, $comparison.pixelMetrics.avaloniaImageSha256, "Avalonia client"),
         @($comparison.pixelMetrics.heatmapPath, $comparison.pixelMetrics.heatmapSha256, "heatmap"))) {
         $path = Get-EvidencePath -RelativePath $metricPath[0]
-        $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actualHash = Get-VisualEvidenceFileSha256 -Path $path
         if ($actualHash -ne $metricPath[1]) {
             throw "$($metricPath[2]) hash is stale for '$scenarioId'."
         }
@@ -135,49 +136,27 @@ foreach ($requiredText in @("app-owned titlebar", "QAT", "status bar", "WPF full
     }
 }
 
-function Get-RelativePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    $Path.Substring($resolvedRoot.Length).TrimStart('\', '/').Replace('\', '/')
-}
-
-function Get-NormalizedTextSha256 {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $content = [IO.File]::ReadAllText($Path).Replace("`r`n", "`n").Replace("`r", "`n")
-    $bytes = [Text.UTF8Encoding]::new($false).GetBytes($content)
-    $hasher = [Security.Cryptography.SHA256]::Create()
-    try {
-        [BitConverter]::ToString($hasher.ComputeHash($bytes)).Replace("-", "").ToLowerInvariant()
-    }
-    finally {
-        $hasher.Dispose()
-    }
-}
-
-$files = Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File |
-    Where-Object { $_.FullName -ne $resolvedManifest } |
-    Sort-Object { Get-RelativePath -Path $_.FullName } |
-    ForEach-Object {
-        if ($_.Length -le 0) { throw "FreeP whole-window evidence contains an empty artifact: $($_.FullName)" }
-        [ordered]@{
-            path = Get-RelativePath -Path $_.FullName
-            bytes = $_.Length
-            sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-        }
-    }
+$files = Get-VisualEvidenceArtifactInventory `
+    -EvidenceRoot $resolvedRoot `
+    -ExcludedPaths @($resolvedManifest) `
+    -RequireNonEmpty `
+    -EmptyArtifactMessage "FreeP whole-window evidence contains an empty artifact: {0}"
 
 $inputPaths = @(
-    "freep\FreeP.App.Presentation\WholeWindowVisualEvidenceContract.cs",
-    "freep\FreeP.App.Presentation\DialogPaneVisualEvidenceFixture.cs",
+    "freep\TestSupport\VisualEvidence\WholeWindowVisualEvidenceContract.cs",
+    "freep\TestSupport\VisualEvidence\WholeWindowVisualEvidenceHostCoordinator.cs",
+    "freep\TestSupport\VisualEvidence\DialogPaneVisualEvidenceFixture.cs",
     "freep\FreeP.App.Presentation\FreePShellVisualMetrics.cs",
     "freep\FreeP.App.Presentation\InCanvasRichTextSelectionVisualContract.cs",
     "freep\FreeP.App.Presentation\InCanvasRichTextVisualPlanner.cs",
-    "freep\FreeP.App.Host\WpfWholeWindowVisualEvidenceCapture.cs",
+    "freep\TestSupport\VisualEvidence.Wpf\WpfWholeWindowVisualEvidenceCapture.cs",
+    "freep\TestSupport\VisualEvidence.Wpf\WpfWholeWindowVisualEvidenceCoordinator.cs",
     "freep\FreeP.App.Host\MainWindow.cs",
-    "freep\FreeP.App.Host\MainWindow.WholeWindowVisualEvidence.cs",
-    "freep\FreeP.App.Avalonia\AvaloniaWholeWindowVisualEvidenceCapture.cs",
+    "freep\TestSupport\VisualEvidence.Wpf\MainWindow.VisualCaptureAdapter.cs",
+    "freep\TestSupport\VisualEvidence.Avalonia\AvaloniaWholeWindowVisualEvidenceCapture.cs",
+    "freep\TestSupport\VisualEvidence.Avalonia\AvaloniaWholeWindowVisualEvidenceCoordinator.cs",
     "freep\FreeP.App.Avalonia\MainWindow.cs",
-    "freep\FreeP.App.Avalonia\MainWindow.WholeWindowVisualEvidence.cs",
+    "freep\TestSupport\VisualEvidence.Avalonia\MainWindow.VisualCaptureAdapter.cs",
     "freep\FreeP.App.Rendering.Wpf\InCanvasTextEditor.cs",
     "freep\FreeP.App.Rendering.Wpf\TextBodyFlowDocumentConverter.cs",
     "freep\FreeP.App.Rendering.Avalonia\AvaloniaInCanvasTextEditor.cs",
@@ -194,7 +173,7 @@ $inputs = foreach ($relativePath in $inputPaths) {
     $path = Join-Path $repoRoot $relativePath
     [ordered]@{
         path = $relativePath.Replace('\', '/')
-        sha256 = Get-NormalizedTextSha256 -Path $path
+        sha256 = Get-VisualEvidenceNormalizedTextSha256 -Path $path
     }
 }
 

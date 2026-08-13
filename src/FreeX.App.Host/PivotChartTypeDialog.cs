@@ -31,7 +31,7 @@ public sealed class PivotChartTypeDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         _tabs.Margin = new Thickness(0, 0, 0, 12);
         _tabs.Height = 290;
-        var recommendedChoices = ChartTypePickerPlanner.GetRecommendedGalleryChoices();
+        var recommendedChoices = ChartTypePickerPlanner.GetRecommendedGalleryChoices(WpfResourceKeyTextResolver.Instance);
         _recommendedGallery.ItemsSource = recommendedChoices;
         _recommendedGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
         _recommendedGallery.SelectedItem = FindGalleryChoice(recommendedChoices, currentType);

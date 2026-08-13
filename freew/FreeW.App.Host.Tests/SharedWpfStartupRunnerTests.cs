@@ -2,24 +2,28 @@ using System.IO;
 using System.Windows;
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
+using Free.Shared.Theme;
 
 namespace FreeW.App.Host.Tests;
 
 public sealed class SharedWpfStartupRunnerTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeW.SharedWpfStartupRunnerTests", Guid.NewGuid().ToString("N"));
+    private const string IsolatedRunEnvironmentVariable = "FREEW_SHARED_WPF_STARTUP_TEST_CHILD";
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.SharedWpfStartupRunnerTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public SharedWpfStartupRunnerTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [StaFact]
     public void Run_InstallsIdentityLoadsOptionsAndRecordsLifecycleAroundWindowRun()
     {
+        if (IsolatedTestProcess.RunIfNeeded(
+                IsolatedRunEnvironmentVariable,
+                "FreeW.App.Host.Tests.SharedWpfStartupRunnerTests.Run_InstallsIdentityLoadsOptionsAndRecordsLifecycleAroundWindowRun"))
+        {
+            return;
+        }
+
         var optionsPath = Path.Combine(_tempDir, "settings.json");
         File.WriteAllText(optionsPath, """{"Marker":" loaded ","RecentFilesLimit":999,"UiLanguage":" qps-ploc "}""");
         var originalProduct = AppProduct.Current;
@@ -88,11 +92,12 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
                             AppProduct.Current.ProductDirectoryName == "FreeW";
                     },
                     Theme = new WpfApplicationThemeStartupSpec<string>(
-                        EnvironmentVariableName: "DUMMY_THEME",
-                        AlternateThemeValue: "midnight",
-                        DefaultTheme: "default",
-                        AlternateTheme: "alternate",
-                        ResourceKeyPrefix: "Dummy",
+                        Plan: new ApplicationThemeStartupPlan<string>(
+                            EnvironmentVariableName: "DUMMY_THEME",
+                            AlternateThemeValue: "midnight",
+                            DefaultTheme: "default",
+                            AlternateTheme: "alternate",
+                            ResourceKeyPrefix: "Dummy"),
                         ApplyTheme: (app, theme, prefix) =>
                         {
                             order.Add("theme");
@@ -218,20 +223,8 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
         freePProgram.Should().NotContain("RecordEvent(\"app_exit\")");
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var directory = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(directory))
-        {
-            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = Directory.GetParent(directory)?.FullName;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 
     private sealed class CapturingDiagnostics(
         List<string> events,

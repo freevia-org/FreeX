@@ -292,7 +292,7 @@ public sealed class DocumentViewListEditTests
         {
             var (view, _) = MakeListDoc("Item", level: 1);
             view.MoveCaretToBlock(0, 0);
-            view.BackspaceOutdentListItemPublic();
+            view.BackspacePublic();
             level = Para(view, 0).Formatting.ListLevel;
             kind  = Para(view, 0).Formatting.ListKind;
         });
@@ -313,7 +313,7 @@ public sealed class DocumentViewListEditTests
         {
             var (view, _) = MakeListDoc("Item", level: 0);
             view.MoveCaretToBlock(0, 0);
-            view.BackspaceOutdentListItemPublic();
+            view.BackspacePublic();
             kind = Para(view, 0).Formatting.ListKind;
         });
 

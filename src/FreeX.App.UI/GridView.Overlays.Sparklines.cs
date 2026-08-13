@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Media;
 
+using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -76,60 +77,6 @@ public partial class GridView
     }
 
     // ── Axis-bound resolution ─────────────────────────────────────────────────
-
-    private static double? ResolveAxisMin(SparklineModel sp, Dictionary<int, double> groupMin)
-    {
-        return sp.MinAxisType switch
-        {
-            SparklineAxisScaling.Custom => sp.ManualMin,
-            SparklineAxisScaling.Group  =>
-                groupMin.TryGetValue(sp.GroupId, out var v) && v != double.MaxValue ? v : null,
-            _ => null, // Individual: no override
-        };
-    }
-
-    private static double? ResolveAxisMax(SparklineModel sp, Dictionary<int, double> groupMax)
-    {
-        return sp.MaxAxisType switch
-        {
-            SparklineAxisScaling.Custom => sp.ManualMax,
-            SparklineAxisScaling.Group  =>
-                groupMax.TryGetValue(sp.GroupId, out var v) && v != double.MinValue ? v : null,
-            _ => null,
-        };
-    }
-
-    private static double? ResolveAxisMaxAbs(SparklineModel sp, Dictionary<int, double> groupMaxAbs)
-    {
-        // For column/win-loss sparklines the bars are scaled symmetrically around zero using a
-        // single maxAbs bound.  Resolution priority (per axis):
-        //   Custom ManualMax / ManualMin  →  use the explicit bound (abs value for min)
-        //   Group                         →  fall back to the shared group maxAbs
-        //   Individual                    →  no override (return null)
-        //
-        // When one axis is Custom and the other is Group, the Custom value wins for its axis and
-        // the group value for the other; we take the larger abs so neither axis is clipped.
-        double? customAbs = null;
-
-        if (sp.MaxAxisType == SparklineAxisScaling.Custom && sp.ManualMax.HasValue)
-            customAbs = Math.Abs(sp.ManualMax.Value);
-
-        if (sp.MinAxisType == SparklineAxisScaling.Custom && sp.ManualMin.HasValue)
-        {
-            var absMin = Math.Abs(sp.ManualMin.Value);
-            customAbs = customAbs.HasValue ? Math.Max(customAbs.Value, absMin) : absMin;
-        }
-
-        // If either axis defers to the group, also fetch the group maxAbs.
-        double? groupAbs = null;
-        if (sp.MaxAxisType == SparklineAxisScaling.Group || sp.MinAxisType == SparklineAxisScaling.Group)
-            groupAbs = groupMaxAbs.TryGetValue(sp.GroupId, out var v) ? v : null;
-
-        // Return the larger of any custom and group contributions; null if neither applies.
-        if (customAbs.HasValue && groupAbs.HasValue)
-            return Math.Max(customAbs.Value, groupAbs.Value);
-        return customAbs ?? groupAbs;
-    }
 
     // ── Axis line ─────────────────────────────────────────────────────────────
 
@@ -382,33 +329,7 @@ public partial class GridView
         // ── Pre-compute group scaling bounds ──────────────────────────────────
         // Group scaling: when MinAxisType or MaxAxisType == Group, find the shared
         // min/max across all sparklines that share the same GroupId.
-        var groupMinValues = new Dictionary<int, double>();    // groupId → shared min
-        var groupMaxValues = new Dictionary<int, double>();    // groupId → shared max
-        var groupMaxAbsValues = new Dictionary<int, double>(); // groupId → shared maxAbs (column)
-
-        foreach (var sp in Sparklines)
-        {
-            if ((sp.MinAxisType == SparklineAxisScaling.Group ||
-                 sp.MaxAxisType == SparklineAxisScaling.Group) &&
-                SparklineValues.TryGetValue(sp.Id, out var vals) && vals.Count > 0)
-            {
-                if (!groupMinValues.ContainsKey(sp.GroupId))
-                {
-                    groupMinValues[sp.GroupId] = double.MaxValue;
-                    groupMaxValues[sp.GroupId] = double.MinValue;
-                    groupMaxAbsValues[sp.GroupId] = 0;
-                }
-
-                foreach (var v in vals)
-                {
-                    if (!double.IsFinite(v)) continue;
-                    if (v < groupMinValues[sp.GroupId]) groupMinValues[sp.GroupId] = v;
-                    if (v > groupMaxValues[sp.GroupId]) groupMaxValues[sp.GroupId] = v;
-                    var abs = Math.Abs(v);
-                    if (abs > groupMaxAbsValues[sp.GroupId]) groupMaxAbsValues[sp.GroupId] = abs;
-                }
-            }
-        }
+        var axisScalePlan = SparklineAxisScalePlanner.Build(Sparklines, SparklineValues);
 
         // ── Per-sparkline rendering ───────────────────────────────────────────
         foreach (var sparkline in Sparklines)
@@ -430,10 +351,7 @@ public partial class GridView
             if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
                 continue;
 
-            // Resolve axis-bound overrides for this sparkline.
-            double? overrideMin = ResolveAxisMin(sparkline, groupMinValues);
-            double? overrideMax = ResolveAxisMax(sparkline, groupMaxValues);
-            double? overrideMaxAbs = ResolveAxisMaxAbs(sparkline, groupMaxAbsValues);
+            var axisScale = axisScalePlan.Resolve(sparkline);
 
             // Resolve colors.
             var seriesColor = sparkline.SeriesColor ?? DefaultPositiveCellColor;
@@ -448,14 +366,14 @@ public partial class GridView
 
             // Draw axis line first (behind the sparkline).
             if (sparkline.ShowAxis)
-                DrawSparklineAxisLine(dc, values, rect, sparkline.Kind, axisColor, overrideMin, overrideMax, _sparklinePenCache, _brushCache);
+                DrawSparklineAxisLine(dc, values, rect, sparkline.Kind, axisColor, axisScale.Minimum, axisScale.Maximum, _sparklinePenCache, _brushCache);
 
             if (sparkline.Kind == SparklineKind.Line)
             {
                 // Line weight: model LineWeight is in points; convert to DIPs (96 dpi / 72 pt).
                 var lineWeightDip = PointsToDip(sparkline.LineWeight ?? DefaultLineWeightPt);
                 var linePen = GetSparklinePen(seriesColor, lineWeightDip, _sparklinePenCache, _brushCache);
-                DrawLineSparkline(dc, sparkline, values, rect, linePen, overrideMin, overrideMax, _brushCache);
+                DrawLineSparkline(dc, sparkline, values, rect, linePen, axisScale.Minimum, axisScale.Maximum, _brushCache);
             }
             else
             {
@@ -464,7 +382,7 @@ public partial class GridView
                     sparkline.Kind == SparklineKind.WinLoss,
                     BrushForCellColor(seriesColor,   _brushCache),
                     BrushForCellColor(negativeColor, _brushCache),
-                    overrideMaxAbs);
+                    axisScale.MaximumAbsolute);
             }
 
             dc.Pop();
@@ -483,47 +401,6 @@ public partial class GridView
     // these carries no behavior change to the interactive redraw path.
 
     /// <summary>
-    /// Computes the shared min/max/maxAbs bounds for every "Group" axis-scaling sparkline group
-    /// among <paramref name="sparklines"/>, exactly as <see cref="RenderSparklines"/>'s own
-    /// pre-compute step does.
-    /// </summary>
-    public static void BuildSparklineGroupScalingBounds(
-        IEnumerable<SparklineModel> sparklines,
-        IReadOnlyDictionary<Guid, IReadOnlyList<double>> sparklineValues,
-        out Dictionary<int, double> groupMinValues,
-        out Dictionary<int, double> groupMaxValues,
-        out Dictionary<int, double> groupMaxAbsValues)
-    {
-        groupMinValues = new Dictionary<int, double>();
-        groupMaxValues = new Dictionary<int, double>();
-        groupMaxAbsValues = new Dictionary<int, double>();
-
-        foreach (var sp in sparklines)
-        {
-            if ((sp.MinAxisType == SparklineAxisScaling.Group ||
-                 sp.MaxAxisType == SparklineAxisScaling.Group) &&
-                sparklineValues.TryGetValue(sp.Id, out var vals) && vals.Count > 0)
-            {
-                if (!groupMinValues.ContainsKey(sp.GroupId))
-                {
-                    groupMinValues[sp.GroupId] = double.MaxValue;
-                    groupMaxValues[sp.GroupId] = double.MinValue;
-                    groupMaxAbsValues[sp.GroupId] = 0;
-                }
-
-                foreach (var v in vals)
-                {
-                    if (!double.IsFinite(v)) continue;
-                    if (v < groupMinValues[sp.GroupId]) groupMinValues[sp.GroupId] = v;
-                    if (v > groupMaxValues[sp.GroupId]) groupMaxValues[sp.GroupId] = v;
-                    var abs = Math.Abs(v);
-                    if (abs > groupMaxAbsValues[sp.GroupId]) groupMaxAbsValues[sp.GroupId] = abs;
-                }
-            }
-        }
-    }
-
-    /// <summary>
     /// Draws one sparkline's axis line (if enabled) and its line/column/win-loss body (+ line
     /// markers) into <paramref name="rect"/>, exactly as the interactive grid's per-sparkline body
     /// in <see cref="RenderSparklines"/> does. <paramref name="brushCache"/>/<paramref name="penCache"/>
@@ -534,18 +411,15 @@ public partial class GridView
         SparklineModel sparkline,
         IReadOnlyList<double> values,
         Rect rect,
-        Dictionary<int, double> groupMinValues,
-        Dictionary<int, double> groupMaxValues,
-        Dictionary<int, double> groupMaxAbsValues,
+        SparklineAxisScalePlan axisScalePlan,
         Dictionary<CellColor, SolidColorBrush>? brushCache = null,
         Dictionary<(CellColor Color, double Thickness), Pen>? penCache = null)
     {
         if (values.Count == 0)
             return;
 
-        var overrideMin = ResolveAxisMin(sparkline, groupMinValues);
-        var overrideMax = ResolveAxisMax(sparkline, groupMaxValues);
-        var overrideMaxAbs = ResolveAxisMaxAbs(sparkline, groupMaxAbsValues);
+        ArgumentNullException.ThrowIfNull(axisScalePlan);
+        var axisScale = axisScalePlan.Resolve(sparkline);
 
         var seriesColor = sparkline.SeriesColor ?? DefaultPositiveCellColor;
         var negativeColor = sparkline.ShowNegativePoints
@@ -557,13 +431,13 @@ public partial class GridView
         dc.PushClip(clipGeometry);
 
         if (sparkline.ShowAxis)
-            DrawSparklineAxisLine(dc, values, rect, sparkline.Kind, axisColor, overrideMin, overrideMax, penCache, brushCache);
+            DrawSparklineAxisLine(dc, values, rect, sparkline.Kind, axisColor, axisScale.Minimum, axisScale.Maximum, penCache, brushCache);
 
         if (sparkline.Kind == SparklineKind.Line)
         {
             var lineWeightDip = PointsToDip(sparkline.LineWeight ?? DefaultLineWeightPt);
             var linePen = GetSparklinePen(seriesColor, lineWeightDip, penCache, brushCache);
-            DrawLineSparkline(dc, sparkline, values, rect, linePen, overrideMin, overrideMax, brushCache);
+            DrawLineSparkline(dc, sparkline, values, rect, linePen, axisScale.Minimum, axisScale.Maximum, brushCache);
         }
         else
         {
@@ -572,7 +446,7 @@ public partial class GridView
                 sparkline.Kind == SparklineKind.WinLoss,
                 BrushForCellColor(seriesColor,   brushCache),
                 BrushForCellColor(negativeColor, brushCache),
-                overrideMaxAbs);
+                axisScale.MaximumAbsolute);
         }
 
         dc.Pop();

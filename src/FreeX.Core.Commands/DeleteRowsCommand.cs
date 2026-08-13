@@ -31,32 +31,17 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     // re-registration instead of the frozen forward payload -- see
     // RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress.
     private IReadOnlyList<CellAddress> _affectedCells = [];
-    private List<GridRange>? _mergeSnapshot;
+    private RowColumnMutationSnapshot? _mutationSnapshot;
     private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;
     private List<uint>? _hiddenRowsSnapshot;
     private List<uint>? _filterHiddenRowsSnapshot;
     private List<uint>? _valueFilterHiddenRowsSnapshot;
     private Dictionary<uint, HashSet<uint>>? _columnFilterOwnedRowsSnapshot;
-    private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
-    private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
-    private List<CellAddress>? _shownCommentsSnapshot;
-    private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
-    private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
-    private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
-    private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
     // R106-io-hyperlink-range-shift: see Sheet.RangeHyperlinks -- whole-column/row and oversized-
     // bounded hyperlink refs shift/delete independently of the CellAddress-keyed dictionaries above.
-    private List<KeyValuePair<string, GridRange>>? _rangeHyperlinkSnapshot;
-    private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
-    private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
-    private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
-    private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _conditionalFormatSnapshot;
-    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
-    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private List<GridRange>? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
-    private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
     // R102: see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown -- every SeriesIndex-keyed
     // per-series/per-point collection on a Switch-Row/Column chart whose plotted series span this
     // delete overlaps must be captured here (undo) since the remap mutates them in place / drops rows.
@@ -67,22 +52,6 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     // R92-commands-undo-structural-format-5-1: see RebandTablesAfterRowDelete.
     private List<(CellAddress Address, Cell? OldCell)>? _tableRebandSnapshot;
-    private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
-    private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
-    private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
-    private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
-    private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
-    private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
-    // R135-commands-cf-dv-promote-anchor-1: separate snapshot for the anchor-delta rewrite
-    // ShiftRuleRowsDown applies when a CF/DV rule's primary AppliesTo area is fully consumed by the
-    // delete and it promotes an AdditionalRanges survivor to the new primary (see
-    // RowColumnShiftHelpers.PromoteCfSurvivorOrRemove/PromoteDvSurvivorOrRemove). Kept independent of
-    // _cfFormulaSnapshot/_cfThresholdSnapshot/_dvFormulaSnapshot above -- those are captured (and
-    // cleared) LATER for the DeleteRowsOp-driven reference rewrite, which would wipe out an entry
-    // recorded here if they shared a dictionary.
-    private readonly Dictionary<Guid, string?> _cfPromotionFormulaSnapshot = [];
-    private readonly Dictionary<(Guid Id, int Slot), string?> _cfPromotionThresholdSnapshot = [];
-    private readonly Dictionary<(Guid Id, int Slot), string?> _dvPromotionFormulaSnapshot = [];
 
     public string Label => $"Delete {_count} Row(s)";
 
@@ -126,6 +95,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         // it to dangle as #NAME? -- mirrors DeleteSheetOp's DeletedTableNames handling.
         var deletedTableNames = RowColumnShiftHelpers.FindStructuredTablesRemovedByRowDelete(sheet, _startRow, _count);
 
+        _mutationSnapshot = RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet);
         _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
         var (deletedSnapshot, shiftedSnapshot) = CaptureDeletedAndShiftedCells(sheet, endRow);
@@ -164,59 +134,39 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         RowColumnShiftHelpers.ShiftChartPositionRowsDown(sheet, _startRow, _count, sheet.RowHeights, sheet.DefaultRowHeight);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.RowHeights, _startRow, _count);
 
-        _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.Comments, _startRow, _count);
         // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
         // author + pinned/"Show Comment" state) and must shift/delete in lockstep with it, or a
         // note's author/pinned box goes stale (or survives at a deleted address) after the delete.
-        _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.CommentAuthors, _startRow, _count);
-        _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
         RowColumnShiftHelpers.ShiftCommentSetRowsDown(sheet.ShownComments, _startRow, _count);
-        _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.ThreadedComments, _startRow, _count);
-        _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.Hyperlinks, _startRow, _count);
-        _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.HyperlinkMetadata, _startRow, _count);
-        _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
-            ctx.Workbook, sheet, new DeleteRowsOp(sheet.Name, _startRow, _count), sheet.Name);
-        _rangeHyperlinkSnapshot = RowColumnShiftHelpers.CaptureRangeHyperlinks(sheet);
         RowColumnShiftHelpers.ShiftRangeHyperlinksRowsDown(sheet, _startRow, _count);
-        _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.RichTextRuns, _startRow, _count);
         // R78-selfreg-twin-sweep-2: sheet.CellPhoneticGuides must shift/delete in lockstep with its
         // RichTextRuns companion, or a deleted row's phonetic guide survives orphaned while a
         // surviving row's guide is left behind at its stale pre-delete address.
-        _phoneticGuideSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CellPhoneticGuides);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.CellPhoneticGuides, _startRow, _count);
 
-        (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
-        _cfPromotionFormulaSnapshot.Clear();
-        _cfPromotionThresholdSnapshot.Clear();
-        _dvPromotionFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.ShiftRuleRowsDown(
-            sheet, _startRow, _count,
-            _cfPromotionFormulaSnapshot, _cfPromotionThresholdSnapshot, _dvPromotionFormulaSnapshot);
-        _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
-        _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
+        _mutationSnapshot!.CaptureRulePromotionFormulas((cfFormulas, cfThresholds, dvFormulas) =>
+            RowColumnShiftHelpers.ShiftRuleRowsDown(
+                sheet, _startRow, _count, cfFormulas, cfThresholds, dvFormulas));
         RowColumnShiftHelpers.ShiftNamedRangeRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
         _printAreaSnapshot = sheet.PrintAreas.ToList();
         RowColumnShiftHelpers.ShiftPrintAreaRowsDown(sheet, _startRow, _count);
         _rowPageBreakSnapshot = RowColumnShiftHelpers.CaptureSortedSet(sheet.RowPageBreaks);
         RowColumnShiftHelpers.ShiftSortedSetDown(sheet.RowPageBreaks, _startRow, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
-        _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
         // R102: must run BEFORE ShiftChartRowsDown below -- it needs each chart's PRE-delete
         // DataRange to tell whether the deleted band overlaps a Switch-Row/Column chart's plotted
         // series span (see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown).
         _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
         RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
         RowColumnShiftHelpers.ShiftChartRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
-        RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count, deletedTableNames));
         RowColumnShiftHelpers.ShiftAddressBearingRowsDown(ctx.Workbook, sheet, _addressStateSnapshot, _startRow, _count);
 
-        _mergeSnapshot = sheet.MergedRegions.ToList();
         var adjustedMerges = new List<GridRange>();
         foreach (var m in sheet.MergedRegions)
         {
@@ -256,16 +206,10 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         }
         sheet.ReplaceMergedRegions(adjustedMerges);
 
-        _formulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteAllFormulas(
-            ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count, deletedTableNames), _formulaSnapshot);
-        _namedFormulaSnapshot.Clear();
-        _scopedNamedFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count, deletedTableNames), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-        _cfFormulaSnapshot.Clear();
-        _cfThresholdSnapshot.Clear();
-        _dvFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count, deletedTableNames), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        _mutationSnapshot.RewriteReferences(
+            ctx.Workbook,
+            sheet,
+            new DeleteRowsOp(sheet.Name, _startRow, _count, deletedTableNames));
 
         // R92-commands-undo-structural-format-5-1: mirror InsertRowsCommand's RebandTable call
         // (R90-io-table-style-banding-5-3) on the delete side. MoveCellsForDelete above relocates
@@ -281,17 +225,16 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         // PERMANENTLY removes. deletedSnapshot holds every cell that lived inside [_startRow, endRow]
         // (already ClearCell'd above) -- unlike shiftedSnapshot, none of these addresses are ever fed
         // into RelocatedFormulaCellsPendingDependencyRefresh/VacatedAddressesForShiftedFormulaCells
-        // (both shifted-only) or _formulaSnapshot (populated by RewriteAllFormulas, which scans the
+        // (both shifted-only) or the shared formula snapshot (populated by RewriteAllFormulas, which scans the
         // sheet AFTER the deleted band was cleared, so it can never see a formula cell that lived
         // there). Without this, a formula cell inside the deleted band that is never re-occupied by a
         // relocated survivor (e.g. it was the last formula in its column) leaves its stale
         // DependencyGraph precedent/dependent entries in place forever, since
         // WorkbookCellEditService.UpdateFormulaDependencies only ever visits AffectedCells.
-        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _formulaSnapshot)
+        _affectedCells = _mutationSnapshot.BuildAffectedCells(
+            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _mutationSnapshot.FormulaTexts)
                 .Concat(VacatedAddressesForShiftedFormulaCells(_sheetId, shiftedSnapshot))
-                .Concat(deletedSnapshot.Select(s => s.ToAddress(_sheetId))),
-            _formulaSnapshot);
+                .Concat(deletedSnapshot.Select(s => s.ToAddress(_sheetId))));
         return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
@@ -301,7 +244,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     // captured (Row, Col) to (Row - count, Col), always leaving the OLD (pre-delete) address blank
     // afterward -- Delete only ever shifts rows UP, so nothing below endRow can move down into the
     // vacated slot. Neither RelocatedFormulaCellsPendingDependencyRefresh (new-address only) nor
-    // _formulaSnapshot (also new-address only) ever surfaced this OLD address in AffectedCells, so
+    // the shared formula snapshot (also new-address only) ever surfaced this OLD address in AffectedCells, so
     // WorkbookCellEditService.UpdateFormulaDependencies (driven purely off AffectedCells) never
     // purged the stale dependency-graph entry left behind there.
     private static IEnumerable<CellAddress> VacatedAddressesForShiftedFormulaCells(
@@ -320,7 +263,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     // RelocatedFormulaCellsPendingDependencyRefresh fix (InsertDeleteRowsCommand.cs) on the
     // delete-rows side. A relocated formula cell whose text needs no rewrite (its cell references
     // are unaffected by the row shift, e.g. a volatile 0-arg function or a formula referencing a row
-    // outside the shifted band) is never added to _formulaSnapshot by RewriteAllFormulas, so it would
+    // outside the shifted band) is never added to the shared formula snapshot by RewriteAllFormulas, so it would
     // otherwise be absent from AffectedCells and the dependency graph would never re-register it at
     // its new, shifted-up address -- orphaning it so an edit to its precedent never triggers a
     // recalc of the (stale) relocated cell.
@@ -409,19 +352,13 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
             }
         }
 
-        // R96-commands-undo-affected-cells-1: RestoreFormulas below clears _formulaSnapshot as its
+        // R96-commands-undo-affected-cells-1: RestoreFormulas below clears the shared formula snapshot as its
         // last step, so capture its keys (the post-delete addresses of every stationary-or-shifted
         // formula cell whose text was rewritten by Apply) now, before that happens -- needed to
         // recompute _affectedCells at the end of this method.
-        var formulaSnapshotAddressesBeforeRestore = _formulaSnapshot.Keys.ToList();
-
-        RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
-        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
-        // R135-commands-cf-dv-promote-anchor-1: undo the promotion-driven anchor-delta rewrite AFTER
-        // the DeleteRowsOp-driven rewrite above (LIFO -- it was applied to the rule BEFORE that one,
-        // in ShiftRuleRowsDown, so it must be reverted after it here).
-        RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfPromotionFormulaSnapshot, _cfPromotionThresholdSnapshot, _dvPromotionFormulaSnapshot);
+        if (_mutationSnapshot is null) return;
+        var formulaSnapshotAddressesBeforeRestore = _mutationSnapshot.RestoreRewrittenFormulas(ctx.Workbook);
+        _mutationSnapshot.RestoreRulePromotionFormulas(ctx.Workbook);
 
         // R20-array-dynamic-spill-1: mirror MoveCellsForDelete's spill-relocation fix for undo —
         // capture any live spill rooted at the shifted-down address before clearing it back.
@@ -447,32 +384,15 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         foreach (var snapshot in _deletedSnapshot)
             sheet.SetCell(snapshot.ToAddress(sheet.Id), snapshot.ToCell());
 
-        if (_mergeSnapshot is not null)
-            sheet.ReplaceMergedRegions(_mergeSnapshot);
-
         RowColumnShiftHelpers.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.FilterHiddenRows, _filterHiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.ValueFilterHiddenRows, _valueFilterHiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnFilterOwnedRows, _columnFilterOwnedRowsSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
-        RowColumnShiftHelpers.RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
-        RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
-        RowColumnShiftHelpers.RestoreRangeHyperlinks(sheet, _rangeHyperlinkSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
-        // Full-rebuild overload: rules removed during deletion must be re-added here.
-        RowColumnShiftHelpers.RestoreRuleRanges(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
-        RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
-        RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
+        _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: false);
         sheet.SetPrintAreas(_printAreaSnapshot ?? []);
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
-        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
         RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
@@ -489,13 +409,13 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         // always leaving (Row - _count, Col) blank afterward (undo of a Delete only ever shifts rows
         // DOWN, so nothing above can move up into it). That vacated address was never included in
         // AffectedCells either, leaving the identical stale dependency-graph entry behind after Undo.
-        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+        _affectedCells = _mutationSnapshot.BuildAffectedCells(
             RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_shiftedSnapshot, _sheetId)
                 .Concat(RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_deletedSnapshot, _sheetId))
                 .Concat(_tableRebandSnapshot?.Select(f => f.Address) ?? [])
                 .Concat(formulaSnapshotAddressesBeforeRestore)
                 .Concat(VacatedAddressesAfterRevertForShiftedCells(_sheetId, _shiftedSnapshot, _count)),
-            []);
+            includeRewrittenFormulaAddresses: false);
     }
 
     private static IEnumerable<CellAddress> VacatedAddressesAfterRevertForShiftedCells(

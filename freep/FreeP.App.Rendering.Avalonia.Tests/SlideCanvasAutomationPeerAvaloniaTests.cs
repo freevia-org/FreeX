@@ -41,6 +41,7 @@ public sealed class SlideCanvasAutomationPeerAvaloniaTests
         var shapeA = new SlideShape
         {
             Id = 1,
+            Kind = SlideShapeKind.Picture,
             Name = "Title 1",
             AutoShapeKind = DrawingShapeKind.Rectangle,
             OffsetXEmu = 457200,
@@ -51,6 +52,7 @@ public sealed class SlideCanvasAutomationPeerAvaloniaTests
         var shapeB = new SlideShape
         {
             Id = 2,
+            Kind = SlideShapeKind.Table,
             // No Name set -- exercises the AlternativeText fallback.
             AlternativeText = "A decorative circle",
             AutoShapeKind = DrawingShapeKind.Ellipse,
@@ -113,11 +115,18 @@ public sealed class SlideCanvasAutomationPeerAvaloniaTests
             var shapeAItem = shapeAPeer.GetProvider<ISelectionItemProvider>();
             shapeAItem.Should().NotBeNull();
             shapeAItem!.IsSelected.Should().BeFalse();
+            shapeAPeer.GetAutomationId().Should().Be("Shape_1");
+            shapeAPeer.GetClassName().Should().Be("SlideShape");
+            shapeAPeer.GetAutomationControlType().Should().Be(AutomationControlType.Image);
+            System.Action selectFromAutomation = shapeAItem.Select;
+            selectFromAutomation.Should().Throw<InvalidOperationException>()
+                .WithMessage(PresentationCanvasAutomationSession.SelectionMutationNotSupportedMessage);
 
             // Shape B has a blank Name; its announced name must fall back to AlternativeText
             // rather than being blank/unannounced.
             var shapeBPeer = children.Single(c => c.GetName() == shapeB.AlternativeText);
-            shapeBPeer.Should().NotBeNull();
+            shapeBPeer.GetAutomationId().Should().Be("Shape_2");
+            shapeBPeer.GetAutomationControlType().Should().Be(AutomationControlType.DataGrid);
         });
     }
 
@@ -126,28 +135,49 @@ public sealed class SlideCanvasAutomationPeerAvaloniaTests
     {
         await Run(() =>
         {
-            var (canvas, editor, shapeA, _) = BuildCanvas();
+            var (canvas, editor, shapeA, shapeB) = BuildCanvas();
 
             var peer = ControlAutomationPeer.CreatePeerForElement(canvas);
             var children = peer.GetChildren();
             var shapeAPeer = children.Single(c => c.GetName() == shapeA.Name);
+            var shapeBPeer = children.Single(c => c.GetName() == shapeB.AlternativeText);
             var shapeAItem = shapeAPeer.GetProvider<ISelectionItemProvider>();
+            var shapeBItem = shapeBPeer.GetProvider<ISelectionItemProvider>();
             shapeAItem.Should().NotBeNull();
+            shapeBItem.Should().NotBeNull();
+            var liveSelection = editor.SelectedShapeIds;
 
             shapeAItem!.IsSelected.Should().BeFalse();
+            shapeAPeer.HasKeyboardFocus().Should().BeFalse();
 
             // Real production selection path (AvaloniaCanvasGestureHandler click-to-select and
             // the ribbon's Selection Pane both funnel through EditingSession.Select).
             editor.Select(shapeA.Id);
 
+            editor.SelectedShapeIds.Should().BeSameAs(liveSelection);
             shapeAItem.IsSelected.Should().BeTrue();
+            shapeAPeer.HasKeyboardFocus().Should().BeTrue();
 
             var selectionProvider = peer.GetProvider<ISelectionProvider>();
             selectionProvider!.GetSelection().Should().ContainSingle();
 
+            // The same selected-id list is mutated before SelectionChanged is raised. The
+            // renderer must consume the detached shared snapshot and its single-focus policy.
+            editor.Select(shapeB.Id, addToSelection: true);
+
+            editor.SelectedShapeIds.Should().BeSameAs(liveSelection);
+            shapeAItem.IsSelected.Should().BeTrue();
+            shapeAPeer.HasKeyboardFocus().Should().BeFalse();
+            shapeBItem!.IsSelected.Should().BeTrue();
+            shapeBPeer.HasKeyboardFocus().Should().BeTrue();
+            selectionProvider.GetSelection().Should().HaveCount(2);
+
             editor.ClearSelection();
 
             shapeAItem.IsSelected.Should().BeFalse();
+            shapeAPeer.HasKeyboardFocus().Should().BeFalse();
+            shapeBItem.IsSelected.Should().BeFalse();
+            shapeBPeer.HasKeyboardFocus().Should().BeFalse();
             selectionProvider.GetSelection().Should().BeEmpty();
         });
     }

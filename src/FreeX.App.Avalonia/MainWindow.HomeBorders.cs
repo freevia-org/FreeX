@@ -24,14 +24,4 @@ public sealed partial class MainWindow
         commands["Dotted"] = () => _borderPickerStyle = BorderStyle.Dotted;
         commands["Double"] = () => _borderPickerStyle = BorderStyle.Double;
     }
-
-    internal IReadOnlyDictionary<string, Action> BuildHomeBorderRibbonActionsForTest()
-    {
-        var commands = new Dictionary<string, Action>(StringComparer.Ordinal);
-        RegisterHomeBorderRibbonActions(commands);
-        return commands;
-    }
-
-    internal void ApplySelectedRangeBorderPresetForTest(CellBorderPreset preset) =>
-        ApplySelectedRangeBorderPreset(preset);
 }

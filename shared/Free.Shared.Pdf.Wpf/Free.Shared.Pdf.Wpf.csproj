@@ -20,10 +20,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Free.Shared.Pdf.Wpf.Tests" />
-    <InternalsVisibleTo Include="FreeX.App.Host" />
-    <InternalsVisibleTo Include="FreeX.App.Host.Tests" />
-    <InternalsVisibleTo Include="FreeW.App.Host" />
-    <InternalsVisibleTo Include="FreeW.App.Host.Tests" />
   </ItemGroup>
 
 </Project>

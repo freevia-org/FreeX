@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
@@ -108,6 +109,62 @@ public sealed class BackstageVisualContractTests
             frame.CurrentPaneLabel.Should().Be("Info");
             nav.Background.Should().BeOfType<SolidColorBrush>().Which.Color.Should().Be(Colors.Blue);
             frame.HandleKey(Key.Escape).Should().BeTrue();
+            frame.IsOpen.Should().BeFalse();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Avalonia_backstage_frame_projects_entry_metadata_and_owns_activation_dismissal()
+    {
+        await Session.Dispatch(() =>
+        {
+            AvaloniaBackstageFrame? frame = null;
+            var commandObservedDismissedFrame = false;
+            var info = SisterBackstageEntryPlan<Control>.Pane(
+                "Localized info",
+                BackstageIconKind.Info,
+                () => new Border()) with
+            {
+                StableId = "pane.info",
+                KeyTip = "I",
+                AutomationId = "InfoAutomationId",
+                AutomationName = "Workbook information",
+                AutomationHelpText = "Inspect workbook properties.",
+                TooltipTitle = "Info",
+                TooltipDescription = "Inspect this workbook.",
+            };
+            var save = SisterBackstageEntryPlan<Control>.Command(
+                "Localized save",
+                BackstageIconKind.Save,
+                () => commandObservedDismissedFrame = !frame!.IsOpen) with
+            {
+                StableId = "command.save",
+                AutomationId = "SaveAutomationId",
+            };
+
+            frame = new AvaloniaBackstageFrame(
+                new AvaloniaBackstageAccent(Colors.Black, Colors.Gray, Colors.Blue, Colors.White),
+                [info, save]);
+
+            frame.Show("pane.info");
+            frame.CurrentEntryId.Should().Be("pane.info");
+            frame.CurrentPaneLabel.Should().Be("Localized info");
+            frame.Entries.Single(entry => entry.StableId == "pane.info").KeyTip.Should().Be("I");
+
+            var infoButton = frame.GetEntryButton("pane.info")!;
+            AutomationProperties.GetAutomationId(infoButton).Should().Be("InfoAutomationId");
+            AutomationProperties.GetName(infoButton).Should().Be("Workbook information");
+            AutomationProperties.GetHelpText(infoButton).Should().Be("Inspect workbook properties.");
+            ToolTip.GetTip(infoButton).Should().Be("Info\nInspect this workbook.");
+
+            var saveButton = frame.GetEntryButton("SaveAutomationId")!;
+            saveButton.IsEnabled = false;
+            frame.TryActivateEntry("command.save").Should().BeFalse();
+            frame.IsOpen.Should().BeTrue();
+
+            saveButton.IsEnabled = true;
+            frame.TryActivateEntry("command.save").Should().BeTrue();
+            commandObservedDismissedFrame.Should().BeTrue();
             frame.IsOpen.Should().BeFalse();
         }, CancellationToken.None);
     }

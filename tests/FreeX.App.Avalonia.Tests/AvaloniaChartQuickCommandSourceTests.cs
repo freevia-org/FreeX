@@ -10,6 +10,12 @@ public sealed class AvaloniaChartQuickCommandSourceTests
     public void ChartFormatTextTabQuickCommands_UseSharedCatalogAndPlanner()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatTextTabs.cs"));
+        var workflowSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "Charts",
+            "Editing",
+            "ChartCommandWorkflowPlanner.cs"));
 
         source.Should().Contain("ChartQuickCommandCatalog.ComboSeries");
         source.Should().Contain("ChartQuickCommandCatalog.ChartTitleColor");
@@ -18,8 +24,11 @@ public sealed class AvaloniaChartQuickCommandSourceTests
         source.Should().Contain("ChartQuickCommandCatalog.SeriesMarkerSize");
         source.Should().Contain("ChartQuickCommandCatalog.SecondaryAxisSeries");
         source.Should().Contain("private void ExecuteChartQuickCommand(");
-        source.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
-        source.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
+        source.Should().Contain("ChartCommandWorkflowPlanner.PlanQuickCommand(");
+        source.Should().NotContain("ChartQuickCommandPlanner.CanApply(");
+        source.Should().NotContain("ChartQuickCommandPlanner.Plan(");
+        workflowSource.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
+        workflowSource.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
         source.Should().Contain("ChartWorkflowUnsupportedStatus(ChartWorkflowCommandCatalog.ComboChart)");
         source.Should().Contain("ChartWorkflowUnsupportedStatus(ChartWorkflowCommandCatalog.FormatDataSeries)");
         source.Should().Contain("ChartQuickUnsupportedStatus(command)");
@@ -41,8 +50,8 @@ public sealed class AvaloniaChartQuickCommandSourceTests
         var contextualSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"));
         var quickSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatTextTabs.cs"));
 
-        contextualSource.Should().Contain("[\"chartDesign.comboChart\"] = CycleChartCombo");
-        contextualSource.Should().NotContain("[\"chartDesign.comboChart\"] = () => RunGuarded(ShowChartComboDialog)");
+        contextualSource.Should().Contain("[\"Combo Chart\"] = CycleChartCombo");
+        contextualSource.Should().NotContain("[\"Combo Chart\"] = () => RunGuarded(ShowChartComboDialog)");
         quickSource.Should().Contain("private void CycleChartCombo()");
         quickSource.Should().Contain("ChartQuickCommandCatalog.ComboToggle");
     }
@@ -52,9 +61,9 @@ public sealed class AvaloniaChartQuickCommandSourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"));
 
-        source.Should().Contain("[\"chartFormat.seriesColor\"] = () => RunGuarded(ShowChartSeriesFormatDialog)");
-        source.Should().Contain("[\"chartFormat.seriesWidth\"] = () => RunGuarded(ShowChartSeriesFormatDialog)");
-        source.Should().NotContain("[\"chartFormat.seriesColor\"] = () => RunGuarded(ShowChartSeriesColorDialog)");
+        source.Should().Contain("[\"Series Color\"] = () => RunGuarded(ShowChartSeriesFormatDialog)");
+        source.Should().Contain("[\"Series Width\"] = () => RunGuarded(ShowChartSeriesFormatDialog)");
+        source.Should().NotContain("[\"Series Color\"] = () => RunGuarded(ShowChartSeriesColorDialog)");
         source.Should().Contain("ChartSeriesFormatPlanner");
     }
 
@@ -63,24 +72,16 @@ public sealed class AvaloniaChartQuickCommandSourceTests
     {
         var contextualSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"));
         var quickSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatTextTabs.cs"));
-        var adapterSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaCommandIdAdapter.cs"));
+        var definitionSource = File.ReadAllText(RepoFile(
+            "src", "FreeX.Ribbon.Definitions", "FreeXRibbonDefinition.cs"));
 
-        contextualSource.Should().Contain("[\"chartDesign.secondaryAxisSeries\"] = CycleChartSecondaryAxisSeries");
+        contextualSource.Should().Contain("[\"Secondary Axis Series\"] = CycleChartSecondaryAxisSeries");
         quickSource.Should().Contain("private void CycleChartSecondaryAxisSeries()");
         quickSource.Should().Contain("ChartQuickCommandCatalog.SecondaryAxisSeries");
         quickSource.Should().Contain("MainWindowMessage_ChartSecondaryAxisUnsupported");
-        adapterSource.Should().Contain("[\"chartDesign.secondaryAxisSeries\"] = \"Secondary Axis Series\"");
+        definitionSource.Should().Contain(".Medium(\"Secondary Axis Series\", \"Secondary Axis Series\"");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

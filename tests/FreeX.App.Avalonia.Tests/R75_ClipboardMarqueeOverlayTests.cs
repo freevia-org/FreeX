@@ -240,7 +240,7 @@ public sealed class R75_ClipboardMarqueeOverlayTests
         var source = MainWindowSource();
         const string escapeClipboardGuard =
             "if (e.Key == Key.Escape &&\n" +
-            "                (_clipboardMarqueeRange is not null || _internalObjectClipboard is not null))";
+            "                (_clipboardMarqueeRange is not null || _drawingObjectClipboard.HasContent))";
 
         source.Should().Contain(
             escapeClipboardGuard,
@@ -250,7 +250,7 @@ public sealed class R75_ClipboardMarqueeOverlayTests
         var guardIndex = source.IndexOf(escapeClipboardGuard, StringComparison.Ordinal);
         var body = source.Substring(guardIndex, 300);
         body.Should().Contain("SetClipboardMarquee(null, isCut: false);");
-        body.Should().Contain("_internalObjectClipboard = null;");
+        body.Should().Contain("_drawingObjectClipboard.Clear();");
     }
 
     [Fact]
@@ -265,7 +265,7 @@ public sealed class R75_ClipboardMarqueeOverlayTests
             "source range the user has since overwritten");
 
         var commitAcrossSelectionBody = ExtractMethodBody(
-            source, "private bool CommitEditAcrossSelection(CellAddress current, string text)");
+            source, "private bool CommitEditAcrossSelection(string text)");
         commitAcrossSelectionBody.Should().Contain("SetClipboardMarquee(null, isCut: false);",
             "the Ctrl+Enter fill-selection commit path must cancel the marquee identically to the single-cell commit");
     }
@@ -326,15 +326,6 @@ public sealed class R75_ClipboardMarqueeOverlayTests
         File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

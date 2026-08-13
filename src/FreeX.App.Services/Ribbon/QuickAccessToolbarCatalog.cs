@@ -1,3 +1,4 @@
+using System.Globalization;
 using Free.Shared.Ribbon;
 
 namespace FreeX.App.Services.Ribbon;
@@ -133,6 +134,18 @@ public static class QuickAccessToolbarCatalog
 
     public static IReadOnlyList<string> NormalizeCommandIds(IEnumerable<string>? commandIds) =>
         Normalize(commandIds).Select(command => command.Id).ToList();
+
+    public static string FormatKeyTip(int visibleIndex)
+    {
+        if (visibleIndex <= 9)
+            return visibleIndex.ToString(CultureInfo.InvariantCulture);
+
+        var offset = visibleIndex - 9;
+        const string extraKeyTipCharacters = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        return offset <= extraKeyTipCharacters.Length
+            ? $"0{extraKeyTipCharacters[offset - 1]}"
+            : visibleIndex.ToString(CultureInfo.InvariantCulture);
+    }
 
     public static bool TryGet(string id, out QuickAccessToolbarCommandDefinition definition) =>
         ById.TryGetValue(id, out definition!);

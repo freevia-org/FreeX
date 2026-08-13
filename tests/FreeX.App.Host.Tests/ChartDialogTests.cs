@@ -12,10 +12,12 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class ChartDialogTests
 {
+    private static readonly ResourceKeyTextResolver ChartTextResolver = new(UiText.Get, UiText.Format);
+
     [Fact]
     public void ChartTypePickerPlanner_ReturnsOnlyRenderableChartTypesWithFriendlyLabels()
     {
-        var options = ChartTypePickerPlanner.GetSupportedOptions();
+        var options = ChartTypePickerPlanner.GetSupportedOptions(ChartTextResolver);
 
         options.Select(option => option.Type).Should().ContainInOrder(
             ChartType.Column,
@@ -58,7 +60,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartTypePickerPlanner_RecommendsDefaultChartTypes()
     {
-        var recommendations = ChartTypePickerPlanner.GetRecommendedOptions();
+        var recommendations = ChartTypePickerPlanner.GetRecommendedOptions(ChartTextResolver);
 
         recommendations.Select(option => option.Type).Should().ContainInOrder(
             ChartType.Column,
@@ -72,7 +74,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartTypePickerPlanner_GroupsRenderableTypesIntoExcelCategories()
     {
-        var categories = ChartTypePickerPlanner.GetCategories();
+        var categories = ChartTypePickerPlanner.GetCategories(ChartTextResolver);
 
         categories.Select(category => category.Name).Should().ContainInOrder(
             "Column",
@@ -127,7 +129,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartTypePickerPlanner_BuildsSubtypeGalleryChoicesWithPreviewText()
     {
-        var choices = ChartTypePickerPlanner.GetGalleryChoices("Bar");
+        var choices = ChartTypePickerPlanner.GetGalleryChoices("Bar", ChartTextResolver);
 
         choices.Select(choice => choice.SubtypeName).Should().ContainInOrder(
             "Clustered Bar",
@@ -140,9 +142,9 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartTypePickerPlanner_BuildsAdvancedFamilyGalleryChoices()
     {
-        var histogramChoices = ChartTypePickerPlanner.GetGalleryChoices("Histogram");
-        var waterfallChoices = ChartTypePickerPlanner.GetGalleryChoices("Waterfall");
-        var funnelChoices = ChartTypePickerPlanner.GetGalleryChoices("Funnel");
+        var histogramChoices = ChartTypePickerPlanner.GetGalleryChoices("Histogram", ChartTextResolver);
+        var waterfallChoices = ChartTypePickerPlanner.GetGalleryChoices("Waterfall", ChartTextResolver);
+        var funnelChoices = ChartTypePickerPlanner.GetGalleryChoices("Funnel", ChartTextResolver);
 
         histogramChoices.Select(choice => choice.Type).Should().ContainInOrder(
             ChartType.Histogram,
@@ -155,25 +157,23 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void ChartTypePickerPlanner_DelegatesCatalogToPresentationAndKeepsHostLocalized()
+    public void ChartTypePickerPlanner_OwnsLocalizedDisplayProjectionInPresentation()
     {
-        var hostSource = DialogSourceTestSupport.ReadHostSourceFile("ChartTypeDialogs.Planner.cs");
+        var hostPlannerPath = Path.Combine(
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            "src",
+            "FreeX.App.Host",
+            "ChartTypeDialogs.Planner.cs");
+        var hostSource = ReadChartTypeDialogSource();
         var sharedSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartTypePickerPlanner.cs");
 
-        hostSource.Should().Contain("PresentationChartTypePickerPlanner.GetSupportedOptions()");
-        hostSource.Should().Contain("PresentationChartTypePickerPlanner.GetCategories()");
-        hostSource.Should().Contain("PresentationChartTypePickerPlanner.GetRecommendedOptions()");
-        hostSource.Should().Contain("PresentationChartTypePickerPlanner.GetRecommendedGalleryChoices()");
-        hostSource.Should().Contain("PresentationChartTypePickerPlanner.GetGalleryChoices(category.NameKey)");
-        hostSource.Should().Contain("UiText.Get(plan.DisplayNameKey)");
-        hostSource.Should().Contain("UiText.Get(plan.CategoryNameKey)");
-        hostSource.Should().Contain("UiText.Format(plan.PreviewTextFormatKey, subtypeName)");
-        hostSource.Should().NotContain("ChartTypeChangePlanner.GetSupportedChoices()");
-        hostSource.Should().NotContain("ChartTypeChangePlanner.GetCategories()");
-        hostSource.Should().NotContain("ChartTypeChangePlanner.GetRecommendedTypes()");
-        hostSource.Should().NotContain("new(ChartType.Column, UiText.Get(\"ChartType_ClusteredColumn\")");
+        File.Exists(hostPlannerPath).Should().BeFalse();
+        hostSource.Should().Contain("WpfResourceKeyTextResolver.Instance");
         sharedSource.Should().Contain("public sealed record ChartTypePickerOptionPlan");
+        sharedSource.Should().Contain("public sealed record ChartTypePickerOption");
         sharedSource.Should().Contain("public static IReadOnlyList<ChartTypeGalleryChoicePlan> GetGalleryChoices");
+        sharedSource.Should().Contain("ResourceKeyTextResolver text");
+        sharedSource.Should().Contain("text.Format(choice.PreviewTextFormatKey, subtypeName)");
         sharedSource.Should().Contain("PreviewTextFormatKey");
     }
 

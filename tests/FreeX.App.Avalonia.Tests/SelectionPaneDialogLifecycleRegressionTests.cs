@@ -12,12 +12,9 @@ public sealed class SelectionPaneDialogLifecycleRegressionTests
     [Fact]
     public async Task SelectionPaneDialog_MatchesWpfFocusTabAndEscapeLifecycle()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-selection-pane-lifecycle-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-selection-pane-lifecycle-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -61,18 +58,6 @@ public sealed class SelectionPaneDialogLifecycleRegressionTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Temp cleanup must not hide the dialog lifecycle regression.
-            }
         }
     }
 }

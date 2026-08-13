@@ -5,13 +5,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
 
-file sealed class TestCommandContext(Workbook workbook) : ICommandContext
-{
-    public Workbook Workbook { get; } = workbook;
-    public Sheet GetSheet(SheetId sheetId) =>
-        Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
-}
-
 /// <summary>
 /// Behavioral tests for the form-control interaction logic wired into the Avalonia shell:
 /// tests that the shared <see cref="FormControlInteractionService"/> produces the expected
@@ -175,19 +168,4 @@ public sealed class FormControlVisualClickTests
         sheet.GetCell(addr)!.Value.Should().Be(new NumberValue(4));
     }
 
-    // ── FormControlClickKind classification ──────────────────────────────────
-
-    [Fact]
-    public void FormControlClickKind_Body_IsDefaultForCheckBox()
-    {
-        // Smoke-test that the enum value round-trips correctly
-        var kind = FormControlClickKind.Body;
-        kind.Should().Be(FormControlClickKind.Body);
-    }
-
-    [Fact]
-    public void FormControlClickKind_StepUp_IsDistinctFromStepDown()
-    {
-        FormControlClickKind.StepUp.Should().NotBe(FormControlClickKind.StepDown);
-    }
 }

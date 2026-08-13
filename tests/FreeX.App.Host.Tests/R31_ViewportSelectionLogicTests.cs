@@ -31,13 +31,13 @@ public sealed class R31_ViewportSelectionLogicTests
         StaTestRunner.Run(() =>
         {
             using var harness = ViewportSelectionHarness.Create();
-            harness.Sheet.FrozenRows = 2;
+            harness.SetFreezePanes(2, 0);
             harness.SelectActiveCell(5, 1);
             harness.RefreshViewport();
 
             var viewport = harness.Viewport;
             var totalRowMetricsCount = viewport.RowMetrics.Count;
-            var scrollableRowCount = viewport.RowMetrics.Count(r => r.Row > harness.Sheet.FrozenRows);
+            var scrollableRowCount = viewport.RowMetrics.Count(r => r.Row > harness.FrozenRows);
 
             // Sanity check: the combined RowMetrics list really does include the frozen rows
             // alongside the scrollable body rows, otherwise this test can't distinguish the bug
@@ -65,12 +65,12 @@ public sealed class R31_ViewportSelectionLogicTests
         StaTestRunner.Run(() =>
         {
             using var harness = ViewportSelectionHarness.Create();
-            harness.Sheet.FrozenRows = 0;
+            harness.SetFreezePanes(0, 0);
             harness.SelectActiveCell(5, 1);
             harness.RefreshViewport();
 
             var viewport = harness.Viewport;
-            var scrollableRowCount = viewport.RowMetrics.Count(r => r.Row > harness.Sheet.FrozenRows);
+            var scrollableRowCount = viewport.RowMetrics.Count(r => r.Row > harness.FrozenRows);
             scrollableRowCount.Should().Be(viewport.RowMetrics.Count);
 
             harness.PressKey(Key.PageDown);
@@ -161,8 +161,8 @@ public sealed class R31_ViewportSelectionLogicTests
         private readonly MethodInfo _setActiveCell;
         private readonly MethodInfo _mainWindowKeyDown;
         private readonly MethodInfo _updateViewport;
+        private readonly MethodInfo _setFreezePanes;
         private readonly FieldInfo _selectionAnchorField;
-        private readonly FieldInfo _workbookField;
 
         private ViewportSelectionHarness(MainWindow window)
         {
@@ -176,24 +176,24 @@ public sealed class R31_ViewportSelectionLogicTests
             _updateViewport = typeof(MainWindow)
                 .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
+            _setFreezePanes = typeof(MainWindow)
+                .GetMethod("SetFreezePanes", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SetFreezePanes");
             _selectionAnchorField = typeof(MainWindow)
                 .GetField("_selectionAnchorField", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_selectionAnchorField");
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
         }
 
         // MainWindow_Loaded unconditionally calls CreateNewWorkbook() (unless adopting a shared
         // document via a WorkbookWindowRegistry, which this harness doesn't provide), replacing
         // whatever workbook was passed into the constructor. So the live workbook/sheet must be
-        // read fresh via reflection AFTER Show()/Loaded has run, never captured beforehand.
-        private Workbook LiveWorkbook =>
-            (Workbook)(_workbookField.GetValue(_window)
-                ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
+        // read fresh from the session AFTER Show()/Loaded has run, never captured beforehand.
+        private Workbook LiveWorkbook => _window.Session.Workbook;
 
         public Sheet Sheet => LiveWorkbook.Sheets[0];
         public SheetId SheetId => Sheet.Id;
+
+        public uint FrozenRows => _window.Session.GetEffectiveFrozenRows();
 
         private SheetGridView Grid => (SheetGridView)_window.FindName("SheetGrid");
 
@@ -223,6 +223,12 @@ public sealed class R31_ViewportSelectionLogicTests
         public void RefreshViewport()
         {
             _updateViewport.Invoke(_window, []);
+            PumpDispatcher();
+        }
+
+        public void SetFreezePanes(uint frozenRows, uint frozenColumns)
+        {
+            _setFreezePanes.Invoke(_window, [frozenRows, frozenColumns]);
             PumpDispatcher();
         }
 

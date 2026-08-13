@@ -1,26 +1,9 @@
 using FluentAssertions;
-using Free.Shared.AppServices;
 
 namespace FreeX.App.Host.Tests;
 
 public sealed class SisterAppFrameContractAdoptionTests
 {
-    [Fact]
-    public void ClientFrameContract_DescribesSharedChromeWorkareaAndStatusSlots()
-    {
-        var contract = SisterAppClientFrameContractPlanner.Plan(
-            topPanelsBelowChrome: 2,
-            bottomPanelsAboveStatus: 1);
-
-        contract.Slots.Should().Equal(
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.Chrome, 0),
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.TopPanelBelowChrome, 0),
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.TopPanelBelowChrome, 1),
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.WorkArea, 0),
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.BottomPanelAboveStatus, 0),
-            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.StatusBar, 0));
-    }
-
     [Fact]
     public void FreeXWpfMainWindow_AppliesSharedClientFrameContractToExistingWorkbookRows()
     {
@@ -44,24 +27,4 @@ public sealed class SisterAppFrameContractAdoptionTests
         shellSource.Should().NotContain("SisterAppStatusBarChrome.Build(");
     }
 
-    [Theory]
-    [InlineData("src", "FreeX.App.Avalonia", "MainWindow.cs", "SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(", "WorkArea:", "StatusBar:")]
-    [InlineData("freew", "FreeW.App.Host", "MainWindow.cs", "SisterAppClientFrameBuilder.Build(", "WorkArea:", "StatusBar:")]
-    [InlineData("freew", "FreeW.App.Avalonia", "MainWindow.cs", "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(", "workArea:", "statusBar:")]
-    [InlineData("freep", "FreeP.App.Host", "MainWindow.cs", "SisterAppClientFrameBuilder.Build(", "WorkArea:", "StatusBar:")]
-    [InlineData("freep", "FreeP.App.Avalonia", "MainWindow.cs", "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(", "workArea:", "statusBar:")]
-    public void SisterAppMainWindows_UseSharedClientFrameBuilders(
-        string appRoot,
-        string appProject,
-        string fileName,
-        string expectedBuilder,
-        string expectedWorkAreaToken,
-        string expectedStatusBarToken)
-    {
-        var source = WorkspaceFileLocator.ReadAllText(appRoot, appProject, fileName);
-
-        source.Should().Contain(expectedBuilder);
-        source.Should().Contain(expectedWorkAreaToken);
-        source.Should().Contain(expectedStatusBarToken);
-    }
 }

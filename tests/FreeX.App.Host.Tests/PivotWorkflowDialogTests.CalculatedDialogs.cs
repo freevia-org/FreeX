@@ -7,6 +7,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Model;
+using PivotCalculatedFieldResult = FreeX.App.Presentation.PivotUI.PivotCalculatedFieldPlanner.PivotCalculatedFieldResult;
+using PivotCalculatedItemResult = FreeX.App.Presentation.PivotUI.PivotCalculatedItemPlanner.PivotCalculatedItemResult;
 
 namespace FreeX.App.Host.Tests;
 
@@ -17,7 +19,7 @@ public sealed partial class PivotWorkflowDialogTests
     {
         var result = PivotCalculatedFieldDialog.CreateResult("  Revenue  ", "  Sales-Cost  ");
 
-        result.Should().Be(new PivotCalculatedFieldDialogResult("Revenue", "Sales-Cost"));
+        result.Should().Be(new PivotCalculatedFieldResult("Revenue", "Sales-Cost"));
         result.ToModel().Should().Be(new PivotCalculatedFieldModel("Revenue", "Sales-Cost"));
     }
 
@@ -65,11 +67,13 @@ public sealed partial class PivotWorkflowDialogTests
         var source = ReadClassSource(
             "PivotCalculatedDialogs.cs",
             "public sealed class PivotCalculatedFieldDialog",
-            "public sealed record PivotCalculatedItemDialogResult");
+            "public sealed class PivotCalculatedItemDialog");
 
-        source.Should().Contain("if (!ValidateInputs())");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotCalculated_EnterCalculatedFieldName\"), _nameBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotCalculated_EnterCalculatedFieldFormula\"), _formulaBox);");
+        source.Should().Contain("PivotCalculatedFieldSession.CreateDraft(");
+        source.Should().Contain("EmptyNameMessage = UiText.Get(\"PivotCalculated_EnterCalculatedFieldName\")");
+        source.Should().Contain("EmptyFormulaMessage = UiText.Get(\"PivotCalculated_EnterCalculatedFieldFormula\")");
+        source.Should().Contain("var plan = _session.PlanSave(");
+        source.Should().Contain("issue.Target == PivotCalculatedInputTarget.Formula ? _formulaBox : _nameBox");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
@@ -106,12 +110,11 @@ public sealed partial class PivotWorkflowDialogTests
     public void PivotCalculatedItemDialog_CreateResult_TrimsClampsAndBuildsModel()
     {
         var result = PivotCalculatedItemDialog.CreateResult(
-            "  Region  ",
             sourceFieldIndex: -8,
             "  East + West  ",
             "  East+West  ");
 
-        result.Should().Be(new PivotCalculatedItemDialogResult("Region", 0, "East + West", "East+West"));
+        result.Should().Be(new PivotCalculatedItemResult(0, "East + West", "East+West"));
         result.ToModel().Should().Be(new PivotCalculatedItemModel(0, "East + West", "East+West"));
     }
 
@@ -154,9 +157,11 @@ public sealed partial class PivotWorkflowDialogTests
             "public sealed class PivotCalculatedItemDialog",
             "");
 
-        source.Should().Contain("if (!ValidateInputs())");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotCalculated_EnterCalculatedItemName\"), _nameBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotCalculated_EnterCalculatedItemFormula\"), _formulaBox);");
+        source.Should().Contain("PivotCalculatedItemSession.CreateDraft(");
+        source.Should().Contain("EmptyNameMessage = UiText.Get(\"PivotCalculated_EnterCalculatedItemName\")");
+        source.Should().Contain("EmptyFormulaMessage = UiText.Get(\"PivotCalculated_EnterCalculatedItemFormula\")");
+        source.Should().Contain("var plan = _session.PlanSave(");
+        source.Should().Contain("issue.Target == PivotCalculatedInputTarget.Formula ? _formulaBox : _nameBox");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 

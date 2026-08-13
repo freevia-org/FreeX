@@ -1,3 +1,6 @@
+using Free.Shared.AppServices;
+using Free.Shared.Opc;
+
 namespace FreeP.App.Media;
 
 public enum MediaPlaybackState
@@ -101,7 +104,7 @@ public interface IMediaPlaybackSourceStore
 
 public sealed class TempMediaPlaybackSourceStore : IMediaPlaybackSourceStore
 {
-    private readonly HashSet<string> _ownedPaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, TemporaryFileLease> _ownedFiles = new(StringComparer.OrdinalIgnoreCase);
 
     public Uri Materialize(MediaPlaybackSource source)
     {
@@ -112,57 +115,37 @@ public sealed class TempMediaPlaybackSourceStore : IMediaPlaybackSourceStore
         if (source.EmbeddedBytes is not { Length: > 0 })
             throw new InvalidOperationException("Media playback source has neither a URI nor embedded bytes.");
 
-        var extension = MediaContentTypeExtensions.GetExtension(source.ContentType);
-        var path = Path.Combine(Path.GetTempPath(), $"freep_playback_{Guid.NewGuid():N}{extension}");
-        File.WriteAllBytes(path, source.EmbeddedBytes);
-        _ownedPaths.Add(path);
-        return new Uri(path, UriKind.Absolute);
+        var extension = OpcMediaTypes.GetMediaFileExtension(
+            source.ContentType,
+            OpcMediaExtensionProfile.TemporaryPlaybackMaterialization,
+            includeDot: true);
+        var temporaryFile = TemporaryFileLease.Create("freep_playback_", extension);
+        try
+        {
+            temporaryFile.WriteAllBytes(source.EmbeddedBytes);
+            _ownedFiles.Add(temporaryFile.Path, temporaryFile);
+            return new Uri(temporaryFile.Path, UriKind.Absolute);
+        }
+        catch
+        {
+            temporaryFile.Release();
+            throw;
+        }
     }
 
     public void Release(Uri uri)
     {
-        if (!uri.IsFile || !_ownedPaths.Remove(uri.LocalPath))
+        if (!uri.IsFile || !_ownedFiles.Remove(uri.LocalPath, out var temporaryFile))
             return;
 
-        try
-        {
-            File.Delete(uri.LocalPath);
-        }
-        catch (IOException)
-        {
-            // The native engine can hold a file briefly after Stop; cleanup is best effort.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // The native engine can hold a file briefly after Stop; cleanup is best effort.
-        }
+        temporaryFile.Release();
     }
 
     public void ReleaseAll()
     {
-        foreach (var path in _ownedPaths.ToArray())
+        foreach (var path in _ownedFiles.Keys.ToArray())
             Release(new Uri(path, UriKind.Absolute));
     }
-}
-
-public static class MediaContentTypeExtensions
-{
-    public static string GetExtension(string? contentType) =>
-        contentType?.Trim().ToLowerInvariant() switch
-        {
-            "video/mp4" => ".mp4",
-            "video/mpeg" => ".mpg",
-            "video/avi" or "video/x-msvideo" => ".avi",
-            "video/quicktime" => ".mov",
-            "video/webm" => ".webm",
-            "audio/mpeg" or "audio/mp3" => ".mp3",
-            "audio/wav" or "audio/x-wav" => ".wav",
-            "audio/ogg" => ".ogg",
-            "audio/aac" => ".aac",
-            "audio/flac" => ".flac",
-            "audio/x-ms-wma" => ".wma",
-            _ => ".bin",
-        };
 }
 
 public interface IMediaPlaybackSession : IDisposable

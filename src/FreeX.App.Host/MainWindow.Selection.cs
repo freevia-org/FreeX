@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using FreeX.App.Presentation;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Services;
@@ -17,7 +16,7 @@ public partial class MainWindow
 {
     private void SelectRow(uint row)
     {
-        var range = CreateWholeRowRange(_currentSheetId, row);
+        var range = GridSelectionNavigationPlanner.CreateWholeRowsRange(_currentSheetId, row, row);
         if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
             return;
 
@@ -44,7 +43,7 @@ public partial class MainWindow
 
     private void SelectColumn(uint col)
     {
-        var range = CreateWholeColumnRange(_currentSheetId, col);
+        var range = GridSelectionNavigationPlanner.CreateWholeColumnsRange(_currentSheetId, col, col);
         if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
             return;
 
@@ -70,11 +69,11 @@ public partial class MainWindow
     // Connections"-style multi-area header selection), not wipe the existing selection down to
     // just this column the way a plain click does (R49-render-multiarea-selection-3-2).
     //
-    // Header Ctrl+click has no analogous continuation through this method; it always asks the shared
-    // selection-area planner to append a fresh area. Header dragging remains in ExtendHeaderSelection.
+    // Header Ctrl+click always starts a new disjoint area; header drag continuation is handled by
+    // ExtendHeaderSelection, so this route uses the shared planner's append-only operation.
     private void AddAdditionalColumnSelection(uint col)
     {
-        var range = CreateWholeColumnRange(_currentSheetId, col);
+        var range = GridSelectionNavigationPlanner.CreateWholeColumnsRange(_currentSheetId, col, col);
         if (TryAppendDisjointFormulaRangeReference(range))
             return;
 
@@ -86,11 +85,10 @@ public partial class MainWindow
         // The newly Ctrl-clicked area must also fully absorb any merge it only partially spans,
         // same as the plain-click path (R99-render-header-select-merge-expand).
         var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
-        var ranges = SelectionAreaPlanner.AppendOrReplaceActiveArea(
+        var ranges = GridSelectionNavigationPlanner.AppendDisjointSelectionArea(
             SheetGrid.SelectedRanges,
             SheetGrid.SelectedRange,
-            expandedRange,
-            startNewArea: true);
+            expandedRange);
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SetSelectedRangesIfChanged(ranges);
@@ -108,7 +106,7 @@ public partial class MainWindow
     // Row-header counterpart of AddAdditionalColumnSelection (R49-render-multiarea-selection-3-2).
     private void AddAdditionalRowSelection(uint row)
     {
-        var range = CreateWholeRowRange(_currentSheetId, row);
+        var range = GridSelectionNavigationPlanner.CreateWholeRowsRange(_currentSheetId, row, row);
         if (TryAppendDisjointFormulaRangeReference(range))
             return;
 
@@ -120,11 +118,10 @@ public partial class MainWindow
         // Row counterpart of AddAdditionalColumnSelection's expansion above
         // (R99-render-header-select-merge-expand).
         var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
-        var ranges = SelectionAreaPlanner.AppendOrReplaceActiveArea(
+        var ranges = GridSelectionNavigationPlanner.AppendDisjointSelectionArea(
             SheetGrid.SelectedRanges,
             SheetGrid.SelectedRange,
-            expandedRange,
-            startNewArea: true);
+            expandedRange);
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SetSelectedRangesIfChanged(ranges);
@@ -141,7 +138,7 @@ public partial class MainWindow
 
     private void SelectAll()
     {
-        var range = CreateWholeGridRange(_currentSheetId);
+        var range = GridSelectionNavigationPlanner.CreateWholeGridRange(_currentSheetId);
         if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
             return;
 
@@ -157,21 +154,6 @@ public partial class MainWindow
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
     }
-
-    private static GridRange CreateWholeRowRange(SheetId sheetId, uint row) =>
-        new(
-            new CellAddress(sheetId, row, 1),
-            new CellAddress(sheetId, row, CellAddress.MaxCol));
-
-    private static GridRange CreateWholeColumnRange(SheetId sheetId, uint col) =>
-        new(
-            new CellAddress(sheetId, 1, col),
-            new CellAddress(sheetId, CellAddress.MaxRow, col));
-
-    private static GridRange CreateWholeGridRange(SheetId sheetId) =>
-        new(
-            new CellAddress(sheetId, 1, 1),
-            new CellAddress(sheetId, CellAddress.MaxRow, CellAddress.MaxCol));
 
     // Ctrl+click during in-formula point-mode reference entry must append a NEW, comma-separated
     // disjoint area after whatever was previously inserted, rather than replacing it the way a
@@ -194,38 +176,35 @@ public partial class MainWindow
         if (editor is null)
             return TryRouteFormulaPointModeSelection(range, append: true);
 
-        if (_formulaEditCell is not { } formulaCell ||
-            !FormulaRangeEntryPlanner.TryGetReferenceSpanForPointEntry(
-                editor.Text,
-                _formulaReferenceStart,
-                _formulaReferenceLength,
-                editor.CaretIndex,
-                editor.SelectionLength,
-                out var referenceStart,
-                out var referenceLength) ||
-            !FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
-                editor.Text,
-                referenceStart,
-                referenceLength,
+        if (_formulaEditCell is not { } formulaCell)
+            return false;
+
+        var snapshot = FormulaRangeEditorSnapshot.Capture(
+            editor.Text,
+            editor.CaretIndex,
+            editor.SelectionLength,
+            formulaCell,
+            _options.UseR1C1ReferenceStyle,
+            _workbook,
+            range,
+            selectedSheetNameOverride,
+            selectedWorkbookName);
+        if (!_formulaRangeEditingSession.TryApplyDisjointRangeSelectionEdit(
+                snapshot,
                 range,
-                formulaCell,
-                _options.UseR1C1ReferenceStyle,
-                out var edit,
-                selectedSheetNameOverride ?? _workbook.GetSheet(range.Start.Sheet)?.Name,
-                selectedWorkbookName: selectedWorkbookName))
+                range.Start,
+                range.End,
+                includeSheetSpan: false,
+                applyEditorEdit: edit => ApplyFormulaEditorTextEdit(editor, edit),
+                afterEditorEdit: null,
+                out var plan))
         {
             return false;
         }
 
-        ApplyFormulaEditorTextEdit(editor, edit.TextEdit);
-
-        _formulaReferenceStart = edit.ReferenceStart;
-        _formulaReferenceLength = edit.ReferenceLength;
-        _formulaRangeSelectionAnchor = range.Start;
-
         HideValidationDropdown();
         ClearCommentPreview();
-        if (selectedWorkbookName is null)
+        if (plan.UpdateLocalSelection)
         {
             _selectionAnchor = range.Start;
             _selectionCursor = range.End;
@@ -414,7 +393,8 @@ public partial class MainWindow
             // comma-separated area (Excel: click A1 then Ctrl+click C3 -> "A1,C3") instead of
             // replacing the previously-inserted reference like a plain click
             // (R52-render-formula-bar-ref-3-3).
-            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 &&
+            if (_formulaRangeEditingSession.ShouldAppendDisjointReference(
+                    FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(Keyboard.Modifiers)) &&
                 TryAppendDisjointFormulaReference(newAddr))
             {
                 _dragSelectionTransientOverlaysCleared = false;
@@ -424,7 +404,8 @@ public partial class MainWindow
                 return;
             }
 
-            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 &&
+            if (_formulaRangeEditingSession.ShouldAppendDisjointReference(
+                    FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(Keyboard.Modifiers)) &&
                 TryRouteFormulaPointModeSelection(new GridRange(newAddr, newAddr), append: true))
             {
                 _selectionAnchor = newAddr;
@@ -622,8 +603,7 @@ public partial class MainWindow
             {
                 _inlineEditor.Text = e.Text;
                 _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
-                var typedEntryPlan = FormulaEditInteractionPlanner.BuildTypedEntryPlan(e.Text);
-                _formulaRangeEntryMode = typedEntryPlan.PointMode;
+                var typedEntryPlan = _formulaRangeEditingSession.ApplyTypedEntry(e.Text);
                 ApplyFormulaEditStatusBarPlan(typedEntryPlan.StatusBarPlan);
                 RefreshFormulaReferenceHighlights();
             }
@@ -705,14 +685,14 @@ public partial class MainWindow
         if (Keyboard.FocusedElement is not TextBox and not ComboBox)
         {
             var keyTipKey = GetEffectiveKey(e);
-            if (IsStandaloneAltKey(keyTipKey) && _ribbonKeyTipMode.IsActive)
+            if (IsStandaloneAltKey(keyTipKey) && _ribbonKeyTipSession.IsActive)
             {
                 _standaloneAltKeyTipTracker.BeginStandaloneAltCandidate();
                 e.Handled = true;
                 return;
             }
 
-            if (_ribbonKeyTipMode.IsActive &&
+            if (_ribbonKeyTipSession.IsActive &&
                 IsRibbonKeyTipContinuationModifierState(Keyboard.Modifiers))
             {
                 HandleActiveRibbonKeyTip(keyTipKey);
@@ -837,12 +817,10 @@ public partial class MainWindow
         // (SheetGrid.SelectedObjectId/-Kind), Excel routes plain and Ctrl+ arrow keys to nudging the
         // object instead of moving the cell cursor underneath it. Only these two modifier states are
         // claimed here -- Shift/Alt + arrow combos (selection-extend, group outdent/indent, etc.)
-        // fall through unchanged, matching the narrow scope of this fix.
-        if (e.Key is Key.Up or Key.Down or Key.Left or Key.Right &&
-            Keyboard.Modifiers is ModifierKeys.None or ModifierKeys.Control &&
-            HasSelectedDrawingObject())
+        // fall through unchanged. The shared planner owns that modifier/selection enablement policy.
+        if (TryPlanSelectedDrawingObjectNudge(e.Key, Keyboard.Modifiers, out var nudgePlan))
         {
-            NudgeSelectedDrawingObject(e.Key, fine: Keyboard.Modifiers == ModifierKeys.Control);
+            ExecuteSelectedDrawingObjectNudge(nudgePlan);
             e.Handled = true;
             return;
         }
@@ -889,21 +867,21 @@ public partial class MainWindow
         // the same merge, SetActiveCell's own merge lookup re-snaps right back to it, and the key
         // press is silently absorbed (R51-render-merged-cell-edit-nav-3-1/3-2). Wrap every plain
         // step (including Tab/Enter, which never routed through this at all outside of in-edit
-        // navigation -- see MainWindow.Editing.cs's AdjustTargetPastMerge) so navigation always
+        // navigation -- see ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge) so navigation always
         // steps past a merge in the direction of travel, matching Excel.
         target ??= e.Key switch
         {
             Key.Up    => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1)
-                                  : AdjustTargetPastMerge(sheet, current,
+                                  : ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current,
                                         new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col)),
             Key.Down  => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, +1)
-                                  : AdjustTargetPastMerge(sheet, current,
+                                  : ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current,
                                         new CellAddress(_currentSheetId, Math.Min(current.Row + 1, FreeX.Core.Model.CellAddress.MaxRow), current.Col)),
             Key.Left  => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, -1)
-                                  : AdjustTargetPastMerge(sheet, current,
+                                  : ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current,
                                         new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u)),
             Key.Right => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, +1)
-                                  : AdjustTargetPastMerge(sheet, current,
+                                  : ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current,
                                         new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, FreeX.Core.Model.CellAddress.MaxCol))),
 
             // Home target, including the "End, Home" -> Ctrl+End jump (R82-app-keyboard-nav-5-2).
@@ -920,12 +898,12 @@ public partial class MainWindow
             // (ExcelEditKeyPlanner.GetEnterTarget via MainWindow.Editing.cs), instead of always
             // hardcoding Down/Up (R82-app-keyboard-nav-5-1).
             Key.Enter => _options.MoveSelectionAfterEnter
-                ? AdjustTargetPastMerge(sheet, current, ExcelEditKeyPlanner.GetEnterTarget(
+                ? ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current, ExcelEditKeyPlanner.GetEnterTarget(
                     current,
                     shiftHeld,
-                    FormulaBarWpfInputAdapter.ToFormulaEditorEnterDirection(_options.AfterEnterDirection)))
+                    AppOptionsEnterDirectionMapper.ToFormulaEditor(_options.AfterEnterDirection)))
                 : current,
-            Key.Tab   => AdjustTargetPastMerge(sheet, current, shiftHeld
+            Key.Tab   => ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current, shiftHeld
                 ? new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u)
                 : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, FreeX.Core.Model.CellAddress.MaxCol))),
             _         => null
@@ -939,48 +917,21 @@ public partial class MainWindow
         // Enter and Tab (including Shift variants) move the active cell; they don't extend selection
         bool moveOnly = e.Key is Key.Enter or Key.Tab;
 
-        // When a single multi-cell rectangular range is already selected (no Ctrl-added extra
-        // areas, not in Add/Extend selection mode), Enter/Tab should move the active cell WITHIN
-        // the range -- wrapping at its edges -- and keep the whole range highlighted, matching
-        // Excel, instead of collapsing the selection down to one cell via SetActiveCell.
-        //
-        // A Ctrl+click multi-area selection (SheetGrid.SelectedRanges has more than one entry --
-        // SheetGrid.SelectedRanges already includes the active area as its own last entry, see
-        // SelectionAreaPlanner) gets the same treatment: Tab/Enter must walk the active
-        // cell through the area it is currently in, and once it wraps past that area's far edge
-        // (in the direction of travel), continue on to the first cell of the NEXT area in the
-        // original click order -- wrapping from the last area back to the first -- instead of
-        // falling through to SetActiveCell and collapsing the whole multi-area selection down to
-        // one cell (R112-app-keyboard-nav-multiarea-tab-1). All originally selected areas stay
-        // highlighted throughout: only the active-cell indicator (_selectionAnchor, mirrored onto
-        // SheetGrid.ActiveCell) moves -- SheetGrid.SelectedRange/SelectedRanges are left untouched.
-        //
-        // A lone selected MERGED cell also satisfies Start != End (it spans multiple rows/cols)
-        // but is logically a single cell, not a real multi-cell selection -- Excel's Tab/Enter
-        // skips straight past it to the next unmerged cell instead of Tab-cycling through its
-        // (normally blank) interior sub-cells (R51-render-merged-cell-edit-nav-3-2). Exclude that
-        // case (for the single-area shape only -- a multi-area selection made only of single/merged
-        // cells still needs to cycle across its areas) so it falls through to the plain
-        // SetActiveCell(target.Value) path below, whose target was already advanced past the
-        // merge's far edge above.
-        IReadOnlyList<GridRange>? multiAreaCandidate =
-            SheetGrid.SelectedRanges is { Count: > 0 } existingAreas ? existingAreas
-            : SheetGrid.SelectedRange is { } soleRange ? new[] { soleRange }
-            : null;
-
-        if (moveOnly &&
-            _selectionMode == ExcelSelectionMode.Normal &&
-            multiAreaCandidate is { Count: > 0 } areas &&
-            SelectionNavigationPlanner.TryAdvanceWithinSelection(
-                areas,
+        // The shared planner owns range traversal, cross-area wrapping, and the exact-merged-cell
+        // exclusion. WPF retains key conversion and applies only the returned active-cell target.
+        var cyclePlan = moveOnly && _selectionMode == ExcelSelectionMode.Normal
+            ? GridSelectionNavigationPlanner.PlanCycle(
                 sheet,
-                _selectionAnchor ?? areas[^1].Start,
-                isTab: e.Key == Key.Tab,
-                forward: !shiftHeld,
-                out var withinSelectionPlan))
+                SheetGrid.SelectedRange,
+                SheetGrid.SelectedRanges,
+                _selectionAnchor ?? SheetGrid.SelectedRange.Value.Start,
+                e.Key == Key.Tab ? GridSelectionCycleKey.Tab : GridSelectionCycleKey.Enter,
+                forward: !shiftHeld)
+            : null;
+        if (cyclePlan is { } cycle)
         {
-            MoveActiveCellWithinSelection(withinSelectionPlan.Target);
-            EnsureCellVisible(withinSelectionPlan.Target);
+            MoveActiveCellWithinSelection(cycle.Target);
+            EnsureCellVisible(cycle.Target);
             e.Handled = true;
             return;
         }
@@ -998,11 +949,14 @@ public partial class MainWindow
         bool willExtendSelection = _selectionMode != ExcelSelectionMode.Add &&
             extendSelection && !moveOnly && _selectionAnchor.HasValue;
         if ((willSetActiveCell || willExtendSelection) &&
-            sheet is { IsProtected: true } &&
-            GetProtectedNavigationStep(e.Key, shiftHeld) is { } step &&
-            !CommandGuards.CanSelectCell(_workbook, sheet, target.Value))
+            sheet is { IsProtected: true })
         {
-            var adjustedTarget = FindNextSelectableCellInDirection(sheet, target.Value, step.RowStep, step.ColStep);
+            var adjustedTarget = ExcelWorksheetNavigationPlanner.ResolveProtectedSheetTarget(
+                _workbook,
+                sheet,
+                target.Value,
+                e.Key,
+                shiftHeld);
             if (adjustedTarget is null)
             {
                 // No selectable cell exists further in this direction (e.g. every remaining cell
@@ -1108,48 +1062,6 @@ public partial class MainWindow
         return false;
     }
 
-    /// <summary>
-    /// The (row, column) step of travel a given navigation key moves the active cell by, used only
-    /// to know which direction to keep stepping in past a locked cell on a protected sheet
-    /// (R75-services-protection-security-4-1). Returns null for keys this protection-skip doesn't
-    /// cover (Home/End/PageUp/PageDown/data-boundary jumps) -- those simply land on their target
-    /// as before, unadjusted.
-    /// </summary>
-    private static (int RowStep, int ColStep)? GetProtectedNavigationStep(Key key, bool shiftHeld) =>
-        key switch
-        {
-            Key.Up => (-1, 0),
-            Key.Down => (1, 0),
-            Key.Left => (0, -1),
-            Key.Right => (0, 1),
-            Key.Enter => shiftHeld ? (-1, 0) : (1, 0),
-            Key.Tab => shiftHeld ? (0, -1) : (0, 1),
-            _ => null
-        };
-
-    /// <summary>
-    /// Starting at <paramref name="start"/> (already known not to be selectable), keeps stepping by
-    /// (<paramref name="rowStep"/>, <paramref name="colStep"/>) until a cell <see
-    /// cref="CommandGuards.CanSelectCell"/> allows is found, mirroring Excel's protected-sheet
-    /// navigation skip. Returns null if the worksheet bounds are reached with nothing selectable in
-    /// between (R75-services-protection-security-4-1).
-    /// </summary>
-    private CellAddress? FindNextSelectableCellInDirection(Sheet sheet, CellAddress start, int rowStep, int colStep)
-    {
-        var candidate = start;
-        while (!CommandGuards.CanSelectCell(_workbook, sheet, candidate))
-        {
-            long nextRow = (long)candidate.Row + rowStep;
-            long nextCol = (long)candidate.Col + colStep;
-            if (nextRow < 1 || nextRow > CellAddress.MaxRow || nextCol < 1 || nextCol > CellAddress.MaxCol)
-                return null;
-
-            candidate = new CellAddress(candidate.Sheet, (uint)nextRow, (uint)nextCol);
-        }
-
-        return candidate;
-    }
-
     // Moves the active cell to `addr` within the CURRENT selection without touching
     // SheetGrid.SelectedRange, so the pre-existing multi-cell marquee stays highlighted
     // (unlike SetActiveCell, which always collapses the selection to a single cell).
@@ -1180,7 +1092,7 @@ public partial class MainWindow
             return;
 
         var currentCorner = _selectionCursor ?? _selectionAnchor ?? range.Start;
-        var nextCorner = SelectionNavigationPlanner.GetNextCorner(range, currentCorner);
+        var nextCorner = SelectionCornerNavigator.GetNextCorner(range, currentCorner);
         _selectionAnchor = nextCorner;
         _selectionCursor = nextCorner;
         SheetGrid.SelectedRange = range;
@@ -1412,20 +1324,10 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is not null && TryGetTableForSelection(sheet, range, out var table))
-        {
-            var tableRowRange = new GridRange(
-                new CellAddress(range.Start.Sheet, range.Start.Row, table.Range.Start.Col),
-                new CellAddress(range.Start.Sheet, range.End.Row, table.Range.End.Col));
-
-            if (range != tableRowRange)
-            {
-                SetSelectionRange(tableRowRange, range.Start);
-                return;
-            }
-        }
-
-        SetSelectionRange(SelectionRangeService.GetWholeRows(range), range.Start);
+        var expanded = sheet is null
+            ? SelectionRangeService.GetWholeRows(range)
+            : StructuredTableSelectionPlanner.PlanWholeRows(sheet, range).Range;
+        SetSelectionRange(expanded, range.Start);
     }
 
     /// <summary>
@@ -1440,59 +1342,10 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is not null && TryGetTableForSelection(sheet, range, out var table))
-        {
-            var tableRowCount = (int)table.Range.RowCount;
-            var headerRows = (uint)Math.Clamp(table.HeaderRowCount.GetValueOrDefault(1), 0, tableRowCount);
-            var totalsRows = (uint)Math.Clamp(table.TotalsRowCount ?? (table.TotalsRowShown ? 1 : 0), 0, tableRowCount);
-            var dataStartRow = table.Range.Start.Row + headerRows;
-            var dataEndRow = table.Range.End.Row - totalsRows;
-
-            if (dataStartRow <= dataEndRow)
-            {
-                var dataRange = new GridRange(
-                    new CellAddress(range.Start.Sheet, dataStartRow, range.Start.Col),
-                    new CellAddress(range.Start.Sheet, dataEndRow, range.End.Col));
-                var fullTableColumnRange = new GridRange(
-                    new CellAddress(range.Start.Sheet, table.Range.Start.Row, range.Start.Col),
-                    new CellAddress(range.Start.Sheet, table.Range.End.Row, range.End.Col));
-
-                if (range == fullTableColumnRange)
-                {
-                    SetSelectionRange(SelectionRangeService.GetWholeColumns(range), range.Start);
-                    return;
-                }
-
-                if (range != dataRange)
-                {
-                    SetSelectionRange(dataRange, range.Start);
-                    return;
-                }
-
-                SetSelectionRange(fullTableColumnRange, range.Start);
-                return;
-            }
-        }
-
-        SetSelectionRange(SelectionRangeService.GetWholeColumns(range), range.Start);
-    }
-
-    /// <summary>Finds the structured Table that fully contains <paramref name="range"/> (both
-    /// corners), if any -- used to scope Ctrl+Space/Shift+Space's first press(es) to the table
-    /// before escalating to the whole sheet column/row.</summary>
-    private static bool TryGetTableForSelection(Sheet sheet, GridRange range, out StructuredTableModel table)
-    {
-        foreach (var candidate in sheet.StructuredTables)
-        {
-            if (candidate.Range.Contains(range.Start) && candidate.Range.Contains(range.End))
-            {
-                table = candidate;
-                return true;
-            }
-        }
-
-        table = null!;
-        return false;
+        var expanded = sheet is null
+            ? SelectionRangeService.GetWholeColumns(range)
+            : StructuredTableSelectionPlanner.PlanWholeColumns(sheet, range).Range;
+        SetSelectionRange(expanded, range.Start);
     }
 
     // R92-commands-merge-edge-5-2: navigating (Name Box / Go To / hyperlink / any other caller of
@@ -1550,7 +1403,7 @@ public partial class MainWindow
         // {cols}C" dimension readout instead of the range address, reverting to the address once
         // the drag ends (CompleteDragSelectionStatusRefresh) (R69-render-active-cell-selection-6-2).
         SetCellAddressBoxSelectionText(_dragSelectActive
-            ? FormatDragSelectionDimensionText(range)
+            ? GridSelectionNavigationPlanner.FormatDragDimensionText(range)
             : FormatRangeReference(range.Start, range.End));
         if (!_dragSelectActive)
             RefreshPivotFieldListPaneAfterSelectionChange();
@@ -1562,16 +1415,6 @@ public partial class MainWindow
     // (R51-render-merged-cell-edit-nav-3-4).
     private static GridRange ExpandRangeToFullyContainMerges(Sheet? sheet, GridRange range) =>
         MergedSelectionRangePlanner.ExpandToFullyContainMerges(sheet, range);
-
-    // Live dimension readout Excel shows in the Name Box while a mouse-drag selection is in
-    // progress (e.g. "4R x 3C" for a 4-row-by-3-column drag from B2 to D5), reverting to the plain
-    // range address once the drag ends (R69-render-active-cell-selection-6-2).
-    private static string FormatDragSelectionDimensionText(GridRange range)
-    {
-        var rowCount = range.End.Row - range.Start.Row + 1;
-        var colCount = range.End.Col - range.Start.Col + 1;
-        return $"{rowCount}R x {colCount}C";
-    }
 
     // Excel's Ctrl+Home jumps to the top-left cell of the *scrollable* region -- the first
     // unfrozen row/column -- rather than always to A1 once panes are frozen; plain Home (no
@@ -1626,7 +1469,7 @@ public partial class MainWindow
         // SheetGrid_MouseMove's drag-continuation passes true) -- so pass that through explicitly
         // instead of trying to re-derive it from selection state after the fact
         // (R112-render-cellarea-multiselect-append-fix).
-        var ranges = SelectionAreaPlanner.AppendOrReplaceActiveArea(
+        var ranges = GridSelectionNavigationPlanner.UpdateDisjointSelectionAreas(
             SheetGrid.SelectedRanges,
             SheetGrid.SelectedRange,
             activeRange,
@@ -1853,6 +1696,76 @@ public partial class MainWindow
             SheetGrid.SelectedRanges = ranges;
     }
 
+    /// <summary>
+    /// Projects the native WPF grid selection into the shared application session. GridView
+    /// remains the input/rendering surface during this migration, while WorkbookSession is the
+    /// authoritative portable view state consumed by future command slices.
+    /// </summary>
+    private void SynchronizeWorkbookSessionSelection()
+    {
+        if (_workbookSessionDisposed)
+            return;
+
+        if (SheetGrid.SelectedRange is not { } primaryRange ||
+            primaryRange.Start.Sheet != _currentSheetId ||
+            primaryRange.End.Sheet != _currentSheetId)
+        {
+            return;
+        }
+
+        var selectedRanges = SheetGrid.SelectedRanges?
+            .Where(range =>
+                range.Start.Sheet == _currentSheetId &&
+                range.End.Sheet == _currentSheetId)
+            .ToList() ?? [primaryRange];
+        if (!selectedRanges.Contains(primaryRange))
+            selectedRanges.Add(primaryRange);
+
+        var activeCell = _selectionAnchor is { } anchor && primaryRange.Contains(anchor)
+            ? anchor
+            : primaryRange.Start;
+        _session.SynchronizeSelectionState(
+            _currentSheetId,
+            primaryRange,
+            selectedRanges,
+            activeCell,
+            _groupedSheetIds,
+            _sheetGroupAnchor,
+            _formulaEditCell);
+    }
+
+    /// <summary>
+    /// Projects authoritative selection changes made by WorkbookSession (notably Undo/Redo and
+    /// formula commits) back into the native WPF grid without moving input/render ownership out
+    /// of GridView.
+    /// </summary>
+    private void ApplyWorkbookSessionSelectionToRenderer()
+    {
+        if (_workbookSessionDisposed)
+            return;
+
+        var previousSheetId = _currentSheetId;
+        _currentSheetId = _session.ActiveSheet.Id;
+        var primaryRange = _session.SelectedRange;
+        var selectedRanges = _session.SelectedRanges.Count > 0
+            ? _session.SelectedRanges.ToArray()
+            : [primaryRange];
+
+        _selectionAnchor = _session.ActiveCell;
+        _selectionCursor = primaryRange.End;
+        SheetGrid.SelectedRange = primaryRange;
+        SetSelectedRangesIfChanged(selectedRanges.Length > 1 ? selectedRanges : null);
+        CellAddressBox.Text = FormatNameBoxSelectionText(primaryRange);
+        SetFormulaBarSelectionText(FormatFormulaBarText(
+            _workbook.GetSheet(_currentSheetId)?.GetCell(_session.ActiveCell),
+            _session.ActiveCell));
+
+        if (!previousSheetId.Equals(_currentSheetId))
+            RefreshSheetTabs();
+
+        EnsureCellVisible(_session.ActiveCell);
+    }
+
     private void SetCellAddressBoxSelectionText(string text)
     {
         if (CellAddressBox.Text == text)
@@ -1968,13 +1881,7 @@ public partial class MainWindow
             TryApplyFormulaRangeSelection(hitAddr.Value, extendSelection: true);
         else if (hitAddr.HasValue && _selectionAnchor is { } formulaSourceAnchor &&
                  TryRouteFormulaPointModeSelection(
-                     new GridRange(
-                         new CellAddress(_currentSheetId,
-                             Math.Min(formulaSourceAnchor.Row, hitAddr.Value.Row),
-                             Math.Min(formulaSourceAnchor.Col, hitAddr.Value.Col)),
-                         new CellAddress(_currentSheetId,
-                             Math.Max(formulaSourceAnchor.Row, hitAddr.Value.Row),
-                             Math.Max(formulaSourceAnchor.Col, hitAddr.Value.Col))),
+                     _formulaRangeEditingSession.PlanRange(formulaSourceAnchor, hitAddr.Value),
                      extendSelection: true))
         {
             _selectionCursor = hitAddr.Value;

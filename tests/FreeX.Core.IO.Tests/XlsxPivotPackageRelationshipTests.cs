@@ -25,7 +25,7 @@ public sealed class XlsxPivotPackageRelationshipTests
 
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
         XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
-        XlsxPivotXmlReferencePreserver.Preserve(sourceArchive, targetArchive, context);
+        XlsxPivotXmlReferencePreserver.Preserve(context);
 
         var workbookXml = LoadPackageXml(targetArchive, "xl/workbook.xml");
         var workbookRelsXml = LoadPackageXml(targetArchive, "xl/_rels/workbook.xml.rels");

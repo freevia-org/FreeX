@@ -6,6 +6,24 @@ namespace FreeX.App.Services.Tests;
 public sealed class WorkbookViewportScrollPlannerTests
 {
     [Theory]
+    [InlineData(1, 20, 1)]
+    [InlineData(10, 20, 10)]
+    [InlineData(0, 20, 3)]
+    [InlineData(-1, 25, 25)]
+    [InlineData(-1, 250, 100)]
+    [InlineData(-2, 25, 3)]
+    [InlineData(int.MaxValue, 20, 100)]
+    public void NormalizeWheelScrollStep_HandlesDefaultPageSentinelAndClamp(
+        int wheelScrollLines,
+        double visibleSpan,
+        int expected)
+    {
+        WorkbookViewportScrollPlanner.NormalizeWheelScrollStep(wheelScrollLines, visibleSpan)
+            .Should()
+            .Be(expected);
+    }
+
+    [Theory]
     [InlineData(0, 0)]
     [InlineData(1, 1)]
     [InlineData(-0.25, -1)]
@@ -23,6 +41,41 @@ public sealed class WorkbookViewportScrollPlannerTests
             .Should().Be(int.MaxValue);
         WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(-double.MaxValue)
             .Should().Be(-int.MaxValue);
+    }
+
+    [Theory]
+    [InlineData(50, 1, 1, 51)]
+    [InlineData(50, 50, -1, 49)]
+    [InlineData(1, 1, -10, 1)]
+    [InlineData(100, 1, int.MaxValue, 100)]
+    public void PlanStructuralEditOriginShift_ShiftsAndClampsEditsAtOrBeforeOrigin(
+        uint currentOrigin,
+        uint editIndex,
+        int delta,
+        uint expected)
+    {
+        WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
+                currentOrigin,
+                editIndex,
+                delta,
+                absoluteLimit: 100)
+            .Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(50, 51, 1)]
+    [InlineData(50, 1, 0)]
+    public void PlanStructuralEditOriginShift_ReturnsNullWhenOriginMustNotMove(
+        uint currentOrigin,
+        uint editIndex,
+        int delta)
+    {
+        WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
+                currentOrigin,
+                editIndex,
+                delta,
+                CellAddress.MaxRow)
+            .Should().BeNull();
     }
 
     [Fact]

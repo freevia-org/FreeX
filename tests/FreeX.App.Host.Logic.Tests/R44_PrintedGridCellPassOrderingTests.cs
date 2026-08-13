@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FluentAssertions;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -112,11 +113,7 @@ public sealed class R44_PrintedGridCellPassOrderingTests
         var linkOverlays = new List<PdfLinkOverlay>();
         var cellDestinationOverlays = new List<PdfCellDestinationOverlay>();
 
-        // PdfLinkTarget is a private nested record of PrintRenderer -- build the (empty)
-        // dictionary via reflection since the type name isn't accessible from test code.
-        var linkTargetType = typeof(PrintRenderer).GetNestedType("PdfLinkTarget", BindingFlags.NonPublic)!;
-        var hyperlinkLookupType = typeof(Dictionary<,>).MakeGenericType(typeof(ValueTuple<uint, uint>), linkTargetType);
-        var hyperlinkLookup = Activator.CreateInstance(hyperlinkLookupType)!;
+        var hyperlinkLookup = new Dictionary<(uint Row, uint Col), WorksheetPrintHyperlinkPlan>();
         var cellDestinationLookup = new Dictionary<(uint Row, uint Col), CellAddress>();
 
         var method = typeof(PrintRenderer).GetMethod(

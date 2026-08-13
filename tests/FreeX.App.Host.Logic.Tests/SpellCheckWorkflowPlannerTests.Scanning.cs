@@ -80,11 +80,13 @@ public sealed partial class SpellCheckWorkflowPlannerTests
         var editingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
 
         var commitIndex = reviewSource.IndexOf("TryCommitPendingSpellCheckEdit()", StringComparison.Ordinal);
-        var scanIndex = reviewSource.IndexOf("SpellCheckWorkflowPlanner.ScanWorksheet(", StringComparison.Ordinal);
+        var startIndex = reviewSource.IndexOf("controller.Start()", StringComparison.Ordinal);
 
         commitIndex.Should().BeGreaterThanOrEqualTo(0);
-        scanIndex.Should().BeGreaterThan(commitIndex);
+        startIndex.Should().BeGreaterThan(commitIndex);
         reviewSource.Should().Contain("if (!TryCommitPendingSpellCheckEdit())");
+        DialogSourceTestSupport.ReadAppServicesSource("SpellCheckSessionController.cs")
+            .Should().Contain("SpellCheckWorkflowPlanner.ScanWorksheet(");
         editingSource.Should().Contain("private bool TryCommitPendingSpellCheckEdit()");
         editingSource.Should().Contain("FormulaBar.Text = _inlineEditor.Text;");
         editingSource.Should().Contain("return CommitEdit();");

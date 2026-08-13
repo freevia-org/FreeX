@@ -69,22 +69,12 @@ public sealed class R126_FreeWAvaloniaShellStringsLocalizationTests : IDisposabl
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "App.cs"));
 
-        source.Should().Contain(
-            "AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName)");
+        source.Should().Contain("AvaloniaAppLocalizationBootstrap.InstallSharedSeams(");
+        source.Should().Contain("UiText.Get,");
+        source.Should().Contain("UiText.Format,");
+        source.Should().Contain("UiText.CreateAutomationName);");
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var directory = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(directory))
-        {
-            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = Directory.GetParent(directory)?.FullName;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

@@ -9,29 +9,26 @@ namespace FreeX.Core.IO;
 internal static class XlsxUnsupportedSheetReferencePreserver
 {
     public static void Preserve(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
         XlsxSourcePackagePreservationContext? context,
         Workbook? workbook = null)
     {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
-        var sourceWorkbookRelsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
-        var targetWorkbookRelsEntry = targetArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (sourceWorkbookEntry is null || sourceWorkbookRelsEntry is null ||
-            targetWorkbookEntry is null || targetWorkbookRelsEntry is null)
+        if (context is null ||
+            !context.HasSourceWorkbookRelationshipsPart ||
+            !context.HasTargetWorkbookRelationshipsPart)
         {
             return;
         }
 
-        var sourceWorkbookXml = XlsxPackageXmlEditor.LoadXml(sourceWorkbookEntry);
-        var sourceWorkbookRelsXml = XlsxPackageXmlEditor.LoadXml(sourceWorkbookRelsEntry);
-        var targetWorkbookXml = XlsxPackageXmlEditor.LoadXml(targetWorkbookEntry);
-        var targetWorkbookRelsXml = XlsxPackageXmlEditor.LoadXml(targetWorkbookRelsEntry);
+        var sourceArchive = context.SourceArchive;
+        var targetArchive = context.TargetArchive;
+        var workbookNs = context.WorkbookNs;
+        var relNs = context.RelNs;
+        var packageRelNs = context.PackageRelNs;
+        var sourceWorkbookXml = context.SourceWorkbookXml;
+        var sourceWorkbookRelsXml = context.SourceWorkbookRelationshipsXml!;
+        var targetWorkbookXml = context.LoadCurrentTargetWorkbookXml();
+        var targetWorkbookRelsXml = context.LoadCurrentTargetWorkbookRelationshipsXml();
+
         var sourceSheets = sourceWorkbookXml.Root?.Element(workbookNs + "sheets");
         var targetSheets = targetWorkbookXml.Root?.Element(workbookNs + "sheets");
         if (sourceSheets is null || targetSheets is null)
@@ -233,8 +230,8 @@ internal static class XlsxUnsupportedSheetReferencePreserver
         if (!changed)
             return;
 
-        XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
-        XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/_rels/workbook.xml.rels", targetWorkbookRelsXml);
+        context.ReplaceTargetWorkbookXml(targetWorkbookXml);
+        context.ReplaceTargetWorkbookRelationshipsXml(targetWorkbookRelsXml, refreshSheetPaths: true);
     }
 
     private static bool IsWorksheetRelationshipType(string relationshipType) =>

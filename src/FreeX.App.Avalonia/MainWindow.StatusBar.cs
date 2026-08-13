@@ -9,6 +9,9 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static readonly IStatusBarTextProvider StatusBarTextProvider =
+        new ResourceKeyStatusBarTextProvider(UiText.Get);
+
     // ── Shared status-bar model wiring ────────────────────────────────────────
     // The Avalonia footer renders from the platform-neutral StatusBarViewModel produced by the shared
     // StatusBarDisplayModelBuilder (the same builder + WorkbookSelectionStats path the WPF host uses).
@@ -20,8 +23,7 @@ public sealed partial class MainWindow
     // (via the shared StatusBarOptionVisibilityStore, the same store the WPF host's FreeXOptions
     // implements) rather than always the hardcoded Excel defaults, so a customization made in a
     // previous session survives a relaunch instead of silently resetting every time.
-    private readonly Dictionary<string, bool> _statusBarOptionVisibility =
-        StatusBarOptionVisibilityStore.ToVisibility(AppOptionsStore.Load()).ToDictionary();
+    private readonly Dictionary<string, bool> _statusBarOptionVisibility;
 
     // Tracks the runtime-built customize toggle items by OptionTag so the menu's live checked state can
     // be refreshed on open, mirroring the WPF host's _statusBarCustomizeMenuItems registry.
@@ -37,7 +39,7 @@ public sealed partial class MainWindow
     private bool _statusTextLiveSettingApplied;
 
     private bool GetStatusBarOption(string optionTag) =>
-        AvaloniaStatusBarSource.IsOptionVisible(_statusBarOptionVisibility, optionTag);
+        StatusBarVisibilityPlanner.IsOptionVisible(_statusBarOptionVisibility, optionTag);
 
     /// <summary>
     /// Builds the neutral <see cref="StatusBarViewModel"/> for the current selection / sheet / zoom using
@@ -45,17 +47,19 @@ public sealed partial class MainWindow
     /// (the same stats path the WPF host consumes — no re-implementation of the stats math).
     /// </summary>
     private StatusBarViewModel BuildStatusBarViewModel(string readyText) =>
-        AvaloniaStatusBarSource.BuildModel(
+        FreeXStatusBarRendererPlanner.BuildModel(
             _session.SelectionStats,
             StatusBarZoomSliderPlanner.ClampZoomPercent(_session.ZoomPercent),
             // R128-status-bar-calculate-indicator: CalculationModeIsManual (MainWindow.Calculation.cs)
             // + Workbook.HasPendingManualRecalculation drive Excel's "Calculate" cell-mode indicator in
             // place of "Ready" -- see NormalizeReadyText's calc-mode overload.
-            AvaloniaStatusBarSource.NormalizeReadyText(
+            FreeXStatusBarRendererPlanner.NormalizeReadyText(
                 readyText,
+                StatusBarTextProvider,
                 CalculationModeIsManual,
                 _session.Workbook.HasPendingManualRecalculation),
-            _session.ViewMode);
+            _session.ViewMode,
+            StatusBarTextProvider);
 
     /// <summary>
     /// Renders the footer readout (<see cref="_selectionStatsText"/>) and ready text
@@ -70,7 +74,7 @@ public sealed partial class MainWindow
         // Render the neutral StatusBarViewModel: the readout is the model's visible aggregate readouts
         // (filtered by the customize toggles); zoom comes from the model; CellMode/Zoom toggles gate the
         // status / zoom controls — mirroring the WPF host's per-option StatusBarShow* gating.
-        var rendererPlan = AvaloniaStatusBarSource.BuildRendererPlan(model, _statusBarOptionVisibility);
+        var rendererPlan = FreeXStatusBarRendererPlanner.BuildRendererPlan(model, _statusBarOptionVisibility);
         _statusText.Text = rendererPlan.ReadyText;
         _statusText.Foreground = StatusBarForeground;
         _statusText.IsVisible = rendererPlan.ReadyTextVisible;
@@ -79,9 +83,11 @@ public sealed partial class MainWindow
         _selectionStatsText.Foreground = StatusBarForeground;
         _selectionStatsText.IsVisible = rendererPlan.VisibleReadoutTextVisible;
         // Keep the accessible NAME a stable label ("Selection statistics"); the dynamic readouts are the
-        // element's Text (value/content). Overwriting Name with the readouts broke the launch-smoke /
-        // accessibility contract (GetName must equal "Selection statistics") whenever a selection had stats.
-        AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
+        // element's Text (value/content). Overwriting Name with the readouts broke the accessibility
+        // contract (GetName must equal "Selection statistics") whenever a selection had stats.
+        AutomationProperties.SetName(
+            _selectionStatsText,
+            UiText.Get("Toolbar_SelectionStatisticsAutomationName"));
         EnsureSelectionStatsLiveRegion();
 
         _zoomText.IsVisible = rendererPlan.IsElementVisible(StatusBarPresentationElement.ZoomText);
@@ -132,21 +138,19 @@ public sealed partial class MainWindow
 
     private void OnStatusBarCustomizeToggled(string optionTag, bool isChecked)
     {
-        _statusBarOptionVisibility[optionTag] = isChecked;
-
-        // R88-app-status-bar-aggregates-5-1: persist the toggle to the on-disk options file (mirrors
-        // the WPF host's StatusBarCustomizeMenuItem_Click, which calls
-        // StatusBarOptionVisibilityStore.TrySetOption(_options, ...) followed by _options.Save()) so
-        // the customization survives a relaunch instead of only living in the in-memory dictionary
-        // above.
-        var options = AppOptionsStore.Load();
-        if (StatusBarOptionVisibilityStore.TrySetOption(options, optionTag, isChecked) &&
-            !AppOptionsStore.Save(options))
+        var result = StatusBarOptionUpdateWorkflow.ApplyToRuntimeSession(
+            _optionsRuntimeSession,
+            optionTag,
+            isChecked);
+        _statusBarOptionVisibility.Clear();
+        foreach (var (tag, isVisible) in result.Visibility.ToDictionary())
+            _statusBarOptionVisibility[tag] = isVisible;
+        if (result.IsRecognized && !result.IsPersisted)
         {
-            ShowEditIssue(options.LastPersistenceError ?? UiText.Get("Options_SaveFailed"));
+            ShowEditIssue(result.PersistenceError ?? UiText.Get("Options_SaveFailed"));
         }
 
-        ApplyStatusBarModel(_statusText.Text ?? AvaloniaStatusBarSource.ReadyText());
+        ApplyStatusBarModel(_statusText.Text ?? StatusBarTextProvider.GetReadyText());
     }
 
     // ── Accessibility: live-region announcement for selection statistics ─────
@@ -157,11 +161,8 @@ public sealed partial class MainWindow
     // NotifyStatusStatisticAutomationChanged, which re-raises AutomationElementIdentifiers.NameProperty
     // with the new value text). Avalonia renders all readouts into a single _selectionStatsText
     // TextBlock whose accessible NAME and HelpText must both stay their fixed, static values —
-    // "Selection statistics" / "Shows statistics for the current selection." — because the launch-smoke
-    // source-contract check (MainWindow.cs's BuildLaunchSmokeSnapshot / HasSelectionStatsAutomationName
-    // and HasSelectionStatsAutomationHelp, pinned by tests/FreeX.App.Host.Tests/
-    // MacOsAppReadinessPreflightTests.cs and tests/FreeX.App.Services.Tests/AvaloniaShellSourceTests.cs)
-    // asserts both hold their static values at any point after construction, not just at startup —
+    // "Selection statistics" / "Shows statistics for the current selection." because accessibility
+    // clients require both to remain stable after construction, not just at startup.
     // so, unlike WPF, neither Name nor HelpText is a safe carrier for the live value here.
     //
     // Mark the control as an AT-SPI/UIA live region (LiveSetting="Polite") so any backend that

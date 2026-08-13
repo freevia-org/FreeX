@@ -8,6 +8,7 @@ using System.Text;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Services;
+using FreeX.Ribbon.Definitions;
 
 using Xunit;
 
@@ -66,6 +67,21 @@ public sealed class FunctionalParityMatrixTests
     }
 
     [Fact]
+    public void NoWpfRegressions_EveryAvaloniaHandledSharedCommandIsAlsoHandledByWpf()
+    {
+        var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
+        var regressions = FunctionalParityClassifier.Classify(FunctionalParityMatrix.Compute(wpf))
+            .Where(classification =>
+                classification.MatrixRow.Status == FunctionalParityMatrix.ParityStatus.WpfMissing &&
+                classification.Classification == FunctionalParityClassifier.ClassificationKind.RealBehaviorGap)
+            .Select(classification => classification.MatrixRow.CommandId)
+            .ToArray();
+
+        regressions.Should().BeEmpty(
+            "typed WPF handler ids and Avalonia bindings must compare through the same canonical identities");
+    }
+
+    [Fact]
     public void Allowlist_OnlyContainsRealWpfHandledSharedCommands()
     {
         var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
@@ -110,8 +126,8 @@ public sealed class FunctionalParityMatrixTests
 
         var prioritizedRows = new[]
         {
-            "Copy Diagnostics#CopyDiagnosticsBtn_Click",
-            "Legal Notices#LegalNoticesBtn_Click",
+            FreeXRibbonCommandIds.HelpCopyDiagnostics,
+            FreeXRibbonCommandIds.HelpLegalNotices,
             "Convert to Comments",
         };
 
@@ -311,11 +327,11 @@ public sealed class FunctionalParityMatrixTests
         sb.Append("Each row is a canonical command id the shared ribbon definition (`FreeXRibbon.Build()`) emits. ");
         sb.Append("`WPF` = the WPF host binds a Click handler for the id (`FreeXRibbonHandlerMap`). ");
         sb.Append("`Avalonia` = the Avalonia shell binds a ribbon-command-registry handler for the id ");
-        sb.Append("(`AvaloniaCommandIdAdapter` + the shell's raw-canonical `ExtraCommands`, cell-style gallery, ");
+        sb.Append("(the shared ribbon definition + the shell's canonical endpoint dictionaries, cell-style gallery, ");
         sb.Append("and chart factory).\n\n");
         sb.Append("> Caveat: coverage is measured at the *command-binding* layer of each shell. Non-parity rows ");
         sb.Append("are classified in `functional-parity-classification.md/json` so command-binding inventory noise ");
-        sb.Append("does not get mistaken for product behavior work. The gate only fires on `AVALONIA-MISSING`.\n\n");
+        sb.Append("does not get mistaken for product behavior work. Gates reject real behavior gaps in either direction.\n\n");
         sb.Append("## Headline numbers\n\n");
         sb.Append("| Metric | Count |\n|---|---:|\n");
         sb.Append("| Total commands | ").Append(total).Append(" |\n");

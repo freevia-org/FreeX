@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -9,12 +10,13 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class CustomShowDialog : Window
+internal sealed partial class CustomShowDialog : Window, ISlideShowCustomShowDialogView
 {
     private const double DragStartThreshold = 4;
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
-    private readonly MainWindow _host;
+    private readonly SlideShowCustomShowDialogController _controller;
+    private readonly SlideShowCustomShowDialogFormSession<Control> _formSession;
     private readonly ListBox _showList = new();
     private readonly TextBox _nameBox = new();
     private readonly ListBox _customShowSlideList = new();
@@ -28,34 +30,60 @@ internal sealed class CustomShowDialog : Window
     private readonly Button _moveDownButton;
     private readonly Button _removeButton;
     private readonly List<CheckBox> _slideCheckBoxes = new();
-    private IReadOnlyList<SlideShowCustomShowSlideOption> _availableSlides = Array.Empty<SlideShowCustomShowSlideOption>();
     private Point? _customShowSlideDragStartPoint;
     private int _customShowSlideDragSourceIndex = -1;
     private bool _customShowSlideDragActive;
 
-    public CustomShowDialog(MainWindow host)
-    {
-        _host = host ?? throw new ArgumentNullException(nameof(host));
+    private PresentationDialogSurfacePlan<
+        SlideShowCustomShowDialogField,
+        SlideShowCustomShowDialogAction> Surface => _controller.Surface;
 
-        Title = "Custom Shows";
+    public CustomShowDialog(
+        SlideShowCustomShowSession customShowSession,
+        Func<string?, bool>? tryStartShow = null)
+    {
+        ArgumentNullException.ThrowIfNull(customShowSession);
+        SlideShowCustomShowDialogSession session =
+            customShowSession.CreateDialogSession(tryStartShow ?? (_ => false));
+        _formSession = new(
+            _showList,
+            _customShowSlideList,
+            _nameBox,
+            _validationText,
+            SetItemsSource,
+            static (control, index) => ((ListBox)control).SelectedIndex = index,
+            static control => ((ListBox)control).SelectedIndex,
+            static control => ((ListBox)control).SelectedItem,
+            SetText,
+            static (control, isChecked) => ((CheckBox)control).IsChecked = isChecked,
+            static control => ((CheckBox)control).IsChecked == true,
+            static (control, isEnabled) => control.IsEnabled = isEnabled);
+        _controller = new(session, this);
+
+        Title = Surface.Title;
+        AutomationProperties.SetName(this, Surface.AccessibleName);
+        AutomationProperties.SetAutomationId(this, Surface.AutomationId);
         Width = 625.3333333333334;
         Height = 402.6666666666667;
         MinWidth = 560;
         MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Background = FreePBrushes.SheetSurface;
 
         _showList.Margin = new Thickness(0, 0, 10, 0);
         ApplyListChrome(_showList);
-        _showList.SelectionChanged += (_, _) => ApplySelectedShowToFields();
+        PresentationDialogControlAdapter.ApplySemantic(_showList, Surface.Field(SlideShowCustomShowDialogField.CustomShows));
+        _showList.SelectionChanged += (_, _) => _controller.SelectShow();
 
         _nameBox.MinWidth = 260;
         _nameBox.Margin = new Thickness(0, 0, 0, 8);
         AvaloniaCompactDialogChrome.ApplyTextBox(_nameBox, DialogChromeStyle);
+        PresentationDialogControlAdapter.ApplySemantic(_nameBox, Surface.Field(SlideShowCustomShowDialogField.Name));
 
         _customShowSlideList.MinHeight = 92;
         ApplyListChrome(_customShowSlideList);
-        _customShowSlideList.SelectionChanged += (_, _) => UpdateMoveButtons();
+        PresentationDialogControlAdapter.ApplySemantic(_customShowSlideList, Surface.Field(SlideShowCustomShowDialogField.OrderedSlides));
+        _customShowSlideList.SelectionChanged += (_, _) => _controller.SelectSlide();
         DragDrop.SetAllowDrop(_customShowSlideList, true);
         _customShowSlideList.PointerPressed += OnCustomShowSlideListPointerPressed;
         _customShowSlideList.PointerMoved += OnCustomShowSlideListPointerMoved;
@@ -64,20 +92,27 @@ internal sealed class CustomShowDialog : Window
         _customShowSlideList.AddHandler(DragDrop.DropEvent, OnCustomShowSlideListDrop);
         PointerCaptureLost += OnCustomShowSlidePointerCaptureLost;
 
-        _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
+        _validationText.Foreground = FreePBrushes.Accent;
         _validationText.TextWrapping = TextWrapping.Wrap;
         _validationText.Margin = new Thickness(0, 4, 0, 8);
+        PresentationDialogControlAdapter.ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));
 
-        _renameButton = MakeButton("Rename", OnRename);
-        _updateButton = MakeButton("Update Slides", OnUpdateSlides);
-        _deleteButton = MakeButton("Delete", OnDelete);
-        _startButton = MakeButton("Start Show", OnStartShow);
-        _moveUpButton = MakeButton("Move Up", () => OnMoveSelectedSlide(-1));
-        _moveDownButton = MakeButton("Move Down", () => OnMoveSelectedSlide(1));
-        _removeButton = MakeButton("Remove", OnRemoveSelectedSlide);
+        _renameButton = MakeButton(SlideShowCustomShowDialogAction.Rename, _controller.Rename);
+        _updateButton = MakeButton(SlideShowCustomShowDialogAction.UpdateSlides, _controller.UpdateSlides);
+        _deleteButton = MakeButton(SlideShowCustomShowDialogAction.Delete, _controller.Delete);
+        _startButton = MakeButton(SlideShowCustomShowDialogAction.StartShow, _controller.StartShow);
+        _moveUpButton = MakeButton(
+            SlideShowCustomShowDialogAction.MoveUp,
+            () => _controller.MoveSelectedSlide(-1));
+        _moveDownButton = MakeButton(
+            SlideShowCustomShowDialogAction.MoveDown,
+            () => _controller.MoveSelectedSlide(1));
+        _removeButton = MakeButton(
+            SlideShowCustomShowDialogAction.Remove,
+            _controller.RemoveSelectedSlide);
 
         Content = BuildContent();
-        Refresh(selectCustomShowIndex: 0);
+        _controller.Initialize();
     }
 
     internal int RenderedCustomShowCount => _showList.Items.Count;
@@ -86,31 +121,9 @@ internal sealed class CustomShowDialog : Window
 
     internal int RenderedCustomShowSlideCount => _customShowSlideList.Items.Count;
 
-    internal int SelectedCustomShowSlideIndex => _customShowSlideList.SelectedIndex;
+    internal int SelectedCustomShowSlideIndex => _formSession.SelectedSlideIndex;
 
     internal string ValidationMessage => _validationText.Text ?? string.Empty;
-
-    internal void SelectCustomShowSlideForTests(int index) =>
-        _customShowSlideList.SelectedIndex = index;
-
-    internal void MoveSelectedCustomShowSlideUpForTests() => OnMoveSelectedSlide(-1);
-
-    internal void MoveSelectedCustomShowSlideDownForTests() => OnMoveSelectedSlide(1);
-
-    internal void RemoveSelectedCustomShowSlideForTests() => OnRemoveSelectedSlide();
-
-    internal void AddCustomShowSlideOccurrenceForTests(string slideId) => AddSlideOccurrence(slideId);
-
-    internal SlideShowCustomShowDragReorderPlan DragReorderCustomShowSlideForTests(
-        int sourceSlideIndex,
-        int targetDropIndex) =>
-        ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
-
-    internal void PrepareValidationForVisualEvidence()
-    {
-        _nameBox.Text = string.Empty;
-        OnCreate();
-    }
 
     private Control BuildContent()
     {
@@ -149,7 +162,7 @@ internal sealed class CustomShowDialog : Window
         var namePanel = new StackPanel();
         namePanel.Children.Add(new TextBlock
         {
-            Text = "Name",
+            Text = Surface.Field(SlideShowCustomShowDialogField.Name).Label,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 4),
         });
@@ -174,7 +187,7 @@ internal sealed class CustomShowDialog : Window
         orderHeader.Children.Add(moveButtons);
         orderHeader.Children.Add(new TextBlock
         {
-            Text = "Custom show order",
+            Text = Surface.Field(SlideShowCustomShowDialogField.OrderedSlides).Label,
             FontWeight = FontWeight.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -191,7 +204,7 @@ internal sealed class CustomShowDialog : Window
 
         var slidesHeader = new TextBlock
         {
-            Text = "Deck slides",
+            Text = Surface.Field(SlideShowCustomShowDialogField.AvailableSlides).Label,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 8, 0, 4),
         };
@@ -221,12 +234,12 @@ internal sealed class CustomShowDialog : Window
             Spacing = 6,
             Children =
             {
-                MakeButton("Create", OnCreate, isDefault: true),
+                MakeButton(SlideShowCustomShowDialogAction.Create, _controller.Create),
                 _renameButton,
                 _updateButton,
                 _deleteButton,
                 _startButton,
-                MakeButton("Close", Close, isCancel: true),
+                MakeButton(SlideShowCustomShowDialogAction.Close, Close),
             },
         };
         Grid.SetRow(buttons, 1);
@@ -236,45 +249,30 @@ internal sealed class CustomShowDialog : Window
         return root;
     }
 
-    private void Refresh(int selectCustomShowIndex, int selectedCustomShowSlideIndex = -1)
+    SlideShowCustomShowDialogViewState ISlideShowCustomShowDialogView.CaptureState() =>
+        new(
+            _nameBox.Text,
+            _formSession.SelectedSlideIds(),
+            _formSession.SelectedShowIndex,
+            _formSession.SelectedSlideIndex);
+
+    void ISlideShowCustomShowDialogView.RenderFullPlan(SlideShowCustomShowSessionPlan plan)
     {
-        var plan = _host.BuildCustomShowSessionPlan(
-            new SlideShowCustomShowSessionState(selectCustomShowIndex, selectedCustomShowSlideIndex));
-        _availableSlides = plan.AvailableSlides;
-        _showList.ItemsSource = plan.CustomShows
-            .Select(show => new CustomShowListItem(
-                show.Index,
-                show.Name,
-                show.SlideCount,
-                show.DisplayText))
-            .ToArray();
-
         RebuildSlides(plan.AvailableSlides);
-
-        var selected = _showList.Items
-            .OfType<CustomShowListItem>()
-            .FirstOrDefault(item => item.Index == selectCustomShowIndex);
-        _showList.SelectedItem = selected ?? _showList.Items.OfType<CustomShowListItem>().FirstOrDefault();
-        ApplySelectedShowToFields();
-        if (selectedCustomShowSlideIndex >= 0 && _customShowSlideList.Items.Count > 0)
-        {
-            _customShowSlideList.SelectedIndex = Math.Clamp(
-                selectedCustomShowSlideIndex,
-                0,
-                _customShowSlideList.Items.Count - 1);
-        }
+        _formSession.ApplyFullPlan(plan);
     }
 
     private void RebuildSlides(IReadOnlyList<SlideShowCustomShowSlideOption> slides)
     {
         _slidePanel.Children.Clear();
         _slideCheckBoxes.Clear();
+        _formSession.ClearAvailableSlides();
 
         foreach (var slide in slides)
         {
             var checkBox = new CheckBox
             {
-                Content = $"Slide {slide.Index + 1}: {slide.Title}",
+                Content = slide.DisplayText,
                 Tag = slide.SlideId,
                 Margin = new Thickness(0, 2, 0, 2),
             };
@@ -283,9 +281,16 @@ internal sealed class CustomShowDialog : Window
             checkBox.MinHeight = 20;
             checkBox.MaxHeight = 20;
             checkBox.Padding = new Thickness(0);
+            PresentationDialogControlAdapter.ApplySemantic(
+                checkBox,
+                Surface.Field(SlideShowCustomShowDialogField.AvailableSlides, slide.SlideId));
             _slideCheckBoxes.Add(checkBox);
+            _formSession.RegisterAvailableSlide(slide.SlideId, checkBox);
             var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2), LastChildFill = true };
-            var addButton = MakeButton("Add", () => AddSlideOccurrence(slide.SlideId));
+            var addButton = MakeButton(
+                SlideShowCustomShowDialogAction.AddSlide,
+                () => _controller.AddSlideOccurrence(slide.SlideId),
+                slide.SlideId);
             addButton.MinWidth = 58;
             DockPanel.SetDock(addButton, Dock.Right);
             row.Children.Add(addButton);
@@ -294,123 +299,25 @@ internal sealed class CustomShowDialog : Window
         }
     }
 
-    private void ApplySelectedShowToFields()
-    {
-        var selected = SelectedShow;
-        var session = _host.BuildCustomShowSessionPlan(
-            selected is null
-                ? new SlideShowCustomShowSessionState(-1)
-                : SlideShowCustomShowSessionPlanner.SelectShow(selected.Index));
-        _nameBox.Text = session.SelectedShow?.Name ?? string.Empty;
+    void ISlideShowCustomShowDialogView.RenderSelectedShowPlan(
+        SlideShowCustomShowSessionPlan plan) =>
+        _formSession.ApplySelectedShowPlan(plan);
 
-        foreach (var checkBox in _slideCheckBoxes)
-        {
-            checkBox.IsChecked = checkBox.Tag is string slideId && session.SelectedSlideIds.Contains(slideId);
-        }
+    void ISlideShowCustomShowDialogView.ApplySlideSelection(
+        SlideShowCustomShowSessionPlan plan) =>
+        _formSession.ApplySlideSelection(plan);
 
-        RebuildCustomShowSlides(session.SelectedSlides);
-        _renameButton.IsEnabled = session.CanRename;
-        _updateButton.IsEnabled = session.CanUpdateSlides;
-        _deleteButton.IsEnabled = session.CanDelete;
-        _startButton.IsEnabled = session.CanStart;
-        UpdateMoveButtons();
-        SetValidation(null);
-    }
+    void ISlideShowCustomShowDialogView.SetValidation(string? message) =>
+        _formSession.SetValidation(message);
 
-    private void OnCreate()
-    {
-        var result = _host.CreateCustomShow(_nameBox.Text, SelectedSlideIds());
-        ApplyMutationResult(result);
-    }
-
-    private void OnRename()
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
-
-        ApplyMutationResult(_host.RenameCustomShow(SelectedShow.Index, _nameBox.Text));
-    }
-
-    private void OnUpdateSlides()
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
-
-        ApplyMutationResult(_host.UpdateCustomShowSlides(SelectedShow.Index, SelectedSlideIds()));
-    }
-
-    private void AddSlideOccurrence(string slideId)
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
-
-        var session = _host.BuildCustomShowSessionPlan(
-            SlideShowCustomShowSessionPlanner.SelectShow(SelectedShow.Index));
-        var result = _host.UpdateCustomShowSlides(
-            SelectedShow.Index,
-            session.SelectedSlideIds.Append(slideId));
-        ApplyMutationResult(result);
-        if (result.Succeeded)
-            _customShowSlideList.SelectedIndex = _customShowSlideList.Items.Count - 1;
-    }
-
-    private void OnRemoveSelectedSlide()
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
-
-        if (_customShowSlideList.SelectedItem is not CustomShowSlideListItem selectedSlide)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowSlideMessage);
-            return;
-        }
-
-        var session = _host.BuildCustomShowSessionPlan(
-            SlideShowCustomShowSessionPlanner.SelectShow(SelectedShow.Index));
-        var slideIds = session.SelectedSlideIds.ToList();
-        slideIds.RemoveAt(selectedSlide.Index);
-        var result = _host.UpdateCustomShowSlides(SelectedShow.Index, slideIds);
-        ApplyMutationResult(result);
-        if (result.Succeeded && _customShowSlideList.Items.Count > 0)
-            _customShowSlideList.SelectedIndex = Math.Min(selectedSlide.Index, _customShowSlideList.Items.Count - 1);
-    }
-
-    private void OnMoveSelectedSlide(int offset)
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
-
-        if (_customShowSlideList.SelectedItem is not CustomShowSlideListItem selectedSlide)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowSlideMessage);
-            return;
-        }
-
-        var targetDropIndex = selectedSlide.Index + offset + (offset > 0 ? 1 : 0);
-        ApplyCustomShowSlideDragReorder(selectedSlide.Index, targetDropIndex);
-    }
+    void ISlideShowCustomShowDialogView.CloseDialog() => Close();
 
     private void OnCustomShowSlideListPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         var point = e.GetCurrentPoint(_customShowSlideList);
         var item = FindControlAncestor<ListBoxItem>(e.Source);
         if (point.Properties.IsLeftButtonPressed &&
-            item?.DataContext is CustomShowSlideListItem slide)
+            item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
             _customShowSlideDragStartPoint = point.Position;
             _customShowSlideDragSourceIndex = slide.Index;
@@ -497,7 +404,7 @@ internal sealed class CustomShowDialog : Window
         var pointerPosition = e.GetPosition(_customShowSlideList);
         var item = FindControlAncestor<ListBoxItem>(
             _customShowSlideList.InputHitTest(pointerPosition) ?? e.Source);
-        if (item?.DataContext is CustomShowSlideListItem slide)
+        if (item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
             var itemPosition = e.GetPosition(item);
             return itemPosition.Y > item.Bounds.Height / 2
@@ -511,7 +418,7 @@ internal sealed class CustomShowDialog : Window
     private int ResolveCustomShowSlideDropIndex(DragEventArgs e)
     {
         var item = FindControlAncestor<ListBoxItem>(e.Source);
-        if (item?.DataContext is CustomShowSlideListItem slide)
+        if (item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
             var position = e.GetPosition(item);
             return position.Y > item.Bounds.Height / 2
@@ -540,162 +447,60 @@ internal sealed class CustomShowDialog : Window
         return ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex).ShouldApplyMutation;
     }
 
-    internal bool CompleteCustomShowSlideDragForTests(
-        int sourceSlideIndex,
-        int targetDropIndex,
-        bool isInsideList) =>
-        CompleteCustomShowSlideDrag(sourceSlideIndex, targetDropIndex, isInsideList);
-
-    internal bool IsCustomShowSlideDragActiveForTests => _customShowSlideDragActive;
-
-    internal IPointer BeginCustomShowSlideDragForTests(int sourceSlideIndex)
-    {
-        _customShowSlideDragStartPoint = new Point();
-        _customShowSlideDragSourceIndex = sourceSlideIndex;
-        _customShowSlideDragActive = true;
-        var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, isPrimary: true);
-        pointer.Capture(this);
-        return pointer;
-    }
-
     private SlideShowCustomShowDragReorderPlan ApplyCustomShowSlideDragReorder(
         int sourceSlideIndex,
-        int targetDropIndex)
-    {
-        var selected = SelectedShow;
-        var session = _host.BuildCustomShowSessionPlan(
-            selected is null
-                ? new SlideShowCustomShowSessionState(-1)
-                : SlideShowCustomShowSessionPlanner.SelectShow(selected.Index));
-        var plan = SlideShowCustomShowSessionPlanner.BuildDragReorderPlan(
-            session,
-            sourceSlideIndex,
-            targetDropIndex);
-
-        if (!plan.IsValid)
-        {
-            SetValidation(plan.ErrorMessage);
-            return plan;
-        }
-
-        if (!plan.ShouldApplyMutation)
-        {
-            _customShowSlideList.SelectedIndex = plan.SelectedSlideIndex;
-            SetValidation(null);
-            return plan;
-        }
-
-        ApplyMutationResult(_host.MoveCustomShowSlide(
-            selected!.Index,
-            plan.SourceSlideIndex,
-            plan.SourceSlideId,
-            plan.TargetSlideIndex));
-        return plan;
-    }
-
-    private void OnDelete()
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
-
-        var deletedIndex = SelectedShow.Index;
-        var result = _host.DeleteCustomShow(deletedIndex);
-        if (!result.Succeeded)
-        {
-            SetValidation(result.ErrorMessage);
-            return;
-        }
-
-        Refresh(Math.Max(0, deletedIndex - 1));
-    }
-
-    private void OnStartShow()
-    {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return;
-        }
-
-        if (!_host.TryStartCustomSlideShow(SelectedShow.Name))
-        {
-            SetValidation(SlideShowCustomShowPlanner.EmptyCustomShowMessage);
-            return;
-        }
-
-        Close();
-    }
-
-    private void ApplyMutationResult(SlideShowCustomShowMutationResult result)
-    {
-        if (!result.Succeeded)
-        {
-            SetValidation(result.ErrorMessage);
-            return;
-        }
-
-        Refresh(result.CustomShowIndex, result.SelectedSlideIndex);
-    }
-
-    private void RebuildCustomShowSlides(
-        IReadOnlyList<SlideShowCustomShowSessionSlideItemPlan> slides)
-    {
-        _customShowSlideList.ItemsSource = slides
-            .Select(slide => new CustomShowSlideListItem(
-                slide.Index,
-                slide.SlideId,
-                slide.DisplayText))
-            .ToArray();
-        if (_customShowSlideList.Items.Count > 0 && _customShowSlideList.SelectedIndex < 0)
-            _customShowSlideList.SelectedIndex = 0;
-        UpdateMoveButtons();
-    }
-
-    private void UpdateMoveButtons()
-    {
-        var selectedIndex = _customShowSlideList.SelectedIndex;
-        var hasCustomShowSlide = selectedIndex >= 0 && selectedIndex < _customShowSlideList.Items.Count;
-        _moveUpButton.IsEnabled = hasCustomShowSlide && selectedIndex > 0;
-        _moveDownButton.IsEnabled = hasCustomShowSlide && selectedIndex < _customShowSlideList.Items.Count - 1;
-        _removeButton.IsEnabled = hasCustomShowSlide;
-    }
-
-    private IEnumerable<string?> SelectedSlideIds() =>
-        _slideCheckBoxes
-            .Where(checkBox => checkBox.IsChecked == true)
-            .Select(checkBox => checkBox.Tag as string);
-
-    private CustomShowListItem? SelectedShow => _showList.SelectedItem as CustomShowListItem;
-
-    private void SetValidation(string? message) =>
-        _validationText.Text = message ?? string.Empty;
+        int targetDropIndex) =>
+        _controller.Reorder(sourceSlideIndex, targetDropIndex);
 
     private static void ApplyListChrome(ListBox listBox)
     {
         AvaloniaCompactDialogChrome.ApplyListBox(listBox, DialogChromeStyle);
-        listBox.Background = Brushes.White;
+        listBox.Background = FreePBrushes.White;
         listBox.BorderBrush = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0));
         listBox.BorderThickness = new Thickness(1);
     }
 
-    private static Button MakeButton(
-        string label,
+    private Button MakeButton(
+        SlideShowCustomShowDialogAction actionId,
         Action onClick,
-        bool isDefault = false,
-        bool isCancel = false)
+        string? automationSuffix = null)
     {
+        var action = Surface.Action(actionId, automationSuffix);
         var button = new Button
         {
-            Content = label,
-            IsDefault = isDefault,
-            IsCancel = isCancel,
+            Content = action.Label,
+            IsDefault = action.IsDefault,
+            IsCancel = action.IsCancel,
         };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 82, isDefault: isDefault);
+        AutomationProperties.SetName(button, action.AccessibleName);
+        AutomationProperties.SetAutomationId(button, action.AutomationId);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: 82,
+            isDefault: action.IsDefault);
         button.Click += (_, _) => onClick();
+        if (automationSuffix is null)
+            _formSession.RegisterAction(actionId, button);
         return button;
+    }
+
+    private static void SetItemsSource(Control control, object? items) =>
+        ((ItemsControl)control).ItemsSource = items as System.Collections.IEnumerable;
+
+    private static void SetText(Control control, string text)
+    {
+        switch (control)
+        {
+            case TextBox textBox:
+                textBox.Text = text;
+                break;
+            case TextBlock textBlock:
+                textBlock.Text = text;
+                break;
+            default:
+                throw new InvalidOperationException($"Unsupported custom show text control: {control.GetType().Name}.");
+        }
     }
 
     private static T? FindControlAncestor<T>(object? source)
@@ -712,13 +517,4 @@ internal sealed class CustomShowDialog : Window
         return null;
     }
 
-    private sealed record CustomShowListItem(int Index, string Name, int SlideCount, string DisplayText)
-    {
-        public override string ToString() => DisplayText;
-    }
-
-    private sealed record CustomShowSlideListItem(int Index, string SlideId, string DisplayText)
-    {
-        public override string ToString() => DisplayText;
-    }
 }

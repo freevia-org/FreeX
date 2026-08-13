@@ -1,11 +1,9 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless;
 using Free.Shared.Drawing;
-using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -14,8 +12,7 @@ namespace FreeP.App.Rendering.Avalonia.Tests;
 /// <summary>
 /// R134 remediation (tracked as task #150, an r133 residual): r133 wired
 /// <see cref="SlideImageRenderDiagnostics"/> into File &gt; Export to PDF, but left File &gt; Export &gt;
-/// Images (<see cref="MainWindow.FileExportImagesToFolderCore"/>) and File &gt; Export &gt; Video
-/// (<see cref="MainWindow.BuildVideoFramePackageCore"/>) unwired on the Avalonia shell too -- an
+/// Images and File &gt; Export &gt; Video unwired on the Avalonia shell too -- an
 /// undecodable embedded picture silently disappeared from those two exports with zero surfacing.
 ///
 /// <para>
@@ -37,8 +34,7 @@ namespace FreeP.App.Rendering.Avalonia.Tests;
 /// backend (<c>UseHeadlessDrawing = false</c>) -- the same harness
 /// <see cref="SlideCanvasRasterPdfImageDiagnosticsTests"/> already uses to prove the underlying
 /// <see cref="SlideImageRenderDiagnostics"/> mechanism works when rendering actually completes. It drives
-/// the exact production composition each command uses -- <see cref="MainWindow.FileExportImagesToFolderCore"/>
-/// and <see cref="MainWindow.BuildVideoFramePackageCore"/>, not a re-implementation, and asserts
+/// the exact shared production executors with the real Avalonia renderer delegate and asserts
 /// unconditionally: no <c>if (ran)</c> guard, because under a real Skia backend the render genuinely
 /// completes and there is nothing to tolerate.
 /// </para>
@@ -90,26 +86,25 @@ public sealed class R134_ExportImagesAndVideoImageDiagnosticsTests
     // ---- Export > Images -------------------------------------------------
 
     [Fact]
-    public async Task FileExportImagesToFolderCore_SurfacesImageDiagnostics_WhenSlidePictureBytesAreUndecodable()
+    public async Task ExportImages_SurfacesImageDiagnostics_WhenSlidePictureBytesAreUndecodable()
     {
         var deck = DeckWithPicture([0x00, 0x01, 0x02, 0x03, 0x04]);
         var outputDirectory = Path.Combine(Path.GetTempPath(), "FreeP-R134-Avalonia-Images-" + Guid.NewGuid().ToString("N"));
-        var imageDiagnostics = new List<string>();
-        PresentationImageExportResult? result = null;
+        PresentationImageExportArtifact? artifact = null;
 
         try
         {
             await Run(() =>
             {
-                result = MainWindow.FileExportImagesToFolderCore(
+                artifact = PresentationImageExportExecutor.ExportWithDiagnostics(
                     deck,
                     new PresentationImageExportRequest(outputDirectory, BaseFileName: "Deck"),
-                    imageDiagnostics);
+                    SlideRenderer.RenderToBytes);
             });
 
-            result.Should().NotBeNull();
-            result!.ExportedSlides.Should().HaveCount(1);
-            imageDiagnostics.Should().NotBeEmpty(
+            artifact.Should().NotBeNull();
+            artifact!.Result.ExportedSlides.Should().HaveCount(1);
+            artifact.ImageDiagnostics.Should().NotBeEmpty(
                 "the undecodable slide picture must be surfaced through the image export path (File > Export > Images), not silently dropped");
         }
         finally
@@ -120,24 +115,25 @@ public sealed class R134_ExportImagesAndVideoImageDiagnosticsTests
     }
 
     [Fact]
-    public async Task FileExportImagesToFolderCore_NoImageDiagnostics_WhenSlidePictureIsDecodable()
+    public async Task ExportImages_NoImageDiagnostics_WhenSlidePictureIsDecodable()
     {
         // Sibling no-regression: a valid embedded picture must not spuriously report an image warning.
         var deck = DeckWithPicture(MinimalPngBytes());
         var outputDirectory = Path.Combine(Path.GetTempPath(), "FreeP-R134-Avalonia-Images-" + Guid.NewGuid().ToString("N"));
-        var imageDiagnostics = new List<string>();
+        PresentationImageExportArtifact? artifact = null;
 
         try
         {
             await Run(() =>
             {
-                MainWindow.FileExportImagesToFolderCore(
+                artifact = PresentationImageExportExecutor.ExportWithDiagnostics(
                     deck,
                     new PresentationImageExportRequest(outputDirectory, BaseFileName: "Deck"),
-                    imageDiagnostics);
+                    SlideRenderer.RenderToBytes);
             });
 
-            imageDiagnostics.Should().BeEmpty();
+            artifact.Should().NotBeNull();
+            artifact!.ImageDiagnostics.Should().BeEmpty();
         }
         finally
         {
@@ -149,38 +145,44 @@ public sealed class R134_ExportImagesAndVideoImageDiagnosticsTests
     // ---- Export > Video ----------------------------------------------------
 
     [Fact]
-    public async Task BuildVideoFramePackageCore_SurfacesImageDiagnostics_WhenSlidePictureBytesAreUndecodable()
+    public async Task BuildVideoFramePackage_SurfacesImageDiagnostics_WhenSlidePictureBytesAreUndecodable()
     {
         var deck = DeckWithPicture([0x00, 0x01, 0x02, 0x03, 0x04]);
-        var imageDiagnostics = new List<string>();
-        PresentationVideoFramePackage? package = null;
+        PresentationVideoFramePackageArtifact? artifact = null;
 
         await Run(() =>
         {
-            package = MainWindow.BuildVideoFramePackageCore(
-                deck, request: null, EncodableHostCapabilities(), imageDiagnostics);
+            artifact = PresentationVideoFramePackageExecutor.BuildPackageWithDiagnostics(
+                deck,
+                request: null,
+                SlideRenderer.RenderToBytes,
+                EncodableHostCapabilities());
         });
 
-        package.Should().NotBeNull();
-        package!.Frames.Should().NotBeEmpty();
-        imageDiagnostics.Should().NotBeEmpty(
+        artifact.Should().NotBeNull();
+        artifact!.Package.Frames.Should().NotBeEmpty();
+        artifact.ImageDiagnostics.Should().NotBeEmpty(
             "the undecodable slide picture must be surfaced through the video frame export path (File > Export > Video), not silently dropped");
     }
 
     [Fact]
-    public async Task BuildVideoFramePackageCore_NoImageDiagnostics_WhenSlidePictureIsDecodable()
+    public async Task BuildVideoFramePackage_NoImageDiagnostics_WhenSlidePictureIsDecodable()
     {
         // Sibling no-regression: a valid embedded picture must not spuriously report an image warning.
         var deck = DeckWithPicture(MinimalPngBytes());
-        var imageDiagnostics = new List<string>();
+        PresentationVideoFramePackageArtifact? artifact = null;
 
         await Run(() =>
         {
-            MainWindow.BuildVideoFramePackageCore(
-                deck, request: null, EncodableHostCapabilities(), imageDiagnostics);
+            artifact = PresentationVideoFramePackageExecutor.BuildPackageWithDiagnostics(
+                deck,
+                request: null,
+                SlideRenderer.RenderToBytes,
+                EncodableHostCapabilities());
         });
 
-        imageDiagnostics.Should().BeEmpty();
+        artifact.Should().NotBeNull();
+        artifact!.ImageDiagnostics.Should().BeEmpty();
     }
 
     // ---- Ambient-sink scoping: must not leak across sequential/concurrent exports --------
@@ -200,28 +202,30 @@ public sealed class R134_ExportImagesAndVideoImageDiagnosticsTests
 
         try
         {
-            var firstDiagnostics = new List<string>();
-            var secondDiagnostics = new List<string>();
+            PresentationImageExportArtifact? firstArtifact = null;
+            PresentationImageExportArtifact? secondArtifact = null;
 
             await Run(() =>
             {
-                MainWindow.FileExportImagesToFolderCore(
+                firstArtifact = PresentationImageExportExecutor.ExportWithDiagnostics(
                     badDeck,
                     new PresentationImageExportRequest(badDir, BaseFileName: "Bad"),
-                    firstDiagnostics);
+                    SlideRenderer.RenderToBytes);
 
-                MainWindow.FileExportImagesToFolderCore(
+                secondArtifact = PresentationImageExportExecutor.ExportWithDiagnostics(
                     goodDeck,
                     new PresentationImageExportRequest(goodDir, BaseFileName: "Good"),
-                    secondDiagnostics);
+                    SlideRenderer.RenderToBytes);
 
                 // Reporting outside of any installed Capture scope (post-dispose) must be a no-op, not a
                 // write into whichever list happened to be installed most recently.
                 SlideImageRenderDiagnostics.ReportUndecodableImage(1, "post-scope report");
             });
 
-            firstDiagnostics.Should().NotBeEmpty();
-            secondDiagnostics.Should().BeEmpty(
+            firstArtifact.Should().NotBeNull();
+            secondArtifact.Should().NotBeNull();
+            firstArtifact!.ImageDiagnostics.Should().NotBeEmpty();
+            secondArtifact!.ImageDiagnostics.Should().BeEmpty(
                 "diagnostics from an earlier, already-completed export must not leak into a later export's own list, " +
                 "and reporting outside any Capture scope must be a no-op");
         }

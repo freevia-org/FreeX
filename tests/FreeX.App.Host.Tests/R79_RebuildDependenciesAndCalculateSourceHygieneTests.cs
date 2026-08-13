@@ -30,6 +30,6 @@ public sealed class R79_RebuildDependenciesAndCalculateSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
 
         source.Should().Contain("private void RebuildDependenciesAndCalculate()");
-        source.Should().Contain("_recalcEngine.RecalculateAllFormulas(_workbook);");
+        source.Should().Contain("_session.RecalculateWorkbook();");
     }
 }

@@ -38,6 +38,17 @@ public sealed class ProofingPresentationPlannerTests
     }
 
     [Fact]
+    public void Proofing_language_dialog_planner_resolves_localized_surface()
+    {
+        var plan = ProofingLanguageDialogPlanner.Build("", key => $"localized:{key}");
+
+        plan.Text.Title.Should().Be("localized:ProofingLanguage_Dialog_Title");
+        plan.Text.LanguageLabel.Should().Be("localized:ProofingLanguage_Language_Label");
+        plan.Text.Instruction.Should().Be("localized:ProofingLanguage_Instruction");
+        plan.Choices[0].DisplayText.Should().Be("localized:ProofingLanguage_Clear_Label");
+    }
+
+    [Fact]
     public void Proofing_language_apply_planner_normalizes_tag_and_single_range()
     {
         var plan = ProofingLanguageApplyPlanner.Build(" fr-FR ", [2], 3, 8);
@@ -121,10 +132,7 @@ public sealed class ProofingPresentationPlannerTests
         plan.Senses[0].DisplayLabel.Should().Be("adjective");
         plan.Senses[0].Actions.Select(action => action.DisplayText)
             .Should().Equal("glad of", "cheerful");
-        // ThesaurusActionRow.ReplaceToolTip is a compatibility alias for InsertToolTip; the wording moved
-        // from "Replace X with Y" to "Insert Y in place of X" in a57cb73ff4 "Close FreeW Avalonia
-        // thesaurus action parity" (see ThesaurusPresentationPlannerTests for the current contract).
-        plan.Senses[0].Actions[0].ReplaceToolTip.Should().Be("Insert \"glad of\" in place of \"Happy\"");
+        plan.Senses[0].Actions[0].InsertToolTip.Should().Be("Insert \"glad of\" in place of \"Happy\"");
         plan.Senses[0].Actions[0].CopyToolTip.Should().Be("Copy \"glad of\" to clipboard");
     }
 

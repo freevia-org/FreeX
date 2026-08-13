@@ -125,10 +125,11 @@ public sealed partial class EuLocalizationResourceTests
     [MemberData(nameof(ExpectedEuOfficeSatelliteCultureData))]
     public void SatelliteResx_MatchesNeutralKeysPlaceholdersAndAccessKeyCounts(string cultureName)
     {
-        var neutral = ReadResxValues("Strings.resx");
+        var neutral = ReadEffectiveNeutralValues();
         var localized = ReadResxValues($"Strings.{cultureName}.resx");
 
-        // The Loc neutral is a superset; satellites are translated subsets.
+        // The effective neutral catalog composes app-owned and shared generic resources;
+        // satellites are translated subsets and may override keys owned by either catalog.
         // Verify no orphan satellite keys, no blank values, and consistent placeholder/access-key counts
         // for all keys actually present in the satellite resx.
         neutral.Keys.Should().Contain(localized.Keys,

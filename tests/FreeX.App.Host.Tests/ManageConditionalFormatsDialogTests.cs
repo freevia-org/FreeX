@@ -1,19 +1,14 @@
-using System.Reflection;
 using System.Windows.Controls;
 using FluentAssertions;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
 public sealed partial class ManageConditionalFormatsDialogTests
 {
-    private static ConditionalFormat CloneWithPriority(ConditionalFormat source, int priority, Guid? id = null)
-    {
-        var method = typeof(ManageConditionalFormatsDialog)
-            .GetMethod("CloneWithPriority", BindingFlags.Static | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        return method!.Invoke(null, [source, priority, id]).Should().BeOfType<ConditionalFormat>().Subject;
-    }
+    private static ConditionalFormat CloneWithPriority(ConditionalFormat source, int priority, Guid? id = null) =>
+        ManageConditionalFormatsPlanner.CloneWithPriority(source, priority, id);
 
     private static T GetControl<T>(ManageConditionalFormatsDialog dialog, string name)
         where T : class

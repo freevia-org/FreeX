@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <Import Project="..\..\..\tools\ToolProjects.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
+    <ProjectReference Include="..\..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
+    <ProjectReference Include="..\..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+  </ItemGroup>
+
+</Project>

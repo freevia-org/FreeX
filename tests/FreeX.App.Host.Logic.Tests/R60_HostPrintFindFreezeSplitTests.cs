@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FluentAssertions;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -173,7 +174,7 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
-                    commandBus,
+                    command => commandBus.Execute(workbook.Id, command),
                     _ => { },
                     getCurrentSheetId: () => sheet.Id,
                     getActiveSelectionCell: () => window.SheetGrid.SelectedRange?.Start)
@@ -225,7 +226,7 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
-                    commandBus,
+                    command => commandBus.Execute(workbook.Id, command),
                     _ => { },
                     getCurrentSheetId: () => sheet.Id,
                     getActiveSelectionCell: () => null)
@@ -284,7 +285,7 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
-                    commandBus,
+                    command => commandBus.Execute(workbook.Id, command),
                     _ => { },
                     getCurrentSheetId: () => sheet.Id,
                     getActiveSelectionCell: () => window.SheetGrid.SelectedRange?.Start)
@@ -355,7 +356,7 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
-                    commandBus,
+                    command => commandBus.Execute(workbook.Id, command),
                     _ => { },
                     getCurrentSheetId: () => sheet.Id,
                     getActiveSelectionCell: () => window.SheetGrid.SelectedRange?.Start)
@@ -487,9 +488,7 @@ public sealed class R60_HostPrintFindFreezeSplitTests
         var linkOverlays = new List<PdfLinkOverlay>();
         var cellDestinationOverlays = new List<PdfCellDestinationOverlay>();
 
-        var linkTargetType = typeof(PrintRenderer).GetNestedType("PdfLinkTarget", BindingFlags.NonPublic)!;
-        var hyperlinkLookupType = typeof(Dictionary<,>).MakeGenericType(typeof(ValueTuple<uint, uint>), linkTargetType);
-        var hyperlinkLookup = Activator.CreateInstance(hyperlinkLookupType)!;
+        var hyperlinkLookup = new Dictionary<(uint Row, uint Col), WorksheetPrintHyperlinkPlan>();
         var cellDestinationLookup = new Dictionary<(uint Row, uint Col), CellAddress>();
 
         var method = typeof(PrintRenderer).GetMethod(

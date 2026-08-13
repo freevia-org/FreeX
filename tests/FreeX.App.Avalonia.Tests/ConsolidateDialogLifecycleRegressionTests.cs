@@ -15,12 +15,9 @@ public sealed class ConsolidateDialogLifecycleRegressionTests
     [Fact]
     public async Task ConsolidateDialog_UsesWpfFunctionComboAsInitialFocusAndCyclesKeyboardLifecycle()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-consolidate-focus-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-consolidate-focus-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -66,29 +63,14 @@ public sealed class ConsolidateDialogLifecycleRegressionTests
                 }
             }, CancellationToken.None);
         }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Temp cleanup must not hide the dialog focus regression.
-            }
-        }
     }
 
     [Fact]
     public async Task ConsolidateCapture_UsesFixtureStateAndProducesFixedNonBlankSurface()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-consolidate-capture-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-consolidate-capture-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -126,18 +108,6 @@ public sealed class ConsolidateDialogLifecycleRegressionTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Temp cleanup must not hide the capture regression.
-            }
         }
     }
 }

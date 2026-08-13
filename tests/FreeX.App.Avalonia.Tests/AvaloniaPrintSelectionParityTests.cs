@@ -26,27 +26,17 @@ public sealed class AvaloniaPrintSelectionParityTests
     }
 
     [Fact]
-    public void PrintAndExportEntryPoints_UseTheSameSelectionGate()
+    public void PrintAndBackstageExport_UseSharedSelectionPolicy()
     {
         var printSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
         var backstageSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Backstage.cs"));
 
         printSource.Should().Contain("var hasSelection = HasPrintSelection(_session.SelectedRange);");
-        backstageSource.Should().Contain("var hasSelection = HasPrintSelection(_session.SelectedRange);");
+        backstageSource.Should().Contain("WorkbookExportInteractionPlanner.CreateCommandPlan(");
+        backstageSource.Should().Contain("_session.SelectedRange");
+        backstageSource.Should().NotContain("HasPrintSelection(");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var current = AppContext.BaseDirectory;
-        while (current is not null)
-        {
-            var candidate = Path.Combine(new[] { current }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            current = Directory.GetParent(current)?.FullName;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

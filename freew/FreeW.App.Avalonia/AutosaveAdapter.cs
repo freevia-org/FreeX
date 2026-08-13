@@ -7,13 +7,12 @@ using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Shell;
-using FreeW.Core.IO;
 
 namespace FreeW.App.Avalonia;
 
 /// <summary>
-/// Avalonia-shell autosave + crash-recovery, mirroring <c>FreeW.App.Host.AutosaveCoordinator</c>
-/// but using an async <see cref="Task.Delay"/>-based loop instead of a WPF DispatcherTimer.
+/// Avalonia scheduling, dispatch, and prompt adapter for the renderer-neutral
+/// <see cref="FreeWAutosaveSession"/>.
 ///
 /// <para>
 /// Call <see cref="Start"/> after the window opens and <see cref="StopAsync"/> after the
@@ -21,67 +20,37 @@ namespace FreeW.App.Avalonia;
 /// surface any snapshot from a previous crashed session.
 /// </para>
 /// </summary>
-internal sealed class AutosaveAdapter : IDisposable
+internal sealed partial class AutosaveAdapter : IDisposable
 {
-    // Default autosave interval mirrors the WPF host (30 s).
-    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
-
-    private readonly AutosaveSnapshotStore _store;
-    private readonly AutosaveSnapshotCoordinator _coordinator;
-    private readonly SnapshotSource _source;
+    private readonly DocumentView _editor;
+    private readonly FileCommandWorkflow _workflow;
+    private readonly FreeWAutosaveSession _session;
     private readonly Func<AutosaveRecoveryCandidate, Task<bool>>? _recoverInNewWindowAsync;
     private CancellationTokenSource? _cts;
 
-    // Unique per MainWindow instance — see FreeW.App.Host.AutosaveCoordinator's matching field for
-    // why: the snapshot ID used to be keyed on the per-PROCESS AutosaveSnapshotStore.LaunchId alone,
-    // so multiple MainWindow instances in the same process (FreeW.App.Avalonia.MainWindow supports
-    // "New Window" / report windows, same as the WPF host) shared one snapshot slot and could
-    // overwrite or delete each other's crash-recovery data.
-    private readonly Guid _windowId = Guid.NewGuid();
-
-    /// <summary>
-    /// The <paramref name="store"/> parameter exists so tests can point two adapters at an
-    /// isolated temp directory instead of the real per-user Recovery folder (production always
-    /// passes null, which resolves to <see cref="AutosaveSnapshotStore.CreateDefault"/> exactly as
-    /// before this parameter was added). <paramref name="recoverInNewWindowAsync"/> is how
-    /// <see cref="OfferRecoveryAsync"/> hands off every accepted candidate beyond the first: the
-    /// first restores into the window that owns this adapter, every additional one is opened in a
-    /// brand-new window via this callback (mirrors <c>MainWindow.OpenNewWindow</c>'s
-    /// window-creation pattern) so accepting more than one pending snapshot never overwrites an
-    /// already-recovered document. Null (the default, used by tests that don't need it) means extra
-    /// candidates are simply left on disk, unrecovered.
-    /// </summary>
     public AutosaveAdapter(
         DocumentView editor,
         FileCommandWorkflow workflow,
-        AutosaveSnapshotStore? store = null,
+        Func<FreeWAutosavePorts, FreeWAutosaveSession>? sessionFactory = null,
         Func<AutosaveRecoveryCandidate, Task<bool>>? recoverInNewWindowAsync = null)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(workflow);
 
-        _store = store ?? AutosaveSnapshotStore.CreateDefault(PlatformApplicationDataPathProvider.LocalInstance);
-        var launchTag = AutosaveSnapshotStore.LaunchId.ToString("N")[..8];
-        var windowTag = _windowId.ToString("N")[..8];
-        _coordinator = new AutosaveSnapshotCoordinator(
-            _store,
-            FormattableString.Invariant($"recovery-{Environment.ProcessId}-{launchTag}-{windowTag}"));
-        _source = new SnapshotSource(editor, workflow);
+        _editor = editor;
+        _workflow = workflow;
+        var ports = new FreeWAutosavePorts(
+            GetOriginalFilePath: () => workflow.CurrentPath,
+            GetDisplayName: () => workflow.DisplayName,
+            GetIsDirty: () => workflow.IsDirty,
+            GetDirtyGeneration: () => workflow.DirtyGeneration,
+            ExecuteWithDocument: writeDocument => Dispatcher.UIThread.InvokeAsync(() =>
+                writeDocument(editor.Document))
+                .GetAwaiter()
+                .GetResult());
+        _session = sessionFactory?.Invoke(ports) ?? new FreeWAutosaveSession(ports);
         _recoverInNewWindowAsync = recoverInNewWindowAsync;
     }
-
-    /// <summary>Test seam (FreeW.App.Avalonia.Tests has InternalsVisibleTo). Exposes the snapshot ID
-    /// this instance resolved to, and lets a test drive a snapshot write without waiting on the loop.</summary>
-    internal string SnapshotIdForTests => _coordinator.SnapshotId;
-    internal void SnapshotNowForTests() => _coordinator.Snapshot(_source);
-
-    /// <summary>Test seam: simulates this window's process having crashed — releases the
-    /// Round134-remediation liveness lock (exactly what the OS does automatically on a real
-    /// process exit) while deliberately leaving the already-written snapshot + sidecar files on
-    /// disk, so a test can build an orphaned-but-real recovery candidate without an actual crash.
-    /// Does NOT call <see cref="StopAsync"/>/DeleteSnapshot — those would delete the very files a
-    /// real crash leaves behind.</summary>
-    internal void SimulateCrashForTests() => _coordinator.Dispose();
 
     /// <summary>
     /// Start the periodic autosave loop. Safe to call from any thread.
@@ -102,27 +71,18 @@ internal sealed class AutosaveAdapter : IDisposable
     /// </summary>
     public async Task StopAsync()
     {
-        if (_cts is null)
-            return;
+        if (_cts is not null)
+        {
+            await _cts.CancelAsync();
+            _cts.Dispose();
+            _cts = null;
+        }
 
-        await _cts.CancelAsync();
-        _cts.Dispose();
-        _cts = null;
-
-        try { _coordinator.DeleteSnapshot(); } catch { /* best-effort */ }
-        // Releases this window's liveness lock (Round134-remediation) deterministically on close,
-        // rather than leaving it to whenever the GC finalizes the underlying handle — see
-        // AutosaveSnapshotCoordinator.Dispose / ReleaseOwnershipLock.
-        try { _coordinator.Dispose(); } catch { /* best-effort */ }
+        _session.CompleteCleanExit();
     }
 
     /// <summary>
-    /// If snapshots survive from a previous session, offer to recover ALL of them, one prompt at a
-    /// time (R133-remediation: previously only the single latest candidate was ever offered, so a
-    /// crash with two or more windows open left every window but one orphaned on disk). The first
-    /// accepted candidate restores into <paramref name="owner"/>; every additional accepted
-    /// candidate opens its own new window via the constructor's <c>recoverInNewWindowAsync</c>
-    /// callback, so accepting more than one never overwrites an already-recovered document.
+    /// Check for recovery candidates from a previous session and offer each one in order.
     /// Must be called from the UI thread (it may show an Avalonia dialog).
     /// Errors are swallowed — recovery is best-effort and never blocks startup.
     /// </summary>
@@ -132,63 +92,27 @@ internal sealed class AutosaveAdapter : IDisposable
 
         try
         {
-            // Round134-remediation: a snapshot still owned by a currently-open window (this
-            // process or another) must never be listed here — see
-            // AutosaveSnapshotStore.ExcludeLiveOwned.
-            var candidates = AutosaveRecoveryPlanner.SelectAllOrdered(
-                _store.ExcludeLiveOwned(_store.EnumerateCandidates()));
-            if (candidates.Count == 0)
-                return;
-
-            var anyAccepted = false;
-
-            for (var i = 0; i < candidates.Count; i++)
-            {
-                var candidate = candidates[i];
-                var name = AutosaveRecoveryPlanner.DisplayName(candidate);
-                var remaining = candidates.Count - i;
-                var prompt = remaining > 1
-                    ? $"FreeW found unsaved changes to \"{name}\" from a previous session ({remaining} unsaved documents found). Recover this one?"
-                    : $"FreeW found unsaved changes to \"{name}\" from a previous session. Recover them?";
-
-                var recover = await RecoveryPromptDialog.ShowAsync(owner, prompt);
-                if (!recover)
+            await FreeWRecoveryWorkflow.RunAsync(
+                _session.PlanRecoveries(),
+                FreeWRecoveryPromptMode.StartupQuotedDisplayName,
+                offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
+                async (recovery, useCurrentWindow) =>
                 {
-                    // Leave the candidate on disk for later recovery; keep asking about any
-                    // remaining candidates rather than stopping at the first decline.
-                    continue;
-                }
-
-                // The first accepted candidate restores into the window that is already open; every
-                // later accepted candidate gets its own new window (mirrors the WPF host's
-                // AutosaveCoordinator.OfferRecovery, which does the same split).
-                var isFirstAccepted = !anyAccepted;
-                anyAccepted = true;
-
-                bool recovered;
-                if (isFirstAccepted)
-                {
-                    try
+                    if (useCurrentWindow)
                     {
-                        var doc = DocxReader.Read(candidate.SnapshotPath);
-                        _source.LoadRecoveredSnapshot(doc, candidate.Sidecar.OriginalFilePath);
-                        recovered = true;
+                        var recoveredInCurrentWindow = _session.CompleteDocumentRecovery(recovery, accepted: true, (document, originalPath) =>
+                        {
+                            _editor.LoadDocument(document);
+                            _workflow.MarkDirtyWithPath(originalPath);
+                        }, FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
+                        return recoveredInCurrentWindow;
                     }
-                    catch
-                    {
-                        recovered = false;
-                    }
-                }
-                else
-                {
-                    recovered = _recoverInNewWindowAsync is null
-                        ? false
-                        : await _recoverInNewWindowAsync(candidate);
-                }
 
-                ApplyRecoveryDisposition(candidate,
-                    AutosaveRecoveryPlanner.ResolveDisposition(accepted: true, recovered: recovered));
-            }
+                    var recovered = _recoverInNewWindowAsync is not null &&
+                        await _recoverInNewWindowAsync(recovery.Candidate);
+                    _session.CompleteRecoveryResult(recovery, accepted: true, recovered);
+                    return recovered;
+                });
         }
         catch
         {
@@ -201,7 +125,7 @@ internal sealed class AutosaveAdapter : IDisposable
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;
-        _coordinator.Dispose();
+        _session.Dispose();
     }
 
     // ── Private ──────────────────────────────────────────────────────────────
@@ -210,81 +134,30 @@ internal sealed class AutosaveAdapter : IDisposable
     {
         while (!ct.IsCancellationRequested)
         {
-            try { await Task.Delay(Interval, ct); }
+            try { await Task.Delay(FreeWAutosaveSession.DefaultInterval, ct); }
             catch (OperationCanceledException) { break; }
 
             if (ct.IsCancellationRequested)
                 break;
 
-            // Coordinator is best-effort and never throws. Skips when not dirty.
-            _coordinator.Snapshot(_source);
+            // The portable session is best-effort and skips unchanged or clean documents.
+            _session.Snapshot();
         }
     }
 
-    private static void ApplyRecoveryDisposition(
-        AutosaveRecoveryCandidate candidate,
-        AutosaveRecoveryDisposition disposition)
-    {
-        switch (disposition)
-        {
-            case AutosaveRecoveryDisposition.Delete:
-                AutosaveSnapshotStore.DeleteCandidate(candidate);
-                break;
-            case AutosaveRecoveryDisposition.Quarantine:
-                AutosaveSnapshotStore.QuarantineCandidate(candidate);
-                break;
-        }
-    }
-
-    // ── IAutosaveSnapshotSource adapter ─────────────────────────────────────
-
-    private sealed class SnapshotSource : IAutosaveSnapshotSource
-    {
-        private readonly DocumentView _editor;
-        private readonly FileCommandWorkflow _workflow;
-
-        public SnapshotSource(DocumentView editor, FileCommandWorkflow workflow)
-        {
-            _editor = editor;
-            _workflow = workflow;
-        }
-
-        public string? OriginalFilePath => _workflow.CurrentPath;
-        public string DisplayName => _workflow.DisplayName;
-        public bool IsDirty => _workflow.IsDirty;
-        public int DirtyGeneration => _workflow.DirtyGeneration;
-
-        public void WriteSnapshot(string snapshotPath)
-        {
-            // Must read the live document on the UI thread, then write.
-            Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                DocxWriter.Write(_editor.Document, snapshotPath);
-            }).GetAwaiter().GetResult();
-        }
-
-        /// <summary>
-        /// Called by the recovery path (already on the UI thread) to load the recovered
-        /// document and mark the workflow dirty so the user is prompted to save or discard.
-        /// </summary>
-        public void LoadRecoveredSnapshot(FreeW.Core.Model.TextDocument doc, string? originalPath)
-        {
-            _editor.LoadDocument(doc);
-            _workflow.MarkDirtyWithPath(originalPath);
-        }
-    }
 }
 
 /// <summary>
 /// Minimal Yes / No prompt for the autosave recovery offer.
 /// </summary>
-internal sealed class RecoveryPromptDialog : FreeWDialogWindow
+internal sealed partial class RecoveryPromptDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private RecoveryPromptDialog(string message)
     {
-        Title = "FreeW – Recover";
+        var recoveryText = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
+        Title = recoveryText.Title;
         Width = 420;
         Height = 160;
         CanResize = false;
@@ -297,11 +170,11 @@ internal sealed class RecoveryPromptDialog : FreeWDialogWindow
             Margin = new Thickness(16, 16, 16, 20),
         };
 
-        var yes = new Button { Content = "Recover", MinWidth = 82, IsDefault = true };
+        var yes = new Button { Content = recoveryText.RecoverButton, MinWidth = 82, IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(yes, DialogChromeStyle, minWidth: 82, isDefault: true);
         yes.Click += (_, _) => Close(true);
 
-        var no = new Button { Content = "Skip", MinWidth = 82, IsCancel = true };
+        var no = new Button { Content = recoveryText.SkipButton, MinWidth = 82, IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(no, DialogChromeStyle, minWidth: 82);
         no.Click += (_, _) => Close(false);
 
@@ -310,18 +183,16 @@ internal sealed class RecoveryPromptDialog : FreeWDialogWindow
         Content = new StackPanel { Children = { text, buttons } };
     }
 
-    /// <summary>
-    /// Test/headless seam mirroring the WPF host's <c>Free.Shared.Shell.HeadlessMessageBox.Handler</c>:
-    /// when set, <see cref="ShowAsync"/> returns this answer instead of constructing and showing a
-    /// real modal dialog window (driving a real Avalonia dialog to completion is unsupported/flaky
-    /// under the headless test platform used by this assembly's tests). Null (the default) shows the
-    /// real dialog exactly as before this seam was added.
-    /// </summary>
-    public static Func<string, bool>? TestResponder { get; set; }
-
     /// <summary>Show the prompt and return true if the user chose to recover.</summary>
-    public static Task<bool> ShowAsync(Window owner, string message) =>
-        TestResponder is { } responder
-            ? Task.FromResult(responder(message))
+    public static Task<bool> ShowAsync(Window owner, string message)
+    {
+        var handled = false;
+        var response = false;
+        ResolveResponseOverride(message, ref handled, ref response);
+        return handled
+            ? Task.FromResult(response)
             : new RecoveryPromptDialog(message).ShowDialog<bool>(owner);
+    }
+
+    static partial void ResolveResponseOverride(string message, ref bool handled, ref bool response);
 }

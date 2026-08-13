@@ -21,7 +21,7 @@ namespace FreeW.App.Avalonia;
 /// <see cref="IsVisible"/> via the View ribbon command (<c>freew.reveal-formatting</c>);
 /// defaults to hidden.
 /// </summary>
-public sealed class RevealFormattingPane : SidePaneBase
+public sealed partial class RevealFormattingPane : SidePaneBase
 {
     // ── State ─────────────────────────────────────────────────────────────────
 
@@ -112,23 +112,4 @@ public sealed class RevealFormattingPane : SidePaneBase
         }
     }
 
-    // ── Test-support ──────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Calls <see cref="RevealFormatting.Describe"/> for <paramref name="run"/> and
-    /// <paramref name="paragraph"/> against <paramref name="page"/> and returns the section
-    /// count. Exposed for headless tests only; the pane itself is not constructed.
-    /// </summary>
-    internal static int DescribeSectionCount(RunFormatting run, ParagraphFormatting paragraph, PageSettings page) =>
-        RevealFormatting.Describe(run, paragraph, page).Count;
-
-    /// <summary>
-    /// Calls <see cref="RevealFormatting.Describe"/> and returns the items under the named
-    /// <paramref name="sectionHeading"/> as a (Label, Value) list. Exposed for headless tests.
-    /// </summary>
-    internal static IReadOnlyList<RevealFormattingItem> DescribeSection(
-        RunFormatting run, ParagraphFormatting paragraph, PageSettings page, string sectionHeading) =>
-        RevealFormatting.Describe(run, paragraph, page)
-            .FirstOrDefault(s => s.Heading == sectionHeading)?.Items
-            ?? Array.Empty<RevealFormattingItem>();
 }

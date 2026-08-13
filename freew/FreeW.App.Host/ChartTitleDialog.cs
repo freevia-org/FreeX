@@ -16,15 +16,18 @@ internal sealed class ChartTitleDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private ChartTitleDialog(Window? owner, string? currentTitle)
     {
+        var surface = ChartTitleDialogPlanner.BuildSurface(UiText.Get);
         Owner = owner;
-        Title = "Chart Title";
+        Title = surface.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         _titleBox = new TextBox { Text = currentTitle ?? string.Empty, MinWidth = 200 };
+        WpfDialogSurfaceSemantics.Apply(_titleBox, surface.Field(ChartTitleDialogField.Title));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -32,7 +35,7 @@ internal sealed class ChartTitleDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var label = new TextBlock { Text = "Title:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        var label = new TextBlock { Text = surface.Field(ChartTitleDialogField.Title).Label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetRow(label, 0); Grid.SetColumn(label, 0);
         grid.Children.Add(label);
         Grid.SetRow(_titleBox, 0); Grid.SetColumn(_titleBox, 1);

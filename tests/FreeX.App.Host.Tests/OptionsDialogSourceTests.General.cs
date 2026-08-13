@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows.Controls;
 using System.Xml.Linq;
 using FreeX.App.Host;
@@ -13,22 +13,17 @@ public sealed partial class OptionsDialogSourceTests
     {
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "options.json");
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, path);
 
         StaTestRunner.Run(() =>
         {
-            // R123: OkBtn_Click now reloads on-disk options before saving and merges only the
-            // fields actually edited in this dialog session (see FreeXOptionsDialogMultiWindowSaveTests),
-            // so the dialog's opening snapshot must itself be persisted first -- exactly like the
-            // real app, where _opts always originates from a prior FreeXOptions.Load() (see
-            // MainWindow.xaml.cs).
-            var initial = new FreeXOptions
+            var initial = new AppOptions
             {
                 CollapseRibbonAutomatically = true,
                 ShowScreenTips = false,
                 SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh"]
             };
-            initial.SaveToPath(path);
+            AppOptionsStore.SaveToPath(initial, path).Should().BeTrue();
             var dialog = new OptionsDialog(initial);
             dialog.Show();
             try
@@ -54,7 +49,7 @@ public sealed partial class OptionsDialogSourceTests
             }
         });
 
-        var reloaded = FreeXOptions.LoadFromPath(path);
+        var reloaded = AppOptionsStore.LoadFromPath(path);
         reloaded.CollapseRibbonAutomatically.Should().BeFalse();
         reloaded.ShowScreenTips.Should().BeTrue();
         reloaded.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
@@ -65,13 +60,10 @@ public sealed partial class OptionsDialogSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
-        // R123: OkBtn_Click reloads current on-disk options into `opts` before saving (fixes a
-        // last-writer-wins race across MainWindow instances sharing one document, see
-        // FreeXOptionsDialogMultiWindowSaveTests) and normalizes the freshly-reloaded value in
-        // place rather than the dialog-open-time `_opts` snapshot.
-        source.Should().Contain("opts.PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(opts.PdfExportLanguage)");
-        source.Should().Contain("editedCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
-        source.Should().NotContain("SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords)");
+        source.Should().Contain("var saveResult = _dialogSession.Commit(");
+        source.Should().Contain("_dialogSession = (runtimeSession ?? new FreeXOptionsRuntimeSession(opts)).BeginDialog(opts);");
+        source.Should().Contain("_customDictionaryEditor = _dialogSession.CustomDictionary;");
+        source.Should().NotContain("SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords)");
     }
 
     [Fact]
@@ -160,7 +152,7 @@ public sealed partial class OptionsDialogSourceTests
         xaml.Should().Contain("Click=\"AddInsGoButton_Click\"");
         source.Should().Contain("PanelAddIns.Visibility");
         source.Should().Contain("private void AddInsGoButton_Click");
-        source.Should().Contain("DeferredCommandMessages.OfficeAddIns()");
+        source.Should().Contain("DeferredCommandMessagePlanner.OfficeAddIns()");
     }
 
     [Fact]
@@ -169,8 +161,7 @@ public sealed partial class OptionsDialogSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         UiText.Get("Options_DefaultFormatJson").Should().Be("FreeX Workbook (.fxl)");
-        source.Should().Contain("FreeXOptions.NormalizeDefaultFormat(_opts.DefaultFormat)");
-        source.Should().Contain("FreeXOptions.FreeXWorkbookDefaultFormat");
+        source.Should().Contain("OptionsDialogPlanner.IndexToDefaultFormat(OptDefaultFormat.SelectedIndex)");
         source.Should().NotContain("DefaultFormat == \".json\"");
         source.Should().NotContain("? \".json\"");
     }
@@ -221,17 +212,17 @@ public sealed partial class OptionsDialogSourceTests
 
         source.Should().Contain("OptAppLanguage.ItemsSource = AppLanguageCatalog.GetAvailableLanguages()");
         source.Should().Contain("OptAppLanguage.SelectedValue = AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage)");
-        // R123: computed into `editedAppLanguage` and applied onto the freshly-reloaded `opts`
-        // only when it actually changed from _opts -- see FreeXOptionsDialogMultiWindowSaveTests.
-        source.Should().Contain("editedAppLanguage = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string)");
+        source.Should().Contain("appLanguage: AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string)");
+        source.Should().Contain("var saveResult = _dialogSession.Commit(");
 
         backstageSource.Should().Contain("AppLocalization.Bootstrap.ApplyAppLanguage(_options.AppLanguage)");
         backstageSource.Should().Contain("UiText.Get(\"Options_AppLanguageRestartMessage\")");
         appSource.Should().Contain("AppLocalization.Bootstrap.ApplyAppLanguage(options.AppLanguage);");
-        appSource.Should().Contain("_startupOptions = options;");
-        appSource.Should().Contain("ConfigureServices(serviceCollection);");
-        appSource.Should().Contain("var options = _startupOptions ?? FreeXOptions.Load();");
-        appSource.Should().NotContain("var options = Services.GetRequiredService<FreeXOptions>();");
+        appSource.Should().Contain("var optionsRuntimeSession = new FreeXOptionsRuntimeSession();");
+        appSource.Should().Contain("ConfigureServices(serviceCollection, optionsRuntimeSession);");
+        appSource.Should().Contain("var options = optionsRuntimeSession.LiveOptions;");
+        appSource.Should().Contain("services.AddSingleton(optionsRuntimeSession);");
+        appSource.Should().NotContain("var options = Services.GetRequiredService<AppOptions>();");
     }
 
     [Fact]
@@ -239,10 +230,10 @@ public sealed partial class OptionsDialogSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
-        source.Should().Contain("OptionsInputParser.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize)");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Options_InvalidDefaultFontSizeMessage\"), OptDefaultFontSize);");
-        source.Should().Contain("OptionsInputParser.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount)");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Options_InvalidSheetCountMessage\"), OptSheetCount);");
+        source.Should().Contain("OptionsDialogPlanner.TryBuildInput(");
+        source.Should().Contain("OptionsDialogPlanner.DescribeInputError(");
+        source.Should().Contain("presentation.FocusTarget == OptionsValidationFocusTarget.DefaultFontSize");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, Control target)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().NotContain("ParseDefaultFontSizeOrFallback");
@@ -254,8 +245,8 @@ public sealed partial class OptionsDialogSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
-        source.Should().Contain("if (!opts.Save())");
-        source.Should().Contain("DialogMessageHelper.ShowError(this, opts.LastPersistenceError, Title);");
+        source.Should().Contain("if (!saveResult.IsPersisted)");
+        source.Should().Contain("DialogMessageHelper.ShowError(this, saveResult.PersistenceError, Title);");
         source.Should().Contain("return;");
         source.Should().Contain("DialogResult = true;");
     }

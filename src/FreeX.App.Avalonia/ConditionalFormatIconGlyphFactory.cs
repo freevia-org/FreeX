@@ -129,26 +129,10 @@ internal static class ConditionalFormatIconGlyphFactory
     /// </summary>
     private static Control StarFillFraction(CfGlyphOp op, IBrush iconFill)
     {
-        // Compute the bounding box from the star points.
-        var points = op.Points;
-        var minX = double.MaxValue;
-        var maxX = double.MinValue;
-        var minY = double.MaxValue;
-        var maxY = double.MinValue;
-        foreach (var p in points)
-        {
-            if (p.X < minX) minX = p.X;
-            if (p.X > maxX) maxX = p.X;
-            if (p.Y < minY) minY = p.Y;
-            if (p.Y > maxY) maxY = p.Y;
-        }
-
-        var starWidth  = maxX - minX;
-        var fillFraction = Math.Clamp(op.RadiusX, 0d, 1d);  // RadiusX carries the fill fraction
-        var clipWidth  = starWidth * fillFraction;
+        var plan = ConditionalIconGlyphGeometry.PlanStarFill(op);
 
         // Build the star geometry (used for both the clip-filled path and the outline).
-        var starGeometry = PolylineGeometry(points, closed: true);
+        var starGeometry = PolylineGeometry(plan.Points, closed: true);
 
         // The filled portion: a path with the star geometry, clipped to the left fillFraction strip.
         var filledPath = new AvaloniaPath
@@ -156,9 +140,13 @@ internal static class ConditionalFormatIconGlyphFactory
             Data = starGeometry,
             Fill = iconFill,
             // Clip to a rectangle covering only the left fillFraction of the star bounding box.
-            Clip = fillFraction >= 1d
+            Clip = !plan.RequiresClip
                 ? null
-                : new RectangleGeometry(new Rect(minX, minY, Math.Max(0, clipWidth), maxY - minY)),
+                : new RectangleGeometry(new Rect(
+                    plan.ClipRect.X,
+                    plan.ClipRect.Y,
+                    Math.Max(0, plan.ClipRect.Width),
+                    plan.ClipRect.Height)),
         };
 
         // The outline star drawn over the fill (always full outline regardless of fill fraction).

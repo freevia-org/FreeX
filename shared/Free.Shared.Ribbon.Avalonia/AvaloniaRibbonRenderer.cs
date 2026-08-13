@@ -15,6 +15,7 @@ using Avalonia.VisualTree;
 using Avalonia.Controls.Primitives.PopupPositioning;
 using Avalonia.Threading;
 using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.KeyTips;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 using System.Runtime.CompilerServices;
@@ -36,23 +37,12 @@ public static class AvaloniaRibbonRenderer
 {
     private const string FileRibbonTabId = "FileTab";
     private const string KeyTipBadgeTag = "RibbonKeyTipBadge";
-    private const string SelectedTabUnderlineTag = "FreeX.SelectedTabUnderline";
-    private const string PopupChromeClass = "freex-ribbon-popup-chrome";
-    private const string SubmenuPlacementClass = "freex-ribbon-submenu-placement";
+    private const string SelectedTabUnderlineTag = "Free.Ribbon.SelectedTabUnderline";
+    private const string PopupChromeClass = "free-ribbon-popup-chrome";
+    private const string SubmenuPlacementClass = "free-ribbon-submenu-placement";
     private const double RibbonCheckBoxHeight = 16;
     private const double RibbonCheckGlyphSize = 11;
     private const int MaxRowsPerColumn = 3;
-    private static readonly IReadOnlyDictionary<string, string> ContextualTabKeyTips =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["PivotTableAnalyzeTab"] = "JA",
-            ["PivotTableDesignTab"] = "JD",
-            ["ChartDesignTab"] = "JC",
-            ["ChartFormatTab"] = "JF",
-            ["ShapeFormatTab"] = "JS",
-            ["PictureFormatTab"] = "JP",
-            ["TableDesignTab"] = "JT",
-        };
     private static readonly AttachedProperty<string?> KeyTipProperty =
         AvaloniaProperty.RegisterAttached<Control, string?>("KeyTip", typeof(AvaloniaRibbonRenderer));
     private static readonly ConditionalWeakTable<CheckBox, CheckBoxExecutionState> CheckBoxExecutionStates = new();
@@ -197,7 +187,7 @@ public static class AvaloniaRibbonRenderer
     private static readonly ConditionalWeakTable<Control, StateStoreBinding> StateStoreBindings = new();
 
     internal static AvaloniaRibbonPalette ResolvePalette(RibbonVisualPalette? palette = null) =>
-        new(palette ?? RibbonVisualPalette.FromTheme(BrandThemes.FreeX));
+        new(palette ?? RibbonVisualPalette.DefaultNeutral);
 
     internal sealed class AvaloniaRibbonPalette
     {
@@ -535,7 +525,7 @@ public static class AvaloniaRibbonRenderer
                 IsVisible = false,
                 Child = new TextBlock
                 {
-                    Text = keyTip.Trim().ToUpperInvariant(),
+                    Text = RibbonKeyTipText.NormalizeOrEmpty(keyTip),
                     FontFamily = RibbonFontFamily,
                     FontSize = 10,
                     Foreground = Brushes.Black,
@@ -572,8 +562,7 @@ public static class AvaloniaRibbonRenderer
         AvaloniaRibbonPalette palette,
         IRibbonStateStore? stateStore) => new()
     {
-        Header = BuildTabHeader(tab.Header, tab.KeyTip ??
-            (tab.IsContextual ? ContextualTabKeyTips.GetValueOrDefault(tab.Id) : null), palette),
+        Header = BuildTabHeader(tab.Header, tab.KeyTip, palette),
         Content = BuildTabContent(tab, registry, afterExecute, palette, stateStore),
         Tag = tab.Id,
     };
@@ -785,7 +774,7 @@ public static class AvaloniaRibbonRenderer
         IsVisible = false,
         Child = new TextBlock
         {
-            Text = keyTip.Trim().ToUpperInvariant(),
+            Text = RibbonKeyTipText.NormalizeOrEmpty(keyTip),
             FontFamily = RibbonFontFamily,
             FontSize = 10,
             Foreground = Brushes.Black,
@@ -803,7 +792,7 @@ public static class AvaloniaRibbonRenderer
         if (tabControl is null)
             return false;
 
-        var normalized = keyTip.Trim();
+        var normalized = RibbonKeyTipText.NormalizeOrEmpty(keyTip);
         foreach (var item in tabControl.Items.OfType<TabItem>())
         {
             var badge = FindKeyTipBadge(item.Header as Control);
@@ -834,7 +823,7 @@ public static class AvaloniaRibbonRenderer
         if (tabControl is null)
             return false;
 
-        var normalized = keyTip.Trim().ToUpperInvariant();
+        var normalized = RibbonKeyTipText.NormalizeOrEmpty(keyTip);
         var tab = tabControl.Items.OfType<TabItem>()
             .Select(item => (Item: item, KeyTip: GetTabKeyTip(item)))
             .Where(candidate => candidate.KeyTip is not null &&
@@ -975,7 +964,7 @@ public static class AvaloniaRibbonRenderer
     private static void SetKeyTip(Control control, string? keyTip)
     {
         if (!string.IsNullOrWhiteSpace(keyTip))
-            control.SetValue(KeyTipProperty, keyTip.Trim().ToUpperInvariant());
+            control.SetValue(KeyTipProperty, RibbonKeyTipText.NormalizeOrEmpty(keyTip));
     }
 
     private static TabControl? FindTabControl(Control control)
@@ -1152,7 +1141,7 @@ public static class AvaloniaRibbonRenderer
 
         var ordered = new List<RibbonTab>(resolved.Count);
         var contextual = resolved.Where(tab => tab.IsContextual)
-            .OrderBy(tab => WpfContextualTabOrder(tab.Id))
+            .OrderBy(tab => tab.Context?.DisplayOrder ?? int.MaxValue)
             .ToArray();
 
         foreach (var tab in resolved)
@@ -1171,18 +1160,6 @@ public static class AvaloniaRibbonRenderer
 
         return ordered;
     }
-
-    private static int WpfContextualTabOrder(string tabId) => tabId switch
-    {
-        "ShapeFormatTab" => 0,
-        "PictureFormatTab" => 1,
-        "ChartDesignTab" => 2,
-        "ChartFormatTab" => 3,
-        "TableDesignTab" => 4,
-        "PivotTableAnalyzeTab" => 5,
-        "PivotTableDesignTab" => 6,
-        _ => 100,
-    };
 
     /// <summary>
     /// Applies the ribbon theme styles to the tab control, replicating the WPF look:
@@ -1977,8 +1954,17 @@ public static class AvaloniaRibbonRenderer
             ClipToBounds = false,
             Tag = combo.CommandId.Value,
         };
-        foreach (var item in combo.Items)
-            box.Items.Add(item);
+        if (combo.Choices.Count > 0)
+        {
+            box.DisplayMemberBinding = new Binding(nameof(RibbonComboBoxChoice.Label));
+            foreach (var choice in combo.Choices)
+                box.Items.Add(choice);
+        }
+        else
+        {
+            foreach (var item in combo.Items)
+                box.Items.Add(item);
+        }
         var executionState = ComboExecutionStates.GetOrCreateValue(box);
         RibbonCommandState? state = null;
         if (registry is not null
@@ -1994,7 +1980,7 @@ public static class AvaloniaRibbonRenderer
         try
         {
             var stateIndex = state?.Value is { Length: > 0 } value
-                ? combo.Items.ToList().FindIndex(item => string.Equals(item, value, StringComparison.Ordinal))
+                ? FindComboValueIndex(box, value)
                 : -1;
             if (stateIndex >= 0)
                 box.SelectedIndex = stateIndex;
@@ -2003,7 +1989,7 @@ public static class AvaloniaRibbonRenderer
                 box.SelectedIndex = -1;
                 box.Text = stateValue;
             }
-            else if (combo.Items.Count > 0)
+            else if (box.Items.Count > 0)
                 box.SelectedIndex = 0;
         }
         finally
@@ -2280,8 +2266,19 @@ public static class AvaloniaRibbonRenderer
 
     private static string? ResolveComboValue(ComboBox box)
     {
+        if (box.SelectedItem is RibbonComboBoxChoice choice)
+            return choice.Value;
+
         var value = box.SelectedItem?.ToString();
-        return string.IsNullOrWhiteSpace(value) ? box.Text : value;
+        if (!string.IsNullOrWhiteSpace(value))
+            return value;
+
+        var typedChoice = box.Items
+            .OfType<RibbonComboBoxChoice>()
+            .FirstOrDefault(item =>
+                string.Equals(item.Label, box.Text, StringComparison.Ordinal) ||
+                string.Equals(item.Value, box.Text, StringComparison.Ordinal));
+        return typedChoice?.Value ?? box.Text;
     }
 
     private static void ClearPendingComboSelection(ComboExecutionState executionState)
@@ -2296,18 +2293,30 @@ public static class AvaloniaRibbonRenderer
         executionState.IsSynchronizing = true;
         try
         {
-            var matchingIndex = combo.Items.ToList().FindIndex(item =>
-                string.Equals(item?.ToString(), value, StringComparison.Ordinal));
+            var matchingIndex = FindComboValueIndex(combo, value);
             if (combo.SelectedIndex != matchingIndex)
                 combo.SelectedIndex = matchingIndex;
-            if (!string.Equals(combo.Text, value, StringComparison.Ordinal))
-                combo.Text = value;
+            var displayText = matchingIndex >= 0 && combo.Items[matchingIndex] is RibbonComboBoxChoice choice
+                ? choice.Label
+                : value;
+            if (!string.Equals(combo.Text, displayText, StringComparison.Ordinal))
+                combo.Text = displayText;
         }
         finally
         {
             executionState.IsSynchronizing = false;
             ClearPendingComboSelection(executionState);
         }
+    }
+
+    private static int FindComboValueIndex(ComboBox combo, string value)
+    {
+        var items = combo.Items.ToList();
+        return items.FindIndex(item => item switch
+        {
+            RibbonComboBoxChoice choice => string.Equals(choice.Value, value, StringComparison.Ordinal),
+            _ => string.Equals(item?.ToString(), value, StringComparison.Ordinal),
+        });
     }
 
     private static void SetCheckBoxStateWithoutExecuting(CheckBox checkBox, bool isChecked)
@@ -2352,6 +2361,12 @@ public static class AvaloniaRibbonRenderer
         var menuItem = new MenuItem
         {
             Header = presentation.Header,
+            Icon = item.Icon is null
+                ? null
+                : AvaloniaRibbonIcons.Build(
+                    item.Icon,
+                    RibbonVisualMetrics.SmallIconSize,
+                    item.Header),
             InputGesture = null,
             Tag = item.CommandId?.Value,
             IsEnabled = item.IsEnabled,
@@ -2657,7 +2672,7 @@ public static class AvaloniaRibbonRenderer
             ConfigureCollapsedGroupFlyout(flyout, button, _palette);
             button.Flyout = flyout;
             SetKeyTip(button, _collapsedKeyTip);
-            button.Classes.Add("freex-ribbon-collapsed-group");
+            button.Classes.Add("free-ribbon-collapsed-group");
             return button;
         }
     }

@@ -8,6 +8,9 @@ namespace FreeX.App.Presentation.Protection;
 /// </summary>
 public static class ProtectionPassword
 {
+    /// <summary>Normalizes an absent or empty entry to null before command composition.</summary>
+    public static string? Normalize(string? password) => IsSet(password) ? password : null;
+
     /// <summary>True when a non-empty password has been entered.</summary>
     public static bool IsSet(string? password) => !string.IsNullOrEmpty(password);
 

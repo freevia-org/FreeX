@@ -29,8 +29,10 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("_sheetGridHost.PointerReleased += HeaderResizeCapturePointerReleased;");
         source.Should().Contain("GridResizeSizePlanner.ClampColumnSize(requestedSize)");
         source.Should().Contain("GridResizeSizePlanner.ClampRowSize(requestedSize)");
-        source.Should().Contain("new SetColumnWidthCommand(");
-        source.Should().Contain("new SetRowHeightCommand(");
+        source.Should().Contain("_session.SetColumnsWidthPixels(");
+        source.Should().Contain("_session.SetRowsHeightPixels(");
+        source.Should().NotContain("new SetColumnWidthCommand(");
+        source.Should().NotContain("new SetRowHeightCommand(");
         var commitResize = source[
             source.IndexOf("private void CommitHeaderResize(", StringComparison.Ordinal)..
             source.IndexOf("private void PreviewHeaderResize(", StringComparison.Ordinal)];
@@ -85,8 +87,9 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("TryContinueFormulaRangeSelectionDrag(target)");
         source.Should().Contain("if (_cellDragFormulaPointCursor == address)");
         source.Should().Contain("TrackFormulaPointDragAnchor(address, referenceStart, referenceLength);");
-        source.Should().Contain("_formulaReferenceStart = _cellDragFormulaReferenceStart;");
-        source.Should().Contain("_formulaReferenceLength = _cellDragFormulaReferenceLength;");
+        source.Should().Contain("_formulaRangeEditingSession.TrackReferenceSpan(");
+        source.Should().Contain("_cellDragFormulaReferenceStart,");
+        source.Should().Contain("_cellDragFormulaReferenceLength);");
         source.Should().Contain("SelectRangeFromAnchor(anchor, target);");
         source.Should().Contain("_cellDragSelectionPointer?.Capture(null);");
         source.Should().Contain("_session.SelectAnchoredRange(anchor, address);");
@@ -111,10 +114,9 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("private static readonly IReadOnlyList<IBrush> FormulaReferenceBrushes");
         source.Should().Contain("private readonly TextBlock _formulaReferenceTextOverlay = new();");
         source.Should().Contain("_formulaBox.TextChanged += FormulaBox_TextChanged;");
-        source.Should().Contain("FormulaReferenceHighlightPlanner.GetHighlights(");
-        source.Should().Contain("ResolveStructuredFormulaReference");
-        source.Should().Contain("StructuredReferenceResolver.ResolveCurrentRowColumn");
-        source.Should().Contain("StructuredReferenceResolver.Resolve(");
+        source.Should().Contain("FormulaReferenceEditingController.BuildHighlights(");
+        source.Should().NotContain("ResolveStructuredFormulaReference");
+        source.Should().NotContain("StructuredReferenceResolver.ResolveEditorReference(");
         source.Should().Contain("AddFormulaReferenceHighlightOverlay(overlay, viewport, showHeadings, zoomFactor);");
         source.Should().Contain("TryGetDisplayedRangeBounds(");
         source.Should().Contain("IsHitTestVisible = false");
@@ -123,7 +125,7 @@ public sealed class AvaloniaGridInputSourceTests
         // -- it no longer hardcodes `_formulaBox` here.
         source.Should().Contain("editor.Foreground = Brushes.Transparent;");
         source.Should().Contain("new Run(text) { Foreground = brush }");
-        source.Should().Contain("RefreshShell(\"Ready\");");
+        source.Should().Contain("RefreshShell(UiText.Get(\"MainLoc_Ready\"));");
     }
 
     [Fact]
@@ -204,7 +206,8 @@ public sealed class AvaloniaGridInputSourceTests
         appendIndex.Should().BeLessThan(
             hyperlinkIndex,
             "WPF/Excel must append a formula area before Ctrl+click hyperlink navigation is considered");
-        pointerHandler.Should().Contain("IsFormulaDisjointReferenceModifier(args.KeyModifiers)");
+        pointerHandler.Should().Contain("_formulaRangeEditingSession.ShouldAppendDisjointReference(");
+        pointerHandler.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers)");
     }
 
     [Fact]
@@ -293,11 +296,10 @@ public sealed class AvaloniaGridInputSourceTests
         interactionSource.Should().Contain("ObjectDragPlanner.HitTestHandle(");
         interactionSource.Should().Contain("ObjectDragPlanner.CalculateDragTransform(");
         interactionSource.Should().Contain("ObjectDragPlanner.CalculateRotationDegrees(");
-        interactionSource.Should().Contain("ObjectDragPlanner.ShouldCommitMove(");
-        interactionSource.Should().Contain("ObjectDragPlanner.ShouldCommitResize(");
-        interactionSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeWithAnchorCommand(");
-        interactionSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
-        interactionSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
+        interactionSource.Should().Contain("ObjectDragPlanner.PlanCommit(");
+        interactionSource.Should().Contain("DrawingObjectCommandPlanner.BuildDragCommitCommand(");
+        interactionSource.Should().NotContain("ObjectDragPlanner.ShouldCommitMove(");
+        interactionSource.Should().NotContain("ObjectDragPlanner.ShouldCommitResize(");
         interactionSource.Should().Contain("args.Pointer.Capture(container);");
         interactionSource.Should().Contain("args.Pointer.Capture(null);");
         interactionSource.Should().Contain("container.PointerCaptureLost +=");
@@ -315,8 +317,8 @@ public sealed class AvaloniaGridInputSourceTests
         // Split panes (K10): header pointer-drag resolution walks the combined split+main pane
         // metrics (CombineSplitColumnMetrics/CombineSplitRowMetrics) so dragging across a pinned
         // split header resolves correctly too, not just viewport.ColMetrics/RowMetrics (main pane).
-        source.Should().Contain("foreach (var metric in CombineSplitColumnMetrics(_session.Viewport))");
-        source.Should().Contain("foreach (var metric in CombineSplitRowMetrics(_session.Viewport))");
+        source.Should().Contain("ViewportGeometryPlanner.HitTestProjectedColumn(");
+        source.Should().Contain("ViewportGeometryPlanner.HitTestProjectedRow(");
         source.Should().Contain("SelectEntireColumnFromHeaderDrag(targetCol, _headerSelectionDragAnchorIndex);");
         source.Should().Contain("SelectEntireRowFromHeaderDrag(targetRow, _headerSelectionDragAnchorIndex);");
     }
@@ -388,8 +390,10 @@ public sealed class AvaloniaGridInputSourceTests
         // formula bar's overlay host), instead of returning the bare TextBox directly.
         source.Should().Contain("private Control CreateInlineCellEditor(");
         source.Should().Contain("AutomationProperties.SetAutomationId(editor, \"WorksheetInlineCellEditor\");");
+        source.Should().Contain("() => FocusInlineCellEditor(address, editor)");
+        source.Should().Contain("_pendingInlineCellCaretIndex ?? _inlineCellEditSelectionStart ?? textLength");
         source.Should().Contain("editor.Focus();");
-        source.Should().Contain("editor.CaretIndex = caret;");
+        source.Should().Contain("editor.CaretIndex = selectionEnd;");
         source.Should().Contain("new FormattedText(");
         source.Should().Contain("BeginInlineCellEdit(address, editText, editText.Length);");
     }
@@ -491,15 +495,6 @@ public sealed class AvaloniaGridInputSourceTests
             "IsWordArt must not unconditionally suppress FillColor-bearing shapes");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

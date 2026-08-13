@@ -5,17 +5,19 @@ namespace FreeW.App.Host.Tests;
 public sealed class ColumnsDialogPolicySourceGuardTests
 {
     [Fact]
-    public void ColumnsDialog_DelegatesPolicyToPresentationPlanner()
+    public void ColumnsDialog_DelegatesPolicyToPresentationSession()
     {
         var source = ReadHostSource("ColumnsDialog.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("ColumnsDialogPlanner.BuildInitialState(");
-        source.Should().Contain("ColumnsDialogPlanner.Presets");
-        source.Should().Contain("ColumnsDialogPlanner.ColumnCountForPreset(");
-        source.Should().Contain("new ColumnsDialogInput(");
-        source.Should().Contain("ColumnsDialogPlanner.TryBuildResult(");
+        source.Should().Contain("ColumnsDialogSession");
+        source.Should().Contain("_session.InitialState");
+        source.Should().Contain("_session.Presets");
+        source.Should().Contain("_session.CountTextForPreset(");
+        source.Should().Contain("_session.PlanAcceptance(");
         source.Should().Contain("ColumnsDialogResult?");
+        source.Should().NotContain("ColumnsDialogPlanner.BuildInitialState(");
+        source.Should().NotContain("ColumnsDialogPlanner.TryBuildResult(");
         source.Should().NotContain("private static readonly string[] Presets");
         source.Should().NotContain("PresetIndexFor(");
         source.Should().NotContain("ApplyPreset(");

@@ -16,9 +16,13 @@ public sealed partial class PrintRendererPageSetupTests
             sheet.SetCell(
                 new CellAddress(sheet.Id, 1, 1),
                 new TextValue("visible prefix worksheet text hidden-tail-token"));
+            sheet.SetCell(
+                new CellAddress(sheet.Id, 1, 2),
+                new TextValue("Overflow blocker"));
+            sheet.ColumnWidths[1] = 12.0;
             sheet.PrintArea = new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
-                new CellAddress(sheet.Id, 1, 12));
+                new CellAddress(sheet.Id, 1, 2));
 
             var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
             var page = document.Pages[0].GetPageRoot(forceReload: false)!;

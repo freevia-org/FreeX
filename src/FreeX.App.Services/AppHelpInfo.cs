@@ -1,4 +1,5 @@
 using System.Reflection;
+using Free.Shared.AppServices;
 
 namespace FreeX.App.Services;
 
@@ -19,21 +20,14 @@ public static class AppHelpInfo
 
     public static string GetVersionText(Assembly assembly)
     {
-        ArgumentNullException.ThrowIfNull(assembly);
-
-        return FormatVersionText(
-            assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-                ?.InformationalVersion);
+        var version = AssemblyVersionMetadata.FromAssembly(assembly);
+        return FormatVersionText(version.InformationalVersion);
     }
 
     public static string GetBuildVersionText(Assembly assembly)
     {
-        ArgumentNullException.ThrowIfNull(assembly);
-
-        return FormatBuildVersionText(
-            assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-                ?.InformationalVersion,
-            assembly.GetName().Version?.ToString());
+        var version = AssemblyVersionMetadata.FromAssembly(assembly);
+        return FormatBuildVersionText(version.InformationalVersion, version.AssemblyVersion);
     }
 
     /// <summary>

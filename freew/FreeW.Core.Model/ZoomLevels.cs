@@ -43,6 +43,9 @@ public static class ZoomLevels
     /// <summary>Convert a zoom factor (1.0 == 100%) to a whole-number percentage for display.</summary>
     public static int ToPercent(double factor) => (int)System.Math.Round(Clamp(factor) * 100.0);
 
+    /// <summary>Format a zoom factor as the canonical whole-number percentage shown by editor chrome.</summary>
+    public static string FormatPercent(double factor) => $"{ToPercent(factor)}%";
+
     /// <summary>Convert a whole-number percentage to a clamped zoom factor (100 -> 1.0).</summary>
     public static double FromPercent(double percent) => Clamp(percent / 100.0);
 }

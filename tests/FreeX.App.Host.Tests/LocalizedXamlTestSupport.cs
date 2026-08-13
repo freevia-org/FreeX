@@ -16,7 +16,7 @@ internal static class LocalizedXamlTestSupport
         DialogSourceTestSupport.ReadHostSources(fileName);
 
     public static void ShouldContainInvariantCommandName(this string xaml, string commandName) =>
-        xaml.Should().Contain($"local:RibbonMetadata.CommandName=\"{EscapeAttribute(WebUtility.HtmlDecode(commandName))}\"");
+        xaml.Should().Contain($"ribbonWpf:RibbonMetadata.CommandName=\"{EscapeAttribute(WebUtility.HtmlDecode(commandName))}\"");
 
     public static void ShouldContainLocalizedAttribute(this string xaml, string attributeName, string expectedValue)
     {
@@ -58,7 +58,7 @@ internal static class LocalizedXamlTestSupport
         string? requiredSubstring = null)
     {
         var escapedCommandName = EscapeAttribute(WebUtility.HtmlDecode(commandName));
-        var needle = $"local:RibbonMetadata.CommandName=\"{escapedCommandName}\"";
+        var needle = $"ribbonWpf:RibbonMetadata.CommandName=\"{escapedCommandName}\"";
         var searchIndex = 0;
 
         while (true)

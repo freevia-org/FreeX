@@ -110,8 +110,7 @@ public sealed class PrintChartTextOverlayPlannerTests
     public void SourceGuard_KeepsOverlayDecisionLogicInPresentationPlanner()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         var plannerSource = File.ReadAllText(Path.Combine(
             presentationRoot,

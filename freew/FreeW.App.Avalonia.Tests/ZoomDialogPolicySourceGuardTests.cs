@@ -8,12 +8,23 @@ public sealed class ZoomDialogPolicySourceGuardTests
     public void ZoomDialog_UsesSharedPresentationPlannerForPolicy()
     {
         var source = ReadAvaloniaSource("ZoomDialog.cs");
+        var mainWindow = ReadAvaloniaSource("MainWindow.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("ZoomDialogPlanner.Build(currentScale)");
-        source.Should().Contain("new ZoomDialogSelectionRequest(");
-        source.Should().Contain("ZoomDialogPlanner.TryCreateResult(");
-        source.Should().Contain("ZoomDialogPlanner.ValidationMessageFor(error)");
+        source.Should().Contain("new ZoomDialogSession(currentScale)");
+        source.Should().Contain("_session.PlanAcceptance(_fitFactors)");
+        source.Should().Contain("ZoomDialogFitFactors fitFactors");
+        source.Should().NotContain("DefaultFitFactors");
+        mainWindow.Should().Contain("new ZoomDialog(_zoomScale, ComputeZoomFitFactors())");
+        mainWindow.Should().Contain("ZoomDialogPlanner.BuildFitFactors(page, viewportWidth, viewportHeight)");
+        source.Should().Contain("acceptance.Validation.FocusTarget");
+        source.Should().Contain("ZoomDialogPlanner.Text");
+        source.Should().Contain("ZoomDialogPlanner.FormatPresetLabel(preset.Percent)");
+        source.Should().NotContain("Preset(\"Page width\")");
+        source.Should().NotContain("Title = \"Zoom\"");
+        source.Should().NotContain("new ZoomDialogSelectionRequest(");
+        source.Should().NotContain("GetSelectedFitOption");
+        source.Should().NotContain("GetSelectedPresetPercent");
         source.Should().Contain("ZoomDialogFitFactors");
         source.Should().NotContain("NumericUpDown");
         source.Should().NotContain("currentScale * 100");

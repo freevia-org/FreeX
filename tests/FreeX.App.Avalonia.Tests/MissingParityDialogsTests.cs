@@ -46,12 +46,9 @@ public sealed class MissingParityDialogsTests
         int expectedWidth,
         int expectedHeight)
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-missing-dialog-parity-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-missing-dialog-parity-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -90,10 +87,6 @@ public sealed class MissingParityDialogsTests
                 }
             }, CancellationToken.None);
         }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
-        }
     }
 
     private static (int Width, int Height) ReadPngDimensions(string path)
@@ -104,16 +97,4 @@ public sealed class MissingParityDialogsTests
             BinaryPrimitives.ReadInt32BigEndian(header[20..24]));
     }
 
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
-        }
-        catch
-        {
-            // Temp cleanup is best-effort on Windows while the headless compositor releases images.
-        }
-    }
 }

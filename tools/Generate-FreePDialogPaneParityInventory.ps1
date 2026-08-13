@@ -10,12 +10,16 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-$wpfMainPath = Join-Path $repoRoot "freep\FreeP.App.Host\MainWindow.cs"
-$wpfCommandsPath = Join-Path $repoRoot "freep\FreeP.App.Host\FreePRibbonCommands.cs"
-$avaloniaMainPath = Join-Path $repoRoot "freep\FreeP.App.Avalonia\MainWindow.cs"
-$wpfMain = Get-Content -LiteralPath $wpfMainPath -Raw
-$wpfCommands = Get-Content -LiteralPath $wpfCommandsPath -Raw
-$avaloniaMain = Get-Content -LiteralPath $avaloniaMainPath -Raw
+$wpfMainRoot = Join-Path $repoRoot "freep\FreeP.App.Host"
+$avaloniaMainRoot = Join-Path $repoRoot "freep\FreeP.App.Avalonia"
+$workareaSessionPath = Join-Path $repoRoot "freep\FreeP.App.Presentation\PresentationWorkareaSession.cs"
+$wpfMain = @(Get-ChildItem -LiteralPath $wpfMainRoot -Filter "MainWindow*.cs" -File |
+    Sort-Object FullName |
+    ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join [Environment]::NewLine
+$avaloniaMain = @(Get-ChildItem -LiteralPath $avaloniaMainRoot -Filter "MainWindow*.cs" -File |
+    Sort-Object FullName |
+    ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join [Environment]::NewLine
+$workareaSession = Get-Content -LiteralPath $workareaSessionPath -Raw
 
 function New-Route {
     param(
@@ -37,17 +41,23 @@ function New-Route {
         [string]$Status = "behavior-aligned",
         [string]$Notes = "",
         [string[]]$RequiredWpfTokens = @(),
-        [string[]]$RequiredAvaloniaTokens = @()
+        [string[]]$RequiredAvaloniaTokens = @(),
+        [string[]]$RequiredWorkareaSessionTokens = @()
     )
 
     foreach ($token in $RequiredWpfTokens) {
-        if (-not ($wpfMain.Contains($token) -or $wpfCommands.Contains($token))) {
+        if (-not $wpfMain.Contains($token)) {
             throw "WPF semantic trigger token '$token' is missing for route '$Id'."
         }
     }
     foreach ($token in $RequiredAvaloniaTokens) {
         if (-not $avaloniaMain.Contains($token)) {
             throw "Avalonia semantic trigger token '$token' is missing for route '$Id'."
+        }
+    }
+    foreach ($token in $RequiredWorkareaSessionTokens) {
+        if (-not $workareaSession.Contains($token)) {
+            throw "Shared workarea-session token '$token' is missing for route '$Id'."
         }
     }
 
@@ -85,7 +95,7 @@ $routes = @(
         -Tests @("freep/FreeP.App.Host.Tests/SlidePaneTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs", "freep/FreeP.App.Avalonia.Tests/KeyboardContextParityTests.cs") `
         -ExistingVisualEvidence @("docs/parity/freep-slide-pane-thumbnail-render-evidence-2026-07-04.md", "docs/parity/freep-slide-pane-thumbnail-chrome-evidence-2026-07-04.md", "tools/FreeP.RenderCompare/SlidePaneThumbnailEvidence.cs") `
         -VisualEvidenceStatus "generated-render-evidence-capable; no committed paired app-window screenshot" `
-        -RequiredWpfTokens @("new SlidePane(Editor)") -RequiredAvaloniaTokens @("BuildSlidePaneContextMenu")
+        -RequiredWpfTokens @("new SlidePane(_workareaSession)") -RequiredAvaloniaTokens @("BuildSlidePaneContextMenu")
 
     New-Route -Id "startup.notes-pane" -Area "Slide notes" `
         -Triggers @("Main window construction", "current slide change") `
@@ -134,7 +144,7 @@ $routes = @(
         -AvaloniaSources @("freep/FreeP.App.Avalonia/SlideSizeDialog.cs", "freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/SlideSizeDialogTests.cs", "freep/FreeP.App.Host.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Avalonia.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Presentation.Tests/SlideSizeDialogPlannerTests.cs") `
         -VisualEvidenceStatus "none; paired screenshots remain" `
-        -RequiredWpfTokens @("onCustomSlideSize", "OpenSlideSizeDialog") -RequiredAvaloniaTokens @("OpenSlideSizeDialog", "ShowDialog<bool?>")
+        -RequiredWpfTokens @("OpenCustomSlideSize =", "OpenSlideSizeDialog") -RequiredAvaloniaTokens @("OpenSlideSizeDialog", "ShowDialog<bool?>")
 
     New-Route -Id "insert.header-footer" -Area "Header, footer, date/time, and slide number" `
         -Triggers @("freep.header-footer", "freep.date-time", "freep.slide-number") `
@@ -148,7 +158,7 @@ $routes = @(
         -Tests @("freep/FreeP.App.Host.Tests/HeaderFooterDialogTests.cs", "freep/FreeP.App.Host.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Avalonia.Tests/HeaderFooterCommandRoutingTests.cs", "freep/FreeP.App.Avalonia.Tests/DialogLifecycleParityTests.cs") `
         -ExistingVisualEvidence @("docs/parity/freep-header-footer-options-2026-07-06.md", "docs/parity/freep-header-footer-placeholder-creation-2026-07-05.md") `
         -VisualEvidenceStatus "semantic evidence only; paired screenshots remain" `
-        -RequiredWpfTokens @("onHeaderFooter", "OpenHeaderFooterDialog") -RequiredAvaloniaTokens @("HeaderFooterCommandPlanner.HeaderFooterCommandId", "OpenHeaderFooterDialog")
+        -RequiredWpfTokens @("OpenHeaderFooter = OpenHeaderFooterDialog", "OpenHeaderFooterDialog") -RequiredAvaloniaTokens @("OpenHeaderFooter = OpenHeaderFooterDialog", "OpenHeaderFooterDialog")
 
     New-Route -Id "home.find-replace" -Area "Find and Replace" `
         -Triggers @("freep.find", "freep.replace", "Ctrl+F", "Ctrl+H") `
@@ -156,13 +166,14 @@ $routes = @(
         -Lifecycle "One instance is reused and switched between Find/Replace modes; Close, Escape, owner close, and presentation replacement close it." `
         -Validation "Shared policy disables empty-query search/replace and reports no-match/no-replacement status." `
         -ResultApplication "EditingSession.FindAll/NavigateTo/ReplaceOne/ReplaceAll; host refresh callback updates canvas and slide pane." `
-        -SharedPolicy "FindReplaceDialogPlanner; FindReplaceDialogPolicy" `
+        -SharedPolicy "PresentationWorkareaSession; FindReplaceDialogPlanner; FindReplaceDialogPolicy" `
         -WpfSources @("freep/FreeP.App.Host/FindReplaceDialog.cs", "freep/FreeP.App.Host/MainWindow.cs") `
         -AvaloniaSources @("freep/FreeP.App.Avalonia/FindReplaceDialog.cs", "freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/FindReplaceDialogPolicySourceTests.cs", "freep/FreeP.App.Host.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Avalonia.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs", "freep/FreeP.App.Avalonia.Tests/KeyboardContextParityTests.cs") `
         -VisualEvidenceStatus "none; Find and Replace mode screenshots remain" `
-        -RequiredWpfTokens @("FreePKeyboardCommand.Find", "OpenFindReplaceDialog", "_findReplaceDialog?.Close();") `
-        -RequiredAvaloniaTokens @("FreePKeyboardCommand.Find", "OpenFindReplaceDialog", "_findReplaceDialog?.Close();")
+        -RequiredWpfTokens @("Find = OpenFindDialog", "Replace = OpenFindReplaceDialog", "_findReplaceDialog?.Close()") `
+        -RequiredAvaloniaTokens @("Find = OpenFindDialog", "Replace = OpenFindReplaceDialog", "_findReplaceDialog?.Close()") `
+        -RequiredWorkareaSessionTokens @("FreePKeyboardCommand.Find", "FreePKeyboardCommand.Replace")
 
     New-Route -Id "insert.hyperlink" -Area "Insert or edit hyperlink" `
         -Triggers @("freep.insert-link") `
@@ -174,7 +185,7 @@ $routes = @(
         -WpfSources @("freep/FreeP.App.Host/HyperlinkDialog.cs", "freep/FreeP.App.Host/MainWindow.cs") `
         -AvaloniaSources @("freep/FreeP.App.Avalonia/HyperlinkDialog.cs", "freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/HyperlinkDialogTests.cs", "freep/FreeP.App.Avalonia.Tests/HyperlinkDialogTests.cs", "freep/FreeP.App.Presentation.Tests/HyperlinkDialogPlannerTests.cs") `
-        -VisualEvidenceStatus "none" -RequiredWpfTokens @("onInsertLink", "OpenHyperlinkDialog") -RequiredAvaloniaTokens @("freep.insert-link", "OpenHyperlinkDialog")
+        -VisualEvidenceStatus "none" -RequiredWpfTokens @("OpenHyperlink = OpenHyperlinkDialog", "OpenHyperlinkDialog") -RequiredAvaloniaTokens @("OpenHyperlink = OpenHyperlinkDialog", "OpenHyperlinkDialog")
 
     New-Route -Id "chart.edit-data" -Area "Chart data editing" `
         -Triggers @("freep.chart.edit-data") `
@@ -186,7 +197,7 @@ $routes = @(
         -WpfSources @("freep/FreeP.App.Host/ChartDataDialog.cs", "freep/FreeP.App.Host/MainWindow.cs") `
         -AvaloniaSources @("freep/FreeP.App.Avalonia/ChartDataDialog.cs", "freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/ChartDataDialogTests.cs", "freep/FreeP.App.Avalonia.Tests/ChartDataDialogTests.cs", "freep/FreeP.App.Presentation.Tests/ChartDataDialogPlannerTests.cs") `
-        -VisualEvidenceStatus "none" -RequiredWpfTokens @("onEditChartData", "OpenChartDataDialog") -RequiredAvaloniaTokens @("ChartDataDialogPlanner.EditDataCommandId", "OpenChartDataDialog")
+        -VisualEvidenceStatus "none" -RequiredWpfTokens @("OpenChartData = OpenChartDataDialog", "OpenChartDataDialog") -RequiredAvaloniaTokens @("OpenChartData = OpenChartDataDialog", "OpenChartDataDialog")
 
     New-Route -Id "slideshow.custom-shows" -Area "Custom show authoring" `
         -Triggers @("freep.slideshow.custom-shows") `
@@ -199,7 +210,7 @@ $routes = @(
         -AvaloniaSources @("freep/FreeP.App.Avalonia/CustomShowDialog.cs", "freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/SlideShowTests.cs", "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs", "freep/FreeP.App.Presentation.Tests/SlideShowCustomShowPlannerTests.cs") `
         -ExistingVisualEvidence @("docs/parity/freep-custom-show-drag-reorder-2026-07-13.md", "docs/parity/freep-custom-show-launch-plan-2026-07-04.md") `
-        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("onCustomShows", "OpenCustomShowDialog") -RequiredAvaloniaTokens @("OpenCustomShowDialog")
+        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("OpenCustomShows = OpenCustomShowDialog", "OpenCustomShowDialog") -RequiredAvaloniaTokens @("OpenCustomShowDialog")
 
     New-Route -Id "review.comments-pane" -Area "Comments" `
         -Triggers @("freep.review.comments") `
@@ -211,7 +222,7 @@ $routes = @(
         -WpfSources @("freep/FreeP.App.Host/MainWindow.cs") -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/SectionsCommentsTests.cs", "freep/FreeP.App.Host.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs", "freep/FreeP.App.Avalonia.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Presentation.Tests/PresentationReviewWorkflowSessionTests.cs") `
         -ExistingVisualEvidence @("docs/parity/freep-comments-review-accessibility-evidence-inventory-2026-07-05.md", "docs/parity/freep-comments-review-navigation-2026-07-03.md") `
-        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("onReviewCommentsPane", "HideReviewCommentsPane") -RequiredAvaloniaTokens @("CommentsPaneCommandId", "HideReviewCommentsPane")
+        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("ShowCommentsPane = () => ShowReviewCommentsPane()", "HideReviewCommentsPane") -RequiredAvaloniaTokens @("ShowCommentsPane = () => ShowReviewCommentsPane()", "HideReviewCommentsPane")
 
     New-Route -Id "review.accessibility-pane" -Area "Accessibility checker" `
         -Triggers @("freep.review.accessibility") `
@@ -223,7 +234,7 @@ $routes = @(
         -WpfSources @("freep/FreeP.App.Host/MainWindow.cs") -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/SectionsCommentsTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs") `
         -ExistingVisualEvidence @("docs/parity/freep-accessibility-checker-navigation-2026-07-14.md", "docs/parity/freep-accessibility-table-structure-review-2026-07-13.md") `
-        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("onReviewAccessibility") -RequiredAvaloniaTokens @("AccessibilityCommandId")
+        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("ShowAccessibilityPane = () => ShowAccessibilityCheckerPane()") -RequiredAvaloniaTokens @("ShowAccessibilityPane = () => ShowAccessibilityCheckerPane()")
 
     New-Route -Id "review.alt-text-pane" -Area "Alternative text" `
         -Triggers @("freep.review.alt-text", "selected-object context action", "accessibility checker row action") `
@@ -235,7 +246,7 @@ $routes = @(
         -WpfSources @("freep/FreeP.App.Host/MainWindow.cs") -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/SectionsCommentsTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs") `
         -ExistingVisualEvidence @("docs/parity/freep-comments-review-accessibility-evidence-inventory-2026-07-05.md") `
-        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("onReviewAltText") -RequiredAvaloniaTokens @("AltTextCommandId")
+        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("ShowAltTextPane = ShowAltTextPane") -RequiredAvaloniaTokens @("ShowAltTextPane = () => ShowAltTextPane()")
 
     New-Route -Id "review.reading-order-pane" -Area "Reading order" `
         -Triggers @("freep.review.reading-order") `
@@ -246,7 +257,7 @@ $routes = @(
         -SharedPolicy "PresentationReviewWorkflowPlanner" `
         -WpfSources @("freep/FreeP.App.Host/MainWindow.cs") -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/SectionsCommentsTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs") `
-        -VisualEvidenceStatus "none" -RequiredWpfTokens @("onReviewReadingOrder") -RequiredAvaloniaTokens @("ReadingOrderPaneCommandId")
+        -VisualEvidenceStatus "none" -RequiredWpfTokens @("ShowReadingOrderPane = () => ShowReadingOrderPane()") -RequiredAvaloniaTokens @("ShowReadingOrderPane = () => ShowReadingOrderPane()")
 
     New-Route -Id "review.proofing-pane" -Area "Proofing" `
         -Triggers @("freep.review.proofing") `
@@ -258,7 +269,7 @@ $routes = @(
         -WpfSources @("freep/FreeP.App.Host/MainWindow.cs") -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/SectionsCommentsTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs") `
         -ExistingVisualEvidence @("docs/parity/freep-proofing-ignore-actions-2026-07-13.md", "docs/parity/freep-proofing-add-to-dictionary-2026-07-13.md") `
-        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("onReviewProofing") -RequiredAvaloniaTokens @("ProofingCommandId")
+        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("ShowProofingPane = () => ShowProofingPane()") -RequiredAvaloniaTokens @("ShowProofingPane = () => ShowProofingPane()")
 
     New-Route -Id "accessibility.media-caption-pane" -Area "Media captions" `
         -Triggers @("Accessibility checker media-caption row action") `
@@ -270,7 +281,7 @@ $routes = @(
         -WpfSources @("freep/FreeP.App.Host/MainWindow.cs") -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/MediaFieldsTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs", "freep/FreeP.App.Presentation.Tests/PresentationMediaTranscriptPlannerTests.cs") `
         -ExistingVisualEvidence @("docs/parity/freep-visible-media-caption-authoring-2026-07-13.md", "docs/parity/freep-media-caption-ttml-sidecar-retention-2026-07-14.md") `
-        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("ShowMediaCaptionPane") -RequiredAvaloniaTokens @("ShowMediaCaptionPane")
+        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("OpenMediaCaptionPane: () => MediaPaneHost.Show()") -RequiredAvaloniaTokens @("OpenMediaCaptionPane: () => MediaPaneHost.Show()")
 
     New-Route -Id "context.smartart-text-pane" -Area "SmartArt text" `
         -Triggers @("Selected SmartArt context action") `
@@ -296,7 +307,7 @@ $routes = @(
         -Tests @("freep/FreeP.App.Host.Tests/AnimationPaneTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs", "freep/FreeP.App.Presentation.Tests/AnimationPanePlannerTests.cs") `
         -ExistingVisualEvidence @("docs/parity/freep-animation-pane-workflow-depth-2026-07-06.md", "docs/parity/freep-animation-pane-playback-workflow-evidence-2026-07-14.md") `
         -VisualEvidenceStatus "workflow evidence only; paired pane screenshots remain" `
-        -RequiredWpfTokens @("onAnimPane", "ToggleAnimationPane") -RequiredAvaloniaTokens @("OnAnimationPaneRequested", "ShowAnimationPane")
+        -RequiredWpfTokens @("ToggleAnimationPane =", "ToggleAnimationPane") -RequiredAvaloniaTokens @("OnAnimationPaneRequested", "ShowAnimationPane")
 
     New-Route -Id "file.print-options" -Area "Print options" `
         -Triggers @("File > Print", "freep.file.print", "Ctrl+P") `
@@ -311,7 +322,9 @@ $routes = @(
         -ExistingVisualEvidence @("docs/parity/freep-print-output-option-choice-ui-2026-07-03.md", "docs/parity/freep-export-backstage-evidence-2026-07-05.md") `
         -VisualEvidenceStatus "package/workflow evidence only; paired app-pane screenshots remain" `
         -Status "behavior-aligned-host-shape-differs" -Notes "Avalonia has an additional compact print-options pane for direct command/keyboard routing; shared option and result policy is the same." `
-        -RequiredWpfTokens @("FreePKeyboardCommand.PrintPresentation", "RefreshPrintBackstagePlan") -RequiredAvaloniaTokens @("FreePKeyboardCommand.PrintPresentation", "ShowPrintOptionsPane")
+        -RequiredWpfTokens @("PrintPresentation = ShowPrintBackstage", "RefreshPrintBackstagePlan") `
+        -RequiredAvaloniaTokens @("PrintPresentation = ShowPrintBackstage", "ShowPrintOptionsPane") `
+        -RequiredWorkareaSessionTokens @("FreePKeyboardCommand.PrintPresentation")
 
     New-Route -Id "file.open-picker" -Area "Open presentation" `
         -Triggers @("File > Open", "freep.file.open", "Ctrl+O") `
@@ -324,7 +337,9 @@ $routes = @(
         -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/FileLifecycleTests.cs", "freep/FreeP.App.Avalonia.Tests/FileLifecycleWorkflowSourceTests.cs", "freep/FreeP.App.Presentation.Tests/PresentationFileDialogPlannerTests.cs") `
         -VisualEvidenceStatus "native platform visual; exact cross-platform pixel parity is not applicable" `
-        -RequiredWpfTokens @("FreePKeyboardCommand.OpenPresentation") -RequiredAvaloniaTokens @("FreePKeyboardCommand.OpenPresentation")
+        -RequiredWpfTokens @("OpenPresentation = () => FileOpen()") `
+        -RequiredAvaloniaTokens @("OpenPresentation = () => _ = FileOpenAsync()") `
+        -RequiredWorkareaSessionTokens @("FreePKeyboardCommand.OpenPresentation")
 
     New-Route -Id "file.save-as-picker" -Area "Save presentation as" `
         -Triggers @("File > Save As", "freep.file.save-as", "Ctrl+Shift+S") `
@@ -337,7 +352,9 @@ $routes = @(
         -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/FileLifecycleTests.cs", "freep/FreeP.App.Avalonia.Tests/FileLifecycleWorkflowSourceTests.cs", "freep/FreeP.App.Presentation.Tests/PresentationFileDialogPlannerTests.cs") `
         -VisualEvidenceStatus "native platform visual; exact cross-platform pixel parity is not applicable" `
-        -RequiredWpfTokens @("FreePKeyboardCommand.SavePresentationAs") -RequiredAvaloniaTokens @("FreePKeyboardCommand.SavePresentationAs")
+        -RequiredWpfTokens @("SavePresentationAs = () => FileSaveAs()") `
+        -RequiredAvaloniaTokens @("SavePresentationAs = () => _ = FileSaveAsAsync()") `
+        -RequiredWorkareaSessionTokens @("FreePKeyboardCommand.SavePresentationAs")
 )
 
 $pairedEvidencePath = "docs/parity/freep-dialog-pane-visual-evidence/report.md"

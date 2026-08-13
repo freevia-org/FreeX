@@ -13,13 +13,13 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void StatusBarZoomCommandButtons_HaveAltKeyTips()
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace ribbonWpf = "clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var missing = document
             .Descendants(presentation + "Button")
             .Where(button => button.Attribute("Click")?.Value is "ZoomOutBtn_Click" or "ZoomInBtn_Click")
-            .Where(button => button.Attribute(local + "RibbonTooltip.KeyTip") is null)
+            .Where(button => button.Attribute(ribbonWpf + "RibbonTooltip.KeyTip") is null)
             .Select(button => LocalizedAttribute(button, "Content") ?? button.Attribute("Click")!.Value)
             .ToList();
 

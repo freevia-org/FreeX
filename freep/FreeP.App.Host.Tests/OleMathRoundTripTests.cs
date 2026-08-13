@@ -14,15 +14,10 @@ namespace FreeP.App.Host.Tests;
 /// </summary>
 public sealed class OleMathRoundTripTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.OleMathTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.OleMathTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public OleMathRoundTripTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     // ─────────────────────────────────────────────────────────────────────────────
     // OLE embedded object round-trip

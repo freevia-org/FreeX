@@ -1,13 +1,14 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private PendingPivotLayout? _pendingPivotLayout;
-    private IReadOnlyList<PivotFieldListItem> _pivotFieldListAvailableItems = [];
+    private PivotFieldLayoutDraft? _pendingPivotLayout;
+    private IReadOnlyList<PivotAvailableFieldItemModel> _pivotFieldListAvailableItems = [];
 
     private void PivotFieldListDeferLayoutCheckBox_Click(object sender, RoutedEventArgs e)
     {
@@ -48,12 +49,12 @@ public partial class MainWindow
         if (PivotAvailableFieldsList is null)
             return;
 
-        PivotAvailableFieldsList.ItemsSource = PivotUiHostHelpers.FilterPivotFieldListItems(
+        PivotAvailableFieldsList.ItemsSource = PivotFieldListPaneBuilder.FilterAvailableFields(
             _pivotFieldListAvailableItems,
             PivotFieldListSearchBox?.Text);
     }
 
-    private PendingPivotLayout? GetDisplayedPivotLayout(PivotTableModel pivotTable)
+    private PivotFieldLayoutDraft? GetDisplayedPivotLayout(PivotTableModel pivotTable)
     {
         return _pendingPivotLayout is { } pending &&
                string.Equals(pending.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase)
@@ -61,20 +62,10 @@ public partial class MainWindow
             : null;
     }
 
-    private PendingPivotLayout GetDisplayedOrCurrentPivotLayout(PivotTableModel pivotTable)
+    private PivotFieldLayoutDraft GetDisplayedOrCurrentPivotLayout(PivotTableModel pivotTable)
     {
-        return GetDisplayedPivotLayout(pivotTable) ?? new PendingPivotLayout(
+        return GetDisplayedPivotLayout(pivotTable) ?? new PivotFieldLayoutDraft(
             pivotTable.Name,
-            pivotTable.RowFields.ToList(),
-            pivotTable.ColumnFields.ToList(),
-            pivotTable.PageFields.ToList(),
-            pivotTable.DataFields.ToList());
+            PivotFieldLayoutPlanner.Capture(pivotTable));
     }
-
-    private sealed record PendingPivotLayout(
-        string PivotTableName,
-        IReadOnlyList<PivotFieldModel> RowFields,
-        IReadOnlyList<PivotFieldModel> ColumnFields,
-        IReadOnlyList<PivotFieldModel> PageFields,
-        IReadOnlyList<PivotDataFieldModel> DataFields);
 }

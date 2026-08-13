@@ -51,7 +51,7 @@ public sealed class BackstageProjectionSourceTests
         source.Should().NotContain("FreeXBackstagePaneCatalog.GetExportScopeLabelKey(");
         source.Should().NotContain("FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(");
 
-        source.Should().Contain("FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(");
+        source.Should().Contain("LocalAccountInfoPlanner.CreateBackstageAccountPaneRequest(");
         source.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
         source.Should().NotContain("foreach (var detail in plan.Details)");
         source.Should().NotContain("foreach (var action in plan.Actions)");
@@ -131,8 +131,8 @@ public sealed class BackstageProjectionSourceTests
     [Fact]
     public void ParityCaptureBackstagePanes_UseSharedProjectionPlanner()
     {
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
-        var hostCaptureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
+        var hostCaptureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
         var projectionPlannerSource = File.ReadAllText(RepoFile(
             "src",
             "FreeX.App.Presentation",
@@ -156,15 +156,76 @@ public sealed class BackstageProjectionSourceTests
         hostCaptureSource.Should().NotContain("pane.Details");
     }
 
-    private static string RepoFile(params string[] parts)
+    [Fact]
+    public void LiveBackstageRecentRows_UseSharedProjectionAndDescriptors()
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.LiveBackstage.cs"));
 
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+        source.Should().Contain("BackstageRecentFileListPlanner.Build(");
+        source.Should().Contain("BackstageRecentFileListPlanner.SelectPinnedFirst(");
+        source.Should().Contain("FreeXBackstageHomePanePlanner.Build()");
+        source.Should().Contain("BackstageGreetingFormatter.FormatGreeting(DateTime.Now)");
+        source.Should().Contain("RecentFileViewModel entry");
+        source.Should().Contain("entry.LastOpenedText");
+        source.Should().Contain("entry.OpenAutomationName");
+        source.Should().Contain("entry.FileAccessIdentity");
+        source.Should().NotContain(".OrderByDescending(entry => entry.IsPinned)");
+        source.Should().NotContain("entry.LastOpened.LocalDateTime.ToString(\"g\")");
+        source.Should().NotContain("GetLiveBackstageGreeting(");
     }
+
+    [Fact]
+    public void LiveBackstageFrame_UsesSharedAvaloniaFrameAsThinProductAdapter()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.LiveBackstage.cs"));
+        var sharedFrameSource = File.ReadAllText(RepoFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaBackstageFrame.cs"));
+        var sharedSessionSource = File.ReadAllText(RepoFile(
+            "shared",
+            "Free.Shared.Shell",
+            "BackstageFrameSession.cs"));
+        var testAccessSource = File.ReadAllText(RepoFile(
+            "tools",
+            "FreeX.ParityCapture.Avalonia",
+            "TestSupport",
+            "MainWindow.LiveBackstage.TestAccess.cs"));
+
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("FreeXBackstageFramePlan LiveBackstageFramePlan");
+        source.Should().Contain("new AvaloniaBackstageFrame(");
+        source.Should().Contain("AvaloniaBackstageRibbonChrome.Create(");
+        source.Should().Contain("LiveBackstageFramePlan.Entries.Select(MapLiveBackstageEntry)");
+        source.Should().Contain("SisterBackstageEntryPlan<Control>.Pane(");
+        source.Should().Contain("SisterBackstageEntryPlan<Control>.Command(");
+        source.Should().Contain("StableId = entry.StableId");
+        source.Should().Contain("AutomationId = navigation.AutomationId");
+        source.Should().Contain("KeyTip = navigation.KeyTip");
+        source.Should().Contain("_backstageOverlay.TryActivateEntry(");
+        source.Should().NotContain("_backstageOverlay.GetEntryButton(");
+        testAccessSource.Should().Contain("_backstageOverlay.GetEntryButton(");
+
+        source.Should().NotContain("BuildLiveBackstageRail(");
+        source.Should().NotContain("CreateLiveBackstageRailButton(");
+        source.Should().NotContain("_backstagePaneButtons");
+        source.Should().NotContain("_backstageCommandButtons");
+        source.Should().NotContain("_backstageContentHost");
+        source.Should().NotContain("_activeBackstagePane");
+        source.Should().NotContain("NavigateBackstageOverlay(");
+        source.Should().NotContain("button.RaiseEvent(");
+        source.Should().NotContain("button.PointerEntered");
+        source.Should().NotContain("button.PointerExited");
+
+        sharedFrameSource.Should().Contain("public string? CurrentEntryId => _session.CurrentEntryId;");
+        sharedSessionSource.Should().Contain("public string? CurrentEntryId { get; private set; }");
+        sharedFrameSource.Should().Contain("public Button? GetEntryButton(string idOrLabel)");
+        sharedFrameSource.Should().Contain("if (!button.IsVisible || !button.IsEffectivelyEnabled)");
+        sharedSessionSource.Should().Contain("if (entry.DismissOnActivate)");
+        sharedFrameSource.Should().Contain("BackstageFrameEntryIdentity.From(entry).ResolveAutomationId()");
+        sharedFrameSource.Should().Contain("ToolTip.SetTip(button, tooltip)");
+    }
+
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

@@ -57,10 +57,24 @@ public sealed class HeaderFooterCommandPlannerTests
     [Fact]
     public void TryApply_PreservesSlideIdentityAcrossApplyUndoAndRedo()
     {
+        const string commentId = "{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}";
+        const string replyId = "{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}";
         var editor = MakeEditor();
         var slide = editor.Presentation.Slides[0];
         slide.Id = "slide-target-7";
         slide.NumericId = 207;
+        var comment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = commentId,
+            Text = "Keep this thread",
+        };
+        comment.Replies.Add(new SlideCommentReply
+        {
+            ModernReplyId = replyId,
+            Text = "Keep this reply",
+        });
+        slide.Comments.Add(comment);
 
         HeaderFooterCommandPlanner.TryApply(
             editor,
@@ -72,17 +86,24 @@ public sealed class HeaderFooterCommandPlannerTests
                 HeaderFooterApplyScope.CurrentSlide),
             out _).Should().BeTrue();
 
-        editor.Presentation.Slides[0].Id.Should().Be("slide-target-7");
-        editor.Presentation.Slides[0].NumericId.Should().Be(207);
+        AssertSemanticIdentities(editor.Presentation.Slides[0], commentId, replyId);
 
         editor.Undo();
-        editor.Presentation.Slides[0].Id.Should().Be("slide-target-7");
-        editor.Presentation.Slides[0].NumericId.Should().Be(207);
+        AssertSemanticIdentities(editor.Presentation.Slides[0], commentId, replyId);
 
         editor.Redo();
-        editor.Presentation.Slides[0].Id.Should().Be("slide-target-7");
-        editor.Presentation.Slides[0].NumericId.Should().Be(207);
+        AssertSemanticIdentities(editor.Presentation.Slides[0], commentId, replyId);
         FooterText(editor.Presentation.Slides[0]).Should().Be("Stable target");
+    }
+
+    private static void AssertSemanticIdentities(Slide slide, string commentId, string replyId)
+    {
+        slide.Id.Should().Be("slide-target-7");
+        slide.NumericId.Should().Be(207);
+        slide.Comments.Should().ContainSingle();
+        slide.Comments[0].ModernCommentId.Should().Be(commentId);
+        slide.Comments[0].Replies.Should().ContainSingle();
+        slide.Comments[0].Replies[0].ModernReplyId.Should().Be(replyId);
     }
 
     [Fact]

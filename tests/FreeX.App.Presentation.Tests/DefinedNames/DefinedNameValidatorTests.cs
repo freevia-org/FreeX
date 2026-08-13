@@ -6,6 +6,53 @@ namespace FreeX.App.Presentation.Tests.DefinedNames;
 public sealed class DefinedNameValidatorTests
 {
     [Theory]
+    [InlineData(DefinedNameError.Blank, "NamedRange_NameRequiredMessage", "Please enter a name.")]
+    [InlineData(DefinedNameError.TooLong, "InsertLoc_NameErrorTooLong", "The name is too long (255 characters maximum).")]
+    [InlineData(DefinedNameError.InvalidFirstCharacter, "InsertLoc_NameErrorInvalidFirstChar", "A name must start with a letter, underscore, or backslash.")]
+    [InlineData(DefinedNameError.InvalidCharacter, "InsertLoc_NameErrorInvalidChar", "A name may contain only letters, digits, periods, and underscores (no spaces).")]
+    [InlineData(DefinedNameError.LooksLikeReference, "InsertLoc_NameErrorLooksLikeReference", "A name cannot look like a cell reference.")]
+    [InlineData(DefinedNameError.Reserved, "InsertLoc_NameErrorReserved", "That name is reserved.")]
+    [InlineData(DefinedNameError.Duplicate, "InsertLoc_NameErrorDuplicate", "A name with that text already exists in this scope.")]
+    [InlineData(DefinedNameError.None, "InsertLoc_NameErrorGeneric", "Enter a valid name.")]
+    public void DescribeValidationMessage_MapsErrorToResourceAndFallback(
+        DefinedNameError error,
+        string resourceKey,
+        string fallbackText)
+    {
+        LocalizedValidationMessage<DefinedNameError> message =
+            DefinedNameValidationMessages.Describe(error);
+
+        message.Error.Should().Be(error);
+        message.Text.ResourceKey.Should().Be(resourceKey);
+        message.Text.FallbackText.Should().Be(fallbackText);
+    }
+
+    [Fact]
+    public void DescribeValidationMessage_UnknownErrorUsesGenericDescriptor()
+    {
+        var error = (DefinedNameError)int.MaxValue;
+
+        LocalizedValidationMessage<DefinedNameError> message =
+            DefinedNameValidationMessages.Describe(error);
+
+        message.Error.Should().Be(error);
+        message.Text.ResourceKey.Should().Be("InsertLoc_NameErrorGeneric");
+        message.Text.FallbackText.Should().Be("Enter a valid name.");
+    }
+
+    [Fact]
+    public void ValidationMessage_ResolvesRendererTextAndUsesSharedFallbackPolicy()
+    {
+        var message = DefinedNameValidationMessages.Describe(DefinedNameError.Duplicate);
+
+        message.Resolve(key => $"localized:{key}")
+            .Should().Be("localized:InsertLoc_NameErrorDuplicate");
+        message.Resolve(_ => string.Empty).Should().Be(message.Text.FallbackText);
+        message.Resolve(key => key).Should().Be(message.Text.FallbackText);
+        message.Resolve(key => $"[[{key}]]").Should().Be(message.Text.FallbackText);
+    }
+
+    [Theory]
     [InlineData("Sales")]
     [InlineData("_hidden")]
     [InlineData("Tax.Rate")]

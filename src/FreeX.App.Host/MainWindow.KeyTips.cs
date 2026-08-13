@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.Ribbon;
 
 namespace FreeX.App.Host;
 
@@ -26,11 +27,12 @@ public partial class MainWindow
 
     private void EnterRibbonKeyTipMode(RibbonKeyTipScope scope)
     {
-        _ribbonKeyTipMode.Enter();
-        _ribbonKeyTipScope = scope;
-        _ribbonKeyTipSequence = "";
-        _legacyDataKeyTipSequence = false;
-        _legacyEditKeyTipSequence = false;
+        _ribbonKeyTipSession.Enter(scope);
+        PrepareRibbonKeyTipScope(scope);
+    }
+
+    private void PrepareRibbonKeyTipScope(RibbonKeyTipScope scope)
+    {
         _activeRibbonKeyTipMenu = null;
         _activeRibbonKeyTipItemsControl = null;
         InvalidateKeyTipCandidateCaches();
@@ -42,11 +44,7 @@ public partial class MainWindow
         if (_activeRibbonKeyTipMenu is not null)
             _activeRibbonKeyTipMenu.IsOpen = false;
 
-        _ribbonKeyTipMode.Cancel();
-        _ribbonKeyTipScope = RibbonKeyTipScope.None;
-        _ribbonKeyTipSequence = "";
-        _legacyDataKeyTipSequence = false;
-        _legacyEditKeyTipSequence = false;
+        _ribbonKeyTipSession.Cancel();
         _activeRibbonKeyTipMenu = null;
         _activeRibbonKeyTipItemsControl = null;
         InvalidateKeyTipCandidateCaches();
@@ -57,124 +55,134 @@ public partial class MainWindow
     {
         if (key == Key.Escape)
         {
+            _ribbonKeyTipSession.HandleEscape();
             ExitRibbonKeyTipMode();
             return;
         }
 
-        var token = RibbonKeyTipMode.ToKeyTipToken(key);
+        var token = ToWpfKeyTipToken(key);
         if (token is null)
         {
+            _ribbonKeyTipSession.HandleToken(null);
             ExitRibbonKeyTipMode();
             return;
         }
 
-        _ribbonKeyTipSequence += token;
-
-        if (_ribbonKeyTipScope == RibbonKeyTipScope.TopLevel)
+        var step = _ribbonKeyTipSession.HandleToken(token);
+        switch (step.Intent)
         {
-            if (HasVisibleTopLevelKeyTipLongerPrefix(_ribbonKeyTipSequence))
+            case FreeXRibbonKeyTipInputIntent.EnterLegacyEditPasteSpecial:
+                PrepareRibbonKeyTipScope(RibbonKeyTipScope.Commands);
+                return;
+            case FreeXRibbonKeyTipInputIntent.EnterLegacyDataFilter:
+                if (TryHandleTopLevelRibbonKeyTip("D"))
+                    PrepareRibbonKeyTipScope(RibbonKeyTipScope.Commands);
+                else
+                    ExitRibbonKeyTipMode();
+                return;
+            case FreeXRibbonKeyTipInputIntent.WaitForContinuation:
+                return;
+            case FreeXRibbonKeyTipInputIntent.InvokeLegacyEditPasteSpecial:
+                PasteSpecialBtn_Click(this, new RoutedEventArgs());
+                ExitRibbonKeyTipMode();
+                return;
+            case FreeXRibbonKeyTipInputIntent.InvokeLegacyDataFilter:
+                FilterButton_Click(this, new RoutedEventArgs());
+                ExitRibbonKeyTipMode();
+                return;
+            case FreeXRibbonKeyTipInputIntent.Cancel:
+                ExitRibbonKeyTipMode();
+                return;
+        }
+
+        if (step.Scope == RibbonKeyTipScope.TopLevel)
+        {
+            if (HasVisibleTopLevelKeyTipLongerPrefix(step.Input))
                 return;
 
-            var topLevelSequence = _ribbonKeyTipSequence;
-            if (TryHandleLegacyEditTopLevelKeyTip(topLevelSequence))
-            {
+            if (TryHandleTopLevelRibbonKeyTip(step.Input))
                 EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
-                _legacyEditKeyTipSequence = true;
-            }
-            else if (TryHandleTopLevelRibbonKeyTip(topLevelSequence))
-            {
-                EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
-                _legacyDataKeyTipSequence = string.Equals(topLevelSequence, "D", StringComparison.OrdinalIgnoreCase);
-            }
-            else if (TryInvokeTopLevelQatKeyTip(_ribbonKeyTipSequence))
+            else if (TryInvokeTopLevelQatKeyTip(step.Input))
                 ExitRibbonKeyTipMode();
             else
                 ExitRibbonKeyTipMode();
             return;
         }
 
-        if (_ribbonKeyTipScope == RibbonKeyTipScope.Menu)
+        if (step.Scope == RibbonKeyTipScope.Menu)
         {
-            if (TryOpenActiveMenuItemSubmenuKeyTip(_ribbonKeyTipSequence))
+            if (TryOpenActiveMenuItemSubmenuKeyTip(step.Input))
                 return;
-            else if (TryInvokeActiveMenuItemKeyTip(_ribbonKeyTipSequence))
+            if (TryInvokeActiveMenuItemKeyTip(step.Input))
                 ExitRibbonKeyTipMode();
-            else if (!HasActiveMenuItemKeyTipPrefix(_ribbonKeyTipSequence))
+            else if (!HasActiveMenuItemKeyTipPrefix(step.Input))
                 ExitRibbonKeyTipMode();
-
             return;
         }
 
-        // Legacy Excel access-key route Alt+E, S (Edit > Paste Special).
-        if (_legacyEditKeyTipSequence &&
-            "S".StartsWith(_ribbonKeyTipSequence, StringComparison.OrdinalIgnoreCase))
-        {
-            if (string.Equals(_ribbonKeyTipSequence, "S", StringComparison.OrdinalIgnoreCase))
-            {
-                PasteSpecialBtn_Click(this, new RoutedEventArgs());
-                ExitRibbonKeyTipMode();
-            }
-
-            return;
-        }
-
-        // Legacy Excel access-key route Alt+D, F, F (Data ▸ Filter ▸ AutoFilter). Once the
-        // Alt+D top-level token has flagged the legacy Data sequence, the "F" keys must be
-        // consumed by this dedicated route and accumulate to "FF" rather than falling through
-        // to the generic command-keytip logic below — otherwise a single "F" could invoke an
-        // unrelated Data command or exit keytip mode before the second "F" arrives, leaving
-        // the filter unset (Issue 119).
-        if (_legacyDataKeyTipSequence &&
-            "FF".StartsWith(_ribbonKeyTipSequence, StringComparison.OrdinalIgnoreCase))
-        {
-            if (string.Equals(_ribbonKeyTipSequence, "FF", StringComparison.OrdinalIgnoreCase))
-            {
-                FilterButton_Click(this, new RoutedEventArgs());
-                ExitRibbonKeyTipMode();
-            }
-
-            // "F" so far — keep keytip mode active and wait for the second "F".
-            return;
-        }
-
-        if (TryInvokeVisibleCommandKeyTip(_ribbonKeyTipSequence))
+        if (TryInvokeVisibleCommandKeyTip(step.Input))
         {
             ExitRibbonKeyTipMode();
             return;
         }
 
-        if (_ribbonKeyTipScope == RibbonKeyTipScope.Menu)
-            return;
-
-        if (!HasVisibleCommandKeyTipPrefix(_ribbonKeyTipSequence))
+        if (_ribbonKeyTipSession.Scope != RibbonKeyTipScope.Menu &&
+            !HasVisibleCommandKeyTipPrefix(step.Input))
+        {
             ExitRibbonKeyTipMode();
+        }
     }
 
     private bool TryHandleDirectRibbonKeyTip(Key key)
     {
-        var token = RibbonKeyTipMode.ToKeyTipToken(key);
+        var token = ToWpfKeyTipToken(key);
         if (token is null)
             return false;
 
-        if (TryHandleLegacyEditTopLevelKeyTip(token))
+        _ribbonKeyTipSession.Enter(RibbonKeyTipScope.TopLevel);
+        var step = _ribbonKeyTipSession.HandleToken(token);
+        if (step.Intent == FreeXRibbonKeyTipInputIntent.EnterLegacyEditPasteSpecial)
         {
-            EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
-            _legacyEditKeyTipSequence = true;
+            PrepareRibbonKeyTipScope(RibbonKeyTipScope.Commands);
             return true;
         }
 
-        if (TryHandleTopLevelRibbonKeyTip(token))
+        if (step.Intent == FreeXRibbonKeyTipInputIntent.EnterLegacyDataFilter)
+        {
+            if (TryHandleTopLevelRibbonKeyTip("D"))
+            {
+                PrepareRibbonKeyTipScope(RibbonKeyTipScope.Commands);
+                return true;
+            }
+
+            _ribbonKeyTipSession.Cancel();
+            return false;
+        }
+
+        if (TryHandleTopLevelRibbonKeyTip(step.Input))
         {
             EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
-            _legacyDataKeyTipSequence = string.Equals(token, "D", StringComparison.OrdinalIgnoreCase);
             return true;
         }
 
-        return TryInvokeTopLevelQatKeyTip(token);
+        var invoked = TryInvokeTopLevelQatKeyTip(step.Input);
+        _ribbonKeyTipSession.Cancel();
+        return invoked;
     }
 
-    private static bool TryHandleLegacyEditTopLevelKeyTip(string token) =>
-        string.Equals(token, "E", StringComparison.OrdinalIgnoreCase);
+    internal static string? ToWpfKeyTipToken(Key key)
+    {
+        if (key >= Key.A && key <= Key.Z)
+            return key.ToString();
+
+        if (key >= Key.D0 && key <= Key.D9)
+            return ((int)(key - Key.D0)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        if (key >= Key.NumPad0 && key <= Key.NumPad9)
+            return ((int)(key - Key.NumPad0)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        return null;
+    }
 
     private void ShowKeyTipOverlay(RibbonKeyTipScope scope)
     {
@@ -327,7 +335,7 @@ public partial class MainWindow
                 toggleButton.IsChecked = toggleButton.IsChecked != true;
 
             button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
-            if (_ribbonKeyTipScope == RibbonKeyTipScope.Menu &&
+            if (_ribbonKeyTipSession.Scope == RibbonKeyTipScope.Menu &&
                 ReferenceEquals(_activeRibbonKeyTipMenu?.PlacementTarget, button))
             {
                 return false;
@@ -355,9 +363,6 @@ public partial class MainWindow
         if (button.ContextMenu is not { } menu)
             return false;
 
-        if (RibbonMetadata.IsCollapsedGroupButton(button))
-            EnsureCollapsedRibbonGroupMenuItems(menu);
-
         if (!GetMenuItems(menu).Any(item => !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item))))
         {
             return false;
@@ -375,7 +380,7 @@ public partial class MainWindow
         RibbonMenuKeyTipScopePlanner.ApplyScopedInputGestureText(menu);
         menu.IsOpen = true;
 
-        if (enterKeyTipMenuScope || _ribbonKeyTipMode.IsActive)
+        if (enterKeyTipMenuScope || _ribbonKeyTipSession.IsActive)
             EnterRibbonMenuKeyTipScope(menu);
     }
 
@@ -383,8 +388,7 @@ public partial class MainWindow
     {
         _activeRibbonKeyTipMenu = menu;
         _activeRibbonKeyTipItemsControl = menu;
-        _ribbonKeyTipScope = RibbonKeyTipScope.Menu;
-        _ribbonKeyTipSequence = "";
+        _ribbonKeyTipSession.EnterScope(RibbonKeyTipScope.Menu);
         RibbonMenuKeyTipScopePlanner.ApplyScopedInputGestureText(menu);
         InvalidateVisibleKeyTipElementCache();
         InvalidateActiveMenuKeyTipItems();
@@ -404,7 +408,7 @@ public partial class MainWindow
         }
 
         _activeRibbonKeyTipItemsControl = submenu;
-        _ribbonKeyTipSequence = "";
+        _ribbonKeyTipSession.ResetInput();
         RibbonMenuKeyTipScopePlanner.ApplyScopedInputGestureText(submenu);
         InvalidateActiveMenuKeyTipItems();
         return true;
@@ -489,7 +493,7 @@ public partial class MainWindow
         RibbonKeyTipRouting.HasKeyTipPrefix(GetRoutableKeyTipElements(RibbonKeyTipScope.Commands), keyTipPrefix);
 
     private bool HasVisibleTopLevelKeyTipLongerPrefix(string keyTipPrefix) =>
-        RibbonTopLevelKeyTipRouter.HasLongerKeyTipPrefix(
+        FreeXRibbonKeyTipRoutePlanner.HasLongerTopLevelKeyTipPrefix(
             keyTipPrefix,
             GetVisibleKeyTipElements(RibbonKeyTipScope.TopLevel)
                 .Select(RibbonTooltip.GetKeyTip));
@@ -519,8 +523,8 @@ public partial class MainWindow
 
     private bool ShouldCacheVisibleKeyTipElements(RibbonKeyTipScope scope) =>
         scope != RibbonKeyTipScope.None &&
-        _ribbonKeyTipMode.IsActive &&
-        _ribbonKeyTipScope == scope;
+        _ribbonKeyTipSession.IsActive &&
+        _ribbonKeyTipSession.Scope == scope;
 
     private List<FrameworkElement> MaterializeVisibleKeyTipElements(RibbonKeyTipScope scope)
     {
@@ -654,11 +658,4 @@ public partial class MainWindow
         return LogicalTreeHelper.GetParent(element);
     }
 
-    private enum RibbonKeyTipScope
-    {
-        None,
-        TopLevel,
-        Commands,
-        Menu
-    }
 }

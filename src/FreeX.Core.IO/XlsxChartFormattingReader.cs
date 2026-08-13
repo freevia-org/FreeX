@@ -74,7 +74,7 @@ internal static class XlsxChartFormattingReader
             return;
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-            chart.ChartAreaBorderThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
+            chart.ChartAreaBorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         // Same noFill-vs-absent distinction as above, but for the border/line ("No Line").
         if (line.Element(DrawingNs + "noFill") is not null)
@@ -143,7 +143,7 @@ internal static class XlsxChartFormattingReader
             return;
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-            chart.PlotAreaBorderThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
+            chart.PlotAreaBorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         // Same noFill-vs-absent distinction as above, but for the border/line ("No Line").
         if (line.Element(DrawingNs + "noFill") is not null)
@@ -214,7 +214,7 @@ internal static class XlsxChartFormattingReader
             return;
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-            result.BorderThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
+            result.BorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         var lineFill = line.Element(DrawingNs + "solidFill");
         if (lineFill is null)

@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Windows;
-using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -22,10 +21,11 @@ internal static class ParagraphBreaksDialog
     public static ParagraphBreaksResult? Prompt(Window? owner, ParagraphFormatting current)
     {
         ParagraphBreaksResult? result = null;
+        var surface = ParagraphBreaksDialogPlanner.Surface;
 
         var dialog = new Window
         {
-            Title = "Paragraph",
+            Title = surface.Title,
             Width = 380,
             SizeToContent = SizeToContent.Height,
             ResizeMode = ResizeMode.NoResize,
@@ -33,6 +33,7 @@ internal static class ParagraphBreaksDialog
             Owner = owner,
             ShowInTaskbar = false,
         };
+        WpfDialogSurfaceSemantics.Apply(dialog, surface);
 
         var state = ParagraphBreaksDialogPlanner.BuildInitialState(current, CultureInfo.CurrentCulture);
 
@@ -43,11 +44,16 @@ internal static class ParagraphBreaksDialog
         var lineSpacing = NumberBox(state.LineSpacingText);
         var contextualSpacingCheck = new CheckBox
         {
-            Content = "Don't add space between paragraphs of the same style",
+            Content = surface.Field(ParagraphBreaksDialogField.ContextualSpacing).Label,
             IsChecked = state.ContextualSpacing,
             Margin = new Thickness(0, 4, 0, 0),
         };
-        AutomationProperties.SetAutomationId(leftBox, "paragraph-left-indent");
+        WpfDialogSurfaceSemantics.Apply(leftBox, surface.Field(ParagraphBreaksDialogField.Left));
+        WpfDialogSurfaceSemantics.Apply(rightBox, surface.Field(ParagraphBreaksDialogField.Right));
+        WpfDialogSurfaceSemantics.Apply(spaceBefore, surface.Field(ParagraphBreaksDialogField.SpaceBefore));
+        WpfDialogSurfaceSemantics.Apply(spaceAfter, surface.Field(ParagraphBreaksDialogField.SpaceAfter));
+        WpfDialogSurfaceSemantics.Apply(lineSpacing, surface.Field(ParagraphBreaksDialogField.LineSpacing));
+        WpfDialogSurfaceSemantics.Apply(contextualSpacingCheck, surface.Field(ParagraphBreaksDialogField.ContextualSpacing));
 
         var specialAmtBox = NumberBox(state.SpecialAmountText);
         var specialBox = new ComboBox { MinWidth = 120, Margin = new Thickness(0, 0, 0, 8) };
@@ -57,6 +63,8 @@ internal static class ParagraphBreaksDialog
         specialBox.SelectionChanged += (_, _) =>
             specialAmtBox.IsEnabled = ParagraphBreaksDialogPlanner.IsSpecialAmountEnabled(specialBox.SelectedIndex);
         specialAmtBox.IsEnabled = state.SpecialAmountEnabled;
+        WpfDialogSurfaceSemantics.Apply(specialBox, surface.Field(ParagraphBreaksDialogField.Special));
+        WpfDialogSurfaceSemantics.Apply(specialAmtBox, surface.Field(ParagraphBreaksDialogField.SpecialAmount));
 
         var indentsPanel = new Grid { Margin = new Thickness(10) };
         indentsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -64,48 +72,66 @@ internal static class ParagraphBreaksDialog
         for (var i = 0; i < 8; i++)
             indentsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddGridRow(indentsPanel, 0, "Left indent (pt):", leftBox);
-        AddGridRow(indentsPanel, 1, "Right indent (pt):", rightBox);
-        AddGridRow(indentsPanel, 2, "Special:", specialBox);
-        AddGridRow(indentsPanel, 3, "By (pt):", specialAmtBox);
-        AddGridRow(indentsPanel, 4, "Space before (pt):", spaceBefore);
-        AddGridRow(indentsPanel, 5, "Space after (pt):", spaceAfter);
-        AddGridRow(indentsPanel, 6, "Line spacing (\u00d7):", lineSpacing);
+        AddGridRow(indentsPanel, 0, surface.Field(ParagraphBreaksDialogField.Left).Label, leftBox);
+        AddGridRow(indentsPanel, 1, surface.Field(ParagraphBreaksDialogField.Right).Label, rightBox);
+        AddGridRow(indentsPanel, 2, surface.Field(ParagraphBreaksDialogField.Special).Label, specialBox);
+        AddGridRow(indentsPanel, 3, surface.Field(ParagraphBreaksDialogField.SpecialAmount).Label, specialAmtBox);
+        AddGridRow(indentsPanel, 4, surface.Field(ParagraphBreaksDialogField.SpaceBefore).Label, spaceBefore);
+        AddGridRow(indentsPanel, 5, surface.Field(ParagraphBreaksDialogField.SpaceAfter).Label, spaceAfter);
+        AddGridRow(indentsPanel, 6, surface.Field(ParagraphBreaksDialogField.LineSpacing).Label, lineSpacing);
         Grid.SetRow(contextualSpacingCheck, 7);
         Grid.SetColumnSpan(contextualSpacingCheck, 2);
         indentsPanel.Children.Add(contextualSpacingCheck);
 
-        var keepWithNextCheck = new CheckBox { Content = "Keep with next", IsChecked = state.KeepWithNext, Margin = new Thickness(0, 0, 0, 6) };
-        var keepLinesTogetherCheck = new CheckBox { Content = "Keep lines together", IsChecked = state.KeepLinesTogether, Margin = new Thickness(0, 0, 0, 6) };
-        var widowControlCheck = new CheckBox { Content = "Widow/orphan control", IsChecked = state.WidowControl, Margin = new Thickness(0, 0, 0, 6) };
-        var pageBreakBeforeCheck = new CheckBox { Content = "Page break before", IsChecked = state.PageBreakBefore, Margin = new Thickness(0, 0, 0, 6) };
-        var suppressHyphensCheck = new CheckBox { Content = "Suppress auto-hyphenation", IsChecked = state.SuppressAutoHyphens, Margin = new Thickness(0, 0, 0, 6) };
-        var suppressLineNumbersCheck = new CheckBox { Content = "Suppress line numbers", IsChecked = state.SuppressLineNumbers, Margin = new Thickness(0, 0, 0, 6) };
+        var keepWithNextCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.KeepWithNext).Label, IsChecked = state.KeepWithNext, Margin = new Thickness(0, 0, 0, 6) };
+        var keepLinesTogetherCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.KeepLinesTogether).Label, IsChecked = state.KeepLinesTogether, Margin = new Thickness(0, 0, 0, 6) };
+        var widowControlCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.WidowControl).Label, IsChecked = state.WidowControl, Margin = new Thickness(0, 0, 0, 6) };
+        var pageBreakBeforeCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.PageBreakBefore).Label, IsChecked = state.PageBreakBefore, Margin = new Thickness(0, 0, 0, 6) };
+        var suppressHyphensCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.SuppressAutoHyphens).Label, IsChecked = state.SuppressAutoHyphens, Margin = new Thickness(0, 0, 0, 6) };
+        var suppressLineNumbersCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.SuppressLineNumbers).Label, IsChecked = state.SuppressLineNumbers, Margin = new Thickness(0, 0, 0, 6) };
+        WpfDialogSurfaceSemantics.Apply(keepWithNextCheck, surface.Field(ParagraphBreaksDialogField.KeepWithNext));
+        WpfDialogSurfaceSemantics.Apply(keepLinesTogetherCheck, surface.Field(ParagraphBreaksDialogField.KeepLinesTogether));
+        WpfDialogSurfaceSemantics.Apply(widowControlCheck, surface.Field(ParagraphBreaksDialogField.WidowControl));
+        WpfDialogSurfaceSemantics.Apply(pageBreakBeforeCheck, surface.Field(ParagraphBreaksDialogField.PageBreakBefore));
+        WpfDialogSurfaceSemantics.Apply(suppressHyphensCheck, surface.Field(ParagraphBreaksDialogField.SuppressAutoHyphens));
+        WpfDialogSurfaceSemantics.Apply(suppressLineNumbersCheck, surface.Field(ParagraphBreaksDialogField.SuppressLineNumbers));
 
         var breaksPanel = new StackPanel { Margin = new Thickness(10) };
-        breaksPanel.Children.Add(new TextBlock
+        var paginationHeading = new TextBlock
         {
-            Text = "Pagination",
+            Text = surface.Field(ParagraphBreaksDialogField.PaginationSection).Label,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
-        });
+        };
+        WpfDialogSurfaceSemantics.Apply(
+            paginationHeading,
+            surface.Field(ParagraphBreaksDialogField.PaginationSection));
+        breaksPanel.Children.Add(paginationHeading);
         breaksPanel.Children.Add(keepWithNextCheck);
         breaksPanel.Children.Add(keepLinesTogetherCheck);
         breaksPanel.Children.Add(widowControlCheck);
         breaksPanel.Children.Add(pageBreakBeforeCheck);
         breaksPanel.Children.Add(new Separator { Margin = new Thickness(0, 4, 0, 8) });
-        breaksPanel.Children.Add(new TextBlock
+        var formattingExceptionsHeading = new TextBlock
         {
-            Text = "Formatting exceptions",
+            Text = surface.Field(ParagraphBreaksDialogField.FormattingExceptionsSection).Label,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
-        });
+        };
+        WpfDialogSurfaceSemantics.Apply(
+            formattingExceptionsHeading,
+            surface.Field(ParagraphBreaksDialogField.FormattingExceptionsSection));
+        breaksPanel.Children.Add(formattingExceptionsHeading);
         breaksPanel.Children.Add(suppressHyphensCheck);
         breaksPanel.Children.Add(suppressLineNumbersCheck);
 
         var tabs = new TabControl();
-        tabs.Items.Add(new TabItem { Header = "Indents and Spacing", Content = new ScrollViewer { Content = indentsPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
-        tabs.Items.Add(new TabItem { Header = "Line and Page Breaks", Content = new ScrollViewer { Content = breaksPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
+        var indentsTab = new TabItem { Header = surface.Field(ParagraphBreaksDialogField.IndentsAndSpacingTab).Label, Content = new ScrollViewer { Content = indentsPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+        var breaksTab = new TabItem { Header = surface.Field(ParagraphBreaksDialogField.LineAndPageBreaksTab).Label, Content = new ScrollViewer { Content = breaksPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+        WpfDialogSurfaceSemantics.Apply(indentsTab, surface.Field(ParagraphBreaksDialogField.IndentsAndSpacingTab));
+        WpfDialogSurfaceSemantics.Apply(breaksTab, surface.Field(ParagraphBreaksDialogField.LineAndPageBreaksTab));
+        tabs.Items.Add(indentsTab);
+        tabs.Items.Add(breaksTab);
 
         void Accept()
         {

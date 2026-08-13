@@ -1,5 +1,6 @@
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using Free.Shared.IO;
 using FileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
 
 namespace FreeX.App.Services;
@@ -39,7 +40,7 @@ public static class SheetBackgroundPickerPlanner
         new(ImagePickerDisplayName, SupportedImagePatterns);
 
     public static bool IsSupportedImagePath(string path) =>
-        ExtensionFor(path).ToLowerInvariant() switch
+        FilePathPolicy.GetExtensionOrEmpty(path).ToLowerInvariant() switch
         {
             ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" => true,
             _ => false
@@ -71,32 +72,7 @@ public static class SheetBackgroundPickerPlanner
         background = new WorksheetBackgroundImage(
             imageBytes,
             contentType,
-            DisplayNameForPath(fileNameOrPath));
+            FilePathPolicy.FileNameOrPath(fileNameOrPath));
         return true;
-    }
-
-    private static string ExtensionFor(string path)
-    {
-        try
-        {
-            return Path.GetExtension(path);
-        }
-        catch (ArgumentException)
-        {
-            return "";
-        }
-    }
-
-    private static string DisplayNameForPath(string path)
-    {
-        try
-        {
-            var fileName = Path.GetFileName(path);
-            return string.IsNullOrWhiteSpace(fileName) ? path : fileName;
-        }
-        catch (ArgumentException)
-        {
-            return path;
-        }
     }
 }

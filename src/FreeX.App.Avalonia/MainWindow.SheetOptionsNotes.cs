@@ -16,7 +16,6 @@ using Avalonia.Styling;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.PageLayout;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -29,7 +28,7 @@ public sealed partial class MainWindow
     private const double ReviewCommentListCellColumnWidth = 80;
 
     private Window? _commentListWindow;
-    private Action<IReadOnlyList<SheetCommentEntry>>? _refreshCommentListWindow;
+    private Action<IReadOnlyList<CommentListRowPlan>>? _refreshCommentListWindow;
 
     private static AvaloniaCompactDialogChromeStyle SheetOptionsDialogChromeStyle => new(FormulaBarFontFamily);
 
@@ -66,7 +65,9 @@ public sealed partial class MainWindow
                     ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_GridlinesFailed"));
                 return result.Success;
             },
-            buildPrintCommand: (sheet, print) => PageLayoutRibbonCommandPlanner.BuildPrintGridlinesCommand(sheet, print));
+            planPrintCommand: print => CreatePageLayoutCommandSession().PlanPrintGridlines(
+                print,
+                _session.ActiveSheet.PrintHeadings));
 
     /// <summary>
     /// Page Layout ▸ Sheet Options ▸ Headings. Two-checkbox popup: View + Print.
@@ -91,7 +92,9 @@ public sealed partial class MainWindow
                 RefreshViewportSizeForZoom();
                 return true;
             },
-            buildPrintCommand: (sheet, print) => PageLayoutRibbonCommandPlanner.BuildPrintHeadingsCommand(sheet, print));
+            planPrintCommand: print => CreatePageLayoutCommandSession().PlanPrintHeadings(
+                _session.ActiveSheet.PrintGridlines,
+                print));
 
     private async Task ShowSheetOptionTwoToggleAsync(
         string title,
@@ -99,7 +102,7 @@ public sealed partial class MainWindow
         Func<bool> getView,
         Func<bool> getPrint,
         Func<bool, bool> setView,
-        Func<Sheet, bool, IWorkbookCommand> buildPrintCommand)
+        Func<bool, PageLayoutCommandExecutionPlan> planPrintCommand)
     {
         if (_isOpening || _isSaving)
             return;
@@ -168,11 +171,15 @@ public sealed partial class MainWindow
         // Print half via a rebuilt page-setup command (undo/redo aware).
         if (wantPrint != getPrint())
         {
-            var sheet = _session.ActiveSheet;
-            var result = _session.ExecuteReviewCommand(buildPrintCommand(sheet, wantPrint));
+            var plan = planPrintCommand(wantPrint);
+            var result = _session.ExecuteReviewCommand(plan.Command);
             if (!result.Success)
             {
-                ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotUpdatePrintOptions"));
+                ShowEditIssue(PageLayoutStatusPlanner.ResolveCommandStatus(
+                    plan,
+                    success: false,
+                    result.ErrorMessage,
+                    UiText.Get));
                 return;
             }
         }
@@ -221,10 +228,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(listBox, "ReviewCommentList");
         AutomationProperties.SetName(listBox, UiText.Get("MainWindowMessage_CommentsTitle"));
         AutomationProperties.SetHelpText(listBox, UiText.Get("ReviewCommentList_ListHelpText"));
-        listBox.ItemTemplate = new FuncDataTemplate<SheetCommentEntry>(
+        listBox.ItemTemplate = new FuncDataTemplate<CommentListRowPlan>(
             (entry, _) => BuildCommentListRow(entry),
             supportsRecycling: true);
-        var visibleComments = new ObservableCollection<SheetCommentEntry>();
+        var visibleComments = new ObservableCollection<CommentListRowPlan>();
         listBox.ItemsSource = visibleComments;
 
         var emptyText = new TextBlock
@@ -259,9 +266,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "ReviewCommentListWindow");
 
-        IReadOnlyList<SheetCommentEntry> currentComments = comments;
+        IReadOnlyList<CommentListRowPlan> currentComments = comments;
 
-        void RefreshList(IReadOnlyList<SheetCommentEntry> refreshedComments)
+        void RefreshList(IReadOnlyList<CommentListRowPlan> refreshedComments)
         {
             var selectedAddress = listBox.SelectedIndex >= 0 && listBox.SelectedIndex < currentComments.Count
                 ? currentComments[listBox.SelectedIndex].Address
@@ -334,21 +341,8 @@ public sealed partial class MainWindow
         return Task.CompletedTask;
     }
 
-    private static List<SheetCommentEntry> CollectThreadedComments(Sheet sheet)
-    {
-        var entries = new List<SheetCommentEntry>();
-
-        foreach (var (address, comment) in sheet.ThreadedComments)
-        {
-            entries.Add(new SheetCommentEntry(
-                address,
-                address.ToA1(),
-                CommentNavigationPlanner.FormatThreadedComment(comment)));
-        }
-
-        entries.Sort(static (x, y) => x.Address.CompareTo(y.Address));
-        return entries;
-    }
+    private static IReadOnlyList<CommentListRowPlan> CollectThreadedComments(Sheet sheet) =>
+        CommentNavigationPlanner.CreateThreadedCommentRows(sheet.ThreadedComments);
 
     private static Grid BuildCommentListHeader()
     {
@@ -388,7 +382,7 @@ public sealed partial class MainWindow
         header.Children.Add(label);
     }
 
-    private static Grid BuildCommentListRow(SheetCommentEntry entry)
+    private static Grid BuildCommentListRow(CommentListRowPlan entry)
     {
         var row = new Grid
         {
@@ -396,8 +390,8 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             MinHeight = 24,
         };
-        AddCommentListRowCell(row, entry.Cell, $"ReviewCommentListCell_{entry.Address.ToA1()}", 0);
-        AddCommentListRowCell(row, entry.Text, $"ReviewCommentListText_{entry.Address.ToA1()}", 1);
+        AddCommentListRowCell(row, entry.Cell, $"ReviewCommentListCell_{entry.Cell}", 0);
+        AddCommentListRowCell(row, entry.Text, $"ReviewCommentListText_{entry.Cell}", 1);
         return row;
     }
 
@@ -417,8 +411,6 @@ public sealed partial class MainWindow
         Grid.SetColumn(label, column);
         row.Children.Add(label);
     }
-
-    private readonly record struct SheetCommentEntry(CellAddress Address, string Cell, string Text);
 
     // ── Visual chrome helpers (SheetOptions / Show Comments dialog) ──────────
 

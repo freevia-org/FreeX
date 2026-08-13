@@ -10,6 +10,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestSupport\ShippingTestHookOwnershipAssertions.cs"
+             Link="TestSupport\ShippingTestHookOwnershipAssertions.cs" />
+    <Using Include="FreeP.App.Localization.LocalizedUiText" Alias="UiText" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -28,10 +31,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestSupport\ChartOptionsDialogTestPlans.cs"
+             Link="TestSupport\ChartOptionsDialogTestPlans.cs" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\FreeP.App.Localization\FreeP.App.Localization.csproj" />
-    <ProjectReference Include="..\FreeP.App.Host\FreeP.App.Host.csproj" />
+    <ProjectReference Include="..\FreeP.App.Host\FreeP.App.Host.csproj"
+                      AdditionalProperties="FreePHostAccess=true;FreePSlideShowTestSupport=true" />
     <ProjectReference Include="..\FreeP.App.Ole.Windows\FreeP.App.Ole.Windows.csproj" />
-    <ProjectReference Include="..\FreeP.App.Rendering.Wpf\FreeP.App.Rendering.Wpf.csproj" />
+    <ProjectReference Include="..\FreeP.App.Rendering.Wpf\FreeP.App.Rendering.Wpf.csproj"
+                      AdditionalProperties="FreePRendererTestSupport=true" />
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
   </ItemGroup>
 

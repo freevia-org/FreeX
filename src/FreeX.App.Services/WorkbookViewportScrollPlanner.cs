@@ -1,3 +1,4 @@
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -29,6 +30,29 @@ public readonly record struct WorkbookViewportCellRevealPlan(
 public static class WorkbookViewportScrollPlanner
 {
     private const double MinimumScrollValue = 1;
+    public const int DefaultWheelScrollLinesPerNotch = 3;
+    public const int MaximumWheelScrollLinesPerNotch = 100;
+
+    /// <summary>
+    /// Converts the platform wheel-lines setting into a worksheet row/column step. The Windows
+    /// page-scroll sentinel (-1) uses the visible page size; invalid settings use the historic
+    /// three-line default, and every result is clamped to a practical range.
+    /// </summary>
+    public static int NormalizeWheelScrollStep(int wheelScrollLines, double visibleSpan)
+    {
+        if (wheelScrollLines == -1)
+        {
+            var pageSize = double.IsFinite(visibleSpan)
+                ? Math.Max(1, Math.Round(visibleSpan))
+                : DefaultWheelScrollLinesPerNotch;
+            return (int)Math.Clamp(pageSize, 1, MaximumWheelScrollLinesPerNotch);
+        }
+
+        if (wheelScrollLines <= 0)
+            return DefaultWheelScrollLinesPerNotch;
+
+        return Math.Clamp(wheelScrollLines, 1, MaximumWheelScrollLinesPerNotch);
+    }
 
     public static int NormalizeWheelNotches(int delta)
     {
@@ -66,8 +90,12 @@ public static class WorkbookViewportScrollPlanner
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(viewport);
 
-        var visibleRows = CountScrollableRows(viewport.RowMetrics, sheet.FrozenRows);
-        var visibleColumns = CountScrollableColumns(viewport.ColMetrics, sheet.FrozenCols);
+        var visibleRows = (uint)Math.Max(
+            1,
+            ViewportService.CountScrollableRows(viewport.RowMetrics, sheet.FrozenRows));
+        var visibleColumns = (uint)Math.Max(
+            1,
+            ViewportService.CountScrollableColumns(viewport.ColMetrics, sheet.FrozenCols));
         var (usedMaxRow, usedMaxCol) = CalculateUsedRangeExtents(sheet);
         return new WorkbookViewportScrollState(
             CreateAxis(
@@ -135,11 +163,43 @@ public static class WorkbookViewportScrollPlanner
         return Math.Max(1, absoluteLimit - Math.Min(frozenCount, absoluteLimit - 1));
     }
 
+    /// <summary>
+    /// Keeps the content at a viewport origin anchored across a row or column insertion/deletion.
+    /// A null result means the edit is below/right of the origin or has no structural delta.
+    /// </summary>
+    public static uint? PlanStructuralEditOriginShift(
+        uint currentOrigin,
+        uint editIndex,
+        int delta,
+        uint absoluteLimit)
+    {
+        if (delta == 0 || editIndex > currentOrigin)
+            return null;
+
+        return (uint)Math.Clamp((long)currentOrigin + delta, 1, absoluteLimit);
+    }
+
     public static uint GetScrollableRowLimit(Sheet? sheet) =>
         CalculateScrollableLimit(CellAddress.MaxRow, sheet?.FrozenRows ?? 0);
 
+    public static uint GetScrollableRowLimit(uint frozenRows) =>
+        CalculateScrollableLimit(CellAddress.MaxRow, frozenRows);
+
     public static uint GetScrollableColumnLimit(Sheet? sheet) =>
         CalculateScrollableLimit(CellAddress.MaxCol, sheet?.FrozenCols ?? 0);
+
+    public static uint GetScrollableColumnLimit(uint frozenColumns) =>
+        CalculateScrollableLimit(CellAddress.MaxCol, frozenColumns);
+
+    public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(
+        uint frozenRows,
+        uint frozenColumns,
+        double verticalScrollValue,
+        double horizontalScrollValue) =>
+        (
+            ScrollbarValueToWorksheetIndex(verticalScrollValue, frozenRows, CellAddress.MaxRow),
+            ScrollbarValueToWorksheetIndex(horizontalScrollValue, frozenColumns, CellAddress.MaxCol)
+        );
 
     public static uint ClampViewportOrigin(double rawValue, uint absoluteLimit, uint visibleSpan)
     {
@@ -488,30 +548,6 @@ public static class WorkbookViewportScrollPlanner
             SmallChange: 1,
             LargeChange: largeChange,
             IsEnabled: maximum > MinimumScrollValue);
-    }
-
-    private static uint CountScrollableRows(IReadOnlyList<RowMetric> rows, uint frozenRows)
-    {
-        uint count = 0;
-        for (var i = 0; i < rows.Count; i++)
-        {
-            if (rows[i].Row > frozenRows)
-                count++;
-        }
-
-        return Math.Max(1, count);
-    }
-
-    private static uint CountScrollableColumns(IReadOnlyList<ColMetric> columns, uint frozenColumns)
-    {
-        uint count = 0;
-        for (var i = 0; i < columns.Count; i++)
-        {
-            if (columns[i].Col > frozenColumns)
-                count++;
-        }
-
-        return Math.Max(1, count);
     }
 
     private static uint GetScrollableRowStart(Sheet sheet) =>

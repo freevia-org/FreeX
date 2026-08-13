@@ -322,7 +322,7 @@ public sealed class DocumentSemanticAutomationPeerTests
             headerParagraph.GetBoundingRectangle().Width.Should().BeGreaterThan(0);
             headerParagraph.BringIntoView();
 
-            view.HeaderFooterCaretInfo.Should().Be((0, false, "Header", 0, 0));
+            view.HeaderFooterCaretInfo.Should().Be((0, false, HeaderFooterSlotKind.Header, 0, 0));
             root.GetItemStatus().Should().StartWith("Section 1 default header; Caret 0 of 18;");
         });
     }

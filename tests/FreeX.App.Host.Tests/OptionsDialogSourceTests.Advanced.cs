@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows.Controls;
 using System.Xml.Linq;
 using FreeX.App.Host;
@@ -51,7 +51,7 @@ public sealed partial class OptionsDialogSourceTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new FreeXOptions());
+            var dialog = new OptionsDialog(new AppOptions());
             dialog.Show();
             try
             {
@@ -74,11 +74,10 @@ public sealed partial class OptionsDialogSourceTests
             .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "OptAdvancedFillHandle");
 
         fillHandle.Attribute("IsEnabled").Should().BeNull();
-        // R123: computed into `editedFillHandle` and applied onto the freshly-reloaded `opts`
-        // only when changed from _opts -- see FreeXOptionsDialogMultiWindowSaveTests.
         DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs")
             .Should().Contain("OptAdvancedFillHandle.IsChecked = _opts.EnableFillHandleAndCellDragAndDrop")
-            .And.Contain("editedFillHandle = OptAdvancedFillHandle.IsChecked == true");
+            .And.Contain("enableFillHandleAndCellDragAndDrop: OptAdvancedFillHandle.IsChecked == true")
+            .And.Contain("var saveResult = _dialogSession.Commit(");
     }
 
     [Fact]
@@ -86,11 +85,11 @@ public sealed partial class OptionsDialogSourceTests
     {
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "options.json");
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+        using var optionsPath = TestEnvironmentVariableScope.Set(AppOptionsStore.OptionsPathEnvironmentVariable, path);
 
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new FreeXOptions { EnableAutoCompleteForCellValues = true });
+            var dialog = new OptionsDialog(new AppOptions { EnableAutoCompleteForCellValues = true });
             dialog.Show();
             try
             {
@@ -109,7 +108,7 @@ public sealed partial class OptionsDialogSourceTests
             }
         });
 
-        var reloaded = FreeXOptions.LoadFromPath(path);
+        var reloaded = AppOptionsStore.LoadFromPath(path);
         reloaded.EnableAutoCompleteForCellValues.Should().BeFalse();
     }
 
@@ -119,8 +118,7 @@ public sealed partial class OptionsDialogSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
 
         source.Should().Contain("_options.EnableAutoCompleteForCellValues");
-        source.Should().Contain("CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries");
-        source.Should().Contain("CellValueAutoCompleteSuggester.Suggest(candidates, text)");
+        source.Should().Contain("_formulaRangeEditingSession.PlanCellValueAutocomplete(");
     }
 
     [Fact]
@@ -157,15 +155,16 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("PanelAdvanced.Visibility");
         source.Should().Contain("OptAfterEnterDirection.ItemsSource");
         source.Should().Contain("OptMoveAfterEnter.IsChecked = _opts.MoveSelectionAfterEnter");
-        source.Should().Contain("ShowGridlines = OptShowGridlines.IsChecked == true");
-        source.Should().Contain("ShowHeadings = OptShowHeadings.IsChecked == true");
-        source.Should().Contain("ObjectsDisplay = OptObjectsDisplay.SelectedIndex switch");
+        source.Should().Contain("OptShowGridlines.IsChecked == true,");
+        source.Should().Contain("OptShowHeadings.IsChecked == true,");
+        source.Should().Contain("objectsDisplay: OptionsDialogPlanner.IndexToObjectDisplay(OptObjectsDisplay.SelectedIndex)");
         source.Should().Contain("OptObjectsDisplay.ItemsSource");
         source.Should().Contain("ShowDeferredOptionsMessage");
-        source.Should().Contain("DeferredCommandMessages.AutoCorrectOptions()");
-        source.Should().Contain("DeferredCommandMessages.RibbonCustomizationImportExport()");
-        source.Should().Contain("DeferredCommandMessages.OfficeAddIns()");
-        source.Should().Contain("DeferredCommandMessages.TrustCenterSettings()");
+        source.Should().Contain("DeferredCommandMessagePlanner.AutoCorrectOptions()");
+        source.Should().Contain("DeferredCommandMessagePlanner.RibbonCustomizationImportExport()");
+        source.Should().Contain("DeferredCommandMessagePlanner.OfficeAddIns()");
+        source.Should().Contain("DeferredCommandMessagePlanner.TrustCenterSettings()");
+        source.Should().Contain("WpfResourceKeyTextResolver.Resolve(");
     }
 
     [Fact]
@@ -182,7 +181,7 @@ public sealed partial class OptionsDialogSourceTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new FreeXOptions());
+            var dialog = new OptionsDialog(new AppOptions());
             dialog.Show();
             try
             {
@@ -216,8 +215,8 @@ public sealed partial class OptionsDialogSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
         source.Should().Contain("SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch");
-        source.Should().Contain("FreeXObjectDisplay.Placeholders => FreeX.App.UI.GridObjectDisplayMode.Placeholders");
-        source.Should().Contain("FreeXObjectDisplay.Nothing => FreeX.App.UI.GridObjectDisplayMode.Nothing");
-        source.Should().Contain("var keepObjectData = _options.ObjectsDisplay != FreeXObjectDisplay.Nothing");
+        source.Should().Contain("AppOptionsObjectDisplay.Placeholders => FreeX.App.UI.GridObjectDisplayMode.Placeholders");
+        source.Should().Contain("AppOptionsObjectDisplay.Nothing => FreeX.App.UI.GridObjectDisplayMode.Nothing");
+        source.Should().Contain("var keepObjectData = _options.ObjectsDisplay != AppOptionsObjectDisplay.Nothing");
     }
 }

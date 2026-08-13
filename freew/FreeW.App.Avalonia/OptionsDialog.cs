@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
@@ -6,6 +7,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using System.Globalization;
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
@@ -14,9 +17,9 @@ namespace FreeW.App.Avalonia;
 
 /// <summary>
 /// Compact Avalonia editor for the FreeW options that the cross-platform shell consumes today.
-/// Parsing and normalization stay in <see cref="OptionsDialogPlanner"/>.
+/// Parsing, normalization, and commit planning stay in <see cref="OptionsDialogSession"/>.
 /// </summary>
-internal sealed class OptionsDialog : FreeWDialogWindow
+internal sealed partial class OptionsDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
@@ -24,25 +27,12 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush,
         };
 
-    private readonly FreeWOptions _seed;
+    private readonly OptionsDialogSession _session;
     private readonly OptionsDialogSurfaceSpec _surface;
     private readonly TextBox _recentFilesCap = new() { Width = 72, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly ComboBox _defaultFormat = new() { Width = 180, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _uiLanguage = new() { Width = 180, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly CheckBox _autoCorrectEnabled = new();
-    private readonly CheckBox _smartQuotes = new();
-    private readonly CheckBox _dashes = new();
-    private readonly CheckBox _ellipsis = new();
-    private readonly CheckBox _symbols = new();
-    private readonly CheckBox _capitalization = new();
-    private readonly CheckBox _bulletedLists = new();
-    private readonly CheckBox _numberedLists = new();
-    private readonly CheckBox _ordinals = new();
-    private readonly CheckBox _fractions = new();
-    private readonly CheckBox _hyperlinks = new();
-    private readonly CheckBox _correctTwoInitialCaps = new();
-    private readonly CheckBox _capitalizeDayNames = new();
-    private readonly CheckBox _replaceText = new();
+    private readonly IReadOnlyDictionary<OptionsDialogToggleKind, CheckBox> _toggles;
     private readonly Border _replacements = new()
     {
         Height = OptionsDialogPlanner.ReplacementTableHeight,
@@ -55,17 +45,12 @@ internal sealed class OptionsDialog : FreeWDialogWindow
 
     public FreeWOptions? Result { get; private set; }
 
-    internal TextBox RecentFilesCapForTest => _recentFilesCap;
-
-    internal IReadOnlyList<(TextBox Replace, TextBox With)> ReplacementEditorsForTest =>
-        _replacementEditors.Select(row => (row.Replace, row.With)).ToArray();
-
-    internal void AcceptForTest() => Accept();
-
     public OptionsDialog(FreeWOptions options)
     {
-        _seed = options ?? new FreeWOptions();
-        _surface = OptionsDialogPlanner.BuildSurface(_seed, SystemLanguageLabel());
+        _session = new OptionsDialogSession(options, CultureInfo.CurrentCulture);
+        _surface = _session.Surface;
+        _toggles = Enum.GetValues<OptionsDialogToggleKind>()
+            .ToDictionary(kind => kind, _ => new CheckBox());
 
         Title = _surface.Title;
         Width = OptionsDialogPlanner.DialogWidth;
@@ -74,10 +59,13 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
-        _recentFilesCap.Text = _seed.RecentFilesCap.ToString();
+        _recentFilesCap.Text = _session.InitialState.RecentFilesCapText;
         _defaultFormat.ItemsSource = _surface.General.FormatChoices;
-        _defaultFormat.SelectedIndex = 0;
-        _uiLanguage.Text = _seed.UiLanguage;
+        _defaultFormat.SelectedItem = _surface.General.FormatChoices.FirstOrDefault(choice =>
+            choice.Extension == _session.InitialState.SelectedFormat);
+        if (_defaultFormat.SelectedIndex < 0)
+            _defaultFormat.SelectedIndex = 0;
+        _uiLanguage.Text = _session.InitialState.UiLanguage;
         BuildReplacementTable();
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_recentFilesCap, DialogChromeStyle);
@@ -95,9 +83,13 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             tabs,
             DialogChromeStyle,
             contentPaneMargin: new Thickness(-12, -1, 0, 0));
-        tabs.Items.Add(new TabItem { Header = _surface.Tabs[0].Header, Content = BuildGeneralTab() });
-        tabs.Items.Add(new TabItem { Header = _surface.AutoCorrect.Header, Content = BuildAutoCorrectTab() });
-        tabs.Items.Add(new TabItem { Header = _surface.AutoFormat.Header, Content = BuildAutoFormatTab() });
+        var tabContents = new[] { BuildGeneralTab(), BuildAutoCorrectTab(), BuildAutoFormatTab() };
+        for (var index = 0; index < _surface.Tabs.Count; index++)
+        {
+            var tab = new TabItem { Header = _surface.Tabs[index].Header, Content = tabContents[index] };
+            AutomationProperties.SetAutomationId(tab, _surface.Tabs[index].AutomationId);
+            tabs.Items.Add(tab);
+        }
         void ApplyAutoCorrectPaneInset()
         {
             tabs.ApplyTemplate();
@@ -160,47 +152,24 @@ internal sealed class OptionsDialog : FreeWDialogWindow
     private void Accept()
     {
         _status.IsVisible = false;
-        if (!OptionsDialogPlanner.TryParseRecentFilesCap(_recentFilesCap.Text, out var cap))
+        var input = OptionsDialogInput.Capture(
+            _recentFilesCap.Text,
+            (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension,
+            _uiLanguage.Text,
+            kind => ToggleFor(kind).IsChecked == true,
+            _replacementEditors
+                .Select(row => new OptionsDialogReplacementInput(row.Replace.Text, row.With.Text)));
+        var plan = _session.PlanAcceptance(input);
+        if (!plan.ShouldApply)
         {
-            _status.Text = $"Enter a whole number between {FreeWOptions.MinRecentFilesCap} and {FreeWOptions.MaxRecentFilesCap}.";
+            _status.Text = plan.Validation!.Message;
             _status.IsVisible = true;
-            _recentFilesCap.Focus();
+            if (plan.Validation.Target == BasicApplicationOptionsValidationTarget.RecentFilesCap)
+                AvaloniaCompactDialogChrome.FocusAndSelect(_recentFilesCap);
             return;
         }
 
-        var format = (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension;
-        var autoFormat = new AutoFormatOptions
-        {
-            SmartQuotes = _smartQuotes.IsChecked == true,
-            Dashes = _dashes.IsChecked == true,
-            Ellipsis = _ellipsis.IsChecked == true,
-            Symbols = _symbols.IsChecked == true,
-            Capitalization = _capitalization.IsChecked == true,
-            BulletedLists = _bulletedLists.IsChecked == true,
-            NumberedLists = _numberedLists.IsChecked == true,
-            Ordinals = _ordinals.IsChecked == true,
-            Fractions = _fractions.IsChecked == true,
-            Hyperlinks = _hyperlinks.IsChecked == true,
-        };
-        var autoCorrect = new AutoCorrectOptions
-        {
-            CorrectTwoInitialCapitals = _correctTwoInitialCaps.IsChecked == true,
-            CapitalizeDayNames = _capitalizeDayNames.IsChecked == true,
-            ReplaceText = _replaceText.IsChecked == true,
-            Replacements = _replacementEditors
-                .Select(row => new { Replace = row.Replace.Text, With = row.With.Text })
-                .Where(row => !string.IsNullOrWhiteSpace(row.Replace) && !string.IsNullOrWhiteSpace(row.With))
-                .Select(row => new AutoCorrectReplacement(row.Replace!.Trim(), row.With!))
-                .ToList(),
-        };
-
-        Result = OptionsDialogPlanner.BuildResult(
-            cap,
-            format,
-            _uiLanguage.Text,
-            _autoCorrectEnabled.IsChecked == true,
-            autoFormat,
-            autoCorrect);
+        Result = plan.Result!;
         Close();
     }
 
@@ -219,9 +188,11 @@ internal sealed class OptionsDialog : FreeWDialogWindow
                 new ColumnDefinition(new GridLength(1, GridUnitType.Star)),
             },
         };
-        AddRow(grid, 0, _surface.General.RecentFilesLabel, _recentFilesCap);
-        AddRow(grid, 1, _surface.General.DefaultSaveFormatLabel, _defaultFormat);
-        AddRow(grid, 2, _surface.General.UiLanguageLabel, _uiLanguage, _surface.General.UiLanguageHint);
+        for (var index = 0; index < _surface.General.Fields.Count; index++)
+        {
+            var field = _surface.General.Fields[index];
+            AvaloniaLabeledFormRow.Add(grid, index, field.Label, GeneralControlFor(field.Kind), field.Hint);
+        }
         return grid;
     }
 
@@ -238,9 +209,8 @@ internal sealed class OptionsDialog : FreeWDialogWindow
                 OptionsDialogPlanner.ContentMargin + 2,
                 OptionsDialogPlanner.ContentBottomMargin + 3)
         };
-        panel.Children.Add(_correctTwoInitialCaps);
-        panel.Children.Add(_capitalizeDayNames);
-        panel.Children.Add(_replaceText);
+        foreach (var spec in _surface.AutoCorrect.Toggles)
+            panel.Children.Add(ToggleFor(spec.Kind));
         panel.Children.Add(new TextBlock
         {
             Text = _surface.AutoCorrect.ReplacementsLabel,
@@ -257,25 +227,27 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             Margin = new Thickness(0, OptionsDialogPlanner.ToggleTopMargin + 2, 0, 0),
         });
 
-        void SyncReplacements() => _replacements.IsEnabled = _replaceText.IsChecked == true;
-        _replaceText.IsCheckedChanged += (_, _) => SyncReplacements();
+        var replaceTextToggle = ToggleFor(OptionsDialogToggleKind.ReplaceText);
+        void SyncReplacements() => _replacements.IsEnabled = _session.PlanEnabledState(
+            ToggleFor(OptionsDialogToggleKind.AutoCorrectEnabled).IsChecked == true,
+            replaceTextToggle.IsChecked == true).ReplacementsEnabled;
+        replaceTextToggle.IsCheckedChanged += (_, _) => SyncReplacements();
         SyncReplacements();
         return panel;
     }
 
     private void BuildReplacementTable()
     {
-        _replacementGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
-        _replacementGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(2, GridUnitType.Star)));
+        foreach (var column in _surface.AutoCorrect.ReplacementColumns)
+        {
+            _replacementGrid.ColumnDefinitions.Add(
+                new ColumnDefinition(new GridLength(column.WidthWeight, GridUnitType.Star)));
+        }
         _replacementGrid.RowDefinitions.Add(new RowDefinition(new GridLength(26)));
-        _replacementGrid.Children.Add(HeaderCell("Replace", 0));
-        _replacementGrid.Children.Add(HeaderCell("With", 1));
+        for (var index = 0; index < _surface.AutoCorrect.ReplacementColumns.Count; index++)
+            _replacementGrid.Children.Add(HeaderCell(_surface.AutoCorrect.ReplacementColumns[index].Header, index));
 
-        OptionsDialogPlanner.TryParseAutoCorrectReplacements(
-            _surface.AutoCorrect.ReplacementsText,
-            out var replacements,
-            out _);
-        foreach (var replacement in replacements)
+        foreach (var replacement in _session.InitialState.Replacements)
             AddReplacementRow(replacement.Replace, replacement.With);
 
         AddReplacementRow();
@@ -346,23 +318,14 @@ internal sealed class OptionsDialog : FreeWDialogWindow
 
     private Control BuildAutoFormatTab()
     {
-        ConfigureToggle(_autoCorrectEnabled, _surface.AutoFormat.MasterToggle, contentSpacing: 7);
+        var masterToggle = ToggleFor(_surface.AutoFormat.MasterToggle.Kind);
+        ConfigureToggle(masterToggle, _surface.AutoFormat.MasterToggle, contentSpacing: 7);
         foreach (var spec in _surface.AutoFormat.RuleToggles)
             ConfigureToggle(ToggleFor(spec.Kind), spec, contentSpacing: 7);
 
-        var ruleBoxes = new[]
-        {
-            _smartQuotes,
-            _dashes,
-            _ellipsis,
-            _symbols,
-            _capitalization,
-            _bulletedLists,
-            _numberedLists,
-            _ordinals,
-            _fractions,
-            _hyperlinks,
-        };
+        var ruleBoxes = _surface.AutoFormat.RuleToggles
+            .Select(spec => ToggleFor(spec.Kind))
+            .ToArray();
 
         var rules = new StackPanel
         {
@@ -383,8 +346,8 @@ internal sealed class OptionsDialog : FreeWDialogWindow
                 OptionsDialogPlanner.ContentMargin,
                 OptionsDialogPlanner.ContentBottomMargin)
         };
-        _autoCorrectEnabled.Margin = new Thickness(0, 0, 0, 8);
-        panel.Children.Add(_autoCorrectEnabled);
+        masterToggle.Margin = new Thickness(0, 0, 0, 8);
+        panel.Children.Add(masterToggle);
         panel.Children.Add(new TextBlock
         {
             Text = _surface.AutoFormat.RuleSectionLabel,
@@ -395,10 +358,13 @@ internal sealed class OptionsDialog : FreeWDialogWindow
 
         void SyncEnabled()
         {
+            var enabledState = _session.PlanEnabledState(
+                masterToggle.IsChecked == true,
+                ToggleFor(OptionsDialogToggleKind.ReplaceText).IsChecked == true);
             foreach (var box in ruleBoxes)
-                box.IsEnabled = _autoCorrectEnabled.IsChecked == true;
+                box.IsEnabled = enabledState.AutoFormatRulesEnabled;
         }
-        _autoCorrectEnabled.IsCheckedChanged += (_, _) => SyncEnabled();
+        masterToggle.IsCheckedChanged += (_, _) => SyncEnabled();
         SyncEnabled();
         return panel;
     }
@@ -417,73 +383,16 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         box.MaxHeight = 16;
     }
 
-    private CheckBox ToggleFor(OptionsDialogToggleKind kind) =>
+    private CheckBox ToggleFor(OptionsDialogToggleKind kind) => _toggles[kind];
+
+    private Control GeneralControlFor(OptionsDialogGeneralFieldKind kind) =>
         kind switch
         {
-            OptionsDialogToggleKind.AutoCorrectEnabled => _autoCorrectEnabled,
-            OptionsDialogToggleKind.SmartQuotes => _smartQuotes,
-            OptionsDialogToggleKind.Dashes => _dashes,
-            OptionsDialogToggleKind.Ellipsis => _ellipsis,
-            OptionsDialogToggleKind.Symbols => _symbols,
-            OptionsDialogToggleKind.Capitalization => _capitalization,
-            OptionsDialogToggleKind.BulletedLists => _bulletedLists,
-            OptionsDialogToggleKind.NumberedLists => _numberedLists,
-            OptionsDialogToggleKind.Ordinals => _ordinals,
-            OptionsDialogToggleKind.Fractions => _fractions,
-            OptionsDialogToggleKind.Hyperlinks => _hyperlinks,
-            OptionsDialogToggleKind.CorrectTwoInitialCapitals => _correctTwoInitialCaps,
-            OptionsDialogToggleKind.CapitalizeDayNames => _capitalizeDayNames,
-            OptionsDialogToggleKind.ReplaceText => _replaceText,
+            OptionsDialogGeneralFieldKind.RecentFilesCap => _recentFilesCap,
+            OptionsDialogGeneralFieldKind.DefaultSaveFormat => _defaultFormat,
+            OptionsDialogGeneralFieldKind.UiLanguage => _uiLanguage,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
         };
-
-    private static void AddRow(Grid grid, int row, string label, Control field, string? hint = null)
-    {
-        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-
-        var text = new TextBlock
-        {
-            Text = label,
-            Margin = new Thickness(0, 4, 12, 4),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetRow(text, row);
-        Grid.SetColumn(text, 0);
-
-        field.Margin = new Thickness(0, 4, 0, 4);
-
-        Control value = field;
-        if (!string.IsNullOrWhiteSpace(hint))
-        {
-            value = new StackPanel
-            {
-                Children =
-                {
-                    field,
-                    new TextBlock
-                    {
-                        Text = hint,
-                        FontSize = 11,
-                        Foreground = Brushes.Gray,
-                        TextWrapping = TextWrapping.Wrap,
-                        Margin = new Thickness(0, 0, 0, 4),
-                    },
-                },
-            };
-        }
-
-        Grid.SetRow(value, row);
-        Grid.SetColumn(value, 1);
-
-        grid.Children.Add(text);
-        grid.Children.Add(value);
-    }
-
-    private static string SystemLanguageLabel()
-    {
-        var name = System.Globalization.CultureInfo.CurrentCulture.Name;
-        return string.IsNullOrEmpty(name) ? "invariant" : name;
-    }
 
     private sealed class ReplacementEditor
     {

@@ -101,29 +101,22 @@ public static class WorkbookFileLifecycleCoordinator
             saveAsAsync);
     }
 
-    public static async Task<bool> SaveResolvedAsync(
+    public static Task<bool> SaveResolvedAsync(
         bool isDirty,
         string? currentFilePath,
         Func<FileSaveTarget?> resolveCurrentTarget,
         Func<FileSaveTarget, Task<bool>> saveTargetAsync,
-        Func<Task<bool>> saveAsAsync)
-    {
-        ArgumentNullException.ThrowIfNull(resolveCurrentTarget);
-        ArgumentNullException.ThrowIfNull(saveTargetAsync);
-        ArgumentNullException.ThrowIfNull(saveAsAsync);
-
-        if (FileLifecyclePlanner.PlanSave(isDirty, currentFilePath) == FileSaveIntent.PromptSaveAs)
-            return await saveAsAsync();
-
-        var target = resolveCurrentTarget();
-        if (target is null)
-            return await saveAsAsync();
-
-        if (PlanSaveTargetWrite(isDirty, currentFilePath, target) == WorkbookSaveTargetIntent.SkipCleanCurrentPath)
-            return true;
-
-        return await saveTargetAsync(target);
-    }
+        Func<Task<bool>> saveAsAsync) =>
+        AsyncFileLifecycleCoordinator.SaveResolvedAsync(
+            isDirty,
+            currentFilePath,
+            resolveCurrentTarget,
+            saveTargetAsync,
+            saveAsAsync,
+            resolvedTargetPolicy: target =>
+                PlanSaveTargetWrite(isDirty, currentFilePath, target) == WorkbookSaveTargetIntent.SkipCleanCurrentPath
+                    ? ResolvedSaveTargetDecision.Skip
+                    : ResolvedSaveTargetDecision.Write);
 
     public static WorkbookSaveTargetIntent PlanSaveTargetWrite(
         bool isDirty,

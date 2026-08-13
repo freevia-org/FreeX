@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using static FreeX.Core.IO.XlsxSlicerTimelineRelationshipTypes;
 
 namespace FreeX.Core.IO;
 
@@ -21,12 +22,6 @@ internal static class XlsxPackageMetadataMerger
     private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
     private const string WebExtensionTaskpanesRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes";
     private const string WebExtensionRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/webextension";
-    private const string SlicerRelationshipType = "http://schemas.microsoft.com/office/2007/relationships/slicer";
-    private const string SlicerCacheRelationshipType = "http://schemas.microsoft.com/office/2007/relationships/slicerCache";
-    private const string TimelineRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/Timeline";
-    private const string TimelineCacheRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/TimelineCache";
-    private const string TimelineRelationshipType2011 = "http://schemas.microsoft.com/office/2011/relationships/timeline";
-    private const string TimelineCacheRelationshipType2011 = "http://schemas.microsoft.com/office/2011/relationships/timelineCache";
     private const string SlicerCachesWorkbookExtensionUri = "{BBE1A952-AA13-448e-AADC-164F8A28A991}";
     private const string TimelineCachesWorkbookExtensionUri = "{D0CA8CA8-9F24-4464-BF8E-62219DCF47F9}";
     // R70-io-vba-6-1: the macro-enabled workbook content-type (.xlsm/.xltm) -- must never be
@@ -1071,7 +1066,7 @@ internal static class XlsxPackageMetadataMerger
                     string.Equals(relationshipType, SlicerCacheRelationshipType, StringComparison.OrdinalIgnoreCase)) ||
                    (targetPart.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase) &&
                     targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-                    IsTimelineCacheRelationshipType(relationshipType));
+                    IsTimelineCache(relationshipType));
         }
 
         if (sourcePart.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
@@ -1082,7 +1077,7 @@ internal static class XlsxPackageMetadataMerger
                     string.Equals(relationshipType, SlicerRelationshipType, StringComparison.OrdinalIgnoreCase)) ||
                    (targetPart.StartsWith("xl/timelines/", StringComparison.OrdinalIgnoreCase) &&
                     targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-                    IsTimelineRelationshipType(relationshipType));
+                    IsTimeline(relationshipType));
         }
 
         return (sourcePart.StartsWith("xl/slicers/", StringComparison.OrdinalIgnoreCase) &&
@@ -1094,7 +1089,7 @@ internal static class XlsxPackageMetadataMerger
                 sourcePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                 targetPart.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase) &&
                 targetPart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
-                IsTimelineCacheRelationshipType(relationshipType));
+                IsTimelineCache(relationshipType));
     }
 
     private static bool IsQueryTablePackageGraphRelationship(
@@ -1293,17 +1288,9 @@ internal static class XlsxPackageMetadataMerger
                string.Equals(relationshipType, WebExtensionRelationshipType, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(relationshipType, SlicerRelationshipType, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(relationshipType, SlicerCacheRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-               IsTimelineRelationshipType(relationshipType) ||
-               IsTimelineCacheRelationshipType(relationshipType);
+               IsTimeline(relationshipType) ||
+               IsTimelineCache(relationshipType);
     }
-
-    private static bool IsTimelineRelationshipType(string? relationshipType) =>
-        string.Equals(relationshipType, TimelineRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(relationshipType, TimelineRelationshipType2011, StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsTimelineCacheRelationshipType(string? relationshipType) =>
-        string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(relationshipType, TimelineCacheRelationshipType2011, StringComparison.OrdinalIgnoreCase);
 
     private static void EnsureSlicerTimelineWorkbookExtensionReferences(ArchiveEntryIndex targetIndex)
     {
@@ -1343,7 +1330,7 @@ internal static class XlsxPackageMetadataMerger
         var timelineCacheRelationshipIds = FindWorkbookRelationshipIds(
             relationshipsRoot,
             packageRelNs,
-            relationshipType => IsTimelineCacheRelationshipType(relationshipType),
+            relationshipType => IsTimelineCache(relationshipType),
             targetPart => targetPart.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase));
 
         if (slicerCacheRelationshipIds.Count == 0 && timelineCacheRelationshipIds.Count == 0)

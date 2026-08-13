@@ -1,6 +1,7 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -44,16 +45,22 @@ public partial class GoalSeekDialog : Window
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!GoalSeekInputParser.TryParse(
+        if (!GoalSeekRequestParser.TryParse(
                 _sheetId,
                 SetCellBox.Text,
                 ToValueBox.Text,
                 ChangingCellBox.Text,
                 out var input,
-                out var error))
+                out var parseResult))
         {
-            DialogMessageHelper.ShowWarning(this, error, UiText.Get("GoalSeek_GoalSeek"));
-            FocusInvalidInput(error);
+            var validation = GoalSeekStatusDialogPlanner.DescribeValidationError(
+                parseResult,
+                GoalSeekPresentationProfile.Wpf);
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation.Message.Resolve(UiText.Get, UiText.Format),
+                UiText.Get("GoalSeek_GoalSeek"));
+            FocusInvalidInput(validation.FocusTarget);
             return;
         }
 
@@ -65,27 +72,15 @@ public partial class GoalSeekDialog : Window
 
     private void CancelBtn_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
-    private void FocusInvalidInput(string error)
+    private void FocusInvalidInput(GoalSeekValidationFocusTarget focusTarget)
     {
-        var target = ResolveInvalidInputTarget(error);
-        DialogFocus.FocusAndSelect(target);
-    }
-
-    private TextBox ResolveInvalidInputTarget(string error)
-    {
-        if (string.Equals(error, UiText.Get("GoalSeek_SetCellRequiredMessage"), StringComparison.Ordinal) ||
-            !CellAddress.TryParse(SetCellBox.Text.Trim(), _sheetId, out _))
-            return SetCellBox;
-
-        var targetInput = ToValueBox.Text.Trim();
-        if ((!double.TryParse(targetInput, NumberStyles.Any, CultureInfo.CurrentCulture, out var targetValue) &&
-             !double.TryParse(targetInput, NumberStyles.Any, CultureInfo.InvariantCulture, out targetValue)) ||
-            !double.IsFinite(targetValue))
+        var target = focusTarget switch
         {
-            return ToValueBox;
-        }
-
-        return ChangingCellBox;
+            GoalSeekValidationFocusTarget.TargetValue => ToValueBox,
+            GoalSeekValidationFocusTarget.ChangingCell => ChangingCellBox,
+            _ => SetCellBox
+        };
+        DialogFocus.FocusAndSelect(target);
     }
 
     private void RangePickerButton_Click(object sender, RoutedEventArgs e)

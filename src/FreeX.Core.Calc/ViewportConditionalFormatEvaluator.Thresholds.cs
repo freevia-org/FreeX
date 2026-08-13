@@ -159,8 +159,9 @@ internal static partial class ViewportConditionalFormatEvaluator
                 !TryGetIconSetAggregateCache(cf, aggregates, out var cache))
                 continue;
 
-            var thresholdCount = GetIconSetCount(cf.IconSetStyle) - 1;
-            var thresholdStartIndex = GetIconSetThresholdStartIndex(cf, GetIconSetCount(cf.IconSetStyle));
+            var iconCount = ConditionalFormatEvaluationMath.GetIconSetCount(cf.IconSetStyle);
+            var thresholdCount = iconCount - 1;
+            var thresholdStartIndex = ConditionalFormatEvaluationMath.GetIconSetThresholdStartIndex(cf.IconSetThresholds.Count, iconCount);
             if (cf.IconSetThresholds.Count - thresholdStartIndex < thresholdCount)
                 continue;
 
@@ -285,29 +286,17 @@ internal static partial class ViewportConditionalFormatEvaluator
         CfAggregateCache? cache,
         out double value)
     {
-        value = 0;
-        return type switch
+        if (cache is null && type is not CfThresholdType.Number)
         {
-            CfThresholdType.Min when cache is not null => Set(cache.Min, out value),
-            CfThresholdType.Max when cache is not null => Set(cache.Max, out value),
-            // AutoMin/AutoMax (data-bar-only "Automatic") resolve to the same actual min/max as
-            // Min/Max -- the zero-baseline clamp that distinguishes Automatic is applied separately
-            // by the data-bar caller (EvaluateDataBar), keyed off the threshold TYPE, not here.
-            CfThresholdType.AutoMin when cache is not null => Set(cache.Min, out value),
-            CfThresholdType.AutoMax when cache is not null => Set(cache.Max, out value),
-            CfThresholdType.Number => TryParseDouble(text, out value),
-            CfThresholdType.Percent when cache is not null => TryParseDouble(text, out var percent) &&
-                                       Set(cache.Min + (cache.Max - cache.Min) * (percent / 100d), out value),
-            CfThresholdType.Percentile when cache is not null => TryParseDouble(text, out var percentile) &&
-                                          TryResolvePercentile(cache.SortedValues, percentile, out value),
-            _ => false
-        };
-
-        static bool Set(double input, out double output)
-        {
-            output = input;
-            return double.IsFinite(input);
+            value = 0;
+            return false;
         }
+
+        return ConditionalFormatEvaluationMath.TryResolveStaticThreshold(
+            type,
+            text,
+            cache is null ? default : ToEvaluationStatistics(cache),
+            out value);
     }
 
     private static bool TryGetIconSetAggregateCache(
@@ -370,14 +359,6 @@ internal static partial class ViewportConditionalFormatEvaluator
         cfContext.StaticThresholdFormulaValues.TryGetValue(new CfThresholdFormulaKey(cf, slot, index), out var value)
             ? value
             : null;
-
-    internal static int GetIconSetCount(string? style) =>
-        !string.IsNullOrWhiteSpace(style) && char.IsDigit(style![0])
-            ? Math.Clamp(style[0] - '0', 3, 5)
-            : 3;
-
-    internal static int GetIconSetThresholdStartIndex(ConditionalFormat cf, int iconCount) =>
-        cf.IconSetThresholds.Count >= iconCount ? 1 : 0;
 
     private static CellStyle? ComputeColorScaleStyle(
         ConditionalFormat cf,
@@ -720,59 +701,24 @@ internal static partial class ViewportConditionalFormatEvaluator
         FormulaNode? formulaAst,
         out double value)
     {
-        value = 0;
-        return type switch
-        {
-            CfThresholdType.Min => Set(cache.Min, out value),
-            CfThresholdType.Max => Set(cache.Max, out value),
-            // See TryResolveStaticThreshold above: AutoMin/AutoMax resolve to the same actual
-            // min/max as Min/Max; the zero-baseline clamp is applied by the data-bar caller.
-            CfThresholdType.AutoMin => Set(cache.Min, out value),
-            CfThresholdType.AutoMax => Set(cache.Max, out value),
-            CfThresholdType.Number => TryParseDouble(text, out value),
-            CfThresholdType.Percent => TryParseDouble(text, out var percent) &&
-                                       Set(cache.Min + (cache.Max - cache.Min) * (percent / 100d), out value),
-            CfThresholdType.Percentile => TryParseDouble(text, out var percentile) &&
-                                          TryResolvePercentile(cache.SortedValues, percentile, out value),
-            CfThresholdType.Formula => staticFormulaValue.HasValue
-                ? Set(staticFormulaValue.Value, out value)
-                : TryEvaluateThresholdFormula(formulaAst, sheet, workbook, anchorCell, currentCell, out value),
-            _ => false
-        };
+        if (type != CfThresholdType.Formula)
+            return ConditionalFormatEvaluationMath.TryResolveStaticThreshold(
+                type,
+                text,
+                ToEvaluationStatistics(cache),
+                out value);
 
-        static bool Set(double input, out double output)
+        if (staticFormulaValue is { } staticValue)
         {
-            output = input;
-            return double.IsFinite(input);
+            value = staticValue;
+            return double.IsFinite(staticValue);
         }
+
+        return TryEvaluateThresholdFormula(formulaAst, sheet, workbook, anchorCell, currentCell, out value);
     }
 
-    private static bool TryResolvePercentile(IReadOnlyList<double>? sortedValues, double percentile, out double value)
-    {
-        value = 0;
-        if (sortedValues is null || sortedValues.Count == 0)
-            return false;
-
-        percentile = Math.Clamp(percentile, 0d, 100d);
-        if (sortedValues.Count == 1)
-        {
-            value = sortedValues[0];
-            return true;
-        }
-
-        var position = (sortedValues.Count - 1) * percentile / 100d;
-        var lower = (int)Math.Floor(position);
-        var upper = (int)Math.Ceiling(position);
-        if (lower == upper)
-        {
-            value = sortedValues[lower];
-            return true;
-        }
-
-        var weight = position - lower;
-        value = sortedValues[lower] + (sortedValues[upper] - sortedValues[lower]) * weight;
-        return true;
-    }
+    private static ConditionalFormatEvaluationStatistics ToEvaluationStatistics(CfAggregateCache cache) =>
+        new(cache.Count, cache.Min, cache.Max, cache.Average, cache.StdDev, cache.SortedValues);
 
     private static bool TryEvaluateThresholdFormula(
         FormulaNode? ast,

@@ -41,13 +41,13 @@ public static class QuickAnalysisShellRequestPlanner
             return QuickAnalysisShellRequestPlan.Empty(QuickAnalysisShellRequestStatus.MissingSelection);
 
         var range = selection.Value;
-        if (range.CellCount <= 1)
-            return QuickAnalysisShellRequestPlan.Empty(QuickAnalysisShellRequestStatus.UnsupportedSelection, range);
-
         if (sheet is null)
             return QuickAnalysisShellRequestPlan.Empty(QuickAnalysisShellRequestStatus.MissingSheet, range);
 
-        var description = QuickAnalysisSelectionReader.Describe(sheet, range);
+        var interpretation = QuickAnalysisSelectionInterpreter.Interpret(sheet, range);
+        if (!interpretation.IsEligible || interpretation.Description is not { } description)
+            return QuickAnalysisShellRequestPlan.Empty(QuickAnalysisShellRequestStatus.UnsupportedSelection, range);
+
         var displayModel = QuickAnalysisModelBuilder.Build(description).ToDisplayModel();
         if (displayModel.IsEmpty)
         {

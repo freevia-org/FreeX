@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Presentation.Tests;
@@ -15,14 +16,16 @@ public sealed class FreeWDialogFocusPlannerTests
             FreeWDialogFocusPlanner.Zoom,
         };
 
+        plans.Should().AllBeAssignableTo<DialogFocusPlan<string>>();
+
         plans.Should().OnlyContain(plan =>
-            plan.InitialFocusTargetAutomationId == plan.ValidationFocusTargetAutomationId
+            plan.InitialFocusTarget == plan.ValidationFocusTarget
             && plan.SelectAllOnFocus
             && plan.ActionButtons.Select(button => button.Label).SequenceEqual(new[] { "OK", "Cancel" })
             && plan.ActionButtons[0].IsDefault
             && plan.ActionButtons[1].IsCancel);
 
-        plans.Select(plan => plan.InitialFocusTargetAutomationId).Should().Equal(
+        plans.Select(plan => plan.InitialFocusTarget).Should().Equal(
             "CompareDocumentsAuthorBox",
             "DocumentPropertiesTitle",
             "TableFormulaFormulaBox",

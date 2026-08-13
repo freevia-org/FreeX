@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows.Threading;
 using Free.Shared.AppServices;
+using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -42,10 +43,11 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
             workbook.AddSheet("Sheet1");
             workbook.FileSharing = new WorkbookFileSharingModel { ReadOnlyRecommended = true };
 
-            harness.ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
+            var outcome = harness.ApplyWorkbookReadOnlyOpenPolicy(workbook);
 
             harness.MessageService.Calls.Should().Be(1,
                 "a Read-Only-Recommended workbook must prompt the user before it's treated as editable");
+            outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.ReadOnlyRecommendedAccepted);
             harness.IsWorkbookReadOnly.Should().BeTrue(
                 "accepting the read-only prompt must mark this session's read-only flag");
         });
@@ -64,8 +66,9 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
             workbook.AddSheet("Sheet1");
             workbook.FileSharing = new WorkbookFileSharingModel { ReadOnlyRecommended = true };
 
-            harness.ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
+            var outcome = harness.ApplyWorkbookReadOnlyOpenPolicy(workbook);
 
+            outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.ReadOnlyRecommendedDeclined);
             harness.IsWorkbookReadOnly.Should().BeFalse(
                 "declining the plain Read-Only-Recommended prompt (no password involved) must leave the session editable");
         });
@@ -82,8 +85,9 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
             workbook.AddSheet("Sheet1");
             workbook.FileSharing = new WorkbookFileSharingModel { ReservationPassword = "secret" };
 
-            harness.ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
+            var outcome = harness.ApplyWorkbookReadOnlyOpenPolicy(workbook);
 
+            outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.ReservationPasswordAccepted);
             harness.IsWorkbookReadOnly.Should().BeFalse(
                 "typing the correct write-reservation password must unlock a fully editable session");
             harness.MessageService.Calls.Should().Be(0,
@@ -110,8 +114,9 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
             workbook.AddSheet("Sheet1");
             workbook.FileSharing = new WorkbookFileSharingModel { ReservationPassword = "secret" };
 
-            harness.ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
+            var outcome = harness.ApplyWorkbookReadOnlyOpenPolicy(workbook);
 
+            outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.ReservationPasswordRejected);
             harness.IsWorkbookReadOnly.Should().BeTrue(
                 "a wrong write-reservation password must fall back to a read-only session, not grant write access");
             harness.MessageService.Calls.Should().Be(1,
@@ -130,8 +135,9 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
             workbook.AddSheet("Sheet1");
             workbook.FileSharing = new WorkbookFileSharingModel { ReservationPassword = "secret" };
 
-            harness.ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
+            var outcome = harness.ApplyWorkbookReadOnlyOpenPolicy(workbook);
 
+            outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.ReservationPasswordCancelled);
             harness.IsWorkbookReadOnly.Should().BeTrue(
                 "cancelling the write-reservation password prompt must fall back to a read-only session");
             harness.MessageService.Calls.Should().Be(0,
@@ -151,9 +157,10 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
             var workbook = new Workbook("Book1.xlsx");
             workbook.AddSheet("Sheet1");
 
-            harness.ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
+            var outcome = harness.ApplyWorkbookReadOnlyOpenPolicy(workbook);
 
             harness.MessageService.Calls.Should().Be(0, "a normal workbook must not prompt at all");
+            outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.Editable);
             harness.IsWorkbookReadOnly.Should().BeFalse();
         });
     }
@@ -161,28 +168,29 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
     private sealed class ReadOnlyPromptHarness : IDisposable
     {
         private readonly MethodInfo _applyMethod;
-        private readonly FieldInfo _isReadOnlyField;
+        private readonly FieldInfo _readOnlySessionField;
 
         private ReadOnlyPromptHarness(MainWindow window, RecordingUserMessageService messageService)
         {
             Window = window;
             MessageService = messageService;
             _applyMethod = typeof(MainWindow).GetMethod(
-                "ApplyReadOnlyRecommendedPromptIfNeeded", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ApplyReadOnlyRecommendedPromptIfNeeded");
-            _isReadOnlyField = typeof(MainWindow).GetField(
-                "_isWorkbookReadOnly", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_isWorkbookReadOnly");
+                "ApplyWorkbookReadOnlyOpenPolicy", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ApplyWorkbookReadOnlyOpenPolicy");
+            _readOnlySessionField = typeof(MainWindow).GetField(
+                "_workbookReadOnlySession", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_workbookReadOnlySession");
         }
 
         public MainWindow Window { get; }
 
         public RecordingUserMessageService MessageService { get; }
 
-        public bool IsWorkbookReadOnly => (bool)_isReadOnlyField.GetValue(Window)!;
+        public bool IsWorkbookReadOnly =>
+            ((WorkbookReadOnlySession)_readOnlySessionField.GetValue(Window)!).IsReadOnly;
 
-        public void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook) =>
-            _applyMethod.Invoke(Window, [workbook]);
+        public WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicy(Workbook workbook) =>
+            (WorkbookReadOnlyOpenOutcome)_applyMethod.Invoke(Window, [workbook])!;
 
         public static ReadOnlyPromptHarness Create(bool acceptReadOnly, Func<string, string?>? reservationPasswordEntry = null)
         {

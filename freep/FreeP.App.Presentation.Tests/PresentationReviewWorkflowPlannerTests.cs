@@ -1,6 +1,7 @@
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
+using PresentationModel = FreeP.Core.Model.Presentation;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -38,6 +39,10 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.TotalMentionCount.Should().Be(0);
         plan.CurrentSlideSummaryLabel.Should().Be("Slide 1: 1 thread");
         plan.DeckSummaryLabel.Should().Be("2 threads: 2 open threads, 0 resolved threads, 0 replies, 0 mentions");
+        plan.HeaderSummaryText.Should().Be(
+            "Slide 1: 1 thread | 2 threads: 2 open threads, 0 resolved threads, 0 replies, 0 mentions");
+        plan.FilterOptionsSummaryText.Should().Be(
+            "All: 1 thread | Open: 1 thread | Resolved: 0 threads | Mentions: 0 threads");
         plan.SelectedCommentIndex.Should().Be(0);
         plan.Comments.Should().ContainSingle().Which.Should().BeEquivalentTo(new PresentationCommentDescriptor(
             0,
@@ -69,6 +74,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.SelectedComment.AnchorSummary.Should().Be("Legacy comment anchor at 100,200 EMU");
         plan.SelectedComment.ReplySummary.Should().Be("0 replies");
         plan.SelectedComment.MentionSummary.Should().Be("0 mentions");
+        plan.CloseAction.Should().Be(new PresentationReviewSurfaceActionPlan("Close", true));
+        plan.SaveEditAction.Should().Be(new PresentationReviewSurfaceActionPlan("Save", true));
 
         Action(PresentationReviewWorkflowPlanner.EditCommentCommandId).IsEnabled.Should().BeTrue();
         Action(PresentationReviewWorkflowPlanner.DeleteCommentCommandId).IsEnabled.Should().BeTrue();
@@ -290,6 +297,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
                 "Nora.Reviewer",
                 "Comment author"));
         all.SummaryLabel.Should().Be("3 mention candidates");
+        all.ShouldAutoApplyDefaultCandidate.Should().BeFalse();
+        all.TriggerLabel.Should().Be("@");
 
         filtered.Query.Should().Be("nor");
         filtered.Candidates.Should().ContainSingle().Which.DisplayName.Should().Be("Nora Reviewer");
@@ -320,6 +329,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.Query.Should().Be("No");
         plan.Candidates.Should().ContainSingle().Which.DisplayName.Should().Be("Nora Reviewer");
         plan.DefaultCandidate!.InsertToken.Should().Be("Nora.Reviewer");
+        plan.ShouldAutoApplyDefaultCandidate.Should().BeTrue();
+        plan.TriggerLabel.Should().Be("@Nora.Reviewer");
     }
 
     [Fact]
@@ -2687,6 +2698,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
                 "R3C1 continues a vertical merge.",
                 "Verify the table still reads correctly in row and column order.")
         });
+        display.Details[0].RenderedLine.Should().Be(
+            "Blank header cell: R1C3 is blank. Add descriptive header text or remove the empty header cell.");
     }
 
     [Fact]
@@ -2862,6 +2875,25 @@ public sealed class PresentationReviewWorkflowPlannerTests
                 null));
         plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderSelectItemCommandId)
             .IsEnabled.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(null, null, false, "Alt text: missing")]
+    [InlineData("Sales", null, false, "Alt text title: Sales")]
+    [InlineData(null, "Quarterly sales by region.", false, "Alt text: Quarterly sales by region.")]
+    [InlineData("Sales", "Quarterly sales by region.", false, "Alt text: Sales - Quarterly sales by region.")]
+    [InlineData("Ignored", "Ignored", true, "Decorative object")]
+    public void ReadingOrderAltTextDisplayText_CoversRendererReadyPermutations(
+        string? title,
+        string? description,
+        bool isDecorative,
+        string expected)
+    {
+        PresentationReviewWorkflowPlanner.BuildReadingOrderAltTextDisplayText(
+                title,
+                description,
+                isDecorative)
+            .Should().Be(expected);
     }
 
     [Fact]
@@ -3237,6 +3269,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.SelectedRowIndex.Should().Be(1);
         plan.SelectedRow.Should().BeSameAs(plan.Rows[1]);
         plan.Rows.Select(row => row.IsSelected).Should().Equal(false, true);
+        plan.Rows.Should().OnlyContain(row =>
+            row.SelectionAction == new PresentationReviewSurfaceActionPlan("Select", true));
         plan.Rows[0].CorrectionAction.IsEnabled.Should().BeFalse();
         plan.Rows[0].CorrectionAction.DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ProofingMissingIssueMessage);
         plan.Rows[1].Should().Match<PresentationProofingIssueRowPlan>(row =>
@@ -4384,7 +4418,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     private static PresentationProofingCorrectionMutationPlan ApplyCorrection(
-        Presentation presentation,
+        PresentationModel presentation,
         IReadOnlyList<PresentationProofingScopeDescriptor> scopes,
         PresentationProofingScopeKind kind)
     {

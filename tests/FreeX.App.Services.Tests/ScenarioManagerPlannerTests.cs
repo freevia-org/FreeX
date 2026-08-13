@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.ScenarioManager;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -11,8 +12,7 @@ public sealed class ScenarioManagerPlannerTests
         var servicesPlannerPath = RepositoryFileLocator.Find("src", "FreeX.App.Services", "ScenarioManagerPlanner.cs");
         var servicesProjectRoot = Path.GetDirectoryName(servicesPlannerPath)
             ?? throw new DirectoryNotFoundException("Could not resolve FreeX.App.Services directory.");
-        var repoRoot = Directory.GetParent(servicesProjectRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(servicesPlannerPath).Should().BeTrue();
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ScenarioManagerPlanner.cs"))
@@ -62,6 +62,29 @@ public sealed class ScenarioManagerPlannerTests
     public void GetDefaultScenarioName_UsesNextOrdinal(int scenarioCount, string expected)
     {
         ScenarioManagerPlanner.GetDefaultScenarioName(scenarioCount).Should().Be(expected);
+    }
+
+    [Fact]
+    public void GetDefaultScenarioName_SkipsExistingNamesCaseInsensitively()
+    {
+        ScenarioManagerPlanner.GetDefaultScenarioName(
+                ["Budget", "Scenario 3", "scenario 4"])
+            .Should()
+            .Be("Scenario 5");
+    }
+
+    [Fact]
+    public void ScenarioHosts_DelegateDefaultNamingToSharedPlanner()
+    {
+        var avalonia = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var wpf = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.ScenarioCommands.cs"));
+
+        avalonia.Should().Contain("ScenarioManagerPlanner.GetDefaultScenarioName(")
+            .And.NotContain("CreateScenarioManagerDefaultName");
+        wpf.Should().Contain("ScenarioManagerPlanner.GetDefaultScenarioName(")
+            .And.NotContain("$\"Scenario {_workbook.Scenarios.Count + 1}\"");
     }
 
     [Fact]

@@ -10,10 +10,13 @@ public sealed class RestrictEditingDialogPolicySourceGuardTests
         var source = ReadHostSource("RestrictEditingDialog.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("RestrictEditingDialogPlanner.BuildPlan(current)");
+        source.Should().Contain("new RestrictEditingDialogSession(current)");
+        source.Should().Contain("_session.InitialPlan");
         source.Should().Contain("RestrictEditingDialogPlanner.ModeOptions");
-        source.Should().Contain("RestrictEditingDialogPlanner.TryCreateStartSettings(");
-        source.Should().Contain("RestrictEditingDialogPlanner.TryCreateStopSettings(");
+        source.Should().Contain("_session.Start(");
+        source.Should().Contain("_session.StopAsync(");
+        source.Should().NotContain("RestrictEditingDialogPlanner.TryCreateStartSettings(");
+        source.Should().NotContain("RestrictEditingDialogPlanner.TryCreateStopSettings(");
         source.Should().Contain("RestrictEditingDialogPlanner.StartButtonText");
         source.Should().Contain("RestrictEditingDialogPlanner.StopButtonText");
         source.Should().NotContain("ProtectionPasswordHelper.CreateWithPassword");
@@ -32,15 +35,7 @@ public sealed class RestrictEditingDialogPolicySourceGuardTests
         source.Should().NotContain("_stateStore.SetChecked(\"freew.restrict-editing\", _editor.IsProtected)");
     }
 
-    private static string ReadHostSource(string fileName)
-    {
-        var path = Path.Combine(AppContext.BaseDirectory);
-        while (path is not null && !Directory.Exists(Path.Combine(path, "freew")))
-            path = Directory.GetParent(path)?.FullName;
-
-        path.Should().NotBeNull();
-        var fullPath = Path.Combine(path!, "freew", "FreeW.App.Host", fileName);
-        File.Exists(fullPath).Should().BeTrue($"{fullPath} should exist");
-        return File.ReadAllText(fullPath);
-    }
+    private static string ReadHostSource(string fileName) =>
+        TestWorkspaceFileLocator.ReadAllTextFromBaseDirectory(
+            "freew", "FreeW.App.Host", fileName);
 }

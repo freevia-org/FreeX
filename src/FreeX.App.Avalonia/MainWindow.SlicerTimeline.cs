@@ -6,6 +6,8 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.Rendering;
 using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Model;
 
@@ -38,6 +40,7 @@ public sealed partial class MainWindow
         var showHeadings = _session.IsShowingHeadings;
         var zoomFactor = GetActiveZoomFactor();
         var workbook = _session.Workbook;
+        var sourceSession = new SlicerTimelineSourceSession(workbook);
 
         foreach (var slicer in workbook.Slicers)
         {
@@ -47,7 +50,7 @@ public sealed partial class MainWindow
                 continue;
             }
 
-            var availableItems = ReadSlicerSourceItems(slicer);
+            var availableItems = sourceSession.ReadSlicerSourceItems(slicer);
             // Full multi-column item rendering (every available item, honoring columnCount + showCaption),
             // matching the WPF/headless renderer — not the single-column four-tile preview.
             var layout = SlicerLayoutBuilder.BuildFull(slicer, availableItems, ToModelBounds(bounds, zoomFactor));
@@ -65,7 +68,7 @@ public sealed partial class MainWindow
                 continue;
             }
 
-            var granularity = SlicerTimelineGranularity.Resolve(timeline);
+            var granularity = sourceSession.ResolveTimelineGranularity(timeline);
             var layout = TimelineLayoutBuilder.Build(timeline, ToModelBounds(bounds, zoomFactor), granularity);
             var visual = CreateTimelineVisual(timeline, layout, bounds.Width, bounds.Height, zoomFactor);
             Canvas.SetLeft(visual, bounds.Left);
@@ -152,7 +155,7 @@ public sealed partial class MainWindow
         }
 
         AutomationProperties.SetAutomationId(canvas, $"Slicer{slicer.Name}");
-        AutomationProperties.SetName(canvas, $"Slicer {layout.Caption}");
+        AutomationProperties.SetName(canvas, UiText.Format("Slicer_AutomationNameFormat", layout.Caption));
 
         canvas.PointerPressed += (_, args) =>
         {
@@ -224,16 +227,9 @@ public sealed partial class MainWindow
         // shared timeline granularity command, matching the WPF/native timeline behavior.
         if (layout.GranularityDropdownRect.Width > 0)
         {
-            var granLabel = layout.Granularity switch
-            {
-                TimelineGranularity.Year => "YEARS ▾",
-                TimelineGranularity.Quarter => "QUARTERS ▾",
-                TimelineGranularity.Month => "MONTHS ▾",
-                _ => "DAYS ▾"
-            };
             canvas.Children.Add(new TextBlock
             {
-                Text = granLabel,
+                Text = layout.GranularityLabel,
                 FontSize = Math.Max(1, 7.5 * zoomFactor),
                 Foreground = Brushes.White,
                 TextTrimming = TextTrimming.CharacterEllipsis,
@@ -251,7 +247,7 @@ public sealed partial class MainWindow
         {
             canvas.Children.Add(new TextBlock
             {
-                Text = "×",
+                Text = layout.ClearFilterGlyph,
                 FontSize = Math.Max(1, 9 * zoomFactor),
                 Foreground = Brushes.White,
                 Width = Math.Max(1, layout.ClearFilterIconRect.Width * zoomFactor),
@@ -267,7 +263,7 @@ public sealed partial class MainWindow
         canvas.Children.Add(CreateTrackRect(layout.SelectionRect, SlicerSelectionBrush, zoomFactor));
 
         AutomationProperties.SetAutomationId(canvas, $"Timeline{timeline.Name}");
-        AutomationProperties.SetName(canvas, $"Timeline {layout.Caption}");
+        AutomationProperties.SetName(canvas, UiText.Format("Timeline_AutomationNameFormat", layout.Caption));
 
         canvas.PointerPressed += (_, args) =>
         {
@@ -333,64 +329,34 @@ public sealed partial class MainWindow
         SlicerLayoutModel layout,
         LayoutPoint point)
     {
-        // Priority order: clear-filter icon > tile toggle.
-        // The clear icon sits in the header and does not overlap any tile, but we test it first so
-        // a click near the corner that just barely overlaps both is unambiguously handled as a clear.
-        if (SlicerTimelineInteractionPlanner.BuildSlicerClearFilterCommand(slicer, layout, point) is { } clearCmd)
-        {
-            CommitFilterCommand(clearCmd, $"Slicer: {layout.Caption}");
-            return;
-        }
-
-        var command = SlicerTimelineInteractionPlanner.BuildSlicerToggleCommand(slicer, availableItems, layout, point);
-        if (command is null)
+        var plan = PivotApplication.PlanSlicerPointer(slicer, availableItems, layout, point);
+        if (plan is null)
             return;
 
-        CommitFilterCommand(command, $"Slicer: {layout.Caption}");
+        CommitFilterPlan(plan, $"Slicer: {layout.Caption}");
     }
 
     private void HandleTimelinePointer(TimelineModel timeline, TimelineLayoutModel layout, LayoutPoint point)
     {
-        // Priority order: clear-filter icon > granularity dropdown > track/handle.
-        if (SlicerTimelineInteractionPlanner.BuildTimelineClearFilterCommand(timeline, layout, point) is { } clearCmd)
-        {
-            CommitFilterCommand(clearCmd, $"Timeline: {layout.Caption}");
-            return;
-        }
-
-        if (SlicerTimelineInteractionPlanner.BuildTimelineGranularityCommand(timeline, layout, point) is { } granCmd)
-        {
-            CommitFilterCommand(granCmd, $"Timeline: {layout.Caption}");
-            return;
-        }
-
-        var command = SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(timeline, layout, point);
-        if (command is null)
+        var plan = PivotApplication.PlanTimelinePointer(timeline, layout, point);
+        if (plan is null)
             return;
 
-        CommitFilterCommand(command, $"Timeline: {layout.Caption}");
+        CommitFilterPlan(plan, $"Timeline: {layout.Caption}");
     }
 
-    private void CommitFilterCommand(FreeX.Core.Commands.IWorkbookCommand command, string status)
+    private void CommitFilterPlan(PivotApplicationPlan plan, string status)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var result = _session.ExecuteReviewCommand(command);
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_FilterUpdateFailed"));
-            return;
-        }
-
-        RefreshShell(status);
+        ApplyPivotApplicationPlan(plan, status);
     }
 
     /// <summary>
-    /// Resolves a drawing anchor's From/To corners to a viewport pixel rectangle, mirroring the
-    /// Windows planner: the column/row indices are 0-based in the anchor and 1-based in the metrics,
-    /// and the EMU corner offsets are added on top of the resolved cell edge. Returns false when
-    /// either corner is off the laid-out viewport.
+    /// Resolves a drawing anchor's From/To corners through the shared viewport planner. Anchor
+    /// indices are 0-based while worksheet metrics are 1-based; EMU offsets are applied to the
+    /// resolved cell edges. Returns false when either corner is outside the laid-out viewport.
     /// </summary>
     private static bool TryResolveAnchorBounds(
         ViewportModel viewport,
@@ -406,20 +372,29 @@ public sealed partial class MainWindow
             return false;
         }
 
-        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, anchor.From.Column + 1, zoomFactor, out var fromLeft) ||
-            !TryGetDisplayedColumnLeft(viewport.ColMetrics, anchor.To.Column + 1, zoomFactor, out var toLeft) ||
-            !TryGetDisplayedRowTop(viewport.RowMetrics, anchor.From.Row + 1, zoomFactor, out var fromTop) ||
-            !TryGetDisplayedRowTop(viewport.RowMetrics, anchor.To.Row + 1, zoomFactor, out var toTop))
+        var settings = CreateAvaloniaViewportGeometrySettings(viewport, showHeadings, zoomFactor);
+        if (!ViewportGeometryPlanner.TryGetCellBounds(
+                viewport.RowMetrics,
+                viewport.ColMetrics,
+                anchor.From.Row + 1,
+                anchor.From.Column + 1,
+                settings,
+                out var fromCell) ||
+            !ViewportGeometryPlanner.TryGetCellBounds(
+                viewport.RowMetrics,
+                viewport.ColMetrics,
+                anchor.To.Row + 1,
+                anchor.To.Column + 1,
+                settings,
+                out var toCell))
         {
             return false;
         }
 
-        var headerLeft = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
-        var headerTop = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;
-        var left = headerLeft + fromLeft + (EmusToPixels(anchor.From.ColumnOffsetEmu) * zoomFactor);
-        var top = headerTop + fromTop + (EmusToPixels(anchor.From.RowOffsetEmu) * zoomFactor);
-        var right = headerLeft + toLeft + (EmusToPixels(anchor.To.ColumnOffsetEmu) * zoomFactor);
-        var bottom = headerTop + toTop + (EmusToPixels(anchor.To.RowOffsetEmu) * zoomFactor);
+        var left = fromCell.Left + (EmusToPixels(anchor.From.ColumnOffsetEmu) * zoomFactor);
+        var top = fromCell.Top + (EmusToPixels(anchor.From.RowOffsetEmu) * zoomFactor);
+        var right = toCell.Left + (EmusToPixels(anchor.To.ColumnOffsetEmu) * zoomFactor);
+        var bottom = toCell.Top + (EmusToPixels(anchor.To.RowOffsetEmu) * zoomFactor);
 
         var width = Math.Max(80 * zoomFactor, right - left);
         var height = Math.Max(44 * zoomFactor, bottom - top);
@@ -435,43 +410,4 @@ public sealed partial class MainWindow
 
     private static double EmusToPixels(long emus) => emus / EmusPerPixel;
 
-    /// <summary>
-    /// Reads the available source items for a slicer from its connected PivotTable field, mirroring
-    /// the Windows host's <c>ReadSlicerSourceItems</c>. Returns an empty list when the slicer is not
-    /// connected or the field cannot be resolved.
-    /// </summary>
-    private IReadOnlyList<string> ReadSlicerSourceItems(SlicerModel slicer)
-    {
-        // Table slicers (and pivot slicers whose items live in the slicer cache) resolve through the
-        // shared SlicerItemResolver — table-column distinct values or pivot cache shared items.
-        var resolved = FreeX.Core.Commands.SlicerItemResolver.ResolveAvailableItems(slicer, _session.Workbook);
-        if (resolved.Count > 0)
-            return resolved;
-
-        if (string.IsNullOrWhiteSpace(slicer.SourcePivotTableName) ||
-            string.IsNullOrWhiteSpace(slicer.SourceFieldName))
-        {
-            return [];
-        }
-
-        foreach (var sheet in _session.Workbook.Sheets)
-        {
-            PivotTableModel? pivotTable = null;
-            foreach (var pivot in sheet.PivotTables)
-            {
-                if (string.Equals(pivot.Name, slicer.SourcePivotTableName, StringComparison.OrdinalIgnoreCase))
-                {
-                    pivotTable = pivot;
-                    break;
-                }
-            }
-
-            if (pivotTable is null)
-                continue;
-
-            return SlicerTimelineSourceReader.ReadFieldItems(sheet, pivotTable, slicer.SourceFieldName);
-        }
-
-        return [];
-    }
 }

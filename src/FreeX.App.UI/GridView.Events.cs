@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
@@ -22,21 +23,6 @@ public readonly record struct GridOutlineGroupToggleRequest(
     uint End,
     bool Collapse);
 
-public enum GridThreadedCommentEditAction
-{
-    ApplyThread,
-    EditReply,
-    DeleteReply
-}
-
-public readonly record struct GridThreadedCommentEditResult(
-    string? RootText,
-    string? ReplyText,
-    bool IsResolved,
-    GridThreadedCommentEditAction Action = GridThreadedCommentEditAction.ApplyThread,
-    int? ReplyIndex = null,
-    string? ReplyEditText = null);
-
 public sealed class GridNoteInlineEditSubmittedEventArgs(CellAddress address, string text) : EventArgs
 {
     public CellAddress Address { get; } = address;
@@ -50,11 +36,11 @@ public sealed class GridNoteInlineEditSubmittedEventArgs(CellAddress address, st
 
 public sealed class GridThreadedCommentInlineEditSubmittedEventArgs(
     CellAddress address,
-    GridThreadedCommentEditResult result) : EventArgs
+    ThreadedCommentDialogResult result) : EventArgs
 {
     public CellAddress Address { get; } = address;
 
-    public GridThreadedCommentEditResult Result { get; } = result;
+    public ThreadedCommentDialogResult Result { get; } = result;
 
     public bool KeepOpen { get; set; }
 

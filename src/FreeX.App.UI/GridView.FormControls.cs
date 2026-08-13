@@ -120,7 +120,7 @@ public partial class GridView
         var buttonLayout = FormControlRenderPlanner.GetDropDownButtonRect(ToLayoutRect(rect));
         var button = ToWpfRect(buttonLayout);
         DrawFormControlRaisedButton(dc, button);
-        DrawFormTriangle(dc, button, pointingUp: false);
+        DrawFormTriangle(dc, button, FormControlTriangleDirection.Down);
 
         // A drop-down has no authored caption in Excel — its field shows the SELECTED ITEM text
         // (the host resolves ListFillRange[SelectedIndex] into SelectedText). Blank when unresolved.
@@ -137,8 +137,7 @@ public partial class GridView
         // A bordered white box with faint row lines, matching Excel's list-box well.
         dc.DrawRectangle(FormControlBoxFillBrush, FormControlBoxBorderPen, rect);
 
-        const double rowHeight = 15;
-        for (var y = rect.Top + rowHeight; y < rect.Bottom - 1; y += rowHeight)
+        foreach (var y in FormControlRenderPlanner.GetListRowSeparatorYCoordinates(ToLayoutRect(rect)))
             dc.DrawLine(FormControlListRowPen, new Point(rect.Left + 1, y), new Point(rect.Right - 1, y));
     }
 
@@ -169,7 +168,7 @@ public partial class GridView
 
     private void DrawFormCheckBox(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
     {
-        var box = GetFormControlGlyphRect(rect);
+        var box = ToWpfRect(FormControlRenderPlanner.GetGlyphRect(ToLayoutRect(rect), FormControlGlyphSize));
         dc.DrawRectangle(FormControlBoxFillBrush, FormControlBoxBorderPen, box);
         DrawFormControlSunkenEdge(dc, box);
 
@@ -181,7 +180,7 @@ public partial class GridView
 
     private void DrawFormOptionButton(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
     {
-        var box = GetFormControlGlyphRect(rect);
+        var box = ToWpfRect(FormControlRenderPlanner.GetGlyphRect(ToLayoutRect(rect), FormControlGlyphSize));
         var center = new Point(box.Left + box.Width / 2, box.Top + box.Height / 2);
         var radius = box.Width / 2;
         dc.DrawEllipse(FormControlBoxFillBrush, FormControlBoxBorderPen, center, radius, radius);
@@ -198,51 +197,39 @@ public partial class GridView
     private void DrawFormSpinner(DrawingContext dc, Rect rect)
     {
         // Two stacked raised buttons (up over down) with black triangle glyphs.
-        var width = Math.Max(8, Math.Min(rect.Width, 17));
-        var buttonRect = new Rect(rect.Left, rect.Top, width, rect.Height);
-        var half = buttonRect.Height / 2;
-        var upRect = new Rect(buttonRect.Left, buttonRect.Top, buttonRect.Width, half);
-        var downRect = new Rect(buttonRect.Left, buttonRect.Top + half, buttonRect.Width, buttonRect.Height - half);
+        var layout = FormControlRenderPlanner.GetSpinnerButtonLayout(ToLayoutRect(rect), maximumButtonWidth: 17);
+        var upRect = ToWpfRect(layout.FirstButton);
+        var downRect = ToWpfRect(layout.SecondButton);
 
         DrawFormControlRaisedButton(dc, upRect);
         DrawFormControlRaisedButton(dc, downRect);
-        DrawFormTriangle(dc, upRect, pointingUp: true);
-        DrawFormTriangle(dc, downRect, pointingUp: false);
+        DrawFormTriangle(dc, upRect, layout.FirstDirection);
+        DrawFormTriangle(dc, downRect, layout.SecondDirection);
     }
 
     private void DrawFormScrollBar(DrawingContext dc, Rect rect)
     {
-        var horizontal = rect.Width >= rect.Height;
         dc.DrawRectangle(FormControlChromeFillBrush, FormControlBoxBorderPen, rect);
-
-        if (horizontal)
-        {
-            var size = Math.Min(rect.Height, rect.Width / 2);
-            var leftRect = new Rect(rect.Left, rect.Top, size, rect.Height);
-            var rightRect = new Rect(rect.Right - size, rect.Top, size, rect.Height);
-            DrawFormControlRaisedButton(dc, leftRect);
-            DrawFormControlRaisedButton(dc, rightRect);
-            DrawFormTriangle(dc, leftRect, pointingUp: false, pointingLeft: true);
-            DrawFormTriangle(dc, rightRect, pointingUp: false, pointingLeft: false, pointingRight: true);
-        }
-        else
-        {
-            var size = Math.Min(rect.Width, rect.Height / 2);
-            var topRect = new Rect(rect.Left, rect.Top, rect.Width, size);
-            var bottomRect = new Rect(rect.Left, rect.Bottom - size, rect.Width, size);
-            DrawFormControlRaisedButton(dc, topRect);
-            DrawFormControlRaisedButton(dc, bottomRect);
-            DrawFormTriangle(dc, topRect, pointingUp: true);
-            DrawFormTriangle(dc, bottomRect, pointingUp: false);
-        }
+        var layout = FormControlRenderPlanner.GetScrollBarButtonLayout(ToLayoutRect(rect));
+        var firstButton = ToWpfRect(layout.FirstButton);
+        var secondButton = ToWpfRect(layout.SecondButton);
+        DrawFormControlRaisedButton(dc, firstButton);
+        DrawFormControlRaisedButton(dc, secondButton);
+        DrawFormTriangle(dc, firstButton, layout.FirstDirection);
+        DrawFormTriangle(dc, secondButton, layout.SecondDirection);
     }
 
     private void DrawFormGroupBox(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
     {
         // Etched rectangle with the caption breaking the top border at the left.
-        var frame = new Rect(rect.Left + 1, rect.Top + 7, Math.Max(1, rect.Width - 2), Math.Max(1, rect.Height - 8));
-        dc.DrawRectangle(null, FormControlBoxBorderPen, frame);
-        DrawFormControlCaption(dc, FormControlRenderPlanner.GetCaption(control), new Rect(rect.Left, rect.Top, rect.Width, 14), rect.Left + 8, pixelsPerDip);
+        var layout = FormControlRenderPlanner.GetGroupBoxLayout(ToLayoutRect(rect), captionHeight: 14);
+        dc.DrawRectangle(null, FormControlBoxBorderPen, ToWpfRect(layout.Frame));
+        DrawFormControlCaption(
+            dc,
+            FormControlRenderPlanner.GetCaption(control),
+            ToWpfRect(layout.Caption),
+            rect.Left + 8,
+            pixelsPerDip);
     }
 
     private void DrawFormLabel(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
@@ -256,13 +243,6 @@ public partial class GridView
     private static Rect ToWpfRect(LayoutRect rect) => new(rect.X, rect.Y, rect.Width, rect.Height);
 
     private static LayoutPoint ToLayoutPoint(Point point) => new(point.X, point.Y);
-
-    private static Rect GetFormControlGlyphRect(Rect rect)
-    {
-        var size = Math.Min(FormControlGlyphSize, Math.Min(rect.Width, rect.Height));
-        var top = rect.Top + Math.Max(0, (rect.Height - size) / 2);
-        return new Rect(rect.Left + 1, top, size, size);
-    }
 
     private static void DrawFormControlSunkenEdge(DrawingContext dc, Rect box)
     {
@@ -293,46 +273,19 @@ public partial class GridView
     private static void DrawFormTriangle(
         DrawingContext dc,
         Rect rect,
-        bool pointingUp,
-        bool pointingLeft = false,
-        bool pointingRight = false)
+        FormControlTriangleDirection direction)
     {
-        var cx = rect.Left + rect.Width / 2;
-        var cy = rect.Top + rect.Height / 2;
-        var size = Math.Max(2, Math.Min(rect.Width, rect.Height) * 0.3);
-
-        Point a, b, c;
-        if (pointingLeft)
-        {
-            a = new Point(cx - size, cy);
-            b = new Point(cx + size, cy - size);
-            c = new Point(cx + size, cy + size);
-        }
-        else if (pointingRight)
-        {
-            a = new Point(cx + size, cy);
-            b = new Point(cx - size, cy - size);
-            c = new Point(cx - size, cy + size);
-        }
-        else if (pointingUp)
-        {
-            a = new Point(cx, cy - size);
-            b = new Point(cx - size, cy + size);
-            c = new Point(cx + size, cy + size);
-        }
-        else
-        {
-            a = new Point(cx, cy + size);
-            b = new Point(cx - size, cy - size);
-            c = new Point(cx + size, cy - size);
-        }
+        var layout = FormControlRenderPlanner.GetTriangleLayout(ToLayoutRect(rect), direction);
+        var first = new Point(layout.First.X, layout.First.Y);
+        var second = new Point(layout.Second.X, layout.Second.Y);
+        var third = new Point(layout.Third.X, layout.Third.Y);
 
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
-            ctx.BeginFigure(a, isFilled: true, isClosed: true);
-            ctx.LineTo(b, isStroked: false, isSmoothJoin: false);
-            ctx.LineTo(c, isStroked: false, isSmoothJoin: false);
+            ctx.BeginFigure(first, isFilled: true, isClosed: true);
+            ctx.LineTo(second, isStroked: false, isSmoothJoin: false);
+            ctx.LineTo(third, isStroked: false, isSmoothJoin: false);
         }
 
         geometry.Freeze();

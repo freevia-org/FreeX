@@ -6,9 +6,6 @@ using FreeP.App.Host;
 using FreeP.App.Rendering.Wpf;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
-// Disambiguate: this test file exercises the WPF ShapeHitTester compatibility facade.
-// The implementation lives in FreeP.App.Compositor.
-using ShapeHitTester = FreeP.App.Rendering.Wpf.ShapeHitTester;
 
 namespace FreeP.App.Host.Tests;
 
@@ -46,18 +43,27 @@ public sealed class CanvasEditingTests
     [Fact]
     public void DoubleClickPolicy_ZoomNavigationIsTerminalBeforeSelection()
     {
-        var source = ReadWorkspaceFile(
+        var router = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "CanvasGestureRouter.cs").Replace("\r\n", "\n");
+        var adapter = ReadWorkspaceFile(
             "freep",
             "FreeP.App.Rendering.Wpf",
-            "CanvasGestureHandler.cs").Replace("\r\n", "\n");
-        var start = source.IndexOf(
+            "CanvasGestureHandler.cs");
+        var start = router.IndexOf(
             "if (shape?.Kind == SlideShapeKind.Zoom &&",
             StringComparison.Ordinal);
-        var end = source.IndexOf("// Text editing", start, StringComparison.Ordinal);
+        var end = router.IndexOf(
+            "if (!CanvasGesturePlanner.ShouldContinueDoubleClickSelection(shape))",
+            start,
+            StringComparison.Ordinal);
 
         start.Should().BeGreaterThanOrEqualTo(0);
         end.Should().BeGreaterThan(start);
-        source[start..end].Should().Contain("e.Handled = true;\n                return;");
+        router[start..end].Should().Contain("_editor.SelectSlide(targetSlideIndex);");
+        router[start..end].Should().Contain("return CanvasGesturePressPlan.HandledOnly;");
+        adapter.Should().Contain("_gestureRouter.HandlePointerPressed(");
     }
 
     [StaFact]
@@ -141,6 +147,34 @@ public sealed class CanvasEditingTests
         shape.ExtentCyEmu.Should().Be(914400L);
         shape.RotationDeg.Should().Be(12);
     }
+
+    [StaFact]
+    public void GestureHandler_KeyboardTranslation_UsesSharedNudgeModifierPolicy()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 914400L,
+            OffsetYEmu = 457200L,
+            ExtentCxEmu = 1828800L,
+            ExtentCyEmu = 914400L,
+        };
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var editor = new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation));
+        editor.Select(shape.Id);
+        using var handler = new CanvasGestureHandler(new SlideCanvas(), editor);
+
+        handler.HandleKeyDownForTests(Key.Right, ModifierKeys.None).Should().BeTrue();
+        handler.HandleKeyDownForTests(Key.Down, ModifierKeys.Shift).Should().BeTrue();
+
+        shape.OffsetXEmu.Should().Be(914400L + CanvasGesturePlanner.SmallNudgeEmu);
+        shape.OffsetYEmu.Should().Be(457200L + CanvasGesturePlanner.LargeNudgeEmu);
+    }
+
     // ── SlideTransform ────────────────────────────────────────────────────────────
 
     [StaFact]
@@ -450,7 +484,8 @@ public sealed class CanvasEditingTests
         transform.Should().NotContain("private const double EmuPerDip");
         transform.Should().NotContain("Math.Min(renderW / slideWidthDip");
 
-        canvas.Should().Contain("SlideTransform.Compute(renderW, renderH");
+        canvas.Should().Contain("PresentationViewZoomPlanner.PlanStageTransform(");
+        canvas.Should().Contain("return new SlideTransform(");
         gestures.Should().Contain("=> xf.Core;");
         gestures.Should().NotContain("new(xf.Scale, xf.OffsetX");
     }
@@ -618,39 +653,24 @@ public sealed class CanvasEditingTests
     }
 
     [Fact]
-    public void ShapeHitTester_WpfFacadeDelegatesToCompositorImplementation()
+    public void ShapeHitTester_WpfCallersUseCompositorImplementation()
     {
-        var source = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "ShapeHitTester.cs");
+        var textEditor = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "InCanvasTextEditor.cs");
+        var tableEditor = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "InCanvasTableCellEditor.cs");
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "ShapeHitTester.cs");
 
-        source.Should().Contain("FreeP.App.Compositor.ShapeHitTester.HitTest");
-        source.Should().Contain("FreeP.App.Compositor.ShapeHitTester.MarqueeHitTest");
-        source.Should().Contain("FreeP.App.Compositor.ShapeHitTester.GetShapeBoundsDip");
-        source.Should().NotContain("PlaceholderResolver.ResolveAnchor");
-        source.Should().NotContain("SlideTransformCore.UnRotatePoint");
-        source.Should().NotContain("private const double EmuPerDip");
-        source.Should().NotContain("private static bool HitTestShape");
+        textEditor.Should().Contain("using FreeP.App.Compositor;");
+        tableEditor.Should().Contain("using FreeP.App.Compositor;");
+        source.Should().Contain("namespace FreeP.App.Compositor;");
+        source.Should().Contain("public static uint? HitTest(");
+        source.Should().Contain("public static IReadOnlyList<uint> MarqueeHitTest(");
+        source.Should().Contain("public static ShapeBoundsDip GetShapeBoundsDip(");
+        source.Should().Contain("PlaceholderResolver.ResolveAnchor");
+        source.Should().Contain("DrawingBoundsHitTester.Contains");
     }
 
-    private static string ReadWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var parts = new string[relativeParts.Length + 1];
-            parts[0] = directory.FullName;
-            relativeParts.CopyTo(parts, 1);
-
-            var candidate = Path.Combine(parts);
-            if (File.Exists(candidate))
-                return File.ReadAllText(candidate);
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(
-            "Could not locate workspace file.",
-            Path.Combine(relativeParts));
-    }
+    private static string ReadWorkspaceFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 
     // ── SelectionAdorner handle positions ────────────────────────────────────────
 
@@ -1036,11 +1056,19 @@ public sealed class CanvasEditingTests
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
-            var registry = FreePRibbonCommands.Build(
-                new RibbonStateStore(),
+            var registry = FreePRibbonTestRegistry.Compose(
                 window.Editor,
-                getEditPointsEnabled: () => window.SlideCanvas.EditPointsEnabled,
-                setEditPointsEnabled: enabled => window.SlideCanvas.SetEditPointsMode(enabled));
+                new FreePRibbonHostPorts
+                {
+                    ActionEndpoints = new FreePRibbonHostActionEndpoints
+                    {
+                        SetEditPointsEnabled = window.SlideCanvas.SetEditPointsMode,
+                    },
+                    QueryEndpoints = new FreePRibbonHostQueryEndpoints
+                    {
+                        EditPointsEnabled = () => window.SlideCanvas.EditPointsEnabled,
+                    },
+                });
             registry.TryGet(PresentationEditPointsModePlanner.CommandId, out var registered)
                 .Should().BeTrue();
             var command = registered.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
@@ -1061,15 +1089,19 @@ public sealed class CanvasEditingTests
     {
         var gestures = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "CanvasGestureHandler.cs");
         var avaloniaGestures = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "AvaloniaCanvasGestureHandler.cs");
+        var sharedSession = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "CanvasGestureSession.cs");
+        var sharedRouter = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "CanvasGestureRouter.cs");
         var adorner = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SelectionAdorner.cs");
 
-        gestures.Should().Contain("ShapeGeometryAdjustmentPlanner.BuildMutationPlan");
-        gestures.Should().Contain("_editor.SetShapeGeometryAdjustment");
-        gestures.Should().Contain("PictureCropAuthoringPlanner.BuildMutationPlan");
-        gestures.Should().Contain("_editor.SetPictureCrop");
-        gestures.Should().Contain("GestureKind.GeometryAdjustment");
-        avaloniaGestures.Should().Contain("PictureCropAuthoringPlanner.BuildMutationPlan");
-        avaloniaGestures.Should().Contain("_editor.SetPictureCrop");
+        sharedSession.Should().Contain("ShapeGeometryAdjustmentPlanner.BuildMutationPlan");
+        sharedSession.Should().Contain("editor.SetShapeGeometryAdjustment");
+        sharedSession.Should().Contain("PictureCropAuthoringPlanner.BuildMutationPlan");
+        sharedSession.Should().Contain("editor.SetPictureCrop");
+        sharedRouter.Should().Contain("_session.CommitGeometryAdjustment");
+        gestures.Should().Contain("_gestureRouter.CompletePointer");
+        gestures.Should().Contain("projection.GeometryHandles");
+        avaloniaGestures.Should().Contain("_gestureRouter.CompletePointer");
+        avaloniaGestures.Should().Contain("projection.GeometryHandles");
         adorner.Should().Contain("UpdateGeometryHandles");
         adorner.Should().Contain("HitTestGeometryHandle");
     }

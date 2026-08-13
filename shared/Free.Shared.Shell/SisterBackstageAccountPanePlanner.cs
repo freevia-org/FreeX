@@ -46,6 +46,47 @@ public sealed record SisterBackstageAccountPaneContext(
     string MachineName,
     string DataFolder);
 
+/// <summary>
+/// Captures local account metadata without forcing renderers to repeat environment exception policy.
+/// </summary>
+public static class SisterBackstageAccountPaneContextPlanner
+{
+    public static SisterBackstageAccountPaneContext BuildLocal(
+        string productName,
+        string version,
+        string dataFolder,
+        Func<string>? getUserName = null,
+        Func<string>? getMachineName = null)
+    {
+        ArgumentNullException.ThrowIfNull(productName);
+        ArgumentNullException.ThrowIfNull(version);
+        ArgumentNullException.ThrowIfNull(dataFolder);
+
+        return new SisterBackstageAccountPaneContext(
+            productName,
+            version,
+            SafeRead(getUserName ?? (() => Environment.UserName)),
+            SafeRead(getMachineName ?? (() => Environment.MachineName)),
+            dataFolder);
+    }
+
+    private static string SafeRead(Func<string> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (InvalidOperationException)
+        {
+            return string.Empty;
+        }
+        catch (PlatformNotSupportedException)
+        {
+            return string.Empty;
+        }
+    }
+}
+
 public sealed record SisterBackstageAccountFieldGroup(
     string Heading,
     IReadOnlyList<BackstageFieldRow> Fields);

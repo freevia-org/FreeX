@@ -1,4 +1,3 @@
-using System.Globalization;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -113,6 +112,8 @@ public sealed class ChartTextOptionsPlanner
     public void SetColor(string? value) => _color =
         ChartPointOptionsPlanner.ParseColor(value, ColorLabel);
 
+    public void SetColor(ThemeAwareColor? value) => _color = value;
+
     public ChartTextOptions BuildCommitPlan() => new(
         _fontFamily,
         _fontSizePt,
@@ -121,12 +122,4 @@ public sealed class ChartTextOptionsPlanner
         _color,
         _target);
 
-    public static double? ParseOptionalFontSize(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return null;
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value)
-            && double.IsFinite(value) && value >= 1 && value <= 400)
-            return value;
-        throw new FormatException($"{FontSizeLabel} must be a number from 1 to 400, or blank.");
-    }
 }

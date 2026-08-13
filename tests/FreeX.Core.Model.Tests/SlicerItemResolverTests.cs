@@ -103,6 +103,24 @@ public sealed class SlicerItemResolverTests
     }
 
     [Fact]
+    public void ResolveAvailableItems_BoundPivotCacheWithoutCacheItems_ReturnsSharedItems()
+    {
+        var workbook = new Workbook("BoundPivotCache");
+        workbook.AddSheet("Pivots");
+        var decoy = new PivotCacheModel { CacheId = 1 };
+        decoy.Fields.Add(new PivotCacheFieldModel("Market", SharedItems: ["Wrong"]));
+        workbook.PivotCaches.Add(decoy);
+        var bound = new PivotCacheModel { CacheId = 2 };
+        bound.Fields.Add(new PivotCacheFieldModel("Market", SharedItems: ["North", "South"]));
+        workbook.PivotCaches.Add(bound);
+        var pivotTable = new PivotTableModel { Name = "Pivot1", CacheId = 2 };
+        var slicer = new SlicerModel { Name = "Market", SourceFieldName = "Market" };
+
+        SlicerItemResolver.ResolveAvailableItems(slicer, workbook, pivotTable)
+            .Should().Equal("North", "South");
+    }
+
+    [Fact]
     public void ResolveAvailableItems_ReturnsEmptyWhenNeitherSourcePathApplies()
     {
         var workbook = new Workbook("None");

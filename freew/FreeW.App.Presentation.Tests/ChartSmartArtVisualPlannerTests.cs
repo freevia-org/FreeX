@@ -5,6 +5,20 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class ChartSmartArtVisualPlannerTests
 {
     [Fact]
+    public void SceneSlice_ProjectsSharedArcEndpointsAndFlags()
+    {
+        var slice = new ChartSceneSlice(
+            100, 80, 40, 20, 0, Math.PI * 1.5, "#FFFFFF", "#000000");
+
+        slice.OuterStart.Should().Be(new ChartScenePoint(140, 80));
+        slice.OuterEnd.X.Should().BeApproximately(100, 0.0001);
+        slice.OuterEnd.Y.Should().BeApproximately(40, 0.0001);
+        slice.InnerStart.Should().Be(new ChartScenePoint(120, 80));
+        slice.HasInnerRadius.Should().BeTrue();
+        slice.IsLargeArc.Should().BeTrue();
+    }
+
+    [Fact]
     public void ChartScene_ColumnGolden_CentralizesFrameAxesBarsLabelsAndLegend()
     {
         var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2"], [1.0, 2.0], "Actual");

@@ -13,19 +13,21 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Themes.Fluent;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.AppServices;
+using Free.Shared.AppServices.Printing;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
-using FreeP.App.Avalonia.Smoke;
 using FreeP.App.Recording;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
+using FreeP.Validation.Avalonia;
 
 [assembly: AvaloniaTestApplication(typeof(FreeP.App.Avalonia.Tests.FreePHeadlessApp))]
 
@@ -49,10 +51,13 @@ public sealed class FreePHeadlessApp : Application
 /// Each test is tolerant of headless drawing not being available in the current environment
 /// (returns early without assertion failure rather than erroring out).
 /// </summary>
-public sealed class MainWindowHeadlessTests
+public sealed class MainWindowHeadlessTests : IDisposable
 {
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreePHeadlessApp).Assembly);
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.MainWindowHeadlessTests-");
+
+    private string TempDirectory => _temporaryDirectory.Path;
 
     // Bootstrap once per test run so tests don't race on product identity.
     static MainWindowHeadlessTests()
@@ -60,6 +65,8 @@ public sealed class MainWindowHeadlessTests
         if (AppProduct.Current is null)
             AppProduct.Current = new AppProductIdentity("FreeP", "FREEP_DIAGNOSTICS", "FreeP");
     }
+
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private static async Task<bool> OnUiThread(Action action)
     {
@@ -89,6 +96,20 @@ public sealed class MainWindowHeadlessTests
         }
     }
 
+    private static async Task<T> AwaitWithUiPumps<T>(Task<T> task)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        while (!task.IsCompleted)
+        {
+            await Session.Dispatch(
+                static () => Dispatcher.UIThread.RunJobs(),
+                timeout.Token);
+            await Task.Delay(1, timeout.Token);
+        }
+
+        return await task.ConfigureAwait(false);
+    }
+
     // ── Construction ────────────────────────────────────────────────────────────
 
     [Fact]
@@ -110,10 +131,18 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void TransitionSoundPicker_UsesSharedAudioFileTypeCatalog()
     {
-        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var source = File.ReadAllText(FindRepoFile(
+            "freep",
+            "FreeP.App.Avalonia",
+            "MainWindow.AssetImports.cs"));
+        var catalog = File.ReadAllText(FindRepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationAssetPickerProfileCatalog.cs"));
 
-        source.Should().Contain("PresentationMediaFileTypeCatalog.AudioFilePatterns");
-        source.Should().Contain("PresentationMediaFileTypeCatalog.AudioMimeTypes");
+        source.Should().Contain("request.PickerProfile.Avalonia");
+        catalog.Should().Contain("PresentationMediaFileTypeCatalog.AudioFilePatterns");
+        catalog.Should().Contain("PresentationMediaFileTypeCatalog.AudioMimeTypes");
         source.Should().NotContain("[\"*.mp3\", \"*.m4a\", \"*.wav\", \"*.wma\"]");
     }
 
@@ -202,7 +231,6 @@ public sealed class MainWindowHeadlessTests
                 {
                     Interlocked.Increment(ref detectorCalls);
                     var result = new LinuxNativeOutputCapabilities(
-                        new LinuxNativePrintCapability(true, "lp", "office", "ready"),
                         new LinuxVideoEncoderCapability(true, "ffmpeg", "mpeg4", false, "ready"));
                     detectorCompleted.TrySetResult(result);
                     return result;
@@ -219,14 +247,12 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public async Task Native_print_handoff_uses_a_ready_direct_submission_without_claiming_a_dialog()
+    public async Task Print_workflow_submits_a_validated_temporary_pdf_through_the_shared_service()
     {
-        var printAdapter = new RecordingPrintAdapter();
-        LinuxNativePrintResult? result = null;
+        var printService = new RecordingPrintService();
+        PrintSubmissionResult? result = null;
         MainWindow? window = null;
-        Task<LinuxNativePrintResult>? printTask = null;
         var capabilities = new LinuxNativeOutputCapabilities(
-            new LinuxNativePrintCapability(true, "lp", "office", "ready"),
             LinuxVideoEncoderCapability.Unavailable("no encoder"));
 
         var ran = await OnUiThread(() =>
@@ -235,36 +261,37 @@ public sealed class MainWindowHeadlessTests
                 Array.Empty<string>(),
                 loadRecentFilesStore: null,
                 nativeOutputCapabilities: capabilities,
-                nativePrintAdapter: printAdapter,
                 videoExportAdapter: new RecordingVideoAdapter(capabilities.Video),
-                printOutputPackageFactory: _ => BuildTestPrintPackage());
+                printOutputPackageFactory: _ => BuildTestPrintPackage(),
+                printService: printService,
+                showPrintSelectionDialog: SelectRequestedPrinter);
         });
 
         if (!ran) return;
         PresentationNativePrintHandoffPlan? handoff = null;
-        var planRan = await OnUiThread(() =>
+        var planRan = await OnUiThreadAsync(async () =>
         {
             handoff = window!.RefreshNativePrintHandoffPlan();
-            printTask = window.ExecuteNativePrintHandoffAsync();
+            result = await window.ExecutePrintForTests();
         });
         if (!planRan) return;
-        handoff!.CanOpenNativePrintDialog.Should().BeFalse();
-        handoff.CanSubmitToNativePrinter.Should().BeTrue();
-        result = await printTask!;
-        result.Succeeded.Should().BeTrue(result.FailureReason);
-        printAdapter.PdfBytes.Should().NotBeNullOrEmpty();
-        printAdapter.PdfBytes!.AsSpan().StartsWith("%PDF-"u8).Should().BeTrue();
+        handoff!.CanOpenNativePrintDialog.Should().BeTrue();
+        result!.Succeeded.Should().BeTrue(result.Message);
+        printService.PdfBytes.Should().NotBeNullOrEmpty();
+        printService.PdfBytes!.AsSpan().StartsWith("%PDF-"u8).Should().BeTrue();
+        printService.PdfExistedDuringSubmission.Should().BeTrue();
+        File.Exists(printService.PdfPath!).Should().BeFalse();
     }
 
     [Fact]
     public async Task Backstage_print_actions_route_layout_selection_to_native_handoff()
     {
-        var printAdapter = new RecordingPrintAdapter();
+        var printService = new RecordingPrintService();
         PresentationPrintRequest? printedRequest = null;
         IReadOnlyList<(string AutomationId, bool IsEnabled)> actions = [];
         MainWindow? window = null;
+        Task<PrintSubmissionResult>? printOperation = null;
         var capabilities = new LinuxNativeOutputCapabilities(
-            new LinuxNativePrintCapability(true, "lp", "office", "ready"),
             LinuxVideoEncoderCapability.Unavailable("no encoder"));
 
         var ran = await OnUiThread(() =>
@@ -273,13 +300,14 @@ public sealed class MainWindowHeadlessTests
                 Array.Empty<string>(),
                 loadRecentFilesStore: null,
                 nativeOutputCapabilities: capabilities,
-                nativePrintAdapter: printAdapter,
                 videoExportAdapter: new RecordingVideoAdapter(capabilities.Video),
                 printOutputPackageFactory: request =>
                 {
                     printedRequest = request;
                     return BuildTestPrintPackage();
-                });
+                },
+                printService: printService,
+                showPrintSelectionDialog: SelectRequestedPrinter);
 
             window.ShowBackstageForTests();
             window.ActivateBackstageEntryForTests("Print").Should().BeTrue();
@@ -287,27 +315,56 @@ public sealed class MainWindowHeadlessTests
             actions.Should().HaveCount(window.LastPrintBackstagePlan!.LayoutChoices.Count);
             actions.Should().OnlyContain(action => action.IsEnabled);
             window.InvokeBackstagePrintActionForTests(actions[0].AutomationId).Should().BeTrue();
+            printOperation = window.BackstagePrintOperationForTests;
         });
 
         if (!ran) return;
-        var result = await window!.BackstagePrintOperationForTests;
-
-        result.Succeeded.Should().BeTrue(result.FailureReason);
+        var result = await AwaitWithUiPumps(printOperation!);
+        result.Succeeded.Should().BeTrue(result.Message);
         printedRequest.Should().NotBeNull();
         printedRequest!.Layout.Should().Be(
-            window.LastPrintBackstagePlan!.LayoutChoices[0].Layout.Layout);
-        printAdapter.PdfBytes.Should().NotBeNullOrEmpty();
+            window!.LastPrintBackstagePlan!.LayoutChoices[0].Layout.Layout);
+        printService.PdfBytes.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task Print_workflow_rejects_an_invalid_pdf_before_shared_submission()
+    {
+        var printService = new RecordingPrintService();
+        PrintSubmissionResult? result = null;
+        var capabilities = new LinuxNativeOutputCapabilities(
+            LinuxVideoEncoderCapability.Unavailable("no encoder"));
+        var ran = await OnUiThread(async () =>
+        {
+            var window = new MainWindow(
+                Array.Empty<string>(),
+                loadRecentFilesStore: null,
+                nativeOutputCapabilities: capabilities,
+                videoExportAdapter: new RecordingVideoAdapter(capabilities.Video),
+                printOutputPackageFactory: _ => BuildTestPrintPackage() with { Bytes = [1, 2, 3] },
+                printService: printService,
+                showPrintSelectionDialog: SelectRequestedPrinter);
+
+            result = await window.ExecutePrintForTests();
+        });
+
+        if (!ran) return;
+        result.Should().NotBeNull();
+        result!.Succeeded.Should().BeFalse();
+        result.Message.Should().Contain("PDF header");
+        printService.SubmissionCount.Should().Be(0);
     }
 
     [Fact]
     public async Task Video_picker_cancel_and_non_local_selection_are_honest_and_successful_capability_adds_video_action()
     {
-        var output = Path.Combine(Path.GetTempPath(), $"freep-host-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(TempDirectory, "host-video.mp4");
         var capabilities = new LinuxNativeOutputCapabilities(
-            LinuxNativePrintCapability.Unavailable("no queue"),
             new LinuxVideoEncoderCapability(true, "ffmpeg", "mpeg4", false, "ready"));
         var videoAdapter = new RecordingVideoAdapter(capabilities.Video);
-        try
+        var videoArtifact = new PresentationVideoFramePackageArtifact(
+            BuildTestVideoPackage(),
+            []);
         {
             MainWindow? window = null;
             var ran = await OnUiThread(() =>
@@ -316,9 +373,8 @@ public sealed class MainWindowHeadlessTests
                     Array.Empty<string>(),
                     loadRecentFilesStore: null,
                     nativeOutputCapabilities: capabilities,
-                    nativePrintAdapter: new RecordingPrintAdapter(),
                     videoExportAdapter: videoAdapter,
-                    videoFramePackageFactory: _ => BuildTestVideoPackage());
+                    videoFramePackageArtifactFactory: _ => videoArtifact);
             });
             if (!ran) return;
 
@@ -343,7 +399,7 @@ public sealed class MainWindowHeadlessTests
             var successRan = await OnUiThread(() => videoTask = window.FileExportVideoAsyncForTests());
             if (!successRan) return;
             (await videoTask!).Should().BeTrue();
-            videoAdapter.Package.Should().NotBeNull();
+            videoAdapter.Package.Should().BeSameAs(videoArtifact.Package);
 
             window.ShowBackstageForTests();
             window.ActivateBackstageEntryForTests("Export").Should().BeTrue();
@@ -352,10 +408,6 @@ public sealed class MainWindowHeadlessTests
                 .Select(AutomationProperties.GetAutomationId)
                 .Should()
                 .Contain("BackstageExport_freepfileexportvideo");
-        }
-        finally
-        {
-            if (File.Exists(output)) File.Delete(output);
         }
 
         var disabledRan = await OnUiThread(() =>
@@ -370,6 +422,32 @@ public sealed class MainWindowHeadlessTests
                 .NotContain("BackstageExport_freepfileexportvideo");
         });
         if (!disabledRan) return;
+    }
+
+    [Fact]
+    public async Task Injected_video_frame_package_artifact_retains_image_diagnostics()
+    {
+        string[] imageDiagnostics = ["Slide 1: injected Avalonia image diagnostic"];
+        var artifact = new PresentationVideoFramePackageArtifact(
+            BuildTestVideoPackage(),
+            imageDiagnostics);
+        PresentationVideoFramePackage? package = null;
+        IReadOnlyList<string>? retainedDiagnostics = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(
+                Array.Empty<string>(),
+                loadRecentFilesStore: null,
+                videoFramePackageArtifactFactory: _ => artifact);
+
+            package = window.RefreshVideoFramePackage();
+            retainedDiagnostics = window.LastVideoFrameImageDiagnostics;
+        });
+
+        if (!ran) return;
+        package.Should().BeSameAs(artifact.Package);
+        retainedDiagnostics.Should().BeSameAs(imageDiagnostics);
     }
 
     [Fact]
@@ -452,7 +530,7 @@ public sealed class MainWindowHeadlessTests
         title.Should().EndWith("FreeP");
         hasIcon.Should().BeTrue("Avalonia and WPF must load the same owned FreeP icon asset");
         statusText.Should().StartWith("Slide 1 / 1");
-        statusText.Should().EndWith("options.json");
+        statusText.Should().EndWith(FreePApplicationFrameDescriptor.ResolveDataFolderLabel());
     }
 
     [Fact]
@@ -548,7 +626,8 @@ public sealed class MainWindowHeadlessTests
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
         mainWindow.Should().Contain("SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
         mainWindow.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
-        mainWindow.Should().Contain("ResolveDataFolderLabel());");
+        mainWindow.Should().Contain(
+            ".BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel())");
         mainWindow.Should().Contain("chrome: ribbon,");
         mainWindow.Should().Contain("workArea: BuildBody(),");
         mainWindow.Should().Contain("statusBar: statusBar");
@@ -612,14 +691,11 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public async Task MainWindow_editing_marks_workflow_dirty()
     {
-        var tempDir = Path.Combine(Path.GetTempPath(), "FreeP.Avalonia.WorkflowTests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
-        var recentPath = Path.Combine(tempDir, "recent.json");
+        var recentPath = Path.Combine(TempDirectory, "recent.json");
         var beforeDirty = true;
         var afterDirty = false;
         string? title = null;
 
-        try
         {
             var ran = await OnUiThread(() =>
             {
@@ -635,19 +711,13 @@ public sealed class MainWindowHeadlessTests
             afterDirty.Should().BeTrue("editing should mark the shared workflow dirty");
             title.Should().Be("Untitled * \u2014 FreeP", "Avalonia must use the WPF document-first title order");
         }
-        finally
-        {
-            try { Directory.Delete(tempDir, recursive: true); } catch { /* best-effort */ }
-        }
     }
 
     [Fact]
     public async Task MainWindow_startup_file_loads_as_saved_and_registers_recent_file()
     {
-        var tempDir = Path.Combine(Path.GetTempPath(), "FreeP.Avalonia.WorkflowTests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
-        var deckPath = Path.Combine(tempDir, "opened.pptx");
-        var recentPath = Path.Combine(tempDir, "recent.json");
+        var deckPath = Path.Combine(TempDirectory, "opened.pptx");
+        var recentPath = Path.Combine(TempDirectory, "recent.json");
         using (var stream = File.Create(deckPath))
             PptxPackageWriter.Write(Presentation.CreateEmpty(), stream);
 
@@ -656,7 +726,6 @@ public sealed class MainWindowHeadlessTests
         string? title = null;
         IReadOnlyList<RecentFileEntry> recentEntries = [];
 
-        try
         {
             var ran = await OnUiThread(() =>
             {
@@ -673,10 +742,6 @@ public sealed class MainWindowHeadlessTests
             title.Should().Be($"{Path.GetFileName(deckPath)} \u2014 FreeP");
             recentEntries.Select(entry => entry.Path).Should().Contain(deckPath);
         }
-        finally
-        {
-            try { Directory.Delete(tempDir, recursive: true); } catch { /* best-effort */ }
-        }
     }
 
     // ── Ribbon definition ───────────────────────────────────────────────────────
@@ -684,7 +749,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_contains_home_tab()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         definition.Tabs.Should().Contain(t => t.Id == "home",
             "the Home tab must be present in the ribbon definition");
     }
@@ -692,7 +757,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_contains_design_transitions_and_animations_tabs()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
 
         definition.Tabs.Select(tab => tab.Id)
             .Should()
@@ -706,7 +771,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_design_tab_has_planned_design_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var design = definition.Tabs.Single(t => t.Id == "design");
         var commandIds = design.Groups
             .SelectMany(group => group.Controls)
@@ -720,7 +785,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_animations_tab_has_planned_animation_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var animations = definition.Tabs.Single(t => t.Id == "animations");
         var commandIds = EnumerateRibbonCommandIds(animations).ToArray();
 
@@ -731,15 +796,15 @@ public sealed class MainWindowHeadlessTests
     public void MainWindow_sources_route_design_commands_through_shared_planner()
     {
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var workflow = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs"));
 
-        source.Should().Contain("PresentationDesignCommandPlanner.BuiltInPlans");
-        source.Should().Contain("PresentationDesignCommandPlanner.TryApply(Editor, plan, OnDesignHostRequest)");
-        source.Should().Contain("PresentationDesignCommandPlanner.LayoutPlan");
+        workflow.Should().Contain("PresentationDesignCommandPlanner.BuiltInPlans.Prepend(PresentationDesignCommandPlanner.LayoutPlan)");
+        workflow.Should().Contain("PresentationDesignCommandPlanner.TryApply(");
         source.Should().Contain("OnLayoutPickerRequested");
         source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");
-        source.Should().Contain("BuildLayoutChoiceLabel(choice)");
+        source.Should().Contain("choice.DisplayLabel");
         source.Should().Contain("BuildLayoutChoiceTile(choice)");
         source.Should().Contain("BuildLayoutThumbnail(choice)");
         source.Should().NotContain("Editor.SetTheme(");
@@ -749,64 +814,96 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public void MainWindow_sources_route_accessibility_checker_navigation_through_shared_planner()
+    public void MainWindow_sources_route_accessibility_checker_navigation_through_shared_session()
     {
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
+        source.Should().Contain("_reviewWorkflowSession.SelectAccessibilityCheckerRow(rowIndex)");
+        source.Should().Contain("_reviewWorkflowSession.ApplyAccessibilityCheckerRowAction(rowIndex)");
+        source.Should().NotContain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
+        source.Should().NotContain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
         source.Should().Contain("_reviewWorkflowSession.ApplyReadingOrderMove(");
         source.Should().Contain("_reviewWorkflowSession.SelectReadingOrderItem(");
     }
 
     [Fact]
-    public void SelectionPane_source_routes_rename_through_undoable_session()
+    public void SelectionPane_source_routes_actions_through_shared_session()
     {
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "SelectionPane.cs"));
 
-        source.Should().Contain("_editor.SetShapeName(");
+        source.Should().Contain("PresentationSelectionPaneSession");
+        source.Should().Contain("_session.CreateItemSession(item.ShapeId)");
+        source.Should().Contain("itemSession.CommitRename(rename.Text)");
+        source.Should().Contain("itemSession.ToggleVisibility()");
+        source.Should().Contain("itemSession.MoveTowardFront()");
+        source.Should().Contain("itemSession.MoveTowardBack()");
+        source.Should().NotContain("var committed");
+        source.Should().NotContain("_session.RenameShape(");
+        source.Should().NotContain("_session.ToggleShapeVisibility(");
+        source.Should().NotContain("_session.MoveShapeInReadingOrder(");
+        source.Should().NotContain("PresentationSelectionPaneMoveDirection");
         source.Should().Contain("Key.Enter");
         source.Should().Contain("rename.LostFocus");
         source.Should().Contain("PresentationSelectionPaneItemPlan.RenameToolTipText");
         source.Should().Contain("item.VisibilityToolTipText");
         source.Should().Contain("PresentationSelectionPaneItemPlan.MoveUpToolTipText");
         source.Should().Contain("PresentationSelectionPaneItemPlan.MoveDownToolTipText");
-        source.Should().Contain("_editor.MoveSelectedShapeInReadingOrder(");
         source.Should().Contain("item.CanMoveUp");
         source.Should().Contain("item.CanMoveDown");
+        source.Should().NotContain(".SetShapeName(");
+        source.Should().NotContain(".ToggleShapeHidden(");
+        source.Should().NotContain(".MoveSelectedShapeInReadingOrder(");
     }
 
     [Fact]
     public void MainWindow_sources_route_animation_commands_through_shared_planner()
     {
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var testSupport = File.ReadAllText(FindRepoFile(
+            "freep",
+            "TestSupport",
+            "HostAccess.Avalonia",
+            "MainWindow.FeaturesTestAccess.cs"));
+        var workflow = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs"));
+        var session = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Presentation", "AnimationPaneSession.cs"));
 
-        source.Should().Contain("PresentationAnimationCommandPlanner.BuiltInPlans");
-        source.Should().Contain("PresentationAnimationCommandPlanner.TryApply(");
+        workflow.Should().Contain("PresentationAnimationCommandPlanner.BuiltInPlans");
+        workflow.Should().Contain("PresentationAnimationCommandPlanner.TryApply(");
         source.Should().Contain("OnAnimationPaneRequested");
-        source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
-        source.Should().Contain("AnimationPanePlanner.BuildWorkflowEvidencePlan(");
-        source.Should().Contain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
-        source.Should().Contain("AnimationPanePlanner.BuildPlaybackWorkflowEvidencePlan(");
+        session.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
+        session.Should().Contain("AnimationPanePlanner.BuildWorkflowEvidencePlan(");
+        session.Should().Contain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
+        session.Should().Contain("AnimationPanePlanner.BuildPlaybackWorkflowEvidencePlan(");
         source.Should().Contain("plan.PlaybackControls");
         source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");
         source.Should().Contain("ShowAnimationPane()");
         source.Should().Contain("BuildAnimationPaneItemCard(");
-        source.Should().Contain("item.EffectOptions.WheelSpokeOptions");
-        source.Should().Contain("AnimationPanePlanner.BuildEffectOptionMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.TryApplyEffectOptionMutation(");
-        source.Should().Contain("AnimationPanePlanner.BuildTriggerMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.BuildDurationMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.BuildDelayMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.TryApplyTimingMutation(");
-        source.Should().Contain("AnimationPanePlanner.BuildReorderMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.TryApplyReorderMutation(");
-        source.Should().Contain("AnimationPanePlanner.BuildRemoveMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.TryApplyRemoveMutation(");
-        source.Should().Contain("AnimationPanePlanner.BuildParagraphBuildMutationPlan(");
-        source.Should().Contain("AnimationPanePlanner.TryApplyParagraphBuildMutation(");
-        source.Should().Contain("ToggleParagraphBuildForTests(");
+        source.Should().Contain("_animationPaneSession.BuildItemControlPlan(item, canEditMotionPath: true)");
+        source.Should().Contain("controls.EffectOptions.Options");
+        source.Should().Contain("controls.WheelSpokes.Options");
+        source.Should().Contain("controls.EffectOptions.ResolveOptionId(");
+        session.Should().Contain("AnimationPanePlanner.BuildEffectOptionMutationPlan(");
+        session.Should().Contain("AnimationPanePlanner.TryApplyEffectOptionMutation(");
+        session.Should().Contain("AnimationPanePlanner.BuildTriggerMutationPlan(");
+        session.Should().Contain("AnimationPanePlanner.BuildDurationMutationPlan(");
+        session.Should().Contain("AnimationPanePlanner.BuildDelayMutationPlan(");
+        session.Should().Contain("AnimationPanePlanner.TryApplyTimingMutation(");
+        session.Should().Contain("AnimationPanePlanner.BuildReorderMutationPlan(");
+        session.Should().Contain("AnimationPanePlanner.TryApplyReorderMutation(");
+        session.Should().Contain("AnimationPanePlanner.BuildRemoveMutationPlan(");
+        session.Should().Contain("AnimationPanePlanner.TryApplyRemoveMutation(");
+        session.Should().Contain("AnimationPanePlanner.BuildParagraphBuildMutationPlan(");
+        session.Should().Contain("AnimationPanePlanner.TryApplyParagraphBuildMutation(");
+        source.Should().NotContain("ForTests");
+        testSupport.Should().Contain("ToggleParagraphBuildForTests(");
         source.Should().Contain("BuildAnimationPaneActionButton(");
+        source.Should().NotContain("item.EffectOptions.Options");
+        source.Should().NotContain("item.EffectOptions.WheelSpokeOptions");
+        source.Should().NotContain("AnimationPanePlanner.FormatEasing(");
+        source.Should().NotContain("AnimationPanePlanner.FormatRepeat(");
+        source.Should().NotContain("AnimationPanePlanner.BuildParagraphBuildMutationPlan(");
+        source.Should().NotContain(".GetRequired(AnimationPaneControlKind.");
+        source.Should().NotContain("AnimationPanePlanner.");
         source.Should().NotContain("Editor.MoveAnimation(");
         source.Should().NotContain("BuildAnimationPaneRowSummary(");
         source.Should().NotContain("FormatEffectOptions(");
@@ -815,7 +912,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_home_tab_has_content_and_edit_groups_without_lifecycle_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var home = definition.Tabs.Single(t => t.Id == "home");
         home.Groups.Should().NotContain(g => g.Id == "file", "document lifecycle belongs in Backstage");
         home.Groups.Should().Contain(g => g.Id == "slides", "Slides group required");
@@ -828,7 +925,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_transitions_group_has_slideshow_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var transitions = definition.Tabs.Single(t => t.Id == "transitions");
         var slideShow = transitions.Groups.Single(g => g.Id == "slideshow-from-transitions");
         slideShow.Controls.Select(i => i.CommandId.Value).Should().Equal(
@@ -843,7 +940,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_avalonia_chart_injection_preserves_order_metadata_and_duplicate_guards()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var insert = definition.Tabs.Single(t => t.Id == "insert");
         var charts = insert.Groups.Single(g => g.Id == "charts");
 
@@ -880,7 +977,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_slides_group_has_new_duplicate_delete()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var home   = definition.Tabs.Single(t => t.Id == "home");
         var slides = home.Groups.Single(g => g.Id == "slides");
         var ids    = slides.Controls.Select(i => i.CommandId.Value).ToList();
@@ -893,7 +990,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_clipboard_group_has_shared_clipboard_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var home = definition.Tabs.Single(t => t.Id == "home");
         var clipboard = home.Groups.Single(g => g.Id == "clipboard");
         var ids = clipboard.Controls.Select(i => i.CommandId.Value).ToList();
@@ -906,7 +1003,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_edit_group_has_undo_and_redo()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var home = definition.Tabs.Single(t => t.Id == "home");
         var edit = home.Groups.Single(g => g.Id == "edit");
         var ids  = edit.Controls.Select(i => i.CommandId.Value).ToList();
@@ -917,7 +1014,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_editing_group_has_find_and_replace()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var home = definition.Tabs.Single(t => t.Id == "home");
         var editing = home.Groups.Single(g => g.Id == "editing");
         var ids = editing.Controls.Select(i => i.CommandId.Value).ToList();
@@ -929,7 +1026,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_arrange_group_has_shared_command_ids()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var home = definition.Tabs.Single(t => t.Id == "home");
         var arrange = home.Groups.Single(g => g.Id == "arrange");
         var ids = arrange.Controls
@@ -961,7 +1058,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_insert_tab_has_object_insertion_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var insert = definition.Tabs.Single(t => t.Id == "insert");
         insert.Groups.Should().Contain(g => g.Id == "text", "Text group required");
         insert.Groups.Should().Contain(g => g.Id == "tables", "Tables group required");
@@ -1029,7 +1126,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_transitions_tab_has_planned_transition_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var transitions = definition.Tabs.Single(t => t.Id == "transitions");
         var commandIds = EnumerateRibbonCommandIds(transitions).ToArray();
 
@@ -1039,7 +1136,7 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public void RibbonDefinition_transitions_tab_exposes_transition_sound_loop_toggle()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var commandIds = EnumerateRibbonCommandIds(definition.Tabs.Single(t => t.Id == "transitions"));
 
         commandIds.Should().Contain("freep.transition.sound-loop");
@@ -3162,6 +3259,38 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_native_multi_selection_feeds_shared_batch_commands()
+    {
+        int[] selectedBefore = [];
+        int[] selectedAfter = [];
+        var slideCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            var list = window.SlidePaneForAccessibilityTests;
+            var items = list.Items.OfType<ListBoxItem>().Where(item => item.Tag is int).ToArray();
+
+            list.SelectedItems!.Clear();
+            list.SelectedItems.Add(items[0]);
+            list.SelectedItems.Add(items[2]);
+            selectedBefore = window.SlidePaneSelectedSlideIndicesForTests.ToArray();
+
+            window.TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind.DuplicateCurrentSlide)
+                .Should().BeTrue();
+            selectedAfter = window.SlidePaneSelectedSlideIndicesForTests.ToArray();
+            slideCount = window.Editor.Presentation.Slides.Count;
+        });
+
+        if (!ran) return;
+        selectedBefore.Should().Equal(0, 2);
+        selectedAfter.Should().Equal(1, 4);
+        slideCount.Should().Be(5);
+    }
+
+    [Fact]
     public async Task SlidePane_keyboard_actions_route_through_shared_planner()
     {
         var deletedSingleSlide = true;
@@ -3242,7 +3371,7 @@ public sealed class MainWindowHeadlessTests
         printPlan.NativePrintHandoff.IsPackageReady.Should().BeTrue();
         printPlan.NativePrintHandoff.RequiresHostHandoff.Should().BeTrue();
         printPlan.NativePrintHandoff.CanOpenNativePrintDialog.Should().BeFalse();
-        printPlan.NativePrintHandoff.Reason.Should().Contain("Native output capability detection is pending");
+        printPlan.NativePrintHandoff.Reason.Should().Contain("host printer adapter is unavailable");
         printPlan.LayoutChoices.Select(choice => choice.Layout.SlidesPerPage).Should().Equal(1, 1, 1, 2, 3, 4, 6, 9);
         printPlan.RangeChoices.Select(choice => choice.Kind).Should().Contain(PresentationSlideRangeKind.CurrentSlide);
     }
@@ -3528,6 +3657,7 @@ public sealed class MainWindowHeadlessTests
         PresentationVideoFramePackage? videoPackage = null;
         PresentationVideoExportHandoffPlan? videoHandoff = null;
         PresentationVideoFramePackageExecutionDescriptor? videoDescriptor = null;
+        IReadOnlyList<string>? videoImageDiagnostics = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -3545,6 +3675,7 @@ public sealed class MainWindowHeadlessTests
             videoPlan = window.LastVideoExportPlan;
             videoHandoff = window.LastVideoExportHandoffPlan;
             videoDescriptor = window.LastVideoExecutionDescriptor;
+            videoImageDiagnostics = window.LastVideoFrameImageDiagnostics;
         });
 
         if (!ran) return;
@@ -3553,6 +3684,7 @@ public sealed class MainWindowHeadlessTests
         videoPlan.Should().NotBeNull();
         videoHandoff.Should().NotBeNull();
         videoDescriptor.Should().NotBeNull();
+        videoImageDiagnostics.Should().BeEmpty();
         videoPackage!.Plan.ExportPlan.Should().BeSameAs(videoPlan);
         videoHandoff!.PackagePlan.Should().BeSameAs(videoPackage.Plan);
         videoDescriptor!.PackagePlan.Should().BeSameAs(videoPackage.Plan);
@@ -3601,7 +3733,6 @@ public sealed class MainWindowHeadlessTests
     {
         PresentationVideoExportPlan? plan = null;
         var capabilities = new LinuxNativeOutputCapabilities(
-            LinuxNativePrintCapability.Unavailable("no queue"),
             new LinuxVideoEncoderCapability(true, "ffmpeg", "mpeg4", false, "ready"));
 
         var ran = await OnUiThread(() =>
@@ -5639,6 +5770,8 @@ public sealed class MainWindowHeadlessTests
         var replaceEnabledAfterCreate = false;
         var deleteEnabledAfterCreate = false;
         var dirty = false;
+        var visibleAfterHide = true;
+        var visibleAfterReopen = false;
 
         var ran = await OnUiThread(() =>
         {
@@ -5654,18 +5787,18 @@ public sealed class MainWindowHeadlessTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            opened = window.ShowMediaCaptionPane();
+            opened = window.MediaPaneHost.Show();
             visible = window.IsMediaCaptionPaneVisible;
             heading = window.MediaCaptionPaneHeading;
             createEnabledBeforeInput = window.IsMediaCaptionCreateEnabled;
 
-            window.SetMediaCaptionPaneInput(
+            window.MediaPaneHost.SetCaptionInput(new(
                 "English captions",
                 "en-US",
                 "ppt/media/demo-captions.vtt",
-                "WEBVTT\r\n\r\n00:00:00.000 --> 00:00:01.000\r\nInitial cue\r\n");
+                "WEBVTT\r\n\r\n00:00:00.000 --> 00:00:01.000\r\nInitial cue\r\n"));
             createEnabledAfterInput = window.IsMediaCaptionCreateEnabled;
-            create = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Create);
+            create = window.MediaPaneHost.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Create);
             mutation = window.LastMediaCaptionAuthoringMutationPlan;
             transcriptAfterCreate = window.LastMediaTranscriptPlan;
             trackCountAfterCreate = window.MediaCaptionPaneTrackCount;
@@ -5673,17 +5806,21 @@ public sealed class MainWindowHeadlessTests
             deleteEnabledAfterCreate = window.IsMediaCaptionDeleteEnabled;
             dirty = window.IsDirty;
 
-            window.SetMediaCaptionPaneInput(
+            window.MediaPaneHost.SetCaptionInput(new(
                 "English captions",
                 "en-US",
                 "ppt/media/demo-captions.vtt",
-                "WEBVTT\r\n\r\n00:00:01.000 --> 00:00:02.000\r\nUpdated cue\r\n",
+                "WEBVTT\r\n\r\n00:00:01.000 --> 00:00:02.000\r\nUpdated cue\r\n"),
                 selectedTrackIndex: 0);
-            replace = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Replace);
+            replace = window.MediaPaneHost.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Replace);
             transcriptAfterReplace = window.LastMediaTranscriptPlan;
 
-            delete = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Delete);
+            delete = window.MediaPaneHost.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Delete);
             trackCountAfterDelete = window.MediaCaptionPaneTrackCount;
+            window.MediaPaneHost.Hide();
+            visibleAfterHide = window.IsMediaCaptionPaneVisible;
+            window.MediaPaneHost.Show();
+            visibleAfterReopen = window.IsMediaCaptionPaneVisible;
         });
 
         if (!ran) return;
@@ -5713,6 +5850,8 @@ public sealed class MainWindowHeadlessTests
         delete.Should().NotBeNull();
         delete!.Succeeded.Should().BeTrue();
         trackCountAfterDelete.Should().Be(0);
+        visibleAfterHide.Should().BeFalse();
+        visibleAfterReopen.Should().BeTrue();
     }
 
     [Fact]
@@ -5735,10 +5874,10 @@ public sealed class MainWindowHeadlessTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.ShowMediaCaptionPane();
+            window.MediaPaneHost.Show();
             window.MediaVolumePercent.Should().Be(80);
-            window.SetMediaVolumePaneInput(25);
-            applied = window.ApplyMediaVolumePane();
+            window.MediaPaneHost.SetVolumeInput(25);
+            applied = window.MediaPaneHost.ApplyVolume();
             volume = mediaShape.Media!.VolumePercent;
             dirty = window.IsDirty;
         });
@@ -5770,9 +5909,9 @@ public sealed class MainWindowHeadlessTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.ShowMediaCaptionPane();
-            window.SetMediaPlaybackPaneInput(MediaPlaybackStartMode.Automatically, true, true, true, true);
-            applied = window.ApplyMediaPlaybackPane();
+            window.MediaPaneHost.Show();
+            window.MediaPaneHost.SetPlaybackInput(MediaPlaybackStartMode.Automatically, true, true, true, true);
+            applied = window.MediaPaneHost.ApplyPlayback();
             startMode = mediaShape.Media!.PlaybackStartMode;
             loop = mediaShape.Media.Loop;
             mediaShape.Media.RewindAfterPlaying.Should().BeTrue();
@@ -5810,8 +5949,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.SetMediaTimingPaneInput(125, 250, 500, 750);
-            applied = window.ApplyMediaTimingPane();
+            window.MediaPaneHost.SetTimingInput(125, 250, 500, 750);
+            applied = window.MediaPaneHost.ApplyTiming();
             trimStart = mediaShape.Media!.TrimStartMilliseconds;
             trimEnd = mediaShape.Media.TrimEndMilliseconds;
             fadeIn = mediaShape.Media.FadeInMilliseconds;
@@ -5851,13 +5990,13 @@ public sealed class MainWindowHeadlessTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.SetMediaBookmarkPaneInput("Intro", 1250.25);
-            appliedCreate = window.ApplyMediaBookmarkCreatePane();
-            window.SetMediaBookmarkPaneInput("Demo", 2500);
-            appliedReplace = window.ApplyMediaBookmarkReplacePane();
+            window.MediaPaneHost.SetBookmarkInput("Intro", 1250.25);
+            appliedCreate = window.MediaPaneHost.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Create);
+            window.MediaPaneHost.SetBookmarkInput("Demo", 2500);
+            appliedReplace = window.MediaPaneHost.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Replace);
             name = mediaShape.Media!.Bookmarks.Single().Name;
-            appliedDelete = window.ApplyMediaBookmarkDeletePane();
-            count = window.MediaBookmarkCount;
+            appliedDelete = window.MediaPaneHost.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Delete);
+            count = window.MediaPaneHost.BookmarkCount;
             dirty = window.IsDirty;
         });
 
@@ -8181,36 +8320,38 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDisplayOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(
-                "Revenue",
-                LegendPosition.Bottom,
-                true,
-                DataLabelPosition.OutsideEnd,
-                false,
-                true,
-                true,
-                true,
-                true,
-                true,
-                "0.0%",
-                " | ",
-                displayBlanksAs: ChartDisplayBlanksAs.Zero,
-                showDataLabelsOverMaximum: true,
-                labelFontFamily: "Aptos",
-                labelFontSizePt: 9,
-                labelBold: true,
-                labelItalic: false,
-                labelColor: "#2F5496",
-                showBubbleSize: true);
-            dialog.SetTitleOverlayForTests(true);
-            dialog.SetTitlePositionForTests(ChartExTitlePosition.Right);
-            dialog.SetTitleAlignmentForTests(ChartExTitleAlignment.Far);
-            dialog.SetPlotVisibleOnlyForTests(false);
-            dialog.SetRoundedCornersForTests(true);
-            dialog.SetVaryColorsForTests(true);
-            dialog.SetLegendOverlayForTests(true);
-            dialog.SetHighLowLinesForTests(false);
-            dialog.SetStyleIdForTests(102);
+            dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+            {
+                Title = "Revenue",
+                Legend = LegendPosition.Bottom,
+                ShowValueLabels = true,
+                LabelPosition = DataLabelPosition.OutsideEnd,
+                CategoryGridlines = false,
+                ValueGridlines = true,
+                ShowPercentLabels = true,
+                ShowCategoryLabels = true,
+                ShowSeriesLabels = true,
+                ShowLegendKeys = true,
+                LabelNumberFormat = "0.0%",
+                LabelSeparator = " | ",
+                DisplayBlanksAs = ChartDisplayBlanksAs.Zero,
+                ShowDataLabelsOverMaximum = true,
+                LabelFontFamily = "Aptos",
+                LabelFontSizePt = 9,
+                LabelBold = true,
+                LabelItalic = false,
+                LabelColor = "#2F5496",
+                ShowBubbleSize = true,
+                TitleOverlay = true,
+                TitlePosition = ChartExTitlePosition.Right,
+                TitleAlignment = ChartExTitleAlignment.Far,
+                PlotVisibleOnly = false,
+                RoundedCorners = true,
+                VaryColors = true,
+                LegendOverlay = true,
+                HighLowLines = false,
+                StyleId = 102,
+            });
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8246,7 +8387,10 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDisplayOptionsDialog(window.Editor);
-            dialog.SetWaterfallConnectorLinesForTests(false);
+            dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+            {
+                WaterfallConnectorLines = false,
+            });
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8269,8 +8413,11 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDisplayOptionsDialog(window.Editor);
-            dialog.SetDropLinesForTests(false);
-            dialog.SetUpDownBarsForTests(true);
+            dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+            {
+                DropLines = false,
+                UpDownBars = true,
+            });
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8293,7 +8440,10 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDisplayOptionsDialog(window.Editor);
-            dialog.SetSeriesLinesForTests(false);
+            dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+            {
+                SeriesLines = false,
+            });
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8314,8 +8464,9 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDataTableOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(true, false, true, false, true,
-                "#F2F2F2", "#4472C4", 1.25, "#112233", 9, "Aptos", true, false);
+            dialog.SetOptionsForTests(new ChartDataTableOptionsDialogTestSettings(
+                true, false, true, false, true,
+                "#F2F2F2", "#4472C4", 1.25, "#112233", 9, "Aptos", true, false));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8336,7 +8487,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartBubbleOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(225, BubbleSizeRepresentation.Width, true);
+            dialog.SetOptionsForTests(new ChartBubbleOptionsDialogTestSettings(
+                225, BubbleSizeRepresentation.Width, true));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8356,7 +8508,7 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartPieOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(225, 68);
+            dialog.SetOptionsForTests(new ChartPieOptionsDialogTestSettings(225, 68));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8376,7 +8528,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartPieOptionsDialog(window.Editor);
-            dialog.SetOfPieOptionsForTests(OfPieType.Bar, OfPieSplitType.Custom, 2, 75, "1, 2", 120, true);
+            dialog.SetOfPieOptionsForTests(new ChartOfPieOptionsDialogTestSettings(
+                OfPieType.Bar, OfPieSplitType.Custom, 2, 75, "1, 2", 120, true));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8402,7 +8555,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartPlotStyleOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(ScatterStyle.SmoothMarker, RadarStyle.Filled);
+            dialog.SetOptionsForTests(new ChartPlotStyleOptionsDialogTestSettings(
+                ScatterStyle.SmoothMarker, RadarStyle.Filled));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8422,7 +8576,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartTextOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests("Calibri", 14, false, true, "#C00000");
+            dialog.SetOptionsForTests(new ChartTextOptionsDialogTestSettings(
+                "Calibri", 14, false, true, "#C00000"));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8494,7 +8649,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new Chart3DViewOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(25, 35, 54, 100, 125, true, false, 275);
+            dialog.SetOptionsForTests(new Chart3DViewOptionsDialogTestSettings(
+                25, 35, 54, 100, 125, true, false, 275));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8514,7 +8670,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartAreaOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(ChartAreaFormattingTarget.PlotArea, null, null, null, true, true);
+            dialog.SetOptionsForTests(new ChartAreaOptionsDialogTestSettings(
+                ChartAreaFormattingTarget.PlotArea, null, null, null, true, true));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8557,12 +8714,12 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartAreaOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(
+            dialog.SetOptionsForTests(new ChartAreaOptionsDialogTestSettings(
                 ChartAreaFormattingTarget.ChartArea,
                 "#4472C4",
                 null,
                 null,
-                fillTransparency: 40);
+                FillTransparency: 40));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8585,7 +8742,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartProtectionOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(false, null, true, false);
+            dialog.SetOptionsForTests(new ChartProtectionOptionsDialogTestSettings(
+                false, null, true, false));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8605,7 +8763,7 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartAxisOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(
+            dialog.SetOptionsForTests(new ChartAxisOptionsDialogTestSettings(
                 ChartAxisKind.Value,
                 "Revenue",
                 10,
@@ -8625,8 +8783,8 @@ public sealed class MainWindowHeadlessTests
                 35,
                 true,
                 false,
-                reverseOrder: true,
-                minorGridlines: true);
+                ReverseOrder: true,
+                MinorGridlines: true));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8670,7 +8828,7 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartAxisOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(
+            dialog.SetOptionsForTests(new ChartAxisOptionsDialogTestSettings(
                 ChartAxisKind.SecondaryValue,
                 "Margin",
                 0,
@@ -8678,7 +8836,7 @@ public sealed class MainWindowHeadlessTests
                 25,
                 null,
                 "0%",
-                false);
+                false));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8702,14 +8860,15 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartSeriesOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4", "#1F4E79", OutlineDash.DashDot, true,
+            dialog.SetOptionsForTests(new ChartSeriesOptionsDialogTestSettings(
+                0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4", "#1F4E79", OutlineDash.DashDot, true,
                 true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
-            "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, errorBars: true,
-            showLeaderLines: true,
-            trendline: true, trendlineType: ChartTrendlineType.Polynomial, trendlineOrder: 3,
-            trendlineForward: 1.5, trendlineBackward: 0.5,
-            trendlineEquation: true, trendlineRSquared: true, overrideChartType: ChartType.LineMarkers,
-            invertIfNegative: true);
+                "Aptos", 9, true, false, "#2F5496", ShowBubbleSize: true, ErrorBars: true,
+                ShowLeaderLines: true,
+                Trendline: true, TrendlineType: ChartTrendlineType.Polynomial, TrendlineOrder: 3,
+                TrendlineForward: 1.5, TrendlineBackward: 0.5,
+                TrendlineEquation: true, TrendlineRSquared: true, OverrideChartType: ChartType.LineMarkers,
+                InvertIfNegative: true));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8856,10 +9015,11 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartPointOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(0, 0, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
+            dialog.SetOptionsForTests(new ChartPointOptionsDialogTestSettings(
+                0, 0, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
                 true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
-                "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, explosionPercent: 35,
-                showLeaderLines: true);
+                "Aptos", 9, true, false, "#2F5496", ShowBubbleSize: true, ExplosionPercent: 35,
+                ShowLeaderLines: true));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8900,7 +9060,10 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartLayoutOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(ChartLayoutTarget.PlotArea, "inner", ChartManualLayoutMode.Edge, ChartManualLayoutMode.Factor, ChartManualLayoutMode.Factor, ChartManualLayoutMode.Edge, 12, 0.1, 0.8, 20);
+            dialog.SetOptionsForTests(new ChartLayoutOptionsDialogTestSettings(
+                ChartLayoutTarget.PlotArea, "inner", ChartManualLayoutMode.Edge,
+                ChartManualLayoutMode.Factor, ChartManualLayoutMode.Factor,
+                ChartManualLayoutMode.Edge, 12, 0.1, 0.8, 20));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8937,20 +9100,19 @@ public sealed class MainWindowHeadlessTests
     public void PackagingSmoke_round_trips_an_empty_presentation()
     {
         // Run the packaging smoke inline — no display needed.
-        var report = Path.Combine(Path.GetTempPath(), $"freep_smoke_{Guid.NewGuid():N}.txt");
-        try
+        var report = Path.Combine(TempDirectory, "packaging-smoke.txt");
         {
             var args = new[] { "--packaging-smoke", report };
-            var result = PackagingSmoke.TryRun(
-                args, TextWriter.Null, TextWriter.Null, out var exit);
+            using var output = new StringWriter();
+            using var error = new StringWriter();
+            var result = PackagingSmokeCommand.TryRun(
+                args, output, error, out var exit);
             result.Should().BeTrue("--packaging-smoke must be handled");
             exit.Should().Be(0, "packaging smoke must pass on an empty presentation");
+            output.ToString().Should().Be("freep_packaging_smoke=passed\nslides=1\n");
+            error.ToString().Should().BeEmpty();
             File.Exists(report).Should().BeTrue("packaging smoke must write a report file");
-            File.ReadAllText(report).Should().Contain("freep_packaging_smoke=passed");
-        }
-        finally
-        {
-            if (File.Exists(report)) File.Delete(report);
+            File.ReadAllText(report).Should().Be(output.ToString());
         }
     }
 
@@ -8962,8 +9124,7 @@ public sealed class MainWindowHeadlessTests
         var presentation = Presentation.CreateEmpty();
         var originalCount = presentation.Slides.Count;
 
-        var path = Path.Combine(Path.GetTempPath(), $"freep_rt_{Guid.NewGuid():N}.pptx");
-        try
+        var path = Path.Combine(TempDirectory, "round-trip.pptx");
         {
             using (var ws = File.Create(path))
                 PptxPackageWriter.Write(presentation, ws);
@@ -8974,28 +9135,46 @@ public sealed class MainWindowHeadlessTests
             loaded.Slides.Count.Should().Be(originalCount,
                 "round-tripping an empty presentation must preserve the slide count");
         }
-        finally
-        {
-            if (File.Exists(path)) File.Delete(path);
-        }
     }
 
     private static string FindRepoFile(params string[] parts) =>
         Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"), Path.Combine(parts));
 
-    private sealed class RecordingPrintAdapter : ILinuxNativePrintHandoffAdapter
-    {
-        public LinuxNativePrintCapability Capability { get; } =
-            new(true, "lp", "office", "ready");
-        public byte[]? PdfBytes { get; private set; }
+    private static Task<PrintSelection?> SelectRequestedPrinter(
+        Window owner,
+        PrinterDiscoveryResult discovery,
+        PrintSelection? requested,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<PrintSelection?>(requested);
 
-        public Task<LinuxNativePrintResult> PrintAsync(
-            byte[] pdfBytes,
-            string documentName,
+    private sealed class RecordingPrintService : IPlatformPrintService
+    {
+        public byte[]? PdfBytes { get; private set; }
+        public string? PdfPath { get; private set; }
+        public bool PdfExistedDuringSubmission { get; private set; }
+        public PrintSelection? Selection { get; private set; }
+        public int SubmissionCount { get; private set; }
+
+        public bool IsSupported => true;
+
+        public Task<PrinterDiscoveryResult> DiscoverAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PrinterDiscoveryResult(
+                PrinterDiscoveryStatus.Available,
+                [new PrinterInfo("office", IsDefault: true)],
+                "office"));
+
+        public async Task<PrintSubmissionResult> SubmitAsync(
+            string pdfPath,
+            PrintSelection selection,
             CancellationToken cancellationToken = default)
         {
-            PdfBytes = pdfBytes;
-            return Task.FromResult(LinuxNativePrintResult.Success(0));
+            SubmissionCount++;
+            PdfPath = pdfPath;
+            Selection = selection;
+            PdfExistedDuringSubmission = File.Exists(pdfPath);
+            PdfBytes = await File.ReadAllBytesAsync(pdfPath, cancellationToken);
+            return new PrintSubmissionResult(PrintSubmissionStatus.Submitted, selection.PrinterName);
         }
     }
 

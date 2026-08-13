@@ -6,7 +6,6 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using FreeX.App.Services;
 using FreeX.App.Presentation.DrawingUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using WpfTextBox = System.Windows.Controls.TextBox;
 
@@ -14,6 +13,8 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private readonly TextBoxInlineEditSession _textBoxInlineEditSession = new();
+
     private void OnTextBoxEditRequested(Guid textBoxId) =>
         BeginTextBoxInlineEdit(textBoxId);
 
@@ -40,11 +41,10 @@ public partial class MainWindow
             return;
 
         EnsureTextBoxInlineEditor();
-        _textBoxInlineEditingId = textBox.Id;
-        _textBoxInlineOriginalText = textBox.Text;
-        _textBoxInlineEditor!.Text = textBox.Text;
-        SheetGrid.EditingTextBoxId = textBox.Id;
-        SheetGrid.SelectedObjectId = textBox.Id;
+        var startPlan = _textBoxInlineEditSession.Begin(textBox);
+        _textBoxInlineEditor!.Text = startPlan.Text;
+        SheetGrid.EditingTextBoxId = startPlan.TextBoxId;
+        SheetGrid.SelectedObjectId = startPlan.TextBoxId;
         SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.TextBox;
         if (!PositionTextBoxInlineEditor(textBox))
         {
@@ -132,7 +132,7 @@ public partial class MainWindow
     private void RefreshTextBoxInlineEditorPosition()
     {
         if (_textBoxInlineEditor?.IsVisible != true ||
-            _textBoxInlineEditingId is not { } textBoxId)
+            _textBoxInlineEditSession.EditingTextBoxId is not { } textBoxId)
         {
             return;
         }
@@ -156,8 +156,7 @@ public partial class MainWindow
         _textBoxInlineEditor.Visibility = Visibility.Collapsed;
         if (_textBoxInlineEditorChrome is not null)
             _textBoxInlineEditorChrome.Visibility = Visibility.Collapsed;
-        _textBoxInlineEditingId = null;
-        _textBoxInlineOriginalText = null;
+        _textBoxInlineEditSession.Complete();
         SheetGrid.EditingTextBoxId = null;
         if (_inlineEditor?.IsVisible != true &&
             _validationDropdown?.Visibility != Visibility.Visible)
@@ -186,30 +185,26 @@ public partial class MainWindow
     {
         textChanged = false;
         if (_textBoxInlineEditor is null ||
-            _textBoxInlineEditingId is not { } textBoxId)
+            _textBoxInlineEditSession.CreateCommitPlan(_currentSheetId, _textBoxInlineEditor.Text) is not { } plan)
         {
             return true;
         }
 
-        var plan = TextBoxInlineEditPlanner.CreateCommitPlan(
-            _textBoxInlineOriginalText,
-            _textBoxInlineEditor.Text);
         if (!plan.TextChanged)
             return true;
 
         if (!TryExecuteCommand(
-                new SetTextBoxTextCommand(_currentSheetId, textBoxId, plan.Text),
-                TextBoxInlineEditPlanner.CommitCommandTitle))
+                plan.Command!,
+                TextBoxInlineEditSession.CommitCommandTitle))
             return false;
 
-        _textBoxInlineOriginalText = plan.Text;
         textChanged = true;
         return true;
     }
 
     private void TextBoxInlineEditor_KeyDown(object sender, KeyEventArgs e)
     {
-        var action = TextBoxInlineEditPlanner.PlanKeyDown(
+        var action = _textBoxInlineEditSession.PlanKeyDown(
             ToTextBoxInlineEditKey(e.Key),
             Keyboard.Modifiers != ModifierKeys.None);
         if (action == TextBoxInlineEditKeyAction.None)
@@ -217,8 +212,11 @@ public partial class MainWindow
 
         if (action == TextBoxInlineEditKeyAction.Cancel)
         {
-            if (_textBoxInlineEditor is not null && _textBoxInlineOriginalText is not null)
-                _textBoxInlineEditor.Text = _textBoxInlineOriginalText;
+            if (_textBoxInlineEditor is not null &&
+                _textBoxInlineEditSession.CreateCancelPlan() is { } cancelPlan)
+            {
+                _textBoxInlineEditor.Text = cancelPlan.OriginalText;
+            }
 
             HideTextBoxInlineEditor(commit: false);
             FocusSheetGridIfNeeded();
@@ -252,7 +250,7 @@ public partial class MainWindow
 
     private void CommitTextBoxInlineEditorLostFocusIfNeeded()
     {
-        if (!TextBoxInlineEditPlanner.ShouldCommitLostFocus(
+        if (!_textBoxInlineEditSession.ShouldCommitLostFocus(
                 _textBoxInlineEditor?.IsVisible == true,
                 ReferenceEquals(Keyboard.FocusedElement, _textBoxInlineEditor),
                 ReferenceEquals(FocusManager.GetFocusedElement(this), _textBoxInlineEditor)))

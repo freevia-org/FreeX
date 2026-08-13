@@ -35,14 +35,10 @@ public sealed class R60_AvaloniaClearHyperlinksStripsFormatWiringTests
     [Fact]
     public void AvaloniaContextMenuClearHyperlinksAction_RoutesToFormatStrippingHandler()
     {
-        var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "MainWindow.cs");
-
-        var caseIndex = source.IndexOf("case WorksheetContextMenuAction.ClearHyperlinks:", System.StringComparison.Ordinal);
-        caseIndex.Should().BeGreaterThan(-1);
-        var breakIndex = source.IndexOf("break;", caseIndex, System.StringComparison.Ordinal);
-        source[caseIndex..breakIndex].Should().Contain(
-            "RemoveSelectedRangeHyperlinks",
-            "the right-click Clear submenu's Clear Hyperlinks entry mirrors ribbon Home>Clear semantics and must strip formatting");
+        var source = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Avalonia", "MainWindow.ApplicationCommandRouting.cs");
+        source.Should().Contain(
+            "ClearHyperlinks = Handled(() => RemoveSelectedRangeHyperlinks())");
     }
 
     [Fact]
@@ -50,14 +46,12 @@ public sealed class R60_AvaloniaClearHyperlinksStripsFormatWiringTests
     {
         // Sibling no-regression case: the true right-click "Remove Hyperlink" item (distinct from the
         // Clear submenu's "Clear Hyperlinks" entry) must keep preserving formatting, exactly as before.
-        var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "MainWindow.cs");
-
-        var caseIndex = source.IndexOf("case WorksheetContextMenuAction.RemoveHyperlinks:", System.StringComparison.Ordinal);
-        caseIndex.Should().BeGreaterThan(-1);
-        var breakIndex = source.IndexOf("break;", caseIndex, System.StringComparison.Ordinal);
-        var caseBody = source[caseIndex..breakIndex];
-        caseBody.Should().Contain("ClearSelectedRangeHyperlinks");
-        caseBody.Should().NotContain("RemoveSelectedRangeHyperlinks");
+        var source = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Avalonia", "MainWindow.ApplicationCommandRouting.cs");
+        source.Should().Contain(
+            "RemoveHyperlinks = Handled(() => ClearSelectedRangeHyperlinks())");
+        source.Should().NotContain(
+            "RemoveHyperlinks = Handled(() => RemoveSelectedRangeHyperlinks())");
     }
 
     [Fact]

@@ -10,12 +10,18 @@ public sealed record SlideShowCustomShowSessionShowItemPlan(
     int Index,
     string Name,
     int SlideCount,
-    string DisplayText);
+    string DisplayText)
+{
+    public override string ToString() => DisplayText;
+}
 
 public sealed record SlideShowCustomShowSessionSlideItemPlan(
     int Index,
     string SlideId,
-    string DisplayText);
+    string DisplayText)
+{
+    public override string ToString() => DisplayText;
+}
 
 public sealed record SlideShowCustomShowSessionPlan(
     IReadOnlyList<SlideShowCustomShowSessionShowItemPlan> CustomShows,
@@ -29,7 +35,8 @@ public sealed record SlideShowCustomShowSessionPlan(
     bool CanDelete,
     bool CanStart,
     bool CanMoveUp,
-    bool CanMoveDown);
+    bool CanMoveDown,
+    bool CanRemove);
 
 public static class SlideShowCustomShowSessionPlanner
 {
@@ -81,7 +88,8 @@ public static class SlideShowCustomShowSessionPlanner
             hasSelection,
             selectedShow?.SlideIds.Count > 0,
             selectedSlideIndex > 0,
-            selectedSlideIndex >= 0 && selectedSlideIndex < selectedSlides.Length - 1);
+            selectedSlideIndex >= 0 && selectedSlideIndex < selectedSlides.Length - 1,
+            selectedSlideIndex >= 0);
     }
 
     public static SlideShowCustomShowSessionState SelectShow(int customShowIndex) =>

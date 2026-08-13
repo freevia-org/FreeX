@@ -60,9 +60,8 @@ public sealed partial class ScenarioManagerDialogTests
         source.Should().Contain("UiText.Get(\"ScenarioManager_ChangingCells\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_Comment\")");
         source.Should().Contain("UiText.Get(\"ScenarioManager_AddEditScenario\")");
-        source.Should().Contain("ProjectSelectionFields(selected, _newNameBox.Text, _defaultScenarioName)");
+        source.Should().Contain("ScenarioManagerDialogPlanner.ProjectSelectionFields(");
         source.Should().Contain("ApplySelectionFields(fields)");
-        source.Should().Contain("SharedScenarioManagerDialogPlanner.ProjectSelectionFields(");
         source.Should().Contain("ScenarioManagerDialogSelectionFields");
         source.Should().NotContain("ScenarioManagerSelectionFields");
         source.Should().NotContain("ToHostSelectionFields");
@@ -79,7 +78,7 @@ public sealed partial class ScenarioManagerDialogTests
         source.Should().Contain("public string? CommentText");
         source.Should().Contain("public bool ScenarioHidden");
         source.Should().Contain("public bool ScenarioLocked");
-        source.Should().Contain("ProjectAcceptResult(");
+        source.Should().Contain("ScenarioManagerDialogPlanner.ProjectAcceptResult(");
         source.Should().Contain("_changingCellsBox.Text");
         source.Should().Contain("_resultCellsBox.Text");
         source.Should().Contain("_commentBox.Text");
@@ -90,14 +89,15 @@ public sealed partial class ScenarioManagerDialogTests
         source.Should().Contain("CommentText = result.CommentText");
         source.Should().Contain("ScenarioLocked = result.Locked");
         source.Should().Contain("ScenarioHidden = result.Hidden");
-        source.Should().Contain("ValidateAcceptRequest(");
-        source.Should().Contain("SharedScenarioManagerDialogPlanner.ValidateAcceptRequest(");
-        source.Should().Contain("LocalizeValidationError(failure.Error)");
+        source.Should().Contain("ScenarioManagerDialogPlanner.ValidateAcceptRequest(");
+        source.Should().Contain("DescribeValidationFailure(failure)");
         source.Should().Contain("ScenarioManagerDialogValidationField");
         source.Should().NotContain("ScenarioManagerValidationField");
         source.Should().NotContain("ToHostValidationField");
+        source.Should().NotContain("ToDialogAction");
+        source.Should().NotContain("ToServiceAction");
         source.Should().NotContain("WorkbookRangeTextCodec.TryParseMany");
-        source.Should().Contain("GetValidationTarget(failure.Field)");
+        source.Should().Contain("GetValidationTarget(presentation.FocusTarget)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         handlerSource.Should().Contain("new ScenarioManagerDialog(");
         handlerSource.Should().Contain("request => ApplyScenarioManagerRangeSelection(dialog, request)");
@@ -114,7 +114,7 @@ public sealed partial class ScenarioManagerDialogTests
         // P20 fix: the Scenario Summary recalculate delegate is now unconditional (independent of
         // WorkbookCalculationMode) so Manual-mode workbooks still get a genuinely distinct
         // recalculated result per scenario column instead of repeating the same stale value.
-        handlerSource.Should().Contain("_recalcEngine.Recalculate(workbook, changedCells)");
+        handlerSource.Should().Contain("_session.RecalculateChangedCellsAlways(changedCells)");
         handlerSource.Should().Contain("dialog.SelectedAction == ScenarioManagerAction.Edit ? dialog.SelectedScenarioName : null");
         handlerSource.Should().Contain("new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName)");
         handlerSource.Should().Contain("TryParseScenarioChangingCells");

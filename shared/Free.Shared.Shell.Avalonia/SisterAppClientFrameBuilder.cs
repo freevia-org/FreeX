@@ -47,45 +47,42 @@ public static class SisterAppClientFrameBuilder
 
         var root = new DockPanel { LastChildFill = true };
 
-        foreach (var slot in contract.Slots)
-        {
-            switch (slot.Role)
-            {
-                case SisterAppClientFrameSlotRole.Chrome:
-                    AddDocked(root, spec.Chrome, Dock.Top);
-                    break;
-                case SisterAppClientFrameSlotRole.TopPanelBelowChrome:
-                    AddDocked(root, topPanelsBelowChrome[slot.Index], Dock.Top);
-                    break;
-                case SisterAppClientFrameSlotRole.WorkArea:
-                case SisterAppClientFrameSlotRole.BottomPanelAboveStatus:
-                case SisterAppClientFrameSlotRole.StatusBar:
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(slot), slot.Role, "Unknown sister-app frame slot.");
-            }
-        }
+        foreach (var slot in contract.SlotsBeforeWorkArea)
+            AddDocked(root, ResolveTopSlot(spec, topPanelsBelowChrome, slot), Dock.Top);
 
-        foreach (var slot in contract.Slots.Reverse())
-        {
-            switch (slot.Role)
-            {
-                case SisterAppClientFrameSlotRole.StatusBar:
-                    AddDocked(root, spec.StatusBar, Dock.Bottom);
-                    break;
-                case SisterAppClientFrameSlotRole.BottomPanelAboveStatus:
-                    AddDocked(root, bottomPanelsAboveStatus[slot.Index], Dock.Bottom);
-                    break;
-            }
-        }
+        foreach (var slot in contract.SlotsAfterWorkArea.Reverse())
+            AddDocked(root, ResolveBottomSlot(spec, bottomPanelsAboveStatus, slot), Dock.Bottom);
 
-        var workAreaSlot = contract.Slots.Single(slot => slot.Role == SisterAppClientFrameSlotRole.WorkArea);
-        root.Children.Add(workAreaSlot.Index == 0
-            ? spec.WorkArea
-            : throw new ArgumentOutOfRangeException(nameof(workAreaSlot), workAreaSlot.Index, "Unknown sister-app workarea slot."));
+        root.Children.Add(spec.WorkArea);
 
         return new SisterAppClientFrameBuildResult(root);
     }
+
+    private static Control ResolveTopSlot(
+        SisterAppClientFrameSpec spec,
+        IReadOnlyList<Control> topPanelsBelowChrome,
+        SisterAppClientFrameSlotPlan slot) => slot.Role switch
+        {
+            SisterAppClientFrameSlotRole.Chrome => spec.Chrome,
+            SisterAppClientFrameSlotRole.TopPanelBelowChrome => topPanelsBelowChrome[slot.Index],
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(slot),
+                slot.Role,
+                "Only top frame slots can be docked above the workarea."),
+        };
+
+    private static Control ResolveBottomSlot(
+        SisterAppClientFrameSpec spec,
+        IReadOnlyList<Control> bottomPanelsAboveStatus,
+        SisterAppClientFrameSlotPlan slot) => slot.Role switch
+        {
+            SisterAppClientFrameSlotRole.BottomPanelAboveStatus => bottomPanelsAboveStatus[slot.Index],
+            SisterAppClientFrameSlotRole.StatusBar => spec.StatusBar,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(slot),
+                slot.Role,
+                "Only bottom frame slots can be docked below the workarea."),
+        };
 
     private static void AddDocked(DockPanel root, Control child, Dock dock)
     {

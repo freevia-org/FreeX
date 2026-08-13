@@ -7,8 +7,6 @@ using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
-public sealed record ZoomDialogResult(int ZoomPercent, bool FitSelection = false);
-
 public sealed class ZoomDialog : Window
 {
     private readonly TextBox _zoomBox = new();
@@ -16,11 +14,11 @@ public sealed class ZoomDialog : Window
     private readonly RadioButton _fitSelectionButton = new() { Content = UiText.Get("Zoom_FitSelection"), GroupName = "Zoom" };
     private readonly List<RadioButton> _presetButtons = [];
 
-    public ZoomDialogResult Result { get; private set; }
+    public ZoomDialogSelection Result { get; private set; }
 
     public ZoomDialog(int currentZoomPercent)
     {
-        Result = new ZoomDialogResult(currentZoomPercent);
+        Result = new ZoomDialogSelection(currentZoomPercent);
         Title = UiText.Get("Zoom_Zoom");
         Width = ZoomDialogPlanner.Width;
         Height = ZoomDialogPlanner.Height;
@@ -60,9 +58,9 @@ public sealed class ZoomDialog : Window
         }
     }
 
-    public static bool TryCreateResult(string? input, out ZoomDialogResult result, out string? error)
+    public static bool TryCreateResult(string? input, out ZoomDialogSelection result, out string? error)
     {
-        result = new ZoomDialogResult(100);
+        result = new ZoomDialogSelection(100);
         error = null;
 
         if (!ZoomDialogPlanner.TryCreateResult(input, out var selection, out var validationError))
@@ -71,19 +69,16 @@ public sealed class ZoomDialog : Window
             return false;
         }
 
-        result = ToResult(selection);
+        result = selection;
         return true;
     }
 
-    public static ZoomDialogResult CreateFitSelectionResult(int currentZoomPercent) =>
-        ToResult(ZoomDialogPlanner.CreateFitSelectionResult(currentZoomPercent));
-
-    private static ZoomDialogResult ToResult(ZoomDialogSelection selection) =>
-        new(selection.ZoomPercent, selection.FitSelection);
+    public static ZoomDialogSelection CreateFitSelectionResult(int currentZoomPercent) =>
+        ZoomDialogPlanner.CreateFitSelectionResult(currentZoomPercent);
 
     private static string ResolveValidationError(ZoomDialogValidationError? validationError) =>
         validationError is null
-            ? UiText.Get("Zoom_EnterAValidZoomPercent")
+            ? UiText.Get(ZoomDialogPlanner.ValidationFallbackResourceKey)
             : UiText.Get(validationError.ResourceKey);
 
     private void Accept()
@@ -99,7 +94,10 @@ public sealed class ZoomDialog : Window
         var input = selectedPreset ?? _zoomBox.Text;
         if (!TryCreateResult(input, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("Zoom_EnterAValidZoomPercent"), Title);
+            DialogMessageHelper.ShowWarning(
+                this,
+                error ?? UiText.Get(ZoomDialogPlanner.ValidationFallbackResourceKey),
+                Title);
             _customZoomButton.IsChecked = true;
             DialogFocus.FocusAndSelect(_zoomBox);
             return;

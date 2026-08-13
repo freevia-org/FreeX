@@ -10,6 +10,7 @@ public sealed class ChartCommandSourceTests
     public void ChartHandlers_RouteThroughExpectedDialogsCommandsAndDeferredPath()
     {
         var source = ReadHostSourceFile("MainWindow.ChartCommands.cs");
+        var workflowSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartCommandWorkflowPlanner.cs");
 
         source.Should().Contain("private void InsertChartPickerBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new InsertChartDialog { Owner = this }");
@@ -17,27 +18,38 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("private void InsertChartOfType(ChartType type)");
         source.Should().Contain("ChartAuthoringPlanner.CanAuthor(type)");
         source.Should().Contain("ShowDeferredChartFamilyMessage();");
-        source.Should().Contain("ChartInsertionPlanner.CreateEmbeddedChartPlan(");
-        source.Should().Contain("ChartInsertionPlanner.BuildChartSheetCommand(");
+        source.Should().Contain("ChartCommandWorkflowPlanner.CreateEmbeddedChartPlan(");
+        source.Should().Contain("ChartCommandWorkflowPlanner.BuildChartSheetCommand(");
         source.Should().NotContain("new AddChartCommand(");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferred\")");
         source.Should().Contain("private void ChangeChartTypeBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new ChangeChartTypeDialog(chart.Type)");
-        source.Should().Contain("new ChangeChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType)");
+        source.Should().Contain("ChartCommandWorkflowPlanner.BuildChangeTypeCommand(");
+        source.Should().NotContain("new ChangeChartTypeCommand(");
         source.Should().Contain("private void SelectChartDataSourceBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new SelectDataSourceDialog(");
         source.Should().Contain("resolveSheetId: ResolveSheetIdByName");
         source.Should().Contain("ChartInputParser.TryParseDataRange(dialog.Result.SourceRangeText, _currentSheetId, ResolveSheetIdByName, out var dataRange)");
-        source.Should().Contain("new ChangeChartSourceCommand(");
+        source.Should().Contain("ChartCommandWorkflowPlanner.BuildChangeSourceCommand(");
+        source.Should().NotContain("new ChangeChartSourceCommand(");
+        source.Should().Contain("ChartCommandWorkflowPlanner.BuildRemoveSeriesCommand(");
+        source.Should().NotContain("new RemoveChartSeriesCommand(");
+        source.Should().Contain("ChartCommandWorkflowPlanner.BuildHiddenEmptyCellsCommand(");
+        source.Should().NotContain("new ConfigureChartHiddenEmptyCellsCommand(");
         // The dialog's Switch Row/Column checkbox must reach the command (and reflect the
         // chart's current orientation when the dialog opens) — not be a silent no-op.
         source.Should().Contain("switchRowColumn: chart.SeriesInRows");
-        source.Should().Contain("seriesInRows: dialog.Result.SwitchRowColumn");
+        source.Should().Contain("dialog.Result.SwitchRowColumn");
+        workflowSource.Should().Contain("seriesInRows: switchRowColumn");
         source.Should().Contain("private void MoveChartBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new MoveChartDialog(currentSheet.Name)");
+        source.Should().Contain("ChartCommandWorkflowPlanner.PlanMoveCommand(");
+        source.Should().NotContain("new MoveChartCommand(");
+        source.Should().NotContain("new MoveChartToNewSheetCommand(");
         source.Should().Contain("private void ResizeSelectedChartObject()");
         source.Should().Contain("new ObjectSizeDialog(chart.Width, chart.Height, UiText.Get(\"MainWindowMessage_ObjectSizeTitle\"))");
-        source.Should().Contain("new SetChartBoundsCommand(");
+        source.Should().Contain("ChartCommandWorkflowPlanner.BuildBoundsCommand(");
+        source.Should().NotContain("new SetChartBoundsCommand(");
     }
 
     [Fact]
@@ -97,6 +109,8 @@ public sealed class ChartCommandSourceTests
         var axisPlannerSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartAxisPlanner.cs");
         var quickPlannerSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartQuickCommandPlanner.cs");
         var quickCatalogSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartQuickCommandCatalog.cs");
+        var workflowSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartCommandWorkflowPlanner.cs");
+        var commandExecutionSource = ReadHostSourceFile("MainWindow.CommandExecution.cs");
 
         chartSource.Should().Contain("ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelCategoryName)");
         chartSource.Should().Contain("ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineMovingAveragePeriod)");
@@ -105,8 +119,12 @@ public sealed class ChartCommandSourceTests
         chartSource.Should().Contain("private void ExecuteChartQuickCommand(ChartQuickCommandDescriptor command)");
         chartSource.Should().Contain("UiText.Get(command.HostMissingSelectionMessageResourceKey)");
         chartSource.Should().Contain("command.HostUnsupportedMessageResourceKey is null");
-        chartSource.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
-        chartSource.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
+        chartSource.Should().Contain("TryExecuteRepeatableChartQuickCommand(");
+        chartSource.Should().NotContain("ChartQuickCommandPlanner.CanApply(");
+        chartSource.Should().NotContain("ChartQuickCommandPlanner.Plan(");
+        commandExecutionSource.Should().Contain("ChartCommandWorkflowPlanner.PlanQuickCommand(");
+        workflowSource.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
+        workflowSource.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
         chartSource.Should().NotContain("ChartQuickFormatCycler.");
         chartSource.Should().NotContain("ChartOptionCycler.GetNextSecondaryAxisSeries(");
         chartSource.Should().NotContain("IndexOfSeriesFormat");

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
@@ -240,7 +241,12 @@ public partial class GridView
         if (fillBrush is not null)
             dc.DrawRectangle(fillBrush, null, rect);
 
-        DrawFillPattern(dc, rect, style, WorkbookTheme, _brushCache, _fillPatternPenCache);
+        var fillPlan = CellFillMaterializationPlanner.Plan(
+            style,
+            WorkbookTheme,
+            CellFillMaterializationProfile.PatternOverlay,
+            CellFillFallbackKind.Transparent);
+        DrawFillPattern(dc, rect, fillPlan, _brushCache, _fillPatternPenCache);
     }
 
     private void DrawPictureCellText(

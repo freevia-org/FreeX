@@ -7,6 +7,11 @@ namespace FreeX.App.Presentation.PageLayout;
 
 public static class PagePrintTextPlanner
 {
+    public static string ResolveWorkbookDirectoryTokenValue(string? filePath) =>
+        Path.GetDirectoryName(filePath) is { Length: > 0 } directory
+            ? directory + Path.DirectorySeparatorChar
+            : "";
+
     // -----------------------------------------------------------------------
     // Public API: tokenizer
     // -----------------------------------------------------------------------

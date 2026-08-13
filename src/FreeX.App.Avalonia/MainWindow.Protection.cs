@@ -1,6 +1,4 @@
 using System.Linq;
-using System.Xml;
-using System.Xml.Linq;
 
 using Avalonia;
 using Avalonia.Automation;
@@ -11,7 +9,6 @@ using Avalonia.Media;
 using Avalonia.Styling;
 
 using Free.Shared.Shell.Avalonia;
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.Protection;
 using FreeX.Core.Model;
 
@@ -26,9 +23,8 @@ namespace FreeX.App.Avalonia;
 /// checklist seeded from <see cref="SheetProtectionOptions"/>; OK validates the confirm-match through
 /// <see cref="ProtectionPassword"/> and runs the Core protect command. When the target is already protected
 /// the action unprotects instead, prompting for the password when one is stored. The portable dialog model,
-/// validation, and projection come from <see cref="FreeX.App.Presentation.Protection"/>; the non-UI mapping
-/// onto Core protect/unprotect commands lives in <see cref="ProtectionShellGlue"/>; commands run through the
-/// shared session command path.
+/// validation, projection, command composition, and outcomes come from
+/// <see cref="ProtectionWorkflowSession"/>; commands run through the shared workbook session path.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -51,8 +47,8 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
 
-        var state = ProtectionShellGlue.ProjectSheet(_session.ActiveSheet);
-        var sheetId = _session.ActiveSheet.Id;
+        var sheet = _session.ActiveSheet;
+        var state = ProtectionSession.ProjectSheet(sheet);
 
         var dialog = new Window
         {
@@ -122,7 +118,7 @@ public sealed partial class MainWindow
                 unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox));
                 unprotectPanel.Children.Add(new TextBlock
                 {
-                    Text = ProtectText("ShellLoc_CautionPasswordsCannotBeRecovered", "Caution: lost or forgotten passwords cannot be recovered."),
+                    Text = UiText.Get("ShellLoc_CautionPasswordsCannotBeRecovered"),
                     Foreground = Brush(110, 110, 110),
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = 11,
@@ -130,22 +126,23 @@ public sealed partial class MainWindow
                 });
             }
 
-            contentChildren.Add(ProtectionGroupBox(ProtectText("ShellLoc_PasswordGroupHeader", "Password"), unprotectPanel));
+            contentChildren.Add(ProtectionGroupBox(UiText.Get("ShellLoc_PasswordGroupHeader"), unprotectPanel));
 
             okButton.Click += (_, _) =>
             {
                 warningText.IsVisible = false;
-                var command = ProtectionShellGlue.BuildUnprotectSheetCommand(
-                    sheetId,
-                    state.HasPassword ? passwordBox.Text : null);
-                var result = _session.ExecuteReviewCommand(command);
-                if (!result.Success)
+                var options = state.Options with
                 {
-                    ShowWarning(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotUnprotectSheet"));
+                    Password = state.HasPassword ? passwordBox.Text : null,
+                };
+                var outcome = ProtectionSession.ExecuteSheet(sheet, options);
+                if (!outcome.Success)
+                {
+                    ShowWarning(outcome.ErrorMessage ?? UiText.Get(outcome.ErrorResourceKey!));
                     return;
                 }
 
-                RefreshShell(UiText.Get("ShellLoc_UnprotectedSheet"));
+                RefreshShell(UiText.Get(outcome.SuccessStatusResourceKey));
                 dialog.Close();
             };
         }
@@ -158,7 +155,7 @@ public sealed partial class MainWindow
             {
                 var box = new CheckBox
                 {
-                    Content = ProtectionShellGlue.DescribePermission(option.Permission),
+                    Content = UiText.Get(option.LabelKey),
                     IsChecked = option.DefaultEnabled,
                 };
                 ApplyProtectCheckBoxChrome(box);
@@ -170,7 +167,7 @@ public sealed partial class MainWindow
 
             contentChildren.Add(new TextBlock
             {
-                Text = ProtectText("ShellLoc_ProtectWorksheetContentsHeader", "Protect worksheet and contents of locked cells"),
+                Text = UiText.Get("ShellLoc_ProtectWorksheetContentsHeader"),
                 Foreground = HeaderForeground,
                 FontWeight = FontWeight.SemiBold,
                 Margin = new Thickness(0, 0, 0, 4),
@@ -187,7 +184,7 @@ public sealed partial class MainWindow
                     ProtectionLabeledField(UiText.Get("ShellLoc_ConfirmPasswordLabel"), confirmBox),
                     new TextBlock
                     {
-                        Text = ProtectText("ShellLoc_CautionPasswordsCannotBeRecovered", "Caution: lost or forgotten passwords cannot be recovered."),
+                        Text = UiText.Get("ShellLoc_CautionPasswordsCannotBeRecovered"),
                         Foreground = Brush(110, 110, 110),
                         TextWrapping = TextWrapping.Wrap,
                         FontSize = 11,
@@ -195,7 +192,7 @@ public sealed partial class MainWindow
                     },
                 },
             };
-            contentChildren.Add(ProtectionGroupBox(ProtectText("ShellLoc_PasswordGroupHeader", "Password"), passwordPanel));
+            contentChildren.Add(ProtectionGroupBox(UiText.Get("ShellLoc_PasswordGroupHeader"), passwordPanel));
             contentChildren.Add(ProtectionGroupBox(
                 UiText.Get("ShellLoc_AllowAllUsersToLabel"),
                 new ScrollViewer { Content = checklist, MaxHeight = 280 }));
@@ -214,22 +211,14 @@ public sealed partial class MainWindow
                     passwordBox.Text,
                     confirmBox.Text);
 
-                var validation = options.ValidatePassword();
-                if (!validation.IsValid)
+                var outcome = ProtectionSession.ExecuteSheet(sheet, options);
+                if (!outcome.Success)
                 {
-                    ShowWarning(UiText.Get("ShellLoc_PasswordsDoNotMatch"));
+                    ShowWarning(outcome.ErrorMessage ?? UiText.Get(outcome.ErrorResourceKey!));
                     return;
                 }
 
-                var command = ProtectionShellGlue.BuildProtectSheetCommand(sheetId, options);
-                var result = _session.ExecuteReviewCommand(command);
-                if (!result.Success)
-                {
-                    ShowWarning(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotProtectSheet"));
-                    return;
-                }
-
-                RefreshShell(UiText.Get("ShellLoc_ProtectedSheet"));
+                RefreshShell(UiText.Get(outcome.SuccessStatusResourceKey));
                 dialog.Close();
             };
         }
@@ -253,7 +242,7 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
 
-        var state = ProtectionShellGlue.ProjectWorkbook(_session.Workbook);
+        var state = ProtectionSession.ProjectWorkbook();
 
         var dialog = new Window
         {
@@ -330,7 +319,7 @@ public sealed partial class MainWindow
                 unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox));
                 unprotectPanel.Children.Add(new TextBlock
                 {
-                    Text = ProtectText("ShellLoc_CautionPasswordsCannotBeRecovered", "Caution: lost or forgotten passwords cannot be recovered."),
+                    Text = UiText.Get("ShellLoc_CautionPasswordsCannotBeRecovered"),
                     Foreground = Brush(110, 110, 110),
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = 11,
@@ -338,21 +327,23 @@ public sealed partial class MainWindow
                 });
             }
 
-            contentChildren.Add(ProtectionGroupBox(ProtectText("ShellLoc_PasswordGroupHeader", "Password"), unprotectPanel));
+            contentChildren.Add(ProtectionGroupBox(UiText.Get("ShellLoc_PasswordGroupHeader"), unprotectPanel));
 
             okButton.Click += (_, _) =>
             {
                 warningText.IsVisible = false;
-                var command = ProtectionShellGlue.BuildUnprotectWorkbookCommand(
-                    state.HasPassword ? passwordBox.Text : null);
-                var result = _session.ExecuteReviewCommand(command);
-                if (!result.Success)
+                var options = state.Options with
                 {
-                    ShowWarning(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotUnprotectWorkbook"));
+                    Password = state.HasPassword ? passwordBox.Text : null,
+                };
+                var outcome = ProtectionSession.ExecuteWorkbook(options);
+                if (!outcome.Success)
+                {
+                    ShowWarning(outcome.ErrorMessage ?? UiText.Get(outcome.ErrorResourceKey!));
                     return;
                 }
 
-                RefreshShell(UiText.Get("ShellLoc_UnprotectedWorkbook"));
+                RefreshShell(UiText.Get(outcome.SuccessStatusResourceKey));
                 dialog.Close();
             };
         }
@@ -374,17 +365,6 @@ public sealed partial class MainWindow
             {
                 warningText.IsVisible = false;
 
-                if (structureBox.IsChecked != true)
-                {
-                    // Core has no model for window-only protection (see ProtectWorkbookOptions
-                    // remarks), so "Structure" unchecked — even with "Windows" checked — protects
-                    // nothing. Warn with the same message as the both-unchecked case instead of
-                    // reporting success while writing a passworded-but-unlocked
-                    // <workbookProtection> element.
-                    ShowWarning(UiText.Get("ShellLoc_SelectStructureOrWindows"));
-                    return;
-                }
-
                 var options = new ProtectWorkbookOptions
                 {
                     ProtectStructure = structureBox.IsChecked == true,
@@ -393,29 +373,14 @@ public sealed partial class MainWindow
                     PasswordConfirmation = confirmBox.Text,
                 };
 
-                var validation = options.ValidatePassword();
-                if (!validation.IsValid)
+                var outcome = ProtectionSession.ExecuteWorkbook(options);
+                if (!outcome.Success)
                 {
-                    ShowWarning(UiText.Get("ShellLoc_PasswordsDoNotMatch"));
+                    ShowWarning(outcome.ErrorMessage ?? UiText.Get(outcome.ErrorResourceKey!));
                     return;
                 }
 
-                var command = ProtectionShellGlue.BuildProtectWorkbookCommand(options);
-                var result = _session.ExecuteReviewCommand(command);
-                if (!result.Success)
-                {
-                    ShowWarning(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotProtectWorkbook"));
-                    return;
-                }
-
-                // Core's ProtectWorkbookCommand has no windows-protection parameter (see
-                // ProtectWorkbookOptions remarks: "the Core model does not persist this flag"), so
-                // the dialog's own "Windows" choice is threaded onto the saved-file representation
-                // here, directly on the preserved workbookProtection metadata bag, instead of being
-                // silently dropped.
-                ApplyWorkbookLockWindows(_session.Workbook, options.ProtectWindows);
-
-                RefreshShell(UiText.Get("ShellLoc_ProtectedWorkbook"));
+                RefreshShell(UiText.Get(outcome.SuccessStatusResourceKey));
                 dialog.Close();
             };
         }
@@ -428,72 +393,6 @@ public sealed partial class MainWindow
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Sets or clears the <c>lockWindows</c> attribute on the workbook's preserved
-    /// <c>workbookProtection</c> metadata bag so the Protect Workbook dialog's "Windows" checkbox
-    /// actually round-trips to <c>&lt;workbookProtection lockWindows="1"/&gt;</c> on save, matching
-    /// real Excel. Core's <see cref="FreeX.Core.Commands.ProtectWorkbookCommand"/> only models
-    /// Structure protection (see <see cref="ProtectWorkbookOptions"/> remarks), so this reaches
-    /// directly into <see cref="Workbook.ProtectionMetadata"/> — the same "residual, not-yet-modelled
-    /// XLSX attribute" bag that <c>XlsxWorkbookMetadataWriter.ApplyProtection</c> re-applies verbatim
-    /// (excluding the Core-managed <c>lockStructure</c>/<c>workbookPassword</c> attributes) — rather
-    /// than requiring a new Core command parameter.
-    /// <para>
-    /// Always clones the current bag (via <see cref="NativeXmlPreserveBag.Clone"/>) before mutating
-    /// it, instead of mutating in place: <see cref="FreeX.Core.Commands.ProtectWorkbookCommand"/>'s
-    /// own undo support snapshots the pre-command <see cref="Workbook.ProtectionMetadata"/>
-    /// reference, and mutating that same (possibly still-referenced) instance here would corrupt
-    /// Undo by leaking this write into the "previous" snapshot.
-    /// </para>
-    /// </summary>
-    internal static void ApplyWorkbookLockWindows(Workbook workbook, bool lockWindows)
-    {
-        var current = workbook.ProtectionMetadata;
-        var raw = current?.Get("workbookProtection");
-
-        XElement element;
-        if (!string.IsNullOrWhiteSpace(raw))
-        {
-            try
-            {
-                element = XElement.Parse(raw);
-            }
-            catch (XmlException)
-            {
-                // Malformed preserved payload from an older save; start fresh rather than risk
-                // corrupting content we don't understand.
-                element = new XElement("e");
-            }
-        }
-        else
-        {
-            element = new XElement("e");
-        }
-
-        if (lockWindows)
-            element.SetAttributeValue("lockWindows", "1");
-        else
-            element.Attribute("lockWindows")?.Remove();
-
-        var clone = current?.Clone() ?? new NativeXmlPreserveBag();
-        clone.Set(
-            "workbookProtection",
-            element.Attributes().Any() || element.HasElements
-                ? element.ToString(SaveOptions.DisableFormatting)
-                : null);
-
-        workbook.ProtectionMetadata = clone;
-    }
-
-    /// <summary>
-    /// Returns the localized string for <paramref name="key"/> when it exists in the catalog, otherwise the
-    /// supplied neutral-English <paramref name="fallback"/>. Used by the Protect dialogs so newly-introduced
-    /// group/header captions render correctly even before their <c>.resx</c> keys land (avoiding the visible
-    /// <c>[[Key]]</c> marker), while still picking up translations once the keys are added.
-    /// </summary>
-    private static string ProtectText(string key, string fallback) =>
-        UiText.GetNeutralResourceKeys().Contains(key) ? UiText.Get(key) : fallback;
 
     private static void AttachProtectionDialogInitialFocus(Window dialog, TextBox passwordBox)
     {

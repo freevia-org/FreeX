@@ -15,7 +15,7 @@ public sealed class PageSetupCommandFactoryTests
     {
         var workbook = new Workbook("Book");
         var sheet = workbook.AddSheet("Sheet1");
-        var request = new PageSetupHeaderFooterRequest
+        var request = new HeaderFooterEditorState
         {
             Header = new WorksheetHeaderFooter("Left", "Center", "Right"),
             Footer = new WorksheetHeaderFooter("Footer left", "Footer center", "Footer right"),
@@ -23,8 +23,8 @@ public sealed class PageSetupCommandFactoryTests
             EvenPageFooter = new WorksheetHeaderFooter("Even footer left", "Even footer center", "Even footer right"),
             DifferentFirstPage = true,
             DifferentOddEvenPages = true,
-            ScaleHeaderFooterWithDocument = false,
-            AlignHeaderFooterWithMargins = false
+            ScaleWithDocument = false,
+            AlignWithMargins = false
         };
 
         var command = PageSetupCommandFactory.BuildHeaderFooterCommand(sheet.Id, request);

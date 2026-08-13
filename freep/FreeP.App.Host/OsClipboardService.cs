@@ -1,277 +1,10 @@
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows;
-using System.Windows.Media.Imaging;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
-
-/// <summary>Testable boundary around the WPF system clipboard.</summary>
-public interface IOsClipboard
-{
-    bool ContainsImage();
-    bool ContainsText();
-    byte[]? GetImagePngBytes();
-    string? GetText();
-    void SetDataObject(DataObject data);
-    long SequenceNumber { get; }
-
-    PresentationClipboardContent Read() => new(
-        PngBytes: ContainsImage() ? GetImagePngBytes() : null,
-        Text: ContainsText() ? GetText() : null);
-
-    void Write(PresentationClipboardContent content) =>
-        SetDataObject(WpfOsClipboard.BuildDataObject(content));
-}
-
-/// <summary>
-/// WPF system-clipboard adapter. The service above this boundary only sees the shared,
-/// framework-neutral <see cref="PresentationClipboardContent"/> contract.
-/// </summary>
-public sealed class WpfOsClipboard : IOsClipboard
-{
-    internal const string SelectionFormat = PresentationClipboardFormats.Selection;
-    internal const string OwnerTokenFormat = PresentationClipboardFormats.OwnerToken;
-    internal const string RichTextFormat = PresentationClipboardFormats.RichText;
-    internal const string WindowsXamlPackageFormat = PresentationClipboardFormats.WindowsXamlPackage;
-
-    // Backward-read aliases for Avalonia application formats. This value is proven
-    // against pinned Avalonia 12.0.4 tag a8dd6417fd8918570edefdbecd92d16ac7620069,
-    // src/Windows/Avalonia.Win32/ClipboardFormatRegistry.cs. Current interop does not
-    // depend on it: both hosts also publish the public platform names above.
-    internal const string AvaloniaApplicationFormatPrefix = "avn-app-fmt:";
-    internal const string LegacyAvaloniaSelectionFormat =
-        AvaloniaApplicationFormatPrefix + PresentationClipboardFormats.Selection;
-    internal const string LegacyAvaloniaOwnerTokenFormat =
-        AvaloniaApplicationFormatPrefix + PresentationClipboardFormats.OwnerToken;
-
-    public PresentationClipboardContent Read()
-    {
-        var data = Clipboard.GetDataObject();
-        return ReadDataObject(data);
-    }
-
-    public void Write(PresentationClipboardContent content)
-    {
-        ArgumentNullException.ThrowIfNull(content);
-        Clipboard.SetDataObject(BuildDataObject(content), copy: true);
-    }
-
-    public bool ContainsImage()
-    {
-        try { return Clipboard.ContainsImage(); }
-        catch { return false; }
-    }
-
-    public bool ContainsText()
-    {
-        try { return Clipboard.ContainsText(); }
-        catch { return false; }
-    }
-
-    public byte[]? GetImagePngBytes()
-    {
-        try
-        {
-            var bitmap = Clipboard.GetImage();
-            return bitmap is null ? null : BitmapSourceToPng(bitmap);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    public string? GetText()
-    {
-        try { return Clipboard.ContainsText() ? Clipboard.GetText() : null; }
-        catch { return null; }
-    }
-
-    public void SetDataObject(DataObject data)
-    {
-        try { Clipboard.SetDataObject(data, copy: true); }
-        catch { }
-    }
-
-    public long SequenceNumber
-    {
-        get
-        {
-            try { return NativeMethods.GetClipboardSequenceNumber(); }
-            catch { return 0; }
-        }
-    }
-
-    internal static DataObject BuildDataObject(PresentationClipboardContent content)
-    {
-        ArgumentNullException.ThrowIfNull(content);
-        var data = new DataObject();
-
-        if (content.SelectionBytes is { Length: > 0 })
-            SetRawBytes(data, SelectionFormat, content.SelectionBytes);
-
-        if (content.RichTextBytes is { Length: > 0 })
-            SetRawBytes(data, RichTextFormat, content.RichTextBytes);
-
-        if (!string.IsNullOrEmpty(content.OwnerToken))
-        {
-            // Avalonia's Win32 clipboard backend serializes custom strings as a
-            // null-terminated UTF-16 HGLOBAL.
-            var bytes = Encoding.Unicode.GetBytes(content.OwnerToken + '\0');
-            SetRawBytes(data, OwnerTokenFormat, bytes);
-        }
-
-        if (content.PngBytes is { Length: > 0 })
-        {
-            try
-            {
-                using var stream = new MemoryStream(content.PngBytes, writable: false);
-                var bitmap = BitmapFrame.Create(
-                    stream,
-                    BitmapCreateOptions.PreservePixelFormat,
-                    BitmapCacheOption.OnLoad);
-                bitmap.Freeze();
-                data.SetImage(bitmap);
-            }
-            catch
-            {
-                // Native selection and text remain useful when image decoding fails.
-            }
-        }
-
-        if (!string.IsNullOrEmpty(content.Text))
-            data.SetText(content.Text);
-
-        return data;
-    }
-
-    internal static PresentationClipboardContent ReadDataObject(IDataObject? data)
-    {
-        if (data is null)
-            return new PresentationClipboardContent();
-
-        var selection = TryReadBytes(data, SelectionFormat)
-            ?? TryReadBytes(data, LegacyAvaloniaSelectionFormat);
-        var richText = TryReadBytes(data, RichTextFormat);
-        var xamlPackage = TryReadBytes(data, WindowsXamlPackageFormat);
-        var rtf = TryReadBytes(data, DataFormats.Rtf);
-        var ownerToken = TryReadCustomString(data, OwnerTokenFormat)
-            ?? TryReadCustomString(data, LegacyAvaloniaOwnerTokenFormat);
-
-        string? text = null;
-        try
-        {
-            if (data.GetDataPresent(DataFormats.UnicodeText, autoConvert: true))
-                text = data.GetData(DataFormats.UnicodeText, autoConvert: true) as string;
-        }
-        catch
-        {
-        }
-
-        byte[]? png = null;
-        try
-        {
-            if (data.GetDataPresent(DataFormats.Bitmap, autoConvert: true)
-                && data.GetData(DataFormats.Bitmap, autoConvert: true) is BitmapSource bitmap)
-            {
-                png = BitmapSourceToPng(bitmap);
-            }
-        }
-        catch
-        {
-        }
-
-        return new PresentationClipboardContent(selection, png, text, ownerToken, richText, xamlPackage, rtf);
-    }
-
-    private static void SetRawBytes(DataObject data, string format, byte[] bytes) =>
-        data.SetData(format, new MemoryStream(bytes, writable: false), autoConvert: false);
-
-    private static byte[]? TryReadBytes(IDataObject data, string format)
-    {
-        try
-        {
-            if (!data.GetDataPresent(format, autoConvert: false))
-                return null;
-
-            return data.GetData(format, autoConvert: false) switch
-            {
-                byte[] bytes when bytes.Length > 0 => bytes.ToArray(),
-                MemoryStream stream when stream.Length > 0 => stream.ToArray(),
-                Stream stream => ReadStream(stream),
-                _ => null,
-            };
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static string? TryReadCustomString(IDataObject data, string format)
-    {
-        try
-        {
-            if (!data.GetDataPresent(format, autoConvert: false))
-                return null;
-
-            var value = data.GetData(format, autoConvert: false);
-            if (value is string text)
-                return string.IsNullOrEmpty(text) ? null : text;
-
-            var bytes = value switch
-            {
-                byte[] array => array,
-                MemoryStream stream => stream.ToArray(),
-                Stream stream => ReadStream(stream),
-                _ => null,
-            };
-            if (bytes is not { Length: >= 2 })
-                return null;
-
-            var decoded = Encoding.Unicode.GetString(bytes).TrimEnd('\0');
-            return string.IsNullOrEmpty(decoded) ? null : decoded;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static byte[]? ReadStream(Stream stream)
-    {
-        try
-        {
-            if (stream.CanSeek)
-                stream.Position = 0;
-            using var copy = new MemoryStream();
-            stream.CopyTo(copy);
-            return copy.Length == 0 ? null : copy.ToArray();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static byte[] BitmapSourceToPng(BitmapSource source)
-    {
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(source));
-        using var stream = new MemoryStream();
-        encoder.Save(stream);
-        return stream.ToArray();
-    }
-
-    private static class NativeMethods
-    {
-        [DllImport("user32.dll")]
-        internal static extern uint GetClipboardSequenceNumber();
-    }
-}
 
 public interface IShapeRenderer
 {
@@ -283,21 +16,14 @@ public interface IShapeRenderer
         int heightPx);
 }
 
-/// <summary>Coordinates shared FreeP clipboard content with the WPF IO boundary.</summary>
+/// <summary>Coordinates FreeP clipboard policy with the shared platform boundary.</summary>
 public sealed class OsClipboardService
 {
-    private readonly IOsClipboard _clipboard;
     private readonly IShapeRenderer _renderer;
-    private string? _lastOwnerToken;
-    private uint _ownCopyGeneration;
-    private uint _lastPlacedGeneration;
-    private long _lastPlacedSequence = -1;
+    private readonly PresentationPlatformClipboardSession _session;
 
     internal bool OwnCopyIsCurrentOnOs =>
-        _ownCopyGeneration > 0
-        && _ownCopyGeneration == _lastPlacedGeneration
-        && _lastPlacedSequence > 0
-        && _clipboard.SequenceNumber == _lastPlacedSequence;
+        _session.OwnCopyHasCurrentPlatformIdentity;
 
     /// <summary>
     /// The message from the most recent failed OS-clipboard write (<see
@@ -305,62 +31,53 @@ public sealed class OsClipboardService
     /// has run yet). Copy/Cut callers read this after a false result so the failure reaches the user
     /// instead of vanishing silently.
     /// </summary>
-    public string? LastWriteFailureMessage { get; private set; }
+    public string? LastWriteFailureMessage => _session.LastWriteFailureMessage;
 
     public int RenderWidthPx { get; set; } = 1280;
     public int RenderHeightPx { get; set; } = 720;
 
-    public OsClipboardService(IOsClipboard clipboard, IShapeRenderer renderer)
+    public OsClipboardService(IPlatformClipboard clipboard, IShapeRenderer renderer)
     {
-        _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
+        ArgumentNullException.ThrowIfNull(clipboard);
         _renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
+        _session = new PresentationPlatformClipboardSession(
+            clipboard,
+            RenderSelection,
+            static content => PresentationClipboardPlatformMapper.ToPlatformContent(content),
+            PresentationClipboardPlatformIdentityStrategy.ChangeIdentity);
     }
 
-    /// <summary>Exports the current selection without changing the editor's clipboard.</summary>
     public void PlaceSelectionOnOsClipboard(EditingSession editor) =>
         TryPlaceSelectionOnOsClipboard(editor);
 
     internal bool TryPlaceSelectionOnOsClipboard(EditingSession editor)
     {
         ArgumentNullException.ThrowIfNull(editor);
-        var ownerToken = Guid.NewGuid().ToString("N");
-        var content = PresentationClipboardContentFactory.CreateSelection(
-            editor,
-            (presentation, slide, shapes) => _renderer.RenderShapesToPng(
-                presentation,
-                slide,
-                shapes,
-                RenderWidthPx,
-                RenderHeightPx),
-            ownerToken);
-        if (content is null)
-        {
-            // Nothing selected to copy; not a write failure, so clear any stale error from an
-            // earlier call rather than letting it resurface on an unrelated empty-selection copy.
-            LastWriteFailureMessage = null;
-            return false;
-        }
+        return TryWrite(PrepareWrite(editor));
+    }
 
-        try
-        {
-            _clipboard.Write(content);
-            _lastOwnerToken = ownerToken;
-            _ownCopyGeneration++;
-            _lastPlacedGeneration = _ownCopyGeneration;
-            var sequence = _clipboard.SequenceNumber;
-            _lastPlacedSequence = sequence > 0 ? sequence : -1;
-            LastWriteFailureMessage = null;
-            return true;
-        }
-        catch (Exception ex)
-        {
-            InvalidateOwnCopy();
-            // The OS clipboard write failed (locked by another process, unsupported format, etc.).
-            // Record the message so the caller can surface it instead of the user believing the
-            // copy/cut succeeded and later pasting stale data.
-            LastWriteFailureMessage = ex.Message;
-            return false;
-        }
+    internal PresentationClipboardWriteRequest PrepareWrite(EditingSession editor) =>
+        _session.PrepareWrite(editor);
+
+    internal bool TryWrite(PresentationClipboardWriteRequest request) =>
+        _session.WriteAsync(request)
+            .GetAwaiter()
+            .GetResult();
+
+    public void Copy(
+        EditingSession editor,
+        Action<string>? onWriteFailed = null)
+    {
+        var written = _session.CopyAsync(editor).GetAwaiter().GetResult();
+        ReportFailure(written, onWriteFailed);
+    }
+
+    public void Cut(
+        EditingSession editor,
+        Action<string>? onWriteFailed = null)
+    {
+        var written = _session.CutAsync(editor).GetAwaiter().GetResult();
+        ReportFailure(written, onWriteFailed);
     }
 
     public void Paste(EditingSession editor, bool preferOsClipboard = true) =>
@@ -368,227 +85,45 @@ public sealed class OsClipboardService
 
     internal PresentationClipboardPasteSource PasteWithResult(
         EditingSession editor,
-        bool preferOsClipboard = true)
-    {
-        ArgumentNullException.ThrowIfNull(editor);
-
-        PresentationClipboardContent content;
-        try
-        {
-            content = _clipboard.Read();
-        }
-        catch
-        {
-            content = new PresentationClipboardContent();
-        }
-
-        var ownCopy = preferOsClipboard
-            && editor.CanPaste
-            && OwnCopyIsCurrentOnOs
-            && !string.IsNullOrEmpty(_lastOwnerToken)
-            && string.Equals(content.OwnerToken, _lastOwnerToken, StringComparison.Ordinal);
-        var source = !preferOsClipboard && editor.CanPaste
-            ? PresentationClipboardPasteSource.Internal
-            : PresentationClipboardPastePlanner.Decide(
-                content.HasSelection,
-                content.HasImage,
-                content.HasText,
-                editor.CanPaste,
-                ownCopy,
-                content.HasRichText,
-                content.HasXamlPackage);
-
-        if (source == PresentationClipboardPasteSource.NativeSelection)
-        {
-            try
-            {
-                var shapes = PresentationClipboardSelectionCodec.Deserialize(content.SelectionBytes!);
-                if (shapes.Count > 0)
-                {
-                    editor.PasteExternalShapes(shapes);
-                    return source;
-                }
-            }
-            catch
-            {
-                // Continue through the shared image/text/internal fallback order.
-            }
-
-            source = PresentationClipboardPastePlanner.Decide(
-                hasNativeSelection: false,
-                hasImage: content.HasImage,
-                hasText: content.HasText,
-                internalHasData: editor.CanPaste,
-                ownCopyIsCurrent: false,
-                hasRichText: content.HasRichText,
-                hasXamlPackage: content.HasXamlPackage);
-        }
-
-        if (source == PresentationClipboardPasteSource.RichText)
-        {
-            var payload = InCanvasRichClipboardPlanner.Deserialize(content.RichTextBytes)
-                ?? ExternalRichTextClipboardPlanner.TryParseRtf(content.RtfBytes);
-            if (payload is not null)
-            {
-                foreach (var image in payload.GetImagePayloads())
-                    editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
-                foreach (var obj in payload.GetObjectPayloads())
-                    editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
-                var slideBody = payload.GetImagePayloads().Count > 0
-                    || payload.GetObjectPayloads().Count > 0
-                    ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
-                    : payload.Body;
-                var table = payload.ContainsTable
-                    ? editor.InsertTableFromClipboard(
-                        slideBody,
-                        payload.TableColumnWidthsEmu,
-                        payload.TableCellStyles)
-                    : null;
-                if (table is null
-                    && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))
-                    editor.InsertTextBox(slideBody);
-                return source;
-            }
-
-            source = PresentationClipboardPastePlanner.Decide(
-                hasNativeSelection: false,
-                hasImage: content.HasImage,
-                hasText: content.HasText,
-                internalHasData: editor.CanPaste,
-                ownCopyIsCurrent: false,
-                hasRichText: false,
-                hasXamlPackage: content.HasXamlPackage);
-        }
-
-        if (source == PresentationClipboardPasteSource.XamlPackage)
-        {
-            var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(content.XamlPackageBytes);
-            if (payload is not null)
-            {
-                foreach (var image in payload.GetImagePayloads())
-                    editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
-                foreach (var obj in payload.GetObjectPayloads())
-                    editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
-                var slideBody = payload.GetImagePayloads().Count > 0
-                    || payload.GetObjectPayloads().Count > 0
-                    ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
-                    : payload.Body;
-                var table = payload.ContainsTable
-                    ? editor.InsertTableFromClipboard(
-                        slideBody,
-                        payload.TableColumnWidthsEmu,
-                        payload.TableCellStyles)
-                    : null;
-                if (table is null
-                    && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))
-                    editor.InsertTextBox(slideBody);
-                return source;
-            }
-
-            source = PresentationClipboardPastePlanner.Decide(
-                hasNativeSelection: false,
-                hasImage: content.HasImage,
-                hasText: content.HasText,
-                internalHasData: editor.CanPaste,
-                ownCopyIsCurrent: false);
-        }
-
-        switch (source)
-        {
-            case PresentationClipboardPasteSource.Image:
-                editor.InsertPicture(content.PngBytes!, "image/png");
-                break;
-            case PresentationClipboardPasteSource.Text:
-                editor.InsertTextBox(content.Text!);
-                break;
-            case PresentationClipboardPasteSource.Internal:
-                editor.Paste();
-                break;
-        }
-
-        return source;
-    }
+        bool preferOsClipboard = true) =>
+        _session.PasteAsync(editor, preferOsClipboard)
+            .GetAwaiter()
+            .GetResult();
 
     internal DataObject BuildDataObject(
         Presentation presentation,
         Slide slide,
         IReadOnlyList<SlideShape> shapes)
     {
-        byte[]? selection = null;
-        byte[]? png = null;
-        try
-        {
-            selection = PresentationClipboardSelectionCodec.Serialize(presentation, slide, shapes);
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            png = _renderer.RenderShapesToPng(
-                presentation,
-                slide,
-                shapes,
+        var content = PresentationClipboardContentFactory.CreateSelection(
+            presentation,
+            slide,
+            shapes,
+            (sourcePresentation, sourceSlide, sourceShapes) => _renderer.RenderShapesToPng(
+                sourcePresentation,
+                sourceSlide,
+                sourceShapes,
                 RenderWidthPx,
-                RenderHeightPx);
-        }
-        catch
-        {
-        }
-
-        return WpfOsClipboard.BuildDataObject(new PresentationClipboardContent(
-            selection,
-            png,
-            PresentationClipboardContentFactory.ExtractText(shapes),
-            Guid.NewGuid().ToString("N")));
+                RenderHeightPx),
+            Guid.NewGuid().ToString("N"));
+        return WpfPlatformClipboard.BuildDataObject(
+            PresentationClipboardPlatformMapper.ToPlatformContent(content));
     }
 
-    public static PasteAction DecidePasteAction(
-        bool osHasImage,
-        bool osHasText,
-        bool internalHasData,
-        bool preferOsClipboard = true,
-        bool ownCopyIsCurrentOnOs = false,
-        bool osHasRichText = false,
-        bool osHasXamlPackage = false)
+    private byte[] RenderSelection(
+        Presentation presentation,
+        Slide slide,
+        IReadOnlyList<SlideShape> shapes) =>
+        _renderer.RenderShapesToPng(
+            presentation,
+            slide,
+            shapes,
+            RenderWidthPx,
+            RenderHeightPx);
+
+    private void ReportFailure(bool written, Action<string>? onWriteFailed)
     {
-        var source = !preferOsClipboard && internalHasData
-            ? PresentationClipboardPasteSource.Internal
-            : PresentationClipboardPastePlanner.Decide(
-                hasNativeSelection: false,
-                hasImage: osHasImage,
-                hasText: osHasText,
-                internalHasData: internalHasData,
-                ownCopyIsCurrent: ownCopyIsCurrentOnOs,
-                hasRichText: osHasRichText,
-                hasXamlPackage: osHasXamlPackage);
-        return source switch
-        {
-            PresentationClipboardPasteSource.Image => PasteAction.OsImage,
-            PresentationClipboardPasteSource.RichText => PasteAction.OsText,
-            PresentationClipboardPasteSource.XamlPackage => PasteAction.OsText,
-            PresentationClipboardPasteSource.Text => PasteAction.OsText,
-            PresentationClipboardPasteSource.Internal => PasteAction.Internal,
-            _ => PasteAction.Nothing,
-        };
+        if (!written && LastWriteFailureMessage is { } error)
+            onWriteFailed?.Invoke(error);
     }
-
-    internal static string ExtractText(IEnumerable<SlideShape> shapes) =>
-        PresentationClipboardContentFactory.ExtractText(shapes) ?? string.Empty;
-
-    private void InvalidateOwnCopy()
-    {
-        _lastOwnerToken = null;
-        _lastPlacedGeneration = 0;
-        _lastPlacedSequence = -1;
-    }
-}
-
-public enum PasteAction
-{
-    OsImage,
-    OsText,
-    Internal,
-    Nothing,
 }

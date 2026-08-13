@@ -110,96 +110,8 @@ public static partial class KeyboardShortcutMatcher
     private static Key GetEffectiveKey(Key key, Key systemKey) =>
         key is Key.None or Key.System ? systemKey : key;
 
-    private static bool TryGetWorkbookShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
-    {
-        shortcutKey = key switch
-        {
-            Key.A => WorkbookShortcutKey.A,
-            Key.Back => WorkbookShortcutKey.Back,
-            Key.B => WorkbookShortcutKey.B,
-            Key.C => WorkbookShortcutKey.C,
-            Key.D => WorkbookShortcutKey.D,
-            Key.D1 => WorkbookShortcutKey.D1,
-            Key.D2 or Key.NumPad2 => WorkbookShortcutKey.D2,
-            Key.D3 or Key.NumPad3 => WorkbookShortcutKey.D3,
-            Key.D4 or Key.NumPad4 => WorkbookShortcutKey.D4,
-            Key.D5 or Key.NumPad5 => WorkbookShortcutKey.D5,
-            Key.D6 => WorkbookShortcutKey.D6,
-            Key.D7 => WorkbookShortcutKey.D7,
-            Key.Delete => WorkbookShortcutKey.Delete,
-            Key.E => WorkbookShortcutKey.E,
-            Key.F => WorkbookShortcutKey.F,
-            Key.F3 => WorkbookShortcutKey.F3,
-            Key.F5 => WorkbookShortcutKey.F5,
-            Key.F11 => WorkbookShortcutKey.F11,
-            Key.F12 => WorkbookShortcutKey.F12,
-            Key.G => WorkbookShortcutKey.G,
-            Key.H => WorkbookShortcutKey.H,
-            Key.I => WorkbookShortcutKey.I,
-            Key.Insert => WorkbookShortcutKey.Insert,
-            Key.N => WorkbookShortcutKey.N,
-            Key.O => WorkbookShortcutKey.O,
-            Key.Oem3 => WorkbookShortcutKey.Oem3,
-            Key.OemMinus => WorkbookShortcutKey.OemMinus,
-            Key.OemPlus or Key.Add => WorkbookShortcutKey.OemPlus,
-            Key.PageDown => WorkbookShortcutKey.PageDown,
-            Key.PageUp => WorkbookShortcutKey.PageUp,
-            Key.P => WorkbookShortcutKey.P,
-            Key.R => WorkbookShortcutKey.R,
-            Key.S => WorkbookShortcutKey.S,
-            Key.U => WorkbookShortcutKey.U,
-            Key.V => WorkbookShortcutKey.V,
-            Key.X => WorkbookShortcutKey.X,
-            Key.Y => WorkbookShortcutKey.Y,
-            Key.Z => WorkbookShortcutKey.Z,
-            _ => default
-        };
-
-        return key is
-            Key.A or
-            Key.Back or
-            Key.B or
-            Key.C or
-            Key.D or
-            Key.D1 or
-            Key.D2 or
-            Key.NumPad2 or
-            Key.D3 or
-            Key.NumPad3 or
-            Key.D4 or
-            Key.NumPad4 or
-            Key.D5 or
-            Key.NumPad5 or
-            Key.D6 or
-            Key.D7 or
-            Key.Delete or
-            Key.E or
-            Key.F or
-            Key.F3 or
-            Key.F5 or
-            Key.F11 or
-            Key.F12 or
-            Key.G or
-            Key.H or
-            Key.I or
-            Key.Insert or
-            Key.N or
-            Key.O or
-            Key.Oem3 or
-            Key.OemMinus or
-            Key.OemPlus or
-            Key.Add or
-            Key.PageDown or
-            Key.PageUp or
-            Key.P or
-            Key.R or
-            Key.S or
-            Key.U or
-            Key.V or
-            Key.X or
-            Key.Y or
-            Key.Z;
-    }
+    private static bool TryGetWorkbookShortcutKey(Key key, out WorkbookShortcutKey shortcutKey) =>
+        WorkbookKeyboardShortcutCatalog.TryParseKeyName(key.ToString(), out shortcutKey);
 
     private static WorkbookShortcutModifiers ToWorkbookModifiers(ModifierKeys modifiers)
     {
@@ -216,7 +128,7 @@ public static partial class KeyboardShortcutMatcher
     public static bool TryGetNumberFormatShortcut(Key key, ModifierKeys modifiers, out NumberFormatShortcut shortcut)
     {
         shortcut = default;
-        if (!TryGetWorkbookNumberFormatShortcutKey(key, out var shortcutKey) ||
+        if (!TryGetWorkbookShortcutKey(key, out var shortcutKey) ||
             !WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(
                 shortcutKey,
                 ToWorkbookModifiers(modifiers),
@@ -238,38 +150,6 @@ public static partial class KeyboardShortcutMatcher
         };
 
         return WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(route);
-    }
-
-    // R125-keyboard-numberformat-numpad-1: this resolver used to omit the NumPad1-6 aliases that
-    // TryGetWorkbookShortcutKey above (used for every other Ctrl/Ctrl+Shift+digit route, e.g.
-    // ToggleBold/FillDown) already grants Key.D2-D5, and that the Avalonia shell's own
-    // TryGetWorkbookShortcutKey (MainWindow.cs) grants for ALL of D1-D6 uniformly. Concretely,
-    // Ctrl+Shift+NumPad1..6 applied a Number/Time/Date/Currency/Percentage/Scientific format on
-    // the Avalonia shell but silently did nothing on this WPF host -- a real cross-shell keyboard
-    // divergence, not merely a missing nice-to-have. Match the Avalonia resolver's aliasing so the
-    // two shells agree.
-    private static bool TryGetWorkbookNumberFormatShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
-    {
-        shortcutKey = key switch
-        {
-            Key.Oem3 => WorkbookShortcutKey.Oem3,
-            Key.D1 or Key.NumPad1 => WorkbookShortcutKey.D1,
-            Key.D2 or Key.NumPad2 => WorkbookShortcutKey.D2,
-            Key.D3 or Key.NumPad3 => WorkbookShortcutKey.D3,
-            Key.D4 or Key.NumPad4 => WorkbookShortcutKey.D4,
-            Key.D5 or Key.NumPad5 => WorkbookShortcutKey.D5,
-            Key.D6 or Key.NumPad6 => WorkbookShortcutKey.D6,
-            _ => default
-        };
-
-        return key is
-            Key.Oem3 or
-            Key.D1 or Key.NumPad1 or
-            Key.D2 or Key.NumPad2 or
-            Key.D3 or Key.NumPad3 or
-            Key.D4 or Key.NumPad4 or
-            Key.D5 or Key.NumPad5 or
-            Key.D6 or Key.NumPad6;
     }
 
     public static bool TryGetFontToggleShortcut(Key key, ModifierKeys modifiers, out FontToggleShortcut shortcut)
@@ -333,94 +213,6 @@ public enum KeyboardSelectionShortcut
     SelectCurrentRegion,
     SelectWholeColumns,
     SelectWholeRows
-}
-
-public enum KeyboardCommandShortcut
-{
-    NewWorkbook,
-    OpenWorkbook,
-    SaveWorkbook,
-    Copy,
-    Cut,
-    Paste,
-    SelectCurrentRegionOrAll,
-    Undo,
-    Redo,
-    CreateTable,
-    InsertHyperlink,
-    OpenHyperlink,
-    FillDown,
-    FillRight,
-    FlashFill,
-    InsertCurrentDate,
-    InsertCurrentTime,
-    ToggleShowFormulas,
-    ToggleOutlineSymbols,
-    ActivatePreviousSheet,
-    ActivateNextSheet,
-    SelectPreviousSheetGroup,
-    SelectNextSheetGroup,
-    OpenFormatCells,
-    Find,
-    Replace,
-    NameManager,
-    CreateNamesFromSelection,
-    InsertFunction,
-    PasteName,
-    SpellCheck,
-    CloseWorkbook,
-    RestoreWorkbookWindow,
-    MoveWorkbookWindow,
-    SizeWorkbookWindow,
-    CalculateNow,
-    CalculateSheet,
-    CalculateFull,
-    RebuildDependenciesAndCalculate,
-    OpenErrorChecking,
-    ToggleFormulaBarExpansion,
-    ToggleFilter,
-    ReapplyFilter,
-    QuickAnalysis,
-    OpenPrintPreview,
-    PasteValues,
-    GoTo,
-    InsertEmbeddedChart,
-    AutoSum,
-    GroupSelection,
-    UngroupSelection,
-    InsertChartSheet,
-    OpenFormatCellsFont,
-    WorkbookStatistics,
-    NewNote,
-    NewThreadedComment,
-    SaveAs,
-    OpenHelp,
-    ShowKeyTips,
-    CycleShellFocus,
-    SwitchToNextWorkbookWindow,
-    SwitchToPreviousWorkbookWindow,
-    MinimizeWorkbookWindow,
-    MaximizeOrRestoreWorkbookWindow,
-    OpenContextMenu,
-    EditInFormulaBar,
-    InsertWorksheet,
-    ZoomIn,
-    ZoomOut,
-    CopyFormulaFromAbove,
-    CopyValueFromAbove,
-    OpenActiveDropdown,
-    SelectVisibleCellsOnly,
-    ScrollActiveCellIntoView,
-    CycleSelectionCorner,
-    SelectDirectPrecedents,
-    SelectDirectDependents,
-    SelectAllPrecedents,
-    SelectAllDependents,
-    SelectCellsWithComments,
-    EditCell,
-    ClearSelection,
-    ClearSelectionAndEdit,
-    RepeatLastAction
 }
 
 public enum BorderKeyboardShortcut

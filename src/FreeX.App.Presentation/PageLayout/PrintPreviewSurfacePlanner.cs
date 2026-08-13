@@ -1,5 +1,5 @@
 using System.Globalization;
-using Free.Shared.Localization;
+using Free.Shared.AppServices;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
@@ -253,9 +253,7 @@ public static class PrintPreviewSurfacePlanner
         string key,
         string fallback,
         bool stripMnemonics = true)
-        => LocalizedFallbackTextResolver.Resolve(
-            key,
-            fallback,
+        => new ResourceTextDescriptor(key, fallback).Resolve(
             textResolver is null ? null : candidate => textResolver.Get(candidate, fallback),
-            stripMnemonics: stripMnemonics);
+            stripMnemonics);
 }

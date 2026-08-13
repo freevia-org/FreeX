@@ -66,9 +66,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
             harness.SelectedTabVisibleCommandControlCount.Should().BeGreaterThanOrEqualTo(5,
                 "the Help tab renders its commands (Help Online, Feedback, Copy Diagnostics, Check for Updates, About, Legal Notices)");
-            // The Help commands are hand-authored as "Title#Handler" ids absent from the generated handler
-            // map; they must still bind to live handlers instead of rendering disabled. (Feedback can be
-            // state-disabled like Excel, so allow at most one disabled command.)
+            // Help commands must bind through the typed registry instead of rendering disabled. Feedback can
+            // be state-disabled like Excel, so allow at most one disabled command.
             harness.SelectedTabDisabledCommandButtonCount.Should().BeLessThanOrEqualTo(1,
                 $"Help commands must bind to live handlers, but these were disabled: " +
                 string.Join(", ", harness.SelectedTabDisabledCommandTitles));

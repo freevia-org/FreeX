@@ -152,20 +152,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
         namespaceName.StartsWith("http://schemas.microsoft.com/office/spreadsheetml/", StringComparison.Ordinal) &&
         namespaceName.Contains("/revision", StringComparison.Ordinal);
 
-    private static string ElementIdentityKey(XElement element)
-    {
-        var address = element.Attribute("pane")?.Value
-            ?? element.Attribute("sqref")?.Value
-            ?? element.Attribute("ref")?.Value
-            ?? element.Attribute("r")?.Value
-            ?? element.Attribute("activeCell")?.Value
-            ?? element.Attribute("name")?.Value
-            ?? element.Attribute("id")?.Value
-            ?? element.Attribute("uid")?.Value
-            ?? element.Attribute("uri")?.Value
-            ?? string.Empty;
-        return $"{element.Name}\u001f{address}";
-    }
+    private static string ElementIdentityKey(XElement element) =>
+        XlsxNativeXmlMerger.GetElementIdentityKey(element);
 
     // "sheet"/"password" are modeled directly on Sheet.IsProtected/Sheet.ProtectionPassword, every
     // permission boolean is modeled via Sheet.ProtectionPermissions, and the modern ISO 29500 hash

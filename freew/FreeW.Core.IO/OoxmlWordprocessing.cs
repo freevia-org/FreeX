@@ -362,36 +362,31 @@ internal static class Ooxml
                 ? contentType
                 : "image/png";
 
-    /// <summary>W3CDTF as used by dcterms:created/modified (UTC, second precision, trailing 'Z').</summary>
-    public static string ToW3CDtf(DateTimeOffset value) => OpcPackageProperties.ToW3CDtf(value);
-
-    public static DateTimeOffset? ParseW3CDtf(string? value) => OpcPackageProperties.ParseW3CDtf(value);
-
-    // ── Unit conversions — delegates to the shared tier (Free.Shared.Opc.DrawingMlUnits) ───────────
+    // ── Unit conversions — delegates to Free.Shared.Drawing.DrawingMlCoordinateUnits ───────────
 
     /// <summary>DrawingML "EMU" = English Metric Units; 914400 per inch, 12700 per point.</summary>
-    public const long EmuPerPoint = DrawingMlUnits.EmuPerPoint;
+    public const long EmuPerPoint = DrawingMlCoordinateUnits.EmuPerPoint;
 
-    public static long PointsToEmu(double points) => DrawingMlUnits.PointsToEmu(points);
+    public static long PointsToEmu(double points) => DrawingMlCoordinateUnits.PointsToEmu(points);
 
-    public static double EmuToPoints(string? value) => DrawingMlUnits.EmuToPoints(value);
+    public static double EmuToPoints(string? value) => DrawingMlCoordinateUnits.EmuToPoints(value);
 
     /// <summary>OOXML "dxa" = twentieths of a point.</summary>
-    public static double DxaToPoints(string? value) => DrawingMlUnits.DxaToPoints(value);
+    public static double DxaToPoints(string? value) => DrawingMlCoordinateUnits.DxaToPoints(value);
 
-    public static int PointsToDxa(double points) => DrawingMlUnits.PointsToDxa(points);
+    public static int PointsToDxa(double points) => DrawingMlCoordinateUnits.PointsToDxa(points);
 
     /// <summary>Run font size is in half-points.</summary>
-    public static double? HalfPointsToPoints(string? value) => DrawingMlUnits.HalfPointsToPoints(value);
+    public static double? HalfPointsToPoints(string? value) => DrawingMlCoordinateUnits.HalfPointsToPoints(value);
 
-    public static int PointsToHalfPoints(double points) => DrawingMlUnits.PointsToHalfPoints(points);
+    public static int PointsToHalfPoints(double points) => DrawingMlCoordinateUnits.PointsToHalfPoints(points);
 
     /// <summary>Border widths (w:sz on w:pBdr / w:tblBorders edges) are in eighths of a point.</summary>
-    public static double EighthPointsToPoints(string? value) => DrawingMlUnits.EighthPointsToPoints(value);
+    public static double EighthPointsToPoints(string? value) => DrawingMlCoordinateUnits.EighthPointsToPoints(value);
 
-    public static int PointsToEighthPoints(double points) => DrawingMlUnits.PointsToEighthPoints(points);
+    public static int PointsToEighthPoints(double points) => DrawingMlCoordinateUnits.PointsToEighthPoints(points);
 
-    public static int ParseInt(string? value) => DrawingMlUnits.ParseInt(value);
+    public static int ParseInt(string? value) => DrawingMlCoordinateUnits.ParseInt(value);
 
     /// <summary>
     /// Maps a <see cref="ProtectionMode"/> to the w:documentProtection/@w:edit token, or null for

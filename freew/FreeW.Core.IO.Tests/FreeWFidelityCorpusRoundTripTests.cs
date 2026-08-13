@@ -24,8 +24,7 @@ public class FreeWFidelityCorpusRoundTripTests
             file => file.EndsWith(Path.Combine("tables", "01-banded-rows-header.docx"), StringComparison.OrdinalIgnoreCase),
             "the committed nested table corpus must be exercised");
 
-        var tmpDir = Path.Combine(Path.GetTempPath(), "freew-fidelity-corpus-roundtrip");
-        Directory.CreateDirectory(tmpDir);
+        using var temporaryDirectory = new TestTemporaryDirectory("freew-fidelity-corpus-roundtrip-");
 
         var failures = new List<string>();
 
@@ -47,7 +46,7 @@ public class FreeWFidelityCorpusRoundTripTests
             TextDocument reopened;
             try
             {
-                var outPath = Path.Combine(tmpDir, name);
+                var outPath = Path.Combine(temporaryDirectory.Path, name);
                 DocxWriter.Write(original, outPath);
                 reopened = DocxReader.Read(outPath);
             }
@@ -71,18 +70,14 @@ public class FreeWFidelityCorpusRoundTripTests
 
     private static IReadOnlyList<string> CorpusFiles()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            var candidate = Path.Combine(dir.FullName, "freew-fidelity-corpus", "files");
-            if (Directory.Exists(candidate))
-                return Directory.GetFiles(candidate, "*.docx", SearchOption.AllDirectories)
-                    .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-            dir = dir.Parent;
-        }
+        var corpusDirectory = TestWorkspaceFileLocator.TryFindDirectoryFromBaseDirectory(
+            "freew-fidelity-corpus", "files");
 
-        return [];
+        return corpusDirectory is null
+            ? []
+            : Directory.GetFiles(corpusDirectory, "*.docx", SearchOption.AllDirectories)
+                .OrderBy(file => file, StringComparer.OrdinalIgnoreCase)
+                .ToList();
     }
 
     /// <summary>Coarse counts of the content FreeW actually models, used to detect round-trip drift.</summary>

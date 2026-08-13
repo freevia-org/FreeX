@@ -17,13 +17,15 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private ChartSizeDialog(Window? owner, double widthPt, double heightPt)
     {
+        var surface = ChartSizeDialogPlanner.BuildSurface(UiText.Get);
         Owner = owner;
-        Title = "Chart Size";
+        Title = surface.Title;
         Width = 300;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ChartSizeDialogPlanner.BuildInitialState(widthPt, heightPt, CultureInfo.CurrentCulture);
 
@@ -37,6 +39,8 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Text = state.HeightText,
             MinWidth = 120
         };
+        WpfDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ChartSizeDialogField.Width));
+        WpfDialogSurfaceSemantics.Apply(_heightBox, surface.Field(ChartSizeDialogField.Height));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -45,8 +49,8 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, "Width (pt):", _widthBox);
-        AddRow(grid, 1, "Height (pt):", _heightBox);
+        AddRow(grid, 0, surface.Field(ChartSizeDialogField.Width).Label, _widthBox);
+        AddRow(grid, 1, surface.Field(ChartSizeDialogField.Height).Label, _heightBox);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Grid.SetRow(buttons, 2); Grid.SetColumn(buttons, 1);
@@ -71,10 +75,13 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         if (!ChartSizeDialogPlanner.TryBuildResult(
             new ChartSizeDialogInput(_widthBox.Text, _heightBox.Text),
             CultureInfo.CurrentCulture,
+            UiText.Get,
             out var result,
-            out var errorMessage))
+            out var validation))
         {
-            DialogMessageHelper.ShowWarning(this, errorMessage ?? ChartSizeDialogPlanner.WidthValidationMessage);
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation!.Message);
             return;
         }
 

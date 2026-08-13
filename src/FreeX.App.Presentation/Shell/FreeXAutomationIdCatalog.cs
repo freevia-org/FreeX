@@ -1,0 +1,111 @@
+namespace FreeX.App.Presentation.Shell;
+
+/// <summary>Stable cross-renderer automation identifiers owned by the FreeX application frame.</summary>
+public static class FreeXAutomationIdCatalog
+{
+    public const string ActivateSheetList = "ActivateSheetList";
+    public const string ActivateSheetOkButton = "ActivateSheetOkButton";
+    public const string ActivateSheetCancelButton = "ActivateSheetCancelButton";
+
+    public const string QuickAccessToolbarImportExportButton = "QuickAccessToolbarImportExportButton";
+    public const string QuickAccessToolbarImportCustomizationMenuItem = "QuickAccessToolbarImportCustomizationMenuItem";
+    public const string QuickAccessToolbarExportCustomizationMenuItem = "QuickAccessToolbarExportCustomizationMenuItem";
+
+    public const string MergeCellsContentWarningDialog = "MergeCellsContentWarningDialog";
+    public const string MergeCellsKeepFirstButton = "MergeCellsKeepFirstButton";
+    public const string MergeCellsConcatenateButton = "MergeCellsConcatenateButton";
+    public const string MergeCellsCancelButton = "MergeCellsCancelButton";
+
+    public const string WorkbookStatisticsSummary = "WorkbookStatisticsSummary";
+    public const string WorkbookStatisticsCopyButton = "WorkbookStatisticsCopyButton";
+
+    public const string RibbonShellUpdateReadyIndicator = "UpdateReadyIndicator";
+    public const string RibbonShellStatusCapsLockText = "StatusCapsLockText";
+    public const string RibbonShellStatusNumLockText = "StatusNumLockText";
+
+    public static class SelectionPane
+    {
+        public const string Dialog = "SelectionPaneDialog";
+        public const string ObjectList = "SelectionPaneObjectList";
+        public const string SearchBox = "SelectionPaneSearchBox";
+        public const string FilterBox = "SelectionPaneFilterBox";
+        public const string RenameBox = "SelectionPaneRenameBox";
+        public const string RenameButton = "SelectionPaneRenameButton";
+        public const string ToggleVisibilityButton = "SelectionPaneToggleVisibilityButton";
+        public const string BringForwardButton = "SelectionPaneBringForwardButton";
+        public const string SendBackwardButton = "SelectionPaneSendBackwardButton";
+        public const string ShowAllButton = "SelectionPaneShowAllButton";
+        public const string HideAllButton = "SelectionPaneHideAllButton";
+        public const string DeleteButton = "SelectionPaneDeleteButton";
+        public const string OkButton = "SelectionPaneOkButton";
+        public const string CancelButton = "SelectionPaneCancelButton";
+
+        public static string WpfItem(string kind, Guid id) => $"SelectionPaneItem{kind}{id:N}";
+        public static string WpfVisibility(string itemAutomationId) => itemAutomationId + "VisibilityBox";
+        public static string WpfName(string itemAutomationId) => itemAutomationId + "NameBox";
+        public static string AvaloniaVisibility(Guid id) => "SelectionPaneVisibility_" + id.ToString("N");
+        public static string AvaloniaName(Guid id) => "SelectionPaneName_" + id.ToString("N");
+    }
+
+    public static class Consolidate
+    {
+        public const string Dialog = "ConsolidateDialog";
+        public const string FunctionBox = "ConsolidateFunctionBox";
+        public const string ReferenceBox = "ConsolidateReferenceBox";
+        public const string BrowseReferenceButton = "ConsolidateBrowseReferenceButton";
+        public const string AllReferencesList = "ConsolidateAllReferencesList";
+        public const string AddReferenceButton = "ConsolidateAddReferenceButton";
+        public const string DeleteReferenceButton = "ConsolidateDeleteReferenceButton";
+        public const string DestinationCellBox = "ConsolidateDestinationCellBox";
+        public const string BrowseDestinationButton = "ConsolidateBrowseDestinationButton";
+        public const string TopRowLabelsBox = "ConsolidateTopRowLabelsBox";
+        public const string LeftColumnLabelsBox = "ConsolidateLeftColumnLabelsBox";
+        public const string CreateLinksBox = "ConsolidateCreateLinksBox";
+        public const string WarningText = "ConsolidateWarningText";
+        public const string ApplyButton = "ConsolidateApplyButton";
+        public const string CancelButton = "ConsolidateCancelButton";
+    }
+
+    public static class AdvancedFilter
+    {
+        public const string Dialog = "AdvancedFilterCompactDialog";
+        public const string ListRangeBox = "AdvancedFilterListRangeBox";
+        public const string CriteriaRangeBox = "AdvancedFilterCriteriaRangeBox";
+        public const string CopyToBox = "AdvancedFilterCopyToBox";
+        public const string InPlaceButton = "AdvancedFilterInPlaceButton";
+        public const string CopyToAnotherLocationButton = "AdvancedFilterCopyToAnotherLocationButton";
+        public const string UniqueRecordsOnlyBox = "AdvancedFilterUniqueRecordsOnlyBox";
+        public const string SelectListRangeButton = "AdvancedFilterSelectListRangeButton";
+        public const string SelectCriteriaRangeButton = "AdvancedFilterSelectCriteriaRangeButton";
+        public const string SelectCopyToButton = "AdvancedFilterSelectCopyToButton";
+        public const string ErrorText = "AdvancedFilterErrorText";
+        public const string OkButton = "AdvancedFilterOkButton";
+        public const string CancelButton = "AdvancedFilterCancelButton";
+    }
+
+    public static class ScenarioManager
+    {
+        public const string AvaloniaDialog = "ScenarioManagerCompactDialog";
+        public const string ScenarioList = "ScenarioManagerScenarioList";
+        public const string WpfScenarioNameBox = "ScenarioManagerScenarioNameBox";
+        public const string AvaloniaScenarioNameBox = "ScenarioManagerNameBox";
+        public const string ChangingCellsBox = "ScenarioManagerChangingCellsBox";
+        public const string ResultCellsBox = "ScenarioManagerResultCellsBox";
+        public const string CommentBox = "ScenarioManagerCommentBox";
+        public const string WpfPreventChangesBox = "ScenarioManagerPreventChangesCheckBox";
+        public const string AvaloniaPreventChangesBox = "ScenarioManagerPreventChangesBox";
+        public const string WpfHideBox = "ScenarioManagerHideCheckBox";
+        public const string AvaloniaHideBox = "ScenarioManagerHideBox";
+        public const string ErrorText = "ScenarioManagerErrorText";
+        public const string SaveButton = "ScenarioManagerSaveButton";
+        public const string EditButton = "ScenarioManagerEditButton";
+        public const string ShowButton = "ScenarioManagerShowButton";
+        public const string DeleteButton = "ScenarioManagerDeleteButton";
+        public const string SummaryButton = "ScenarioManagerSummaryButton";
+        public const string CloseButton = "ScenarioManagerCloseButton";
+        public const string ChangingCellsPickerButton = "ScenarioManagerChangingCellsPickerButton";
+        public const string ResultCellsPickerButton = "ScenarioManagerResultCellsPickerButton";
+
+        public static string WpfActionButton<TAction>(TAction action) => $"ScenarioManager{action}Button";
+    }
+}

@@ -83,7 +83,7 @@ public sealed class FreeXCleanupMED10Tests
             var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
             var dialog = new FindReplaceDialog(
                 () => workbook,
-                commandBus,
+                command => commandBus.Execute(workbook.Id, command),
                 _ => { },
                 replaceMode: false,
                 getCurrentSheetId: () => sheet.Id);

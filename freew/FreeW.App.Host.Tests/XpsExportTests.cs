@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Linq;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -15,8 +16,12 @@ namespace FreeW.App.Host.Tests;
 /// well-formed OPC (zip) package containing the FixedDocumentSequence part. Runs on STA because XPS
 /// serialisation walks the live WPF visual tree.
 /// </summary>
-public sealed class XpsExportTests
+public sealed class XpsExportTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.XpsExportTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
     // Local OPC magic so the test does not depend on any other helper: every .xps / OOXML package is a
     // zip, which begins with the "PK\x03\x04" local-file-header signature.
     private static readonly byte[] ZipMagic = { 0x50, 0x4B, 0x03, 0x04 };
@@ -44,16 +49,25 @@ public sealed class XpsExportTests
     }
 
     [StaFact]
-    public void Save_SampleDocument_WritesValidXpsFile()
+    public void SharedWorkflow_SampleDocument_WritesValidXpsFile()
     {
         var view = BuildSampleView();
         var paginator = PrintLayout.BuildPaginator(view);
-        var path = Path.Combine(Path.GetTempPath(), $"freew-xps-{Guid.NewGuid():N}.xps");
+        var path = Path.Combine(_temporaryDirectory.Path, "sample.xps");
 
         try
         {
-            XpsExport.Save(paginator, path);
+            var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Xps, "Sample");
+            var execution = FreeWExportWorkflow.ExecuteAsync(
+                plan,
+                path,
+                (stream, _) =>
+                {
+                    stream.Write(XpsExport.RenderToBytes(paginator));
+                    return ValueTask.FromResult(new FreeWExportArtifact());
+                }).GetAwaiter().GetResult();
 
+            Assert.True(execution.Succeeded, execution.Message);
             Assert.True(File.Exists(path));
             Assert.True(new FileInfo(path).Length > 0, "Exported XPS file should not be empty.");
 

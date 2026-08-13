@@ -42,7 +42,7 @@ public partial class MainWindow
         }
     }
 
-    private void NormalizeRibbonSurface(bool forceCompact = false)
+    private void NormalizeRibbonSurface(bool forceLayout = false)
     {
         if (_normalizingRibbonSurface)
             return;
@@ -51,7 +51,7 @@ public partial class MainWindow
         try
         {
             NormalizeStaticRibbonSurfaceForSelectedTabOnce();
-            UpdateRibbonCompactMode(force: forceCompact);
+            RefreshActiveDeclarativeRibbonLayout(forceLayout);
         }
         finally
         {
@@ -67,7 +67,7 @@ public partial class MainWindow
         if (!_normalizedRibbonStaticTabs.Add(tabItem))
             return;
 
-        PrepareRibbonTabForImmediateCompaction(tabItem, forceLayout: true);
+        PrepareRibbonTabForLayout(tabItem, forceLayout: true);
         var root = GetRibbonTabContentRoot(tabItem);
         var surface = CaptureRibbonStaticSurface(root);
         NormalizeRibbonGroupMetadata(surface);
@@ -79,7 +79,7 @@ public partial class MainWindow
         AlignRibbonIconColumns(surface);
         HideRibbonScrollBars(root, surface);
         ApplyToolbarDropdownWhiteBackgrounds(surface);
-        InvalidateRibbonAdaptiveMeasurementCaches();
+        RefreshActiveDeclarativeRibbonLayout(forceLayout: true);
     }
 
     private void NormalizeRibbonGroupMetadata(RibbonStaticSurfaceSnapshot surface)
@@ -329,8 +329,9 @@ public partial class MainWindow
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
     {
-        _ribbonResizeNormalizationRequired = true;
-        NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true, scheduleFallback: true);
+        PrepareSelectedRibbonTabForLayout();
+        NormalizeRibbonSurface(forceLayout: true);
+        UpdateActiveRibbonLayoutBeforeFirstFrame();
     }
 
     private void ChangeRibbonSelectionWithoutTabNormalization(Action changeSelection)
@@ -349,261 +350,47 @@ public partial class MainWindow
 
     private void NormalizeRibbonSurfaceAfterResize()
     {
-        if (!ShouldNormalizeRibbonSurfaceForResize())
+        RefreshActiveDeclarativeRibbonLayout(forceLayout: false);
+    }
+
+    private void CompleteRibbonResizeLayout()
+    {
+        RefreshActiveDeclarativeRibbonLayout(forceLayout: true);
+    }
+
+    private void RefreshActiveDeclarativeRibbonLayout(bool forceLayout)
+    {
+        var panel = GetActiveDeclarativeRibbonPanel();
+        if (panel is null)
             return;
 
-        CompactRibbonSurfaceAfterResize(scheduleFallback: !_isInWindowResizeMoveLoop);
+        panel.InvalidateMeasure();
+        if (forceLayout)
+            panel.UpdateLayout();
     }
 
-    private void NormalizeRibbonSurfaceAfterLayoutChange()
-        => NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: false, scheduleFallback: true);
-
-    private void NormalizeRibbonSurfaceAfterLayoutChange(bool prepareSelectedTab, bool scheduleFallback)
+    private Free.Shared.Ribbon.Wpf.RibbonAdaptivePanel? GetActiveDeclarativeRibbonPanel()
     {
-        if (prepareSelectedTab)
-            PrepareSelectedRibbonTabForImmediateCompaction();
+        if (RibbonTabs?.SelectedItem is not TabItem tabItem)
+            return null;
 
-        NormalizeRibbonSurface(forceCompact: true);
-        UpdateActiveRibbonLayoutBeforeFirstFrame();
-        if (scheduleFallback)
-            QueueRibbonFallback(RibbonFallbackWork.NormalizeSurface);
+        var root = GetRibbonTabContentRoot(tabItem);
+        return root as Free.Shared.Ribbon.Wpf.RibbonAdaptivePanel ??
+            EnumerateVisualDescendants(root)
+                .Concat(EnumerateLogicalDescendants(root))
+                .OfType<Free.Shared.Ribbon.Wpf.RibbonAdaptivePanel>()
+                .FirstOrDefault();
     }
 
-    private void CompactRibbonSurfaceAfterResize(bool scheduleFallback)
-    {
-        if (!scheduleFallback)
-        {
-            _ribbonResizeCompactionPendingOnExit = true;
-            return;
-        }
-
-        var result = UpdateRibbonCompactMode(force: true);
-        if (RibbonCompactUpdateRequiresLayout(result))
-            UpdateActiveRibbonLayoutBeforeFirstFrame();
-        QueueRibbonFallback(RibbonFallbackWork.CompactOnly);
-    }
-
-    private void QueueRibbonFallback(RibbonFallbackWork work)
-    {
-        if (work == RibbonFallbackWork.None)
-            return;
-
-        _ribbonFallbackRequestCount++;
-        _lastRibbonFallbackRequestedWork = work;
-        if (TrySkipRedundantCompactFallbackPost(work))
-            return;
-
-        _ribbonFallbackWork = MergeRibbonFallbackWork(_ribbonFallbackWork, work);
-        _lastRibbonFallbackMergedWork = _ribbonFallbackWork;
-        _queuedRibbonCompactFallbackStateKey = _ribbonFallbackWork == RibbonFallbackWork.CompactOnly
-            ? _lastRibbonAdaptiveAppliedStateKey
-            : null;
-        if (_ribbonFallbackPending)
-            return;
-
-        _ribbonFallbackPending = true;
-        _ribbonFallbackPostedCount++;
-        Dispatcher.BeginInvoke(
-            (Action)(() =>
-            {
-                var pendingWork = _ribbonFallbackWork;
-                var compactFallbackStateKey = _queuedRibbonCompactFallbackStateKey;
-                _ribbonFallbackWork = RibbonFallbackWork.None;
-                _queuedRibbonCompactFallbackStateKey = null;
-                _ribbonFallbackPending = false;
-                _ribbonFallbackExecutedCount++;
-                _lastRibbonFallbackExecutedWork = pendingWork;
-
-                if (pendingWork == RibbonFallbackWork.NormalizeSurface)
-                {
-                    _ribbonFallbackForcedNormalizeCount++;
-                    NormalizeRibbonSurface(forceCompact: true);
-                    UpdateActiveRibbonLayoutBeforeFirstFrame();
-                }
-                else if (pendingWork == RibbonFallbackWork.CompactOnly)
-                {
-                    _ribbonFallbackForcedCompactCount++;
-                    if (CanSkipQueuedRibbonCompactFallback(compactFallbackStateKey))
-                    {
-                        _ribbonFallbackSkippedCompactLayoutCount++;
-                        return;
-                    }
-
-                    var result = UpdateRibbonCompactMode(force: false);
-                    if (RibbonCompactUpdateRequiresLayout(result))
-                        UpdateActiveRibbonLayoutBeforeFirstFrame();
-                    else
-                        _ribbonFallbackSkippedCompactLayoutCount++;
-                }
-            }),
-            DispatcherPriority.Render);
-    }
-
-    internal RibbonFallbackDiagnosticsSnapshot GetRibbonFallbackDiagnosticsForTests() =>
-        new(
-            _ribbonFallbackRequestCount,
-            _ribbonFallbackPostedCount,
-            _ribbonFallbackExecutedCount,
-            _ribbonFallbackForcedNormalizeCount,
-            _ribbonFallbackForcedCompactCount,
-            _ribbonFallbackSkippedCompactLayoutCount,
-            _ribbonFirstFrameLayoutUpdateCount,
-            _lastRibbonFallbackRequestedWork.ToString(),
-            _lastRibbonFallbackMergedWork.ToString(),
-            _lastRibbonFallbackExecutedWork.ToString(),
-            _ribbonFallbackPending,
-            _ribbonResizeCompactionPendingOnExit);
-
-    internal void ResetRibbonFallbackDiagnosticsForTests()
-    {
-        _ribbonFallbackRequestCount = 0;
-        _ribbonFallbackPostedCount = 0;
-        _ribbonFallbackExecutedCount = 0;
-        _ribbonFallbackForcedNormalizeCount = 0;
-        _ribbonFallbackForcedCompactCount = 0;
-        _ribbonFallbackSkippedCompactLayoutCount = 0;
-        _ribbonFirstFrameLayoutUpdateCount = 0;
-        _lastRibbonFallbackRequestedWork = RibbonFallbackWork.None;
-        _lastRibbonFallbackMergedWork = RibbonFallbackWork.None;
-        _lastRibbonFallbackExecutedWork = RibbonFallbackWork.None;
-        _queuedRibbonCompactFallbackStateKey = null;
-    }
-
-    private static RibbonFallbackWork MergeRibbonFallbackWork(RibbonFallbackWork current, RibbonFallbackWork requested) =>
-        current == RibbonFallbackWork.NormalizeSurface || requested == RibbonFallbackWork.NormalizeSurface
-            ? RibbonFallbackWork.NormalizeSurface
-            : current == RibbonFallbackWork.CompactOnly || requested == RibbonFallbackWork.CompactOnly
-                ? RibbonFallbackWork.CompactOnly
-                : RibbonFallbackWork.None;
-
-    private bool TrySkipRedundantCompactFallbackPost(RibbonFallbackWork work)
-    {
-        if (work != RibbonFallbackWork.CompactOnly ||
-            _ribbonFallbackPending ||
-            _ribbonFallbackWork != RibbonFallbackWork.None ||
-            !CanSkipQueuedRibbonCompactFallback(_lastRibbonAdaptiveAppliedStateKey))
-        {
-            return false;
-        }
-
-        _lastRibbonFallbackMergedWork = RibbonFallbackWork.CompactOnly;
-        _ribbonFallbackSkippedCompactLayoutCount++;
-        return true;
-    }
-
-    private static bool RibbonCompactUpdateRequiresLayout(RibbonCompactUpdateResult result) =>
-        result is RibbonCompactUpdateResult.AppliedVisualChange or RibbonCompactUpdateResult.MeasuredCorrectionApplied;
-
-    private bool CanSkipQueuedRibbonCompactFallback(RibbonAppliedStateKey? queuedStateKey) =>
-        queuedStateKey is not null &&
-        !_ribbonAdaptiveStateDiffInvalidated &&
-        _lastRibbonAdaptiveAppliedStateKey == queuedStateKey;
-
-    private void CompleteRibbonResizeCompaction()
-    {
-        if (_ribbonResizeCompactionPendingOnExit)
-        {
-            _ribbonResizeCompactionPendingOnExit = false;
-            var result = UpdateRibbonCompactMode(force: true);
-            if (RibbonCompactUpdateRequiresLayout(result))
-                UpdateActiveRibbonLayoutBeforeFirstFrame();
-            QueueRibbonFallback(RibbonFallbackWork.CompactOnly);
-        }
-
-        var width = GetCurrentRibbonResizeWidth();
-        if (width > 0 && !double.IsNaN(width))
-            _lastRibbonResizeWidth = width;
-    }
-
-    private bool ShouldNormalizeRibbonSurfaceForResize()
-    {
-        var width = GetCurrentRibbonResizeWidth();
-        if (width <= 0 || double.IsNaN(width))
-            return true;
-
-        if (double.IsNaN(_lastRibbonResizeWidth))
-        {
-            _lastRibbonResizeWidth = width;
-            return true;
-        }
-
-        if (_ribbonResizeNormalizationRequired)
-        {
-            _ribbonResizeNormalizationRequired = false;
-            _lastRibbonResizeWidth = width;
-            return true;
-        }
-
-        var previousWidth = _lastRibbonResizeWidth;
-        _lastRibbonResizeWidth = width;
-        if (_ribbonResizeThresholds.Count == 0)
-            return true;
-
-        return RibbonResizeThresholdGate.CrossedAnyThreshold(previousWidth, width, _ribbonResizeThresholds);
-    }
-
-    private double GetCurrentRibbonResizeWidth()
-    {
-        if (RibbonTabs is null)
-            return 0;
-
-        if (TryGetCachedRibbonResizeWidth(out var cachedWidth))
-            return cachedWidth;
-
-        if (GetActiveRibbonPanel() is { } activePanel &&
-            FindVisualAncestor<ScrollViewer>(activePanel) is { } scrollViewer)
-        {
-            var width = scrollViewer.ActualWidth > 0 ? scrollViewer.ActualWidth : scrollViewer.ViewportWidth;
-            if (width > 0)
-                return RibbonTabs.ActualWidth > 0
-                    ? Math.Min(width, Math.Max(0, RibbonTabs.ActualWidth - 12))
-                    : width;
-        }
-
-        return RibbonTabs.ActualWidth;
-    }
-
-    private bool TryGetCachedRibbonResizeWidth(out double width)
-    {
-        width = 0;
-        if (_ribbonAdaptiveControlCachePanel is not { IsVisible: true } ||
-            _ribbonAdaptiveScrollViewerCache is not { } scrollViewer ||
-            !IsCachedRibbonSurfaceSelected())
-        {
-            return false;
-        }
-
-        width = scrollViewer.ActualWidth > 0 ? scrollViewer.ActualWidth : scrollViewer.ViewportWidth;
-        if (width <= 0)
-            return false;
-
-        if (RibbonTabs.ActualWidth > 0)
-            width = Math.Min(width, Math.Max(0, RibbonTabs.ActualWidth - 12));
-
-        return width > 0;
-    }
-
-    private bool IsCachedRibbonSurfaceSelected()
-    {
-        if (RibbonTabs?.SelectedItem is not TabItem selectedTab ||
-            _ribbonAdaptiveControlCachePanel is not { IsVisible: true } ||
-            _ribbonAdaptiveControlCacheTab is null)
-        {
-            return false;
-        }
-
-        return ReferenceEquals(_ribbonAdaptiveControlCacheTab, selectedTab);
-    }
-
-    private void PrepareSelectedRibbonTabForImmediateCompaction()
+    private void PrepareSelectedRibbonTabForLayout()
     {
         if (RibbonTabs?.SelectedItem is not TabItem tabItem)
             return;
 
-        PrepareRibbonTabForImmediateCompaction(tabItem);
+        PrepareRibbonTabForLayout(tabItem);
     }
 
-    private static void PrepareRibbonTabForImmediateCompaction(TabItem tabItem, bool forceLayout = false)
+    private static void PrepareRibbonTabForLayout(TabItem tabItem, bool forceLayout = false)
     {
         tabItem.ApplyTemplate();
         if (tabItem.Content is FrameworkElement content)
@@ -636,15 +423,25 @@ public partial class MainWindow
         {
             content.ApplyTemplate();
             UpdateRibbonLayoutIfNeeded(content);
-            _ribbonFirstFrameLayoutUpdateCount++;
-            return;
+        }
+    }
+
+    private static DependencyObject GetRibbonTabContentRoot(TabItem tabItem) =>
+        tabItem.Content as DependencyObject ?? tabItem;
+
+    private static bool IsRibbonCollapsedGroupButton(FrameworkElement element) =>
+        RibbonMetadata.IsCollapsedGroupButton(element);
+
+    private static T? FindVisualAncestor<T>(DependencyObject element)
+        where T : DependencyObject
+    {
+        for (var current = element; current is not null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (current is T match)
+                return match;
         }
 
-        if (GetActiveRibbonPanel() is { } activePanel)
-        {
-            UpdateRibbonLayoutIfNeeded(activePanel);
-            _ribbonFirstFrameLayoutUpdateCount++;
-        }
+        return null;
     }
 
     private void ConfigureInsertRibbonSurface(RibbonStaticSurfaceSnapshot surface)

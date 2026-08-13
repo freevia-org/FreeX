@@ -46,7 +46,7 @@ public sealed class RibbonTabChromeParityTests
                         RibbonTabChromeMetrics.HeaderVerticalPadding));
 
                     var underline = header.Children.OfType<Border>()
-                        .Single(border => Equals(border.Tag, "FreeX.SelectedTabUnderline"));
+                        .Single(border => Equals(border.Tag, "Free.Ribbon.SelectedTabUnderline"));
                     underline.Height.Should().Be(RibbonTabChromeMetrics.SelectedUnderlineThickness);
                     underline.MinHeight.Should().Be(RibbonTabChromeMetrics.SelectedUnderlineThickness);
                 }

@@ -41,7 +41,7 @@ public partial class MainWindow
         }
 
         _borderDrawModeActive = true;
-        RefreshShell("Draw Border mode active — click or drag cells to draw borders. Press Esc to cancel.");
+        RefreshShell(UiText.Get("DrawBorder_ModeActiveStatus"));
     }
 
     /// <summary>Cancels Draw Border mode without applying any border.</summary>
@@ -51,7 +51,7 @@ public partial class MainWindow
             return;
 
         _borderDrawModeActive = false;
-        RefreshShell("Draw Border mode cancelled.");
+        RefreshShell(UiText.Get("DrawBorder_ModeCancelledStatus"));
     }
 
     // ── Apply ─────────────────────────────────────────────────────────────────
@@ -71,11 +71,11 @@ public partial class MainWindow
         var result = _session.SetSelectedRangeDrawBorder();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Draw Border failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("DrawBorder_FailedMessage"));
             return;
         }
 
-        RefreshShell($"Draw Border applied to {rangeReference}");
+        RefreshShell(UiText.Format("DrawBorder_AppliedStatusFormat", rangeReference));
     }
 }

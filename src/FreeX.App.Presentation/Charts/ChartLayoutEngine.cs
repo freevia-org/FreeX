@@ -1,6 +1,3 @@
-using System.Globalization;
-using System.Xml.Linq;
-
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FreeX.App.Presentation.Text;
@@ -25,9 +22,6 @@ public static class ChartLayoutEngine
     // The source renderer centers both clustered and stacked columns/bars at index ± 0.35 by
     // default (WPF's ColumnBarHalfWidth is a single shared function used by both paths); both are
     // reproduced exactly here.
-    private const double DefaultColumnHalfWidth = 0.35;
-    private const double StackedColumnHalfWidth = 0.35;
-
     /// <summary>
     /// Returns the half-width of the full category slot for a clustered (non-stacked) column or bar
     /// chart, mirroring WPF ColumnBarHalfWidth. When <see cref="ChartModel.BarGapWidth"/> is set,
@@ -35,9 +29,7 @@ public static class ChartLayoutEngine
     /// percentage of the bar width (gapWidth=0 ⇒ no gap; gapWidth=150 ⇒ Excel default).
     /// </summary>
     private static double ClusteredBarHalfWidth(ChartModel chart) =>
-        chart.BarGapWidth is int gapWidth
-            ? Math.Clamp(0.5 * 100.0 / (100.0 + gapWidth), 0.05, 0.5)
-            : DefaultColumnHalfWidth;
+        ChartRenderPolicyPlanner.ResolveBarHalfWidth(chart);
 
     /// <summary>
     /// Returns the half-width of a stacked column/bar segment, mirroring WPF's ColumnBarHalfWidth
@@ -47,9 +39,7 @@ public static class ChartLayoutEngine
     /// Gap Width setting must narrow/widen the stack just like a clustered chart's.
     /// </summary>
     private static double StackedBarHalfWidth(ChartModel chart) =>
-        chart.BarGapWidth is int gapWidth
-            ? Math.Clamp(0.5 * 100.0 / (100.0 + gapWidth), 0.05, 0.5)
-            : StackedColumnHalfWidth;
+        ChartRenderPolicyPlanner.ResolveBarHalfWidth(chart);
 
     /// <summary>
     /// Resolves the effective Series Overlap percentage for a clustered/stacked column or bar
@@ -65,14 +55,7 @@ public static class ChartLayoutEngine
     /// default to).
     /// </summary>
     private static int EffectiveBarOverlap(ChartModel chart) =>
-        chart.BarOverlap ?? (chart.Type is ChartType.Column
-            or ChartType.Bar
-            or ChartType.StackedColumn
-            or ChartType.PercentStackedColumn
-            or ChartType.StackedBar
-            or ChartType.PercentStackedBar
-                ? -27
-                : 0);
+        ChartRenderPolicyPlanner.ResolveEffectiveBarOverlap(chart);
 
     /// <summary>
     /// Returns the left/right offsets (relative to the category centre) for the bar of the
@@ -92,15 +75,11 @@ public static class ChartLayoutEngine
         int clusterCount,
         int overlapPercent = 0)
     {
-        if (clusterCount <= 1)
-            return (-halfWidth, halfWidth);
-
-        var overlap = Math.Clamp(overlapPercent, -100, 100) / 100.0;
-        var denominator = clusterCount - (overlap * (clusterCount - 1));
-        var unitWidth = Math.Abs(denominator) < 1e-9 ? 2.0 * halfWidth : 2.0 * halfWidth / denominator;
-        var step = unitWidth * (1 - overlap);
-        var left = -halfWidth + clusterOrdinal * step;
-        return (left, left + unitWidth);
+        return ChartRenderPolicyPlanner.ResolveClusteredBarOffsets(
+            halfWidth,
+            clusterOrdinal,
+            clusterCount,
+            overlapPercent);
     }
 
     /// <summary>Returns true when this engine can lay out the given chart type.</summary>
@@ -252,44 +231,12 @@ public static class ChartLayoutEngine
         out double[] positions,
         out double minValue,
         out double maxValue)
-    {
-        positions = [];
-        minValue = 0;
-        maxValue = 0;
-        if (!chart.XAxisIsDateAxis || categories.Count == 0)
-            return false;
-
-        var values = new double[categories.Count];
-        var min = double.PositiveInfinity;
-        var max = double.NegativeInfinity;
-        for (var index = 0; index < categories.Count; index++)
-        {
-            if (!TryParseDateCategory(categories[index], out var parsed))
-                return false;
-
-            var value = parsed.Date.ToOADate();
-            values[index] = value;
-            if (value < min) min = value;
-            if (value > max) max = value;
-        }
-
-        positions = values;
-        minValue = min;
-        maxValue = max;
-        return true;
-    }
-
-    private static bool TryParseDateCategory(string category, out DateTime value) =>
-        DateTime.TryParse(
-            category,
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AllowWhiteSpaces,
-            out value) ||
-        DateTime.TryParse(
-            category,
-            CultureInfo.CurrentCulture,
-            DateTimeStyles.AllowWhiteSpaces,
-            out value);
+        => ChartRenderPolicyPlanner.TryResolveDateCategoryPositions(
+            chart,
+            categories,
+            out positions,
+            out minValue,
+            out maxValue);
 
     /// <summary>
     /// Resolves the plot-space X position for category index <paramref name="index"/>: the
@@ -318,16 +265,17 @@ public static class ChartLayoutEngine
     private static (AxisSide Side, double LinePosition) ApplyAxisCrosses(
         AxisSide side, double linePosition, ChartAxisCrosses crosses, PlotRect plot)
     {
-        if (crosses != ChartAxisCrosses.Maximum)
+        var resolvedSide = ChartRenderPolicyPlanner.ResolveAxisSide(side, crosses);
+        if (resolvedSide == side)
             return (side, linePosition);
 
-        return side switch
+        return resolvedSide switch
         {
-            AxisSide.Bottom => (AxisSide.Top, plot.Top),
-            AxisSide.Top => (AxisSide.Bottom, plot.Bottom),
-            AxisSide.Left => (AxisSide.Right, plot.Right),
-            AxisSide.Right => (AxisSide.Left, plot.Left),
-            _ => (side, linePosition),
+            AxisSide.Bottom => (resolvedSide, plot.Bottom),
+            AxisSide.Top => (resolvedSide, plot.Top),
+            AxisSide.Left => (resolvedSide, plot.Left),
+            AxisSide.Right => (resolvedSide, plot.Right),
+            _ => (resolvedSide, linePosition),
         };
     }
 
@@ -390,8 +338,7 @@ public static class ChartLayoutEngine
                 // entry in ExplodedSlices (per-point <c:dPt>/<c:explosion> overrides), so a chart
                 // where several slices are individually exploded renders ALL of them exploded rather
                 // than collapsing to just one -- mirrors the WPF renderer's IsPieSliceExploded.
-                var isExploded = chart.ExplodedSliceIndex == index ||
-                    chart.ExplodedSlices.Any(slice => slice.SeriesIndex == 0 && slice.PointIndex == index);
+                var isExploded = ChartRenderPolicyPlanner.IsPieSliceExploded(chart, series.SeriesIndex, index);
                 if (isExploded && chart.ExplodedSliceDistance > 0)
                 {
                     var mid = angle + (sweep / 2);
@@ -447,13 +394,8 @@ public static class ChartLayoutEngine
     {
         var chart = request.Chart;
         // Inside-end / center labels sit at a fraction of the radius; outside-end sits just past it.
-        var radiusFraction = chart.DataLabelPosition switch
-        {
-            ChartDataLabelPosition.Center => 0.5,
-            ChartDataLabelPosition.InsideEnd => 0.8,
-            ChartDataLabelPosition.OutsideEnd => 1.15,
-            _ => 0.8,
-        };
+        var radiusFraction = ChartRenderPolicyPlanner.ResolvePieLabelRadiusFraction(
+            chart.DataLabelPosition);
         var labelRadius = arc.OuterRadius * radiusFraction;
         var anchor = PolarToPixel(arc.Center, arc.MidAngleDegrees, labelRadius);
         var size = request.TextMeasurer.Measure(text, null, chart.DataLabelFontSize, false, false);
@@ -511,7 +453,7 @@ public static class ChartLayoutEngine
 
         // Combo charts: a secondary value axis on the right carries the assigned series. Stacked
         // charts do not split across axes (matching the source renderer).
-        var useSecondary = !isStacked && WantsSecondaryAxis(request, categoryCount);
+        var useSecondary = !isStacked && WantsSecondaryAxis(request);
         var secondaryScale = useSecondary
             ? CreateSecondaryValueAxis(chart, SecondaryValueRange(request).Min, SecondaryValueRange(request).Max, plot, AxisSide.Right)
             : null;
@@ -539,21 +481,21 @@ public static class ChartLayoutEngine
             // CountClusteredBarSeries.
             var isClusteredColumn = chart.Type is ChartType.Column or ChartType.ThreeDColumn;
             var clusteredColumnCount = isClusteredColumn
-                ? request.Series.Count(s => !IsComboLineSeries(chart, s.SeriesIndex) && !IsComboScatterSeries(chart, s.SeriesIndex))
+                ? ChartRenderPolicyPlanner.CountClusteredSeries(chart, request.Series.Select(s => s.SeriesIndex))
                 : 0;
             var clusteredColumnOrdinal = 0;
 
             foreach (var series in request.Series)
             {
-                var onSecondary = useSecondary && UsesSecondaryAxis(chart, series.SeriesIndex);
+                var onSecondary = useSecondary && ChartRenderPolicyPlanner.UsesSecondaryAxis(chart, series.SeriesIndex);
                 var yScale = onSecondary ? secondaryScale! : valueScale;
                 var baseY = yScale.Transform(Clamp0(yScale));
                 SeriesLayout laid;
-                if (IsComboScatterSeries(chart, series.SeriesIndex))
+                if (ChartRenderPolicyPlanner.IsComboScatterSeries(chart, series.SeriesIndex))
                 {
                     laid = LayoutComboScatterSeries(request, series, categoryScale, yScale, dataLabels, categoryPositions);
                 }
-                else if (IsComboLineSeries(chart, series.SeriesIndex))
+                else if (ChartRenderPolicyPlanner.IsComboLineSeries(chart, series.SeriesIndex))
                 {
                     laid = LayoutLineSeries(request, series, categoryScale, yScale, dataLabels, categoryPositions: categoryPositions);
                 }
@@ -745,7 +687,7 @@ public static class ChartLayoutEngine
             // A series promoted to a combo line overlay is drawn as a line over the stack instead
             // of a stacked segment, and does not participate in the running stack totals (mirrors
             // WPF BuildStackedColumnModel, which `continue`s before touching positiveBases/negativeBases).
-            if (IsComboLineSeries(chart, series.SeriesIndex))
+            if (ChartRenderPolicyPlanner.IsComboLineSeries(chart, series.SeriesIndex))
             {
                 seriesLayouts.Add(LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels, categoryPositions: categoryPositions));
                 continue;
@@ -825,7 +767,7 @@ public static class ChartLayoutEngine
             // LayoutStackedColumns / WPF BuildStackedAreaModel, which `continue` before touching bases).
             // Its own data labels still ride over the stack (WPF calls AddLineDataLabelAnnotations), so
             // the real dataLabels list is threaded through — unlike the stacked bands, which emit none.
-            if (IsComboLineSeries(chart, series.SeriesIndex))
+            if (ChartRenderPolicyPlanner.IsComboLineSeries(chart, series.SeriesIndex))
             {
                 seriesLayouts.Add(LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels, categoryPositions: categoryPositions));
                 continue;
@@ -1154,11 +1096,6 @@ public static class ChartLayoutEngine
 
     // ---- Bubble ---------------------------------------------------------------------------
 
-    // The largest pixel radius a bubble is drawn at when its size equals the series maximum, before
-    // the chart's BubbleScale is applied. Mirrors the source renderer's default bubble sizing.
-    private const double MaxBubbleRadius = 20.0;
-    private const double MinBubbleRadius = 1.0;
-
     private static ChartLayout LayoutBubble(ChartLayoutRequest request)
     {
         var chart = request.Chart;
@@ -1190,7 +1127,10 @@ public static class ChartLayoutEngine
                     continue;
 
                 var center = new LayoutPoint(xScale.Transform(x), yScale.Transform(y));
-                var radius = BubbleRadius(Math.Abs(rawSize), maxSize, chart.BubbleSizeRepresents) * scale;
+                var radius = ChartRenderPolicyPlanner.ResolveBubbleRadius(
+                    Math.Abs(rawSize),
+                    maxSize,
+                    chart.BubbleSizeRepresents) * scale;
                 bubbles.Add(new SeriesBubble(i, x, y, rawSize, center, radius));
                 AddCartesianDataLabel(request, dataLabels, series, i, y, center);
             }
@@ -1242,18 +1182,6 @@ public static class ChartLayoutEngine
         }
 
         return max;
-    }
-
-    private static double BubbleRadius(double size, double maxSize, ChartBubbleSizeRepresents represents)
-    {
-        if (maxSize <= 0)
-            return MinBubbleRadius;
-
-        // Area representation keeps the bubble area proportional to the size value, so the radius
-        // scales with the square root of the size fraction; Width scales the radius linearly.
-        var fraction = Math.Clamp(size / maxSize, 0, 1);
-        var radiusFraction = represents == ChartBubbleSizeRepresents.Width ? fraction : Math.Sqrt(fraction);
-        return Math.Max(MinBubbleRadius, MaxBubbleRadius * radiusFraction);
     }
 
     // ---- Radar ----------------------------------------------------------------------------
@@ -1503,45 +1431,11 @@ public static class ChartLayoutEngine
     /// ChartRenderer.Axes.cs GetAxisDisplayUnitDivisor (WPF) so both shells agree on tick text.
     /// </summary>
     private static double? GetAxisDisplayUnitDivisor(ChartAxisDisplayUnit? unit, double? customUnit)
-    {
-        if (customUnit is { } custom && double.IsFinite(custom) && custom > 0)
-            return custom;
-
-        return unit switch
-        {
-            ChartAxisDisplayUnit.Hundreds => 1e2,
-            ChartAxisDisplayUnit.Thousands => 1e3,
-            ChartAxisDisplayUnit.TenThousands => 1e4,
-            ChartAxisDisplayUnit.HundredThousands => 1e5,
-            ChartAxisDisplayUnit.Millions => 1e6,
-            ChartAxisDisplayUnit.TenMillions => 1e7,
-            ChartAxisDisplayUnit.HundredMillions => 1e8,
-            ChartAxisDisplayUnit.Billions => 1e9,
-            ChartAxisDisplayUnit.Trillions => 1e12,
-            _ => null
-        };
-    }
+        => ChartRenderPolicyPlanner.ResolveAxisDisplayUnitDivisor(unit, customUnit);
 
     /// <summary>Mirrors ChartRenderer.Axes.cs GetAxisDisplayUnitLabel (WPF's axis-title suffix).</summary>
     private static string GetAxisDisplayUnitLabel(ChartAxisDisplayUnit? unit, double? customUnit)
-    {
-        if (customUnit is { } custom && double.IsFinite(custom) && custom > 0)
-            return custom.ToString("0.###", CultureInfo.InvariantCulture);
-
-        return unit switch
-        {
-            ChartAxisDisplayUnit.Hundreds => "Hundreds",
-            ChartAxisDisplayUnit.Thousands => "Thousands",
-            ChartAxisDisplayUnit.TenThousands => "Ten Thousands",
-            ChartAxisDisplayUnit.HundredThousands => "Hundred Thousands",
-            ChartAxisDisplayUnit.Millions => "Millions",
-            ChartAxisDisplayUnit.TenMillions => "Ten Millions",
-            ChartAxisDisplayUnit.HundredMillions => "Hundred Millions",
-            ChartAxisDisplayUnit.Billions => "Billions",
-            ChartAxisDisplayUnit.Trillions => "Trillions",
-            _ => ""
-        };
-    }
+        => ChartRenderPolicyPlanner.ResolveAxisDisplayUnitLabel(unit, customUnit);
 
     private static AxisLayout BuildCategoryAxisLayout(
         ChartLayoutRequest request,
@@ -1674,61 +1568,23 @@ public static class ChartLayoutEngine
 
     // ---- Secondary axis (combo) -----------------------------------------------------------
 
-    private static bool WantsSecondaryAxis(ChartLayoutRequest request, int categoryCount)
-    {
-        var chart = request.Chart;
-        if (!chart.ShowSecondaryAxis || !ChartTypeSupport.SupportsSecondaryAxis(chart.Type) || request.Series.Count < 2)
-            return false;
-
-        // At least one series must actually map to the secondary axis (any series, including the
-        // first — see UsesSecondaryAxis).
-        foreach (var series in request.Series)
-        {
-            if (UsesSecondaryAxis(chart, series.SeriesIndex))
-                return true;
-        }
-
-        return false;
-    }
+    private static bool WantsSecondaryAxis(ChartLayoutRequest request)
+        => ChartRenderPolicyPlanner.HasAnySecondaryAxisSeries(
+            request.Chart,
+            request.Series.Select(series => series.SeriesIndex));
 
     // Mirrors the source renderer (ChartRenderer.SeriesFormatting.UsesSecondaryAxis): a series uses
     // the secondary axis when the chart enables it and either an explicit assignment list contains
     // this series index — valid for ANY series, including the first (R25-chart-axis-series-deep-1,
     // Excel's Format Data Series > Secondary Axis works on series 0 too) — or no list is given, in
     // which case Excel's implicit default sends every series AFTER the first to the secondary axis.
-    private static bool UsesSecondaryAxis(ChartModel chart, int seriesIndex)
-    {
-        if (!chart.ShowSecondaryAxis || seriesIndex < 0)
-            return false;
-
-        return chart.SecondaryAxisSeriesIndexes.Count == 0
-            ? seriesIndex > 0
-            : chart.SecondaryAxisSeriesIndexes.Contains(seriesIndex);
-    }
-
     // Mirrors the source renderer's IsComboLineSeries: membership in ComboLineSeriesIndexes is
     // authoritative (populated from the chart XML's <c:lineChart> plot group), so a real Excel combo
     // chart (e.g. bar-plus-line) draws the designated series as a line overlay instead of a
     // column/area, even at series index 0 (Excel commonly draws the line series first over bar
     // helper series). An empty list means "no combo lines" so a plain chart is unaffected.
-    private static bool IsComboLineSeries(ChartModel chart, int seriesIndex)
-    {
-        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type) || !chart.UseComboLineForSecondarySeries || seriesIndex < 0)
-            return false;
-
-        return chart.ComboLineSeriesIndexes.Contains(seriesIndex);
-    }
-
     // Mirrors the source renderer's IsComboScatterSeries: a series in ComboScatterSeriesIndexes is
     // drawn as a scatter overlay (markers only, no connecting line) instead of column/area.
-    private static bool IsComboScatterSeries(ChartModel chart, int seriesIndex)
-    {
-        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type) || seriesIndex < 0)
-            return false;
-
-        return chart.ComboScatterSeriesIndexes.Contains(seriesIndex);
-    }
-
     private static (double Min, double Max) SecondaryValueRange(ChartLayoutRequest request)
     {
         var chart = request.Chart;
@@ -1736,7 +1592,7 @@ public static class ChartLayoutEngine
         var max = double.NegativeInfinity;
         foreach (var series in request.Series)
         {
-            if (!UsesSecondaryAxis(chart, series.SeriesIndex))
+            if (!ChartRenderPolicyPlanner.UsesSecondaryAxis(chart, series.SeriesIndex))
                 continue;
             foreach (var value in series.Values)
             {
@@ -1754,140 +1610,6 @@ public static class ChartLayoutEngine
 
     // ---- Trendline overlay ----------------------------------------------------------------
 
-    // Mirrors the source renderer's AddTrendlineIfRequested: Excel only allows a fixed intercept on
-    // the Linear trendline, so when ChartModel.TrendlineIntercept is set, the free-intercept fit
-    // TrendlineCalculator.Calculate produced is discarded and refit with the intercept pinned
-    // (least squares over the residual y - intercept), then the (possibly refit) trendline is
-    // extended by the Forecast Forward/Backward periods. Without this step (the bug this method
-    // fixes), both persisted, round-tripped chart options were silently dropped on this shell.
-    private static IReadOnlyList<TrendPoint> ApplyTrendlineInterceptAndForecast(
-        ChartModel chart,
-        IReadOnlyList<TrendPoint> sourcePoints,
-        IReadOnlyList<TrendPoint> trend)
-    {
-        if (chart.TrendlineType == ChartTrendlineType.Linear && chart.TrendlineIntercept is { } fixedIntercept)
-            trend = CalculateLinearWithFixedIntercept(sourcePoints, fixedIntercept) ?? trend;
-
-        return ApplyTrendlineForecast(chart, trend);
-    }
-
-    /// <summary>
-    /// Refits a linear trendline with the intercept pinned to <paramref name="intercept"/> (Excel's
-    /// "Set Intercept" option), returning the two fitted endpoints across the source X range. Uses
-    /// ordinary least squares on the residual (y - intercept) so slope = Σx·(y-intercept) / Σx².
-    /// Returns null when the fit is undefined (fewer than 2 points or a degenerate X range). Mirrors
-    /// the source renderer's CalculateLinearWithFixedIntercept exactly.
-    /// </summary>
-    private static IReadOnlyList<TrendPoint>? CalculateLinearWithFixedIntercept(
-        IReadOnlyList<TrendPoint> points,
-        double intercept)
-    {
-        var sumXX = 0.0;
-        var sumXResidual = 0.0;
-        var minX = double.PositiveInfinity;
-        var maxX = double.NegativeInfinity;
-        var count = 0;
-        for (var i = 0; i < points.Count; i++)
-        {
-            var point = points[i];
-            sumXX += point.X * point.X;
-            sumXResidual += point.X * (point.Y - intercept);
-            minX = Math.Min(minX, point.X);
-            maxX = Math.Max(maxX, point.X);
-            count++;
-        }
-
-        if (count < 2 || Math.Abs(sumXX) < double.Epsilon)
-            return null;
-
-        var slope = sumXResidual / sumXX;
-        return [new TrendPoint(minX, intercept + slope * minX), new TrendPoint(maxX, intercept + slope * maxX)];
-    }
-
-    /// <summary>
-    /// Extends the fitted trendline by Excel's Forward/Backward forecast periods (measured in
-    /// category-axis units, i.e. the same X units as the source points). Extrapolates using the
-    /// trendline's own boundary segment (linear/exponential/logarithmic/power all sample a smooth
-    /// curve whose two nearest boundary points define the local slope) so the extension continues the
-    /// fitted shape rather than requiring a shared-file change to the trendline calculator. Moving
-    /// Average has no Excel forecast option and is returned unchanged. Mirrors the source renderer's
-    /// ApplyTrendlineForecast exactly.
-    /// </summary>
-    private static IReadOnlyList<TrendPoint> ApplyTrendlineForecast(
-        ChartModel chart,
-        IReadOnlyList<TrendPoint> trendPoints)
-    {
-        var forward = chart.TrendlineForward is { } f && f > 0 ? f : 0;
-        var backward = chart.TrendlineBackward is { } b && b > 0 ? b : 0;
-        if ((forward <= 0 && backward <= 0) || chart.TrendlineType == ChartTrendlineType.MovingAverage || trendPoints.Count < 2)
-            return trendPoints;
-
-        var result = new List<TrendPoint>(trendPoints.Count + 2);
-        if (backward > 0)
-        {
-            var first = trendPoints[0];
-            var second = trendPoints[1];
-            var extendedX = first.X - backward;
-            result.Add(new TrendPoint(extendedX, ExtrapolateY(chart.TrendlineType, first, second, extendedX)));
-        }
-
-        result.AddRange(trendPoints);
-
-        if (forward > 0)
-        {
-            var last = trendPoints[^1];
-            var secondToLast = trendPoints[^2];
-            var extendedX = last.X + forward;
-            result.Add(new TrendPoint(extendedX, ExtrapolateY(chart.TrendlineType, secondToLast, last, extendedX)));
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Extrapolates a Y value at <paramref name="targetX"/> beyond the boundary segment
-    /// (<paramref name="a"/>, <paramref name="b"/>) of a fitted trendline, using the closed-form shape
-    /// appropriate to <paramref name="type"/> (log-linear for exponential/power in the relevant axis,
-    /// straight-line extension otherwise). Falls back to a linear extension of the segment when the
-    /// closed form is undefined for the given points (e.g. non-positive X/Y for log/power). Mirrors
-    /// the source renderer's ExtrapolateY exactly.
-    /// </summary>
-    private static double ExtrapolateY(ChartTrendlineType type, TrendPoint a, TrendPoint b, double targetX)
-    {
-        var dx = b.X - a.X;
-        if (Math.Abs(dx) < double.Epsilon)
-            return b.Y;
-
-        switch (type)
-        {
-            case ChartTrendlineType.Exponential when a.Y > 0 && b.Y > 0:
-            {
-                var slope = Math.Log(b.Y / a.Y) / dx;
-                return a.Y * Math.Exp(slope * (targetX - a.X));
-            }
-            case ChartTrendlineType.Power when a.X > 0 && b.X > 0 && a.Y > 0 && b.Y > 0 && targetX > 0:
-            {
-                var dLogX = Math.Log(b.X) - Math.Log(a.X);
-                if (Math.Abs(dLogX) < double.Epsilon)
-                    break;
-                var slope = Math.Log(b.Y / a.Y) / dLogX;
-                return a.Y * Math.Pow(targetX / a.X, slope);
-            }
-            case ChartTrendlineType.Logarithmic when a.X > 0 && b.X > 0 && targetX > 0:
-            {
-                var dLogX = Math.Log(b.X) - Math.Log(a.X);
-                if (Math.Abs(dLogX) < double.Epsilon)
-                    break;
-                var slope = (b.Y - a.Y) / dLogX;
-                return b.Y + slope * (Math.Log(targetX) - Math.Log(b.X));
-            }
-        }
-
-        // Linear (and any degenerate curve case above) extends the straight segment.
-        var linearSlope = (b.Y - a.Y) / dx;
-        return b.Y + linearSlope * (targetX - b.X);
-    }
-
     // Computes the trendline overlay for the first plotted series (matching the source renderer,
     // which fits the trendline to the first series' points) and attaches it to that series' layout.
     private static void AttachTrendline(
@@ -1900,8 +1622,6 @@ public static class ChartLayoutEngine
         double[]? categoryPositions = null)
     {
         var chart = request.Chart;
-        if (!chart.ShowLinearTrendline || !ChartTypeSupport.SupportsTrendlines(chart.Type))
-            return;
         if (request.Series.Count == 0 || seriesLayouts.Count == 0)
             return;
 
@@ -1917,24 +1637,19 @@ public static class ChartLayoutEngine
                 sourcePoints.Add(new TrendPoint(CategoryX(categoryPositions, i), v));
         }
 
-        if (sourcePoints.Count < 2)
+        var plan = TrendlineProjectionPlanner.Plan(chart, sourcePoints);
+        if (plan is null)
             return;
 
-        var trend = TrendlineCalculator.Calculate(chart.TrendlineType, sourcePoints, chart.TrendlinePeriod, chart.TrendlineOrder);
-        if (trend.Count < 2)
-            return;
-
-        trend = ApplyTrendlineInterceptAndForecast(chart, sourcePoints, trend);
-
-        var onSecondary = useSecondary && UsesSecondaryAxis(chart, first.SeriesIndex) && secondaryScale is not null;
+        var onSecondary = useSecondary && ChartRenderPolicyPlanner.UsesSecondaryAxis(chart, first.SeriesIndex) && secondaryScale is not null;
         var yScale = onSecondary ? secondaryScale! : primaryScale;
-        var pixelPoints = new List<LayoutPoint>(trend.Count);
-        foreach (var point in trend)
+        var pixelPoints = new List<LayoutPoint>(plan.Points.Count);
+        foreach (var point in plan.Points)
             pixelPoints.Add(new LayoutPoint(xToPixel(point.X), yScale.Transform(point.Y)));
 
         seriesLayouts[0] = seriesLayouts[0] with
         {
-            Trendline = BuildTrendlineLayout(chart, sourcePoints, trend, pixelPoints,
+            Trendline = BuildTrendlineLayout(plan, pixelPoints,
                 point => new LayoutPoint(xToPixel(point.X), yScale.Transform(point.Y))),
         };
     }
@@ -1951,8 +1666,6 @@ public static class ChartLayoutEngine
         AxisScale valueScale)
     {
         var chart = request.Chart;
-        if (!chart.ShowLinearTrendline || !ChartTypeSupport.SupportsTrendlines(chart.Type))
-            return;
         if (request.Series.Count == 0 || seriesLayouts.Count == 0)
             return;
 
@@ -1964,26 +1677,19 @@ public static class ChartLayoutEngine
                 sourcePoints.Add(new TrendPoint(i, v));
         }
 
-        if (sourcePoints.Count < 2)
+        var plan = TrendlineProjectionPlanner.Plan(chart, sourcePoints, swapAxes: true);
+        if (plan is null)
             return;
 
-        var trend = TrendlineCalculator.Calculate(chart.TrendlineType, sourcePoints, chart.TrendlinePeriod, chart.TrendlineOrder);
-        if (trend.Count < 2)
-            return;
-
-        trend = ApplyTrendlineInterceptAndForecast(chart, sourcePoints, trend);
-
-        // TrendPoint.X is the category index (→ categoryScale, vertical); TrendPoint.Y is the value
-        // (→ valueScale, horizontal).
-        var pixelPoints = new List<LayoutPoint>(trend.Count);
-        foreach (var point in trend)
-            pixelPoints.Add(new LayoutPoint(valueScale.Transform(point.Y), categoryScale.Transform(point.X)));
+        // The portable plan projects bar points to (value, category) display-axis order.
+        var pixelPoints = new List<LayoutPoint>(plan.Points.Count);
+        foreach (var point in plan.Points)
+            pixelPoints.Add(new LayoutPoint(valueScale.Transform(point.X), categoryScale.Transform(point.Y)));
 
         seriesLayouts[0] = seriesLayouts[0] with
         {
-            Trendline = BuildTrendlineLayout(chart, sourcePoints, trend, pixelPoints,
-                point => new LayoutPoint(valueScale.Transform(point.Y), categoryScale.Transform(point.X)),
-                swapAnnotationAxes: true),
+            Trendline = BuildTrendlineLayout(plan, pixelPoints,
+                point => new LayoutPoint(valueScale.Transform(point.X), categoryScale.Transform(point.Y))),
         };
     }
 
@@ -1996,8 +1702,6 @@ public static class ChartLayoutEngine
         AxisScale yScale)
     {
         var chart = request.Chart;
-        if (!chart.ShowLinearTrendline || !ChartTypeSupport.SupportsTrendlines(chart.Type))
-            return;
         if (request.Series.Count == 0 || seriesLayouts.Count == 0)
             return;
 
@@ -2011,78 +1715,37 @@ public static class ChartLayoutEngine
             sourcePoints.Add(new TrendPoint(x, y));
         }
 
-        if (sourcePoints.Count < 2)
+        var plan = TrendlineProjectionPlanner.Plan(chart, sourcePoints);
+        if (plan is null)
             return;
 
-        var trend = TrendlineCalculator.Calculate(chart.TrendlineType, sourcePoints, chart.TrendlinePeriod, chart.TrendlineOrder);
-        if (trend.Count < 2)
-            return;
-
-        trend = ApplyTrendlineInterceptAndForecast(chart, sourcePoints, trend);
-
-        var pixelPoints = new List<LayoutPoint>(trend.Count);
-        foreach (var point in trend)
+        var pixelPoints = new List<LayoutPoint>(plan.Points.Count);
+        foreach (var point in plan.Points)
             pixelPoints.Add(new LayoutPoint(xScale.Transform(point.X), yScale.Transform(point.Y)));
 
         seriesLayouts[0] = seriesLayouts[0] with
         {
-            Trendline = BuildTrendlineLayout(chart, sourcePoints, trend, pixelPoints,
+            Trendline = BuildTrendlineLayout(plan, pixelPoints,
                 point => new LayoutPoint(xScale.Transform(point.X), yScale.Transform(point.Y))),
         };
     }
 
-    // Builds the TrendlineLayout including the optional equation/R-squared annotation (F18): the
-    // annotation anchor mirrors the source renderer's TextAnnotation placement. The source renderer
-    // (AddTrendlineIfRequested) swaps each source point to (Y, X) before taking (Min(X), Max(Y))
-    // whenever swapTrendlineAxes is set (Bar charts); for the non-swapped families it takes
-    // (Min(X), Max(Y)) of the source points directly. swapAnnotationAxes reproduces that exactly:
-    // when true, the anchor is (min value, max index) — the swapped corner — instead of
-    // (min index, max value), matching WPF's swapTrendlineAxes: true path for ChartType.Bar.
+    // Maps the portable data-space plan to layout pixels; projection and annotation semantics stay
+    // in TrendlineProjectionPlanner so every renderer consumes the same result.
     private static TrendlineLayout BuildTrendlineLayout(
-        ChartModel chart,
-        IReadOnlyList<TrendPoint> sourcePoints,
-        IReadOnlyList<TrendPoint> trend,
+        TrendlineProjectionPlan plan,
         IReadOnlyList<LayoutPoint> pixelPoints,
-        Func<TrendPoint, LayoutPoint> toPixel,
-        bool swapAnnotationAxes = false)
+        Func<TrendPoint, LayoutPoint> toPixel)
     {
-        var annotationLines = TrendlineAnnotationFormatter.BuildAnnotationLines(chart, sourcePoints, trend);
-        var anchor = default(LayoutPoint);
-        if (annotationLines.Count > 0)
-        {
-            if (swapAnnotationAxes)
-            {
-                // Mirror WPF's displaySourcePoints = points.Select(p => (p.Y, p.X)) swap: anchor at
-                // (min value, max index) rather than (min index, max value).
-                var minValue = sourcePoints[0].Y;
-                var maxIndex = sourcePoints[0].X;
-                foreach (var point in sourcePoints)
-                {
-                    minValue = Math.Min(minValue, point.Y);
-                    maxIndex = Math.Max(maxIndex, point.X);
-                }
-
-                anchor = toPixel(new TrendPoint(maxIndex, minValue));
-            }
-            else
-            {
-                var minX = sourcePoints[0].X;
-                var maxY = sourcePoints[0].Y;
-                foreach (var point in sourcePoints)
-                {
-                    minX = Math.Min(minX, point.X);
-                    maxY = Math.Max(maxY, point.Y);
-                }
-
-                anchor = toPixel(new TrendPoint(minX, maxY));
-            }
-        }
+        var anchor = plan.AnnotationAnchor is { } dataAnchor
+            ? toPixel(dataAnchor)
+            : default;
 
         return new TrendlineLayout
         {
-            Fit = ToFitKind(chart.TrendlineType),
+            Fit = ToFitKind(plan.Type),
             Points = pixelPoints,
-            AnnotationLines = annotationLines,
+            AnnotationLines = plan.AnnotationLines,
             AnnotationAnchor = anchor,
         };
     }
@@ -2100,8 +1763,7 @@ public static class ChartLayoutEngine
 
     // ---- Error bars (Std Error / Percentage / Fixed Value / Custom) -----------------------
 
-    // Mirrors the source (WPF) renderer's AddErrorBarsIfRequested/AddWhisker/GetErrorBarAmount
-    // (ChartRenderer.SeriesFormatting.cs) so every plotted series on every chart family that
+    // Uses the shared error-amount policy so every plotted series on every chart family that
     // supports error bars (column/bar/line/scatter/bubble/area — ChartTypeSupport.SupportsTrendlines)
     // draws identical whiskers on the portable rendering path. Unlike the trendline overlay (fitted
     // once for the first series only), error bars are attached per plotted series, matching Excel
@@ -2129,7 +1791,7 @@ public static class ChartLayoutEngine
         for (var s = 0; s < seriesLayouts.Count && s < request.Series.Count; s++)
         {
             var series = request.Series[s];
-            var onSecondary = useSecondary && UsesSecondaryAxis(chart, series.SeriesIndex) && secondaryScale is not null;
+            var onSecondary = useSecondary && ChartRenderPolicyPlanner.UsesSecondaryAxis(chart, series.SeriesIndex) && secondaryScale is not null;
             var yScale = onSecondary ? secondaryScale! : primaryScale;
 
             // Mirrors the same blank-handling every column/line/area layout uses (LayoutColumnSeries/
@@ -2242,7 +1904,7 @@ public static class ChartLayoutEngine
 
     /// <summary>
     /// Builds the whisker overlay for one series from its plotted (index, value, pixel-anchor)
-    /// triples, mirroring the source renderer's AddWhisker/GetErrorBarAmount: computes each point's
+    /// triples, mirroring the source renderer's native whisker materialization: computes each point's
     /// plus/minus amount per <see cref="ChartModel.ErrorBarKind"/>, maps it through
     /// <paramref name="amountScale"/> (the axis the whisker direction runs along, so amounts are
     /// expressed and transformed in the same data units as the plotted value) to get the whisker's
@@ -2263,8 +1925,8 @@ public static class ChartLayoutEngine
         for (var i = 0; i < anchors.Count; i++)
             values[i] = anchors[i].Value;
 
-        var customPlus = ParseErrorBarRangeCache(chart.ErrorBarPlusRangeCacheXml);
-        var customMinus = ParseErrorBarRangeCache(chart.ErrorBarMinusRangeCacheXml) ?? customPlus;
+        var customPlus = ChartRenderPolicyPlanner.ParseErrorBarRangeCache(chart.ErrorBarPlusRangeCacheXml);
+        var customMinus = ChartRenderPolicyPlanner.ParseErrorBarRangeCache(chart.ErrorBarMinusRangeCacheXml) ?? customPlus;
 
         // The end-cap tick runs perpendicular to the whisker (i.e. along the *other* screen axis than
         // the whisker itself). A fixed data-space half-width (matching the source renderer's 0.08
@@ -2277,9 +1939,14 @@ public static class ChartLayoutEngine
         var any = false;
         for (var i = 0; i < anchors.Count; i++)
         {
-            var amount = GetErrorBarAmount(chart, values, i, customPlus, customMinus, out var plusAmount, out var minusAmount);
-            var plus = chart.ErrorBarDirection == ChartErrorBarDirection.Minus ? 0 : (plusAmount > 0 ? plusAmount : amount);
-            var minus = chart.ErrorBarDirection == ChartErrorBarDirection.Plus ? 0 : (minusAmount > 0 ? minusAmount : amount);
+            var amounts = ChartRenderPolicyPlanner.ResolveErrorBarAmounts(
+                chart,
+                values,
+                i,
+                customPlus,
+                customMinus);
+            var plus = amounts.Plus;
+            var minus = amounts.Minus;
             if (plus <= 0 && minus <= 0)
                 continue;
 
@@ -2314,90 +1981,6 @@ public static class ChartLayoutEngine
             return null;
 
         return new ErrorBarLayout { Whiskers = whiskers, EndCaps = chart.ErrorBarEndCaps };
-    }
-
-    /// <summary>
-    /// Computes the whisker half-length for point <paramref name="index"/> of a series whose plotted
-    /// values are <paramref name="values"/>, per Excel's error-bar amount kinds: Standard Error (the
-    /// series' own sample standard error, same for every point), Percentage (a percentage of that
-    /// point's value), Fixed Value (a constant amount), and Custom (explicit plus/minus amounts read
-    /// from the cached range values, one entry per point). <paramref name="plusAmount"/>/
-    /// <paramref name="minusAmount"/> carry the resolved Custom-kind asymmetric amounts (zero when not
-    /// Custom or when no cached value exists for this point); the return value is the symmetric amount
-    /// used for every other kind. Mirrors the source renderer's GetErrorBarAmount exactly.
-    /// </summary>
-    private static double GetErrorBarAmount(
-        ChartModel chart,
-        IReadOnlyList<double> values,
-        int index,
-        IReadOnlyList<double>? customPlus,
-        IReadOnlyList<double>? customMinus,
-        out double plusAmount,
-        out double minusAmount)
-    {
-        plusAmount = 0;
-        minusAmount = 0;
-        switch (chart.ErrorBarKind)
-        {
-            case ChartErrorBarKind.Percentage:
-                return Math.Abs(values[index]) * chart.ErrorBarValue / 100.0;
-            case ChartErrorBarKind.FixedValue:
-                return chart.ErrorBarValue;
-            case ChartErrorBarKind.Custom:
-                plusAmount = customPlus is not null && index < customPlus.Count ? Math.Abs(customPlus[index]) : 0;
-                minusAmount = customMinus is not null && index < customMinus.Count ? Math.Abs(customMinus[index]) : 0;
-                return 0;
-            default:
-                return CalculateStandardError(values);
-        }
-    }
-
-    /// <summary>Sample standard error of the mean (sample stddev / sqrt(n)) — Excel's "Standard Error" amount.</summary>
-    private static double CalculateStandardError(IReadOnlyList<double> values)
-    {
-        if (values.Count < 2)
-            return 0;
-
-        var mean = values.Average();
-        var sumSquares = 0.0;
-        for (var i = 0; i < values.Count; i++)
-            sumSquares += (values[i] - mean) * (values[i] - mean);
-
-        var variance = sumSquares / (values.Count - 1);
-        return Math.Sqrt(variance) / Math.Sqrt(values.Count);
-    }
-
-    /// <summary>
-    /// Parses a cached <c>&lt;c:numCache&gt;</c> XML fragment (as stored in
-    /// <see cref="ChartModel.ErrorBarPlusRangeCacheXml"/>/<see cref="ChartModel.ErrorBarMinusRangeCacheXml"/>)
-    /// into an index-ordered value list for Custom-kind error bars. Returns null for missing/unparsable input.
-    /// </summary>
-    private static IReadOnlyList<double>? ParseErrorBarRangeCache(string? cacheXml)
-    {
-        if (string.IsNullOrWhiteSpace(cacheXml))
-            return null;
-
-        try
-        {
-            var element = XElement.Parse(cacheXml);
-            var points = new SortedDictionary<int, double>();
-            foreach (var pt in element.Elements().Where(e => e.Name.LocalName == "pt"))
-            {
-                var idxAttribute = pt.Attribute("idx");
-                var valueElement = pt.Elements().FirstOrDefault(e => e.Name.LocalName == "v");
-                if (idxAttribute is null || valueElement is null)
-                    continue;
-                if (int.TryParse(idxAttribute.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx)
-                    && double.TryParse(valueElement.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-                    points[idx] = value;
-            }
-
-            return points.Count == 0 ? null : points.Values.ToArray();
-        }
-        catch (System.Xml.XmlException)
-        {
-            return null;
-        }
     }
 
     // ---- Data-label helpers ---------------------------------------------------------------
@@ -2538,11 +2121,6 @@ public static class ChartLayoutEngine
 
     // ---- Waterfall ------------------------------------------------------------------------
 
-    // Waterfall colors (match WPF: green for increase, red for decrease, blue for total).
-    private static readonly CellColor WaterfallPositiveColor = new CellColor(0x54, 0x82, 0x35);
-    private static readonly CellColor WaterfallNegativeColor = new CellColor(0xC0, 0x00, 0x00);
-    private static readonly CellColor WaterfallTotalColor    = new CellColor(0x44, 0x72, 0xC4);
-
     // Waterfall: vertical floating bars — each bar starts at the running total of prior values.
     // Increase/decrease/total bars are colored differently. Connectors are emitted as WaterfallConnectors.
     // Math: uses the existing WaterfallBarPlanner.Compute() from Core.Model (same as WPF renderer).
@@ -2562,7 +2140,10 @@ public static class ChartLayoutEngine
         }
 
         // Waterfall geometry is computed by the shared WaterfallBarPlanner (ported from WPF).
-        var plan = WaterfallBarPlanner.Compute(rawValues, chart.WaterfallTotalPointIndices);
+        var plan = WaterfallBarPlanner.Compute(
+            rawValues,
+            chart.WaterfallTotalPointIndices,
+            WaterfallNullTotalsPolicy.LastPointIsTotal);
 
         // Compute the full value range so we can build a proper value axis.
         var yMin = double.PositiveInfinity;
@@ -2590,12 +2171,7 @@ public static class ChartLayoutEngine
         for (var i = 0; i < plan.Count; i++)
         {
             var bar = plan[i];
-            var color = bar.Kind switch
-            {
-                WaterfallBarKind.Total    => WaterfallTotalColor,
-                WaterfallBarKind.Increase => WaterfallPositiveColor,
-                _                         => WaterfallNegativeColor,
-            };
+            var color = ChartRenderPolicyPlanner.ResolveWaterfallBarColor(bar.Kind);
 
             var x0 = categoryScale.Transform(i - WaterfallHalfWidth);
             var x1 = categoryScale.Transform(i + WaterfallHalfWidth);
@@ -2933,40 +2509,21 @@ public static class ChartLayoutEngine
         for (var si = 0; si < request.Series.Count; si++)
         {
             var series = request.Series[si];
-            var vals = new List<double>();
-            foreach (var v in series.Values)
-                if (v is { } val)
-                    vals.Add(val);
-            if (vals.Count == 0)
+            var statistics = ChartRenderPolicyPlanner.PlanBoxAndWhisker(series.Values);
+            if (statistics is null)
                 continue;
-            vals.Sort();
-            var q1     = BoxPercentile(vals, 25);
-            var median = BoxPercentile(vals, 50);
-            var q3     = BoxPercentile(vals, 75);
-            var iqr    = q3 - q1;
-            var lowerFence = q1 - 1.5 * iqr;
-            var upperFence = q3 + 1.5 * iqr;
-            // Lower whisker: smallest value >= lowerFence.
-            var lowerWhisker = vals[0];
-            foreach (var val in vals)
-            {
-                if (val >= lowerFence) { lowerWhisker = val; break; }
-            }
-            // Upper whisker: largest value <= upperFence.
-            var upperWhisker = vals[^1];
-            for (var j = vals.Count - 1; j >= 0; j--)
-            {
-                if (vals[j] <= upperFence) { upperWhisker = vals[j]; break; }
-            }
-            // Outliers: values outside the fences.
-            var outliers = new List<double>();
-            foreach (var val in vals)
-                if (val < lowerFence || val > upperFence)
-                    outliers.Add(val);
 
             var label = si < request.Categories.Count ? request.Categories[si]
                       : (series.Name ?? $"S{si + 1}");
-            boxes.Add(new BoxWhiskerStat(si, label, lowerWhisker, q1, median, q3, upperWhisker, outliers));
+            boxes.Add(new BoxWhiskerStat(
+                si,
+                label,
+                statistics.LowerWhisker,
+                statistics.FirstQuartile,
+                statistics.Median,
+                statistics.ThirdQuartile,
+                statistics.UpperWhisker,
+                statistics.Outliers));
         }
 
         if (boxes.Count == 0)
@@ -3086,17 +2643,6 @@ public static class ChartLayoutEngine
         };
     }
 
-    // Mirrors WPF BoxPercentile: linear interpolation between sorted values at position pct/100.
-    private static double BoxPercentile(List<double> sorted, double pct)
-    {
-        if (sorted.Count == 1) return sorted[0];
-        var pos = pct / 100.0 * (sorted.Count - 1);
-        var lo = (int)pos;
-        var hi = lo + 1;
-        if (hi >= sorted.Count) return sorted[^1];
-        return sorted[lo] + (pos - lo) * (sorted[hi] - sorted[lo]);
-    }
-
     private readonly record struct BoxWhiskerStat(
         int SeriesIndex,
         string Label,
@@ -3105,7 +2651,7 @@ public static class ChartLayoutEngine
         double Median,
         double Q3,
         double UpperWhisker,
-        List<double> Outliers);
+        IReadOnlyList<double> Outliers);
 
     // ---- Treemap -------------------------------------------------------------------------
 
@@ -3328,16 +2874,8 @@ public static class ChartLayoutEngine
     /// Maps a z-value to a cell fill color using a blue→yellow gradient that mirrors the desktop
     /// shell renderer's heatmap color scale (R: 68→255, G: 114→192, B: 196→0).
     /// </summary>
-    public static CellColor GetSurfaceCellColor(double value, double minValue, double maxValue)
-    {
-        var t = maxValue <= minValue
-            ? 0.5
-            : Math.Clamp((value - minValue) / (maxValue - minValue), 0.0, 1.0);
-        var r = (byte)Math.Round(68  + (255 - 68)  * t);
-        var g = (byte)Math.Round(114 + (192 - 114) * t);
-        var b = (byte)Math.Round(196 + (0   - 196) * t);
-        return new CellColor(r, g, b);
-    }
+    public static CellColor GetSurfaceCellColor(double value, double minValue, double maxValue) =>
+        ChartRenderPolicyPlanner.ResolveSurfaceCellColor(value, minValue, maxValue);
 
     // ---- Sunburst ------------------------------------------------------------------------
 

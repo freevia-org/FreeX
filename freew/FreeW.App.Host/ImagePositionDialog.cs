@@ -24,6 +24,7 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         string title,
         bool isGroupLocal)
     {
+        var surface = ImagePositionDialogPlanner.Surface;
         Owner = owner;
         Title = title;
         Width = 320;
@@ -31,6 +32,7 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        WpfDialogSurfaceSemantics.Apply(this, surface with { AutomationName = title });
 
         var state = ImagePositionDialogPlanner.BuildInitialState(
             hOffPt,
@@ -46,6 +48,10 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _vAnchorBox = Combo(ImagePositionDialogPlanner.VerticalAnchorItems, state.VerticalAnchorIndex);
         _hAnchorBox.IsEnabled = !isGroupLocal;
         _vAnchorBox.IsEnabled = !isGroupLocal;
+        WpfDialogSurfaceSemantics.Apply(_hBox, surface.Field(ImagePositionDialogField.HorizontalOffset));
+        WpfDialogSurfaceSemantics.Apply(_hAnchorBox, surface.Field(ImagePositionDialogField.HorizontalAnchor));
+        WpfDialogSurfaceSemantics.Apply(_vBox, surface.Field(ImagePositionDialogField.VerticalOffset));
+        WpfDialogSurfaceSemantics.Apply(_vAnchorBox, surface.Field(ImagePositionDialogField.VerticalAnchor));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -58,10 +64,10 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Grid.SetRow(el, row); Grid.SetColumn(el, col); g.Children.Add(el);
         }
 
-        Place(grid, Label("Horizontal offset (pt):"), 0, 0); Place(grid, _hBox, 0, 1);
-        Place(grid, Label("Relative to:"),             1, 0); Place(grid, _hAnchorBox, 1, 1);
-        Place(grid, Label("Vertical offset (pt):"),   2, 0); Place(grid, _vBox, 2, 1);
-        Place(grid, Label("Relative to:"),             3, 0); Place(grid, _vAnchorBox, 3, 1);
+        Place(grid, Label(surface.Field(ImagePositionDialogField.HorizontalOffset).Label), 0, 0); Place(grid, _hBox, 0, 1);
+        Place(grid, Label(surface.Field(ImagePositionDialogField.HorizontalAnchor).Label), 1, 0); Place(grid, _hAnchorBox, 1, 1);
+        Place(grid, Label(surface.Field(ImagePositionDialogField.VerticalOffset).Label),   2, 0); Place(grid, _vBox, 2, 1);
+        Place(grid, Label(surface.Field(ImagePositionDialogField.VerticalAnchor).Label),   3, 0); Place(grid, _vAnchorBox, 3, 1);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Place(grid, buttons, 4, 1);
@@ -111,7 +117,7 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         double vOffPt,
         HorizontalAnchor hAnchor,
         VerticalAnchor vAnchor,
-        string title = "Picture Position",
+        string title = ImagePositionDialogPlanner.DefaultTitle,
         bool isGroupLocal = false)
     {
         var dialog = new ImagePositionDialog(

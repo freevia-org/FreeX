@@ -5497,27 +5497,6 @@ public static class DocxWriter
         _                         => "textNoShape",
     };
 
-    /// <summary>Parses a <c>a:prstTxWarp/@prst</c> token back to a <see cref="WordArtWarp"/> enum value.</summary>
-    private static WordArtWarp WordArtWarpFromToken(string? token) => token switch
-    {
-        "textArchUp"         => WordArtWarp.ArchUp,
-        "textArchDown"       => WordArtWarp.ArchDown,
-        "textCircle"         => WordArtWarp.Circle,
-        "textButton"         => WordArtWarp.Button,
-        "textWave1"          => WordArtWarp.Wave1,
-        "textWave2"          => WordArtWarp.Wave2,
-        "textInflate"        => WordArtWarp.Inflate,
-        "textDeflate"        => WordArtWarp.Deflate,
-        "textInflateBottom"  => WordArtWarp.InflateBottom,
-        "textChevron"        => WordArtWarp.ChevronUp,
-        "textChevronInverted"=> WordArtWarp.ChevronDown,
-        "textFadeRight"      => WordArtWarp.FadeRight,
-        "textFadeLeft"       => WordArtWarp.FadeLeft,
-        "textSlantUp"        => WordArtWarp.SlantUp,
-        "textSlantDown"      => WordArtWarp.SlantDown,
-        _                    => WordArtWarp.None,
-    };
-
     /// <summary>Builds an a:solidFill wrapping an a:srgbClr of the given RRGGBB hex value.</summary>
     private static XElement SolidFill(string hex) =>
         new(A + "solidFill", new XElement(A + "srgbClr", new XAttribute("val", hex)));
@@ -8212,18 +8191,6 @@ public static class DocxWriter
                 DocumentRelativeTarget(drawing.PartName)));
         foreach (var (url, relationshipId) in part.Hyperlinks)
             relationships.Add(OpcRelationships.CreateRelationship(relationshipId, HyperlinkRel, url, external: true));
-        return new XDocument(relationships);
-    }
-
-    private static XDocument BuildPartLocalPreservedDrawingRels(
-        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
-    {
-        var relationships = OpcRelationships.CreateRoot();
-        foreach (var drawing in preservedDrawings)
-            relationships.Add(OpcRelationships.CreateRelationship(
-                drawing.RelationshipId,
-                drawing.RelationshipType,
-                DocumentRelativeTarget(drawing.PartName)));
         return new XDocument(relationships);
     }
 

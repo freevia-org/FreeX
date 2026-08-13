@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -270,13 +271,12 @@ public sealed class ChartPointOptionsPlanner
         if (string.IsNullOrWhiteSpace(text))
             return null;
 
-        var normalized = text.Trim();
-        if (normalized.StartsWith('#'))
-            normalized = normalized[1..];
-        if (normalized.Length != 6 ||
-            !int.TryParse(normalized, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+        if (!RgbColorTextCodec.TryParse(
+                text,
+                RgbColorTextProfile.TrimmedHashOrBare,
+                out var rgb))
             throw new FormatException($"{label} must be blank or a six-digit #RRGGBB color.");
-        return new ThemeAwareColor(SrgbColor.FromRgb(rgb));
+        return new ThemeAwareColor(new SrgbColor(rgb.R, rgb.G, rgb.B));
     }
 
     private void LoadPoint()

@@ -6,14 +6,21 @@ namespace FreeP.App.Compositor;
 public static class TextColumnSpacingOptionParser
 {
     private const double EmuPerPoint = 12_700;
+    private const long MaximumSpacingEmu = 144L * 12_700;
 
-    public static bool TryParse(string? value, out long spacingEmu)
+    public static bool TryParse(object? value, out long spacingEmu)
     {
         spacingEmu = 0;
-        if (string.IsNullOrWhiteSpace(value))
+        if (FreePRibbonChoiceCatalog.TryResolve(
+                value,
+                FreePRibbonChoiceCatalog.TextColumnSpacingChoices,
+                out spacingEmu))
+            return spacingEmu is >= 0 and <= MaximumSpacingEmu;
+
+        if (value is not string text || string.IsNullOrWhiteSpace(text))
             return false;
 
-        var setting = value.Trim();
+        var setting = text.Trim();
         if (setting.EndsWith("pt", StringComparison.OrdinalIgnoreCase))
             setting = setting[..^2].Trim();
 

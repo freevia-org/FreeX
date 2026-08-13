@@ -57,8 +57,9 @@ public sealed class Wave89MultiSelectionEvidenceContractTests
         var runner = ReadWorkspaceFile("tools", "Run-FreePMultiSelectionX11Validation.ps1");
 
         runner.Should().Contain("Invoke-External powershell.exe $startArgs");
-        runner.Should().Contain("Wait-EvidenceFile");
-        runner.Should().Contain("Start-Sleep -Milliseconds 100");
+        runner.Should().Contain("$manifestPath = Join-Path $sessionDirectory");
+        runner.Should().Contain("probe evidence is");
+        runner.Should().Contain("already present on the host");
         runner.Should().NotContain("Invoke-External docker @(\"cp\"");
         runner.Should().Contain("if ($PublishDir) { $startArgs += @(\"-PublishDir\", $PublishDir) }");
         runner.Should().Contain("if ($SkipPublish) { $startArgs += \"-SkipPublish\" }");
@@ -66,20 +67,6 @@ public sealed class Wave89MultiSelectionEvidenceContractTests
         runner.Should().Contain("if ($Replace) { $startArgs += \"-Replace\" }");
     }
 
-    private static string ReadWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var parts = new string[relativeParts.Length + 1];
-            parts[0] = directory.FullName;
-            relativeParts.CopyTo(parts, 1);
-            var candidate = Path.Combine(parts);
-            if (File.Exists(candidate))
-                return File.ReadAllText(candidate);
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
-    }
+    private static string ReadWorkspaceFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

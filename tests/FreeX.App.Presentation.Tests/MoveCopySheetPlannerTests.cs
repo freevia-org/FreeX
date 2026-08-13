@@ -99,15 +99,15 @@ public sealed class MoveCopySheetPlannerTests
     [Fact]
     public void MoveOrCopySheetDialog_DelegatesTargetAndResultPolicyToPlanner()
     {
-        var repoRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        repoRoot = Directory.GetParent(repoRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var source = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MoveOrCopySheetDialog.cs"));
 
         source.Should().Contain("MoveCopySheetPlanner.BuildTargets(");
         source.Should().Contain("MoveCopySheetPlanner.InitialTargetIndex(");
         source.Should().Contain("MoveCopySheetPlanner.CreatePlan(");
+        source.Should().Contain("public MoveCopySheetPlan Result");
         source.Should().Contain("DisplayMemberPath = nameof(MoveCopySheetTarget.DisplayName)");
+        source.Should().NotContain("MoveOrCopySheetDialogResult");
         source.Should().NotContain("private static IEnumerable<MoveOrCopySheetTarget> BuildTargets");
         source.Should().NotContain("private sealed record MoveOrCopySheetTarget");
         source.Should().NotContain("Math.Clamp(insertBeforeIndex");

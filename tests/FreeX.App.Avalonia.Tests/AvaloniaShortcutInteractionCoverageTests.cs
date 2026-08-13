@@ -2,6 +2,7 @@ using Avalonia.Input;
 using Avalonia.Headless;
 using FluentAssertions;
 using FreeX.App.Presentation.InteractionValidation;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -13,7 +14,7 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
     [Fact]
-    public void AvaloniaHostRegistry_ExactlyMatchesStructuredScenarioChords()
+    public void ApplicationAndAvaloniaLocalRegistries_ExactlyMatchStructuredScenarioChords()
     {
         var scenarioChords = InteractiveValidationInventory.KeyboardShortcuts
             .SelectMany(scenario => scenario.Interactions.Select(interaction => (scenario.Id, Interaction: interaction)))
@@ -23,28 +24,48 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
             .Select(item => (item.Id, item.DisplayText, Chord: item.Chord!.Value))
             .ToArray();
 
-        MainWindow.AvaloniaHostShortcutRules.Should().HaveCount(56);
-        MainWindow.AvaloniaHostShortcutRules
+        var applicationRules = WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts
+            .Select(shortcut => (
+                Key: Enum.Parse<Key>(shortcut.Key.ToString()),
+                Modifiers: ToAvaloniaModifiers(shortcut.Modifiers),
+                shortcut.Command))
+            .Concat(
+            [
+                (Key: Key.Add, Modifiers: KeyModifiers.Control | KeyModifiers.Alt, Command: KeyboardCommandShortcut.ZoomIn),
+                (Key: Key.Subtract, Modifiers: KeyModifiers.Control | KeyModifiers.Alt, Command: KeyboardCommandShortcut.ZoomOut),
+                (Key: Key.Decimal, Modifiers: KeyModifiers.Control, Command: KeyboardCommandShortcut.CycleSelectionCorner),
+            ])
+            .ToArray();
+        applicationRules.Should().HaveCount(50);
+        applicationRules.Select(rule => rule.Command).Distinct().Should().HaveCount(42);
+        applicationRules
             .GroupBy(rule => $"{rule.Modifiers}:{rule.Key}", StringComparer.Ordinal)
             .Should().OnlyContain(group => group.Count() == 1);
-        foreach (var rule in MainWindow.AvaloniaHostShortcutRules)
+        foreach (var rule in applicationRules)
         {
             scenarioChords
                 .Where(item => item.Chord == (rule.Key, rule.Modifiers))
                 .Select(item => $"{item.Id}:{item.DisplayText}")
                 .Should().ContainSingle($"{rule.Modifiers}+{rule.Key} must have one scenario interaction");
-            MainWindow.TryResolveAvaloniaHostShortcutForTest(rule.Key, rule.Modifiers, out var resolved)
+            MainWindow.TryResolveApplicationShortcutForTest(rule.Key, rule.Modifiers, out var resolved)
                 .Should().BeTrue();
-            resolved.Should().Be(rule.Shortcut);
+            resolved.Should().Be(rule.Command);
         }
 
-        var representedHostChords = scenarioChords
+        MainWindow.AvaloniaLocalShortcutRules.Should().HaveCount(6);
+        var representedApplicationChords = scenarioChords
             .Select(item => item.Chord)
             .Distinct()
-            .Where(chord => MainWindow.TryResolveAvaloniaHostShortcutForTest(chord.Key, chord.Modifiers, out _))
+            .Where(chord => MainWindow.TryResolveApplicationShortcutForTest(chord.Key, chord.Modifiers, out _))
             .ToArray();
-        representedHostChords.Should().BeEquivalentTo(
-            MainWindow.AvaloniaHostShortcutRules.Select(rule => (rule.Key, rule.Modifiers)));
+        representedApplicationChords.Should().BeEquivalentTo(
+            applicationRules.Select(rule => (rule.Key, rule.Modifiers)));
+        foreach (var rule in MainWindow.AvaloniaLocalShortcutRules)
+        {
+            scenarioChords
+                .Where(item => item.Chord == (rule.Key, rule.Modifiers))
+                .Should().ContainSingle();
+        }
     }
 
     [Fact]
@@ -283,6 +304,16 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
         ShortcutModifierKeys modifiers) =>
         interaction.Steps.Count == 1 &&
         interaction.Steps[0] == new ShortcutGestureStep(key, modifiers);
+
+    private static KeyModifiers ToAvaloniaModifiers(WorkbookShortcutModifiers modifiers)
+    {
+        var result = KeyModifiers.None;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Control)) result |= KeyModifiers.Control;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Meta)) result |= KeyModifiers.Meta;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Alt)) result |= KeyModifiers.Alt;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Shift)) result |= KeyModifiers.Shift;
+        return result;
+    }
 
     private static (Key Key, KeyModifiers Modifiers)? ToAvaloniaChord(ShortcutGestureStep step)
     {

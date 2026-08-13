@@ -16,21 +16,30 @@ public sealed class FreeWFileDialogSourceTests
             ReadHostSource("Ribbon", "FreeWRibbonCommands.cs")
         };
         var combined = string.Join(Environment.NewLine, sources);
+        var outputWorkflow = ReadPresentationSource("Shell", "FreeWOutputWorkflow.cs");
+        var pictureWorkflow = ReadPresentationSource(
+            "DocumentFragments", "FreeWPictureImportWorkflow.cs");
+        var fragmentWorkflow = ReadPresentationSource(
+            "DocumentFragments", "FreeWDocumentFragmentImportWorkflow.cs");
+        var fragmentPorts = ReadHostSource(
+            "DocumentFragments", "WpfDocumentFragmentImportPorts.cs");
 
         combined.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         combined.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
-        combined.Should().Contain("defaultExtensionWithDot: \".docx\"");
-        combined.Should().Contain("\"Insert Text from File\"");
-        combined.Should().Contain("\"Insert Picture\"");
-        combined.Should().Contain("\"Insert Object\"");
-        combined.Should().Contain("OlePackagePayloadBuilder.Create(");
-        combined.Should().Contain("EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId)");
+        fragmentPorts.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        fragmentWorkflow.Should().Contain("DefaultExtensionWithDot: \".docx\"");
+        fragmentWorkflow.Should().Contain("InsertDialogTextResources.TextFromFilePickerTitle");
+        pictureWorkflow.Should().Contain("InsertPicturePickerTitle");
+        fragmentWorkflow.Should().Contain("\"Insert Object\"");
+        fragmentWorkflow.Should().Contain("OlePackagePayloadBuilder.Create(");
+        fragmentWorkflow.Should().Contain("EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId)");
         combined.Should().NotContain("SampleEmbeddedObject");
-        combined.Should().Contain("\"Export to PDF\"");
-        combined.Should().Contain("\"Export to XPS\"");
-        combined.Should().Contain("\"Compare: pick the ORIGINAL document\"");
-        combined.Should().Contain("\"Combine: pick the ORIGINAL (base) document\"");
-        combined.Should().Contain("\"Combine: pick Reviewer B's revised document\"");
+        combined.Should().Contain("FreeWExportWorkflow.CreatePlan(");
+        outputWorkflow.Should().Contain("FreeWFileTextResources.ExportPdfPickerTitle");
+        outputWorkflow.Should().Contain("FreeWFileTextResources.ExportXpsPickerTitle");
+        combined.Should().Contain("ReviewCompareCombineWorkflow.CompareOriginalPickerTitle");
+        combined.Should().Contain("ReviewCompareCombineWorkflow.CombineOriginalPickerTitle");
+        combined.Should().Contain("ReviewCompareCombineWorkflow.CombineReviewerBPickerTitle");
         combined.Should().Contain("WatermarkOptionsDialogPlanner.SelectWatermarkImageTitle");
         combined.Should().Contain("WatermarkOptionsDialogPlanner.WatermarkImageFilter");
         combined.Should().NotContain("using Microsoft.Win32;");
@@ -43,6 +52,12 @@ public sealed class FreeWFileDialogSourceTests
     private static string ReadHostSource(params string[] relativeParts)
     {
         var path = Path.Combine(new[] { TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Host" }.Concat(relativeParts).ToArray());
+        return File.ReadAllText(path);
+    }
+
+    private static string ReadPresentationSource(params string[] relativeParts)
+    {
+        var path = Path.Combine(new[] { TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Presentation" }.Concat(relativeParts).ToArray());
         return File.ReadAllText(path);
     }
 

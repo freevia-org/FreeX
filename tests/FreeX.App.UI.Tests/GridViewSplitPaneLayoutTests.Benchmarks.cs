@@ -13,13 +13,14 @@ public sealed partial class GridViewSplitPaneLayoutTests
         private List<FormulaTraceArrowLayout>? _layouts;
 
         public void AcceptLayout(
-            Point start,
-            Point end,
+            LayoutPoint start,
+            LayoutPoint end,
             FormulaTraceArrowLayoutKind kind,
-            CellAddress? navigationTarget)
+            CellAddress? navigationTarget,
+            FormulaTraceArrowKind arrowKind)
         {
             _layouts ??= [];
-            _layouts.Add(new FormulaTraceArrowLayout(start, end, kind, navigationTarget));
+            _layouts.Add(new FormulaTraceArrowLayout(start, end, kind, navigationTarget, arrowKind));
         }
 
         public readonly IReadOnlyList<FormulaTraceArrowLayout> Layouts => _layouts ?? [];

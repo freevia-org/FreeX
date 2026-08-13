@@ -8,13 +8,12 @@ using FreeW.App.Presentation.Dialogs;
 namespace FreeW.App.Avalonia.Editing;
 
 /// <summary>Fullscreen cross-platform drag selector for Insert &gt; Screen Clipping.</summary>
-internal sealed class ScreenClipOverlay : Window
+internal sealed partial class ScreenClipOverlay : Window
 {
     private readonly Canvas _canvas;
     private readonly Rectangle _selection;
     private readonly PixelRect _virtualBounds;
-    private Point _origin;
-    private bool _dragging;
+    private readonly ScreenClipSelectionSession _selectionSession = new();
     private ScreenPixelRect? _result;
     private TaskCompletionSource<ScreenPixelRect?>? _completion;
 
@@ -56,8 +55,6 @@ internal sealed class ScreenClipOverlay : Window
         Opened += (_, _) => Focus();
     }
 
-    internal ScreenPixelRect? ResultForTest => _result;
-
     public Task<ScreenPixelRect?> ShowSelectionAsync()
     {
         if (_completion is not null)
@@ -69,29 +66,6 @@ internal sealed class ScreenClipOverlay : Window
         Activate();
         return _completion.Task;
     }
-
-    internal void BeginSelectionForTest(Point point)
-    {
-        _origin = point;
-        _dragging = true;
-        UpdateSelectionVisual(point);
-    }
-
-    internal ScreenPixelRect? CompleteSelectionForTest(Point point, double renderScale)
-    {
-        _dragging = false;
-        _result = ScreenClipPlanner.BuildPhysicalSelection(
-            _origin.X,
-            _origin.Y,
-            point.X,
-            point.Y,
-            _virtualBounds.X,
-            _virtualBounds.Y,
-            renderScale);
-        return _result;
-    }
-
-    internal void CancelForTest() => _result = null;
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs args)
     {
@@ -106,35 +80,36 @@ internal sealed class ScreenClipOverlay : Window
         if (point.Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed)
             return;
 
-        _origin = point.Position;
-        _dragging = true;
-        UpdateSelectionVisual(_origin);
+        ApplySelectionVisual(_selectionSession.Begin(point.Position.X, point.Position.Y));
         args.Pointer.Capture(_canvas);
         args.Handled = true;
     }
 
     private void OnPointerMoved(object? sender, PointerEventArgs args)
     {
-        if (!_dragging)
-            return;
-
-        UpdateSelectionVisual(args.GetPosition(_canvas));
-        args.Handled = true;
+        var current = args.GetPosition(_canvas);
+        if (_selectionSession.Update(current.X, current.Y) is { } update)
+        {
+            ApplySelectionVisual(update);
+            args.Handled = true;
+        }
     }
 
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs args)
     {
-        if (!_dragging || args.InitialPressMouseButton != MouseButton.Left)
+        if (args.InitialPressMouseButton != MouseButton.Left)
             return;
 
-        _dragging = false;
-        args.Pointer.Capture(null);
         var current = args.GetPosition(_canvas);
+        if (_selectionSession.Complete(current.X, current.Y) is not { } completion)
+            return;
+
+        args.Pointer.Capture(null);
         _result = ScreenClipPlanner.BuildPhysicalSelection(
-            _origin.X,
-            _origin.Y,
-            current.X,
-            current.Y,
+            completion.Origin.X,
+            completion.Origin.Y,
+            completion.Current.X,
+            completion.Current.Y,
             _virtualBounds.X,
             _virtualBounds.Y,
             RenderScaling);
@@ -151,19 +126,18 @@ internal sealed class ScreenClipOverlay : Window
         Cancel();
     }
 
-    private void UpdateSelectionVisual(Point current)
+    private void ApplySelectionVisual(ScreenClipSelectionUpdate update)
     {
-        var left = Math.Min(_origin.X, current.X);
-        var top = Math.Min(_origin.Y, current.Y);
-        Canvas.SetLeft(_selection, left);
-        Canvas.SetTop(_selection, top);
-        _selection.Width = Math.Abs(current.X - _origin.X);
-        _selection.Height = Math.Abs(current.Y - _origin.Y);
+        Canvas.SetLeft(_selection, update.Bounds.Left);
+        Canvas.SetTop(_selection, update.Bounds.Top);
+        _selection.Width = update.Bounds.Width;
+        _selection.Height = update.Bounds.Height;
         _selection.IsVisible = true;
     }
 
     private void Cancel()
     {
+        _selectionSession.Cancel();
         _result = null;
         Close();
     }

@@ -120,12 +120,9 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     {
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
-        var mouseDown = selectionSource[
-            selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
+        var shiftCellSelection = selectionSource[
+            selectionSource.IndexOf("private bool TryHandleCellAreaExtendClick", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal)];
-        var shiftCellSelection = mouseDown[
-            mouseDown.IndexOf("if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)", StringComparison.Ordinal)..
-            mouseDown.IndexOf("else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)", StringComparison.Ordinal)];
 
         shiftCellSelection.Should().Contain("HideValidationDropdown();");
         shiftCellSelection.Should().Contain("ExtendSelection(_selectionAnchor.Value, newAddr);");
@@ -144,10 +141,10 @@ public sealed partial class MainWindowMouseSelectionSourceTests
             selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
 
         extendSelection.Should().Contain("ClearSelectionTransientOverlays();");
-        extendSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
+        extendSelection.Should().Contain("SheetGrid.SelectedRange = range;");
         extendSelection.IndexOf("ClearSelectionTransientOverlays();", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(extendSelection.IndexOf("SheetGrid.SelectedRange = new GridRange(", StringComparison.Ordinal));
+            .BeLessThan(extendSelection.IndexOf("SheetGrid.SelectedRange = range;", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -170,7 +167,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         clearTransientOverlays.Should().Contain("ClearCommentPreview();");
         extendSelection.IndexOf("ClearSelectionTransientOverlays();", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(extendSelection.IndexOf("SheetGrid.SelectedRange = new GridRange(", StringComparison.Ordinal));
+            .BeLessThan(extendSelection.IndexOf("SheetGrid.SelectedRange = range;", StringComparison.Ordinal));
         addSelection.IndexOf("ClearSelectionTransientOverlays();", StringComparison.Ordinal)
             .Should()
             .BeLessThan(addSelection.IndexOf("SetSelectedRangesIfChanged(ranges);", StringComparison.Ordinal));

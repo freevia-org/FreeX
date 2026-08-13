@@ -1,13 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Threading;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
 
@@ -19,12 +15,9 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     /// <summary>
-    /// Opt-in (env <c>FREEX_RIBBON_DECLARATIVE=1</c>) swap of the hand-authored XAML ribbon for the
-    /// declarative <see cref="FreeXRibbonDefinition"/> rendered via <see cref="RibbonWpfRenderer"/>.
-    /// Commands bridge to the existing handlers: every original ribbon control is captured by its
-    /// <c>CommandName</c> before replacement, and the rendered button raises the original control's
-    /// Click so existing behavior runs unchanged. Default (flag unset) keeps the live XAML ribbon,
-    /// so this never regresses keytips/adaptive/state-sync in shipping builds.
+    /// Installs the declarative <see cref="FreeXRibbonDefinition"/> through the shared WPF renderer.
+    /// Tab shells, commands, keytips, and adaptive policy all come from the shared definition before
+    /// workbook and option state is applied.
     /// </summary>
     private void TryApplyDeclarativeRibbon()
     {
@@ -33,9 +26,12 @@ public partial class MainWindow
 
         try
         {
-            // The ribbon is now declarative. Hidden backplane controls (MainWindow.RibbonBackplane.g.cs)
-            // hold state and serve as the 'sender' for handlers. Commands bind NATIVELY: each CommandId
-            // invokes its MainWindow handler method directly; the control bridge is only a fallback.
+            var definition = FreeXRibbonCompositionPlanner.Compose(FreeXRibbon.Build(), UiText.Get);
+            BuildRibbonTabShells(definition);
+
+            // Hidden backplane controls (MainWindow.RibbonBackplane.g.cs) hold state and serve as the
+            // fallback sender for handlers. Definition commands bind directly to typed delegates; the
+            // control bridge remains only for non-definition backplane commands.
             InitializeRibbonControlBackplane();
             var originals = RibbonBackplaneControls;
             var registry = BuildNativeRibbonRegistry();
@@ -45,8 +41,6 @@ public partial class MainWindow
                     registry.Register(name, new WpfControlRibbonCommand(control));
             }
 
-            var definition = FreeXRibbon.Build();
-            RegisterDefinitionHandlerQualifiedCommands(registry, definition);
             foreach (var item in RibbonTabs.Items)
             {
                 if (item is not TabItem tabItem)
@@ -56,7 +50,15 @@ public partial class MainWindow
                 if (definition.FindTab(catalogId) is not { } definitionTab)
                     continue;
 
-                var content = RibbonWpfRenderer.BuildTabContent(definitionTab, this, registry, _ribbonState);
+                if (definitionTab.Groups.Count == 0)
+                    continue;
+
+                var content = Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.BuildTabContent(
+                    definitionTab,
+                    this,
+                    registry,
+                    _ribbonState,
+                    RibbonWpfRendererOptions.FreeXHost);
 
                 // The Home tab keeps the HomeRibbonPanel backplane in its rendered subtree so commands
                 // injected into it at runtime (Excel add-ins / tests) still surface as keytip candidates.
@@ -100,74 +102,64 @@ public partial class MainWindow
             WireRenderedFormatPainterDoubleClick(renderedByName);
             PopulateAndWireRenderedHomeCombos(renderedByName);
             PopulateAndWireRenderedPageLayoutCombos(renderedByName);
-
-            if (Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_CAPTURE") == "1")
-                Dispatcher.BeginInvoke(new Action(CaptureDeclarativeRibbon), DispatcherPriority.ContextIdle);
         }
         catch (Exception ex)
         {
-            // A preview-mode swap must never take down startup.
+            // Ribbon materialization must not take down the rest of the workbook shell.
             System.Diagnostics.Debug.WriteLine($"Declarative ribbon swap failed: {ex}");
         }
     }
 
-    /// <summary>Renders the live (swapped) ribbon tab strip to a PNG and exits — capture-mode proof.</summary>
-    private void CaptureDeclarativeRibbon()
+    private readonly Dictionary<string, TabItem> _ribbonTabsByCatalogId =
+        new(StringComparer.Ordinal);
+
+    private void BuildRibbonTabShells(RibbonDefinition definition)
     {
+        var selectedCatalogId = RibbonTabs.SelectedItem is DependencyObject selected &&
+                                RibbonMetadata.TryGetCatalogId(selected, out var selectedId)
+            ? selectedId
+            : FreeXRibbonTabIds.Home;
+
+        _suppressRibbonSelectionChangedNormalization = true;
         try
         {
-            if (RibbonTabs is null)
-                return;
+            RibbonTabs.Items.Clear();
+            _ribbonTabsByCatalogId.Clear();
 
-            if (double.TryParse(Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_WIDTH"),
-                    System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var forcedWidth) &&
-                forcedWidth > 0)
+            foreach (var tab in definition.Tabs)
             {
-                WindowState = WindowState.Normal;
-                Width = forcedWidth;
+                var item = new TabItem
+                {
+                    Header = tab.Header,
+                    Visibility = tab.IsContextual ? Visibility.Collapsed : Visibility.Visible,
+                };
+                RibbonMetadata.SetCatalogId(item, tab.Id);
+                RibbonTooltip.SetKeyTip(item, tab.KeyTip ?? string.Empty);
+                RibbonTabs.Items.Add(item);
+                _ribbonTabsByCatalogId.Add(tab.Id, item);
             }
 
-            RibbonTabs.UpdateLayout();
-            var width = (int)Math.Ceiling(RibbonTabs.ActualWidth);
-            var height = (int)Math.Ceiling(RibbonTabs.ActualHeight);
-            if (width <= 0 || height <= 0)
-                return;
-
-            var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-            bitmap.Render(RibbonTabs);
-
-            var outputPath = Path.Combine(FindScreenshotDirectory(), "home_live.png");
-            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(bitmap));
-            using var stream = File.Create(outputPath);
-            encoder.Save(stream);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Declarative ribbon capture failed: {ex}");
+            RibbonTabs.SelectedItem = FindRibbonTabByCatalogId(selectedCatalogId) ??
+                                      FindRibbonTabByCatalogId(FreeXRibbonTabIds.Home);
         }
         finally
         {
-            Application.Current?.Shutdown();
+            _suppressRibbonSelectionChangedNormalization = false;
         }
     }
 
-    private static string FindScreenshotDirectory()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FreeX.slnx")))
-            dir = dir.Parent;
+    private TabItem? FindRibbonTabByCatalogId(string catalogId) =>
+        _ribbonTabsByCatalogId.GetValueOrDefault(catalogId);
 
-        var root = dir?.FullName ?? AppContext.BaseDirectory;
-        return Path.Combine(root, "screenshots", "ribbon-declarative");
-    }
+    private TabItem? FileTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.File);
+    private TabItem? ShapeFormatTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.ShapeFormat);
+    private TabItem? PictureFormatTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.PictureFormat);
+    private TabItem? ChartDesignTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.ChartDesign);
+    private TabItem? ChartFormatTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.ChartFormat);
+    private TabItem? TableDesignTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.TableDesign);
+    private TabItem? PivotTableAnalyzeTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.PivotTableAnalyze);
+    private TabItem? PivotTableDesignTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.PivotTableDesign);
 
-    /// <summary>
-    /// Builds the native command registry: each CommandId is bound directly to its MainWindow
-    /// Click-handler method (via the generated <see cref="FreeXRibbonHandlerMap"/>), so command
-    /// execution no longer depends on the XAML control tree.
-    /// </summary>
     /// <summary>
     /// Attaches the Excel-style split-button dropdown zone (hover highlight + click-zone handler) to every
     /// rendered menu button in a tab. The renderer already gives menu buttons a ContextMenu and a tagged
@@ -192,57 +184,45 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// Builds the native command registry from the generated typed delegate catalog, so command
+    /// execution does not depend on reflection or the XAML control tree.
+    /// </summary>
     private RibbonCommandRegistry BuildNativeRibbonRegistry()
     {
         var registry = new RibbonCommandRegistry();
-        var type = typeof(MainWindow);
-        const System.Reflection.BindingFlags flags =
-            System.Reflection.BindingFlags.Instance |
-            System.Reflection.BindingFlags.NonPublic |
-            System.Reflection.BindingFlags.Public;
-
-        foreach (var (name, methodName) in FreeXRibbonHandlerMap.Handlers)
-        {
-            var method = type.GetMethod(methodName, flags, binder: null,
-                types: new[] { typeof(object), typeof(RoutedEventArgs) }, modifiers: null)
-                ?? type.GetMethod(methodName, flags, binder: null, types: System.Type.EmptyTypes, modifiers: null);
-            if (method is not null)
-                registry.Register(name, new WpfReflectiveRibbonCommand(this, method,
-                    RibbonBackplaneControls.GetValueOrDefault(name)));
-        }
+        foreach (var (commandId, binding) in FreeXRibbonHandlers)
+            registry.Register(commandId, new WpfDelegateRibbonCommand(
+                this,
+                binding.Handler,
+                RibbonBackplaneControls.GetValueOrDefault(commandId)));
 
         return registry;
     }
 
-    /// <summary>
-    /// Registers commands whose CommandId is "Title#HandlerMethod" but are NOT in the generated
-    /// <see cref="FreeXRibbonHandlerMap"/> (it is generated from the old XAML and so omits hand-authored
-    /// declarative additions like the Help tab). Without this their buttons render disabled because the
-    /// renderer disables any command the registry cannot resolve. The handler method name after '#' is
-    /// bound by reflection, mirroring how the generated map's ambiguous ids are bound.
-    /// </summary>
-    private void RegisterDefinitionHandlerQualifiedCommands(RibbonCommandRegistry registry, RibbonDefinition definition)
+    private sealed class WpfDelegateRibbonCommand(
+        MainWindow owner,
+        Action<MainWindow, object, RoutedEventArgs> handler,
+        object? fallbackSender) : IRibbonCommand
     {
-        var type = typeof(MainWindow);
-        const System.Reflection.BindingFlags flags =
-            System.Reflection.BindingFlags.Instance |
-            System.Reflection.BindingFlags.NonPublic |
-            System.Reflection.BindingFlags.Public;
-
-        foreach (var control in definition.Tabs.SelectMany(tab => tab.Groups).SelectMany(group => group.Controls))
+        public void Execute(RibbonCommandContext context)
         {
-            var id = control.CommandId.Value;
-            var hash = id.IndexOf('#');
-            if (hash <= 0 || hash >= id.Length - 1 || registry.TryGet(control.CommandId, out _))
-                continue;
+            var sender = (context.Parameters.TryGetValue(
+                    Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey,
+                    out var value)
+                    ? value
+                    : null)
+                ?? fallbackSender
+                ?? owner;
 
-            var methodName = id[(hash + 1)..];
-            var method = type.GetMethod(methodName, flags, binder: null,
-                    types: new[] { typeof(object), typeof(RoutedEventArgs) }, modifiers: null)
-                ?? type.GetMethod(methodName, flags, binder: null, types: System.Type.EmptyTypes, modifiers: null);
-            if (method is not null)
-                registry.Register(id, new WpfReflectiveRibbonCommand(this, method,
-                    RibbonBackplaneControls.GetValueOrDefault(id)));
+            try
+            {
+                handler(owner, sender, new RoutedEventArgs());
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ribbon command delegate threw: {ex}");
+            }
         }
     }
 
@@ -279,11 +259,6 @@ public partial class MainWindow
     /// ribbon has been built.</summary>
     private Control? FindRenderedRibbonControl(string commandName) =>
         _renderedRibbonControls.TryGetValue(commandName, out var control) ? control : null;
-
-    /// <summary>Test hook: returns the visible rendered ribbon control for a command name (e.g. a
-    /// gallery button) so functional tests can assert its attached context menu.</summary>
-    internal Control? FindRenderedRibbonCommandControlForTest(string commandName) =>
-        FindRenderedRibbonControl(commandName);
 
     /// <summary>
     /// Shares imperatively-built context menus from the legacy backplane buttons onto the rendered
@@ -386,7 +361,6 @@ public partial class MainWindow
 
         if (rendered.TryGetValue("Number Format", out var numberControl) && numberControl is ComboBox numberBox)
         {
-            PopulateRenderedComboItems(numberBox, HomeNumberFormatLabels);
             _suppressToolbarSync = true;
             try
             {
@@ -418,7 +392,6 @@ public partial class MainWindow
     {
         if (rendered.TryGetValue("Scale Width", out var widthControl) && widthControl is ComboBox widthBox)
         {
-            PopulateRenderedComboItems(widthBox, PageLayoutInputParser.ScalePageCountOptions);
             if (!_renderedPageLayoutCombosWired)
             {
                 widthBox.SelectionChanged += PageLayoutScaleWidthBox_SelectionChanged;
@@ -429,7 +402,6 @@ public partial class MainWindow
 
         if (rendered.TryGetValue("Scale Height", out var heightControl) && heightControl is ComboBox heightBox)
         {
-            PopulateRenderedComboItems(heightBox, PageLayoutInputParser.ScalePageCountOptions);
             if (!_renderedPageLayoutCombosWired)
             {
                 heightBox.SelectionChanged += PageLayoutScaleHeightBox_SelectionChanged;
@@ -440,7 +412,6 @@ public partial class MainWindow
 
         if (rendered.TryGetValue("Scale Percent", out var percentControl) && percentControl is ComboBox percentBox)
         {
-            PopulateRenderedComboItems(percentBox, PageLayoutInputParser.ScalePercentOptions);
             if (!_renderedPageLayoutCombosWired)
             {
                 percentBox.SelectionChanged += PageLayoutScalePercentBox_SelectionChanged;
@@ -465,10 +436,6 @@ public partial class MainWindow
     /// <summary>Default font-size choices for the rendered Home Font Size combo.</summary>
     private static readonly System.Collections.Generic.IReadOnlyList<string> HomeFontSizeOptions =
         new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36", "48", "72" };
-
-    /// <summary>Number-format labels for the rendered Home Number Format combo.</summary>
-    private static readonly System.Collections.Generic.IReadOnlyList<string> HomeNumberFormatLabels =
-        HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label).ToArray();
 
     /// <summary>Replaces a rendered combo's declarative placeholder items with the full host source.</summary>
     private static void PopulateRenderedComboItems(

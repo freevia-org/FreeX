@@ -58,8 +58,8 @@ public sealed class AvaloniaPictureCropRuntimeTests
             var commands = (IReadOnlyDictionary<string, Action>)InvokePrivate(
                 window, "BuildContextualTabCommands")!;
 
-            commands.Should().ContainKey("pictureFormat.crop");
-            commands["pictureFormat.crop"]();
+            commands.Should().ContainKey("Crop Picture");
+            commands["Crop Picture"]();
 
             GetPrivateField<bool>(window, "_isPictureCropMode").Should().BeTrue();
 

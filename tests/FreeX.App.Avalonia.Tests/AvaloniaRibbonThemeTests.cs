@@ -9,6 +9,8 @@ using Avalonia.Media;
 
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.Ribbon;
+using FreeX.Ribbon.Definitions;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
@@ -109,7 +111,7 @@ public sealed class AvaloniaRibbonThemeTests
         // built from the single-source FreeXRibbon definition.
         var combo = ribbon.GetLogicalDescendants()
             .OfType<ComboBox>()
-            .First(c => (string?)c.Tag == AvaloniaCommandIdAdapter.ToCanonical("home.fontSize"));
+            .First(c => (string?)c.Tag == FreeXRibbonCommandCatalog.GetRequired("Font Size").Value);
 
         // Initial index 0 was suppressed at build; a user pick (index change) applies the chosen size.
         combo.SelectedIndex = combo.SelectedIndex + 1;

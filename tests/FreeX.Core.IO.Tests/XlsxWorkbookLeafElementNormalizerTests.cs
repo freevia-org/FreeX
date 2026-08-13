@@ -220,6 +220,26 @@ public sealed class XlsxWorkbookLeafElementNormalizerTests
 
     // ── 8. schema table coverage: all registered schemas are self-consistent ─────────────
 
+    [Fact]
+    public void Normalize_KnownElement_ResolvesSchemaByLocalName()
+    {
+        var element = MakeElement("calcPr", ("calcMode", "auto"), ("unknown", "drop"));
+
+        XlsxWorkbookLeafElementNormalizer.Normalize(element).Should().BeTrue();
+
+        element.Attribute("calcMode")!.Value.Should().Be("auto");
+        element.Attribute("unknown").Should().BeNull();
+    }
+
+    [Fact]
+    public void Normalize_UnknownElement_ReportsMissingSchema()
+    {
+        var act = () => XlsxWorkbookLeafElementNormalizer.Normalize(new XElement("unknownLeaf"));
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*unknownLeaf*");
+    }
+
     [Theory]
     [MemberData(nameof(AllRegisteredSchemaLocalNames))]
     public void RegisteredSchema_AttributeRuleKeys_AreSubsetOfAllowedAttributes(string localName)

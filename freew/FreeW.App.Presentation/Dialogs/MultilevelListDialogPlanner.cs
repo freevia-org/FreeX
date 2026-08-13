@@ -39,10 +39,62 @@ public sealed record MultilevelListDefinition(
     IReadOnlyList<ListNumberFormat> NumberFormats,
     bool LinkToHeadingStyles = false);
 
+public sealed record MultilevelListPreset(
+    string CommandId,
+    string Name,
+    string Description,
+    MultilevelListDefinition Definition);
+
 public static class MultilevelListDialogPlanner
 {
-    public const string Title = "Define New Multilevel List";
-    public const string PositiveStartAtMessage = "Start-at values must be positive integers or blank.";
+    public static string Title => FreeWUiTextCatalog.MultilevelListTitle;
+    public static string PositiveStartAtMessage => FreeWUiTextCatalog.MultilevelListPositiveStartAtMessage;
+    public const int MaximumLevelCount = 9;
+    public const int DialogWidth = 380;
+    public const int OuterMargin = 14;
+    public const int LevelsMinWidth = 80;
+    public const int StartAtMinWidth = 60;
+    public const int NumberFormatMinWidth = 130;
+    public const int ButtonWidth = 72;
+    public static string Description => FreeWUiTextCatalog.MultilevelListDescription;
+    public static string LevelsLabel => FreeWUiTextCatalog.MultilevelListLevelsLabel;
+    public static string Level0StartAtLabel => FreeWUiTextCatalog.MultilevelListLevel1StartAtLabel;
+    public static string Level1StartAtLabel => FreeWUiTextCatalog.MultilevelListLevel2StartAtLabel;
+    public static string Level0NumberStyleLabel => FreeWUiTextCatalog.MultilevelListLevel1NumberStyleLabel;
+    public static string Level1NumberStyleLabel => FreeWUiTextCatalog.MultilevelListLevel2NumberStyleLabel;
+    public static string Level2NumberStyleLabel => FreeWUiTextCatalog.MultilevelListLevel3NumberStyleLabel;
+    public static string Level0StartAtToolTip => FreeWUiTextCatalog.MultilevelListLevel1StartAtToolTip;
+    public static string Level1StartAtToolTip => FreeWUiTextCatalog.MultilevelListLevel2StartAtToolTip;
+
+    public static MultilevelListDefinition DefaultDefinition { get; } =
+        new(
+            MultiLevelListFormat.LevelCount,
+            Level0StartAt: null,
+            Level1StartAt: null,
+            MultiLevelListFormat.DecimalNumberFormats);
+
+    public static IReadOnlyList<MultilevelListPreset> Presets { get; } =
+    [
+        new(
+            "freew.multilevel-preset-0",
+            "Outline: 1. / 1.1. / 1.1.1.",
+            "Decimal outline using the standard FreeW multilevel list.",
+            DefaultDefinition),
+        new(
+            "freew.multilevel-preset-1",
+            "Outline: 1. / a. / i.",
+            "Decimal + lower-letter + lower-roman per-level numbering.",
+            new MultilevelListDefinition(
+                MultiLevelListFormat.LevelCount,
+                Level0StartAt: null,
+                Level1StartAt: null,
+                MultiLevelListFormat.DecimalLowerLetterLowerRomanNumberFormats)),
+        new(
+            "freew.multilevel-preset-2",
+            "Outline (Headings): link to Heading styles",
+            "Apply multilevel list and map each level to Heading 1-3 styles.",
+            DefaultDefinition with { LinkToHeadingStyles = true }),
+    ];
 
     public static IReadOnlyList<MultilevelListNumberFormatChoice> NumberFormatChoices { get; } =
     [
@@ -52,6 +104,14 @@ public static class MultilevelListDialogPlanner
         new("i, ii, iii", ListNumberFormat.LowerRoman),
         new("I, II, III", ListNumberFormat.UpperRoman),
     ];
+
+    public static MultilevelListDialogSession CreateSession(
+        IReadOnlyList<ListNumberFormat>? currentNumberFormats,
+        CultureInfo culture) =>
+        new(currentNumberFormats, culture);
+
+    public static MultilevelListCommitPlan PlanCommit(MultilevelListDefinition? definition) =>
+        new(definition);
 
     public static MultilevelListDialogInitialState BuildInitialState(
         IReadOnlyList<ListNumberFormat>? currentNumberFormats,
@@ -99,7 +159,7 @@ public static class MultilevelListDialogPlanner
         formats[1] = FormatAt(input.Level1FormatIndex);
         formats[2] = FormatAt(input.Level2FormatIndex);
         result = new MultilevelListDefinition(
-            Math.Clamp(input.LevelsIndex + 1, 1, 9),
+            Math.Clamp(input.LevelsIndex + 1, 1, MaximumLevelCount),
             level0StartAt,
             level1StartAt,
             formats);

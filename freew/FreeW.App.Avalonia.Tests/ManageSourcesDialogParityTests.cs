@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using FreeW.App.Avalonia;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -33,14 +34,15 @@ public sealed class ManageSourcesDialogParityTests
                 lists.Should().OnlyContain(list => list.SelectedIndex == 0);
 
                 var buttons = dialog.GetLogicalDescendants().OfType<Button>().ToArray();
+                var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
                 buttons.Select(button => button.Content as string).Should().Equal(
-                    "Add...", "Edit...", "Delete",
-                    "Copy →", "Copy <-",
-                    "Add...", "Edit...", "Delete",
-                    "OK", "Cancel");
+                    text.AddButtonLabel, text.EditButtonLabel, text.DeleteButtonLabel,
+                    text.CopyToCurrentButtonLabel, text.CopyToMasterButtonLabel,
+                    text.AddButtonLabel, text.EditButtonLabel, text.DeleteButtonLabel,
+                    text.OkButtonLabel, text.CancelButtonLabel);
                 buttons.Should().OnlyContain(button => button.MinWidth == 72);
-                buttons.Should().ContainSingle(button => button.IsDefault && Equals(button.Content, "OK"));
-                buttons.Should().ContainSingle(button => button.IsCancel && Equals(button.Content, "Cancel"));
+                buttons.Should().ContainSingle(button => button.IsDefault && Equals(button.Content, text.OkButtonLabel));
+                buttons.Should().ContainSingle(button => button.IsCancel && Equals(button.Content, text.CancelButtonLabel));
 
                 return true;
             },

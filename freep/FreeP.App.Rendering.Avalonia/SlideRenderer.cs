@@ -7,7 +7,7 @@ namespace FreeP.App.Rendering.Avalonia;
 
 /// <summary>
 /// Headless off-screen renderer: renders a <see cref="Slide"/> to a PNG byte array
-/// (or file) using Avalonia's <see cref="RenderTargetBitmap"/> — no on-screen window
+/// using Avalonia's <see cref="RenderTargetBitmap"/> — no on-screen window
 /// or WPF STA thread required.
 ///
 /// Requires that the Avalonia application has been initialised with
@@ -17,21 +17,6 @@ namespace FreeP.App.Rendering.Avalonia;
 /// </summary>
 public static class SlideRenderer
 {
-    /// <summary>
-    /// Renders slide <paramref name="slideIndex"/> of <paramref name="presentation"/>
-    /// to a PNG and saves it to <paramref name="pngPath"/>.
-    /// </summary>
-    public static void RenderToPng(
-        Presentation presentation,
-        int slideIndex,
-        int widthPx,
-        int heightPx,
-        string pngPath)
-    {
-        var bytes = RenderToBytes(presentation, slideIndex, widthPx, heightPx);
-        File.WriteAllBytes(pngPath, bytes);
-    }
-
     /// <summary>
     /// Renders slide <paramref name="slideIndex"/> to an in-memory PNG byte array.
     /// </summary>
@@ -83,36 +68,5 @@ public static class SlideRenderer
         using var ms = new MemoryStream();
         rtb.Save(ms);
         return ms.ToArray();
-    }
-
-    /// <summary>
-    /// Renders every slide in <paramref name="presentation"/> to PNG files
-    /// <c>slide-01.png</c>, <c>slide-02.png</c>, … in <paramref name="outDir"/>.
-    /// Returns the number of slides that failed.
-    /// </summary>
-    public static int RenderAllSlides(
-        Presentation presentation,
-        string outDir,
-        int widthPx = 1280,
-        int heightPx = 720)
-    {
-        ArgumentNullException.ThrowIfNull(presentation);
-        Directory.CreateDirectory(outDir);
-
-        int failCount = 0;
-        for (int i = 0; i < presentation.Slides.Count; i++)
-        {
-            string outPath = Path.Combine(outDir, $"slide-{i + 1:D2}.png");
-            try
-            {
-                RenderToPng(presentation, i, widthPx, heightPx, outPath);
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"  slide-{i + 1:D2} FAILED: {ex.Message}");
-                failCount++;
-            }
-        }
-        return failCount;
     }
 }

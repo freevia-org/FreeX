@@ -11,9 +11,11 @@ namespace Free.Shared.AppServices;
 public static class EntryAssemblyVersion
 {
     /// <summary>The entry assembly's informational/assembly version, or <c>"0.0.0"</c> when unavailable.</summary>
-    public static string Resolve() =>
-        Assembly.GetEntryAssembly()?
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-        ?? Assembly.GetEntryAssembly()?.GetName().Version?.ToString()
-        ?? "0.0.0";
+    public static string Resolve()
+    {
+        var entryAssembly = Assembly.GetEntryAssembly();
+        return entryAssembly is null
+            ? "0.0.0"
+            : AssemblyVersionMetadata.FromAssembly(entryAssembly).PreferredVersion ?? "0.0.0";
+    }
 }

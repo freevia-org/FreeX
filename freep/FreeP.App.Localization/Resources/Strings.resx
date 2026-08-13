@@ -58,9 +58,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
-    <value>Use system default</value>
-  </data>
   <data name="Backstage_Recent_OpenPinnedFileAutomationName" xml:space="preserve">
     <value>Open pinned presentation {0}</value>
   </data>
@@ -84,9 +81,6 @@
   </data>
   <data name="Ribbon_Group_File_KeyTip" xml:space="preserve">
     <value>F</value>
-  </data>
-  <data name="Ribbon_Command_FileNew_Label" xml:space="preserve">
-    <value>New</value>
   </data>
   <data name="Ribbon_Command_FileNew_KeyTip" xml:space="preserve">
     <value>N</value>
@@ -147,9 +141,6 @@
   </data>
   <data name="Ribbon_Command_FormatPainter_KeyTip" xml:space="preserve">
     <value>F</value>
-  </data>
-  <data name="Ribbon_Command_FontColor_Label" xml:space="preserve">
-    <value>Font Color</value>
   </data>
   <data name="Ribbon_Command_FontFamily_KeyTip" xml:space="preserve">
     <value>FON</value>
@@ -387,9 +378,6 @@
   </data>
   <data name="Ribbon_Command_SlideShowSetup_KeyTip" xml:space="preserve">
     <value>S</value>
-  </data>
-  <data name="Ribbon_Tab_Insert_Label" xml:space="preserve">
-    <value>Insert</value>
   </data>
   <data name="Ribbon_Tab_Insert_KeyTip" xml:space="preserve">
     <value>N</value>
@@ -1377,9 +1365,6 @@
   </data>
   <data name="Ribbon_Tab_Design_KeyTip" xml:space="preserve">
     <value>G</value>
-  </data>
-  <data name="Ribbon_Group_Themes_Label" xml:space="preserve">
-    <value>Themes</value>
   </data>
   <data name="Ribbon_Group_Themes_KeyTip" xml:space="preserve">
     <value>T</value>
@@ -2989,9 +2974,6 @@
   <data name="Ribbon_Command_ViewSelectionPane_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
-  <data name="Ribbon_Group_ViewZoom_Label" xml:space="preserve">
-    <value>Zoom</value>
-  </data>
   <data name="Ribbon_Group_ViewZoom_KeyTip" xml:space="preserve">
     <value>Z</value>
   </data>
@@ -3016,6 +2998,42 @@
   <data name="File_PresentationFallbackDisplayName" xml:space="preserve">
     <value>Presentation</value>
   </data>
+  <data name="File_PrintJobFallbackName" xml:space="preserve">
+    <value>FreeP presentation</value>
+  </data>
+  <data name="File_VideoExportFailed" xml:space="preserve">
+    <value>Video export failed.</value>
+  </data>
+  <data name="File_Error_OpenPresentation" xml:space="preserve">
+    <value>Could not open the presentation</value>
+  </data>
+  <data name="File_Error_SavePresentation" xml:space="preserve">
+    <value>Could not save the presentation</value>
+  </data>
+  <data name="File_Error_ExportPdf" xml:space="preserve">
+    <value>Could not export the presentation to PDF</value>
+  </data>
+  <data name="File_Error_ExportNotesPagePdf" xml:space="preserve">
+    <value>Could not export the presentation notes pages to PDF</value>
+  </data>
+  <data name="File_Error_ExportImages" xml:space="preserve">
+    <value>Could not export the presentation slides to images</value>
+  </data>
+  <data name="File_Error_PrintPresentation" xml:space="preserve">
+    <value>Could not print the presentation</value>
+  </data>
+  <data name="File_Error_ExportVideo" xml:space="preserve">
+    <value>Could not export the presentation video</value>
+  </data>
+  <data name="File_Error_PresentationCommand" xml:space="preserve">
+    <value>Could not complete the presentation file command</value>
+  </data>
+  <data name="File_Error_NativePickerUnavailable" xml:space="preserve">
+    <value>The native picker is unavailable.</value>
+  </data>
+  <data name="File_Error_NonLocalSelection" xml:space="preserve">
+    <value>The selected item does not have a local path.</value>
+  </data>
   <data name="File_NewPresentationAction" xml:space="preserve">
     <value>creating a new presentation</value>
   </data>
@@ -3037,4 +3055,746 @@
   <data name="Ribbon_Command_Audio_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>
+  <data name="Dialog_ZoomFormat_Title" xml:space="preserve">
+    <value>Zoom Format</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ReturnToParent" xml:space="preserve">
+    <value>Return to parent after following the Zoom</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ShowBackground" xml:space="preserve">
+    <value>Show destination slide background</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseTransition" xml:space="preserve">
+    <value>Use Zoom transition</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseBorder" xml:space="preserve">
+    <value>Use Zoom border</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseGradientBorder" xml:space="preserve">
+    <value>Use gradient border</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UsePatternBorder" xml:space="preserve">
+    <value>Use pattern border</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseNoFillBorder" xml:space="preserve">
+    <value>Use no-fill border</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseThemeBorderColor" xml:space="preserve">
+    <value>Use theme border color</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseOuterBorderShadow" xml:space="preserve">
+    <value>Use outer border shadow</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseBorderGlow" xml:space="preserve">
+    <value>Use border glow</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseBorderSoftEdge" xml:space="preserve">
+    <value>Use border soft edge</value>
+  </data>
+  <data name="Dialog_ZoomFormat_UseBorderReflection" xml:space="preserve">
+    <value>Use border reflection</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ApplyToAllSummaryTiles" xml:space="preserve">
+    <value>Apply format to all Summary Zoom tiles</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ImageSource" xml:space="preserve">
+    <value>Image source:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_TransitionDuration" xml:space="preserve">
+    <value>Transition duration:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_BorderColor" xml:space="preserve">
+    <value>Border color:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ThemeColor" xml:space="preserve">
+    <value>Theme color:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ShadowColor" xml:space="preserve">
+    <value>Shadow color:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ShadowAlpha" xml:space="preserve">
+    <value>Shadow alpha (%):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ShadowBlur" xml:space="preserve">
+    <value>Shadow blur (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ShadowDistance" xml:space="preserve">
+    <value>Shadow distance (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ShadowDirection" xml:space="preserve">
+    <value>Shadow direction (deg):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_GlowColor" xml:space="preserve">
+    <value>Glow color:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_GlowAlpha" xml:space="preserve">
+    <value>Glow alpha (%):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_GlowRadius" xml:space="preserve">
+    <value>Glow radius (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_SoftEdgeRadius" xml:space="preserve">
+    <value>Soft-edge radius (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ReflectionAlpha" xml:space="preserve">
+    <value>Reflection alpha (%):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ReflectionBlur" xml:space="preserve">
+    <value>Reflection blur (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ReflectionDistance" xml:space="preserve">
+    <value>Reflection distance (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ReflectionDirection" xml:space="preserve">
+    <value>Reflection direction (deg):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ReflectionScale" xml:space="preserve">
+    <value>Reflection scale (%):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_ReflectionEndPosition" xml:space="preserve">
+    <value>Reflection fade end (%):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_BorderWidth" xml:space="preserve">
+    <value>Border width (pt):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_BorderDash" xml:space="preserve">
+    <value>Border dash:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_GradientStart" xml:space="preserve">
+    <value>Gradient start:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_GradientEnd" xml:space="preserve">
+    <value>Gradient end:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_GradientAngle" xml:space="preserve">
+    <value>Gradient angle (deg):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_PatternPreset" xml:space="preserve">
+    <value>Pattern preset:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_PatternForeground" xml:space="preserve">
+    <value>Pattern foreground:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_PatternBackground" xml:space="preserve">
+    <value>Pattern background:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_FrameShape" xml:space="preserve">
+    <value>Frame shape:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_PreviewCrop" xml:space="preserve">
+    <value>Preview crop (%):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_SummaryTile" xml:space="preserve">
+    <value>Summary tile:</value>
+  </data>
+  <data name="Dialog_ZoomFormat_TilePosition" xml:space="preserve">
+    <value>Tile position (%):</value>
+  </data>
+  <data name="Dialog_ZoomFormat_TileScale" xml:space="preserve">
+    <value>Tile scale (%):</value>
+  </data>
+  <data name="Pane_MediaCaptions_Heading" xml:space="preserve">
+    <value>Media Captions</value>
+  </data>
+  <data name="Pane_MediaCaptions_HeadingFormat" xml:space="preserve">
+    <value>Media Captions - {0}</value>
+  </data>
+  <data name="Pane_Media_PlaybackVolume" xml:space="preserve">
+    <value>Playback volume</value>
+  </data>
+  <data name="Pane_Media_ApplyVolume" xml:space="preserve">
+    <value>Apply volume</value>
+  </data>
+  <data name="Pane_Media_PlaybackStart" xml:space="preserve">
+    <value>Playback start</value>
+  </data>
+  <data name="Pane_Media_StartOnClick" xml:space="preserve">
+    <value>On click</value>
+  </data>
+  <data name="Pane_Media_StartAutomatically" xml:space="preserve">
+    <value>Automatically</value>
+  </data>
+  <data name="Pane_Media_LoopUntilStopped" xml:space="preserve">
+    <value>Loop until stopped</value>
+  </data>
+  <data name="Pane_Media_ShowWhenStopped" xml:space="preserve">
+    <value>Show when stopped</value>
+  </data>
+  <data name="Pane_Media_RewindAfterPlaying" xml:space="preserve">
+    <value>Rewind after playing</value>
+  </data>
+  <data name="Pane_Media_PlayFullScreen" xml:space="preserve">
+    <value>Play full screen</value>
+  </data>
+  <data name="Pane_Media_StopAfterSlides" xml:space="preserve">
+    <value>Stop after slides</value>
+  </data>
+  <data name="Pane_Media_ApplyPlayback" xml:space="preserve">
+    <value>Apply playback</value>
+  </data>
+  <data name="Pane_Media_TrimStartMilliseconds" xml:space="preserve">
+    <value>Trim start (ms)</value>
+  </data>
+  <data name="Pane_Media_TrimEndMilliseconds" xml:space="preserve">
+    <value>Trim end (ms)</value>
+  </data>
+  <data name="Pane_Media_FadeInMilliseconds" xml:space="preserve">
+    <value>Fade in (ms)</value>
+  </data>
+  <data name="Pane_Media_FadeOutMilliseconds" xml:space="preserve">
+    <value>Fade out (ms)</value>
+  </data>
+  <data name="Pane_Media_ApplyTiming" xml:space="preserve">
+    <value>Apply timing</value>
+  </data>
+  <data name="Pane_Media_Bookmarks" xml:space="preserve">
+    <value>Media bookmarks</value>
+  </data>
+  <data name="Pane_Media_BookmarkName" xml:space="preserve">
+    <value>Bookmark name</value>
+  </data>
+  <data name="Pane_Media_BookmarkTimeMilliseconds" xml:space="preserve">
+    <value>Bookmark time (ms)</value>
+  </data>
+  <data name="Pane_Media_AddBookmark" xml:space="preserve">
+    <value>Add bookmark</value>
+  </data>
+  <data name="Pane_Media_ReplaceBookmark" xml:space="preserve">
+    <value>Replace bookmark</value>
+  </data>
+  <data name="Pane_Media_DeleteBookmark" xml:space="preserve">
+    <value>Delete bookmark</value>
+  </data>
+  <data name="Pane_Accessibility_Heading" xml:space="preserve">
+    <value>Accessibility</value>
+  </data>
+  <data name="Pane_AltText_HeadingFormat" xml:space="preserve">
+    <value>Alt Text - {0}</value>
+  </data>
+  <data name="Pane_ReadingOrder_Heading" xml:space="preserve">
+    <value>Reading Order</value>
+  </data>
+  <data name="Pane_ReadingOrder_HeadingFormat" xml:space="preserve">
+    <value>Reading Order - slide {0} ({1} shapes)</value>
+  </data>
+  <data name="Pane_ReadingOrder_SelectedFormat" xml:space="preserve">
+    <value>Selected: {0}</value>
+  </data>
+  <data name="Pane_ReadingOrder_ItemTitleFormat" xml:space="preserve">
+    <value>{0}. {1}</value>
+  </data>
+  <data name="Pane_ReadingOrder_ItemMetadataFormat" xml:space="preserve">
+    <value>{0} - depth {1}</value>
+  </data>
+  <data name="Pane_ReadingOrder_SelectedItem" xml:space="preserve">
+    <value>Selected item</value>
+  </data>
+  <data name="Pane_ReadingOrder_SelectToolTipFormat" xml:space="preserve">
+    <value>Select {0}</value>
+  </data>
+  <data name="Pane_Proofing_Heading" xml:space="preserve">
+    <value>Spelling</value>
+  </data>
+  <data name="Pane_Proofing_HeadingFormat" xml:space="preserve">
+    <value>Spelling - {0} issues</value>
+  </data>
+  <data name="Pane_Proofing_SelectedFormat" xml:space="preserve">
+    <value>{0}: change &quot;{1}&quot; to &quot;{2}&quot;</value>
+  </data>
+  <data name="Pane_Proofing_SelectedIssue" xml:space="preserve">
+    <value>Selected issue</value>
+  </data>
+  <data name="Pane_Proofing_SelectCommand" xml:space="preserve">
+    <value>Select</value>
+  </data>
+  <data name="Pane_Comments_NewCommentDefault" xml:space="preserve">
+    <value>New comment</value>
+  </data>
+  <data name="Pane_Comments_NewReplyDefault" xml:space="preserve">
+    <value>New reply</value>
+  </data>
+  <data name="Pane_Comments_NewCommentCommand" xml:space="preserve">
+    <value>New Comment</value>
+  </data>
+  <data name="Pane_Comments_ReplyCommand" xml:space="preserve">
+    <value>Reply</value>
+  </data>
+  <data name="Pane_Comments_CloseCommand" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Pane_Comments_SaveCommand" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Pane_Animation_Heading" xml:space="preserve">
+    <value>Animation Pane</value>
+  </data>
+  <data name="Pane_Animation_HeadingFormat" xml:space="preserve">
+    <value>Animation Pane - slide {0} ({1} animations)</value>
+  </data>
+  <data name="Pane_Animation_EmptyMessage" xml:space="preserve">
+    <value>No animations on this slide.</value>
+  </data>
+  <data name="Pane_Animation_SelectedMessageFormat" xml:space="preserve">
+    <value>Selected: {0} - {1}</value>
+  </data>
+  <data name="Pane_Animation_SelectRowMessage" xml:space="preserve">
+    <value>Select an animation row to inspect and reorder it.</value>
+  </data>
+  <data name="Pane_Animation_EffectOptions" xml:space="preserve">
+    <value>Effect options</value>
+  </data>
+  <data name="Pane_Animation_WheelSpokes" xml:space="preserve">
+    <value>Wheel spokes</value>
+  </data>
+  <data name="Pane_Animation_Trigger" xml:space="preserve">
+    <value>Trigger</value>
+  </data>
+  <data name="Pane_Animation_Duration" xml:space="preserve">
+    <value>Duration</value>
+  </data>
+  <data name="Pane_Animation_DurationSeconds" xml:space="preserve">
+    <value>Duration (seconds)</value>
+  </data>
+  <data name="Pane_Animation_Delay" xml:space="preserve">
+    <value>Delay</value>
+  </data>
+  <data name="Pane_Animation_DelaySeconds" xml:space="preserve">
+    <value>Delay (seconds)</value>
+  </data>
+  <data name="Pane_Animation_Repeat" xml:space="preserve">
+    <value>Repeat</value>
+  </data>
+  <data name="Pane_Animation_RepeatCount" xml:space="preserve">
+    <value>Repeat count</value>
+  </data>
+  <data name="Pane_Animation_AutoReverse" xml:space="preserve">
+    <value>Auto-reverse</value>
+  </data>
+  <data name="Pane_Animation_AutoReverseToolTip" xml:space="preserve">
+    <value>Auto-reverse between repeats</value>
+  </data>
+  <data name="Pane_Animation_SmoothStart" xml:space="preserve">
+    <value>Smooth start</value>
+  </data>
+  <data name="Pane_Animation_SmoothEnd" xml:space="preserve">
+    <value>Smooth end</value>
+  </data>
+  <data name="Pane_Animation_MoveEarlier" xml:space="preserve">
+    <value>Move earlier</value>
+  </data>
+  <data name="Pane_Animation_MoveLater" xml:space="preserve">
+    <value>Move later</value>
+  </data>
+  <data name="Pane_Animation_Remove" xml:space="preserve">
+    <value>Remove animation</value>
+  </data>
+  <data name="Pane_Animation_ParagraphBuild" xml:space="preserve">
+    <value>Build text by paragraph</value>
+  </data>
+  <data name="Pane_Animation_ParagraphBuildAllAtOnce" xml:space="preserve">
+    <value>Build text all at once</value>
+  </data>
+  <data name="Pane_Animation_EditMotionPath" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Pane_Animation_EditMotionPathToolTip" xml:space="preserve">
+    <value>Edit motion path geometry</value>
+  </data>
+  <data name="Pane_Animation_RepeatIndefinitely" xml:space="preserve">
+    <value>Indefinitely</value>
+  </data>
+  <data name="Pane_Animation_Validation_MissingAnimation" xml:space="preserve">
+    <value>Select an animation to edit timing.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidTrigger" xml:space="preserve">
+    <value>Choose a valid animation trigger.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidDuration" xml:space="preserve">
+    <value>Enter a duration greater than 0 seconds.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidDelay" xml:space="preserve">
+    <value>Enter a delay of 0 seconds or greater.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidRepeat" xml:space="preserve">
+    <value>Repeat must be 1 or greater, or Indefinitely.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidEasing" xml:space="preserve">
+    <value>Smooth start/end must be between 0% and 100%.</value>
+  </data>
+  <data name="Pane_Animation_Validation_MissingEffectOption" xml:space="preserve">
+    <value>Select an animation to edit effect options.</value>
+  </data>
+  <data name="Pane_Animation_Validation_UnsupportedEffectOption" xml:space="preserve">
+    <value>This effect has no shared effect options yet.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidEffectOption" xml:space="preserve">
+    <value>Choose a valid effect option.</value>
+  </data>
+  <data name="Pane_Animation_Validation_ParagraphBuildDisabled" xml:space="preserve">
+    <value>Select an animated text shape with at least one paragraph.</value>
+  </data>
+  <data name="Pane_Animation_Validation_ParagraphBuildInvalidXml" xml:space="preserve">
+    <value>The slide build list is not valid PowerPoint timing XML.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidReorder" xml:space="preserve">
+    <value>Select an animation row that can move in that direction.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidRemove" xml:space="preserve">
+    <value>Select an animation row to remove.</value>
+  </data>
+  <data name="Pane_Animation_Playback_Preview" xml:space="preserve">
+    <value>Preview</value>
+  </data>
+  <data name="Pane_Animation_Playback_PlayFromSelected" xml:space="preserve">
+    <value>Play From Selected</value>
+  </data>
+  <data name="Pane_Animation_Playback_PlayAll" xml:space="preserve">
+    <value>Play All</value>
+  </data>
+  <data name="Pane_Animation_Playback_Stop" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="Pane_Animation_Playback_PreviewCurrentSlideToolTip" xml:space="preserve">
+    <value>Preview current slide animations</value>
+  </data>
+  <data name="Pane_Animation_Playback_PlayFromSelectedToolTip" xml:space="preserve">
+    <value>Play animation preview from the selected row</value>
+  </data>
+  <data name="Pane_Animation_Playback_PlayAllToolTip" xml:space="preserve">
+    <value>Play all animations on the current slide</value>
+  </data>
+  <data name="Pane_Animation_Playback_StopToolTip" xml:space="preserve">
+    <value>Stop the running animation preview</value>
+  </data>
+  <data name="Pane_Animation_Playback_NoAnimationsToPreview" xml:space="preserve">
+    <value>No animations to preview</value>
+  </data>
+  <data name="Pane_Animation_Playback_NoAnimationsToPlay" xml:space="preserve">
+    <value>No animations to play</value>
+  </data>
+  <data name="Pane_Animation_Playback_SelectRowToPlay" xml:space="preserve">
+    <value>Select an animation row to play from it</value>
+  </data>
+  <data name="Pane_Animation_Playback_AlreadyRunning" xml:space="preserve">
+    <value>Stop the running animation preview before starting another</value>
+  </data>
+  <data name="Pane_Animation_Playback_NoPreviewRunning" xml:space="preserve">
+    <value>No animation preview is currently running</value>
+  </data>
+  <data name="Pane_Animation_Playback_PreviewStopped" xml:space="preserve">
+    <value>Animation preview stopped</value>
+  </data>
+  <data name="Pane_Animation_Playback_PlayingFromFormat" xml:space="preserve">
+    <value>Playing from animation {0}</value>
+  </data>
+  <data name="Pane_Animation_Playback_PlayingAll" xml:space="preserve">
+    <value>Playing all current slide animations</value>
+  </data>
+  <data name="Pane_SmartArt_Heading" xml:space="preserve">
+    <value>SmartArt Text Pane</value>
+  </data>
+  <data name="Pane_SmartArt_ToggleAssistant" xml:space="preserve">
+    <value>Toggle Assistant</value>
+  </data>
+  <data name="Pane_SmartArt_ReplacePicture" xml:space="preserve">
+    <value>Replace picture</value>
+  </data>
+  <data name="Pane_SmartArt_RemovePicture" xml:space="preserve">
+    <value>Remove picture</value>
+  </data>
+  <data name="Pane_SmartArt_Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Pane_SmartArt_AddSibling" xml:space="preserve">
+    <value>Add sibling</value>
+  </data>
+  <data name="Pane_SmartArt_AddSibling_ToolTip" xml:space="preserve">
+    <value>Add a sibling row after the selected SmartArt row.</value>
+  </data>
+  <data name="Pane_SmartArt_AddChild" xml:space="preserve">
+    <value>Add child</value>
+  </data>
+  <data name="Pane_SmartArt_AddChild_ToolTip" xml:space="preserve">
+    <value>Add a child row below the selected SmartArt row.</value>
+  </data>
+  <data name="Pane_SmartArt_Remove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Pane_SmartArt_Remove_ToolTip" xml:space="preserve">
+    <value>Remove the selected SmartArt row.</value>
+  </data>
+  <data name="Pane_SmartArt_MoveUp" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="Pane_SmartArt_MoveUp_ToolTip" xml:space="preserve">
+    <value>Move the selected SmartArt row earlier.</value>
+  </data>
+  <data name="Pane_SmartArt_MoveDown" xml:space="preserve">
+    <value>Move down</value>
+  </data>
+  <data name="Pane_SmartArt_MoveDown_ToolTip" xml:space="preserve">
+    <value>Move the selected SmartArt row later.</value>
+  </data>
+  <data name="Pane_SmartArt_Promote" xml:space="preserve">
+    <value>Promote</value>
+  </data>
+  <data name="Pane_SmartArt_Promote_ToolTip" xml:space="preserve">
+    <value>Promote the selected SmartArt row.</value>
+  </data>
+  <data name="Pane_SmartArt_Demote" xml:space="preserve">
+    <value>Demote</value>
+  </data>
+  <data name="Pane_SmartArt_Demote_ToolTip" xml:space="preserve">
+    <value>Demote the selected SmartArt row.</value>
+  </data>
+  <data name="Pane_SmartArt_AddAssistant" xml:space="preserve">
+    <value>Add assistant</value>
+  </data>
+  <data name="Pane_SmartArt_AddAssistant_ToolTip" xml:space="preserve">
+    <value>Add an assistant below the selected hierarchy row.</value>
+  </data>
+  <data name="Pane_Comments_EmptyMessage" xml:space="preserve">
+    <value>No comments on this slide.</value>
+  </data>
+  <data name="Pane_SmartArt_AssistantRow" xml:space="preserve">
+    <value>Assistant row</value>
+  </data>
+  <data name="Pane_SmartArt_RootRow" xml:space="preserve">
+    <value>Root row</value>
+  </data>
+  <data name="Pane_SmartArt_LevelRowFormat" xml:space="preserve">
+    <value>Level {0} row</value>
+  </data>
+  <data name="Pane_SlideSection_AddPromptTitle" xml:space="preserve">
+    <value>Add Section</value>
+  </data>
+  <data name="Pane_SlideSection_RenamePromptTitle" xml:space="preserve">
+    <value>Rename Section</value>
+  </data>
+  <data name="Pane_SlideSection_NamePromptLabel" xml:space="preserve">
+    <value>Section name:</value>
+  </data>
+  <data name="Pane_SlideSection_NamePromptAccept" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Pane_SlideSection_NamePromptCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Shell_Status_SlideSizeDialog" xml:space="preserve">
+    <value>Slide Size</value>
+  </data>
+  <data name="Shell_Status_HeaderFooterDialog" xml:space="preserve">
+    <value>Header and Footer</value>
+  </data>
+  <data name="Shell_Status_SlideShowSettingsDialog" xml:space="preserve">
+    <value>Set Up Slide Show</value>
+  </data>
+  <data name="Shell_Status_LayoutPicker" xml:space="preserve">
+    <value>Layout picker: {0} choices</value>
+  </data>
+  <data name="Shell_Status_TablePicker" xml:space="preserve">
+    <value>Table picker: {0} choices</value>
+  </data>
+  <data name="Shell_Status_SmartArtPictureFailure" xml:space="preserve">
+    <value>Could not replace SmartArt picture: {0}</value>
+  </data>
+  <data name="Shell_Status_PictureBulletApplied" xml:space="preserve">
+    <value>Picture bullet applied.</value>
+  </data>
+  <data name="Shell_Command_PictureBullet" xml:space="preserve">
+    <value>Picture Bullet</value>
+  </data>
+  <data name="Edit_Command_Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="Edit_Command_Cut" xml:space="preserve">
+    <value>Cut</value>
+  </data>
+  <data name="Edit_Command_Paste" xml:space="preserve">
+    <value>Paste</value>
+  </data>
+  <data name="Edit_Command_SelectAll" xml:space="preserve">
+    <value>Select All</value>
+  </data>
+  <data name="Shell_Status_PresentationCommandUnavailable" xml:space="preserve">
+    <value>The presentation command is unavailable.</value>
+  </data>
+  <data name="Shell_Dialog_PresentationCommandUnavailableTitle" xml:space="preserve">
+    <value>Could not complete the presentation command</value>
+  </data>
+  <data name="Shell_Status_PresentationCommandFailureFallback" xml:space="preserve">
+    <value>The command failed.</value>
+  </data>
+  <data name="Print_Command_Name" xml:space="preserve">
+    <value>Print</value>
+  </data>
+  <data name="Print_Status_DialogSucceeded" xml:space="preserve">
+    <value>Printed presentation</value>
+  </data>
+  <data name="Print_Status_DialogCancelled" xml:space="preserve">
+    <value>Print cancelled</value>
+  </data>
+  <data name="Print_Status_DialogFailed" xml:space="preserve">
+    <value>Print failed</value>
+  </data>
+  <data name="Print_Status_SystemHandoffSucceeded" xml:space="preserve">
+    <value>Linux print handoff completed</value>
+  </data>
+  <data name="Print_Status_SystemHandoffSucceededWithPeriod" xml:space="preserve">
+    <value>Linux print handoff completed.</value>
+  </data>
+  <data name="Print_Status_SystemHandoffCancelled" xml:space="preserve">
+    <value>Linux print handoff canceled</value>
+  </data>
+  <data name="Print_Status_SystemHandoffFailed" xml:space="preserve">
+    <value>Linux print handoff failed</value>
+  </data>
+  <data name="Print_Error_Fallback" xml:space="preserve">
+    <value>Printing failed.</value>
+  </data>
+  <data name="Print_Error_PackageNotBuilt" xml:space="preserve">
+    <value>Printable package was not built.</value>
+  </data>
+  <data name="Print_Error_HandoffPlanNotBuilt" xml:space="preserve">
+    <value>The portable print handoff plan was not built.</value>
+  </data>
+  <data name="Print_Error_SubmissionFallback" xml:space="preserve">
+    <value>Portable print submission failed.</value>
+  </data>
+  <data name="Print_Status_HandoutLayoutPlanned" xml:space="preserve">
+    <value>Print handout layout planned</value>
+  </data>
+  <data name="Print_Status_NotesPagePdfPlanned" xml:space="preserve">
+    <value>Notes page PDF planned</value>
+  </data>
+  <data name="Export_Status_VideoPlanned" xml:space="preserve">
+    <value>Video export planned</value>
+  </data>
+  <data name="Export_Status_Completed" xml:space="preserve">
+    <value>Export completed</value>
+  </data>
+  <data name="Export_Status_VideoCancelled" xml:space="preserve">
+    <value>Video export canceled</value>
+  </data>
+  <data name="Export_Status_VideoFailed" xml:space="preserve">
+    <value>Video export failed</value>
+  </data>
+  <data name="Export_Status_VideoCompletedVideoOnly" xml:space="preserve">
+    <value>Video export completed (video-only)</value>
+  </data>
+  <data name="Export_Status_VideoCompletedWithTracks" xml:space="preserve">
+    <value>Video export completed with {0} narration track(s), {1} camera track(s), and {2} caption track(s)</value>
+  </data>
+  <data name="Export_VideoHost_Wpf" xml:space="preserve">
+    <value>WPF video export host</value>
+  </data>
+  <data name="Export_VideoHost_WpfWindows" xml:space="preserve">
+    <value>WPF Windows video export host</value>
+  </data>
+  <data name="Export_VideoHost_AvaloniaLinux" xml:space="preserve">
+    <value>Avalonia Linux video export host</value>
+  </data>
+  <data name="Export_VideoHost_AvaloniaWindows" xml:space="preserve">
+    <value>Avalonia Windows video export host</value>
+  </data>
+  <data name="Export_VideoHost_FfmpegNarrationAvailable" xml:space="preserve">
+    <value>ffmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available.</value>
+  </data>
+  <data name="Export_VideoHost_FfmpegVideoOnlyAvailable" xml:space="preserve">
+    <value>Video-only ffmpeg export is available; narration and captured camera picture-in-picture are unavailable.</value>
+  </data>
+  <data name="Print_Help_CustomRangeApply" xml:space="preserve">
+    <value>Apply the custom slide range to the print preview and output.</value>
+  </data>
+  <data name="Print_Windows_PrinterHeading" xml:space="preserve">
+    <value>Printer</value>
+  </data>
+  <data name="Print_Windows_QueueLabel" xml:space="preserve">
+    <value>Queue</value>
+  </data>
+  <data name="Print_Windows_NoQueues" xml:space="preserve">
+    <value>No Windows printer queues were detected.</value>
+  </data>
+  <data name="Print_Windows_PrinterDialogLabel" xml:space="preserve">
+    <value>Windows printer dialog</value>
+  </data>
+  <data name="Print_Status_PrinterSelected" xml:space="preserve">
+    <value>Printer selected: {0}</value>
+  </data>
+  <data name="Print_Surface_SettingsHeading" xml:space="preserve"><value>Settings</value></data>
+  <data name="Print_Surface_CustomRangeHeading" xml:space="preserve"><value>Custom range</value></data>
+  <data name="Print_Surface_CustomRangeDescription" xml:space="preserve"><value>Enter slide numbers and ranges, for example 2,4-6.</value></data>
+  <data name="Print_Surface_CustomRangePlaceholder" xml:space="preserve"><value>e.g. 2,4-6</value></data>
+  <data name="Print_Surface_CustomRangeApplyLabel" xml:space="preserve"><value>Apply range</value></data>
+  <data name="Print_Surface_PrintHeading" xml:space="preserve"><value>Print</value></data>
+  <data name="Print_Surface_LayoutField" xml:space="preserve"><value>Layout</value></data>
+  <data name="Print_Surface_SlidesField" xml:space="preserve"><value>Slides</value></data>
+  <data name="Print_Surface_PagesField" xml:space="preserve"><value>Pages</value></data>
+  <data name="Print_Surface_PreviewField" xml:space="preserve"><value>Preview</value></data>
+  <data name="Print_Surface_HiddenSlidesField" xml:space="preserve"><value>Hidden slides</value></data>
+  <data name="Print_Surface_OptionsField" xml:space="preserve"><value>Options</value></data>
+  <data name="Print_Surface_NativePrinterHandoffField" xml:space="preserve"><value>Native printer handoff</value></data>
+  <data name="Print_Surface_IncludedValue" xml:space="preserve"><value>Included</value></data>
+  <data name="Print_Surface_NotIncludedValue" xml:space="preserve"><value>Not included</value></data>
+  <data name="Print_Surface_OutputOptionsGroup" xml:space="preserve"><value>Output options</value></data>
+  <data name="Print_Surface_PreviewGroup" xml:space="preserve"><value>Preview</value></data>
+  <data name="Print_Surface_LayoutsGroup" xml:space="preserve"><value>Layouts</value></data>
+  <data name="Print_Surface_SlideRangeGroup" xml:space="preserve"><value>Slide range</value></data>
+  <data name="Print_Surface_GroupChoiceFormat" xml:space="preserve"><value>{0}: {1}</value></data>
+  <data name="Print_Surface_SelectedChoiceFormat" xml:space="preserve"><value>Selected: {0}</value></data>
+  <data name="Print_Surface_UnavailableChoiceFormat" xml:space="preserve"><value>{0} (unavailable)</value></data>
+  <data name="Print_Surface_ActionFormat" xml:space="preserve"><value>Print {0}</value></data>
+  <data name="Print_Dialog_Title" xml:space="preserve"><value>Print</value></data>
+  <data name="Print_Dialog_PrinterLabel" xml:space="preserve"><value>Printer:</value></data>
+  <data name="Print_Dialog_CopiesLabel" xml:space="preserve"><value>Copies:</value></data>
+  <data name="Print_Dialog_PagesLabel" xml:space="preserve"><value>Pages:</value></data>
+  <data name="Print_Dialog_FirstPageLabel" xml:space="preserve"><value>First:</value></data>
+  <data name="Print_Dialog_LastPageLabel" xml:space="preserve"><value>Last:</value></data>
+  <data name="Print_Dialog_OrientationLabel" xml:space="preserve"><value>Orientation:</value></data>
+  <data name="Print_Dialog_LayoutLabel" xml:space="preserve"><value>Layout:</value></data>
+  <data name="Print_Dialog_AllPages" xml:space="preserve"><value>All pages</value></data>
+  <data name="Print_Dialog_SinglePage" xml:space="preserve"><value>Single page</value></data>
+  <data name="Print_Dialog_PageRange" xml:space="preserve"><value>Page range</value></data>
+  <data name="Print_Dialog_DocumentOrientation" xml:space="preserve"><value>Document</value></data>
+  <data name="Print_Dialog_PortraitOrientation" xml:space="preserve"><value>Portrait</value></data>
+  <data name="Print_Dialog_LandscapeOrientation" xml:space="preserve"><value>Landscape</value></data>
+  <data name="Print_Dialog_CollateCopies" xml:space="preserve"><value>Collate copies</value></data>
+  <data name="Print_Dialog_Submit" xml:space="preserve"><value>Print</value></data>
+  <data name="Print_Dialog_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Print_Dialog_ReadyStatus" xml:space="preserve"><value>Choose the printer and print settings.</value></data>
+  <data name="Print_Dialog_UnavailableStatus" xml:space="preserve"><value>Printing is unavailable on this host.</value></data>
+  <data name="Print_Dialog_CopiesOutOfRange" xml:space="preserve"><value>Copies must be between 1 and 999.</value></data>
+  <data name="Print_Dialog_FirstPageInvalid" xml:space="preserve"><value>Enter a positive first page number.</value></data>
+  <data name="Print_Dialog_LastPageBeforeFirstPage" xml:space="preserve"><value>The last page must be at least the first page.</value></data>
+  <data name="Pane_Common_CloseCommand" xml:space="preserve"><value>Close</value></data>
+  <data name="Pane_Notes_Placeholder" xml:space="preserve"><value>Click to add notes</value></data>
+  <data name="FreeP_Backstage_Options_EditText" xml:space="preserve">
+    <value>Edit options…</value>
+  </data>
+  <data name="Options_Title" xml:space="preserve"><value>FreeP Options</value></data>
+  <data name="Options_RecentFilesLabel" xml:space="preserve"><value>Recent files to keep:</value></data>
+  <data name="Options_DefaultSaveFormatLabel" xml:space="preserve"><value>Default save format:</value></data>
+  <data name="Options_UiLanguageLabel" xml:space="preserve"><value>UI language:</value></data>
+  <data name="Options_UiLanguageSystemHint" xml:space="preserve"><value>Empty = follow the system culture.</value></data>
+  <data name="Options_UiLanguageCurrentHint" xml:space="preserve"><value>Empty = follow the system culture (currently {0}).</value></data>
+  <data name="Options_PresentationFormat" xml:space="preserve"><value>Presentation (*.fxp)</value></data>
+  <data name="Options_RecentFilesCapValidation" xml:space="preserve"><value>Enter a whole number between {0} and {1}.</value></data>
+  <data name="Shell_Command_SlideZoom" xml:space="preserve"><value>Slide Zoom</value></data>
+  <data name="Shell_Command_SectionZoom" xml:space="preserve"><value>Section Zoom</value></data>
+  <data name="Shell_Command_SummaryZoom" xml:space="preserve"><value>Summary Zoom</value></data>
+  <data name="Shell_Command_ZoomTarget" xml:space="preserve"><value>Zoom Target</value></data>
+  <data name="Shell_Command_SummaryZoomTargets" xml:space="preserve"><value>Summary Zoom Targets</value></data>
+  <data name="Shell_Command_SlidePane" xml:space="preserve"><value>Slide Pane</value></data>
+  <data name="Shell_Command_CustomShow" xml:space="preserve"><value>Custom Show</value></data>
+  <data name="File_Error_PlatformPickerUnavailableFormat" xml:space="preserve"><value>{0} is unavailable because this platform cannot open files.</value></data>
+  <data name="File_Error_InvalidAvaloniaAssetSelection" xml:space="preserve"><value>The selected presentation asset is not an Avalonia storage file.</value></data>
+  <data name="Print_Status_BackstageNotRun" xml:space="preserve"><value>No Backstage print action has run.</value></data>
+  <data name="Print_Status_NativeDetectionPending" xml:space="preserve"><value>Native output capability detection is pending.</value></data>
+  <data name="Print_Status_WindowsQueueUnavailableFormat" xml:space="preserve"><value>Windows printer queue '{0}' is no longer available.</value></data>
+  <data name="Print_Host_Wpf" xml:space="preserve"><value>WPF print host</value></data>
+  <data name="Print_Host_AvaloniaWindows" xml:space="preserve"><value>Avalonia Windows print host</value></data>
+  <data name="Print_Host_AvaloniaLinux" xml:space="preserve"><value>Avalonia Linux print host</value></data>
+  <data name="Print_Host_UnavailableFormat" xml:space="preserve"><value>{0} is unavailable on this platform.</value></data>
+  <data name="Print_Host_WpfWindowsOnly" xml:space="preserve"><value>Native WPF printing is available only on Windows.</value></data>
+  <data name="Renderer_InlineOleObjectFallback" xml:space="preserve"><value>OLE object</value></data>
 </root>

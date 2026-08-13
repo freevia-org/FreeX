@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
-using FreeP.App.Avalonia.Smoke;
+using FreeP.Validation.Avalonia;
 
 namespace FreeP.App.Avalonia.Tests;
 
@@ -22,14 +22,15 @@ public sealed class StartupDirtyTraceTests
     }
 
     [Fact]
-    public void Production_app_lifetime_startup_argument_path_starts_clean()
+    public void Validation_host_startup_argument_path_starts_clean()
     {
         if (OperatingSystem.IsLinux() && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DISPLAY")))
             return;
 
         var documentPath = RepoFile("tools/FreeP.RenderCompare/corpus/01-title-slide.pptx");
-        var appAssemblyPath = typeof(App).Assembly.Location;
-        var reportPath = Path.Combine(Path.GetTempPath(), $"freep-startup-dirty-{Guid.NewGuid():N}.json");
+        var appAssemblyPath = ValidationHostAssemblyPath();
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-startup-dirty-");
+        var reportPath = Path.Combine(temporaryDirectory.Path, "startup-dirty.json");
 
         using var process = Process.Start(new ProcessStartInfo
         {
@@ -70,17 +71,56 @@ public sealed class StartupDirtyTraceTests
         {
             if (!process!.HasExited)
                 process.Kill(entireProcessTree: true);
-            try { File.Delete(reportPath); } catch { }
         }
     }
 
-    private static string RepoFile(params string[] parts)
+    [Fact]
+    public void Startup_dirty_trace_harness_is_owned_by_validation_support()
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-            directory = directory.Parent!;
+        var coordinator = File.ReadAllText(RepoFile(
+            "freep", "TestSupport", "Validation.Avalonia", "StartupDirtyTraceValidation.cs"));
+        var app = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "App.cs"));
+        var program = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "Program.cs"));
+        var adapter = File.ReadAllText(RepoFile(
+            "freep", "TestSupport", "Validation.Avalonia", "MainWindow.ValidationAccessAdapter.cs"));
 
-        directory.Should().NotBeNull();
-        return Path.Combine([directory!.FullName, .. parts]);
+        coordinator.Should().Contain("DispatcherTimer");
+        coordinator.Should().Contain("JsonArtifactIO.Write");
+        coordinator.Should().Contain("StartupDirtyTraceReport");
+        app.Should().NotContain("StartupDirtyTraceOptions");
+        app.Should().NotContain("StartupDirtyTraceCoordinator");
+        program.Should().NotContain("StartupDirtyTraceOptions");
+        program.Should().NotContain("--startup-dirty-trace");
+        program.Should().NotContain("RunToolHost(");
+        adapter.Should().Contain("StartupDirtyTrace =>");
+        adapter.Should().NotContain("DispatcherTimer");
+        adapter.Should().NotContain("JsonArtifactIO.Write");
+        File.Exists(RepoFile(
+            "freep", "FreeP.App.Avalonia", "MainWindow.ValidationAccessAdapter.cs")).Should().BeFalse();
+        File.Exists(RepoFile(
+            "freep", "FreeP.App.Avalonia", "StartupDirtyTrace.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(
+            Path.GetDirectoryName(RepoFile("freep", "FreeP.App.Avalonia", "Program.cs"))!,
+            "Smoke",
+            "StartupDirtyTrace.cs")).Should().BeFalse();
+    }
+
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeP.slnx", parts);
+
+    private static string ValidationHostAssemblyPath()
+    {
+        var testOutput = Path.GetDirectoryName(typeof(StartupDirtyTraceTests).Assembly.Location)!;
+        var targetFramework = Path.GetFileName(testOutput);
+        var configuration = Path.GetFileName(Path.GetDirectoryName(testOutput))!;
+        return RepoFile(
+            "freep",
+            "TestSupport",
+            "Validation.Avalonia",
+            "bin",
+            configuration,
+            targetFramework,
+            "FreeP.Validation.Avalonia.dll");
     }
 }

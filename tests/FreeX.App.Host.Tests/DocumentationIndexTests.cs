@@ -158,7 +158,7 @@ public sealed partial class DocumentationIndexTests
     public void NewestStatusReport_RepositoryMetricsMatchTrackedSources()
     {
         var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var repositoryRoot = Directory.GetParent(docsDirectory)!.FullName;
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var newestStatusReport = NewestStatusReportPath(docsDirectory);
         var report = File.ReadAllText(newestStatusReport);
         var metrics = ReadMetricTable(report);

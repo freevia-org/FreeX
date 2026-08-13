@@ -62,9 +62,8 @@ public sealed class ContextMenuInteractionValidationTests
         await Session.Dispatch(async () =>
         {
             var window = new MainWindow([]);
-            var outputDirectory = Path.Combine(
-                Path.GetTempPath(),
-                "freex-context-validation-" + Guid.NewGuid().ToString("N"));
+            using var temporaryDirectory = new TestTemporaryDirectory("freex-context-validation-");
+            var outputDirectory = temporaryDirectory.Path;
             window.Show();
             try
             {
@@ -99,8 +98,6 @@ public sealed class ContextMenuInteractionValidationTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
             }
         }, CancellationToken.None);
     }
@@ -236,7 +233,8 @@ public sealed class ContextMenuInteractionValidationTests
             !row.ProductionRoute.Contains("planner", StringComparison.OrdinalIgnoreCase) &&
             !row.ProductionRoute.Contains("catalog", StringComparison.OrdinalIgnoreCase));
 
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.InteractionValidation.cs"));
+        var source = File.ReadAllText(RepoFile(
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ContextMenuInteractionValidation.cs"));
         source.Should().NotContain("planned-enabled");
         source.Should().NotContain("planned-disabled");
         source.Should().NotContain("neutral-planner-backed");
@@ -561,13 +559,6 @@ public sealed class ContextMenuInteractionValidationTests
         actual.Should().BeEquivalentTo(expected);
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

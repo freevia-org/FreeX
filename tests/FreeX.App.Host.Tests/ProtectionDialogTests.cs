@@ -16,8 +16,7 @@ public sealed partial class ProtectionDialogTests
     private static string ReadProtectionDialogSources() =>
         DialogSourceTestSupport.ReadHostSources(
             "ProtectionDialogs.cs",
-            "AllowEditRangeDialog.cs",
-            "SheetProtectionPermissionLabels.cs");
+            "AllowEditRangeDialog.cs");
 
     private static Rect BoundsRelativeTo(FrameworkElement root, FrameworkElement element) =>
         element.TransformToAncestor(root).TransformBounds(new Rect(element.RenderSize));

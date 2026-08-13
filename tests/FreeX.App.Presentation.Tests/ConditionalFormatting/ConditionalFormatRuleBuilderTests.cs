@@ -223,8 +223,10 @@ public sealed class ConditionalFormatRuleBuilderTests
     [Fact]
     public void PresetFactory_BelowAverageSetsDirection()
     {
+        var input = ConditionalFormatPresetFactory.BuildInput(ConditionalFormatPreset.BelowAverage);
         var rule = ConditionalFormatPresetFactory.BuildRule(ConditionalFormatPreset.BelowAverage, Range());
 
+        input.IsTop.Should().BeFalse("the editor seed and one-click rule must share direction policy");
         rule.RuleType.Should().Be(CfRuleType.AboveAverage);
         rule.AboveAverage.Should().BeFalse();
     }

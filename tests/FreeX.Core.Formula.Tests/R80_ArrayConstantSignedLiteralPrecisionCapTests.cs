@@ -9,10 +9,10 @@ namespace FreeX.Core.Formula.Tests;
 /// R80-formula-array-cse-5-3: a SIGNED numeric literal inside an array constant (e.g.
 /// {-123456789012345678,1} or {+123456789012345678,1}) bypassed Excel's 15-significant-digit
 /// literal storage cap. ParseArrayConstantElement's unsigned TokenType.Number branch correctly
-/// wraps the parsed value in CapLiteralToExcel15SigDigits (see R75_NumericLiteralPrecisionCapTests
+/// wraps the parsed value in ExcelNumericPrecision.CapSignificantDigits (see R75_NumericLiteralPrecisionCapTests
 /// .SixteenDigitArrayConstantElement_IsAlsoTruncated), but the TokenType.Plus/Minus branch
 /// delegated to ParseSignedArrayConstantNumber, which did a bare double.Parse + negation with no
-/// capping at all. Fixed by capping the unsigned magnitude via CapLiteralToExcel15SigDigits before
+/// capping at all. Fixed by capping the unsigned magnitude via ExcelNumericPrecision before
 /// negating, matching the unsigned array-constant path and the ordinary-literal path (Parser.cs's
 /// plain TokenType.Number ParsePrimary case, which gets its negative form via a UnaryOpNode
 /// wrapping an already-capped NumberNode).

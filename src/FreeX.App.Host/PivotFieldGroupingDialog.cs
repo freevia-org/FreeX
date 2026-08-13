@@ -1,21 +1,12 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public sealed record PivotFieldGroupingDialogResult(
-    string SourceFieldName,
-    int SourceFieldIndex,
-    PivotFieldGrouping Grouping,
-    double? GroupStart,
-    double? GroupEnd,
-    double? GroupInterval,
-    bool Ungroup);
 
 public sealed class PivotFieldGroupingDialog : Window
 {
@@ -27,13 +18,13 @@ public sealed class PivotFieldGroupingDialog : Window
     private readonly CheckBox _ungroupBox = new() { Content = UiText.Get("PivotFieldGrouping_UngroupSelectedField") };
     private readonly IReadOnlyList<PivotSourceFieldOption> _fields;
 
-    public PivotFieldGroupingDialogResult Result { get; private set; }
+    public PivotGroupFieldSubmission Result { get; private set; }
 
     public PivotFieldGroupingDialog(IEnumerable<string> fieldNames, PivotFieldModel? currentField = null)
     {
         var fieldNameList = fieldNames.ToList();
         _fields = CreateFieldOptions(fieldNameList);
-        Result = FromPivotField(fieldNameList, currentField);
+        Result = PivotGroupFieldPlanner.CaptureSubmission(fieldNameList, currentField);
 
         Title = UiText.Get("PivotFieldGrouping_GroupPivotField");
         Width = 420;
@@ -44,69 +35,6 @@ public sealed class PivotFieldGroupingDialog : Window
         Content = CreateContent();
         Load(Result);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
-    }
-
-    public static PivotFieldGroupingDialogResult FromPivotField(IEnumerable<string> fieldNames, PivotFieldModel? currentField)
-    {
-        var fields = fieldNames.ToList();
-        var sourceFieldIndex = Math.Max(0, currentField?.SourceFieldIndex ?? 0);
-        var sourceFieldName = FindFieldNameBySourceIndexOrFirst(fields, sourceFieldIndex);
-
-        return CreateResult(
-            sourceFieldName,
-            sourceFieldIndex,
-            currentField?.Grouping ?? PivotFieldGrouping.None,
-            currentField?.GroupStart,
-            currentField?.GroupEnd,
-            currentField?.GroupInterval,
-            ungroup: false);
-    }
-
-    public static PivotFieldGroupingDialogResult CreateResult(
-        string sourceFieldName,
-        int sourceFieldIndex,
-        PivotFieldGrouping grouping,
-        string? groupStartText,
-        string? groupEndText,
-        string? groupIntervalText,
-        bool ungroup) =>
-        CreateResult(
-            sourceFieldName,
-            sourceFieldIndex,
-            grouping,
-            ParseOptionalDouble(groupStartText),
-            ParseOptionalDouble(groupEndText),
-            ParseOptionalDouble(groupIntervalText),
-            ungroup);
-
-    public static PivotFieldGroupingDialogResult CreateResult(
-        string sourceFieldName,
-        int sourceFieldIndex,
-        PivotFieldGrouping grouping,
-        double? groupStart,
-        double? groupEnd,
-        double? groupInterval,
-        bool ungroup)
-    {
-        if (ungroup)
-            return new(sourceFieldName.Trim(), Math.Max(0, sourceFieldIndex), PivotFieldGrouping.None, null, null, null, true);
-
-        var normalizedGrouping = grouping;
-        if (normalizedGrouping == PivotFieldGrouping.None)
-            return new(sourceFieldName.Trim(), Math.Max(0, sourceFieldIndex), PivotFieldGrouping.None, null, null, null, false);
-
-        var normalizedInterval = normalizedGrouping == PivotFieldGrouping.NumberRange
-            ? Math.Max(1, groupInterval ?? 1)
-            : groupInterval;
-
-        return new(
-            sourceFieldName.Trim(),
-            Math.Max(0, sourceFieldIndex),
-            normalizedGrouping,
-            groupStart,
-            groupEnd,
-            normalizedInterval,
-            false);
     }
 
     private StackPanel CreateContent()
@@ -133,13 +61,13 @@ public sealed class PivotFieldGroupingDialog : Window
         return stack;
     }
 
-    private void Load(PivotFieldGroupingDialogResult result)
+    private void Load(PivotGroupFieldSubmission result)
     {
-        _fieldBox.SelectedItem = FindFieldBySourceIndexOrFirst(_fields, result.SourceFieldIndex);
-        _groupingBox.SelectedItem = result.Grouping;
-        _startBox.Text = FormatDouble(result.GroupStart);
-        _endBox.Text = FormatDouble(result.GroupEnd);
-        _intervalBox.Text = FormatDouble(result.GroupInterval);
+        _fieldBox.SelectedItem = FindFieldBySourceIndexOrFirst(_fields, result.Field.SourceFieldIndex);
+        _groupingBox.SelectedItem = result.Field.Grouping;
+        _startBox.Text = PivotGroupFieldPlanner.FormatBound(result.Field.GroupStart);
+        _endBox.Text = PivotGroupFieldPlanner.FormatBound(result.Field.GroupEnd);
+        _intervalBox.Text = PivotGroupFieldPlanner.FormatBound(result.Field.GroupInterval);
         _ungroupBox.IsChecked = result.Ungroup;
     }
 
@@ -148,36 +76,31 @@ public sealed class PivotFieldGroupingDialog : Window
         var grouping = _groupingBox.SelectedItem is PivotFieldGrouping selectedGrouping
             ? selectedGrouping
             : PivotFieldGrouping.None;
-        if (_ungroupBox.IsChecked != true && !TryParseOptionalFiniteDouble(_startBox.Text, out _))
-        {
-            ShowInvalidInputWarning(UiText.Get("PivotFieldGrouping_EnterValidStartingValue"), _startBox);
-            return;
-        }
-
-        if (_ungroupBox.IsChecked != true && !TryParseOptionalFiniteDouble(_endBox.Text, out _))
-        {
-            ShowInvalidInputWarning(UiText.Get("PivotFieldGrouping_EnterValidEndingValue"), _endBox);
-            return;
-        }
-
-        var groupInterval = 0d;
-        if (_ungroupBox.IsChecked != true
-            && grouping == PivotFieldGrouping.NumberRange
-            && !TryParsePositiveInterval(_intervalBox.Text, out groupInterval))
-        {
-            ShowInvalidInputWarning(UiText.Get("PivotFieldGrouping_EnterPositiveGroupingInterval"), _intervalBox);
-            return;
-        }
-
         var selectedField = GetSelectedField();
-        Result = CreateResult(
-            selectedField?.Name ?? _fieldBox.Text,
-            selectedField?.Index ?? 0,
-            grouping,
-            _startBox.Text,
-            _endBox.Text,
-            grouping == PivotFieldGrouping.NumberRange ? FormatDouble(groupInterval) : _intervalBox.Text,
-            _ungroupBox.IsChecked == true);
+        if (!PivotGroupFieldPlanner.TryCreateSubmission(
+                selectedField?.Name ?? _fieldBox.Text,
+                selectedField?.Index ?? 0,
+                grouping,
+                _ungroupBox.IsChecked == true,
+                _startBox.Text,
+                _endBox.Text,
+                _intervalBox.Text,
+                out var submission,
+                out var error))
+        {
+            var (message, target) = error switch
+            {
+                PivotGroupFieldPlanner.InvalidEndMessage =>
+                    (UiText.Get("PivotFieldGrouping_EnterValidEndingValue"), _endBox),
+                PivotGroupFieldPlanner.InvalidIntervalMessage =>
+                    (UiText.Get("PivotFieldGrouping_EnterPositiveGroupingInterval"), _intervalBox),
+                _ => (UiText.Get("PivotFieldGrouping_EnterValidStartingValue"), _startBox),
+            };
+            ShowInvalidInputWarning(message, target);
+            return;
+        }
+
+        Result = submission!;
         DialogResult = true;
     }
 
@@ -203,14 +126,6 @@ public sealed class PivotFieldGroupingDialog : Window
         _fieldBox.SelectedItem as PivotSourceFieldOption
         ?? FindFieldByName(_fields, _fieldBox.Text);
 
-    private static string FindFieldNameBySourceIndexOrFirst(IReadOnlyList<string> fields, int sourceFieldIndex)
-    {
-        var normalizedIndex = Math.Max(0, sourceFieldIndex);
-        return normalizedIndex < fields.Count
-            ? fields[normalizedIndex]
-            : fields.Count > 0 ? fields[0] : "";
-    }
-
     private static PivotSourceFieldOption? FindFieldBySourceIndexOrFirst(
         IReadOnlyList<PivotSourceFieldOption> fields,
         int sourceFieldIndex)
@@ -233,45 +148,6 @@ public sealed class PivotFieldGroupingDialog : Window
 
         return null;
     }
-
-    private static double? ParseOptionalDouble(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (NumericInputParser.TryParseFiniteDouble(trimmed ?? "", CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var parsed))
-            return parsed;
-        return null;
-    }
-
-    private static bool TryParseOptionalFiniteDouble(string? value, out double? parsedValue)
-    {
-        parsedValue = null;
-        if (string.IsNullOrWhiteSpace(value))
-            return true;
-
-        if (!NumericInputParser.TryParseFiniteDouble(value.Trim(), CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var parsed))
-        {
-            return false;
-        }
-
-        parsedValue = parsed;
-        return true;
-    }
-
-    private static bool TryParsePositiveInterval(string? value, out double interval)
-    {
-        if (string.IsNullOrWhiteSpace(value)
-            || !NumericInputParser.TryParseFiniteDouble(value.Trim(), CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out interval)
-            || interval <= 0)
-        {
-            interval = 0;
-            return false;
-        }
-
-        return true;
-    }
-
-    private static string FormatDouble(double? value) =>
-        value?.ToString("G", CultureInfo.CurrentCulture) ?? "";
 
     private static void AddTextBox(Panel stack, string label, TextBox textBox)
     {

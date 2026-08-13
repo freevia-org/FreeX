@@ -7,6 +7,77 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class PageBorderArtVisualPlannerTests
 {
     [Fact]
+    public void FramePlan_CentralizesAppleGeometryForNativeRenderers()
+    {
+        PageBorderArtVisualPlanner.TryBuildFramePlan(1, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().BeEmpty();
+        plan.Polygons.Should().BeEmpty();
+        plan.Lines.Should().BeEmpty();
+        plan.CubicFigures.Should().HaveCount(306);
+        plan.CubicFigures[0].Should().Match<PageBorderArtCubicFigure>(figure =>
+            figure.IsClosed
+            && figure.Fill == new PageBorderArtColor(PageBorderArtVisualPlanner.AppleFillRed, 0, 0)
+            && figure.Segments.Count == 4);
+        plan.CubicFigures[1].StrokeWidthDip.Should().Be(1.35);
+        plan.CubicFigures[1].RoundCaps.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FramePlan_RejectsUnsupportedArtStyle()
+    {
+        PageBorderArtVisualPlanner.TryBuildFramePlan(999, 3, 816, 1056, 32, out var plan)
+            .Should().BeFalse();
+        plan.Fills.Should().BeEmpty();
+        plan.Polygons.Should().BeEmpty();
+        plan.Lines.Should().BeEmpty();
+        plan.CubicFigures.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FramePlan_PreservesRendererHintsForShadowedSquareFills()
+    {
+        PageBorderArtVisualPlanner.TryBuildFramePlan(
+                PageBorderArtVisualPlanner.ShadowedSquaresArtId,
+                3,
+                816,
+                1056,
+                32,
+                out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().NotBeEmpty().And.OnlyContain(fill => fill.Antialias);
+    }
+
+    [Theory]
+    [InlineData(PageBorderArtVisualPlanner.ApplesArtId)]
+    [InlineData(PageBorderArtVisualPlanner.MapleMuffinsArtId)]
+    [InlineData(PageBorderArtVisualPlanner.CakeSliceArtId)]
+    [InlineData(PageBorderArtVisualPlanner.CandyCornArtId)]
+    [InlineData(PageBorderArtVisualPlanner.IceCreamConesArtId)]
+    [InlineData(PageBorderArtVisualPlanner.BirdsFlightArtId)]
+    [InlineData(PageBorderArtVisualPlanner.FlowersRosesArtId)]
+    [InlineData(PageBorderArtVisualPlanner.PaintedEggsArtId)]
+    [InlineData(PageBorderArtVisualPlanner.PeopleArtId)]
+    [InlineData(PageBorderArtVisualPlanner.ShadowedSquaresArtId)]
+    [InlineData(PageBorderArtVisualPlanner.ShorebirdTracksArtId)]
+    [InlineData(PageBorderArtVisualPlanner.DecorativeArchArtId)]
+    [InlineData(PageBorderArtVisualPlanner.BatsArtId)]
+    [InlineData(PageBorderArtVisualPlanner.PapyrusArtId)]
+    [InlineData(PageBorderArtVisualPlanner.VineArtId)]
+    [InlineData(PageBorderArtVisualPlanner.WeavingRibbonArtId)]
+    [InlineData(PageBorderArtVisualPlanner.Handmade2ArtId)]
+    public void FramePlan_CoversEverySupportedArtStyle(int artId)
+    {
+        PageBorderArtVisualPlanner.TryBuildFramePlan(artId, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        (plan.Fills.Count + plan.Polygons.Count + plan.Lines.Count + plan.CubicFigures.Count)
+            .Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Apples_UsesWordArtSizeAndStretchesMotifsAcrossEachEdge()
     {
         PageBorderArtVisualPlanner.TryBuildApplesFrame(1, 3, 816, 1056, 32, out var motifs)

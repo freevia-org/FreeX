@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.Editing;
+using FreeX.Core.Commands;
 
 namespace FreeX.App.Host;
 
@@ -33,28 +34,23 @@ public sealed partial class PasteSpecialDialog : Window
     private readonly RadioButton _opSubtract;
     private readonly RadioButton _opMultiply;
     private readonly RadioButton _opDivide;
+    private readonly IReadOnlyDictionary<PasteSpecialDialogMode, RadioButton> _pasteChoiceButtons;
+    private readonly IReadOnlyDictionary<PasteSpecialOperation, RadioButton> _operationButtons;
     private bool _pasteLinkRequested;
 
-    public PasteSpecialDialogMode Mode => true switch
+    public PasteSpecialDialogMode Mode
     {
-        _ when _rbValues.IsChecked == true => PasteSpecialDialogMode.Values,
-        _ when _rbFormulas.IsChecked == true => PasteSpecialDialogMode.Formulas,
-        _ when _rbFormats.IsChecked == true => PasteSpecialDialogMode.Formats,
-        _ when _rbComments.IsChecked == true => PasteSpecialDialogMode.Comments,
-        _ when _rbValidation.IsChecked == true => PasteSpecialDialogMode.Validation,
-        _ when _rbAllUsingSourceTheme.IsChecked == true => PasteSpecialDialogMode.AllUsingSourceTheme,
-        _ when _rbAllExceptBorders.IsChecked == true => PasteSpecialDialogMode.AllExceptBorders,
-        _ when _rbAllMergingConditionalFormats.IsChecked == true => PasteSpecialDialogMode.AllMergingConditionalFormats,
-        _ when _rbColumnWidths.IsChecked == true => PasteSpecialDialogMode.ColumnWidths,
-        _ when _rbFormulasAndNumberFormats.IsChecked == true => PasteSpecialDialogMode.FormulasAndNumberFormats,
-        _ when _rbValuesAndNumberFormats.IsChecked == true => PasteSpecialDialogMode.ValuesAndNumberFormats,
-        _ when _rbValuesAndSourceFormatting.IsChecked == true => PasteSpecialDialogMode.ValuesAndSourceFormatting,
-        _ when _rbText.IsChecked == true => PasteSpecialDialogMode.Text,
-        _ when _rbUnicodeText.IsChecked == true => PasteSpecialDialogMode.UnicodeText,
-        _ when _rbPicture.IsChecked == true => PasteSpecialDialogMode.Picture,
-        _ when _rbLinkedPicture.IsChecked == true => PasteSpecialDialogMode.LinkedPicture,
-        _ => PasteSpecialDialogMode.All
-    };
+        get
+        {
+            foreach (var choice in PasteSpecialPlanner.Surface.WpfChoices)
+            {
+                if (_pasteChoiceButtons[choice.Mode].IsChecked == true)
+                    return choice.Mode;
+            }
+
+            return PasteSpecialDialogMode.All;
+        }
+    }
 
     public bool PasteValues    => Mode == PasteSpecialDialogMode.Values;
     public bool PasteFormats   => Mode == PasteSpecialDialogMode.Formats;
@@ -64,50 +60,98 @@ public sealed partial class PasteSpecialDialog : Window
     public bool SkipBlanks     => _skipBlanks.IsChecked == true;
     public bool Transpose      => _transpose.IsChecked == true;
     public bool KeepColumnWidths => _keepColumnWidths.IsChecked == true;
-    public string Operation => true switch
+    public PasteSpecialOperation Operation
     {
-        _ when _opAdd.IsChecked == true => "Add",
-        _ when _opSubtract.IsChecked == true => "Subtract",
-        _ when _opMultiply.IsChecked == true => "Multiply",
-        _ when _opDivide.IsChecked == true => "Divide",
-        _ => "None"
-    };
+        get
+        {
+            foreach (var operation in PasteSpecialPlanner.Surface.Operations.OrderBy(descriptor => descriptor.Order))
+            {
+                if (_operationButtons[operation.Operation].IsChecked == true)
+                    return operation.Operation;
+            }
+
+            return PasteSpecialOperation.None;
+        }
+    }
+
+    public PasteSpecialDialogSelection Selection =>
+        PasteSpecialPlanner.CreateSelection(Mode, Operation, SkipBlanks, Transpose, KeepColumnWidths, PasteLink);
 
     public PasteSpecialDialog()
     {
-        Title = UiText.Get("PasteSpecial_PasteSpecial");
+        var surface = PasteSpecialPlanner.Surface;
+
+        Title = surface.Title.ResolveWpf(UiText.Get);
         Width = 470; Height = 550;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
 
-        _rbAll      = new RadioButton { Content = UiText.Get("PasteSpecial_All"),            IsChecked = true, Margin = new Thickness(0, 0, 0, 6) };
-        _rbValues   = new RadioButton { Content = UiText.Get("PasteSpecial_Values"),    Margin = new Thickness(0, 0, 0, 6) };
-        _rbFormulas = new RadioButton { Content = UiText.Get("PasteSpecial_Formulas"),  Margin = new Thickness(0, 0, 0, 6) };
-        _rbFormats  = new RadioButton { Content = UiText.Get("PasteSpecial_Formats"),   Margin = new Thickness(0, 0, 0, 6) };
-        _rbComments = new RadioButton { Content = UiText.Get("PasteSpecial_CommentsAndNotes"), Margin = new Thickness(0, 0, 0, 6) };
-        _rbValidation = new RadioButton { Content = UiText.Get("PasteSpecial_Validation"), Margin = new Thickness(0, 0, 0, 6) };
-        _rbAllUsingSourceTheme = new RadioButton { Content = UiText.Get("PasteSpecial_AllUsingSourceTheme"), Margin = new Thickness(0, 0, 0, 6) };
-        _rbAllExceptBorders = new RadioButton { Content = UiText.Get("PasteSpecial_AllExceptBorders"), Margin = new Thickness(0, 0, 0, 6) };
-        _rbAllMergingConditionalFormats = new RadioButton { Content = UiText.Get("PasteSpecial_AllMergingConditionalFormats"), Margin = new Thickness(0, 0, 0, 6) };
-        _rbColumnWidths = new RadioButton { Content = UiText.Get("PasteSpecial_ColumnWidths"), Margin = new Thickness(0, 0, 0, 6) };
-        _rbFormulasAndNumberFormats = new RadioButton { Content = UiText.Get("PasteSpecial_FormulasAndNumberFormats"), Margin = new Thickness(0, 0, 0, 6) };
-        _rbValuesAndNumberFormats = new RadioButton { Content = UiText.Get("PasteSpecial_ValuesAndNumberFormats"), Margin = new Thickness(0, 0, 0, 6) };
-        _rbValuesAndSourceFormatting = new RadioButton { Content = UiText.Get("PasteSpecial_ValuesAndSourceFormatting"), Margin = new Thickness(0, 0, 0, 6) };
-        _rbText = new RadioButton { Content = UiText.Get("PasteSpecial_Text"), Margin = new Thickness(0, 0, 0, 6) };
-        _rbUnicodeText = new RadioButton { Content = UiText.Get("PasteSpecial_UnicodeText"), Margin = new Thickness(0, 0, 0, 6) };
-        _rbPicture  = new RadioButton { Content = UiText.Get("PasteSpecial_Picture"),        Margin = new Thickness(0, 0, 0, 6) };
-        _rbLinkedPicture = new RadioButton { Content = UiText.Get("PasteSpecial_LinkedPicture"), Margin = new Thickness(0, 0, 0, 6) };
-        _pasteLinkButton = new Button { Content = UiText.Get("PasteSpecial_PasteLink"), Width = 96, Margin = new Thickness(0, 0, 8, 0) };
-        _skipBlanks = new CheckBox { Content = UiText.Get("PasteSpecial_SkipBlanks"), Margin = new Thickness(0, 0, 0, 8) };
-        _transpose  = new CheckBox { Content = UiText.Get("PasteSpecial_Transpose"), Margin = new Thickness(0, 4, 0, 8) };
-        _keepColumnWidths = new CheckBox { Content = UiText.Get("PasteSpecial_KeepSourceColumnWidths"), Margin = new Thickness(0, 0, 0, 8) };
-        _opNone = CreateOperationButton(UiText.Get("PasteSpecial_OperationNone"), isChecked: true);
-        _opAdd = CreateOperationButton(UiText.Get("PasteSpecial_OperationAdd"));
-        _opSubtract = CreateOperationButton(UiText.Get("PasteSpecial_OperationSubtract"));
-        _opMultiply = CreateOperationButton(UiText.Get("PasteSpecial_OperationMultiply"));
-        _opDivide = CreateOperationButton(UiText.Get("PasteSpecial_OperationDivide"));
+        _rbAll = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.All));
+        _rbValues = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.Values));
+        _rbFormulas = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.Formulas));
+        _rbFormats = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.Formats));
+        _rbComments = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.Comments));
+        _rbValidation = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.Validation));
+        _rbAllUsingSourceTheme = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.AllUsingSourceTheme));
+        _rbAllExceptBorders = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.AllExceptBorders));
+        _rbAllMergingConditionalFormats = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.AllMergingConditionalFormats));
+        _rbColumnWidths = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.ColumnWidths));
+        _rbFormulasAndNumberFormats = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.FormulasAndNumberFormats));
+        _rbValuesAndNumberFormats = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.ValuesAndNumberFormats));
+        _rbValuesAndSourceFormatting = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.ValuesAndSourceFormatting));
+        _rbText = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.Text));
+        _rbUnicodeText = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.UnicodeText));
+        _rbPicture = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.Picture));
+        _rbLinkedPicture = CreatePasteChoiceButton(surface.GetChoice(PasteSpecialDialogMode.LinkedPicture));
+        _pasteChoiceButtons = new Dictionary<PasteSpecialDialogMode, RadioButton>
+        {
+            [PasteSpecialDialogMode.All] = _rbAll,
+            [PasteSpecialDialogMode.Values] = _rbValues,
+            [PasteSpecialDialogMode.Formulas] = _rbFormulas,
+            [PasteSpecialDialogMode.Formats] = _rbFormats,
+            [PasteSpecialDialogMode.Comments] = _rbComments,
+            [PasteSpecialDialogMode.Validation] = _rbValidation,
+            [PasteSpecialDialogMode.AllUsingSourceTheme] = _rbAllUsingSourceTheme,
+            [PasteSpecialDialogMode.AllExceptBorders] = _rbAllExceptBorders,
+            [PasteSpecialDialogMode.AllMergingConditionalFormats] = _rbAllMergingConditionalFormats,
+            [PasteSpecialDialogMode.ColumnWidths] = _rbColumnWidths,
+            [PasteSpecialDialogMode.FormulasAndNumberFormats] = _rbFormulasAndNumberFormats,
+            [PasteSpecialDialogMode.ValuesAndNumberFormats] = _rbValuesAndNumberFormats,
+            [PasteSpecialDialogMode.ValuesAndSourceFormatting] = _rbValuesAndSourceFormatting,
+            [PasteSpecialDialogMode.Text] = _rbText,
+            [PasteSpecialDialogMode.UnicodeText] = _rbUnicodeText,
+            [PasteSpecialDialogMode.Picture] = _rbPicture,
+            [PasteSpecialDialogMode.LinkedPicture] = _rbLinkedPicture,
+        };
+
+        var pasteLinkAction = surface.GetAction(PasteSpecialDialogActionKind.PasteLink);
+        _pasteLinkButton = new Button
+        {
+            Content = UiText.Get(pasteLinkAction.WpfLabelTextKey),
+            Width = 96,
+            Margin = new Thickness(0, 0, 8, 0),
+            IsEnabled = pasteLinkAction.IsEnabled,
+        };
+
+        _skipBlanks = CreateToggle(surface.GetToggle(PasteSpecialToggleKind.SkipBlanks), new Thickness(0, 0, 0, 8));
+        _transpose = CreateToggle(surface.GetToggle(PasteSpecialToggleKind.Transpose), new Thickness(0, 4, 0, 8));
+        _keepColumnWidths = CreateToggle(surface.GetToggle(PasteSpecialToggleKind.KeepColumnWidths), new Thickness(0, 0, 0, 8));
+
+        _opNone = CreateOperationButton(surface.GetOperation(PasteSpecialOperation.None));
+        _opAdd = CreateOperationButton(surface.GetOperation(PasteSpecialOperation.Add));
+        _opSubtract = CreateOperationButton(surface.GetOperation(PasteSpecialOperation.Subtract));
+        _opMultiply = CreateOperationButton(surface.GetOperation(PasteSpecialOperation.Multiply));
+        _opDivide = CreateOperationButton(surface.GetOperation(PasteSpecialOperation.Divide));
+        _operationButtons = new Dictionary<PasteSpecialOperation, RadioButton>
+        {
+            [PasteSpecialOperation.None] = _opNone,
+            [PasteSpecialOperation.Add] = _opAdd,
+            [PasteSpecialOperation.Subtract] = _opSubtract,
+            [PasteSpecialOperation.Multiply] = _opMultiply,
+            [PasteSpecialOperation.Divide] = _opDivide,
+        };
         ApplyAutomationMetadata();
 
         stack.Children.Add(CreatePasteGroup());
@@ -124,5 +168,23 @@ public sealed partial class PasteSpecialDialog : Window
         _rbAll.Focus();
         Keyboard.Focus(_rbAll);
     }
+
+    private static RadioButton CreatePasteChoiceButton(PasteSpecialChoiceDescriptor choice) =>
+        new()
+        {
+            Content = UiText.Get(choice.WpfLabelTextKey),
+            IsChecked = choice.IsDefault,
+            IsEnabled = choice.IsEnabled,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+
+    private static CheckBox CreateToggle(PasteSpecialToggleDescriptor toggle, Thickness margin) =>
+        new()
+        {
+            Content = UiText.Get(toggle.WpfLabelTextKey),
+            IsChecked = toggle.IsCheckedByDefault,
+            IsEnabled = toggle.IsEnabled,
+            Margin = margin,
+        };
 
 }

@@ -1,6 +1,4 @@
-using System.Reflection;
 using System.Windows.Automation;
-using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -26,9 +24,7 @@ public sealed class FreeXCleanupMED14Tests
         StaTestRunner.Run(() =>
         {
             var workbook = new Workbook("Book1");
-            var sheet = workbook.AddSheet("Sheet1");
-            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("hello")));
-            sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromValue(new TextValue("world")));
+            workbook.AddSheet("Sheet1");
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();
@@ -55,22 +51,17 @@ public sealed class FreeXCleanupMED14Tests
                 window.UpdateLayout();
                 PumpDispatcher();
 
-                var showInlineEditor = typeof(MainWindow)
-                    .GetMethod("ShowInlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?? throw new MissingMethodException(nameof(MainWindow), "ShowInlineEditor");
-                var setActiveCell = typeof(MainWindow)
-                    .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-                var inlineEditorField = typeof(MainWindow)
-                    .GetField("_inlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?? throw new MissingFieldException(nameof(MainWindow), "_inlineEditor");
+                var sheet = window.Session.ActiveSheet;
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("hello")));
+                sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromValue(new TextValue("world")));
 
-                setActiveCell.Invoke(window, [new CellAddress(sheet.Id, 1, 1)]);
+                window.SetActiveCellForTest(new CellAddress(sheet.Id, 1, 1));
                 PumpDispatcher();
-                showInlineEditor.Invoke(window, [new CellAddress(sheet.Id, 1, 1)]);
+                window.ShowInlineEditorForTest(new CellAddress(sheet.Id, 1, 1));
                 PumpDispatcher();
 
-                var editor = (TextBox)inlineEditorField.GetValue(window)!;
+                var editor = window.InlineEditorForTest
+                    ?? throw new InvalidOperationException("Inline editor was not created.");
                 var nameAtA1 = AutomationProperties.GetName(editor);
                 var automationId = AutomationProperties.GetAutomationId(editor);
 
@@ -78,9 +69,9 @@ public sealed class FreeXCleanupMED14Tests
                 nameAtA1.Should().Contain("A1", "the accessible name must identify the cell being edited");
                 automationId.Should().Be("WorksheetInlineCellEditor");
 
-                setActiveCell.Invoke(window, [new CellAddress(sheet.Id, 2, 2)]);
+                window.SetActiveCellForTest(new CellAddress(sheet.Id, 2, 2));
                 PumpDispatcher();
-                showInlineEditor.Invoke(window, [new CellAddress(sheet.Id, 2, 2)]);
+                window.ShowInlineEditorForTest(new CellAddress(sheet.Id, 2, 2));
                 PumpDispatcher();
 
                 var nameAtB2 = AutomationProperties.GetName(editor);

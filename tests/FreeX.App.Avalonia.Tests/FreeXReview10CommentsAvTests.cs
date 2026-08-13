@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -57,7 +56,7 @@ public sealed class FreeXReview10CommentsAvTests
 
             window.Session.SelectCell(address);
 
-            InvokePrivate(window, "DeleteActiveCellNote");
+            window.DeleteActiveCellNoteForTest();
 
             sheet.Comments.ContainsKey(address).Should().BeFalse(
                 "Delete Note must remove the legacy note");
@@ -93,7 +92,7 @@ public sealed class FreeXReview10CommentsAvTests
 
             window.Session.SelectCell(address);
 
-            InvokePrivate(window, "DeleteActiveCellThreadedComment");
+            window.DeleteActiveCellThreadedCommentForTest();
 
             sheet.ThreadedComments.ContainsKey(address).Should().BeFalse(
                 "Delete Comment must remove the whole threaded conversation (root + replies)");
@@ -213,14 +212,6 @@ public sealed class FreeXReview10CommentsAvTests
 
     private static void ForceViewportRefresh(MainWindow window) =>
         window.Session.UpdateViewportSize(InitialViewportHeightForTests + 1, InitialViewportWidthForTests);
-
-    private static void InvokePrivate(MainWindow window, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        method.Invoke(window, null);
-    }
 
     private static Grid FindInnerGrid(Control built)
     {

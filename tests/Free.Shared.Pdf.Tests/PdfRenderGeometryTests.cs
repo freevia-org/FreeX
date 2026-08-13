@@ -103,18 +103,9 @@ public sealed class PdfRenderGeometryTests
         wpf.Should().Contain("XImage.FromBitmapSource");
         wpf.Should().Contain("PdfSharp.Drawing");
         wpf.Should().NotContain("SkiaSharp");
+        wpf.Should().NotContain("? \"FreeX\"");
     }
 
-    private static string FindWorkspaceRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return directory.FullName;
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the FreeX workspace root.");
-    }
+    private static string FindWorkspaceRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

@@ -50,44 +50,9 @@ public partial class ColorPickerDialog : Window
 
     public bool AllowNoColor { get; }
 
-    public static IReadOnlyList<CellColorSwatch> BuildDefaultSwatches(WorkbookTheme? theme = null) =>
-        CellColorPalettePlanner.BuildDefaultSwatches(theme);
-
-    public static IReadOnlyList<CellColorThemeColumn> BuildThemePalette(WorkbookTheme? theme = null) =>
-        CellColorPalettePlanner.BuildThemePalette(theme);
-
-    public static IReadOnlyList<CellColorSwatch> BuildStandardSwatches() =>
-        CellColorPalettePlanner.BuildStandardSwatches();
-
-    public static IReadOnlyList<CellColorSwatch> BuildCustomSpectrumSwatches() =>
-        CellColorPalettePlanner.BuildCustomSpectrumSwatches();
-
-    public static bool TryParseColorText(string text, out CellColor color)
-    {
-        return ColorInputParser.TryParseColorText(text, out color);
-    }
-
-    public static bool TryParseRgbComponents(
-        string redText,
-        string greenText,
-        string blueText,
-        out CellColor color)
-    {
-        color = default;
-        if (!TryParseRgbByte(redText, out var red)
-            || !TryParseRgbByte(greenText, out var green)
-            || !TryParseRgbByte(blueText, out var blue))
-        {
-            return false;
-        }
-
-        color = new CellColor(red, green, blue);
-        return true;
-    }
-
     private void CustomColorTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (_updatingText || !TryParseColorText(CustomColorTextBox.Text, out var color))
+        if (_updatingText || !ColorInputParser.TryParseColorText(CustomColorTextBox.Text, out var color))
             return;
 
         SelectColor(color);
@@ -96,7 +61,7 @@ public partial class ColorPickerDialog : Window
     private void CustomRgbTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (_updatingText
-            || !TryParseRgbComponents(
+            || !ColorInputParser.TryParseRgbComponents(
                 CustomRedTextBox.Text,
                 CustomGreenTextBox.Text,
                 CustomBlueTextBox.Text,
@@ -119,7 +84,7 @@ public partial class ColorPickerDialog : Window
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryParseColorText(CustomColorTextBox.Text, out var color))
+        if (!ColorInputParser.TryParseColorText(CustomColorTextBox.Text, out var color))
         {
             ShowInvalidCustomColorWarning(UiText.Get("ColorPicker_InvalidColorMessage"), CustomColorTextBox);
             return;
@@ -153,17 +118,17 @@ public partial class ColorPickerDialog : Window
 
     private void BuildPaletteButtons()
     {
-        var themeColumns = BuildThemePalette(_theme);
+        var themeColumns = CellColorPalettePlanner.BuildThemePalette(_theme);
         for (var row = 0; row < themeColumns[0].Shades.Count; row++)
         {
             foreach (var column in themeColumns)
                 ThemeColorsPanel.Children.Add(CreateSwatchButton(column.Shades[row], column.Name));
         }
 
-        foreach (var swatch in BuildStandardSwatches())
+        foreach (var swatch in CellColorPalettePlanner.BuildStandardSwatches())
             StandardColorsPanel.Children.Add(CreateSwatchButton(swatch, UiText.Get("ColorPicker_StandardColorGroup")));
 
-        foreach (var swatch in BuildCustomSpectrumSwatches())
+        foreach (var swatch in CellColorPalettePlanner.BuildCustomSpectrumSwatches())
             CustomSpectrumPanel.Children.Add(CreateSwatchButton(swatch, UiText.Get("ColorPicker_CustomSpectrumColorGroup")));
     }
 
@@ -186,7 +151,10 @@ public partial class ColorPickerDialog : Window
         AutomationProperties.SetItemStatus(button, NotSelectedItemStatus);
         button.Click += SwatchButton_Click;
         _initialFocusButton ??= button;
-        if (SelectedColor == swatch.Color)
+        // A color can appear in more than one palette (for example standard red also appears in
+        // the custom spectrum). Keep the first visible match selected during construction instead
+        // of moving selection to the last duplicate, which can live on a different tab.
+        if (_selectedSwatchButton is null && SelectedColor == swatch.Color)
             MarkSelectedSwatch(button);
         return button;
     }

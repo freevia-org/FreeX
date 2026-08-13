@@ -70,7 +70,9 @@ internal static class FreePAvaloniaRenderer
             string outPath = Path.Combine(outDir, $"slide-{i + 1:D2}.png");
             try
             {
-                SlideRenderer.RenderToPng(presentation, i, width, height, outPath);
+                File.WriteAllBytes(
+                    outPath,
+                    SlideRenderer.RenderToBytes(presentation, i, width, height));
                 Console.WriteLine($"  slide-{i + 1:D2} -> {outPath}");
                 var diversity = PixelDiversity.Analyze(outPath);
                 Console.WriteLine($"    {diversity}");

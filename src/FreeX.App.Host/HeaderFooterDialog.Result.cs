@@ -8,40 +8,41 @@ public partial class HeaderFooterDialog
 {
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
-        Header = new WorksheetHeaderFooter(
-            HeaderLeftBox.Text,
-            HeaderCenterBox.Text,
-            HeaderRightBox.Text);
-        Footer = new WorksheetHeaderFooter(
-            FooterLeftBox.Text,
-            FooterCenterBox.Text,
-            FooterRightBox.Text);
-        FirstPageHeader = new WorksheetHeaderFooter(
-            FirstHeaderLeftBox.Text,
-            FirstHeaderCenterBox.Text,
-            FirstHeaderRightBox.Text);
-        FirstPageFooter = new WorksheetHeaderFooter(
-            FirstFooterLeftBox.Text,
-            FirstFooterCenterBox.Text,
-            FirstFooterRightBox.Text);
-        EvenPageHeader = new WorksheetHeaderFooter(
-            EvenHeaderLeftBox.Text,
-            EvenHeaderCenterBox.Text,
-            EvenHeaderRightBox.Text);
-        EvenPageFooter = new WorksheetHeaderFooter(
-            EvenFooterLeftBox.Text,
-            EvenFooterCenterBox.Text,
-            EvenFooterRightBox.Text);
-        HeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(Header, HeaderPictures);
-        FooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(Footer, FooterPictures);
-        FirstPageHeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(FirstPageHeader, FirstPageHeaderPictures);
-        FirstPageFooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(FirstPageFooter, FirstPageFooterPictures);
-        EvenPageHeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(EvenPageHeader, EvenPageHeaderPictures);
-        EvenPageFooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(EvenPageFooter, EvenPageFooterPictures);
-        DifferentFirstPage = DifferentFirstPageBox.IsChecked == true;
-        DifferentOddEvenPages = DifferentOddEvenBox.IsChecked == true;
-        ScaleWithDocument = ScaleWithDocumentBox.IsChecked == true;
-        AlignWithMargins = AlignWithMarginsBox.IsChecked == true;
+        var result = new HeaderFooterEditorState(
+            new WorksheetHeaderFooter(HeaderLeftBox.Text, HeaderCenterBox.Text, HeaderRightBox.Text),
+            new WorksheetHeaderFooter(FooterLeftBox.Text, FooterCenterBox.Text, FooterRightBox.Text),
+            new WorksheetHeaderFooter(FirstHeaderLeftBox.Text, FirstHeaderCenterBox.Text, FirstHeaderRightBox.Text),
+            new WorksheetHeaderFooter(FirstFooterLeftBox.Text, FirstFooterCenterBox.Text, FirstFooterRightBox.Text),
+            new WorksheetHeaderFooter(EvenHeaderLeftBox.Text, EvenHeaderCenterBox.Text, EvenHeaderRightBox.Text),
+            new WorksheetHeaderFooter(EvenFooterLeftBox.Text, EvenFooterCenterBox.Text, EvenFooterRightBox.Text),
+            HeaderPictures,
+            FooterPictures,
+            FirstPageHeaderPictures,
+            FirstPageFooterPictures,
+            EvenPageHeaderPictures,
+            EvenPageFooterPictures,
+            DifferentFirstPageBox.IsChecked == true,
+            DifferentOddEvenBox.IsChecked == true,
+            ScaleWithDocumentBox.IsChecked == true,
+            AlignWithMarginsBox.IsChecked == true)
+            .PrunePicturesWithoutTokens();
+
+        Header = result.Header;
+        Footer = result.Footer;
+        FirstPageHeader = result.FirstPageHeader;
+        FirstPageFooter = result.FirstPageFooter;
+        EvenPageHeader = result.EvenPageHeader;
+        EvenPageFooter = result.EvenPageFooter;
+        HeaderPictures = result.HeaderPictures;
+        FooterPictures = result.FooterPictures;
+        FirstPageHeaderPictures = result.FirstPageHeaderPictures;
+        FirstPageFooterPictures = result.FirstPageFooterPictures;
+        EvenPageHeaderPictures = result.EvenPageHeaderPictures;
+        EvenPageFooterPictures = result.EvenPageFooterPictures;
+        DifferentFirstPage = result.DifferentFirstPage;
+        DifferentOddEvenPages = result.DifferentOddEvenPages;
+        ScaleWithDocument = result.ScaleWithDocument;
+        AlignWithMargins = result.AlignWithMargins;
         DialogResult = true;
         Close();
     }

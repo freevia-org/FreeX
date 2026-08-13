@@ -9,6 +9,26 @@ public sealed class SlideCanvasGeometryPlannerTests
 
     private static long ToEmu(double dip) => (long)Math.Round(dip * EmuPerDip);
 
+    [Theory]
+    [InlineData(1000, 1000, 1000, 562.5)]
+    [InlineData(double.PositiveInfinity, 270, 480, 270)]
+    [InlineData(320, double.PositiveInfinity, 320, 180)]
+    [InlineData(double.PositiveInfinity, double.PositiveInfinity, 960, 540)]
+    [InlineData(0, 100, 1, 1)]
+    public void FitAspectRatio_PreservesRendererMeasureGeometry(
+        double availableWidth,
+        double availableHeight,
+        double expectedWidth,
+        double expectedHeight)
+    {
+        SlideCanvasGeometryPlanner.FitAspectRatio(
+                960,
+                540,
+                availableWidth,
+                availableHeight)
+            .Should().Be(new SlideCanvasSize(expectedWidth, expectedHeight));
+    }
+
     [Fact]
     public void ShapeBoundsToScreen_UsesSharedUniformFitTransform()
     {
@@ -185,14 +205,30 @@ public sealed class SlideCanvasGeometryPlannerTests
             "freep",
             "FreeP.App.Rendering.Avalonia",
             "AvaloniaCanvasGestureHandler.cs");
+        var router = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "CanvasGestureRouter.cs");
+
+        router.Should().Contain("CanvasGestureSession _session");
+        router.Should().Contain("_session.PlanMove(");
+        router.Should().Contain("SlideCanvasGeometryPlanner.ScreenRectBetween");
+        router.Should().Contain("CanvasGesturePreviewProjector");
+        router.Should().Contain("SlideCanvasGeometryPlanner.EmuBoundsToScreen");
+        router.Should().Contain("SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen");
 
         foreach (var source in new[] { wpfGesture, avaloniaGesture })
         {
-            source.Should().Contain("CanvasGesturePlanner.CaptureMoveState");
-            source.Should().Contain("CanvasGesturePlanner.PlanMove");
-            source.Should().Contain("SlideCanvasGeometryPlanner.EmuBoundsToScreen");
-            source.Should().Contain("SlideCanvasGeometryPlanner.ScreenRectBetween");
-            source.Should().Contain("SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen");
+            source.Should().Contain("CanvasGestureRouter _gestureRouter");
+            source.Should().Contain("_gestureRouter.PreviewPointer(");
+            source.Should().Contain("ApplyPreviewPlan(");
+            source.Should().Contain("CanvasGesturePreviewProjector.Project(");
+            source.Should().Contain("ToGesturePoint(");
+            source.Should().NotContain("CanvasGesturePlanner.CaptureMoveState");
+            source.Should().NotContain("CanvasGesturePlanner.PlanMove");
+            source.Should().NotContain("SlideCanvasGeometryPlanner.ScreenRectBetween");
+            source.Should().NotContain("SlideCanvasGeometryPlanner.EmuBoundsToScreen");
+            source.Should().NotContain("SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen");
             source.Should().NotContain("BoundsToScreenRect");
             source.Should().NotContain("SnapEngine.Snap(");
         }
@@ -253,34 +289,27 @@ public sealed class SlideCanvasGeometryPlannerTests
             source.Should().NotContain("g.Position * xf.Scale");
         }
 
+        var wpfCanvas = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "SlideCanvas.cs");
         var avaloniaCanvas = ReadWorkspaceFile(
             "freep",
             "FreeP.App.Rendering.Avalonia",
             "SlideCanvas.cs");
-        avaloniaCanvas.Should().Contain("SlideTransformCore.Compute");
+        foreach (var source in new[] { wpfCanvas, avaloniaCanvas })
+        {
+            source.Should().Contain("SlideCanvasGeometryPlanner.FitAspectRatio(")
+                .And.NotContain("double ratio = _slideWidthDip / _slideHeightDip")
+                .And.NotContain("if (w / h > ratio)");
+        }
+
+        avaloniaCanvas.Should().Contain("PresentationViewZoomPlanner.PlanStageTransform");
         avaloniaCanvas.Should().NotContain("Math.Min(renderW / _slideWidthDip");
     }
 
-    private static string ReadWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var parts = new string[relativeParts.Length + 1];
-            parts[0] = directory.FullName;
-            relativeParts.CopyTo(parts, 1);
-
-            var candidate = Path.Combine(parts);
-            if (File.Exists(candidate))
-                return File.ReadAllText(candidate);
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(
-            "Could not locate workspace file.",
-            Path.Combine(relativeParts));
-    }
+    private static string ReadWorkspaceFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 
     private static TableShape MakeTable()
     {

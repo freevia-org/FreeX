@@ -38,28 +38,6 @@ public static class DataValidationPresetPlanner
     public static bool RequiresSecondFormula(DvType type, DvOperator op) =>
         DataValidationDisplayTextPlanner.RequiresSecondFormula(type, op);
 
-    public static DataValidation CreateDefaultRule(DvType type, GridRange selectedRange)
-    {
-        var op = DvOperator.Between;
-        return new DataValidation
-        {
-            AppliesTo = selectedRange,
-            Type = type,
-            Operator = op,
-            Formula1 = "",
-            Formula2 = RequiresSecondFormula(type, op) ? "" : "",
-            AllowBlank = true,
-            ShowDropdown = type == DvType.List,
-            AlertStyle = DvAlertStyle.Stop,
-            ShowInputMessage = true,
-            ShowErrorMessage = true,
-            ErrorTitle = "",
-            ErrorMessage = "",
-            PromptTitle = "",
-            PromptMessage = ""
-        };
-    }
-
     public static DataValidationSelectionSummary CreateSelectionSummary(
         Workbook workbook,
         Sheet sheet,
@@ -177,89 +155,8 @@ public static class DataValidationPresetPlanner
     }
 
     private static bool HaveSameSettings(DataValidation left, DataValidation right) =>
-        left.Type == right.Type &&
-        left.Operator == right.Operator &&
-        string.Equals(left.Formula1, right.Formula1, StringComparison.Ordinal) &&
-        string.Equals(left.Formula2, right.Formula2, StringComparison.Ordinal) &&
-        left.AllowBlank == right.AllowBlank &&
-        left.ShowDropdown == right.ShowDropdown &&
-        left.AlertStyle == right.AlertStyle &&
-        left.ShowInputMessage == right.ShowInputMessage &&
-        left.ShowErrorMessage == right.ShowErrorMessage &&
-        string.Equals(left.ErrorTitle, right.ErrorTitle, StringComparison.Ordinal) &&
-        string.Equals(left.ErrorMessage, right.ErrorMessage, StringComparison.Ordinal) &&
-        string.Equals(left.PromptTitle, right.PromptTitle, StringComparison.Ordinal) &&
-        string.Equals(left.PromptMessage, right.PromptMessage, StringComparison.Ordinal) &&
-        DictionaryEquals(left.NativeAttributes, right.NativeAttributes) &&
-        SequenceEquals(left.NativeChildXmls, right.NativeChildXmls) &&
-        DictionaryEquals(left.NativeContainerAttributes, right.NativeContainerAttributes) &&
-        SequenceEquals(left.NativeContainerChildXmls, right.NativeContainerChildXmls);
+        left.HasSameSettings(right, includeNativeMetadata: true);
 
-    private static DataValidation CloneRule(DataValidation source)
-    {
-        var clone = new DataValidation
-        {
-            Id = source.Id,
-            AppliesTo = source.AppliesTo,
-            Type = source.Type,
-            Operator = source.Operator,
-            Formula1 = source.Formula1,
-            Formula2 = source.Formula2,
-            AllowBlank = source.AllowBlank,
-            ShowDropdown = source.ShowDropdown,
-            AlertStyle = source.AlertStyle,
-            ShowInputMessage = source.ShowInputMessage,
-            ShowErrorMessage = source.ShowErrorMessage,
-            ErrorTitle = source.ErrorTitle,
-            ErrorMessage = source.ErrorMessage,
-            PromptTitle = source.PromptTitle,
-            PromptMessage = source.PromptMessage,
-            NativeAttributes = source.NativeAttributes,
-            NativeChildXmls = source.NativeChildXmls,
-            NativeContainerAttributes = source.NativeContainerAttributes,
-            NativeContainerChildXmls = source.NativeContainerChildXmls
-        };
-        clone.AdditionalRanges.AddRange(source.AdditionalRanges);
-        return clone;
-    }
-
-    private static bool DictionaryEquals(
-        IReadOnlyDictionary<string, string>? left,
-        IReadOnlyDictionary<string, string>? right)
-    {
-        if (ReferenceEquals(left, right))
-            return true;
-
-        if (left is null || right is null || left.Count != right.Count)
-            return false;
-
-        foreach (var (key, value) in left)
-        {
-            if (!right.TryGetValue(key, out var rightValue) ||
-                !string.Equals(value, rightValue, StringComparison.Ordinal))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool SequenceEquals<T>(IReadOnlyList<T>? left, IReadOnlyList<T>? right)
-    {
-        if (ReferenceEquals(left, right))
-            return true;
-
-        if (left is null || right is null || left.Count != right.Count)
-            return false;
-
-        for (var i = 0; i < left.Count; i++)
-        {
-            if (!EqualityComparer<T>.Default.Equals(left[i], right[i]))
-                return false;
-        }
-
-        return true;
-    }
+    private static DataValidation CloneRule(DataValidation source) => source.Clone();
 
 }

@@ -12,6 +12,12 @@ namespace FreeX.App.Host.Tests;
 public sealed class RibbonIconFactorySvgTests
 {
     [Fact]
+    public void RibbonIcon_InheritsSharedWpfRenderer()
+    {
+        typeof(RibbonIcon).BaseType.Should().Be(typeof(Free.Shared.Ribbon.Wpf.RibbonIcon));
+    }
+
+    [Fact]
     public void CreateCommandIcon_LoadsCommandArtworkAsVectorImage()
     {
         StaTestRunner.Run(() =>

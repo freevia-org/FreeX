@@ -36,10 +36,18 @@ public sealed class R87_MainWindowPerViewShowHeadingsGridlinesFrozenPanesSourceT
         source.Should().Contain(
             "private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)\n    {\n        var showHeadings = _session.IsShowingHeadings;");
 
-        // The overflow-clip frozen-column computations (were lines ~6709/~6739) now read the
-        // per-view frozen-column cache via the (Wave1-made-public) GetEffectiveFrozenCols().
-        source.Should().Contain("var limit = cellRight;\n        var frozenCols = _session.GetEffectiveFrozenCols();");
-        source.Should().Contain("var limit = cellLeft;\n        var frozenCols = _session.GetEffectiveFrozenCols();");
+        // Both overflow directions delegate geometry to the shared planner while supplying the
+        // per-view frozen-column cache.
+        var rightOverflow = source[
+            source.IndexOf("private double ResolveOverflowRightLimit(", StringComparison.Ordinal)..
+            source.IndexOf("private double ResolveOverflowLeftLimit(", StringComparison.Ordinal)];
+        var leftOverflow = source[
+            source.IndexOf("private double ResolveOverflowLeftLimit(", StringComparison.Ordinal)..
+            source.IndexOf("private bool IsOverflowOccupied(", StringComparison.Ordinal)];
+        rightOverflow.Should().Contain("ViewportGeometryPlanner.CalculateOverflowAvailability(");
+        rightOverflow.Should().Contain("_session.GetEffectiveFrozenCols()");
+        leftOverflow.Should().Contain("ViewportGeometryPlanner.CalculateOverflowAvailability(");
+        leftOverflow.Should().Contain("_session.GetEffectiveFrozenCols()");
 
         // The column/row header hit-test gates (were lines ~7320/~7347).
         source.Should().Contain(
@@ -90,23 +98,14 @@ public sealed class R87_MainWindowPerViewShowHeadingsGridlinesFrozenPanesSourceT
         source.Should().NotContain("_session.ActiveSheet.ViewMode");
         source.Should().Contain("WorksheetViewModeUiStatePlanner.Build(_session.ViewMode)");
 
-        source.Should().Contain("[\"view.gridlines\"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),");
-        source.Should().Contain("[\"view.headings\"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),");
+        source.Should().Contain("[\"Gridlines\"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),");
+        source.Should().Contain("[\"Headings\"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),");
         source.Should().Contain("IsShowingGridlines: _session.IsShowingGridlines,");
         source.Should().Contain("IsShowingHeadings: _session.IsShowingHeadings,");
         source.Should().Contain("var showGridlines = !_session.IsShowingGridlines;");
         source.Should().Contain("var result = _session.SetShowGridlines(showGridlines);");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

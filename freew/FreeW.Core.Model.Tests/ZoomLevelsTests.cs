@@ -39,6 +39,16 @@ public class ZoomLevelsTests
     }
 
     [Theory]
+    [InlineData(1.0, "100%")]
+    [InlineData(0.5, "50%")]
+    [InlineData(2.0, "200%")]
+    [InlineData(double.NaN, "100%")]
+    public void FormatPercent_UsesCanonicalClampedEditorText(double factor, string expected)
+    {
+        ZoomLevels.FormatPercent(factor).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(100, 1.0)]
     [InlineData(50, 0.5)]
     [InlineData(200, 2.0)]

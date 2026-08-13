@@ -62,6 +62,24 @@ public sealed class AutosaveService : IDisposable
     }
 
     /// <summary>
+    /// Starts tracking a workbook window using the canonical per-launch snapshot identity.
+    /// </summary>
+    public void Attach(IAutosaveWorkbookSource source, Guid windowId)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        if (windowId == Guid.Empty)
+            throw new ArgumentException("The autosave window identity cannot be empty.", nameof(windowId));
+
+        var launchTag = AutosaveSnapshotStore.LaunchId.ToString("N")[..8];
+        var windowTag = windowId.ToString("N")[..8];
+        Attach(
+            source,
+            FormattableString.Invariant(
+                $"recovery-{Environment.ProcessId}-{launchTag}-{windowTag}"));
+    }
+
+    /// <summary>
     /// Starts tracking the workbook window. Should be called once when the window is loaded.
     /// </summary>
     public void Attach(IAutosaveWorkbookSource source, string snapshotId)
@@ -95,6 +113,18 @@ public sealed class AutosaveService : IDisposable
             return;
 
         _coordinator.TryEmergencySnapshot(Wrap(source));
+    }
+
+    /// <summary>
+    /// Performs an emergency best-effort snapshot of the attached workbook source.
+    /// Must never throw.
+    /// </summary>
+    public void TryEmergencySnapshot()
+    {
+        if (_boundSource is null)
+            return;
+
+        TryEmergencySnapshot(_boundSource);
     }
 
     /// <summary>

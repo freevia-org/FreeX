@@ -1,5 +1,6 @@
 using Free.Shared.IO;
 using Free.Shared.Drawing;
+using Free.Shared.Localization;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -139,16 +140,8 @@ public sealed record PresentationHandoutLayoutPlan(
     double PageWidth,
     double PageHeight,
     int PageCount,
-    IReadOnlyList<PresentationHandoutPagePlan> Pages);
-
-public sealed record PresentationDeferredExportPlan(
-    PresentationExportFormat Format,
-    string CommandId,
-    string DisplayName,
-    string Description,
-    string DefaultExtensionWithDot,
-    PresentationSlideRangePlan SlideRange,
-    bool IsImplemented);
+    IReadOnlyList<PresentationHandoutPagePlan> Pages,
+    LocalizedTextDescriptor StatusText);
 
 public sealed record PresentationVideoQualityDescriptor(
     PresentationVideoQualityKind Quality,
@@ -200,7 +193,8 @@ public sealed record PresentationVideoExportPlan(
     IReadOnlyList<PresentationVideoQualityDescriptor> QualityOptions,
     bool IsImplemented,
     bool CanExecute,
-    string? DisabledReason);
+    string? DisabledReason,
+    LocalizedTextDescriptor PlannedStatusText);
 
 public sealed record PresentationImageExportPlan(
     PresentationExportFormat Format,
@@ -430,7 +424,8 @@ public static class PresentationExportPlanner
             Math.Max(1, pageWidth),
             Math.Max(1, pageHeight),
             pages.Count,
-            pages);
+            pages,
+            PresentationShellTextCatalog.PrintHandoutLayoutPlannedStatus);
     }
 
     public static PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
@@ -464,7 +459,8 @@ public static class PresentationExportPlanner
             Math.Max(1, pageWidth),
             Math.Max(1, pageHeight),
             pages.Count,
-            pages);
+            pages,
+            PresentationShellTextCatalog.PrintHandoutLayoutPlannedStatus);
     }
 
     public static PresentationImageExportPlan BuildImageExportPlan(
@@ -602,7 +598,8 @@ public static class PresentationExportPlanner
             qualityOptions,
             isImplemented,
             CanExecute: isImplemented && range.SlideNumbers.Count > 0,
-            disabledReason);
+            disabledReason,
+            PresentationShellTextCatalog.VideoExportPlannedStatus);
     }
 
     public static IReadOnlyList<PresentationVideoQualityDescriptor> BuildVideoQualityDescriptors() =>
@@ -721,6 +718,11 @@ public static class PresentationExportPlanner
             request.CustomRangeText,
             validationMessage);
     }
+
+    public static PresentationSlideRangeRequest BuildCurrentSlideRangeRequest(int currentSlideIndex) =>
+        new(
+            PresentationSlideRangeKind.CurrentSlide,
+            CurrentSlideNumber: currentSlideIndex + 1);
 
     public static PresentationSlideRangeParseResult ParseCustomSlideRange(
         string? rangeText,
@@ -1096,24 +1098,6 @@ public static class PresentationExportPlanner
             return DefaultVideoSecondsPerSlide;
 
         return Math.Clamp(secondsPerSlide, 1, 60);
-    }
-
-    private static PresentationDeferredExportPlan BuildDeferredExportPlan(
-        PresentationExportFormat format,
-        PresentationSlideRangeRequest? range,
-        int slideCount,
-        string deferredDescription)
-    {
-        var descriptor = BuildFormatDescriptors().Single(d => d.Format == format);
-
-        return new PresentationDeferredExportPlan(
-            descriptor.Format,
-            descriptor.CommandId,
-            descriptor.DisplayName,
-            deferredDescription,
-            descriptor.DefaultExtensionWithDot ?? string.Empty,
-            BuildSlideRangePlan(range, slideCount),
-            descriptor.IsImplemented);
     }
 
     private static IReadOnlyList<int> BuildAllSlides(int slideCount) =>

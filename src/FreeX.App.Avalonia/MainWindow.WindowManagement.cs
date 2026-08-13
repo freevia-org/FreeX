@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -126,15 +127,13 @@ public sealed partial class MainWindow : Window
         WindowRegistry.RefreshWindowNumbering();
     }
 
-    internal MainWindow CreateSharedViewForTest() =>
-        new(App.StartupArguments, _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth));
-
     // view.newWindow
     private void NewWindow()
     {
         var window = new MainWindow(
             App.StartupArguments,
-            _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth));
+            _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth),
+            _optionsRuntimeSession);
         var snapshotStore = AutosaveSnapshotStore.CreateDefault(
             PlatformApplicationDataPathProvider.LocalInstance);
         var autosaveCoordinator = new AvaloniaAutosaveCoordinator(window, snapshotStore);
@@ -187,11 +186,11 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var workArea = GetPrimaryWorkArea();
+        var (workArea, scaling) = GetPrimaryWorkAreaMetrics();
         var bounds = ArrangeAllLayoutPlanner.Arrange(
             (ShellWindowArrangement)arrangement,
-            workArea.Width,
-            workArea.Height,
+            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Width, scaling),
+            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Height, scaling),
             windows.Count);
 
         if (bounds.Count != windows.Count)
@@ -200,19 +199,18 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        var tiles = AvaloniaWindowBoundsTranslator.Translate(workArea, scaling, bounds);
         for (var index = 0; index < windows.Count; index++)
         {
             var window = windows[index];
-            var rect = bounds[index];
+            var tile = tiles[index];
 
             // A maximized/full-screen window cannot be positioned; normalize first.
             window.WindowState = WindowState.Normal;
 
-            window.Position = new PixelPoint(
-                workArea.X + (int)rect.X,
-                workArea.Y + (int)rect.Y);
-            window.Width = Math.Max(window.MinWidth, rect.Width);
-            window.Height = Math.Max(window.MinHeight, rect.Height);
+            window.Position = tile.Position;
+            window.Width = Math.Max(window.MinWidth, tile.Width);
+            window.Height = Math.Max(window.MinHeight, tile.Height);
         }
 
         RefreshShell(UiText.Format("WTA_ArrangeAll_Arranged", windows.Count, ArrangementDisplayName(arrangement)));
@@ -254,6 +252,7 @@ public sealed partial class MainWindow : Window
         // rest of the session.
         HiddenWindows.Remove(this);
         _session.WorkbookChanged -= Session_WorkbookChanged;
+        _fileOperationCancellationSession.Dispose();
         _session.Dispose();
         WindowRegistry.Unregister(this);
         // If this window was part of a side-by-side pair, clear the pair so the partner window
@@ -262,15 +261,15 @@ public sealed partial class MainWindow : Window
         base.OnClosed(e);
     }
 
-    private PixelRect GetPrimaryWorkArea()
+    private (PixelRect WorkingArea, double Scaling) GetPrimaryWorkAreaMetrics()
     {
         var screens = Screens;
         var screen = screens?.ScreenFromWindow(this) ?? screens?.Primary;
 
         if (screen is not null)
-            return screen.WorkingArea;
+            return (screen.WorkingArea, screen.Scaling);
 
         // Fallback when no screen metrics are available (e.g. headless).
-        return new PixelRect(0, 0, 1280, 800);
+        return (new PixelRect(0, 0, 1280, 800), 1);
     }
 }

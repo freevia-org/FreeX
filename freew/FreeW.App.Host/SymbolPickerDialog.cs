@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using FreeW.App.Presentation.Dialogs;
@@ -22,11 +23,13 @@ internal sealed class SymbolPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        AutomationProperties.SetAutomationId(this, FreeWSymbolPickerDialogPlanner.DialogAutomationId);
 
         var panel = new StackPanel { Margin = new Thickness(FreeWSymbolPickerDialogPlanner.OuterMargin) };
         var grid = new UniformGrid { Columns = FreeWSymbolPickerDialogPlanner.Columns };
         foreach (var glyph in FreeWSymbolPickerDialogPlanner.Glyphs)
         {
+            var semantic = FreeWSymbolPickerDialogPlanner.BuildSemantic(glyph);
             var button = new Button
             {
                 Content = glyph,
@@ -34,8 +37,10 @@ internal sealed class SymbolPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 Height = FreeWSymbolPickerDialogPlanner.ButtonSize,
                 FontSize = FreeWSymbolPickerDialogPlanner.ButtonFontSize,
                 Margin = new Thickness(FreeWSymbolPickerDialogPlanner.ButtonMargin),
-                ToolTip = FreeWSymbolPickerDialogPlanner.BuildCodePointLabel(glyph),
+                ToolTip = semantic.CodePointLabel,
             };
+            AutomationProperties.SetName(button, semantic.AutomationName);
+            AutomationProperties.SetAutomationId(button, semantic.AutomationId);
             button.Click += (_, _) => { _result = glyph; DialogResult = true; };
             grid.Children.Add(button);
         }
@@ -54,6 +59,7 @@ internal sealed class SymbolPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 0),
             Padding = new Thickness(8, 2, 8, 2),
         };
+        AutomationProperties.SetAutomationId(cancel, FreeWSymbolPickerDialogPlanner.CancelAutomationId);
         panel.Children.Add(cancel);
 
         Content = panel;

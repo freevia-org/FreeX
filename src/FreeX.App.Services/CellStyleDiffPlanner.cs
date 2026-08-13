@@ -114,6 +114,45 @@ public static class CellStyleDiffPlanner
             _ => preset.ToString()
         };
 
+    public static string GetCellStylePresetLabelResourceKey(CellStylePreset preset) =>
+        preset switch
+        {
+            CellStylePreset.Normal => "MainWindow_Header_Normal",
+            CellStylePreset.Good => "MainWindow_Header_Good",
+            CellStylePreset.Bad => "MainWindow_Header_Bad",
+            CellStylePreset.Neutral => "MainWindow_Header_Neutral",
+            CellStylePreset.Input => "MainWindow_Header_Input",
+            CellStylePreset.Output => "MainWindow_Header_Output",
+            CellStylePreset.Calculation => "MainWindow_Header_Calculation",
+            CellStylePreset.CheckCell => "MainWindow_Header_CheckCell",
+            CellStylePreset.LinkedCell => "MainWindow_Header_LinkedCell",
+            CellStylePreset.ExplanatoryText => "MainWindow_Header_ExplanatoryText",
+            CellStylePreset.Heading1 => "MainWindow_Header_Heading1",
+            CellStylePreset.Heading2 => "MainWindow_Header_Heading2",
+            CellStylePreset.Note => "MainWindow_Header_Note",
+            CellStylePreset.WarningText => "MainWindow_Header_WarningText",
+            CellStylePreset.Total => "MainWindow_Header_Total",
+            CellStylePreset.Accent1_20 => "MainWindow_Header_20Accent1",
+            CellStylePreset.Accent2_20 => "MainWindow_Header_20Accent2",
+            CellStylePreset.Accent3_20 => "MainWindow_Header_20Accent3",
+            CellStylePreset.Accent4_20 => "MainWindow_Header_20Accent4",
+            CellStylePreset.Accent5_20 => "MainWindow_Header_20Accent5",
+            CellStylePreset.Accent6_20 => "MainWindow_Header_20Accent6",
+            CellStylePreset.Accent1_40 => "MainWindow_Header_40Accent1",
+            CellStylePreset.Accent2_40 => "MainWindow_Header_40Accent2",
+            CellStylePreset.Accent3_40 => "MainWindow_Header_40Accent3",
+            CellStylePreset.Accent4_40 => "MainWindow_Header_40Accent4",
+            CellStylePreset.Accent5_40 => "MainWindow_Header_40Accent5",
+            CellStylePreset.Accent6_40 => "MainWindow_Header_40Accent6",
+            CellStylePreset.Accent1_60 => "MainWindow_Header_60Accent1",
+            CellStylePreset.Accent2_60 => "MainWindow_Header_60Accent2",
+            CellStylePreset.Accent3_60 => "MainWindow_Header_60Accent3",
+            CellStylePreset.Accent4_60 => "MainWindow_Header_60Accent4",
+            CellStylePreset.Accent5_60 => "MainWindow_Header_60Accent5",
+            CellStylePreset.Accent6_60 => "MainWindow_Header_60Accent6",
+            _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
+        };
+
     public static StyleDiff GetCellStylePresetDiff(CellStylePreset preset, WorkbookTheme theme) =>
         preset switch
         {

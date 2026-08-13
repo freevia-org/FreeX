@@ -19,8 +19,8 @@ public sealed partial class SymbolPickerDialog
     private UIElement CreateDialogContent()
     {
         var recentSymbols = SymbolPickerCatalogPlanner.DefaultRecentSymbols.ToList();
-        var symbolItems = new ObservableCollection<SymbolCatalogEntry>();
-        var recentItems = new ObservableCollection<SymbolCatalogEntry>();
+        var symbolItems = new ObservableCollection<SymbolPickerCatalogEntry>();
+        var recentItems = new ObservableCollection<SymbolPickerCatalogEntry>();
         var selectedCode = new TextBox { Width = 96, Text = SymbolPickerCatalogPlanner.FormatCodeText(SelectedSymbol) };
         var preview = new TextBlock
         {
@@ -70,7 +70,7 @@ public sealed partial class SymbolPickerDialog
         void SelectSymbolText(string value, string? name = null, string? subset = null, string? codeText = null)
         {
             var selection = SymbolPickerCatalogPlanner.CreateSelection(value);
-            var entry = CreateSymbolEntry(selection.Symbol, subset ?? "");
+            var entry = SymbolPickerCatalogPlanner.CreateSymbolEntry(selection.Symbol, subset ?? "");
             ApplySelection(selection);
             preview.Text = CreateVisibleSymbolText(selection.Symbol);
             selectedCode.Text = string.IsNullOrEmpty(codeText) ? selection.CodeText : codeText;
@@ -78,17 +78,19 @@ public sealed partial class SymbolPickerDialog
             selectedSubset.Text = string.IsNullOrEmpty(subset) ? entry.Subset : subset;
         }
 
-        void SelectCatalogEntry(SymbolCatalogEntry entry) =>
+        void SelectCatalogEntry(SymbolPickerCatalogEntry entry) =>
             SelectSymbolText(entry.Symbol, entry.Name, entry.Subset, entry.CodeText);
 
-        void SelectSpecialCharacter(SpecialCharacter special) =>
+        void SelectSpecialCharacter(SymbolPickerSpecialCharacter special) =>
             SelectSymbolText(special.Symbol, special.Name, UiText.Get("SymbolPicker_SpecialCharactersTab"), special.CodeText);
 
         void PopulateRecent()
         {
             recentItems.Clear();
             foreach (var symbol in recentSymbols)
-                recentItems.Add(CreateSymbolEntry(symbol, UiText.Get("SymbolPicker_RecentlyUsedSymbols")));
+                recentItems.Add(SymbolPickerCatalogPlanner.CreateSymbolEntry(
+                    symbol,
+                    UiText.Get("SymbolPicker_RecentlyUsedSymbols")));
         }
 
         void AcceptSelectedSymbol()
@@ -96,7 +98,10 @@ public sealed partial class SymbolPickerDialog
             if (string.IsNullOrEmpty(SelectedSymbol))
                 return;
 
-            recentSymbols = PromoteRecentSymbol(recentSymbols, SelectedSymbol, 12).ToList();
+            recentSymbols = SymbolPickerCatalogPlanner.PromoteRecentSymbol(
+                recentSymbols,
+                SelectedSymbol,
+                12).ToList();
             PopulateRecent();
             DialogResult = true;
         }
@@ -124,7 +129,7 @@ public sealed partial class SymbolPickerDialog
 
             symbolItems.Clear();
             foreach (var entry in plan.Entries)
-                symbolItems.Add(SymbolCatalogEntry.FromPresentation(entry));
+                symbolItems.Add(entry);
 
             resultCount.Text = UiText.Format("SymbolPicker_SearchResultCountFormat", symbolItems.Count);
             noResults.Visibility = symbolItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -155,12 +160,12 @@ public sealed partial class SymbolPickerDialog
         searchBox.TextChanged += (_, _) => RefreshSymbols();
         symbolList.SelectionChanged += (_, _) =>
         {
-            if (symbolList.SelectedItem is SymbolCatalogEntry entry)
+            if (symbolList.SelectedItem is SymbolPickerCatalogEntry entry)
                 SelectCatalogEntry(entry);
         };
         symbolList.MouseDoubleClick += (_, e) =>
         {
-            if (symbolList.SelectedItem is SymbolCatalogEntry)
+            if (symbolList.SelectedItem is SymbolPickerCatalogEntry)
             {
                 AcceptSelectedSymbol();
                 e.Handled = true;
@@ -176,12 +181,12 @@ public sealed partial class SymbolPickerDialog
         };
         recentList.SelectionChanged += (_, _) =>
         {
-            if (recentList.SelectedItem is SymbolCatalogEntry entry)
+            if (recentList.SelectedItem is SymbolPickerCatalogEntry entry)
                 SelectCatalogEntry(entry);
         };
         recentList.MouseDoubleClick += (_, e) =>
         {
-            if (recentList.SelectedItem is SymbolCatalogEntry)
+            if (recentList.SelectedItem is SymbolPickerCatalogEntry)
             {
                 AcceptSelectedSymbol();
                 e.Handled = true;
@@ -284,7 +289,7 @@ public sealed partial class SymbolPickerDialog
         grid.Children.Add(control);
     }
 
-    private static ListBox CreateSymbolList(ObservableCollection<SymbolCatalogEntry> items, double cellSize, double fontSize)
+    private static ListBox CreateSymbolList(ObservableCollection<SymbolPickerCatalogEntry> items, double cellSize, double fontSize)
     {
         var list = new ListBox
         {
@@ -316,7 +321,7 @@ public sealed partial class SymbolPickerDialog
     private static DataTemplate CreateSymbolTemplate(double fontSize)
     {
         var textFactory = new FrameworkElementFactory(typeof(TextBlock));
-        textFactory.SetBinding(TextBlock.TextProperty, new Binding(nameof(SymbolCatalogEntry.Symbol)));
+        textFactory.SetBinding(TextBlock.TextProperty, new Binding(nameof(SymbolPickerCatalogEntry.Symbol)));
         textFactory.SetValue(TextBlock.FontSizeProperty, fontSize);
         textFactory.SetValue(TextBlock.TextAlignmentProperty, TextAlignment.Center);
         textFactory.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
@@ -333,16 +338,18 @@ public sealed partial class SymbolPickerDialog
         style.Setters.Add(new Setter(Control.MarginProperty, new Thickness(1)));
         style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
         style.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Stretch));
-        style.Setters.Add(new Setter(AutomationProperties.NameProperty, new Binding(nameof(SymbolCatalogEntry.AutomationName))));
-        style.Setters.Add(new Setter(FrameworkElement.ToolTipProperty, new Binding(nameof(SymbolCatalogEntry.ToolTipText))));
+        style.Setters.Add(new Setter(
+            AutomationProperties.NameProperty,
+            new Binding(nameof(SymbolPickerCatalogEntry.Symbol)) { Converter = SymbolAutomationNameConverter.Instance }));
+        style.Setters.Add(new Setter(FrameworkElement.ToolTipProperty, new Binding(nameof(SymbolPickerCatalogEntry.ToolTipText))));
         return style;
     }
 
-    private ListView CreateSpecialCharacterList(Action<SpecialCharacter> selectSpecialCharacter, Action acceptSelectedSymbol)
+    private ListView CreateSpecialCharacterList(Action<SymbolPickerSpecialCharacter> selectSpecialCharacter, Action acceptSelectedSymbol)
     {
         var specialList = new ListView
         {
-            ItemsSource = GetSpecialCharacters(),
+            ItemsSource = SymbolPickerCatalogPlanner.GetSpecialCharacters(),
             SelectionMode = SelectionMode.Single,
             ItemContainerStyle = CreateSpecialCharacterItemStyle()
         };
@@ -353,19 +360,19 @@ public sealed partial class SymbolPickerDialog
         {
             Columns =
             {
-                new GridViewColumn { Header = UiText.Get("SymbolPicker_NameLabel"), Width = 220, DisplayMemberBinding = new Binding(nameof(SpecialCharacter.Name)) },
-                new GridViewColumn { Header = UiText.Get("SymbolPicker_Symbol"), Width = 90, DisplayMemberBinding = new Binding(nameof(SpecialCharacter.DisplaySymbol)) },
-                new GridViewColumn { Header = UiText.Get("SymbolPicker_CharacterCodeLabel"), Width = 110, DisplayMemberBinding = new Binding(nameof(SpecialCharacter.CodeText)) }
+                new GridViewColumn { Header = UiText.Get("SymbolPicker_NameLabel"), Width = 220, DisplayMemberBinding = new Binding(nameof(SymbolPickerSpecialCharacter.Name)) },
+                new GridViewColumn { Header = UiText.Get("SymbolPicker_Symbol"), Width = 90, DisplayMemberBinding = new Binding(nameof(SymbolPickerSpecialCharacter.DisplaySymbol)) },
+                new GridViewColumn { Header = UiText.Get("SymbolPicker_CharacterCodeLabel"), Width = 110, DisplayMemberBinding = new Binding(nameof(SymbolPickerSpecialCharacter.CodeText)) }
             }
         };
         specialList.SelectionChanged += (_, _) =>
         {
-            if (specialList.SelectedItem is SpecialCharacter special)
+            if (specialList.SelectedItem is SymbolPickerSpecialCharacter special)
                 selectSpecialCharacter(special);
         };
         specialList.MouseDoubleClick += (_, e) =>
         {
-            if (specialList.SelectedItem is SpecialCharacter)
+            if (specialList.SelectedItem is SymbolPickerSpecialCharacter)
             {
                 acceptSelectedSymbol();
                 e.Handled = true;
@@ -385,8 +392,10 @@ public sealed partial class SymbolPickerDialog
     private static Style CreateSpecialCharacterItemStyle()
     {
         var style = new Style(typeof(ListViewItem));
-        style.Setters.Add(new Setter(AutomationProperties.NameProperty, new Binding(nameof(SpecialCharacter.AutomationName))));
-        style.Setters.Add(new Setter(FrameworkElement.ToolTipProperty, new Binding(nameof(SpecialCharacter.SearchText))));
+        style.Setters.Add(new Setter(
+            AutomationProperties.NameProperty,
+            new Binding(".") { Converter = SpecialCharacterAutomationNameConverter.Instance }));
+        style.Setters.Add(new Setter(FrameworkElement.ToolTipProperty, new Binding(nameof(SymbolPickerSpecialCharacter.SearchText))));
         return style;
     }
 
@@ -456,9 +465,9 @@ public sealed partial class SymbolPickerDialog
         AutomationProperties.SetHelpText(codeSelect, UiText.Get("SymbolPicker_GoToCharacterCodeHelpText"));
         codeSelect.Click += (_, _) =>
         {
-            if (TryParseCharacterCode(selectedCode.Text, out var symbol))
+            if (SymbolPickerCatalogPlanner.TryParseCharacterCode(selectedCode.Text, out var symbol))
             {
-                var entry = CreateSymbolEntry(symbol, "");
+                var entry = SymbolPickerCatalogPlanner.CreateSymbolEntry(symbol, "");
                 selectSymbolText(entry.Symbol, entry.Name, entry.Subset, entry.CodeText);
             }
             else
@@ -535,5 +544,32 @@ public sealed partial class SymbolPickerDialog
         return rune == default
             ? UiText.Get("SymbolPicker_SymbolAutomationName")
             : UiText.Format("SymbolPicker_SymbolCodeAutomationNameFormat", rune.Value);
+    }
+
+    private sealed class SymbolAutomationNameConverter : IValueConverter
+    {
+        public static SymbolAutomationNameConverter Instance { get; } = new();
+
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) =>
+            CreateSymbolAutomationName(value as string ?? string.Empty);
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) =>
+            Binding.DoNothing;
+    }
+
+    private sealed class SpecialCharacterAutomationNameConverter : IValueConverter
+    {
+        public static SpecialCharacterAutomationNameConverter Instance { get; } = new();
+
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) =>
+            value is SymbolPickerSpecialCharacter special
+                ? UiText.Format(
+                    "SymbolPicker_SpecialCharacterAutomationNameFormat",
+                    special.Name,
+                    CreateSymbolAutomationName(special.Symbol))
+                : UiText.Get("SymbolPicker_SymbolAutomationName");
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) =>
+            Binding.DoNothing;
     }
 }

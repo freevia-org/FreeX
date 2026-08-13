@@ -10,23 +10,20 @@ public sealed class TableCellBorderVisualPlannerSourceGuardTests
         source.Should().Contain("TableCellBorderVisualPlanner.Build(cellModel.Borders, PxPerPoint)");
         source.Should().Contain("TableCellBorderVisualPlan? CellBorderPlan");
         source.Should().Contain("DrawCellEdgeLine(DrawingContext context, TableCellBorderEdgeVisualPlan edge, Rect rect)");
-        source.Should().Contain("BorderLineStyle.Double");
         source.Should().Contain("edge.IsWave ? WaveBorderBrush(edge)");
-        source.Should().Contain("TableCellBorderVisualPlanner.BuildWaveOffsets(length)");
+        source.Should().Contain("TableCellBorderVisualPlanner.BuildStrokeSegments(");
+        source.Should().Contain("waveRegistrationDip: -4.0");
         source.Should().Contain("edge.StrokeOpacity");
         source.Should().Contain("cell => cell.EffectiveFill");
         source.Should().Contain("DocumentTableCellEffectiveFillPlan.Empty");
         source.Should().NotContain("ResolveCellStyle(");
         source.Should().NotContain("DrawCellEdgeLine(DrawingContext context, CellBorderEdge? edge");
+        source.Should().NotContain("TableCellBorderVisualPlanner.BuildWaveOffsets(");
+        source.Should().NotContain("TableCellBorderVisualPlanner.ProjectEdgeSegment(");
+        source.Should().NotContain("WaveCellBorderPoint(");
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FreeW.slnx")))
-            dir = dir.Parent;
-
-        dir.Should().NotBeNull("tests run from inside the repository tree");
-        return Path.Combine(new[] { dir!.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeW.slnx", parts);
 }

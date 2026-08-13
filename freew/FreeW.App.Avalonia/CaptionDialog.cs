@@ -2,28 +2,23 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed record CaptionDialogResult(CaptionLabel Label, string Text);
-
-internal sealed class CaptionDialog : FreeWDialogWindow
+internal sealed partial class CaptionDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = AvaloniaCompactDialogChrome.WindowsStyle;
-    private static readonly CaptionLabel[] Labels =
-    [
-        CaptionLabel.Figure,
-        CaptionLabel.Table,
-        CaptionLabel.Equation,
-    ];
 
+    private readonly CaptionDialogPlan _plan;
     private readonly ComboBox _label;
     private readonly TextBox _text;
 
     internal CaptionDialog(CaptionLabel defaultLabel)
     {
-        Title = "Insert Caption";
+        _plan = CaptionDialogPlanner.Build(defaultLabel);
+        Title = _plan.Title;
         Width = 390;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -32,8 +27,8 @@ internal sealed class CaptionDialog : FreeWDialogWindow
 
         _label = new ComboBox
         {
-            ItemsSource = Labels.Select(Captions.LabelText).ToArray(),
-            SelectedIndex = Math.Max(0, Array.IndexOf(Labels, defaultLabel)),
+            ItemsSource = _plan.Choices.Select(choice => choice.Label).ToArray(),
+            SelectedIndex = _plan.SelectedIndex,
             HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Stretch,
         };
         AvaloniaCompactDialogChrome.ApplyComboBox(_label, Chrome);
@@ -49,9 +44,9 @@ internal sealed class CaptionDialog : FreeWDialogWindow
             Spacing = 6,
             Children =
             {
-                new TextBlock { Text = "Label:" },
+                new TextBlock { Text = _plan.LabelPrompt },
                 _label,
-                new TextBlock { Text = "Caption:" },
+                new TextBlock { Text = _plan.CaptionPrompt },
                 _text,
                 AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0)),
             },
@@ -70,16 +65,10 @@ internal sealed class CaptionDialog : FreeWDialogWindow
     public static Task<CaptionDialogResult?> ShowAsync(Window owner, CaptionLabel defaultLabel) =>
         new CaptionDialog(defaultLabel).ShowDialog<CaptionDialogResult?>(owner);
 
-    internal CaptionDialogResult BuildResultForTest(int selectedIndex, string? text)
-    {
-        var index = Math.Clamp(selectedIndex, 0, Labels.Length - 1);
-        return new CaptionDialogResult(Labels[index], text?.Trim() ?? string.Empty);
-    }
+    private CaptionDialogResult BuildResult(int selectedIndex, string? text)
+        => CaptionDialogPlanner.BuildResult(selectedIndex, text);
 
-    internal CaptionLabel SelectedLabelForTest =>
-        Labels[Math.Clamp(_label.SelectedIndex, 0, Labels.Length - 1)];
-
-    private void Accept() => Close(BuildResultForTest(_label.SelectedIndex, _text.Text));
+    private void Accept() => Close(BuildResult(_label.SelectedIndex, _text.Text));
 
     private static Button Button(string text, bool isDefault = false, bool isCancel = false, Action? click = null)
     {

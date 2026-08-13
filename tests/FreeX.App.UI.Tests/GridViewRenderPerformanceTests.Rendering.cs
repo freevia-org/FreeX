@@ -455,10 +455,12 @@ public sealed partial class GridViewRenderPerformanceTests
     public void RenderSparklines_AvoidsEmptyRenderAllocations()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.Sparklines.cs");
-        // Slice the RenderSparklines method body (entry point is last method in file).
-        // Ends at the closing brace of the class (last "}" in the file).
+        // Slice only the interactive entry point; the public print/PDF helper below deliberately
+        // owns a one-shot uncached clip geometry when no renderer cache is supplied.
         var renderSparklinesStart = source.IndexOf("private void RenderSparklines(DrawingContext dc)", StringComparison.Ordinal);
-        var renderSparklines = source[renderSparklinesStart..];
+        var renderSparklines = source[
+            renderSparklinesStart..
+            source.IndexOf("public static void DrawSparklineIntoCell", renderSparklinesStart, StringComparison.Ordinal)];
 
         // Early-out guards are still in place — no work done when there's nothing to render.
         renderSparklines.Should().Contain("Sparklines is not { Count: > 0 }");
@@ -763,11 +765,12 @@ public sealed partial class GridViewRenderPerformanceTests
         setup.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
         setup.Should().NotContain("GetOccupiedCellLookup(viewport, EditingCell)");
         beforeTextLayout.Should().NotContain("GetOccupiedCellLookup(viewport, EditingCell)");
-        overflowBlock.Should().Contain("if (canOverflow && textLayout.Bounds.Right > rect.Right)");
+        overflowBlock.Should().Contain("var overflowRight = canOverflow && textLayout.Bounds.Right > rect.Right;");
         overflowBlock.Should().Contain("occupied ??= GetOccupiedCellLookup(viewport, EditingCell);");
-        overflowBlock.Should().Contain("!occupied.Contains((cell.Row, nextCol))");
-        overflowBlock.Should().Contain("if (canOverflow && textLayout.Bounds.Left < rect.Left && colMetric.Col > 1)");
-        overflowBlock.Should().Contain("!occupied.Contains((cell.Row, prevCol))");
+        overflowBlock.Should().Contain("var overflowLeft = canOverflow && textLayout.Bounds.Left < rect.Left && colMetric.Col > 1;");
+        overflowBlock.Should().Contain("ViewportGeometryPlanner.CalculateOverflowAvailability(");
+        overflowBlock.Should().Contain("ViewportOverflowTraversal.LogicalColumns");
+        overflowBlock.Should().Contain("occupiedCells.Contains((cell.Row, column))");
         overflowBlock.Should().Contain("var clipRect = new Rect(clipLeft, rect.Top, renderWidth, rect.Height);");
     }
 
@@ -839,14 +842,18 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_ReusesCellColorBrushesWithinRenderPass()
     {
-        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
+        var source = AppUiSourceTestSupport.ReadAppUiSources(
+            "GridView.Rendering.cs",
+            "GridView.Rendering.CellStyles.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
 
-        // R114-render-theme-color-reresolution: the fill color painted is now the theme-RESOLVED
-        // value (bg.ResolveFillColor(WorkbookTheme)), not the raw baked bg.FillColor field.
-        renderCells.Should().Contain("BrushForCellColor(resolvedFillColor, _brushCache)");
+        // The shared fill materialization plan resolves theme colors; WPF only materializes that
+        // portable plan through its bounded brush cache.
+        renderCells.Should().Contain("CellFillMaterializationPlanner.Plan(");
+        renderCells.Should().Contain("BuildCellBackgroundBrush(fillPlan, _brushCache)");
+        source.Should().Contain("BrushForCellColor(color, brushCache)");
         renderCells.Should().Contain("BrushForCellColor(fc, _brushCache)");
         renderCells.Should().NotContain("new SolidColorBrush");
     }
@@ -875,9 +882,8 @@ public sealed partial class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private readonly Dictionary<CellColor, Pen> _fillPatternPenCache = new();");
         rendering.Should().Contain("if (_fillPatternPenCache.Count >= RenderCacheSizeLimit)");
         rendering.Should().Contain("_fillPatternPenCache.Clear();");
-        // R114-render-theme-color-reresolution: DrawFillPattern now takes the active WorkbookTheme
-        // so it can re-resolve FillPatternThemeColor instead of reading the raw baked FillPatternColor.
-        rendering.Should().Contain("DrawFillPattern(dc, rect, bg, WorkbookTheme, _brushCache, _fillPatternPenCache)");
+        rendering.Should().Contain("DrawFillPattern(dc, rect, fillPlan, _brushCache, _fillPatternPenCache)");
+        cellStyles.Should().Contain("CellFillMaterializationPlan fillPlan");
         cellStyles.Should().Contain("FillPatternPenForCellColor(color, brushCache, fillPatternPenCache)");
         cellStyles.Should().Contain("pen.Freeze();");
         drawFillPattern.Should().NotContain("new Pen(");

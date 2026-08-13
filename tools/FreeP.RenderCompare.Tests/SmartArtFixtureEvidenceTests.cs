@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using Free.ToolsShared;
 
 namespace FreeP.RenderCompare.Tests;
 
@@ -8,7 +9,7 @@ public sealed class SmartArtFixtureEvidenceTests
     [Fact]
     public void Process1FixtureContainsTheAuditedFiveStageNodeAndConnectorGrammar()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryRoot;
         var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
 
         using var archive = ZipFile.OpenRead(path);
@@ -37,7 +38,7 @@ public sealed class SmartArtFixtureEvidenceTests
     [Fact]
     public void List1FixtureContainsTheAuditedFourSlotGrammar()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryRoot;
         var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
 
         using var archive = ZipFile.OpenRead(path);
@@ -71,7 +72,7 @@ public sealed class SmartArtFixtureEvidenceTests
     [Fact]
     public void GroupedListFixtureContainsTheAuditedCachedBandGrammar()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryRoot;
         var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
 
         using var archive = ZipFile.OpenRead(path);
@@ -93,7 +94,7 @@ public sealed class SmartArtFixtureEvidenceTests
     [Fact]
     public void Relationship1FixtureContainsTheAuditedNodeEllipseGrammar()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryRoot;
         var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
 
         using var archive = ZipFile.OpenRead(path);
@@ -128,7 +129,7 @@ public sealed class SmartArtFixtureEvidenceTests
     [Fact]
     public void GridMatrixFixtureContainsTheAuditedFourCellSquareGrammar()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryRoot;
         var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
 
         using var archive = ZipFile.OpenRead(path);
@@ -165,7 +166,7 @@ public sealed class SmartArtFixtureEvidenceTests
     [Fact]
     public void IncreasingCircleProcessFixtureContainsTheAuditedGrowingEllipseGrammar()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryRoot;
         var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
 
         using var archive = ZipFile.OpenRead(path);
@@ -195,7 +196,7 @@ public sealed class SmartArtFixtureEvidenceTests
     [Fact]
     public void VerticalArrowListFixtureContainsTheAuditedFourSlotGrammar()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryRoot;
         var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
 
         using var archive = ZipFile.OpenRead(path);
@@ -235,13 +236,7 @@ public sealed class SmartArtFixtureEvidenceTests
         return XDocument.Load(stream);
     }
 
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName
+    private static string RepositoryRoot =>
+        RepositoryRootLocator.Find(AppContext.BaseDirectory, "FreeX.slnx")
             ?? throw new DirectoryNotFoundException("Could not locate the FreeX repository root.");
-    }
 }

@@ -8,7 +8,7 @@ public sealed class StatusBarCustomizeMenuSourceTests
     [Fact]
     public void DefaultStatusBarCustomization_MatchesExcelVisibleStatistics()
     {
-        var options = new FreeXOptions();
+        var options = new AppOptions();
 
         options.StatusBarShowAverage.Should().BeTrue();
         options.StatusBarShowCount.Should().BeTrue();
@@ -22,7 +22,9 @@ public sealed class StatusBarCustomizeMenuSourceTests
     public void StatusBarCustomizeMenu_WiresHandlersToPersistedOptions()
     {
         var gridStatusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.GridStatus.cs"));
-        var optionsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeXOptions.cs"));
+        var optionsSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "AppOptions.cs");
+        var rendererPlannerSource = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Services", "FreeXStatusBarRendererPlanner.cs");
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var contextMenuSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ContextMenus.cs"));
 
@@ -42,16 +44,17 @@ public sealed class StatusBarCustomizeMenuSourceTests
         optionsSource.Should().Contain("public bool StatusBarShowZoomSlider { get; set; } = true;");
         gridStatusSource.Should().Contain("private void StatusBarCustomizeMenu_Opened(object sender, RoutedEventArgs e)");
         gridStatusSource.Should().Contain("private void StatusBarCustomizeMenuItem_Click(object sender, RoutedEventArgs e)");
-        gridStatusSource.Should().Contain("StatusBarPresentationPlanner.Build(");
-        gridStatusSource.Should().Contain("StatusBarPresentationPlanner.BuildRendererPlan(plan);");
+        gridStatusSource.Should().Contain("FreeXStatusBarRendererPlanner.BuildRendererPlan(");
+        rendererPlannerSource.Should().Contain("StatusBarPresentationPlanner.Build(");
+        rendererPlannerSource.Should().Contain("StatusBarPresentationPlanner.BuildRendererPlan(");
         gridStatusSource.Should().Contain("foreach (var entry in rendererPlan.VisibilityElements)");
         gridStatusSource.Should().Contain("GetStatusBarReadoutTextBlock(readout.Kind)");
         gridStatusSource.Should().Contain("private void ApplyStatusBarInteractiveDisplayState(StatusBarRendererPlan rendererPlan)");
         gridStatusSource.Should().Contain("rendererPlan.IsElementVisible(StatusBarPresentationElement.ViewShortcuts)");
         gridStatusSource.Should().Contain("StatusBarOptionVisibilityStore.ToVisibility(_options)");
-        gridStatusSource.Should().Contain("StatusBarOptionVisibilityStore.TrySetOption(_options, option, isChecked)");
+        gridStatusSource.Should().Contain("StatusBarOptionUpdateWorkflow.ApplyToRuntimeSession(");
         gridStatusSource.Should().NotContain("case StatusBarOptionTags.Average");
-        gridStatusSource.Should().Contain("_options.Save()");
+        gridStatusSource.Should().NotContain("AppOptionsStore.Save(_options)");
         gridStatusSource.Should().NotContain("ApplyStatusBarInteractiveDisplayState(BuildStatusBarPresentationPlan(state).Visibility);");
     }
 }

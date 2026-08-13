@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
+using Free.Shared.Drawing;
 
 namespace Free.Shared.Pdf;
 
@@ -83,7 +84,7 @@ public static class PortablePdfWriter
                 Width: page.WidthPoints,
                 Height: page.HeightPoints,
                 Links: BuildLinkAnnotations(page),
-                Destinations: BuildNamedDestinations(page)))
+                Destinations: PdfAnnotationPlanner.BuildNamedDestinations(page)))
             .ToArray();
         WritePdf(stream, pages, fontResources, imageResources.Resources, opacityResources.Resources, patternResources.Resources, headerComment);
     }
@@ -380,53 +381,15 @@ public static class PortablePdfWriter
 
     private static IReadOnlyList<PdfLinkAnnotation> BuildLinkAnnotations(PdfContentPage page)
     {
-        if (page.LinkOverlays is not { Count: > 0 })
-            return [];
-
-        var links = new List<PdfLinkAnnotation>(page.LinkOverlays.Count);
-        foreach (var overlay in page.LinkOverlays)
-        {
-            if (!double.IsFinite(overlay.X)
-                || !double.IsFinite(overlay.Y)
-                || !double.IsFinite(overlay.Width)
-                || !double.IsFinite(overlay.Height)
-                || overlay.Width <= 0
-                || overlay.Height <= 0)
-                continue;
-
-            var uri = overlay.Uri?.Trim();
-            var destinationName = overlay.DestinationName?.Trim();
-            if (string.IsNullOrEmpty(uri) && string.IsNullOrEmpty(destinationName))
-                continue;
-
-            var left = Math.Clamp(overlay.X, 0, page.WidthPoints);
-            var right = Math.Clamp(overlay.X + overlay.Width, 0, page.WidthPoints);
-            var top = Math.Clamp(page.HeightPoints - overlay.Y, 0, page.HeightPoints);
-            var bottom = Math.Clamp(page.HeightPoints - (overlay.Y + overlay.Height), 0, page.HeightPoints);
-            if (right <= left || top <= bottom)
-                continue;
-
-            links.Add(new PdfLinkAnnotation(left, bottom, right, top, uri, overlay.Tooltip, destinationName));
-        }
-
-        return links;
-    }
-
-    private static IReadOnlyList<PdfNamedDestination> BuildNamedDestinations(PdfContentPage page)
-    {
-        if (page.NamedDestinations is not { Count: > 0 })
-            return [];
-
-        return page.NamedDestinations
-            .Where(destination => !string.IsNullOrWhiteSpace(destination.Name)
-                && double.IsFinite(destination.X)
-                && double.IsFinite(destination.Y))
-            .Select(destination => destination with
-            {
-                Name = destination.Name.Trim(),
-                X = Math.Clamp(destination.X, 0, page.WidthPoints),
-                Y = Math.Clamp(destination.Y, 0, page.HeightPoints),
-            })
+        return PdfAnnotationPlanner.BuildLinkAnnotations(page)
+            .Select(link => new PdfLinkAnnotation(
+                link.Left,
+                page.HeightPoints - link.Bottom,
+                link.Right,
+                page.HeightPoints - link.Top,
+                link.Uri,
+                link.Tooltip,
+                link.DestinationName))
             .ToArray();
     }
 
@@ -742,10 +705,6 @@ public static class PortablePdfWriter
     {
         var stream = new StringBuilder();
         stream.AppendLine("q");
-        AppendRgb(stream, pattern.Background, "rg");
-        stream.AppendLine($"0 0 {FormatNumber(pattern.TileWidth)} {FormatNumber(pattern.TileHeight)} re f");
-        AppendRgb(stream, pattern.Foreground, "RG");
-        stream.AppendLine($"{FormatNumber(pattern.StrokeWidth)} w");
         AppendPatternTileGeometry(stream, pattern);
         stream.AppendLine("Q");
 
@@ -765,49 +724,45 @@ public static class PortablePdfWriter
 
     private static void AppendPatternTileGeometry(StringBuilder content, PdfPatternFill pattern)
     {
-        var width = pattern.TileWidth;
-        var height = pattern.TileHeight;
-        var unit = pattern.UnitScale;
-        var midX = width / 2;
-        var midY = height / 2;
-
-        switch (pattern.Kind)
+        foreach (var primitive in pattern.Recipe.Primitives)
         {
-            case PdfPatternKind.Horizontal:
-                content.AppendLine($"0 {FormatNumber(midY)} m {FormatNumber(width)} {FormatNumber(midY)} l S");
-                break;
-            case PdfPatternKind.Vertical:
-                content.AppendLine($"{FormatNumber(midX)} 0 m {FormatNumber(midX)} {FormatNumber(height)} l S");
-                break;
-            case PdfPatternKind.DownDiagonal:
-                // The shared kind names the WPF screen-space direction. PDF uses y-up.
-                content.AppendLine($"0 {FormatNumber(height)} m {FormatNumber(width)} 0 l S");
-                break;
-            case PdfPatternKind.UpDiagonal:
-                content.AppendLine($"0 0 m {FormatNumber(width)} {FormatNumber(height)} l S");
-                break;
-            case PdfPatternKind.Cross:
-                content.AppendLine($"0 {FormatNumber(midY)} m {FormatNumber(width)} {FormatNumber(midY)} l S");
-                content.AppendLine($"{FormatNumber(midX)} 0 m {FormatNumber(midX)} {FormatNumber(height)} l S");
-                break;
-            case PdfPatternKind.Dot:
-                AppendRgb(content, pattern.Foreground, "rg");
-                AppendPatternEllipse(content, midX, midY, unit, unit);
-                content.AppendLine("f");
-                break;
-            case PdfPatternKind.Brick:
-                content.AppendLine($"0 0 m {FormatNumber(width)} 0 l S");
-                content.AppendLine($"{FormatNumber(6 * unit)} {FormatNumber(4 * unit)} m {FormatNumber(width)} {FormatNumber(4 * unit)} l S");
-                content.AppendLine($"0 {FormatNumber(4 * unit)} m {FormatNumber(3 * unit)} {FormatNumber(4 * unit)} l S");
-                content.AppendLine($"{FormatNumber(6 * unit)} 0 m {FormatNumber(6 * unit)} {FormatNumber(4 * unit)} l S");
-                content.AppendLine($"0 {FormatNumber(4 * unit)} m 0 {FormatNumber(height)} l S");
-                content.AppendLine($"{FormatNumber(width)} {FormatNumber(4 * unit)} m {FormatNumber(width)} {FormatNumber(height)} l S");
-                break;
-            case PdfPatternKind.DiagonalCross:
-                content.AppendLine($"0 {FormatNumber(height)} m {FormatNumber(width)} 0 l S");
-                content.AppendLine($"0 0 m {FormatNumber(width)} {FormatNumber(height)} l S");
-                break;
+            var color = primitive.ColorRole == DrawingMlPatternFillColorRole.Foreground
+                ? pattern.Foreground
+                : pattern.Background;
+            switch (primitive)
+            {
+                case DrawingMlPatternFillRectangle rectangle:
+                    AppendRgb(content, color, "rg");
+                    content.AppendLine(
+                        $"{FormatNumber(rectangle.X * pattern.UnitScale)} " +
+                        $"{FormatNumber(ToPdfY(rectangle.Y + rectangle.Height, pattern))} " +
+                        $"{FormatNumber(rectangle.Width * pattern.UnitScale)} " +
+                        $"{FormatNumber(rectangle.Height * pattern.UnitScale)} re f");
+                    break;
+                case DrawingMlPatternFillLine line:
+                    AppendRgb(content, color, "RG");
+                    content.AppendLine($"{FormatNumber(line.StrokeWidth * pattern.UnitScale)} w");
+                    content.AppendLine(
+                        $"{FormatNumber(line.Start.X * pattern.UnitScale)} {FormatNumber(ToPdfY(line.Start.Y, pattern))} m " +
+                        $"{FormatNumber(line.End.X * pattern.UnitScale)} {FormatNumber(ToPdfY(line.End.Y, pattern))} l S");
+                    break;
+                case DrawingMlPatternFillEllipse ellipse:
+                    AppendRgb(content, color, "rg");
+                    AppendPatternEllipse(
+                        content,
+                        ellipse.CenterX * pattern.UnitScale,
+                        ToPdfY(ellipse.CenterY, pattern),
+                        ellipse.RadiusX * 2 * pattern.UnitScale,
+                        ellipse.RadiusY * 2 * pattern.UnitScale);
+                    content.AppendLine("f");
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unsupported pattern primitive {primitive.GetType().Name}.");
+            }
         }
+
+        static double ToPdfY(double screenY, PdfPatternFill pattern) =>
+            pattern.TileHeight - (screenY * pattern.UnitScale);
     }
 
     private static void AppendPatternEllipse(StringBuilder content, double centerX, double centerY, double width, double height)

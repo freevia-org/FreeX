@@ -29,7 +29,11 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
 
-        var items = PasteNamesPlanner.BuildItems(_session.Workbook, FormatRangeReferenceQualified);
+        var commandPlan = DefinedNameUiPolicy.PlanUseInFormula(
+            _session.Workbook,
+            FormatRangeReferenceQualified,
+            DefinedNameUiProfile.Avalonia);
+        var items = commandPlan.Items;
 
         var dialog = new Window
         {
@@ -46,7 +50,7 @@ public sealed partial class MainWindow
         var namesList = new ListBox { MinHeight = 150 };
         ApplyNamesListBoxStyle(namesList);
         AutomationProperties.SetAutomationId(namesList, "PasteNamesList");
-        namesList.ItemsSource = items.Select(FormatPasteNamesRow).ToList();
+        namesList.ItemsSource = items.Select(DefinedNameUiPolicy.FormatPasteNamesRow).ToList();
         if (items.Count > 0)
             namesList.SelectedIndex = 0;
 
@@ -71,8 +75,9 @@ public sealed partial class MainWindow
 
         void SyncButtonState()
         {
-            okButton.IsEnabled = namesList.SelectedIndex >= 0 && namesList.SelectedIndex < items.Count;
-            pasteListButton.IsEnabled = items.Count > 0;
+            var plan = DefinedNameUiPolicy.PlanPasteNamesSelection(items, namesList.SelectedIndex);
+            okButton.IsEnabled = plan.CanInsertName;
+            pasteListButton.IsEnabled = plan.CanPasteList;
         }
 
         namesList.SelectionChanged += (_, _) => SyncButtonState();
@@ -87,10 +92,10 @@ public sealed partial class MainWindow
         okButton.Click += (_, _) =>
         {
             warningText.IsVisible = false;
-            if (namesList.SelectedIndex < 0 || namesList.SelectedIndex >= items.Count)
+            var plan = DefinedNameUiPolicy.PlanPasteNamesSelection(items, namesList.SelectedIndex);
+            if (plan.SelectedItem is not { } item)
                 return;
 
-            var item = items[namesList.SelectedIndex];
             if (!ApplyPasteNameReference(item))
                 return;
 
@@ -180,12 +185,6 @@ public sealed partial class MainWindow
         return true;
     }
 
-    private static string FormatPasteNamesRow(PasteNamesItem item) => $"{item.Name}    {item.RefersTo}";
-
-    private static string DescribePasteNamesListError(PasteNamesListError error) => error switch
-    {
-        PasteNamesListError.NotEnoughColumns => UiText.Get("PasteNames_NotEnoughColumns"),
-        PasteNamesListError.NotEnoughRows => UiText.Get("PasteNames_NotEnoughRows"),
-        _ => UiText.Get("PasteNames_NoNames"),
-    };
+    private static string DescribePasteNamesListError(PasteNamesListError error) =>
+        UiText.Get(DefinedNameUiPolicy.GetPasteNamesListErrorResourceKey(error, DefinedNameUiProfile.Avalonia));
 }

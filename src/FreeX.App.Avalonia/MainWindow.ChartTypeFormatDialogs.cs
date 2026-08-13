@@ -82,7 +82,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(UiText.Get(ChartBarFormatPlanner.InvalidInputMessageResourceKey(issue)));
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -176,7 +176,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(UiText.Get(ChartPieFormatPlanner.InvalidInputMessageResourceKey(issue)));
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -271,7 +271,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(UiText.Get(ChartBubbleFormatPlanner.InvalidInputMessageResourceKey(issue)));
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -412,7 +412,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(UiText.Get(ChartStockFormatPlanner.InvalidInputMessageResourceKey(issue)));
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 

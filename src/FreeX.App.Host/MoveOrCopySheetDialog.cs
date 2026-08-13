@@ -7,8 +7,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed record MoveOrCopySheetDialogResult(int InsertBeforeIndex, bool CreateCopy);
-
 public sealed class MoveOrCopySheetDialog : Window
 {
     private readonly ComboBox _bookBox = new();
@@ -18,7 +16,7 @@ public sealed class MoveOrCopySheetDialog : Window
     private readonly Button _cancelButton = new() { Content = UiText.Cancel, Width = 72, IsCancel = true };
     private readonly int _sheetCount;
 
-    public MoveOrCopySheetDialogResult Result { get; private set; }
+    public MoveCopySheetPlan Result { get; private set; }
 
     public MoveOrCopySheetDialog(Workbook workbook, SheetId sourceSheetId)
     {
@@ -72,14 +70,11 @@ public sealed class MoveOrCopySheetDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static MoveOrCopySheetDialogResult CreateResult(
+    public static MoveCopySheetPlan CreateResult(
         int insertBeforeIndex,
         bool createCopy,
-        int sheetCount)
-    {
-        var plan = MoveCopySheetPlanner.CreatePlan(insertBeforeIndex, createCopy, sheetCount);
-        return new(plan.InsertBeforeIndex, plan.CreateCopy);
-    }
+        int sheetCount) =>
+        MoveCopySheetPlanner.CreatePlan(insertBeforeIndex, createCopy, sheetCount);
 
     private static int FindSheetIndexOrZero(Workbook workbook, SheetId sourceSheetId)
     {

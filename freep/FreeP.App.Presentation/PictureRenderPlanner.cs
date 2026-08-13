@@ -13,6 +13,11 @@ public enum PictureRenderPhase
 
 public readonly record struct PictureSourceRectPixels(int X, int Y, int Width, int Height);
 
+public sealed record PictureMediaPlayGlyphPlan(
+    LayoutPoint CenterDip,
+    double RadiusDip,
+    IReadOnlyList<LayoutPoint> TriangleDip);
+
 public sealed record PictureRenderPlan(
     LayoutRect DestinationDip,
     PictureSourceRectPixels SourceRectPixels,
@@ -38,10 +43,16 @@ public sealed record PictureRenderPlan(
     public double ReflectionBlurDip { get; init; }
     public double ReflectionScaleY { get; init; } = -1;
     public double ReflectionEndPos { get; init; } = 1;
+    public double ReflectionPivotY { get; init; }
+    public bool ReflectionNeedsTerminalTransparentStop { get; init; }
     public IReadOnlyList<PictureReflectionBlurPass> ReflectionBlurPasses { get; init; } =
         [new PictureReflectionBlurPass(0, 0, 1)];
 
     public bool AlphaAppliesToImageBody { get; init; } = true;
+
+    public double FrameCornerRadiusDip { get; init; }
+
+    public PictureMediaPlayGlyphPlan? MediaPlayGlyph { get; init; }
 }
 
 public static class PictureRenderPlanner
@@ -59,6 +70,9 @@ public static class PictureRenderPlanner
         int sourceWidth = Math.Max(1, pixelWidth);
         int sourceHeight = Math.Max(1, pixelHeight);
         var sourceRect = PlanSourceRect(picture, sourceWidth, sourceHeight);
+        double reflectionDistance = picture.Effects?.ReflectionDistDip ?? 0;
+        double reflectionScale = picture.Effects?.ReflectionScaleY ?? -1;
+        double reflectionEndPosition = picture.Effects?.ReflectionEndPos ?? 1;
 
         return new PictureRenderPlan(
             picture.DestDip,
@@ -74,13 +88,37 @@ public static class PictureRenderPlanner
                 sourceRect.Height != sourceHeight,
             HasReflection = picture.Effects?.HasReflection == true,
             ReflectionAlpha = picture.Effects?.ReflectionAlpha ?? 0,
-            ReflectionDistDip = picture.Effects?.ReflectionDistDip ?? 0,
+            ReflectionDistDip = reflectionDistance,
             ReflectionBlurDip = picture.Effects?.ReflectionBlurDip ?? 0,
-            ReflectionScaleY = picture.Effects?.ReflectionScaleY ?? -1,
-            ReflectionEndPos = picture.Effects?.ReflectionEndPos ?? 1,
+            ReflectionScaleY = Math.Abs(reflectionScale) < 0.001 ? -1 : reflectionScale,
+            ReflectionEndPos = Math.Clamp(reflectionEndPosition, 0.001, 1.0),
+            ReflectionPivotY = picture.DestDip.Y + picture.DestDip.Height + reflectionDistance / 2.0,
+            ReflectionNeedsTerminalTransparentStop = reflectionEndPosition < 0.999,
             ReflectionBlurPasses = PictureReflectionRenderPlanner.PlanBlurPasses(
-                picture.Effects?.ReflectionBlurDip ?? 0)
+                picture.Effects?.ReflectionBlurDip ?? 0),
+            FrameCornerRadiusDip = PlanFrameCornerRadius(picture.DestDip),
+            MediaPlayGlyph = picture.IsMedia ? PlanMediaPlayGlyph(picture.DestDip) : null,
         };
+    }
+
+    private static double PlanFrameCornerRadius(LayoutRect destination) =>
+        Math.Min(destination.Width, destination.Height) * 0.18;
+
+    private static PictureMediaPlayGlyphPlan PlanMediaPlayGlyph(LayoutRect destination)
+    {
+        var center = new LayoutPoint(
+            destination.X + destination.Width / 2,
+            destination.Y + destination.Height / 2);
+        var radius = Math.Max(4, Math.Min(destination.Width, destination.Height) / 6);
+        var triangleX = center.X - radius * 0.3;
+        return new PictureMediaPlayGlyphPlan(
+            center,
+            radius,
+            [
+                new LayoutPoint(triangleX, center.Y - radius * 0.45),
+                new LayoutPoint(triangleX + radius * 0.8, center.Y),
+                new LayoutPoint(triangleX, center.Y + radius * 0.45),
+            ]);
     }
 
     private static PictureSourceRectPixels PlanSourceRect(

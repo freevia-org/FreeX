@@ -6,24 +6,37 @@ namespace FreeX.App.Localization.Tests;
 public sealed class SharedCatalogInventoryTests
 {
     [Fact]
-    public void SharedOwnedKeys_AreRemovedFromEveryAppNeutralAndSatelliteCatalog()
+    public void SharedOwnedKeys_HaveNoRedundantAppCopies()
     {
-        var sharedPath = TestWorkspaceFileLocator.Find(
+        var sharedNeutralPath = TestWorkspaceFileLocator.Find(
             "shared", "Free.Shared.Localization", "Resources", "Strings.resx");
-        var sharedKeys = ResxResourceTestSupport.ReadResxValues(sharedPath).Keys
+        var sharedResourceDirectory = Path.GetDirectoryName(sharedNeutralPath)!;
+        var sharedNeutralValues = ResxResourceTestSupport.ReadResxValues(sharedNeutralPath);
+        var sharedKeys = sharedNeutralValues.Keys
             .ToHashSet(StringComparer.Ordinal);
 
         // Tripwire so shared-catalog growth is a deliberate act: bump this only after confirming the
         // dedup loop below still passes, i.e. that the new keys were removed from every app catalog.
-        // 67 -> 69: File_VideoFileTypeName and File_AudioFileTypeName (shared media-insert strings).
-        sharedKeys.Should().HaveCount(69);
+        // The merged catalog contains the shared media-insert strings plus the campaign's shell text.
+        sharedKeys.Should().HaveCount(79);
         sharedKeys.Should().Contain([
             "Common_Cancel",
+            "Common_AltText",
+            "Common_Apply",
+            "Common_CancelText",
+            "Common_FontColor",
+            "Common_Insert",
+            "Common_New",
+            "Common_OkText",
+            "Common_Themes",
+            "Common_Zoom",
             "Backstage_Recent_LastOpenedTodayAt",
             "Ribbon_Command_Bold_Label",
-            "File_CommandFailedFormat"
+            "Ribbon_Command_Subscript_Label",
+            "Ribbon_Command_Superscript_Label",
+            "File_CommandFailedFormat",
+            "Options_AppLanguageSystemDefault"
         ]);
-        sharedKeys.Should().NotContain("Options_AppLanguageSystemDefault");
         sharedKeys.Should().NotContain([
             "Backstage_Recent_OpenRecentFileAutomationName",
             "Backstage_Recent_OpenPinnedFileAutomationName",
@@ -43,29 +56,78 @@ public sealed class SharedCatalogInventoryTests
                 "freep", "FreeP.App.Localization", "Resources", "Strings.resx")
         };
 
-        // FreeW intentionally keeps the two ribbon label overrides that its native WPF
-        // resource layer owns. All other shared keys must remain shared-only after deduplication.
-        var expectedAppOverrides = new HashSet<string>(StringComparer.Ordinal)
+        var expectedSatelliteOverrides = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
         {
-            "Ribbon_Command_Subscript_Label",
-            "Ribbon_Command_Superscript_Label"
+            ["FreeX"] = new(StringComparer.Ordinal)
+            {
+                "Common_AltText",
+                "Common_Apply",
+                "Common_CancelText",
+                "Common_FontColor",
+                "Common_Insert",
+                "Common_New",
+                "Common_Themes",
+                "Options_AppLanguageSystemDefault"
+            },
+            ["FreeW"] = new(StringComparer.Ordinal)
+            {
+                "Common_AltText",
+                "Common_Apply",
+                "Common_Themes"
+            },
+            ["FreeP"] = new(StringComparer.Ordinal)
         };
 
         foreach (var (app, directory) in appResourceDirectories)
         {
+            var observedOverrides = new HashSet<string>(StringComparer.Ordinal);
+
             foreach (var path in Directory.EnumerateFiles(directory, "Strings*.resx"))
             {
-                var appKeys = ResxResourceTestSupport.ReadResxValues(path).Keys;
-                var overlappingKeys = appKeys.Intersect(sharedKeys, StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
-                var allowedOverrides = app == "FreeW"
-                    && string.Equals(Path.GetFileName(path), "Strings.resx", StringComparison.OrdinalIgnoreCase)
-                    ? expectedAppOverrides
-                    : [];
+                var fileName = Path.GetFileName(path);
+                var appValues = ResxResourceTestSupport.ReadResxValues(path);
+                var overlappingKeys = appValues.Keys
+                    .Intersect(sharedKeys, StringComparer.Ordinal)
+                    .ToHashSet(StringComparer.Ordinal);
 
-                overlappingKeys.Should().BeEquivalentTo(
-                    allowedOverrides,
-                    $"{app} resource {Path.GetFileName(path)} must contain only its explicitly owned shared-catalog overrides");
+                if (string.Equals(fileName, "Strings.resx", StringComparison.OrdinalIgnoreCase))
+                {
+                    overlappingKeys.Should().BeEmpty(
+                        $"{app} neutral resources must defer shared-owned keys to the shared catalog");
+                    continue;
+                }
+
+                overlappingKeys.ExceptWith(expectedSatelliteOverrides[app]);
+                overlappingKeys.Should().BeEmpty(
+                    $"{app} resource {fileName} must contain only explicitly approved shared-key overrides");
+
+                var appOverrideKeys = appValues.Keys
+                    .Intersect(expectedSatelliteOverrides[app], StringComparer.Ordinal)
+                    .ToArray();
+                if (appOverrideKeys.Length == 0)
+                    continue;
+
+                var sharedSatellitePath = Path.Combine(sharedResourceDirectory, fileName);
+                var sharedSatelliteValues = File.Exists(sharedSatellitePath)
+                    ? ResxResourceTestSupport.ReadResxValues(sharedSatellitePath)
+                    : new Dictionary<string, string>(StringComparer.Ordinal);
+
+                foreach (var key in appOverrideKeys)
+                {
+                    var effectiveSharedValue = sharedSatelliteValues.TryGetValue(key, out var localizedValue)
+                        ? localizedValue
+                        : sharedNeutralValues[key];
+
+                    appValues[key].Should().NotBe(
+                        effectiveSharedValue,
+                        $"{app} resource {fileName} must not repeat the effective shared value for {key}");
+                    observedOverrides.Add(key);
+                }
             }
+
+            observedOverrides.Should().BeEquivalentTo(
+                expectedSatelliteOverrides[app],
+                $"{app} must retain exactly its intentional shared-catalog satellite overrides");
         }
     }
 }

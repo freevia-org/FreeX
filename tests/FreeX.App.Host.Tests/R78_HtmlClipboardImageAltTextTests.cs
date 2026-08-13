@@ -1,11 +1,11 @@
-using System.Reflection;
 using FluentAssertions;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// Regression coverage for R78-services-clipboard-formats-5-3
-/// (src/FreeX.App.Host/MainWindow.ClipboardCommands.cs, DecodeHtmlCellText).
+/// (src/FreeX.App.Services/HtmlClipboardTableParser.cs).
 ///
 /// Before the fix: pasting an HTML table whose cell contained an &lt;img&gt; (e.g. a product
 /// thumbnail next to its price) silently and completely lost that cell's content -- the tag-skip
@@ -13,7 +13,7 @@ namespace FreeX.App.Host.Tests;
 /// nothing to the decoded cell text, with no user-visible sign anything was dropped and no way to
 /// recover it from the paste.
 ///
-/// After the fix, DecodeHtmlCellText falls back to the img's alt text (the HTML author's own
+/// The shared parser falls back to the img's alt text (the HTML author's own
 /// stand-in for the image's content) when present, instead of leaving the cell blank. Full
 /// picture-paste (fetching/decoding the src and creating a floating Picture object the way
 /// TryPasteClipboardImage does for a pure CF_Bitmap clipboard payload) remains a larger follow-up
@@ -21,14 +21,8 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class R78_HtmlClipboardImageAltTextTests
 {
-    private static string DecodeCellText(string innerHtml)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            "DecodeHtmlCellText", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new MissingMethodException(nameof(MainWindow), "DecodeHtmlCellText");
-
-        return (string)method.Invoke(null, [innerHtml])!;
-    }
+    private static string DecodeCellText(string innerHtml) =>
+        HtmlClipboardTableParser.Parse($"<table><tr><td>{innerHtml}</td></tr></table>")![0][0];
 
     [Fact]
     public void ImgWithAltText_FallsBackToAltTextInsteadOfBeingSilentlyDropped()

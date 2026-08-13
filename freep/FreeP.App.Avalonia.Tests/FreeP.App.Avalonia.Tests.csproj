@@ -11,6 +11,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestSupport\ShippingTestHookOwnershipAssertions.cs"
+             Link="TestSupport\ShippingTestHookOwnershipAssertions.cs" />
     <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="FluentAssertions" />
@@ -22,11 +24,16 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
+    <Using Include="FreeP.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeP.App.Avalonia\FreeP.App.Avalonia.csproj" />
+    <Compile Include="..\TestSupport\ChartOptionsDialogTestPlans.cs"
+             Link="TestSupport\ChartOptionsDialogTestPlans.cs" />
+    <ProjectReference Include="..\FreeP.App.Avalonia\FreeP.App.Avalonia.csproj"
+                      AdditionalProperties="FreePHostAccess=true;FreePSlideShowTestSupport=true" />
     <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
+    <ProjectReference Include="..\TestSupport\Validation.Avalonia\FreeP.Validation.Avalonia.csproj" />
   </ItemGroup>
 
 </Project>

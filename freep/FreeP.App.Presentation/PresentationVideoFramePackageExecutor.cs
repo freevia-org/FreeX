@@ -69,6 +69,10 @@ public sealed record PresentationVideoFramePackage(
     IReadOnlyList<PresentationVideoFramePackageFrame> Frames,
     byte[] Bytes);
 
+public sealed record PresentationVideoFramePackageArtifact(
+    PresentationVideoFramePackage Package,
+    IReadOnlyList<string> ImageDiagnostics);
+
 public sealed record PresentationVideoFramePackageValidation(
     int ByteCount,
     bool HasBytes,
@@ -211,6 +215,18 @@ public static class PresentationVideoFramePackageExecutor
 
         var packageBytes = BuildZipPackage(plan, frames, frameBytes);
         return new PresentationVideoFramePackage(plan, frames, packageBytes);
+    }
+
+    public static PresentationVideoFramePackageArtifact BuildPackageWithDiagnostics(
+        Presentation presentation,
+        PresentationVideoExportRequest? request,
+        PresentationSlideImageRenderer renderSlideToPng,
+        PresentationVideoExportHandoffHostCapabilities? hostCapabilities = null)
+    {
+        var imageDiagnostics = new List<string>();
+        using var capture = SlideImageRenderDiagnostics.Capture(imageDiagnostics);
+        var package = BuildPackage(presentation, request, renderSlideToPng, hostCapabilities);
+        return new PresentationVideoFramePackageArtifact(package, imageDiagnostics);
     }
 
     public static PresentationVideoExportHandoffPlan BuildHandoffPlan(
@@ -366,7 +382,7 @@ public static class PresentationVideoFramePackageExecutor
                 descriptor.DisabledReason);
         }
 
-        ExportAtomicWriter.WriteAllBytes(targetPath, package.Bytes);
+        AtomicFileWriter.WriteAllBytes(targetPath, package.Bytes);
         return new PresentationVideoFramePackageMaterializationResult(
             descriptor,
             targetPath,

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using FluentAssertions;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;

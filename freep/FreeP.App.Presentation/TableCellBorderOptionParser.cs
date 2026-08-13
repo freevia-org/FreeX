@@ -2,20 +2,30 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
-/// <summary>Parses the shared ribbon's active-cell border selection into model primitives.</summary>
+/// <summary>Resolves stable border choices and compatible external labels into model primitives.</summary>
 public static class TableCellBorderOptionParser
 {
     public static bool TryParse(
-        string? value,
+        object? value,
         out TableCellBorderSide side,
         out ShapeOutline? outline)
     {
         side = default;
         outline = null;
-        if (string.IsNullOrWhiteSpace(value))
+        if (FreePRibbonChoiceCatalog.TryResolve(
+                value,
+                FreePRibbonChoiceCatalog.TableCellBorderChoices,
+                out FreePRibbonTableCellBorderChoiceDescriptor descriptor))
+        {
+            side = descriptor.Side;
+            outline = descriptor.Outline;
+            return true;
+        }
+
+        if (value is not string text || string.IsNullOrWhiteSpace(text))
             return false;
 
-        var parts = value.Split(':', 2, StringSplitOptions.TrimEntries);
+        var parts = text.Split(':', 2, StringSplitOptions.TrimEntries);
         if (parts.Length != 2 || !TryParseSide(parts[0], out side))
             return false;
 

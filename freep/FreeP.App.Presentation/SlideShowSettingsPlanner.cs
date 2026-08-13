@@ -21,6 +21,25 @@ public static class SlideShowSettingsPlanner
 
     public static bool TryApply(
         EditingSession editor,
+        SlideShowSettingsState state)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(state);
+
+        return editor.SetSlideShowSettings(
+            state.UseSlideTimings,
+            state.ShowWithAnimation,
+            state.LoopUntilStopped,
+            state.ShowType,
+            state.ShowBrowseScrollbar,
+            state.KioskRestartAfterMilliseconds,
+            state.ShowWithNarration,
+            state.ShowMediaControls,
+            state.ShowMasterShapes);
+    }
+
+    public static bool TryApply(
+        EditingSession editor,
         bool useSlideTimings,
         bool showWithAnimation,
         bool loopUntilStopped,
@@ -30,16 +49,18 @@ public static class SlideShowSettingsPlanner
         bool showWithNarration = true,
         bool showMediaControls = true,
         bool showMasterShapes = true) =>
-        editor.SetSlideShowSettings(
-            useSlideTimings,
-            showWithAnimation,
-            loopUntilStopped,
-            showType,
-            showBrowseScrollbar,
-            kioskRestartAfterMilliseconds,
-            showWithNarration,
-            showMediaControls,
-            showMasterShapes);
+        TryApply(
+            editor,
+            new SlideShowSettingsState(
+                useSlideTimings,
+                showWithAnimation,
+                loopUntilStopped,
+                showType,
+                showBrowseScrollbar,
+                kioskRestartAfterMilliseconds,
+                showWithNarration,
+                showMediaControls,
+                showMasterShapes));
 }
 
 public sealed record SlideShowSettingsState(

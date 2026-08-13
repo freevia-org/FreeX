@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
-using FreeX.Core.Commands;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -14,7 +14,7 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
             return;
 
-        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var headers = PivotApplication.ReadSourceHeaders(new PivotApplicationTarget(sheet, pivotTable));
         var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable);
         if (sourceIndex is null)
             return;
@@ -32,21 +32,21 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
             return;
 
-        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var headers = PivotApplication.ReadSourceHeaders(new PivotApplicationTarget(sheet, pivotTable));
         var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable);
         if (sourceIndex is null)
             return;
 
         ApplyPivotGroupingResult(
             pivotTable,
-            PivotFieldGroupingDialog.CreateResult(
+            PivotGroupFieldPlanner.CreateSubmission(
                 PivotUiPlanner.FieldCaption(headers, sourceIndex.Value),
                 sourceIndex.Value,
                 PivotFieldGrouping.None,
-                groupStart: null,
-                groupEnd: null,
-                groupInterval: null,
-                ungroup: true));
+                ungroup: true,
+                start: null,
+                end: null,
+                interval: null));
     }
 
     private void PivotCalculatedFieldBtn_Click(object sender, RoutedEventArgs e)
@@ -81,7 +81,7 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
             return;
 
-        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var headers = PivotApplication.ReadSourceHeaders(new PivotApplicationTarget(sheet, pivotTable));
         var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable) ?? 0;
         var dialog = new PivotCalculatedItemDialog(headers, sourceIndex) { Owner = this };
         if (dialog.ShowDialog() != true ||
@@ -107,28 +107,15 @@ public partial class MainWindow
             calculatedItems);
     }
 
-    private void ApplyPivotGroupingResult(PivotTableModel pivotTable, PivotFieldGroupingDialogResult result)
+    private void ApplyPivotGroupingResult(PivotTableModel pivotTable, PivotGroupFieldSubmission submission)
     {
-        var groupedField = new PivotFieldModel(
-            result.SourceFieldIndex,
-            Grouping: result.Ungroup ? PivotFieldGrouping.None : result.Grouping,
-            GroupStart: result.Ungroup ? null : result.GroupStart,
-            GroupEnd: result.Ungroup ? null : result.GroupEnd,
-            GroupInterval: result.Ungroup ? null : result.GroupInterval);
-        var fieldAlreadyInLayout =
-            pivotTable.RowFields.Concat(pivotTable.ColumnFields).Concat(pivotTable.PageFields)
-                .Any(field => field.SourceFieldIndex == groupedField.SourceFieldIndex);
-        var rowFields = fieldAlreadyInLayout
-            ? ReplacePivotField(pivotTable.RowFields, groupedField)
-            : pivotTable.RowFields.Append(groupedField).ToList();
-        var columnFields = ReplacePivotField(pivotTable.ColumnFields, groupedField);
-        var pageFields = ReplacePivotField(pivotTable.PageFields, groupedField);
+        var layout = PivotGroupFieldPlanner.BuildLayout(pivotTable, submission.Field);
 
         ApplyPivotAdvancedConfiguration(
             pivotTable,
-            rowFields,
-            columnFields,
-            pageFields,
+            layout.RowFields,
+            layout.ColumnFields,
+            layout.PageFields,
             pivotTable.CalculatedFields.ToList(),
             pivotTable.CalculatedItems.ToList());
     }
@@ -141,10 +128,11 @@ public partial class MainWindow
         IReadOnlyList<PivotCalculatedFieldModel> calculatedFields,
         IReadOnlyList<PivotCalculatedItemModel> calculatedItems)
     {
-        if (!TryExecuteCommand(
-                new ConfigurePivotTableCalculatedItemsCommand(
-                    _currentSheetId,
-                    pivotTable.Name,
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null ||
+            !ApplyPivotApplicationPlan(
+                PivotApplication.PlanCalculatedConfiguration(
+                    new PivotApplicationTarget(sheet, pivotTable),
                     rowFields,
                     columnFields,
                     pageFields,
@@ -154,8 +142,6 @@ public partial class MainWindow
             return;
 
         _pendingPivotLayout = null;
-        RefreshPivotFieldListPane();
-        UpdateViewport();
     }
 
     private int? ResolveSelectedPivotSourceField(IReadOnlyList<string> headers, PivotTableModel pivotTable)
@@ -174,13 +160,4 @@ public partial class MainWindow
 
         return null;
     }
-
-    private static List<PivotFieldModel> ReplacePivotField(
-        IReadOnlyList<PivotFieldModel> fields,
-        PivotFieldModel replacement) =>
-        fields
-            .Select(field => field.SourceFieldIndex == replacement.SourceFieldIndex
-                ? replacement
-                : field)
-            .ToList();
 }

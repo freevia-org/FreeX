@@ -2,6 +2,8 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 using Free.Shared.AppServices;
+using Free.Shared.IO;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -1224,14 +1226,9 @@ public static class ExternalXamlClipboardPlanner
             .FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value));
 
     private static string ContentTypeFor(string path) =>
-        Path.GetExtension(path).ToLowerInvariant() switch
-        {
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".gif" => "image/gif",
-            ".bmp" => "image/bmp",
-            ".tif" or ".tiff" => "image/tiff",
-            _ => "image/png",
-        };
+        OpcMediaTypes.GetContentTypeForFileNameOrExtension(
+            path,
+            OpcMediaContentTypeProfile.ExternalXamlPicture);
 
     private readonly record struct XamlTextStyle(
         string? FontFamily,

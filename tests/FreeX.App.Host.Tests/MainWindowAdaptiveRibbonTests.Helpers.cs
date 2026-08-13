@@ -58,20 +58,12 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         private readonly MainWindow _window;
         private readonly bool _ownsWindow;
-        private readonly MethodInfo _updateRibbonCompactMode;
-        private readonly MethodInfo _invalidateRibbonAdaptiveMeasurementCaches;
         private readonly MethodInfo _normalizeRibbonSurface;
 
         private MainWindowHarness(MainWindow window, bool ownsWindow = false)
         {
             _window = window;
             _ownsWindow = ownsWindow;
-            _updateRibbonCompactMode = typeof(MainWindow)
-                .GetMethod("UpdateRibbonCompactMode", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateRibbonCompactMode");
-            _invalidateRibbonAdaptiveMeasurementCaches = typeof(MainWindow)
-                .GetMethod("InvalidateRibbonAdaptiveMeasurementCaches", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "InvalidateRibbonAdaptiveMeasurementCaches");
             _normalizeRibbonSurface = typeof(MainWindow)
                 .GetMethod("NormalizeRibbonSurface", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "NormalizeRibbonSurface");
@@ -754,7 +746,6 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             _window.WindowState = WindowState.Normal;
             _window.Width = width;
             _window.UpdateLayout();
-            _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
 
@@ -775,7 +766,6 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             _window.UpdateLayout();
             PumpDispatcher();
             PumpDispatcher();
-            _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
 
@@ -788,9 +778,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public void ShowPivotContextualTabs()
         {
-            if (_window.FindName("PivotTableAnalyzeTab") is TabItem analyzeTab)
+            if (FindRibbonTab("PivotTableAnalyzeTab") is { } analyzeTab)
                 analyzeTab.Visibility = Visibility.Visible;
-            if (_window.FindName("PivotTableDesignTab") is TabItem designTab)
+            if (FindRibbonTab("PivotTableDesignTab") is { } designTab)
                 designTab.Visibility = Visibility.Visible;
 
             _window.UpdateLayout();
@@ -799,9 +789,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public void ShowChartContextualTabs()
         {
-            if (_window.FindName("ChartDesignTab") is TabItem designTab)
+            if (FindRibbonTab("ChartDesignTab") is { } designTab)
                 designTab.Visibility = Visibility.Visible;
-            if (_window.FindName("ChartFormatTab") is TabItem formatTab)
+            if (FindRibbonTab("ChartFormatTab") is { } formatTab)
                 formatTab.Visibility = Visibility.Visible;
 
             _window.UpdateLayout();
@@ -810,7 +800,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public void ShowTableDesignContextualTab()
         {
-            if (_window.FindName("TableDesignTab") is TabItem tableTab)
+            if (FindRibbonTab("TableDesignTab") is { } tableTab)
                 tableTab.Visibility = Visibility.Visible;
 
             _window.UpdateLayout();
@@ -819,9 +809,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public void ShowDrawingObjectContextualTabs()
         {
-            if (_window.FindName("ShapeFormatTab") is TabItem shapeTab)
+            if (FindRibbonTab("ShapeFormatTab") is { } shapeTab)
                 shapeTab.Visibility = Visibility.Visible;
-            if (_window.FindName("PictureFormatTab") is TabItem pictureTab)
+            if (FindRibbonTab("PictureFormatTab") is { } pictureTab)
                 pictureTab.Visibility = Visibility.Visible;
 
             _window.UpdateLayout();
@@ -917,26 +907,32 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 menu.IsOpen = false;
             if (VisibleOrCollapsedRibbonButton("Find & Select") is { } findSelect)
                 findSelect.IsEnabled = true;
-            if (_window.FindName("TableDesignTab") is TabItem tableDesignTab)
+            if (FindRibbonTab("TableDesignTab") is { } tableDesignTab)
                 tableDesignTab.Visibility = Visibility.Collapsed;
-            if (_window.FindName("ShapeFormatTab") is TabItem shapeFormatTab)
+            if (FindRibbonTab("ShapeFormatTab") is { } shapeFormatTab)
                 shapeFormatTab.Visibility = Visibility.Collapsed;
-            if (_window.FindName("PictureFormatTab") is TabItem pictureFormatTab)
+            if (FindRibbonTab("PictureFormatTab") is { } pictureFormatTab)
                 pictureFormatTab.Visibility = Visibility.Collapsed;
-            if (_window.FindName("ChartDesignTab") is TabItem chartDesignTab)
+            if (FindRibbonTab("ChartDesignTab") is { } chartDesignTab)
                 chartDesignTab.Visibility = Visibility.Collapsed;
-            if (_window.FindName("ChartFormatTab") is TabItem chartFormatTab)
+            if (FindRibbonTab("ChartFormatTab") is { } chartFormatTab)
                 chartFormatTab.Visibility = Visibility.Collapsed;
-            if (_window.FindName("PivotTableAnalyzeTab") is TabItem pivotAnalyzeTab)
+            if (FindRibbonTab("PivotTableAnalyzeTab") is { } pivotAnalyzeTab)
                 pivotAnalyzeTab.Visibility = Visibility.Collapsed;
-            if (_window.FindName("PivotTableDesignTab") is TabItem pivotDesignTab)
+            if (FindRibbonTab("PivotTableDesignTab") is { } pivotDesignTab)
                 pivotDesignTab.Visibility = Visibility.Collapsed;
             if (_window.FindName("RibbonTabs") is TabControl tabs)
                 tabs.SelectedIndex = 1;
-            _invalidateRibbonAdaptiveMeasurementCaches.Invoke(_window, []);
             _window.UpdateLayout();
             PumpDispatcher();
         }
+
+        private TabItem? FindRibbonTab(string catalogId) =>
+            (_window.FindName("RibbonTabs") as TabControl)?.Items
+                .OfType<TabItem>()
+                .FirstOrDefault(tab =>
+                    RibbonMetadata.TryGetCatalogId(tab, out var candidate) &&
+                    string.Equals(candidate, catalogId, StringComparison.Ordinal));
 
         private static string GetButtonLabel(ButtonBase button)
         {

@@ -84,36 +84,39 @@ public static class DocumentCombine
         {
             if (block is not Paragraph bParagraph)
             {
-                result.Blocks.Add(CloneBlock(block));
+                result.Blocks.Add(DocumentModelCloner.CloneBlock(block, RevisionClonePolicy.Preserve));
                 continue;
             }
 
             var aParagraph = bParagraphIndex < aParagraphs.Count ? aParagraphs[bParagraphIndex] : null;
             bParagraphIndex++;
-            result.Blocks.Add(MergeParagraph(aParagraph, bParagraph, authorA, authorB, dateXml, commentIdMapA));
+            result.Blocks.Add(MergeParagraph(
+                aParagraph,
+                bParagraph,
+                authorA,
+                authorB,
+                dateXml,
+                commentIdMapA));
         }
 
         return result;
     }
 
-    // Carry both blacklines' comment threads into the combined result. blacklineB's ids are kept as-is
-    // (most surviving spine text/anchors are sourced from blacklineB — see MergeParagraph). blacklineA's
-    // threads are then added, renumbering only the ones whose id collides with a blacklineB id already in
-    // use, so two independently-authored reviews that both happened to start their comment ids at 0 don't
-    // clobber each other. Returns the id remap so A-sourced body runs can be pointed at the (possibly
-    // renumbered) comment record that now lives in result.Comments.
-    private static Dictionary<int, int> MergeComments(TextDocument blacklineA, TextDocument blacklineB, TextDocument result)
+    private static Dictionary<int, int> MergeComments(
+        TextDocument blacklineA,
+        TextDocument blacklineB,
+        TextDocument result)
     {
         foreach (var (id, comment) in blacklineB.Comments)
-            result.Comments[id] = CloneComment(comment, static id => id);
+            result.Comments[id] = CloneComment(comment, static commentId => commentId);
 
         var usedIds = result.Comments.Values
             .SelectMany(comment => comment.ThreadInOrder())
             .Select(comment => comment.Id)
             .ToHashSet();
-
         var commentIdMapA = new Dictionary<int, int>();
-        foreach (var (_, comment) in blacklineA.Comments)
+
+        foreach (var comment in blacklineA.Comments.Values)
         {
             foreach (var node in comment.ThreadInOrder())
             {
@@ -148,16 +151,19 @@ public static class DocumentCombine
             Resolved = source.Resolved,
         };
         foreach (var paragraph in source.Content)
-            clone.Content.Add(ClonePlain(paragraph));
+        {
+            clone.Content.Add(DocumentModelCloner.CloneParagraph(
+                paragraph,
+                RevisionClonePolicy.Preserve));
+        }
         foreach (var reply in source.Replies)
             clone.Replies.Add(CloneComment(reply, mapId));
         return clone;
     }
 
-    // Remap a run cloned from blacklineA's side (off-spine deletions / A-only survivors) onto the id its
-    // comment thread now has in the merged result's Comments dictionary. Runs sourced from blacklineB's
-    // spine never need this — their CommentId already matches a blacklineB id, which MergeComments keeps.
-    private static Run RemapAComment(Run run, IReadOnlyDictionary<int, int> commentIdMapA)
+    private static Run RemapAComment(
+        Run run,
+        IReadOnlyDictionary<int, int> commentIdMapA)
     {
         if (run.CommentId is int id && commentIdMapA.TryGetValue(id, out var mapped))
             run.CommentId = mapped;
@@ -182,18 +188,14 @@ public static class DocumentCombine
         string? dateXml,
         IReadOnlyDictionary<int, int> commentIdMapA)
     {
-        var merged = new Paragraph
-        {
-            BlockContentControl = bParagraph.BlockContentControl ?? aParagraph?.BlockContentControl,
-            BlockCustomXml = bParagraph.BlockCustomXml ?? aParagraph?.BlockCustomXml,
-            Formatting = bParagraph.Formatting,
-            StyleId = bParagraph.StyleId,
-            SpanningFieldStart = bParagraph.SpanningFieldStart ?? aParagraph?.SpanningFieldStart,
-            SpanningFieldOwner = bParagraph.SpanningFieldOwner ?? aParagraph?.SpanningFieldOwner,
-            EndsSpanningField = bParagraph.EndsSpanningField || aParagraph?.EndsSpanningField == true,
-            DropCap = bParagraph.DropCap,
-        };
-        merged.BookmarkNames.AddRange(bParagraph.BookmarkNames);
+        var merged = DocumentModelCloner.CloneParagraph(bParagraph, RevisionClonePolicy.Preserve);
+        merged.BlockContentControl = bParagraph.BlockContentControl ?? aParagraph?.BlockContentControl;
+        merged.BlockCustomXml = bParagraph.BlockCustomXml ?? aParagraph?.BlockCustomXml;
+        merged.SpanningFieldStart = bParagraph.SpanningFieldStart ?? aParagraph?.SpanningFieldStart;
+        merged.SpanningFieldOwner = bParagraph.SpanningFieldOwner ?? aParagraph?.SpanningFieldOwner;
+        merged.EndsSpanningField = bParagraph.EndsSpanningField || aParagraph?.EndsSpanningField == true;
+        merged.Runs.Clear();
+        merged.BookmarkBoundaries.Clear();
 
         var aRuns = aParagraph?.Runs ?? new List<Run>();
         var bRuns = bParagraph.Runs;
@@ -207,7 +209,9 @@ public static class DocumentCombine
             // A's deletions (base-only text struck by A) are off-spine: emit them, attributed to authorA.
             if (ai < aRuns.Count && aRuns[ai].Revision == RevisionKind.Deleted)
             {
-                merged.Runs.Add(RemapAComment(Stamp(aRuns[ai], RevisionKind.Deleted, authorA, dateXml), commentIdMapA));
+                merged.Runs.Add(RemapAComment(
+                    Stamp(aRuns[ai], RevisionKind.Deleted, authorA, dateXml),
+                    commentIdMapA));
                 ai++;
                 continue;
             }
@@ -236,9 +240,17 @@ public static class DocumentCombine
                 if (aRun is not null)
                 {
                     if (aRun.Revision == RevisionKind.Inserted)
-                        merged.Runs.Add(RemapAComment(Stamp(aRun, RevisionKind.Inserted, authorA, dateXml), commentIdMapA));
+                    {
+                        merged.Runs.Add(RemapAComment(
+                            Stamp(aRun, RevisionKind.Inserted, authorA, dateXml),
+                            commentIdMapA));
+                    }
                     else
-                        merged.Runs.Add(RemapAComment(Stamp(aRun, RevisionKind.None, null, null), commentIdMapA));
+                    {
+                        merged.Runs.Add(RemapAComment(
+                            Stamp(aRun, RevisionKind.None, null, null),
+                            commentIdMapA));
+                    }
                     ai++;
                 }
                 continue;
@@ -273,7 +285,7 @@ public static class DocumentCombine
     // Clone a run and stamp it with one revision kind/author/date (clearing the mark when kind is None).
     private static Run Stamp(Run source, RevisionKind kind, string? author, string? dateXml)
     {
-        var copy = CloneRun(source);
+        var copy = DocumentModelCloner.CloneRun(source, RevisionClonePolicy.Preserve);
         copy.Revision = kind;
         copy.RevisionAuthor = kind == RevisionKind.None ? null : author;
         copy.RevisionDateXml = kind == RevisionKind.None ? null : dateXml;
@@ -315,103 +327,4 @@ public static class DocumentCombine
         target.Preserved.CopyFrom(source.Preserved);
     }
 
-    private static Block CloneBlock(Block block) => block switch
-    {
-        Paragraph paragraph => ClonePlain(paragraph),
-        Table table => CloneTable(table),
-        _ => block
-    };
-
-    private static Paragraph ClonePlain(Paragraph source)
-    {
-        var clone = new Paragraph
-        {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            StyleId = source.StyleId,
-            SpanningFieldStart = source.SpanningFieldStart,
-            SpanningFieldOwner = source.SpanningFieldOwner,
-            EndsSpanningField = source.EndsSpanningField,
-            DropCap = source.DropCap,
-        };
-        clone.BookmarkNames.AddRange(source.BookmarkNames);
-        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
-        foreach (var run in source.Runs)
-            clone.Runs.Add(CloneRun(run));
-        return clone;
-    }
-
-    private static Table CloneTable(Table source)
-    {
-        var clone = new Table
-        {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            TableStyleId = source.TableStyleId,
-            Borders = source.Borders,
-            PreferredWidthPt = source.PreferredWidthPt,
-            Alignment = source.Alignment,
-            IndentFromLeftPt = source.IndentFromLeftPt,
-            FloatingPosition = source.FloatingPosition,
-            FloatingTableAllowsOverlap = source.FloatingTableAllowsOverlap,
-            DefaultCellMargins = source.DefaultCellMargins,
-            CellSpacingPt = source.CellSpacingPt,
-            AutoFit = source.AutoFit
-        };
-        clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
-        foreach (var row in source.Rows)
-        {
-            var rowClone = new TableRow();
-            foreach (var cell in row.Cells)
-            {
-                var cellClone = new TableCell
-                {
-                    ShadingColorHex = cell.ShadingColorHex,
-                    WidthPt = cell.WidthPt,
-                    GridSpan = cell.GridSpan,
-                    VerticalMerge = cell.VerticalMerge,
-                    VerticalAlignment = cell.VerticalAlignment,
-                    Margins = cell.Margins,
-                    Borders = cell.Borders,
-                    TextDirection = cell.TextDirection,
-                    WrapText = cell.WrapText,
-                    FitText = cell.FitText
-                };
-                foreach (var paragraph in cell.Paragraphs)
-                    cellClone.Paragraphs.Add(ClonePlain(paragraph));
-                foreach (var nestedTable in cell.NestedTables)
-                    cellClone.NestedTables.Add(CloneTable(nestedTable));
-                rowClone.Cells.Add(cellClone);
-            }
-            clone.Rows.Add(rowClone);
-        }
-        return clone;
-    }
-
-    // Copy a run's content and marks (including any existing revision metadata, which the merge relies on).
-    private static Run CloneRun(Run source) => new(source.Text, source.Formatting)
-    {
-        Image = source.Image,
-        HyperlinkUrl = source.HyperlinkUrl,
-        HyperlinkAnchor = source.HyperlinkAnchor,
-        HyperlinkTooltip = source.HyperlinkTooltip,
-        SubDocument = source.SubDocument,
-        FieldKind = source.FieldKind,
-        FootnoteId = source.FootnoteId,
-        EndnoteId = source.EndnoteId,
-        CommentId = source.CommentId,
-        IsCommentReference = source.IsCommentReference,
-        IsPageBreak = source.IsPageBreak,
-        IsColumnBreak = source.IsColumnBreak,
-        Revision = source.Revision,
-        RevisionAuthor = source.RevisionAuthor,
-        RevisionDateXml = source.RevisionDateXml,
-        MoveRevisionId = source.MoveRevisionId,
-        Control = source.Control,
-        Citation = source.Citation,
-        CrossReference = source.CrossReference,
-        ComplexField = source.ComplexField
-    };
 }

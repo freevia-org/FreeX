@@ -103,6 +103,12 @@ public sealed class AvaloniaChartFormatDialogSourceTests
     public void SelectDataSourceDialog_WiresSwitchRowColumnThroughToCommand()
     {
         var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+        var workflowSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "Charts",
+            "Editing",
+            "ChartCommandWorkflowPlanner.cs"));
 
         // The Switch Row/Column checkbox must reflect the chart's current orientation when the
         // dialog opens and reach ChangeChartSourceCommand on confirm — not be a silent no-op.
@@ -110,7 +116,10 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         chartTabsSource.Should().Contain("bool switchRowColumn = false)");
         chartTabsSource.Should().Contain("CreateChartCheckBox(StripDisplayMnemonic(UiText.Get(switchField.LabelResourceKey)), switchRowColumn)");
         chartTabsSource.Should().Contain("switchRowColumnCheck.IsChecked == true));");
-        chartTabsSource.Should().Contain("seriesInRows: choice.SwitchRowColumn));");
+        chartTabsSource.Should().Contain("ChartCommandWorkflowPlanner.BuildChangeSourceCommand(");
+        chartTabsSource.Should().Contain("choice.SwitchRowColumn));");
+        chartTabsSource.Should().NotContain("new ChangeChartSourceCommand(");
+        workflowSource.Should().Contain("seriesInRows: switchRowColumn");
     }
 
     [Fact]
@@ -243,17 +252,6 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().NotContain("AutomationProperties.SetAutomationId(gapWidthBox, \"ChartStockFormatGapWidthBox\")");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.FindFileFromBaseDirectory(parts);
 }

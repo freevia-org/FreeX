@@ -44,9 +44,9 @@ public sealed class AppCrashAnalyticsTests
     }
 
     [Fact]
-    public void FreeXOptions_DefaultsCrashAnalyticsToOptOutUntilUserEnablesIt()
+    public void AppOptions_DefaultsCrashAnalyticsToOptOutUntilUserEnablesIt()
     {
-        var options = new FreeXOptions();
+        var options = new AppOptions();
 
         options.CrashAnalyticsEnabled.Should().BeFalse();
     }

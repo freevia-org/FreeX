@@ -15,7 +15,7 @@ public sealed class FileDialogFilterBuilderTests
             ])
         };
 
-        FileDialogFilterBuilder.BuildOpenFilter(adapters)
+        BuildOpenFilter(adapters)
             .Should().Be("All files (*.*)|*.*");
     }
 
@@ -29,7 +29,7 @@ public sealed class FileDialogFilterBuilderTests
             ])
         };
 
-        FileDialogFilterBuilder.BuildSaveFilter(adapters)
+        BuildSaveFilter(adapters)
             .Should().BeEmpty();
     }
 
@@ -74,7 +74,7 @@ public sealed class FileDialogFilterBuilderTests
             ])
         };
 
-        var filter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
+        var filter = BuildOpenFilter(adapters);
 
         filter.Should().Be(
             "All supported files (*.xlsx;*.xlsm;*.xltx;*.csv)|*.xlsx;*.xlsm;*.xltx;*.csv|" +
@@ -99,7 +99,7 @@ public sealed class FileDialogFilterBuilderTests
             ])
         };
 
-        var filter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
+        var filter = BuildOpenFilter(adapters);
 
         filter.Should().StartWith("All supported files (*.xlsx;*.xlsm)|*.xlsx;*.xlsm|");
     }
@@ -119,7 +119,7 @@ public sealed class FileDialogFilterBuilderTests
             ])
         };
 
-        var descriptors = FileDialogFilterBuilder.BuildOpenPickerTypes(
+        var descriptors = BuildOpenPickerTypes(
             adapters,
             allSupportedName: "All supported workbooks");
 
@@ -150,7 +150,7 @@ public sealed class FileDialogFilterBuilderTests
             ])
         };
 
-        var descriptors = FileDialogFilterBuilder.BuildSavePickerTypes(
+        var descriptors = BuildSavePickerTypes(
             adapters,
             preferredFirstExtension: ".fxl");
 
@@ -177,7 +177,7 @@ public sealed class FileDialogFilterBuilderTests
             ])
         };
 
-        FileDialogFilterBuilder.BuildSaveFilter(adapters)
+        BuildSaveFilter(adapters)
             .Should().Be("XLSX Workbook (*.xlsx)|*.xlsx");
     }
 
@@ -191,16 +191,16 @@ public sealed class FileDialogFilterBuilderTests
             ])
         };
 
-        FileDialogFilterBuilder.BuildOpenFilter(adapters)
+        BuildOpenFilter(adapters)
             .Should().Contain("CSV (Comma-separated values) (*.csv)|*.csv");
-        FileDialogFilterBuilder.BuildSaveFilter(adapters)
+        BuildSaveFilter(adapters)
             .Should().Be("CSV (Comma-separated values) (*.csv)|*.csv");
     }
 
     [Fact]
     public void BuildOpenFilter_RealAdaptersExposeExcelOpenAliases()
     {
-        var filter = FileDialogFilterBuilder.BuildOpenFilter(
+        var filter = BuildOpenFilter(
             [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter()]);
 
         filter.Should().Contain("*.xlsx;*.xlsm;*.xltx;*.xltm;*.xls;*.xlsb;*.xlt;*.csv;*.xml;*.fxl");
@@ -214,7 +214,7 @@ public sealed class FileDialogFilterBuilderTests
     [Fact]
     public void BuildSaveFilter_RealAdaptersExcludeOpenOnlyExcelFormats()
     {
-        var filter = FileDialogFilterBuilder.BuildSaveFilter(
+        var filter = BuildSaveFilter(
             [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter()]);
 
         filter.Should().Be("XLSX Workbook (*.xlsx)|*.xlsx|CSV (Comma-separated values) (*.csv)|*.csv|XML Spreadsheet 2003 (*.xml)|*.xml|FreeX Workbook (*.fxl)|*.fxl");
@@ -246,13 +246,13 @@ public sealed class FileDialogFilterBuilderTests
             ])
         };
 
-        FileDialogFilterBuilder.FindSaveFilterIndex(adapters, extension).Should().Be(expected);
+        FindSaveFilterIndex(adapters, extension).Should().Be(expected);
     }
 
     [Fact]
     public void FindSaveFilterIndex_RealAdaptersSelectsFreexWorkbookFilter()
     {
-        var index = FileDialogFilterBuilder.FindSaveFilterIndex(
+        var index = FindSaveFilterIndex(
             [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter()],
             ".fxl");
 
@@ -267,7 +267,7 @@ public sealed class FileDialogFilterBuilderTests
             new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
         ]);
 
-        var result = FileDialogFilterBuilder.FindOpenAdapter([adapter], " XLSM ", out var format);
+        var result = FileFormatResolver.FindOpenAdapter([adapter], " XLSM ", out var format);
 
         result.Should().BeSameAs(adapter);
         format.Should().NotBeNull();
@@ -316,7 +316,7 @@ public sealed class FileDialogFilterBuilderTests
     {
         var adapters = new IFileAdapter[] { new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter() };
 
-        var result = FileDialogFilterBuilder.FindOpenAdapter(adapters, extension, out var format);
+        var result = FileFormatResolver.FindOpenAdapter(adapters, extension, out var format);
 
         result.Should().BeOfType(expectedAdapterType);
         format.Should().NotBeNull();
@@ -337,7 +337,7 @@ public sealed class FileDialogFilterBuilderTests
     {
         var adapters = new IFileAdapter[] { new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter() };
 
-        var result = FileDialogFilterBuilder.FindSaveAdapter(adapters, extension, out var format);
+        var result = FileFormatResolver.FindSaveAdapter(adapters, extension, out var format);
 
         result.Should().BeOfType(expectedAdapterType);
         format.Should().NotBeNull();
@@ -356,7 +356,7 @@ public sealed class FileDialogFilterBuilderTests
     {
         var adapters = new IFileAdapter[] { new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new NativeJsonAdapter() };
 
-        var result = FileDialogFilterBuilder.FindSaveAdapter(adapters, extension, out var format);
+        var result = FileFormatResolver.FindSaveAdapter(adapters, extension, out var format);
 
         result.Should().BeNull();
         format.Should().BeNull();
@@ -372,5 +372,37 @@ public sealed class FileDialogFilterBuilderTests
         FileFormatResolver.FindSaveAdapter(adapters, ".ods", out var saveFormat).Should().BeNull();
         saveFormat.Should().BeNull();
     }
+
+    private static string BuildOpenFilter(IEnumerable<IFileAdapter> adapters) =>
+        Free.Shared.IO.FileDialogFilterBuilder.BuildOpenFilter(
+            Free.Shared.IO.FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(
+                adapters.SelectMany(adapter => adapter.Formats)));
+
+    private static string BuildSaveFilter(IEnumerable<IFileAdapter> adapters) =>
+        Free.Shared.IO.FileDialogFilterBuilder.BuildSaveFilter(
+            Free.Shared.IO.FileFormatDialogDescriptorAdapter.ToSaveDialogDescriptors(
+                adapters.SelectMany(adapter => adapter.Formats)));
+
+    private static IReadOnlyList<Free.Shared.IO.FileDialogPickerTypeDescriptor> BuildOpenPickerTypes(
+        IEnumerable<IFileAdapter> adapters,
+        string allSupportedName) =>
+        Free.Shared.IO.FileDialogFilterBuilder.BuildOpenPickerTypes(
+            Free.Shared.IO.FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(
+                adapters.SelectMany(adapter => adapter.Formats)),
+            allSupportedName);
+
+    private static IReadOnlyList<Free.Shared.IO.FileDialogPickerTypeDescriptor> BuildSavePickerTypes(
+        IEnumerable<IFileAdapter> adapters,
+        string? preferredFirstExtension = null) =>
+        Free.Shared.IO.FileDialogFilterBuilder.BuildSavePickerTypes(
+            Free.Shared.IO.FileFormatDialogDescriptorAdapter.ToSaveDialogDescriptors(
+                adapters.SelectMany(adapter => adapter.Formats)),
+            preferredFirstExtension);
+
+    private static int FindSaveFilterIndex(IEnumerable<IFileAdapter> adapters, string extension) =>
+        Free.Shared.IO.FileDialogFilterBuilder.FindSaveFilterIndex(
+            Free.Shared.IO.FileFormatDialogDescriptorAdapter.ToSaveDialogDescriptors(
+                adapters.SelectMany(adapter => adapter.Formats)),
+            extension);
 
 }

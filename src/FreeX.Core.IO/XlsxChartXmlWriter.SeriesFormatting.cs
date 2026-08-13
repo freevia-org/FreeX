@@ -17,7 +17,9 @@ internal static partial class XlsxChartXmlWriter
             .Where(format => format.SeriesIndex == seriesIndex && format.PointIndex >= 0 && format.PointIndex < pointCount)
             .GroupBy(format => format.PointIndex)
             .Select(group => group.Last())
-            .Where(HasPointDataLabelFormatting)
+            .Where(format => ChartFormatPresence.HasPointDataLabelFormatting(
+                format,
+                includeLayoutAndCustomText: true))
             .OrderBy(format => format.PointIndex)
             .Select(format => ToPointDataLabelXml(format, chart.Type, chartNs, drawingNs))
             .ToArray();
@@ -28,7 +30,9 @@ internal static partial class XlsxChartXmlWriter
                 seriesDefaults = format;
         }
 
-        if (seriesDefaults is not null && !HasSeriesDataLabelFormatting(seriesDefaults))
+        if (seriesDefaults is not null && !ChartFormatPresence.HasSeriesDataLabelFormatting(
+                seriesDefaults,
+                includeDeletion: true))
             seriesDefaults = null;
 
         return labels.Length == 0 && seriesDefaults is null
@@ -37,56 +41,6 @@ internal static partial class XlsxChartXmlWriter
                 labels,
                 seriesDefaults is null ? null : ToSeriesDataLabelDefaultsXml(seriesDefaults, chart.Type, chartNs, drawingNs));
     }
-
-    private static bool HasPointDataLabelFormatting(ChartPointDataLabelFormat format) =>
-        format.FillColor is not null
-        || format.BorderColor is not null
-        || format.BorderThickness is not null
-        || format.TextColor is not null
-        || format.FontSize is not null
-        || format.FillThemeColor is not null
-        || format.BorderThemeColor is not null
-        || format.TextThemeColor is not null
-        || format.IsDeleted is not null
-        || format.Position is not null
-        || format.ShowValue is not null
-        || format.ShowCategoryName is not null
-        || format.ShowSeriesName is not null
-        || format.ShowLegendKey is not null
-        || format.ShowPercentage is not null
-        || format.ShowBubbleSize is not null
-        || !string.IsNullOrEmpty(format.NumberFormatCode)
-        || format.NumberFormatSourceLinked is not null
-        || format.SeparatorText is not null
-        || format.Layout is not null
-        || !string.IsNullOrEmpty(format.CustomTextXml);
-
-    private static bool HasSeriesDataLabelFormatting(ChartSeriesDataLabelFormat format) =>
-        format.FillColor is not null
-        || format.BorderColor is not null
-        || format.BorderThickness is not null
-        || format.TextColor is not null
-        || format.FontSize is not null
-        || format.FillThemeColor is not null
-        || format.BorderThemeColor is not null
-        || format.TextThemeColor is not null
-        // R63-io-chart-legend-datalabels-6-1 (write side): a delete-only series dLbls (every
-        // other field null) must still count as "has formatting" -- mirrors the reader's
-        // HasSeriesDataLabelMetadata (XlsxChartDataLabelReader.cs), which treats IsDeleted the
-        // same way. Without this, ToPointDataLabelsXml nulls seriesDefaults out before it ever
-        // reaches ToSeriesDataLabelDefaultsXml, and the per-series "hide all labels" override
-        // set by the model/reader on load is silently dropped on save.
-        || format.IsDeleted is not null
-        || format.Position is not null
-        || format.ShowValue is not null
-        || format.ShowCategoryName is not null
-        || format.ShowSeriesName is not null
-        || format.ShowLegendKey is not null
-        || format.ShowPercentage is not null
-        || format.ShowBubbleSize is not null
-        || !string.IsNullOrEmpty(format.NumberFormatCode)
-        || format.NumberFormatSourceLinked is not null
-        || format.SeparatorText is not null;
 
     private static IEnumerable<XElement?> ToSeriesDataLabelDefaultsXml(
         ChartSeriesDataLabelFormat format,
@@ -362,7 +316,7 @@ internal static partial class XlsxChartXmlWriter
 
         return new XElement(chartNs + "spPr",
             new XElement(drawingNs + "ln",
-                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(chart.TrendlineThickness, 0.5, 10) * DrawingMlUnits.EmuPerPoint))),
+                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(chart.TrendlineThickness, 0.5, 10) * DrawingMlCoordinateUnits.EmuPerPoint))),
                 fill,
                 ToPresetDash(chart.TrendlineDashStyle, drawingNs)));
     }
@@ -465,7 +419,7 @@ internal static partial class XlsxChartXmlWriter
 
         return new XElement(chartNs + "spPr",
             new XElement(drawingNs + "ln",
-                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(chart.ErrorBarThickness, 0.5, 10) * DrawingMlUnits.EmuPerPoint))),
+                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(chart.ErrorBarThickness, 0.5, 10) * DrawingMlCoordinateUnits.EmuPerPoint))),
                 fill,
                 ToPresetDash(chart.ErrorBarDashStyle, drawingNs)));
     }

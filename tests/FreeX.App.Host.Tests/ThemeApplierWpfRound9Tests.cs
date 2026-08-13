@@ -199,6 +199,8 @@ public sealed class ThemeApplierWpfRound9Tests
             "ThemeNeutralWhiteBrush",
             "ThemeNeutralDangerBrush",
             "ThemeNeutralSheetSurfaceBrush",
+            "ThemeNeutralBorderBrush",
+            "ThemeNeutralBorderStrongBrush",
         };
         foreach (var key in neutralKeys)
             dict.Contains(key).Should().BeTrue(because: $"round-8 neutral key '{key}' must still be present after round 9");

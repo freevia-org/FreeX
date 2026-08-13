@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.Editing;
 
 namespace FreeX.App.Host;
 
@@ -14,27 +15,18 @@ public sealed partial class PasteSpecialDialog
         for (var i = 0; i < 9; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddPasteChoice(grid, _rbAll, 0, 0);
-        AddPasteChoice(grid, _rbFormulas, 1, 0);
-        AddPasteChoice(grid, _rbValues, 2, 0);
-        AddPasteChoice(grid, _rbFormats, 3, 0);
-        AddPasteChoice(grid, _rbComments, 4, 0);
-        AddPasteChoice(grid, _rbValidation, 5, 0);
-        AddPasteChoice(grid, _rbAllUsingSourceTheme, 6, 0);
-        AddPasteChoice(grid, _rbAllExceptBorders, 7, 0);
-        AddPasteChoice(grid, _rbColumnWidths, 8, 0);
-        AddPasteChoice(grid, _rbFormulasAndNumberFormats, 0, 1);
-        AddPasteChoice(grid, _rbValuesAndNumberFormats, 1, 1);
-        AddPasteChoice(grid, _rbAllMergingConditionalFormats, 2, 1);
-        AddPasteChoice(grid, _rbValuesAndSourceFormatting, 3, 1);
-        AddPasteChoice(grid, _rbText, 4, 1);
-        AddPasteChoice(grid, _rbUnicodeText, 5, 1);
-        AddPasteChoice(grid, _rbPicture, 6, 1);
-        AddPasteChoice(grid, _rbLinkedPicture, 7, 1);
+        foreach (var choice in PasteSpecialPlanner.Surface.WpfChoices)
+        {
+            AddPasteChoice(
+                grid,
+                _pasteChoiceButtons[choice.Mode],
+                choice.WpfPlacement.Row,
+                choice.WpfPlacement.Column);
+        }
 
         return new GroupBox
         {
-            Header = UiText.Get("PasteSpecial_PasteGroup"),
+            Header = PasteSpecialPlanner.Surface.PasteGroup.ResolveWpf(UiText.Get),
             Content = grid,
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 10)
@@ -44,16 +36,15 @@ public sealed partial class PasteSpecialDialog
     private StackPanel CreatePasteOptionsPanel()
     {
         var options = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
-        options.Children.Add(_skipBlanks);
-        options.Children.Add(_transpose);
-        options.Children.Add(_keepColumnWidths);
+        foreach (var toggle in PasteSpecialPlanner.Surface.Toggles.OrderBy(descriptor => descriptor.Order))
+            options.Children.Add(GetToggleControl(toggle.Kind));
         return options;
     }
 
     private GroupBox CreateOperationGroup() =>
         new()
         {
-            Header = UiText.Get("PasteSpecial_OperationGroup"),
+            Header = PasteSpecialPlanner.Surface.OperationGroup.ResolveWpf(UiText.Get),
             Content = CreateOperationPanel(),
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 12)
@@ -61,6 +52,9 @@ public sealed partial class PasteSpecialDialog
 
     private StackPanel CreateFooterRow()
     {
+        var surface = PasteSpecialPlanner.Surface;
+        var acceptAction = surface.GetAction(PasteSpecialDialogActionKind.Accept);
+        var cancelAction = surface.GetAction(PasteSpecialDialogActionKind.Cancel);
         var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         _pasteLinkButton.Click += (_, _) =>
         {
@@ -68,10 +62,23 @@ public sealed partial class PasteSpecialDialog
             DialogResult = true;
         };
 
-        var ok = new Button { Content = UiText.Ok, Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = UiText.Cancel, Width = 80, IsCancel = true };
-        SetAutomationMetadata(ok, UiText.Get("PasteSpecial_OkAutomationName"), "PasteSpecialOkButton", UiText.Get("PasteSpecial_ApplyTheSelectedPasteSpecialOptions"));
-        SetAutomationMetadata(cancel, UiText.Get("PasteSpecial_CancelAutomationName"), "PasteSpecialCancelButton", UiText.Get("PasteSpecial_CloseThePasteSpecialDialogWithoutApplyingChanges"));
+        var ok = new Button
+        {
+            Content = UiText.Get(acceptAction.WpfLabelTextKey),
+            Width = 80,
+            Margin = new Thickness(0, 0, 8, 0),
+            IsDefault = acceptAction.IsDefault,
+            IsEnabled = acceptAction.IsEnabled,
+        };
+        var cancel = new Button
+        {
+            Content = UiText.Get(cancelAction.WpfLabelTextKey),
+            Width = 80,
+            IsCancel = cancelAction.IsCancel,
+            IsEnabled = cancelAction.IsEnabled,
+        };
+        ApplyAutomationMetadata(ok, acceptAction);
+        ApplyAutomationMetadata(cancel, cancelAction);
         ok.Click += (_, _) => { DialogResult = true; };
         row.Children.Add(_pasteLinkButton);
         row.Children.Add(ok);
@@ -81,33 +88,46 @@ public sealed partial class PasteSpecialDialog
 
     private void ApplyAutomationMetadata()
     {
-        SetAutomationMetadata(_rbAll, UiText.Get("PasteSpecial_AllAutomationName"), "PasteSpecialAllOption", UiText.Get("PasteSpecial_PasteAllCellContentsAndFormatting"));
-        SetAutomationMetadata(_rbValues, UiText.Get("PasteSpecial_ValuesAutomationName"), "PasteSpecialValuesOption", UiText.Get("PasteSpecial_PasteOnlyCellValues"));
-        SetAutomationMetadata(_rbFormulas, UiText.Get("PasteSpecial_FormulasAutomationName"), "PasteSpecialFormulasOption", UiText.Get("PasteSpecial_PasteFormulasWithoutChangingExistingFormatting"));
-        SetAutomationMetadata(_rbFormats, UiText.Get("PasteSpecial_FormatsAutomationName"), "PasteSpecialFormatsOption", UiText.Get("PasteSpecial_PasteOnlyCellFormatting"));
-        SetAutomationMetadata(_rbComments, UiText.Get("PasteSpecial_CommentsAndNotesAutomationName"), "PasteSpecialCommentsAndNotesOption", UiText.Get("PasteSpecial_PasteOnlyCommentsAndNotes"));
-        SetAutomationMetadata(_rbValidation, UiText.Get("PasteSpecial_ValidationAutomationName"), "PasteSpecialValidationOption", UiText.Get("PasteSpecial_PasteOnlyDataValidationRules"));
-        SetAutomationMetadata(_rbAllUsingSourceTheme, UiText.Get("PasteSpecial_AllUsingSourceThemeAutomationName"), "PasteSpecialAllUsingSourceThemeOption", UiText.Get("PasteSpecial_PasteAllContentUsingTheCopiedSourceTheme"));
-        SetAutomationMetadata(_rbAllExceptBorders, UiText.Get("PasteSpecial_AllExceptBordersAutomationName"), "PasteSpecialAllExceptBordersOption", UiText.Get("PasteSpecial_PasteAllContentAndFormattingExceptCellBorders"));
-        SetAutomationMetadata(_rbAllMergingConditionalFormats, UiText.Get("PasteSpecial_AllMergingConditionalFormatsAutomationName"), "PasteSpecialAllMergingConditionalFormatsOption", UiText.Get("PasteSpecial_PasteAllContentWhileMergingConditionalFormattingRules"));
-        SetAutomationMetadata(_rbColumnWidths, UiText.Get("PasteSpecial_ColumnWidthsAutomationName"), "PasteSpecialColumnWidthsOption", UiText.Get("PasteSpecial_PasteOnlyCopiedColumnWidths"));
-        SetAutomationMetadata(_rbFormulasAndNumberFormats, UiText.Get("PasteSpecial_FormulasAndNumberFormatsAutomationName"), "PasteSpecialFormulasAndNumberFormatsOption", UiText.Get("PasteSpecial_PasteFormulasAndNumberFormats"));
-        SetAutomationMetadata(_rbValuesAndNumberFormats, UiText.Get("PasteSpecial_ValuesAndNumberFormatsAutomationName"), "PasteSpecialValuesAndNumberFormatsOption", UiText.Get("PasteSpecial_PasteValuesAndNumberFormats"));
-        SetAutomationMetadata(_rbValuesAndSourceFormatting, UiText.Get("PasteSpecial_ValuesAndSourceFormattingAutomationName"), "PasteSpecialValuesAndSourceFormattingOption", UiText.Get("PasteSpecial_PasteValuesWithCopiedSourceFormatting"));
-        SetAutomationMetadata(_rbText, UiText.Get("PasteSpecial_TextAutomationName"), "PasteSpecialTextOption", UiText.Get("PasteSpecial_PasteClipboardText"));
-        SetAutomationMetadata(_rbUnicodeText, UiText.Get("PasteSpecial_UnicodeTextAutomationName"), "PasteSpecialUnicodeTextOption", UiText.Get("PasteSpecial_PasteClipboardUnicodeText"));
-        SetAutomationMetadata(_rbPicture, UiText.Get("PasteSpecial_PictureAutomationName"), "PasteSpecialPictureOption", UiText.Get("PasteSpecial_PasteCopiedCellsAsAPicture"));
-        SetAutomationMetadata(_rbLinkedPicture, UiText.Get("PasteSpecial_LinkedPictureAutomationName"), "PasteSpecialLinkedPictureOption", UiText.Get("PasteSpecial_PasteCopiedCellsAsALinkedPicture"));
-        SetAutomationMetadata(_skipBlanks, UiText.Get("PasteSpecial_SkipBlanksAutomationName"), "PasteSpecialSkipBlanksBox", UiText.Get("PasteSpecial_SkipBlankCellsFromTheCopiedRange"));
-        SetAutomationMetadata(_transpose, UiText.Get("PasteSpecial_TransposeAutomationName"), "PasteSpecialTransposeBox", UiText.Get("PasteSpecial_SwitchCopiedRowsAndColumnsWhilePasting"));
-        SetAutomationMetadata(_keepColumnWidths, UiText.Get("PasteSpecial_KeepSourceColumnWidthsAutomationName"), "PasteSpecialKeepColumnWidthsBox", UiText.Get("PasteSpecial_ApplyTheCopiedSourceColumnWidths"));
-        SetAutomationMetadata(_opNone, UiText.Get("PasteSpecial_OperationNoneAutomationName"), "PasteSpecialOperationNoneOption", UiText.Get("PasteSpecial_PasteWithoutAMathematicalOperation"));
-        SetAutomationMetadata(_opAdd, UiText.Get("PasteSpecial_OperationAddAutomationName"), "PasteSpecialOperationAddOption", UiText.Get("PasteSpecial_AddCopiedValuesToDestinationValues"));
-        SetAutomationMetadata(_opSubtract, UiText.Get("PasteSpecial_OperationSubtractAutomationName"), "PasteSpecialOperationSubtractOption", UiText.Get("PasteSpecial_SubtractCopiedValuesFromDestinationValues"));
-        SetAutomationMetadata(_opMultiply, UiText.Get("PasteSpecial_OperationMultiplyAutomationName"), "PasteSpecialOperationMultiplyOption", UiText.Get("PasteSpecial_MultiplyDestinationValuesByCopiedValues"));
-        SetAutomationMetadata(_opDivide, UiText.Get("PasteSpecial_OperationDivideAutomationName"), "PasteSpecialOperationDivideOption", UiText.Get("PasteSpecial_DivideDestinationValuesByCopiedValues"));
-        SetAutomationMetadata(_pasteLinkButton, UiText.Get("PasteSpecial_PasteLinkAutomationName"), "PasteSpecialPasteLinkButton", UiText.Get("PasteSpecial_PasteFormulasThatLinkToTheCopiedCells"));
+        var surface = PasteSpecialPlanner.Surface;
+        foreach (var choice in surface.WpfChoices)
+            ApplyAutomationMetadata(_pasteChoiceButtons[choice.Mode], choice);
+
+        foreach (var toggle in surface.Toggles)
+            ApplyAutomationMetadata(GetToggleControl(toggle.Kind), toggle);
+
+        foreach (var operation in surface.Operations)
+            ApplyAutomationMetadata(_operationButtons[operation.Operation], operation);
+
+        ApplyAutomationMetadata(_pasteLinkButton, surface.GetAction(PasteSpecialDialogActionKind.PasteLink));
     }
+
+    private static void ApplyAutomationMetadata(Control control, PasteSpecialChoiceDescriptor descriptor) =>
+        SetAutomationMetadata(
+            control,
+            UiText.Get(descriptor.WpfAutomationNameTextKey),
+            descriptor.WpfAutomationId,
+            UiText.Get(descriptor.WpfAutomationHelpTextKey));
+
+    private static void ApplyAutomationMetadata(Control control, PasteSpecialToggleDescriptor descriptor) =>
+        SetAutomationMetadata(
+            control,
+            UiText.Get(descriptor.WpfAutomationNameTextKey),
+            descriptor.WpfAutomationId,
+            UiText.Get(descriptor.WpfAutomationHelpTextKey));
+
+    private static void ApplyAutomationMetadata(Control control, PasteSpecialOperationDescriptor descriptor) =>
+        SetAutomationMetadata(
+            control,
+            UiText.Get(descriptor.WpfAutomationNameTextKey),
+            descriptor.WpfAutomationId,
+            UiText.Get(descriptor.WpfAutomationHelpTextKey));
+
+    private static void ApplyAutomationMetadata(Control control, PasteSpecialDialogActionDescriptor descriptor) =>
+        SetAutomationMetadata(
+            control,
+            UiText.Get(descriptor.WpfAutomationNameTextKey),
+            descriptor.WpfAutomationId,
+            UiText.Get(descriptor.WpfAutomationHelpTextKey));
 
     private static void SetAutomationMetadata(Control control, string name, string automationId, string helpText)
     {
@@ -123,12 +143,13 @@ public sealed partial class PasteSpecialDialog
         panel.Children.Add(button);
     }
 
-    private static RadioButton CreateOperationButton(string content, bool isChecked = false) =>
+    private static RadioButton CreateOperationButton(PasteSpecialOperationDescriptor operation) =>
         new()
         {
-            Content = content,
+            Content = UiText.Get(operation.WpfLabelTextKey),
             GroupName = "PasteSpecialOperation",
-            IsChecked = isChecked,
+            IsChecked = operation.IsDefault,
+            IsEnabled = operation.IsEnabled,
             Margin = new Thickness(0, 0, 12, 6)
         };
 
@@ -141,13 +162,25 @@ public sealed partial class PasteSpecialDialog
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddOperation(panel, _opNone, 0, 0);
-        AddOperation(panel, _opAdd, 0, 1);
-        AddOperation(panel, _opSubtract, 1, 0);
-        AddOperation(panel, _opMultiply, 1, 1);
-        AddOperation(panel, _opDivide, 2, 0);
+        foreach (var operation in PasteSpecialPlanner.Surface.Operations.OrderBy(descriptor => descriptor.Order))
+        {
+            AddOperation(
+                panel,
+                _operationButtons[operation.Operation],
+                operation.Placement.Row,
+                operation.Placement.Column);
+        }
         return panel;
     }
+
+    private CheckBox GetToggleControl(PasteSpecialToggleKind kind) =>
+        kind switch
+        {
+            PasteSpecialToggleKind.SkipBlanks => _skipBlanks,
+            PasteSpecialToggleKind.Transpose => _transpose,
+            PasteSpecialToggleKind.KeepColumnWidths => _keepColumnWidths,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
 
     private static void AddOperation(Grid panel, RadioButton button, int row, int column)
     {

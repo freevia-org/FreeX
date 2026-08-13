@@ -33,7 +33,10 @@ public sealed class DialogSharedHelperSourceTests
         slideSize.Should().NotContain("MessageBox.Show(");
 
         var hyperlink = ReadHostSource("HyperlinkDialog.cs");
-        hyperlink.Should().Contain("DialogButtonRowFactory.Create(OnOk, buttonWidth: 75)");
+        hyperlink.Should().Contain("DialogButtonRowFactory.Create(");
+        hyperlink.Should().Contain("buttonWidth: 75");
+        hyperlink.Should().Contain("acceptContent: surface.AcceptLabel");
+        hyperlink.Should().Contain("cancelContent: surface.CancelLabel");
         hyperlink.Should().Contain("DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption)");
         hyperlink.Should().Contain("DialogFocus.FocusAndSelect(_urlBox)");
         hyperlink.Should().NotContain("Content = \"OK\"");
@@ -50,7 +53,7 @@ public sealed class DialogSharedHelperSourceTests
     private static void AssertUsesSharedDialogWindow(string fileName, string className)
     {
         var source = ReadHostSource(fileName);
-        source.Should().Contain($"public sealed class {className} : Free.Shared.Ribbon.Wpf.DialogWindow");
+        source.Should().Contain($"public sealed partial class {className} : Free.Shared.Ribbon.Wpf.DialogWindow");
         source.Should().NotContain($"public sealed class {className} : Window");
         source.Should().NotContain($"public sealed class {className} : System.Windows.Window");
     }

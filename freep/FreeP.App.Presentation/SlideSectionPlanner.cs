@@ -25,6 +25,9 @@ public sealed record SlideSectionActionExecutionPlan(
     bool IsEnabled,
     bool RequiresNamePrompt,
     string PromptTitle = "",
+    string PromptLabel = "",
+    string PromptAcceptText = "",
+    string PromptCancelText = "",
     string SuggestedName = "");
 
 public static class SlideSectionPlanner
@@ -93,6 +96,8 @@ public static class SlideSectionPlanner
     {
         ArgumentNullException.ThrowIfNull(action);
 
+        var prompt = PresentationPaneTextResources.BuildSlideSectionNamePrompt(action.Kind);
+
         return action.Kind switch
         {
             SlideSectionActionKind.AddSection => new SlideSectionActionExecutionPlan(
@@ -101,7 +106,10 @@ public static class SlideSectionPlanner
                 action.SectionIndex,
                 action.IsEnabled,
                 RequiresNamePrompt: action.IsEnabled,
-                PromptTitle: AddSectionMenuText,
+                PromptTitle: prompt.Title,
+                PromptLabel: prompt.Label,
+                PromptAcceptText: prompt.AcceptText,
+                PromptCancelText: prompt.CancelText,
                 SuggestedName: action.SuggestedName),
 
             SlideSectionActionKind.RenameSection => new SlideSectionActionExecutionPlan(
@@ -110,7 +118,10 @@ public static class SlideSectionPlanner
                 action.SectionIndex,
                 action.IsEnabled,
                 RequiresNamePrompt: action.IsEnabled,
-                PromptTitle: RenameSectionMenuText,
+                PromptTitle: prompt.Title,
+                PromptLabel: prompt.Label,
+                PromptAcceptText: prompt.AcceptText,
+                PromptCancelText: prompt.CancelText,
                 SuggestedName: action.SuggestedName),
 
             SlideSectionActionKind.RemoveSection => new SlideSectionActionExecutionPlan(

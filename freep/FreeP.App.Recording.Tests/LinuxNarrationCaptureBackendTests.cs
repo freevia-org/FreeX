@@ -9,7 +9,7 @@ public sealed class LinuxNarrationCaptureBackendTests
     [Fact]
     public void Readiness_WithPipeWireMicrophoneExposesNarrationOnly()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-narration-tests-");
         using var backend = CreateBackend(temp.Path, new FakeProcessAdapter());
 
         backend.AdapterReadiness.CanCaptureNarration.Should().BeTrue();
@@ -23,7 +23,7 @@ public sealed class LinuxNarrationCaptureBackendTests
     [Fact]
     public void CompleteCapture_StopsRecorderAndReturnsPersistableWavPayload()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-narration-tests-");
         var processAdapter = new FakeProcessAdapter { PayloadOnStop = BuildWavePayload() };
         using var backend = CreateBackend(temp.Path, processAdapter);
         var started = new DateTimeOffset(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
@@ -52,7 +52,7 @@ public sealed class LinuxNarrationCaptureBackendTests
     [Fact]
     public void CompleteCapture_RejectsRecorderThatExitedDuringStartup()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-narration-tests-");
         var processAdapter = new FakeProcessAdapter { ExitDuringStartup = true, StandardError = "server unavailable" };
         using var backend = CreateBackend(temp.Path, processAdapter);
         var started = DateTimeOffset.UtcNow;
@@ -69,7 +69,7 @@ public sealed class LinuxNarrationCaptureBackendTests
     [Fact]
     public void CompleteCapture_PropagatesStartFailure()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-narration-tests-");
         var processAdapter = new FakeProcessAdapter { StartException = new InvalidOperationException("permission denied") };
         using var backend = CreateBackend(temp.Path, processAdapter);
         var started = DateTimeOffset.UtcNow;
@@ -84,7 +84,7 @@ public sealed class LinuxNarrationCaptureBackendTests
     [Fact]
     public void BeginCapture_CleansUpLaunchedRecorder_WhenStartupProbeThrows()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-narration-tests-");
         var processAdapter = new FakeProcessAdapter
         {
             WaitForExitException = new InvalidOperationException("startup probe failed")
@@ -106,7 +106,7 @@ public sealed class LinuxNarrationCaptureBackendTests
     [Fact]
     public void CompleteCapture_RejectsForcedStopAndInvalidWavePayload()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-narration-tests-");
         var forcedAdapter = new FakeProcessAdapter
         {
             StopResult = new LinuxRecordingProcessStopResult(true, true, 137, string.Empty),
@@ -130,7 +130,7 @@ public sealed class LinuxNarrationCaptureBackendTests
     [Fact]
     public void UnavailableToolsReturnDeferredWithoutStartingProcess()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-narration-tests-");
         var adapter = new FakeProcessAdapter();
         using var backend = new LinuxNarrationCaptureBackend(
             Metadata(temp.Path),
@@ -150,7 +150,7 @@ public sealed class LinuxNarrationCaptureBackendTests
     [Fact]
     public void CancelCapture_InterruptsDisposesAndDeletesTemporaryOutput()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-narration-tests-");
         var adapter = new FakeProcessAdapter { PayloadOnStart = BuildWavePayload() };
         using var backend = CreateBackend(temp.Path, adapter);
         var started = DateTimeOffset.UtcNow;
@@ -170,7 +170,7 @@ public sealed class LinuxNarrationCaptureBackendTests
     [Fact]
     public void StartingSameSlideAgainCancelsPriorRecorder()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-narration-tests-");
         var adapter = new FakeProcessAdapter();
         using var backend = CreateBackend(temp.Path, adapter);
         var started = DateTimeOffset.UtcNow;
@@ -186,7 +186,7 @@ public sealed class LinuxNarrationCaptureBackendTests
     [Fact]
     public void Dispose_CancelsEveryActiveRecorderAndIsIdempotent()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-narration-tests-");
         var adapter = new FakeProcessAdapter();
         var backend = CreateBackend(temp.Path, adapter);
         var started = DateTimeOffset.UtcNow;
@@ -205,7 +205,7 @@ public sealed class LinuxNarrationCaptureBackendTests
     [Fact]
     public void PreferredMicrophoneIsPassedToRecorderCommand()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-narration-tests-");
         var adapter = new FakeProcessAdapter();
         var discovery = AvailableDiscovery(
             Microphone("52", isDefault: true),
@@ -432,22 +432,4 @@ public sealed class LinuxNarrationCaptureBackendTests
         }
     }
 
-    private sealed class TemporaryDirectory : IDisposable
-    {
-        public TemporaryDirectory()
-        {
-            Path = System.IO.Path.Combine(
-                System.IO.Path.GetTempPath(),
-                "freep-linux-narration-tests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
 }

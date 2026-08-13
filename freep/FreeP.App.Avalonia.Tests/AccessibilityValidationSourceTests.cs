@@ -1,4 +1,4 @@
-using FreeP.App.Avalonia;
+using FreeP.Validation.Avalonia;
 
 namespace FreeP.App.Avalonia.Tests;
 
@@ -22,17 +22,27 @@ public sealed class AccessibilityValidationSourceTests
     [Fact]
     public void Accessibility_validation_source_reads_live_control_metadata()
     {
-        var source = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/AccessibilityValidation.cs"));
+        var source = File.ReadAllText(RepoFile("freep/TestSupport/Validation.Avalonia/AccessibilityValidation.cs"));
+        var adapter = File.ReadAllText(RepoFile(
+            "freep/TestSupport/Validation.Avalonia/MainWindow.ValidationAccessAdapter.cs"));
+        var program = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/Program.cs"));
 
-        source.Should().Contain("PaneAccessibilitySnapshotForTests");
-        source.Should().Contain("SlidePaneForAccessibilityTests");
-        source.Should().Contain("AutomationProperties.GetAutomationId(control)");
-        source.Should().Contain("AutomationProperties.GetName(control)");
-        source.Should().Contain("AutomationProperties.GetItemStatus(control)");
-        source.Should().Contain("control.GetType().Name");
-        source.Should().Contain("FocusRepresentativePanesForAccessibilityValidation");
+        source.Should().Contain("CaptureAccessibilityPanes");
+        source.Should().Contain("FocusRepresentativeAccessibilityPanes");
         source.Should().Contain("atspi-ready.json");
         source.Should().Contain("atspi-result.json");
+        adapter.Should().Contain("AutomationProperties.GetAutomationId(control)");
+        adapter.Should().Contain("AutomationProperties.GetName(control)");
+        adapter.Should().Contain("AutomationProperties.GetItemStatus(control)");
+        adapter.Should().Contain("control.GetType().Name");
+        adapter.Should().NotContain("atspi-ready.json");
+        adapter.Should().NotContain("File.Exists");
+        program.Should().NotContain("AccessibilityValidationOptions");
+        program.Should().NotContain("--accessibility-validation");
+        File.Exists(Path.Combine(Path.GetDirectoryName(RepoFile(
+            "freep/FreeP.App.Avalonia/Program.cs"))!, "MainWindow.ValidationAccessAdapter.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(Path.GetDirectoryName(RepoFile(
+            "freep/FreeP.App.Avalonia/Program.cs"))!, "AccessibilityValidation.cs")).Should().BeFalse();
     }
 
     [Fact]
@@ -84,8 +94,11 @@ public sealed class AccessibilityValidationSourceTests
         runner.Should().Contain("os-atspi-x11-focus-events");
         runner.Should().Contain("expectedFocusOrder");
         runner.Should().Contain("wave59-report");
+        runner.Should().Contain("\"-Host\", \"Validation\"");
     }
 
     private static string RepoFile(string relativePath) =>
-        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../", relativePath));
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeP.slnx",
+            relativePath.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries));
 }

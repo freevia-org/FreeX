@@ -5,6 +5,31 @@ public sealed record FreeXBackstageTextValue(string? Text = null, string? TextKe
     public static FreeXBackstageTextValue Literal(string text) => new(text);
 
     public static FreeXBackstageTextValue Key(string key) => new(TextKey: key);
+
+    public static string ResolveKey(string? key, Func<string, string> getText)
+    {
+        ArgumentNullException.ThrowIfNull(getText);
+        return key is null ? string.Empty : Key(key).Resolve(getText);
+    }
+
+    public static string? ResolveOptionalKey(
+        string? key,
+        Func<string, string> getText,
+        Func<string, string>? transform = null)
+    {
+        ArgumentNullException.ThrowIfNull(getText);
+        if (key is null)
+            return null;
+
+        var resolved = Key(key).Resolve(getText);
+        return transform is null ? resolved : transform(resolved);
+    }
+
+    public string Resolve(Func<string, string> getText)
+    {
+        ArgumentNullException.ThrowIfNull(getText);
+        return TextKey is { Length: > 0 } key ? getText(key) : Text ?? string.Empty;
+    }
 }
 
 public sealed record FreeXBackstageAccountPaneRequest(
@@ -77,6 +102,22 @@ public static class FreeXBackstageAccountPanePlanner
             FreeXBackstagePaneCatalog.BuildAccountActions(request.OptionsAvailable),
             "Backstage_Account_NoticesSectionHeader",
             notices);
+    }
+
+    public static string FormatMessageBody(
+        FreeXBackstageAccountPanePlan plan,
+        string bodyText,
+        Func<string, string> getText)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(getText);
+
+        var lines = plan.Details.Select(detail =>
+            $"{getText(detail.LabelKey)}: {detail.Value.Resolve(getText)}");
+        return bodyText +
+               Environment.NewLine +
+               Environment.NewLine +
+               string.Join(Environment.NewLine, lines);
     }
 
     private static FreeXBackstageTextValue ResolveDetailValue(

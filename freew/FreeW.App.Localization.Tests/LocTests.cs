@@ -52,6 +52,12 @@ public sealed class LocTests
     public void SharedCatalog_FallsBackAcrossCulturesAndPreservesFormattingContracts()
     {
         WithUiCulture("en-US", () => Loc.Get("Ribbon_Command_Bold_Label")).Should().Be("Bold");
+        WithUiCulture("en-US", () => Loc.Get("Ribbon_Command_Subscript_Label")).Should().Be("Subscript");
+        WithUiCulture("en-US", () => Loc.Get("Ribbon_Command_Superscript_Label")).Should().Be("Superscript");
+        WithUiCulture("en-US", () => Loc.Get("Options_AppLanguageSystemDefault"))
+            .Should().Be("Use system default");
+        WithUiCulture("fr-FR", () => Loc.Get("Options_AppLanguageSystemDefault"))
+            .Should().Be("Utiliser la langue du systeme");
         WithUiCulture("en-US", () => Loc.Format("File_CommandFailedFormat", "Open", "Denied"))
             .Should().Be("Open failed: Denied");
         WithUiCulture("fr-FR", () => Loc.Get("Common_ConfirmTitle")).Should().Be("Confirmation");
@@ -127,7 +133,7 @@ public sealed class LocTests
             "Ribbon_Command_TextHighlightColor_Label",
             "Ribbon_Command_HighlightCompact_Label",
             "Ribbon_Command_FontColor_Label",
-            "Ribbon_Command_FontColorDropdown_Label",
+            "Common_FontColor",
             "Ribbon_Command_CharacterBorder_Label",
             "Ribbon_Command_CharacterShading_Label",
             "Ribbon_Command_ClearAllFormatting_Label",

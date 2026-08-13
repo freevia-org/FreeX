@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Free.Shared.AppServices;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Host;
@@ -17,6 +19,8 @@ namespace FreeW.App.Host;
 internal sealed class ThesaurusPane
 {
     private readonly DocumentView _editor;
+    private readonly IPlatformClipboard _platformClipboard;
+    private readonly ThesaurusPaneSession _session = new();
 
     // ── UI elements owned by this pane ──────────────────────────────────────────────────────────
     private Border _pane = null!;
@@ -25,11 +29,12 @@ internal sealed class ThesaurusPane
     private StackPanel _sensesPanel = null!;
     private ScrollViewer _scroll = null!;
 
-    public bool IsVisible { get; private set; }
+    public bool IsVisible => _session.IsVisible;
 
-    public ThesaurusPane(DocumentView editor)
+    public ThesaurusPane(DocumentView editor, IPlatformClipboard platformClipboard)
     {
         _editor = editor;
+        _platformClipboard = platformClipboard ?? throw new ArgumentNullException(nameof(platformClipboard));
     }
 
     // ── Build ────────────────────────────────────────────────────────────────────────────────────
@@ -45,7 +50,7 @@ internal sealed class ThesaurusPane
 
         _statusText = new TextBlock
         {
-            Text = "Position the cursor on a word and press Shift+F7.",
+            Text = ThesaurusPresentationPlanner.EmptyWordStatus,
             Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)),
             Margin = new Thickness(10, 2, 10, 8),
             TextWrapping = TextWrapping.Wrap
@@ -62,7 +67,7 @@ internal sealed class ThesaurusPane
 
         var header = new TextBlock
         {
-            Text = "Thesaurus",
+            Text = FreeWUiTextCatalog.ThesaurusHeading,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(10, 8, 10, 6)
         };
@@ -91,33 +96,28 @@ internal sealed class ThesaurusPane
 
     public void Toggle()
     {
-        IsVisible = !IsVisible;
-        _pane.Visibility = IsVisible ? Visibility.Visible : Visibility.Collapsed;
-        if (IsVisible)
-            Lookup();
+        ApplyTransition(_session.Toggle(_editor.GetCaretWord()));
     }
 
-    public void Show() { IsVisible = true; _pane.Visibility = Visibility.Visible; Lookup(); }
-    public void Hide() { IsVisible = false; _pane.Visibility = Visibility.Collapsed; }
+    public void Show() => ApplyTransition(_session.Show(_editor.GetCaretWord()));
+    public void Hide() => ApplyTransition(_session.Hide());
 
     // ── Lookup ───────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Looks up the word at the editor's caret and populates the pane.</summary>
     public void Lookup()
     {
-        if (!IsVisible) return;
+        ApplyTransition(_session.Refresh(_editor.GetCaretWord()));
+    }
 
-        var word = _editor.GetCaretWord();
-        _sensesPanel.Children.Clear();
-
-        if (string.IsNullOrWhiteSpace(word))
-        {
-            _headingText.Text = string.Empty;
-            _statusText.Text = "Position the cursor on a word and press Shift+F7.";
+    private void ApplyTransition(ThesaurusPaneTransition transition)
+    {
+        _pane.Visibility = transition.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (!transition.ShouldRender)
             return;
-        }
 
-        var plan = ThesaurusPresentationPlanner.Lookup(word);
+        var plan = transition.DisplayPlan;
+        _sensesPanel.Children.Clear();
         _headingText.Text = plan.HeadingText;
         _statusText.Text = plan.StatusText;
 
@@ -169,10 +169,12 @@ internal sealed class ThesaurusPane
     {
         // Display synonym with underscores replaced by spaces (storage format)
         var display = action.DisplayText;
+        var availability = _session.PlanAction(action, canReplace: true, canCopy: true);
         var insertBtn = new Button
         {
             Content = "↵",
             ToolTip = action.InsertToolTip,
+            IsEnabled = availability.CanReplace,
             Padding = new Thickness(3, 1, 3, 1),
             Margin = new Thickness(0, 0, 2, 0),
             FontSize = 10,
@@ -180,7 +182,11 @@ internal sealed class ThesaurusPane
         };
         insertBtn.Click += (_, _) =>
         {
-            _editor.ReplaceCaretWord(display);
+            if (availability.ReplaceIntent is not { } intent)
+                return;
+
+            var replaced = ReplaceCurrentWord(intent.Text);
+            ApplyTransition(_session.CompleteReplacement(replaced, _editor.GetCaretWord()));
             _editor.Focus();
         };
 
@@ -188,13 +194,23 @@ internal sealed class ThesaurusPane
         {
             Content = "⎘",
             ToolTip = action.CopyToolTip,
+            IsEnabled = availability.CanCopy,
             Padding = new Thickness(3, 1, 3, 1),
             FontSize = 10,
             Cursor = System.Windows.Input.Cursors.Hand
         };
         copyBtn.Click += (_, _) =>
         {
-            try { Clipboard.SetText(display); }
+            if (availability.CopyIntent is not { } intent)
+                return;
+
+            try
+            {
+                _ = _platformClipboard.WriteAsync(new PlatformClipboardContent(Text: intent.Text))
+                    .AsTask()
+                    .GetAwaiter()
+                    .GetResult();
+            }
             catch { /* clipboard might be unavailable in tests */ }
         };
 
@@ -224,6 +240,15 @@ internal sealed class ThesaurusPane
             Margin = new Thickness(0),
             Padding = new Thickness(0)
         };
+    }
+
+    private bool ReplaceCurrentWord(string synonym)
+    {
+        if (string.IsNullOrWhiteSpace(_editor.GetCaretWord()))
+            return false;
+
+        _editor.ReplaceCaretWord(synonym);
+        return true;
     }
 
     private static Style? _borderlessStyle;

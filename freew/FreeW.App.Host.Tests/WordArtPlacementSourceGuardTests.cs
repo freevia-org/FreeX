@@ -58,8 +58,9 @@ public sealed class WordArtPlacementSourceGuardTests
         wpf.Should().Contain("var preserveOpaqueGlowGoldFill = wordArt is");
         wpf.Should().Contain("Text: \"FORMAT\",");
         wpf.Should().Contain("Style: WordArtStyle.GlowGold,");
-        wpf.Should().Contain("if (wordArt.Style == WordArtStyle.GlowGold)");
-        wpf.Should().Contain("Color.FromRgb(0xD8, 0xBA, 0x66)");
+        wpf.Should().Contain("var preserveOpaqueGlowGoldFill = wordArt is");
+        wpf.Should().Contain("var glowColor = preserveOpaqueGlowGoldFill");
+        wpf.Should().Contain("? Color.FromRgb(0xC0, 0x90, 0x00)");
         wpf.Should().Contain("glowColor: glowColor");
         wpf.Should().Contain("var isImportedGradFillMultiArchUp = wordArt is");
         wpf.Should().Contain("Style: WordArtStyle.GradFillMulti,");
@@ -73,17 +74,6 @@ public sealed class WordArtPlacementSourceGuardTests
         avalonia.Should().NotContain("var archDepth =");
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var path = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(path))
-                return path;
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

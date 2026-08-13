@@ -233,6 +233,44 @@ public static class SparklinePlanner
         return SparklineInputValidation.Valid;
     }
 
+    /// <summary>
+    /// Builds the undoable insert command for a validated single sparkline or sparkline group. A group
+    /// receives one shared, nonzero id so it survives XLSX round-trips as one x14:sparklineGroup.
+    /// </summary>
+    public static IWorkbookCommand BuildInsertCommand(
+        SheetId sheetId,
+        IReadOnlyList<SparklineGroupMember> members,
+        SparklineKind kind,
+        IEnumerable<SparklineModel> existingSparklines,
+        CellAddress? singleLocationOverride = null)
+    {
+        ArgumentNullException.ThrowIfNull(members);
+        ArgumentNullException.ThrowIfNull(existingSparklines);
+        if (members.Count == 0)
+            throw new ArgumentException("At least one sparkline group member is required.", nameof(members));
+
+        if (members.Count == 1)
+        {
+            var member = members[0];
+            return new AddSparklineCommand(
+                sheetId,
+                member.DataRange,
+                singleLocationOverride ?? member.Location,
+                kind);
+        }
+
+        var groupId = SparklineGroupIdAllocator.NextGroupId(existingSparklines);
+        var commands = members
+            .Select(member => (IWorkbookCommand)new AddSparklineCommand(
+                sheetId,
+                member.DataRange,
+                member.Location,
+                kind,
+                groupId))
+            .ToList();
+        return new CompositeWorkbookCommand("Insert Sparkline", commands);
+    }
+
     /// <summary>Parses a sparkline location, accepting a multi-cell range (for a sparkline group).</summary>
     private static bool TryParseLocationRange(string? input, SheetId sheetId, out GridRange range)
     {

@@ -9,32 +9,28 @@ namespace FreeP.App.Avalonia.Tests;
 public sealed class WindowsNativePrintHandoffTests
 {
     [Fact]
-    public void AvaloniaWindowRoutesWindowsBuildsToNativePrintOutput()
+    public void AvaloniaWindowUsesSharedWindowsPrintingAndKeepsNativeQueueSelection()
     {
         var repo = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(repo, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("WindowsNativePrintOutput.Detect()");
-        source.Should().Contain("WindowsNativePrintOutput.CreateAdapter(capability)");
+        source.Should().Contain("new WindowsPrintService(");
+        source.Should().Contain("WindowsNativePrintOutput.TryShowPrinterSelectionDialog(");
         source.Should().Contain("WindowsNativePrintOutput.CreateVideoAdapter(capability)");
+        source.Should().NotContain("WindowsNativePrintHandoffAdapter");
         source.Should().Contain("FREEP_WINDOWS_CAPTURE");
     }
 
     [Fact]
-    public async Task WindowsAdapterRejectsNonPdfBeforeStartingShell()
+    public void AvaloniaWindowValidatesPdfBeforeSharedSubmission()
     {
-        var capability = new LinuxNativePrintCapability(
-            CanPrint: true,
-            ExecutablePath: "windows-shell-print",
-            PrinterName: "test-printer",
-            Reason: "ready");
-        var adapter = new WindowsNativePrintHandoffAdapter(capability);
+        var repo = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(repo, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
 
-        var result = await adapter.PrintAsync([1, 2, 3], "test");
-
-        result.Succeeded.Should().BeFalse();
-        result.Canceled.Should().BeFalse();
-        result.FailureReason.Should().Contain("valid non-empty PDF");
+        source.Should().Contain("PresentationPrintOutputPackageExecutor.ValidatePackage(package)");
+        source.IndexOf("ValidatePackage(package)", StringComparison.Ordinal).Should().BeLessThan(
+            source.IndexOf("_printService.SubmitAsync(", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -97,6 +93,19 @@ public sealed class WindowsNativePrintHandoffTests
     }
 
     [Fact]
+    public void WindowsVideoCapability_WhenDeviceEnumerationFails_PreservesExportContext()
+    {
+        var capability = WindowsNativePrintOutput.DetectWindowsVideoCapability(
+            new ThrowingWindowsRecordingDeviceCatalog());
+
+        capability.CanEncodeMp4.Should().BeTrue();
+        capability.CanCaptureNarration.Should().BeFalse();
+        capability.CanCaptureCameraAndMedia.Should().BeFalse();
+        capability.Reason.Should().Contain("Windows MediaComposition video export is available");
+        capability.Reason.Should().Contain("Device detection failed: device catalog failed");
+    }
+
+    [Fact]
     public void WindowsVideoCapabilitySelectsTheNativeAdapter()
     {
         var capability = new LinuxVideoEncoderCapability(
@@ -130,18 +139,18 @@ public sealed class WindowsNativePrintHandoffTests
             CanCaptureNarration: true,
             Reason: "test");
         var adapter = new WindowsNativeVideoExportAdapter(capability);
-        var outputPath = Path.Combine(Path.GetTempPath(), $"freep-native-video-test-{Guid.NewGuid():N}.mp4");
-        var narrationOutputPath = Path.Combine(Path.GetTempPath(), $"freep-native-narration-video-test-{Guid.NewGuid():N}.mp4");
-        var cameraOutputPath = Path.Combine(Path.GetTempPath(), $"freep-native-camera-video-test-{Guid.NewGuid():N}.mp4");
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-native-video-test-");
+        var outputPath = Path.Combine(temporaryDirectory.Path, "video.mp4");
+        var narrationOutputPath = Path.Combine(temporaryDirectory.Path, "narration-video.mp4");
+        var cameraOutputPath = Path.Combine(temporaryDirectory.Path, "camera-video.mp4");
 
-        try
         {
             var result = await adapter.ExportAsync(package, outputPath);
 
             if (!result.Succeeded)
                 throw new Xunit.Sdk.XunitException(
                     $"Native export failed: canceled={result.Canceled}; bytes={result.ByteCount}; " +
-                    $"encoder=[{result.EncoderName}]; reason=[{result.FailureReason}]; status=[{result.StatusText}].");
+                    $"encoder=[{result.EncoderName}]; reason=[{result.FailureReason}].");
             result.ByteCount.Should().BeGreaterThan(0);
             File.Exists(outputPath).Should().BeTrue();
 
@@ -212,21 +221,6 @@ public sealed class WindowsNativePrintHandoffTests
             cameraResult.ByteCount.Should().BeGreaterThan(0);
             File.Exists(cameraOutputPath).Should().BeTrue();
         }
-        finally
-        {
-            try
-            {
-                if (File.Exists(outputPath))
-                    File.Delete(outputPath);
-                if (File.Exists(narrationOutputPath))
-                    File.Delete(narrationOutputPath);
-                if (File.Exists(cameraOutputPath))
-                    File.Delete(cameraOutputPath);
-            }
-            catch (IOException)
-            {
-            }
-        }
     }
 
     private static readonly byte[] TinyPng = Convert.FromBase64String(
@@ -260,5 +254,11 @@ public sealed class WindowsNativePrintHandoffTests
         params SlideShowRecordingCaptureDeviceDescriptor[] devices) : IWindowsRecordingDeviceCatalog
     {
         public IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices() => devices;
+    }
+
+    private sealed class ThrowingWindowsRecordingDeviceCatalog : IWindowsRecordingDeviceCatalog
+    {
+        public IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices() =>
+            throw new InvalidOperationException("device catalog failed");
     }
 }

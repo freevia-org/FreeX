@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -60,7 +59,7 @@ public sealed class R128_MergeAndCenterMultiAreaToggleContentLossTests
                     new CellAddress(sheet.Id, 1, 1),
                     new CellAddress(sheet.Id, 2, 2));
                 window.Session.SelectRange(activeArea);
-                await InvokePrivateAsync(window, "MergeAndCenterSelectedRangeAsync");
+                await window.MergeAndCenterSelectedRangeForTestAsync();
                 sheet.MergedRegions.Should().Contain(activeArea, "the setup merge of the active area must succeed");
 
                 // A disjoint SIBLING area (D1:E1) that is NOT merged and holds content in its
@@ -78,7 +77,7 @@ public sealed class R128_MergeAndCenterMultiAreaToggleContentLossTests
                 // holds both areas, exactly what a real multi-area Ctrl+click leaves behind.
                 window.Session.SelectRanges(activeArea, [siblingArea, activeArea]);
 
-                var task = InvokePrivateTaskAsync(window, "MergeAndCenterSelectedRangeAsync");
+                var task = window.MergeAndCenterSelectedRangeForTestAsync();
                 await DrainInputAsync();
 
                 // THE DEFECT: because the active area is already merged (isUnmergeToggle == true), the
@@ -142,7 +141,7 @@ public sealed class R128_MergeAndCenterMultiAreaToggleContentLossTests
                     new CellAddress(sheet.Id, 1, 1),
                     new CellAddress(sheet.Id, 2, 2));
                 window.Session.SelectRange(activeArea);
-                await InvokePrivateAsync(window, "MergeAndCenterSelectedRangeAsync");
+                await window.MergeAndCenterSelectedRangeForTestAsync();
                 sheet.MergedRegions.Should().Contain(activeArea, "the setup merge of the active area must succeed");
 
                 var siblingArea = new GridRange(
@@ -154,7 +153,7 @@ public sealed class R128_MergeAndCenterMultiAreaToggleContentLossTests
 
                 window.Session.SelectRanges(activeArea, [siblingArea, activeArea]);
 
-                await InvokePrivateAsync(window, "MergeAndCenterSelectedRangeAsync");
+                await window.MergeAndCenterSelectedRangeForTestAsync();
 
                 window.OwnedWindows.Should().BeEmpty(
                     "a sibling area whose only content is already in its own top-left cell must not " +
@@ -175,17 +174,6 @@ public sealed class R128_MergeAndCenterMultiAreaToggleContentLossTests
             return true;
         }, CancellationToken.None);
     }
-
-    private static Task InvokePrivateAsync(MainWindow window, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        return (Task)method.Invoke(window, null)!;
-    }
-
-    private static Task InvokePrivateTaskAsync(MainWindow window, string methodName) =>
-        InvokePrivateAsync(window, methodName);
 
     private static async Task DrainInputAsync()
     {

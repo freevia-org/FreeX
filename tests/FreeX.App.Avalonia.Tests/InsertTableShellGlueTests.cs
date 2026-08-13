@@ -18,14 +18,6 @@ namespace FreeX.App.Avalonia.Tests;
 /// </summary>
 public sealed class InsertTableShellGlueTests
 {
-    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
-    }
-
     private static Sheet CreateSheet() => new Workbook("Book").AddSheet("Sheet1");
 
     private static GridRange Range(Sheet sheet, uint startRow, uint startCol, uint endRow, uint endCol) =>

@@ -54,12 +54,9 @@ namespace FreeW.App.Host.Tests;
 //     a different STA thread then calls set_Document → SetCustomDictionaries → tries to
 //     call the factory COM object → RCW is disconnected → InvalidComObjectException.
 //
-//     Fix: pre-create a DocumentView and call LoadModel() on a long-lived STA keeper
-//     thread BEFORE any test-class STA thread does so.  The keeper thread's Dispatcher
-//     pumps for the entire process lifetime, keeping the WinRT COM apartment alive and
-//     the RCW reference count positive.  Subsequent test-class calls to set_Document
-//     re-use the already-initialised factory through COM's inter-apartment proxy and
-//     succeed.
+//     Fix: suppress native spell checking only in the broad parent testhost, where portable
+//     proofing and renderer behavior do not require WinRT. The native visibility contract runs
+//     alone in a bounded child test process, so its COM apartment lives for the whole assertion.
 //
 // ────────────────────────────────────────────────────────────────────────────
 // Design
@@ -102,14 +99,13 @@ internal sealed class WpfWarmUpGateAttribute : BeforeAfterTestAttribute
 }
 
 /// <summary>
-/// One-time WPF warm-up: pre-warms the WinRT spell-checker COM object on a long-lived STA keeper
-/// thread so that subsequent test-class STA threads can access it through the COM inter-apartment
-/// proxy without hitting a disconnected-RCW exception.
+/// One-time WPF warm-up for shared WPF resources and ribbon construction. Native spell checking is
+/// suppressed in the broad parent testhost and enabled only in its isolated contract-test child.
 /// </summary>
 internal static class WpfTestWarmUp
 {
-    // Keep the pre-warmed DocumentView alive for the process lifetime so the WinRT spell-checker
-    // COM RCW reference count never hits zero and the COM apartment on the keeper thread never exits.
+    private const string NativeSpellCheckChildEnvironmentVariable = "FREEW_NATIVE_SPELLCHECK_TEST_CHILD";
+    // Keep the pre-warmed DocumentView alive with the other WPF warm-up objects for process lifetime.
 #pragma warning disable IDE0052
     private static DocumentView? _keepAliveDocumentView;
 #pragma warning restore IDE0052
@@ -125,6 +121,11 @@ internal static class WpfTestWarmUp
     [ModuleInitializer]
     public static void StartWarmUp()
     {
+        DocumentView.SuppressNativeSpellCheckForTests = !string.Equals(
+            Environment.GetEnvironmentVariable(NativeSpellCheckChildEnvironmentVariable),
+            "1",
+            StringComparison.Ordinal);
+
         var keeperThread = new Thread(KeeperThreadProc);
         keeperThread.SetApartmentState(ApartmentState.STA);
         keeperThread.IsBackground = true;           // does not prevent process exit
@@ -180,14 +181,8 @@ internal static class WpfTestWarmUp
     {
         try
         {
-            // Pre-initialise the WinRT ISpellCheckerFactory COM object.
-            // DocumentView.LoadModel() → internal Render() → RichTextBox.set_Document
-            // → SetCustomDictionaries → WinRTSpellerInterop.LoadDictionaryImpl
-            // → SpellCheckerFactory.RegisterUserDictionaryPrivate  (first-time COM init).
-            // Keeping _keepAliveDocumentView alive prevents the RCW reference count from
-            // ever reaching zero, so the COM apartment on this keeper thread stays alive for
-            // the duration of the test process.  Subsequent test-class STA threads that call
-            // set_Document reach the same COM factory through COM's inter-apartment proxy.
+            // Warm DocumentView construction and rendering. In the broad parent testhost this skips
+            // WinRT spell checking; the isolated native contract child enables and warms it here.
             var dv = new DocumentView();
             dv.LoadModel(TextDocument.CreateEmpty());
             _keepAliveDocumentView = dv;
@@ -198,7 +193,7 @@ internal static class WpfTestWarmUp
             // or FreeWRibbonCommands touch on first call.  After this point the first real ribbon-
             // parity test (which runs on its own per-class STA thread) skips the cold-JIT path
             // entirely and runs from cached types — eliminating the intermittent cold-start flake.
-            _keepAliveRibbonDefinition = FreeWRibbon.Build();
+            _keepAliveRibbonDefinition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
             _keepAliveRibbonCommands   = FreeWRibbonCommands.Build(dv, new RibbonStateStore());
         }
         catch (Exception ex)

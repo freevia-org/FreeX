@@ -14,18 +14,16 @@ namespace FreeW.App.Host;
 /// <item><b>Keep original formatting</b> — carry the source run's character formatting.</item>
 /// <item><b>Tab leader</b> — the fill character between citation text and page number.</item>
 /// </list>
-/// Returns a <see cref="Result"/> carrying the chosen <see cref="ToaOptions"/>, or null when cancelled.
+/// Returns the chosen <see cref="ToaOptions"/>, or null when cancelled.
 /// </summary>
-internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    /// <summary>The options the user configured.</summary>
-    internal sealed record Result(ToaOptions Options);
-
+    private readonly TableOfAuthoritiesDialogSession _session;
     private readonly ComboBox _categoryCombo;
     private readonly CheckBox _passimBox;
     private readonly CheckBox _keepFormattingBox;
     private readonly ComboBox _leaderCombo;
-    private Result? _result;
+    private ToaOptions? _result;
 
     private TableOfAuthoritiesDialog(Window? owner, ToaOptions options)
     {
@@ -39,18 +37,17 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var state = TableOfAuthoritiesDialogPlanner.BuildInitialState(options);
-        var categories = TableOfAuthoritiesDialogPlanner.BuildCategoryChoices();
-        var leaders = TableOfAuthoritiesDialogPlanner.BuildTabLeaderChoices();
+        _session = TableOfAuthoritiesDialogPlanner.CreateSession(options);
+        var state = _session.State;
 
         _categoryCombo = new ComboBox
         {
             Height = metrics.ComboBoxHeight,
             Margin = new Thickness(0, 0, 0, metrics.ComboBottomMargin)
         };
-        foreach (var choice in categories)
+        foreach (var choice in _session.Categories)
             _categoryCombo.Items.Add(choice);
-        _categoryCombo.SelectedIndex = TableOfAuthoritiesDialogPlanner.SelectCategoryIndex(categories, state.CategoryFilter);
+        _categoryCombo.SelectedIndex = state.CategoryIndex;
 
         _passimBox = new CheckBox
         {
@@ -70,9 +67,15 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
             Height = metrics.ComboBoxHeight,
             Margin = new Thickness(0, 0, 0, metrics.ComboBottomMargin)
         };
-        foreach (var choice in leaders)
+        foreach (var choice in _session.TabLeaders)
             _leaderCombo.Items.Add(choice);
-        _leaderCombo.SelectedIndex = TableOfAuthoritiesDialogPlanner.SelectTabLeaderIndex(leaders, state.TabLeader);
+        _leaderCombo.SelectedIndex = state.TabLeaderIndex;
+        _categoryCombo.SelectionChanged += (_, _) => _session.UpdateCategory(_categoryCombo.SelectedIndex);
+        _passimBox.Checked += (_, _) => _session.UpdateUsePassim(true);
+        _passimBox.Unchecked += (_, _) => _session.UpdateUsePassim(false);
+        _keepFormattingBox.Checked += (_, _) => _session.UpdateKeepOriginalFormatting(true);
+        _keepFormattingBox.Unchecked += (_, _) => _session.UpdateKeepOriginalFormatting(false);
+        _leaderCombo.SelectionChanged += (_, _) => _session.UpdateTabLeader(_leaderCombo.SelectedIndex);
 
         var buttons = DialogButtonRowFactory.Create(
             Accept,
@@ -105,60 +108,32 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
 
     private void Accept()
     {
-        var categoryFilter = (_categoryCombo.SelectedItem as TableOfAuthoritiesCategoryChoice)?.Category;
-        var leader = (_leaderCombo.SelectedItem as TableOfAuthoritiesTabLeaderChoice)?.Leader ?? ToaTabLeader.Dots;
-        var state = new TableOfAuthoritiesDialogState(
-            _passimBox.IsChecked == true,
-            _keepFormattingBox.IsChecked == true,
-            categoryFilter,
-            leader);
+        SynchronizeSession();
+        var acceptance = _session.PlanAcceptance();
+        if (!acceptance.IsAccepted)
+        {
+            FocusValidation(acceptance.Validation?.Field);
+            return;
+        }
 
-        _result = new Result(TableOfAuthoritiesDialogPlanner.BuildOptions(state));
+        _result = acceptance.Options;
         Close();
     }
 
-    // -----------------------------------------------------------------------
-    // Test seam
-    // -----------------------------------------------------------------------
-
-    /// <summary>
-    /// Test seam: construct the dialog without showing it so STA tests can exercise the control wiring.
-    /// Seed values default to: All categories, passim=false, keep-formatting=false, Dots leader.
-    /// </summary>
-    internal static TableOfAuthoritiesDialog CreateForTest(
-        bool passim = false,
-        bool keepFormatting = false,
-        CitationCategory? categoryFilter = null,
-        ToaTabLeader leader = ToaTabLeader.Dots)
+    private void SynchronizeSession()
     {
-        var dlg = new TableOfAuthoritiesDialog(
-            owner: null,
-            options: new ToaOptions
-            {
-                UsePassim = passim,
-                KeepOriginalFormatting = keepFormatting,
-                CategoryFilter = categoryFilter,
-                TabLeader = leader
-            });
-
-        dlg._categoryCombo.SelectedIndex = TableOfAuthoritiesDialogPlanner.SelectCategoryIndex(
-            dlg._categoryCombo.Items.OfType<TableOfAuthoritiesCategoryChoice>().ToList(),
-            categoryFilter);
-
-        dlg._leaderCombo.SelectedIndex = TableOfAuthoritiesDialogPlanner.SelectTabLeaderIndex(
-            dlg._leaderCombo.Items.OfType<TableOfAuthoritiesTabLeaderChoice>().ToList(),
-            leader);
-
-        return dlg;
+        _session.UpdateCategory(_categoryCombo.SelectedIndex);
+        _session.UpdateUsePassim(_passimBox.IsChecked is true);
+        _session.UpdateKeepOriginalFormatting(_keepFormattingBox.IsChecked is true);
+        _session.UpdateTabLeader(_leaderCombo.SelectedIndex);
     }
 
-    /// <summary>
-    /// Test seam: run Accept logic and return the produced <see cref="Result"/> without closing the window.
-    /// </summary>
-    internal Result? AcceptForTest()
+    private void FocusValidation(TableOfAuthoritiesDialogField? field)
     {
-        Accept();
-        return _result;
+        var target = field == TableOfAuthoritiesDialogField.TabLeader
+            ? _leaderCombo
+            : _categoryCombo;
+        target.Focus();
     }
 
     // -----------------------------------------------------------------------
@@ -166,10 +141,10 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// Show the Table of Authorities options dialog. Returns the chosen <see cref="Result"/>, or null if
+    /// Show the Table of Authorities options dialog. Returns the chosen <see cref="ToaOptions"/>, or null if
     /// cancelled.
     /// </summary>
-    public static Result? Prompt(Window? owner, ToaOptions? options = null)
+    public static ToaOptions? Prompt(Window? owner, ToaOptions? options = null)
     {
         var dlg = new TableOfAuthoritiesDialog(owner, options ?? ToaOptions.Default);
         dlg.ShowDialog();

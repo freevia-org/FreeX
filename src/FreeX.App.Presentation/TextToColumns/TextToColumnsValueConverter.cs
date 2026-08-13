@@ -32,7 +32,10 @@ public static class TextToColumnsValueConverter
             // then date-like-text, then boolean, then text fallback chain. Number is tried before
             // date so an ordinary/grouped numeric literal is never misread as a date.
             TextToColumnsColumnFormat.General when TryParseNumber(text, advancedOptions, out var generalNumber) => new NumberValue(generalNumber),
-            TextToColumnsColumnFormat.General when TryParseGeneralDate(text, out var generalDate) => new DateTimeValue(generalDate.ToOADate()),
+            TextToColumnsColumnFormat.General when ExcelDateEntryParser.TryParseCurrentCulture(
+                text,
+                allowTimeOnly: false,
+                out var generalDate) => new DateTimeValue(generalDate.ToOADate()),
             TextToColumnsColumnFormat.General when IsBooleanText(text, out var generalBool) => new BoolValue(generalBool),
             _ when TryParseNumber(text, advancedOptions, out var number) => new NumberValue(number),
             _ when IsBooleanText(text, out var value) => new BoolValue(value),
@@ -141,55 +144,6 @@ public static class TextToColumnsValueConverter
         var decimalSeparator = Regex.Escape(culture.NumberFormat.NumberDecimalSeparator);
         var pattern = $@"^[+-]?\d{{1,3}}({groupSeparator}\d{{3}})*({decimalSeparator}\d*)?[+-]?$";
         return Regex.IsMatch(text.Trim(), pattern);
-    }
-
-    // General-format date coercion: honors the CURRENT CULTURE's own date-part order (day-first,
-    // month-first, etc.), mirroring FreeX.App.Services.CellEntryParser.TryParseCurrentCultureDate's
-    // typed-cell-entry behavior. The logic is duplicated here (rather than referenced) because
-    // FreeX.App.Services depends on FreeX.App.Presentation, so a reverse reference would be circular.
-    private static bool TryParseGeneralDate(string text, out DateTime date)
-    {
-        date = default;
-        if (string.IsNullOrEmpty(CultureInfo.CurrentCulture.Name) || !LooksLikeGeneralDateCandidate(text))
-            return false;
-
-        // Clone so the two-digit-year window can be overridden to Excel's documented 1930-2029
-        // rule (30-99 -> 19xx, 00-29 -> 20xx). .NET's default Calendar.TwoDigitYearMax is 2049,
-        // which would misdate e.g. "6/15/45" to 2045 instead of Excel's 1945.
-        var culture = (CultureInfo)CultureInfo.CurrentCulture.Clone();
-        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
-
-        if (!DateTime.TryParse(text, culture, DateTimeStyles.NoCurrentDateDefault, out date))
-            return false;
-
-        // Excel's earliest representable date is 1/1/1900 (serial 1); text that parses to an
-        // earlier date is left as plain text/number instead of becoming a negative-serial value.
-        return date.Date >= new DateTime(1900, 1, 1);
-    }
-
-    // Only attempt a date parse when the text already "looks like" a date -- otherwise
-    // DateTime.TryParse is lenient enough to misread plain numbers/fractions. '/' and '-' are
-    // universally treated by Excel as date separators regardless of locale; '.' only counts when
-    // it is the current culture's own actual date separator (e.g. de-DE/it-IT), otherwise a plain
-    // decimal-looking string like "1.2.3" under en-US (whose date separator is '/') would be
-    // misread as a date instead of staying text. See FreeX.Core.IO.DateEntryShapeRecognizer for
-    // the shared, single-source implementation of this heuristic (also used by
-    // DelimitedTextWorkbookReader's CSV import and CellEntryParser's typed-cell-entry path) --
-    // including its year-less two-digit-group "M/d"/"M-d" rule (e.g. a bare "3/4" is a date to
-    // Excel, matching CSV import and typed cell entry).
-    private static bool LooksLikeGeneralDateCandidate(string text)
-    {
-        var cultureDateSeparator = CultureInfo.CurrentCulture.DateTimeFormat.DateSeparator;
-        var dotCountsAsDateSeparator = cultureDateSeparator.Length == 1 && cultureDateSeparator[0] == '.';
-
-        // Text-to-Columns has no separate time-parsing step for the General column format, so a
-        // standalone colon must not qualify as a date candidate on its own (colonAlwaysQualifies:
-        // false); this matches the pre-existing behavior, where a colon was never treated as a
-        // date separator here at all.
-        return DateEntryShapeRecognizer.LooksLikeDateCandidate(
-            text.AsSpan(),
-            dotCountsAsDateSeparator,
-            colonAlwaysQualifies: false);
     }
 
     private static bool TryParseDate(string text, DatePartOrder partOrder, out DateTime date)

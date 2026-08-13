@@ -10,7 +10,7 @@ public sealed partial class ColorPickerDialogTests
     [Fact]
     public void BuildDefaultSwatches_ReturnsNamedHexColorsWithModelColorValues()
     {
-        var swatches = ColorPickerDialog.BuildDefaultSwatches();
+        var swatches = CellColorPalettePlanner.BuildDefaultSwatches();
 
         swatches.Should().Contain(sw => sw.Hex == "#000000" && sw.Color == CellColor.Black);
         swatches.Should().Contain(sw => sw.Hex == "#FFFFFF" && sw.Color == CellColor.White);
@@ -21,7 +21,7 @@ public sealed partial class ColorPickerDialogTests
     [Fact]
     public void BuildThemePalette_ReturnsExcelLikeThemeColumnsWithShades()
     {
-        var columns = ColorPickerDialog.BuildThemePalette();
+        var columns = CellColorPalettePlanner.BuildThemePalette();
 
         columns.Should().HaveCount(10);
         columns.Should().OnlyContain(column => column.Shades.Count == 6);
@@ -38,14 +38,15 @@ public sealed partial class ColorPickerDialogTests
             "Accent 6");
         columns[0].Shades[0].Hex.Should().Be("#000000");
         columns[1].Shades[0].Hex.Should().Be("#FFFFFF");
-        columns[4].Shades[0].Hex.Should().Be("#4472C4");
+        columns[4].Shades[0].Color.Should().Be(WorkbookTheme.Office.ResolveColor(WorkbookThemeColorSlot.Accent1));
+        columns[4].Shades[0].Hex.Should().Be("#156082");
         columns.SelectMany(column => column.Shades).Select(swatch => swatch.Hex).Should().OnlyHaveUniqueItems();
     }
 
     [Fact]
     public void BuildStandardSwatches_ReturnsExcelLikeStandardColorRow()
     {
-        var swatches = ColorPickerDialog.BuildStandardSwatches();
+        var swatches = CellColorPalettePlanner.BuildStandardSwatches();
 
         swatches.Should().HaveCount(10);
         swatches.Select(swatch => swatch.Hex).Should().Contain(["#C00000", "#FFFF00", "#7030A0"]);
@@ -54,7 +55,7 @@ public sealed partial class ColorPickerDialogTests
     [Fact]
     public void BuildCustomSpectrumSwatches_ReturnsHueAndSaturationGrid()
     {
-        var swatches = ColorPickerDialog.BuildCustomSpectrumSwatches();
+        var swatches = CellColorPalettePlanner.BuildCustomSpectrumSwatches();
 
         swatches.Should().HaveCount(48);
         swatches.Select(swatch => swatch.Hex).Should().OnlyHaveUniqueItems();
@@ -95,16 +96,8 @@ public sealed partial class ColorPickerDialogTests
                     .ToArray();
 
                 firstRow.Should().Equal(
-                    new CellColor(0x00, 0x00, 0x00),
-                    new CellColor(0xFF, 0xFF, 0xFF),
-                    new CellColor(0x44, 0x54, 0x6A),
-                    new CellColor(0xE7, 0xE6, 0xE6),
-                    new CellColor(0x44, 0x72, 0xC4),
-                    new CellColor(0xED, 0x7D, 0x31),
-                    new CellColor(0xA5, 0xA5, 0xA5),
-                    new CellColor(0xFF, 0xC0, 0x00),
-                    new CellColor(0x5B, 0x9B, 0xD5),
-                    new CellColor(0x70, 0xAD, 0x47));
+                    CellColorPalettePlanner.BuildThemePalette()
+                        .Select(column => column.Shades[0].Color));
             }
             finally
             {

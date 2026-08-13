@@ -251,25 +251,16 @@ public static partial class ChartRenderer
         out double[] positions)
     {
         dateAxis = null;
-        positions = [];
-        if (!chart.XAxisIsDateAxis || categories.Count == 0)
-            return false;
-
-        var values = new double[categories.Count];
-        var minValue = double.PositiveInfinity;
-        var maxValue = double.NegativeInfinity;
-        for (var index = 0; index < categories.Count; index++)
+        if (!ChartRenderPolicyPlanner.TryResolveDateCategoryPositions(
+                chart,
+                categories,
+                out positions,
+                out var minValue,
+                out var maxValue))
         {
-            if (!TryParseStockDateCategory(categories[index], out var parsed))
-                return false;
-
-            var value = DateTimeAxis.ToDouble(parsed.Date);
-            values[index] = value;
-            if (value < minValue) minValue = value;
-            if (value > maxValue) maxValue = value;
+            return false;
         }
 
-        positions = values;
         dateAxis = new DateTimeAxis
         {
             Position = AxisPosition.Bottom,
@@ -298,16 +289,24 @@ public static partial class ChartRenderer
     /// </summary>
     private static void ApplyAxisCrossesPosition(Axis axis, ChartAxisCrosses crosses)
     {
-        if (crosses != ChartAxisCrosses.Maximum)
+        var side = axis.Position switch
+        {
+            AxisPosition.Bottom => AxisSide.Bottom,
+            AxisPosition.Top => AxisSide.Top,
+            AxisPosition.Left => AxisSide.Left,
+            AxisPosition.Right => AxisSide.Right,
+            _ => (AxisSide?)null,
+        };
+        if (side is not { } currentSide)
             return;
 
-        axis.Position = axis.Position switch
+        axis.Position = ChartRenderPolicyPlanner.ResolveAxisSide(currentSide, crosses) switch
         {
-            AxisPosition.Bottom => AxisPosition.Top,
-            AxisPosition.Top => AxisPosition.Bottom,
-            AxisPosition.Left => AxisPosition.Right,
-            AxisPosition.Right => AxisPosition.Left,
-            _ => axis.Position
+            AxisSide.Bottom => AxisPosition.Bottom,
+            AxisSide.Top => AxisPosition.Top,
+            AxisSide.Left => AxisPosition.Left,
+            AxisSide.Right => AxisPosition.Right,
+            _ => axis.Position,
         };
     }
 
@@ -466,24 +465,7 @@ public static partial class ChartRenderer
     /// unit is set, so callers can distinguish "no scaling" from "scale by 1".
     /// </summary>
     private static double? GetAxisDisplayUnitDivisor(ChartAxisDisplayUnit? unit, double? customUnit)
-    {
-        if (customUnit is { } custom && double.IsFinite(custom) && custom > 0)
-            return custom;
-
-        return unit switch
-        {
-            ChartAxisDisplayUnit.Hundreds => 1e2,
-            ChartAxisDisplayUnit.Thousands => 1e3,
-            ChartAxisDisplayUnit.TenThousands => 1e4,
-            ChartAxisDisplayUnit.HundredThousands => 1e5,
-            ChartAxisDisplayUnit.Millions => 1e6,
-            ChartAxisDisplayUnit.TenMillions => 1e7,
-            ChartAxisDisplayUnit.HundredMillions => 1e8,
-            ChartAxisDisplayUnit.Billions => 1e9,
-            ChartAxisDisplayUnit.Trillions => 1e12,
-            _ => null
-        };
-    }
+        => ChartRenderPolicyPlanner.ResolveAxisDisplayUnitDivisor(unit, customUnit);
 
     /// <summary>
     /// Applies Excel's axis Display Unit to <paramref name="axis"/>: tick labels are divided by
@@ -515,22 +497,5 @@ public static partial class ChartRenderer
     }
 
     private static string GetAxisDisplayUnitLabel(ChartAxisDisplayUnit? unit, double? customUnit)
-    {
-        if (customUnit is { } custom && double.IsFinite(custom) && custom > 0)
-            return custom.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
-
-        return unit switch
-        {
-            ChartAxisDisplayUnit.Hundreds => "Hundreds",
-            ChartAxisDisplayUnit.Thousands => "Thousands",
-            ChartAxisDisplayUnit.TenThousands => "Ten Thousands",
-            ChartAxisDisplayUnit.HundredThousands => "Hundred Thousands",
-            ChartAxisDisplayUnit.Millions => "Millions",
-            ChartAxisDisplayUnit.TenMillions => "Ten Millions",
-            ChartAxisDisplayUnit.HundredMillions => "Hundred Millions",
-            ChartAxisDisplayUnit.Billions => "Billions",
-            ChartAxisDisplayUnit.Trillions => "Trillions",
-            _ => ""
-        };
-    }
+        => ChartRenderPolicyPlanner.ResolveAxisDisplayUnitLabel(unit, customUnit);
 }

@@ -52,7 +52,7 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
-            ShowOpenIssue($"More Fill Colors failed: {ex.Message}");
+            ShowOpenIssue(UiText.Format("MoreColors_FillFailedFormat", ex.Message));
         }
     }
 
@@ -69,7 +69,7 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
-            ShowOpenIssue($"More Font Colors failed: {ex.Message}");
+            ShowOpenIssue(UiText.Format("MoreColors_FontFailedFormat", ex.Message));
         }
     }
 
@@ -93,7 +93,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
         ApplyMoreColorsTextBoxChrome(hexBox);
-        AutomationProperties.SetName(hexBox, "Hex color");
+        AutomationProperties.SetName(hexBox, UiText.Get("ColorPicker_HexAutomationName"));
         AutomationProperties.SetAutomationId(hexBox, "MoreColorsHexBox");
 
         void SetSelected(CellColor color, bool updateHexBox)
@@ -145,7 +145,7 @@ public sealed partial class MainWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             IsDefault = true,
         };
         ApplyMoreColorsFixedButtonChrome(okButton, 80, isDefault: true);
@@ -159,7 +159,7 @@ public sealed partial class MainWindow
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             IsCancel = true,
         };
         ApplyMoreColorsFixedButtonChrome(cancelButton, 80);
@@ -175,7 +175,7 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Children =
             {
-                new TextBlock { Text = "Hex:", VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ColorPicker_Hex")), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 hexBox,
             },
         };
@@ -187,10 +187,10 @@ public sealed partial class MainWindow
             MinWidth = 252,
             Children =
             {
-                new TextBlock { Text = "Standard Colors", FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock { Text = UiText.Get("ColorPicker_StandardColors"), FontSize = 12, FontFamily = FormulaBarFontFamily },
                 swatchPanel,
                 hexRow,
-                new TextBlock { Text = "Preview", FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock { Text = UiText.Get("FormatCells_Preview"), FontSize = 12, FontFamily = FormulaBarFontFamily },
                 preview,
                 buttons,
             },

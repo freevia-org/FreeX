@@ -30,9 +30,7 @@ public static class QuickAnalysisShellPlanner
                     item.Group,
                     item.Label,
                     item.PreviewText,
-                    item.PreviewVisual,
-                    item.Route,
-                    item,
+                    QuickAnalysisPreviewIconPlanner.Plan(item.PreviewVisual),
                     QuickAnalysisShellActionPlanner.Plan(item, capabilities),
                     QuickAnalysisPlanner.BuildHoverPreview(selection, item),
                     $"QuickAnalysis_{item.Id}"));
@@ -120,9 +118,12 @@ public sealed record QuickAnalysisShellItemPlan(
     QuickAnalysisGroup Group,
     string Label,
     string ToolTip,
-    QuickAnalysisPreviewVisual PreviewVisual,
-    QuickAnalysisCommandRoute Route,
-    QuickAnalysisDisplayItem DisplayItem,
+    QuickAnalysisPreviewIconPlan PreviewIcon,
     QuickAnalysisShellAction Action,
     QuickAnalysisDisplayHoverPreview HoverPreview,
-    string AutomationId);
+    string AutomationId)
+{
+    public bool IsSupported => Action.Kind != QuickAnalysisShellActionKind.Deferred;
+
+    public bool IsEnabled => IsSupported || !string.IsNullOrWhiteSpace(Action.DeferredNote);
+}

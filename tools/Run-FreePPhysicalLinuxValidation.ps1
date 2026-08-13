@@ -30,21 +30,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
-
-function Invoke-External {
-    param([Parameter(Mandatory = $true)][string[]]$Arguments)
-    Push-Location $repoRoot
-    try {
-        & powershell.exe @Arguments | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw "powershell.exe exited with code $LASTEXITCODE." }
-    } finally { Pop-Location }
-}
+$resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 
 function Read-RunManifest {
     param([Parameter(Mandatory = $true)][string]$RunRoot)
@@ -52,21 +40,14 @@ function Read-RunManifest {
     if (-not (Test-Path -LiteralPath $sessionPath -PathType Leaf)) {
         throw "FreeP session metadata is missing: $sessionPath"
     }
-    $session = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+    $session = Read-VisualEvidenceJson -Path $sessionPath -MissingMessage "FreeP session metadata is missing: $sessionPath"
     $sessionDirectory = [IO.Path]::GetFullPath([string]$session.sessionDirectory)
     $manifestPath = Join-Path $sessionDirectory "physical-validation/freep-physical-linux-wave13b.json"
-    $deadline = (Get-Date).AddMinutes(3)
-    while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-        Start-Sleep -Milliseconds 500
-    }
-    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-        throw "FreeP physical validation did not write a manifest: $manifestPath"
-    }
     [pscustomobject]@{
         Session = $session
         SessionDirectory = $sessionDirectory
         ManifestPath = $manifestPath
-        Manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+        Manifest = Read-VisualEvidenceJson -Path $manifestPath -TimeoutMilliseconds 180000 -PollMilliseconds 500 -MissingMessage "FreeP physical validation did not write a manifest: $manifestPath"
     }
 }
 
@@ -97,7 +78,7 @@ function Start-ValidationRun {
     New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
     $arguments = @(
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-        "-Action", "Start", "-App", "FreeP", "-Port", "$Port",
+        "-Action", "Start", "-App", "FreeP", "-Host", "Validation", "-Port", "$Port",
         "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi",
         "-MemoryLimit", $MemoryLimit, "-OutputDir", $runRoot,
         "-CupsDryRun", "-CupsDryRunMode", $Mode,
@@ -110,7 +91,7 @@ function Start-ValidationRun {
 
     $started = $false
     try {
-        Invoke-External -Arguments $arguments
+        Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $arguments -WorkingDirectory $repoRoot -OutputToHost
         $started = $true
         $run = Read-RunManifest -RunRoot $runRoot
         Assert-Manifest -Run $run -ExpectedCupsMode $Mode
@@ -118,10 +99,10 @@ function Start-ValidationRun {
     } finally {
         if ($started) {
             try {
-                Invoke-External -Arguments @(
+                Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
                     "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                     "-Action", "Stop", "-App", "FreeP", "-Port", "$Port",
-                    "-OutputDir", $runRoot)
+                    "-OutputDir", $runRoot) -WorkingDirectory $repoRoot -OutputToHost
             } catch { Write-Warning "Could not stop harness-owned FreeP container: $($_.Exception.Message)" }
         }
     }

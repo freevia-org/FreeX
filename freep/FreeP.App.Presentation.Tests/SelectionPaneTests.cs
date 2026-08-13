@@ -30,11 +30,281 @@ public sealed class SelectionPaneTests
         plan.Items[2].CanMoveUp.Should().BeTrue();
         plan.Items[2].CanMoveDown.Should().BeFalse();
         plan.Items[0].SelectToolTipText.Should().Be("Select Shape");
+        plan.Items[0].SelectText.Should().Be("1.");
+        plan.Items[0].VisibilityActionText.Should().Be("Hide");
         plan.Items[0].VisibilityToolTipText.Should().Be("Hide object");
+        plan.Items[0].MoveUpText.Should().Be("\u25B2");
+        plan.Items[0].MoveDownText.Should().Be("\u25BC");
+        plan.Items[0].AccessibilityStateText.Should().Be("Selected");
+        plan.Items[1].AccessibilityStateText.Should().Be("Not selected");
+        plan.SelectedItemIndex.Should().Be(0);
+        plan.TitleText.Should().Be("Selection Pane");
+        plan.StatusText.Should().Be("Slide 3 (3 objects)");
         PresentationSelectionPaneItemPlan.RenameToolTipText.Should().Be("Rename object");
         PresentationSelectionPaneItemPlan.MoveUpToolTipText.Should().Be("Move toward front");
         PresentationSelectionPaneItemPlan.MoveDownToolTipText.Should().Be("Move toward back");
         plan.Items[1].VisibilityToolTipText.Should().Be("Show object");
+    }
+
+    [Fact]
+    public void Session_PlansVisibilityAndRenameTransitionsFromCurrentState()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "Transitions" };
+        slide.Shapes.Clear();
+        slide.Shapes.Add(MakeShape(17, "Original"));
+        presentation.Slides.Add(slide);
+        var session = new PresentationSelectionPaneSession(
+            new EditingSession(presentation, new PresentationCommandBus(presentation)));
+
+        var visibility = session.ToggleShapeVisibility(17);
+
+        visibility.Action.Should().Be(PresentationSelectionPaneActionKind.ToggleVisibility);
+        visibility.ActionApplied.Should().BeTrue();
+        visibility.ShouldRefreshPane.Should().BeTrue();
+        visibility.RestoreNameText.Should().BeNull();
+        visibility.PanePlan.Should().BeSameAs(session.CurrentPlan);
+        visibility.PanePlan.Items.Single().IsHidden.Should().BeTrue();
+
+        var renamed = session.RenameShape(17, "  Renamed  ");
+
+        renamed.Action.Should().Be(PresentationSelectionPaneActionKind.Rename);
+        renamed.ActionApplied.Should().BeTrue();
+        renamed.ShouldRefreshPane.Should().BeFalse();
+        renamed.RestoreNameText.Should().BeNull();
+        renamed.PanePlan.Items.Single().ShapeName.Should().Be("Renamed");
+
+        var rejected = session.RenameShape(17, "   ");
+
+        rejected.ActionApplied.Should().BeFalse();
+        rejected.ShouldRefreshPane.Should().BeFalse();
+        rejected.RestoreNameText.Should().Be("Renamed");
+        rejected.PanePlan.Items.Single().ShapeName.Should().Be("Renamed");
+    }
+
+    [Fact]
+    public void Session_SelectsBeforeMovingAndPreservesEditorEventOrder()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "Order" };
+        slide.Shapes.Clear();
+        slide.Shapes.Add(MakeShape(1, "Back"));
+        slide.Shapes.Add(MakeShape(2, "Front"));
+        presentation.Slides.Add(slide);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var session = new PresentationSelectionPaneSession(editor);
+        var events = new List<string>();
+        editor.SelectionChanged += (_, _) => events.Add("selection");
+        editor.Changed += () => events.Add("changed");
+
+        var selected = session.SelectShape(1);
+
+        selected.Action.Should().Be(PresentationSelectionPaneActionKind.Select);
+        selected.ActionApplied.Should().BeTrue();
+        selected.ShouldRefreshPane.Should().BeFalse();
+        selected.PanePlan.SelectedShapeId.Should().Be(1);
+        events.Should().Equal("selection");
+        events.Clear();
+
+        var moved = session.MoveShapeInReadingOrder(
+            2,
+            PresentationSelectionPaneMoveDirection.TowardBack);
+
+        events.Should().Equal("selection", "changed");
+        moved.Action.Should().Be(PresentationSelectionPaneActionKind.MoveInReadingOrder);
+        moved.ActionApplied.Should().BeTrue();
+        moved.ShouldRefreshPane.Should().BeTrue();
+        moved.PanePlan.SelectedShapeId.Should().Be(2);
+        slide.Shapes.Select(shape => shape.Id).Should().Equal(2u, 1u);
+        moved.PanePlan.Items.Select(item => item.ShapeId).Should().Equal(1u, 2u);
+    }
+
+    [Fact]
+    public void Planner_ValidatesCommandsAndPreservesUnknownShapeKinds()
+    {
+        var unknownKind = (SlideShapeKind)12345;
+        var slide = new Slide { Title = "Unknown shape" };
+        slide.Shapes.Clear();
+        var unknown = MakeShape(41, "   ");
+        unknown.Kind = unknownKind;
+        slide.Shapes.Add(MakeShape(40, "Back"));
+        slide.Shapes.Add(unknown);
+        var panePlan = PresentationSelectionPanePlanner.Build(slide, 0, [41]);
+        var unknownItem = panePlan.Items[0];
+
+        unknownItem.ShapeType.Should().Be(unknownKind);
+        unknownItem.ShapeTypeLabel.Should().Be("Object 41");
+        unknownItem.ShapeName.Should().Be("Object 41");
+
+        var rename = PresentationSelectionPanePlanner.PlanCommand(
+            PresentationSelectionPaneActionKind.Rename,
+            panePlan,
+            41,
+            proposedName: "  Quarterly object  ");
+        rename.CanExecute.Should().BeTrue();
+        rename.NormalizedName.Should().Be("Quarterly object");
+        rename.PreviousName.Should().Be("Object 41");
+
+        var blankRename = PresentationSelectionPanePlanner.PlanCommand(
+            PresentationSelectionPaneActionKind.Rename,
+            panePlan,
+            41,
+            proposedName: "   ");
+        blankRename.CanExecute.Should().BeFalse();
+        blankRename.NormalizedName.Should().BeNull();
+        blankRename.PreviousName.Should().Be("Object 41");
+
+        var moveBack = PresentationSelectionPanePlanner.PlanCommand(
+            PresentationSelectionPaneActionKind.MoveInReadingOrder,
+            panePlan,
+            41,
+            moveDirection: PresentationSelectionPaneMoveDirection.TowardBack);
+        moveBack.CanExecute.Should().BeTrue();
+        moveBack.ReadingOrderOffset.Should().Be(-1);
+
+        var movePastFront = PresentationSelectionPanePlanner.PlanCommand(
+            PresentationSelectionPaneActionKind.MoveInReadingOrder,
+            panePlan,
+            41,
+            moveDirection: PresentationSelectionPaneMoveDirection.TowardFront);
+        movePastFront.CanExecute.Should().BeFalse();
+        movePastFront.ReadingOrderOffset.Should().Be(1);
+
+        var moveWithoutDirection = PresentationSelectionPanePlanner.PlanCommand(
+            PresentationSelectionPaneActionKind.MoveInReadingOrder,
+            panePlan,
+            41);
+        moveWithoutDirection.CanExecute.Should().BeFalse();
+        moveWithoutDirection.ReadingOrderOffset.Should().Be(0);
+
+        PresentationSelectionPanePlanner.PlanCommand(
+                PresentationSelectionPaneActionKind.Select,
+                panePlan,
+                999)
+            .CanExecute.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ItemSession_CommitsOrCancelsRenameOnlyOnce()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "Rename lifecycle" };
+        slide.Shapes.Clear();
+        slide.Shapes.Add(MakeShape(17, "Original"));
+        presentation.Slides.Add(slide);
+        var paneSession = new PresentationSelectionPaneSession(
+            new EditingSession(presentation, new PresentationCommandBus(presentation)));
+
+        var committedItem = paneSession.CreateItemSession(17);
+        var committed = committedItem.CommitRename("  First  ");
+        var duplicateCommit = committedItem.CommitRename("Second");
+
+        committed.ActionApplied.Should().BeTrue();
+        committed.PanePlan.Items.Single().ShapeName.Should().Be("First");
+        duplicateCommit.ActionApplied.Should().BeFalse();
+        duplicateCommit.ShouldRefreshPane.Should().BeFalse();
+        slide.Shapes.Single().Name.Should().Be("First");
+
+        var cancelledItem = paneSession.CreateItemSession(17);
+        var cancelled = cancelledItem.CancelRename();
+        var commitAfterCancel = cancelledItem.CommitRename("Second");
+
+        cancelled.ShouldRefreshPane.Should().BeTrue();
+        cancelled.ActionApplied.Should().BeFalse();
+        commitAfterCancel.ActionApplied.Should().BeFalse();
+        slide.Shapes.Single().Name.Should().Be("First");
+
+        var rejectedItem = paneSession.CreateItemSession(17);
+        var rejected = rejectedItem.CommitRename("   ");
+        var commitAfterRejection = rejectedItem.CommitRename("Second");
+
+        rejected.ActionApplied.Should().BeFalse();
+        rejected.RestoreNameText.Should().Be("First");
+        commitAfterRejection.ActionApplied.Should().BeFalse();
+        slide.Shapes.Single().Name.Should().Be("First");
+    }
+
+    [Fact]
+    public void ItemSession_MapsMoveIntentAndRejectsCurrentBoundary()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "Move intent" };
+        slide.Shapes.Clear();
+        slide.Shapes.Add(MakeShape(1, "Back"));
+        slide.Shapes.Add(MakeShape(2, "Front"));
+        presentation.Slides.Add(slide);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var paneSession = new PresentationSelectionPaneSession(editor);
+        var frontItem = paneSession.CreateItemSession(2);
+
+        var rejected = frontItem.MoveTowardFront();
+
+        rejected.ActionApplied.Should().BeFalse();
+        rejected.ShouldRefreshPane.Should().BeFalse();
+        editor.SelectedShapeIds.Should().BeEmpty();
+        slide.Shapes.Select(shape => shape.Id).Should().Equal(1u, 2u);
+
+        var movedBack = frontItem.MoveTowardBack();
+
+        movedBack.ActionApplied.Should().BeTrue();
+        movedBack.ShouldRefreshPane.Should().BeTrue();
+        editor.SelectedShapeIds.Should().Equal(2u);
+        slide.Shapes.Select(shape => shape.Id).Should().Equal(2u, 1u);
+
+        var movedFront = frontItem.MoveTowardFront();
+
+        movedFront.ActionApplied.Should().BeTrue();
+        slide.Shapes.Select(shape => shape.Id).Should().Equal(1u, 2u);
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaSelectionPanes_KeepCommandsInSharedSessionAndNativeProjectionLocal()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var wpf = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "SelectionPane.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "SelectionPane.cs"));
+        var wpfWindow = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
+        var avaloniaWindow = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("PresentationSelectionPaneSession");
+            source.Should().Contain("_session.CreateItemSession(item.ShapeId)");
+            source.Should().Contain("ApplyTransition(itemSession.Select())");
+            source.Should().Contain("itemSession.CommitRename(rename.Text)");
+            source.Should().Contain("ApplyTransition(itemSession.CancelRename())");
+            source.Should().Contain("itemSession.ToggleVisibility()");
+            source.Should().Contain("itemSession.MoveTowardFront()");
+            source.Should().Contain("itemSession.MoveTowardBack()");
+            source.Should().Contain("item.VisibilityActionText");
+            source.Should().Contain("PresentationPaneAccessibilityPlanner.PlanItem(");
+            source.Should().Contain("PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)");
+            source.Should().Contain("BuildItem(");
+            source.Should().Contain("rename.LostFocus");
+            source.Should().Contain("Key.Enter");
+            source.Should().Contain("Key.Escape");
+            source.Should().NotContain("PresentationSelectionPanePlanner.Build(");
+            source.Should().NotContain("var committed");
+            source.Should().NotContain("_session.SelectShape(");
+            source.Should().NotContain("_session.RenameShape(");
+            source.Should().NotContain("_session.ToggleShapeVisibility(");
+            source.Should().NotContain("_session.MoveShapeInReadingOrder(");
+            source.Should().NotContain("PresentationSelectionPaneMoveDirection");
+            source.Should().NotContain("offset:");
+            source.Should().NotContain("item.IsHidden ?");
+            source.Should().NotContain("item.AccessibilityStateText");
+            source.Should().NotContain(".SetShapeName(");
+            source.Should().NotContain(".ToggleShapeHidden(");
+            source.Should().NotContain(".MoveSelectedShapeInReadingOrder(");
+        }
+
+        wpf.Should().Contain("System.Windows.Controls");
+        avalonia.Should().Contain("Avalonia.Controls");
+        foreach (var source in new[] { wpfWindow, avaloniaWindow })
+        {
+            source.Should().Contain("_selectionPane.CurrentPlan");
+            source.Should().NotContain("PresentationSelectionPanePlanner.Build(");
+        }
     }
 
     [Fact]

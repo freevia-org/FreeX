@@ -14,6 +14,7 @@ public sealed class ZoomDialogPlannerTests
     [Fact]
     public void SizeContract_MatchesWpfVisualEvidenceTarget()
     {
+        ZoomDialogPlanner.ValidationFallbackResourceKey.Should().Be("Zoom_EnterAValidZoomPercent");
         ZoomDialogPlanner.Width.Should().Be(300);
         ZoomDialogPlanner.Height.Should().Be(240);
         ZoomDialogPlanner.OuterPadding.Should().Be(12);
@@ -60,5 +61,19 @@ public sealed class ZoomDialogPlannerTests
         ZoomDialogPlanner.CreateFitSelectionResult(125)
             .Should()
             .Be(new ZoomDialogSelection(125, FitSelection: true));
+    }
+
+    [Fact]
+    public void Renderers_UsePlannerOwnedValidationFallbackKey()
+    {
+        var wpf = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "src", "FreeX.App.Host", "ZoomDialog.cs");
+        var avalonia = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var paired = wpf + Environment.NewLine + avalonia;
+
+        wpf.Should().Contain("ZoomDialogPlanner.ValidationFallbackResourceKey");
+        avalonia.Should().Contain("ZoomDialogPlanner.ValidationFallbackResourceKey");
+        paired.Should().NotContain("\"Zoom_EnterAValidZoomPercent\"");
     }
 }

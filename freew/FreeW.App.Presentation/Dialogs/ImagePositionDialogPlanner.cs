@@ -6,7 +6,9 @@ namespace FreeW.App.Presentation.Dialogs;
 public enum ImagePositionDialogField
 {
     HorizontalOffset,
-    VerticalOffset
+    HorizontalAnchor,
+    VerticalOffset,
+    VerticalAnchor
 }
 
 public sealed record ImagePositionDialogInitialState(
@@ -33,7 +35,21 @@ public sealed record ImagePositionDialogResult(
 
 public static class ImagePositionDialogPlanner
 {
+    public const string DefaultTitle = "Picture Position";
     public const string OffsetValidationMessage = "Enter valid numeric offsets in points.";
+
+    public static DialogSurfaceSpec<ImagePositionDialogField> Surface { get; } = new(
+        Title: DefaultTitle,
+        AutomationId: "ImagePositionDialog",
+        AutomationName: "Picture Position",
+        Fields:
+        [
+            new(ImagePositionDialogField.HorizontalOffset, "Horizontal offset (pt):", "ImagePositionHorizontalOffsetTextBox", "Horizontal offset"),
+            new(ImagePositionDialogField.HorizontalAnchor, "Relative to:", "ImagePositionHorizontalAnchorComboBox", "Horizontal position relative to"),
+            new(ImagePositionDialogField.VerticalOffset, "Vertical offset (pt):", "ImagePositionVerticalOffsetTextBox", "Vertical offset"),
+            new(ImagePositionDialogField.VerticalAnchor, "Relative to:", "ImagePositionVerticalAnchorComboBox", "Vertical position relative to"),
+        ],
+        ValidationAutomationId: "ImagePositionValidationText");
 
     public static readonly IReadOnlyList<ImageDialogChoice<HorizontalAnchor>> HorizontalAnchorItems =
     [

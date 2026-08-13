@@ -100,6 +100,33 @@ public static class GridObjectDragPlanner
         ToWpfPoint(PlannerCore.RotatePointAroundCenter(
             ToLayoutPoint(point), ToLayoutRect(objectRect), rotationDegrees));
 
+    public static ObjectDragCommitPlan PlanCommit(
+        ObjectDragKind dragKind,
+        Rect startRect,
+        Rect currentRect,
+        CellAddress startAnchor,
+        CellAddress? currentAnchor,
+        double width,
+        double height,
+        double rotationDegrees,
+        bool startFlipHorizontal,
+        bool startFlipVertical,
+        bool currentFlipHorizontal,
+        bool currentFlipVertical) =>
+        PlannerCore.PlanCommit(
+            ToCore(dragKind),
+            ToLayoutRect(startRect),
+            ToLayoutRect(currentRect),
+            startAnchor,
+            currentAnchor,
+            width,
+            height,
+            rotationDegrees,
+            startFlipHorizontal,
+            startFlipVertical,
+            currentFlipHorizontal,
+            currentFlipVertical);
+
     private static CoreDragKind ToCore(ObjectDragKind kind) => (CoreDragKind)(int)kind;
 
     private static ObjectDragKind ToWpf(CoreDragKind kind) => (ObjectDragKind)(int)kind;

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -11,94 +12,97 @@ namespace FreeW.App.Host;
 /// Exposes the document-level numbering properties stored in <c>w:footnotePr</c> /
 /// <c>w:endnotePr</c> in word/settings.xml: number format, start-at value and restart mode.
 /// </summary>
-internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    /// <summary>The settings the dialog produces.</summary>
-    internal sealed record Result(
-        NoteNumberFormat FootnoteFormat,
-        int FootnoteStartAt,
-        NoteNumberRestart FootnoteRestart,
-        NoteNumberFormat EndnoteFormat,
-        int EndnoteStartAt,
-        NoteNumberRestart EndnoteRestart);
-
+    private readonly FootnoteEndnoteOptionsDialogSession _session;
     private readonly ComboBox _footnoteFormatBox;
     private readonly TextBox _footnoteStartBox;
     private readonly ComboBox _footnoteRestartBox;
     private readonly ComboBox _endnoteFormatBox;
     private readonly TextBox _endnoteStartBox;
     private readonly ComboBox _endnoteRestartBox;
-    private Result? _result;
+    private FootnoteEndnoteOptionsDialogResult? _result;
 
     internal FootnoteEndnoteOptionsDialog(Window? owner, NoteNumberingOptions footnote, NoteNumberingOptions endnote)
     {
         Owner = owner;
-        Title = FootnoteEndnoteOptionsDialogPlanner.Title;
-        Width = FootnoteEndnoteOptionsDialogPlanner.DialogWidth;
+        var surface = FootnoteEndnoteOptionsDialogPlanner.Surface;
+        Title = surface.Title;
+        Width = surface.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var state = FootnoteEndnoteOptionsDialogPlanner.BuildInitialState(
+        _session = FootnoteEndnoteOptionsDialogPlanner.CreateSession(
             footnote,
             endnote,
             CultureInfo.CurrentCulture);
-
-        _footnoteFormatBox = ChoiceCombo(
-            FootnoteEndnoteOptionsDialogPlanner.FormatItems,
-            state.FootnoteFormatIndex);
-        _footnoteStartBox = StartBox(state.FootnoteStartAtText);
-        _footnoteRestartBox = ChoiceCombo(
-            FootnoteEndnoteOptionsDialogPlanner.FootnoteRestartItems,
-            state.FootnoteRestartIndex);
-        _endnoteFormatBox = ChoiceCombo(
-            FootnoteEndnoteOptionsDialogPlanner.FormatItems,
-            state.EndnoteFormatIndex);
-        _endnoteStartBox = StartBox(state.EndnoteStartAtText);
-        _endnoteRestartBox = ChoiceCombo(
-            FootnoteEndnoteOptionsDialogPlanner.EndnoteRestartItems,
-            state.EndnoteRestartIndex);
+        var state = _session.InitialState;
+        var controls = surface.Sections.ToDictionary(section => section.Kind, CreateControls);
+        (_footnoteFormatBox, _footnoteStartBox, _footnoteRestartBox) = controls[FootnoteEndnoteNoteKind.Footnote];
+        (_endnoteFormatBox, _endnoteStartBox, _endnoteRestartBox) = controls[FootnoteEndnoteNoteKind.Endnote];
 
         var outerStack = new StackPanel
         {
-            Margin = new Thickness(FootnoteEndnoteOptionsDialogPlanner.OuterMargin)
+            Margin = new Thickness(surface.OuterMargin)
         };
-
-        outerStack.Children.Add(SectionHeader(FootnoteEndnoteOptionsDialogPlanner.FootnotesSectionLabel));
-        outerStack.Children.Add(OptionsGrid(_footnoteFormatBox, _footnoteStartBox, _footnoteRestartBox));
-
-        outerStack.Children.Add(new Separator
+        foreach (var section in surface.Sections)
         {
-            Margin = new Thickness(
-                0,
-                FootnoteEndnoteOptionsDialogPlanner.SeparatorTopMargin,
-                0,
-                FootnoteEndnoteOptionsDialogPlanner.SeparatorBottomMargin)
-        });
-
-        outerStack.Children.Add(SectionHeader(FootnoteEndnoteOptionsDialogPlanner.EndnotesSectionLabel));
-        outerStack.Children.Add(OptionsGrid(_endnoteFormatBox, _endnoteStartBox, _endnoteRestartBox));
+            if (section.Kind != FootnoteEndnoteNoteKind.Footnote)
+            {
+                outerStack.Children.Add(new Separator
+                {
+                    Margin = new Thickness(0, surface.SeparatorTopMargin, 0, surface.SeparatorBottomMargin)
+                });
+            }
+            outerStack.Children.Add(SectionHeader(section, surface));
+            outerStack.Children.Add(OptionsGrid(section, controls[section.Kind], surface));
+        }
 
         var buttons = DialogButtonRowFactory.Create(
             Accept,
-            buttonWidth: FootnoteEndnoteOptionsDialogPlanner.ButtonWidth,
-            rowMargin: new Thickness(0, FootnoteEndnoteOptionsDialogPlanner.ActionTopMargin, 0, 0));
+            buttonWidth: surface.ButtonWidth,
+            rowMargin: new Thickness(0, surface.ActionTopMargin, 0, 0));
         outerStack.Children.Add(buttons);
 
         Content = outerStack;
         DialogFocus.FocusAndSelect(_footnoteStartBox);
+
+        (ComboBox Format, TextBox StartAt, ComboBox Restart) CreateControls(
+            FootnoteEndnoteSectionSpec section)
+        {
+            var format = ChoiceCombo(_session.FormatItems, state.FormatIndex(section.Kind));
+            var startAt = StartBox(state.StartAtText(section.Kind), section.Field(FootnoteEndnoteFieldKind.StartAt).MinWidth);
+            var restart = ChoiceCombo(_session.RestartItems(section.Kind), state.RestartIndex(section.Kind));
+            AutomationProperties.SetAutomationId(format, section.Field(FootnoteEndnoteFieldKind.NumberFormat).AutomationId);
+            AutomationProperties.SetAutomationId(startAt, section.Field(FootnoteEndnoteFieldKind.StartAt).AutomationId);
+            AutomationProperties.SetAutomationId(restart, section.Field(FootnoteEndnoteFieldKind.Numbering).AutomationId);
+            format.SelectionChanged += (_, _) => _session.UpdateIndex(section.Kind, FootnoteEndnoteFieldKind.NumberFormat, format.SelectedIndex);
+            startAt.TextChanged += (_, _) => _session.UpdateStartAt(section.Kind, startAt.Text);
+            restart.SelectionChanged += (_, _) => _session.UpdateIndex(section.Kind, FootnoteEndnoteFieldKind.Numbering, restart.SelectedIndex);
+            return (format, startAt, restart);
+        }
     }
 
-    private static TextBlock SectionHeader(string text) =>
-        new()
+    private static TextBlock SectionHeader(
+        FootnoteEndnoteSectionSpec section,
+        FootnoteEndnoteSurfaceSpec surface)
+    {
+        var header = new TextBlock
         {
-            Text = text,
+            Text = section.Label,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, FootnoteEndnoteOptionsDialogPlanner.SectionHeaderBottomMargin)
+            Margin = new Thickness(0, 0, 0, surface.SectionHeaderBottomMargin)
         };
+        AutomationProperties.SetAutomationId(header, section.AutomationId);
+        return header;
+    }
 
-    private static Grid OptionsGrid(ComboBox formatBox, TextBox startBox, ComboBox restartBox)
+    private static Grid OptionsGrid(
+        FootnoteEndnoteSectionSpec section,
+        (ComboBox Format, TextBox StartAt, ComboBox Restart) controls,
+        FootnoteEndnoteSurfaceSpec surface)
     {
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -107,14 +111,19 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, FootnoteEndnoteOptionsDialogPlanner.NumberFormatLabel, formatBox);
-        AddRow(grid, 1, FootnoteEndnoteOptionsDialogPlanner.StartAtLabel, startBox);
-        AddRow(grid, 2, FootnoteEndnoteOptionsDialogPlanner.NumberingLabel, restartBox);
+        var fields = new UIElement[] { controls.Format, controls.StartAt, controls.Restart };
+        for (var row = 0; row < section.Fields.Count; row++)
+            AddRow(grid, row, section.Fields[row].Label, fields[row], surface);
 
         return grid;
     }
 
-    private static void AddRow(Grid grid, int row, string label, UIElement field)
+    private static void AddRow(
+        Grid grid,
+        int row,
+        string label,
+        UIElement field,
+        FootnoteEndnoteSurfaceSpec surface)
     {
         var block = new TextBlock
         {
@@ -122,9 +131,9 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(
                 0,
-                FootnoteEndnoteOptionsDialogPlanner.FieldVerticalMargin,
-                FootnoteEndnoteOptionsDialogPlanner.LabelFieldGap,
-                FootnoteEndnoteOptionsDialogPlanner.FieldVerticalMargin)
+                surface.FieldVerticalMargin,
+                surface.LabelFieldGap,
+                surface.FieldVerticalMargin)
         };
         Grid.SetRow(block, row);
         Grid.SetColumn(block, 0);
@@ -133,7 +142,11 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
         Grid.SetRow(field, row);
         Grid.SetColumn(field, 1);
         if (field is FrameworkElement fe)
-            fe.Margin = new Thickness(0, 4, 0, 4);
+            fe.Margin = new Thickness(
+                0,
+                surface.FieldVerticalMargin,
+                0,
+                surface.FieldVerticalMargin);
         grid.Children.Add(field);
     }
 
@@ -148,55 +161,39 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
         return box;
     }
 
-    private static TextBox StartBox(string text) =>
-        new() { Text = text, MinWidth = FootnoteEndnoteOptionsDialogPlanner.StartAtMinWidth };
+    private static TextBox StartBox(string text, double minWidth) =>
+        new() { Text = text, MinWidth = minWidth };
 
     private void Accept()
     {
-        if (!TryBuildInput(out var result, out var validation))
+        SynchronizeSession();
+        var acceptance = _session.PlanAcceptance();
+        if (!acceptance.IsAccepted)
         {
             DialogMessageHelper.ShowWarning(
                 this,
-                validation?.Message ?? FootnoteEndnoteOptionsDialogPlanner.PositiveStartAtMessage);
-            FocusFailure(validation?.Field);
+                acceptance.Validation?.Message ?? FootnoteEndnoteOptionsDialogPlanner.PositiveStartAtMessage);
+            FocusFailure(acceptance.Validation?.Field);
             return;
         }
 
-        _result = new Result(
-            result!.FootnoteFormat,
-            result.FootnoteStartAt,
-            result.FootnoteRestart,
-            result.EndnoteFormat,
-            result.EndnoteStartAt,
-            result.EndnoteRestart);
+        _result = acceptance.Result;
         Close();
     }
 
     // The visual harness uses this non-modal seam to exercise the same planner and focus policy as an
     // attempted OK click without opening a second warning window during a static capture.
-    internal void ValidateForTest()
+    private void SynchronizeSession()
     {
-        _ = TryBuildInput(out _, out var validation);
-        FocusFailure(validation?.Field);
+        Synchronize(FootnoteEndnoteNoteKind.Footnote, _footnoteFormatBox, _footnoteStartBox, _footnoteRestartBox);
+        Synchronize(FootnoteEndnoteNoteKind.Endnote, _endnoteFormatBox, _endnoteStartBox, _endnoteRestartBox);
     }
 
-    private bool TryBuildInput(
-        out FootnoteEndnoteOptionsDialogResult? result,
-        out FootnoteEndnoteOptionsValidation? validation)
+    private void Synchronize(FootnoteEndnoteNoteKind note, ComboBox format, TextBox startAt, ComboBox restart)
     {
-        var input = new FootnoteEndnoteOptionsDialogInput(
-            _footnoteFormatBox.SelectedIndex,
-            _footnoteStartBox.Text,
-            _footnoteRestartBox.SelectedIndex,
-            _endnoteFormatBox.SelectedIndex,
-            _endnoteStartBox.Text,
-            _endnoteRestartBox.SelectedIndex);
-
-        return FootnoteEndnoteOptionsDialogPlanner.TryBuildResult(
-            input,
-            CultureInfo.CurrentCulture,
-            out result,
-            out validation);
+        _session.UpdateIndex(note, FootnoteEndnoteFieldKind.NumberFormat, format.SelectedIndex);
+        _session.UpdateStartAt(note, startAt.Text);
+        _session.UpdateIndex(note, FootnoteEndnoteFieldKind.Numbering, restart.SelectedIndex);
     }
 
     private void FocusFailure(FootnoteEndnoteOptionsDialogField? field)
@@ -211,7 +208,10 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
     /// Show the dialog seeded with the document's current footnote/endnote numbering settings;
     /// returns the chosen settings, or null if cancelled.
     /// </summary>
-    public static Result? Prompt(Window? owner, NoteNumberingOptions footnote, NoteNumberingOptions endnote)
+    public static FootnoteEndnoteOptionsDialogResult? Prompt(
+        Window? owner,
+        NoteNumberingOptions footnote,
+        NoteNumberingOptions endnote)
     {
         var dialog = new FootnoteEndnoteOptionsDialog(owner, footnote, endnote);
         dialog.ShowDialog();

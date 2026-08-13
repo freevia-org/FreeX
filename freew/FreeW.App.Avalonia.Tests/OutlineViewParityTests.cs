@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -5,6 +6,7 @@ using Avalonia.Headless;
 using Free.Shared.Ribbon;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -36,6 +38,49 @@ public sealed class OutlineViewParityTests
         document.Blocks.Add(new Paragraph("section body"));
         document.Blocks.Add(Heading(1, "Chapter Two"));
         return document;
+    }
+
+    [Fact]
+    public void Renderer_delegates_outline_state_and_operations_to_presentation_controller()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "Editing",
+            "OutlineView.cs"));
+
+        source.Should().Contain("using FreeW.App.Presentation.Editing;");
+        source.Should().Contain("new OutlineViewController(new OutlineViewOperations(");
+        source.Should().Contain("getDocument: () => _editor.Document");
+        source.Should().Contain("_controller.RowsChanged += RenderRows;");
+        source.Should().Contain("_controller.Refresh();");
+        source.Should().Contain("OutlineViewPlanner.ShowLevelOptions");
+        source.Should().Contain("OutlineViewPlanner.OutlineLevelOptions");
+        source.Should().Contain("OutlineViewPlanner.CommandPlans");
+        source.Should().Contain("_controller.Execute(command.Command)");
+        source.Should().Contain("_controller.SelectBlock(blockIndex)");
+        source.Should().Contain("_controller.SetShowLevel(level)");
+        source.Should().Contain("_controller.SetFirstLineOnly(firstLineOnly)");
+        source.Should().Contain("_controller.SetOutlineLevel(level)");
+        source.Should().Contain("_controller.CurrentOutlineLevel");
+        source.Should().Contain("_controller.VisibleRows");
+        source.Should().Contain("_controller.ProjectedRows");
+        source.Should().Contain("OutlineViewPlanner.FormatRow(projectedRow, RowMarkers)");
+        source.Should().Contain("navigateToBlock: blockIndex => _editor.MoveCaretToBlock(blockIndex, 0)",
+            "Avalonia adapts native caret movement once and the controller owns navigation decisions");
+        source.Should().Contain("\"[+] \"").And.Contain("\"[-] \"", "Avalonia owns its visual marker glyphs");
+        source.Should().NotContain("OutlineViewModel.Build(");
+        source.Should().NotContain("class ShowLevelItem");
+        source.Should().NotContain("class OutlineLevelItem");
+        source.Should().NotContain("_controller.Apply(");
+        source.Should().NotContain("_controller.Move(");
+        source.Should().NotContain("new string(' '");
+        source.Should().NotContain("(untitled heading)");
+        source.Should().NotContain("_selectedShowLevel");
+        source.Should().NotContain("_firstLineOnly");
+        source.Should().NotContain("CommitToModel");
     }
 
     [Fact]
@@ -99,18 +144,18 @@ public sealed class OutlineViewParityTests
             plainTextAfter = editor.Document.PlainText;
 
             outline.SelectBlockIndex(2);
-            outline.PromoteSelectedToHeading1ForTests();
+            outline.ExecuteForTests(OutlineCommand.PromoteToHeading1);
             outline.SelectBlockIndex(6);
-            outline.MoveSelectedForTests(moveUp: true);
+            outline.ExecuteForTests(OutlineCommand.MoveUp);
             selectedAfterMove = outline.SelectedBlockIndex;
             outline.SelectBlockIndex(2);
             expandedMarkerBefore = outline.RowDisplayTextForTests(2);
             var documentChangedCount = 0;
             editor.DocumentChanged += () => documentChangedCount++;
-            outline.CollapseSelectedForTests();
+            outline.ExecuteForTests(OutlineCommand.Collapse);
             collapsed = editor.IsHeadingCollapsed(2);
             collapsedMarker = outline.RowDisplayTextForTests(2);
-            outline.ExpandSelectedForTests();
+            outline.ExecuteForTests(OutlineCommand.Expand);
             expanded = !editor.IsHeadingCollapsed(2);
             expandedMarkerAfter = outline.RowDisplayTextForTests(2);
             collapseExpandDocumentChangedCount = documentChangedCount;
@@ -204,12 +249,12 @@ public sealed class OutlineViewParityTests
             dirtyBefore = callbacks.GetIsDirty();
             window.ToggleOutlineViewForTests();
             window.OutlineViewForTests.SelectBlockIndex(heading.BlockIndex);
-            window.OutlineViewForTests.CollapseSelectedForTests();
+            window.OutlineViewForTests.ExecuteForTests(OutlineCommand.Collapse);
             collapsed = window.Editor.IsHeadingCollapsed(heading.BlockIndex);
             collapsedMarker = window.OutlineViewForTests.RowDisplayTextForTests(heading.BlockIndex);
             dirtyAfterCollapse = callbacks.GetIsDirty();
 
-            window.OutlineViewForTests.ExpandSelectedForTests();
+            window.OutlineViewForTests.ExecuteForTests(OutlineCommand.Expand);
             expanded = !window.Editor.IsHeadingCollapsed(heading.BlockIndex);
             expandedMarker = window.OutlineViewForTests.RowDisplayTextForTests(heading.BlockIndex);
             dirtyAfterExpand = callbacks.GetIsDirty();

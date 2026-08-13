@@ -1,0 +1,19 @@
+<Project>
+  <ItemGroup>
+    <!-- Reuse FreeX artwork except where FreeW owns a reviewed product-specific variant. -->
+    <Content Include="$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
+             Exclude="$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\arrange-all.svg;$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\breaks.svg;$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\eraser.svg;$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\new-window.svg;$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\paste-special.svg;$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\show-comments.svg;$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\show-notes.svg;$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\sort.svg;$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\strikethrough.svg;$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-colors.svg;$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-effects.svg;$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-fonts.svg"
+             Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(MSBuildThisFileDirectory)Resources\CommandIconsSvg\**\*.svg"
+             Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(MSBuildThisFileDirectory)Resources\ContentIconsSvg\**\*.svg"
+             Link="Resources\ContentIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest">
+      <CopyToPublishDirectory Condition="'$(UseWPF)' != 'true'">PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

@@ -6,6 +6,8 @@ using FluentAssertions;
 
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.Ribbon;
+using FreeX.Ribbon.Definitions;
 using FreeX.Core.Model;
 
 using Xunit;
@@ -19,9 +21,9 @@ public sealed class AvaloniaPageLayoutScaleCommitTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
     [Theory]
-    [InlineData("pageLayout.width", "2 pages", 2, null, null)]
-    [InlineData("pageLayout.height", "3 pages", null, 3, null)]
-    [InlineData("pageLayout.scale", "85%", null, null, 85)]
+    [InlineData("Scale Width", "2 pages", 2, null, null)]
+    [InlineData("Scale Height", "3 pages", null, 3, null)]
+    [InlineData("Scale Percent", "85%", null, null, 85)]
     public async Task ScaleSelection_UpdatesWorksheetAndUndoRestoresDefault(
         string commandId,
         string selectedValue,
@@ -37,7 +39,7 @@ public sealed class AvaloniaPageLayoutScaleCommitTests
                 var sheet = window.Session.ActiveSheet;
                 sheet.ScaleToFit.Should().Be(WorksheetScaleToFit.Default);
 
-                var canonicalId = new RibbonCommandId(AvaloniaCommandIdAdapter.ToCanonical(commandId));
+                var canonicalId = FreeXRibbonCommandCatalog.GetRequired(commandId);
                 window.RibbonCommandRegistryForTest!.TryGet(canonicalId, out var command).Should().BeTrue();
 
                 command!.Execute(RibbonCommandContext.ForSelectedValue(selectedValue));

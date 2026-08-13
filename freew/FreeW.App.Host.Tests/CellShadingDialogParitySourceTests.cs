@@ -22,9 +22,9 @@ public sealed class CellShadingDialogParitySourceTests
     [Fact]
     public void Wpf_dialog_is_an_app_owned_harness_route_with_explicit_cancel_semantics()
     {
-        var factory = ReadWorkspaceSource("freew", "tools", "FreeW.DialogVisualHarness.Wpf", "WpfDialogRouteFactory.cs");
+        var catalog = ReadWorkspaceSource("freew", "tools", "FreeW.DialogVisualHarness", "FreeWDialogEvidenceCatalog.cs");
 
-        factory.Should().Contain("[\"cell-shading\"] = \"CellShadingDialog\"");
+        catalog.Should().Contain("Pair(\"cell-shading\", \"CellShadingDialog\")");
     }
 
     private static string ReadHostSource(params string[] parts) => ReadWorkspaceSource(new[] { "freew", "FreeW.App.Host" }.Concat(parts).ToArray());

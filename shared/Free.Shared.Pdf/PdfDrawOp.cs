@@ -1,3 +1,5 @@
+using Free.Shared.Drawing;
+
 namespace Free.Shared.Pdf;
 
 /// <summary>
@@ -64,9 +66,10 @@ public sealed record PdfPatternFill(
     PdfColor Background,
     double UnitScale = 1)
 {
-    public double TileWidth => (Kind == PdfPatternKind.Brick ? 12 : 8) * UnitScale;
-    public double TileHeight => 8 * UnitScale;
-    public double StrokeWidth => (Kind == PdfPatternKind.Brick ? 0.5 : 1) * UnitScale;
+    public DrawingMlPatternFillRecipe Recipe => DrawingMlPatternFillPlanner.RecipeFor(ToSharedFamily(Kind));
+    public double TileWidth => Recipe.TileWidth * UnitScale;
+    public double TileHeight => Recipe.TileHeight * UnitScale;
+    public double StrokeWidth => Recipe.Primitives.OfType<DrawingMlPatternFillLine>().FirstOrDefault()?.StrokeWidth * UnitScale ?? UnitScale;
 
     public static PdfPatternFill FromPreset(
         string? preset,
@@ -77,27 +80,32 @@ public sealed record PdfPatternFill(
         if (!double.IsFinite(unitScale) || unitScale <= 0)
             unitScale = 1;
 
-        var kind = preset switch
+        var kind = DrawingMlPatternFillPlanner.Classify(preset) switch
         {
-            "horz" or "ltHorz" or "medGray" or "dkHorz" or "pct5" or "pct10" or "pct20"
-                => PdfPatternKind.Horizontal,
-            "vert" or "ltVert" or "dkVert" or "pct25" or "pct30"
-                => PdfPatternKind.Vertical,
-            "diagStripe" or "ltDnDiag" or "dkDnDiag" or "dnDiag" or "pct50"
-                => PdfPatternKind.DownDiagonal,
-            "ltUpDiag" or "dkUpDiag" or "upDiag" or "pct60" or "pct70"
-                => PdfPatternKind.UpDiagonal,
-            "cross" or "ltGrid" or "dkGrid" or "pct75" or "pct80"
-                => PdfPatternKind.Cross,
-            "dotGrid" or "dotDmnd" or "smGrid" or "pct90"
-                => PdfPatternKind.Dot,
-            "horzBrick" or "divot" or "weave"
-                => PdfPatternKind.Brick,
+            DrawingMlPatternFillFamily.Horizontal => PdfPatternKind.Horizontal,
+            DrawingMlPatternFillFamily.Vertical => PdfPatternKind.Vertical,
+            DrawingMlPatternFillFamily.DownDiagonal => PdfPatternKind.DownDiagonal,
+            DrawingMlPatternFillFamily.UpDiagonal => PdfPatternKind.UpDiagonal,
+            DrawingMlPatternFillFamily.Cross => PdfPatternKind.Cross,
+            DrawingMlPatternFillFamily.Dot => PdfPatternKind.Dot,
+            DrawingMlPatternFillFamily.Brick => PdfPatternKind.Brick,
             _ => PdfPatternKind.DiagonalCross,
         };
 
         return new PdfPatternFill(kind, foreground, background, unitScale);
     }
+
+    private static DrawingMlPatternFillFamily ToSharedFamily(PdfPatternKind kind) => kind switch
+    {
+        PdfPatternKind.Horizontal => DrawingMlPatternFillFamily.Horizontal,
+        PdfPatternKind.Vertical => DrawingMlPatternFillFamily.Vertical,
+        PdfPatternKind.DownDiagonal => DrawingMlPatternFillFamily.DownDiagonal,
+        PdfPatternKind.UpDiagonal => DrawingMlPatternFillFamily.UpDiagonal,
+        PdfPatternKind.Cross => DrawingMlPatternFillFamily.Cross,
+        PdfPatternKind.Dot => DrawingMlPatternFillFamily.Dot,
+        PdfPatternKind.Brick => DrawingMlPatternFillFamily.Brick,
+        _ => DrawingMlPatternFillFamily.DiagonalCross,
+    };
 }
 
 /// <summary>Fills an axis-aligned rectangle with a shared tiled pattern.</summary>

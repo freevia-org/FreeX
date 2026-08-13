@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Layout;
@@ -11,13 +12,15 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class HyperlinkDialog : Window
+internal sealed partial class HyperlinkDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = 26 };
-    private static readonly IBrush WpfDefaultButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
+    private static IBrush WpfDefaultButtonBorderBrush => FreePBrushes.Accent;
     private static readonly IBrush WpfCancelButtonBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xF1, 0xF1, 0xF1));
 
+    private readonly HyperlinkDialogSession _session;
+    private readonly HyperlinkDialogSurfacePlan _surface;
     private readonly RadioButton _urlRadio;
     private readonly RadioButton _slideRadio;
     private readonly TextBox _urlBox;
@@ -25,22 +28,7 @@ internal sealed class HyperlinkDialog : Window
     private readonly TextBox _tooltipBox;
     private readonly TextBlock _validationText;
 
-    internal Hyperlink? Result { get; private set; }
-
-    internal bool ApplyForVisualEvidence(
-        HyperlinkDialogTargetKind targetKind,
-        string url,
-        int selectedSlideIndex,
-        string tooltip)
-    {
-        _urlRadio.IsChecked = targetKind == HyperlinkDialogTargetKind.Url;
-        _slideRadio.IsChecked = targetKind == HyperlinkDialogTargetKind.Slide;
-        _urlBox.Text = url;
-        _slideCombo.SelectedIndex = selectedSlideIndex;
-        _tooltipBox.Text = tooltip;
-        UpdateEnabled();
-        return Apply();
-    }
+    internal Hyperlink? Result => _session.Result;
 
     public HyperlinkDialog(IReadOnlyList<Slide> slides, Hyperlink? current = null)
         : this(HyperlinkDialogPlanner.BuildDialogRequest(slides, current))
@@ -50,49 +38,59 @@ internal sealed class HyperlinkDialog : Window
     internal HyperlinkDialog(HyperlinkDialogRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        _session = new HyperlinkDialogSession(request);
+        _surface = _session.Surface;
 
-        Title = HyperlinkDialogPlanner.Caption;
+        Title = _surface.Title;
         Width = 405.3333333333333;
         Height = 216;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         AvaloniaCompactDialogChrome.ApplyWindow(this, DialogChromeStyle);
+        AutomationProperties.SetName(this, _surface.Schema.AccessibleName);
+        AutomationProperties.SetAutomationId(this, _surface.Schema.AutomationId);
 
         _urlRadio = new RadioButton
         {
-            Content = "Web address:",
+            Content = _surface.TargetLabel(HyperlinkDialogTargetKind.Url),
             GroupName = "HyperlinkTarget",
             Margin = new Thickness(0, 0, 0, 4),
         };
         _slideRadio = new RadioButton
         {
-            Content = "Slide in this presentation:",
+            Content = _surface.TargetLabel(HyperlinkDialogTargetKind.Slide),
             GroupName = "HyperlinkTarget",
             Margin = new Thickness(0, 0, 0, 8),
         };
+        PresentationDialogControlAdapter.ApplySemantic(_urlRadio, _surface.TargetField(HyperlinkDialogTargetKind.Url));
+        PresentationDialogControlAdapter.ApplySemantic(_slideRadio, _surface.TargetField(HyperlinkDialogTargetKind.Slide));
         _urlBox = new TextBox
         {
             Margin = new Thickness(0, 0, 0, 4),
             MinWidth = 260,
         };
+        PresentationDialogControlAdapter.ApplySemantic(_urlBox, _surface.Field(HyperlinkDialogField.Url));
         _slideCombo = new ComboBox
         {
             Margin = new Thickness(0, 0, 0, 2),
             MinWidth = 260,
-            ItemsSource = request.SlideOptions,
-            SelectedIndex = request.SelectedSlideIndex,
+            ItemsSource = _session.SlideOptions,
+            SelectedIndex = _session.State.SelectedSlideIndex,
         };
+        PresentationDialogControlAdapter.ApplySemantic(_slideCombo, _surface.Field(HyperlinkDialogField.Slide));
         _tooltipBox = new TextBox
         {
             Margin = new Thickness(0, 0, 0, 8),
             MinWidth = 260,
         };
+        PresentationDialogControlAdapter.ApplySemantic(_tooltipBox, _surface.Field(HyperlinkDialogField.Tooltip));
         _validationText = new TextBlock
         {
-            Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            Foreground = FreePBrushes.Accent,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 8),
         };
+        PresentationDialogControlAdapter.ApplySemantic(_validationText, _surface.Field(HyperlinkDialogField.Validation));
         AvaloniaCompactDialogChrome.ApplyCompactRadioButton(_urlRadio, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyCompactRadioButton(_slideRadio, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_urlBox, DialogChromeStyle);
@@ -115,23 +113,30 @@ internal sealed class HyperlinkDialog : Window
             },
         });
 
-        var initial = request.InitialState;
-        _urlRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Url;
-        _slideRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Slide;
-        _urlBox.Text = initial.UrlText;
-        _tooltipBox.Text = initial.TooltipText;
+        var state = _session.State;
+        RenderInputState(state);
         _urlRadio.TabIndex = 0;
         _slideRadio.TabIndex = 1;
         _urlBox.TabIndex = 2;
         _slideCombo.TabIndex = 3;
         _tooltipBox.TabIndex = 4;
 
-        _urlRadio.IsCheckedChanged += (_, _) => UpdateEnabled();
-        _slideRadio.IsCheckedChanged += (_, _) => UpdateEnabled();
+        _urlRadio.IsCheckedChanged += (_, _) =>
+        {
+            if (_urlRadio.IsChecked == true)
+                RenderTargetState(_session.SelectTarget(HyperlinkDialogTargetKind.Url));
+        };
+        _slideRadio.IsCheckedChanged += (_, _) =>
+        {
+            if (_slideRadio.IsChecked == true)
+                RenderTargetState(_session.SelectTarget(HyperlinkDialogTargetKind.Slide));
+        };
+        _urlBox.TextChanged += (_, _) => _session.SetUrlText(_urlBox.Text);
+        _slideCombo.SelectionChanged += (_, _) => _session.SelectSlide(_slideCombo.SelectedIndex);
+        _tooltipBox.TextChanged += (_, _) => _session.SetTooltipText(_tooltipBox.Text);
 
         Content = BuildContent();
         Opened += (_, _) => ApplyWpfButtonChrome();
-        UpdateEnabled();
     }
 
     private Control BuildContent()
@@ -164,17 +169,17 @@ internal sealed class HyperlinkDialog : Window
         Grid.SetColumnSpan(radioPanel, 2);
         grid.Children.Add(radioPanel);
 
-        AddLabel(grid, "URL:", row: 1);
+        AddLabel(grid, _surface.UrlLabel, row: 1);
         Grid.SetRow(_urlBox, 1);
         Grid.SetColumn(_urlBox, 1);
         grid.Children.Add(_urlBox);
 
-        AddLabel(grid, "Target slide:", row: 2);
+        AddLabel(grid, _surface.SlideLabel, row: 2);
         Grid.SetRow(_slideCombo, 2);
         Grid.SetColumn(_slideCombo, 1);
         grid.Children.Add(_slideCombo);
 
-        AddLabel(grid, "Tooltip:", row: 3);
+        AddLabel(grid, _surface.TooltipLabel, row: 3);
         Grid.SetRow(_tooltipBox, 3);
         Grid.SetColumn(_tooltipBox, 1);
         grid.Children.Add(_tooltipBox);
@@ -190,8 +195,12 @@ internal sealed class HyperlinkDialog : Window
             Spacing = 13,
             Margin = new Thickness(0, 2, 0, 0),
         };
-        var ok = MakeDialogButton("OK", isDefault: true, OnOk);
-        var cancel = MakeDialogButton("Cancel", isDefault: false, () => Close(null));
+        var ok = MakeDialogButton(
+            _surface.Action(HyperlinkDialogAction.Accept),
+            OnOk);
+        var cancel = MakeDialogButton(
+            _surface.Action(HyperlinkDialogAction.Cancel),
+            () => Close(null));
         ok.TabIndex = 5;
         cancel.TabIndex = 6;
         buttons.Children.Add(ok);
@@ -216,32 +225,49 @@ internal sealed class HyperlinkDialog : Window
         grid.Children.Add(label);
     }
 
-    private static Button MakeDialogButton(string label, bool isDefault, Action onClick)
+    private static Button MakeDialogButton(
+        PresentationDialogActionPlan<HyperlinkDialogAction> action,
+        Action onClick)
     {
         var button = new Button
         {
-            Content = label,
-            IsDefault = isDefault,
-            IsCancel = !isDefault,
+            Content = action.Label,
+            IsDefault = action.IsDefault,
+            IsCancel = action.IsCancel,
         };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 75, isDefault: isDefault);
-        button.Background = isDefault ? Brushes.White : WpfCancelButtonBackgroundBrush;
-        button.BorderBrush = isDefault
+        AutomationProperties.SetName(button, action.AccessibleName);
+        AutomationProperties.SetAutomationId(button, action.AutomationId);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: 75,
+            isDefault: action.IsDefault);
+        button.Background = action.IsDefault ? FreePBrushes.White : WpfCancelButtonBackgroundBrush;
+        button.BorderBrush = action.IsDefault
             ? WpfDefaultButtonBorderBrush
-            : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8));
+            : FreePBrushes.DisabledBorder;
         button.Click += (_, _) => onClick();
         return button;
     }
 
-    private void UpdateEnabled()
+    private void RenderTargetState(HyperlinkDialogViewState state)
     {
-        var isUrl = _urlRadio.IsChecked == true;
-        _urlBox.IsEnabled = isUrl;
-        _slideCombo.IsEnabled = !isUrl;
+        _urlBox.IsEnabled = state.IsUrlInputEnabled;
+        _slideCombo.IsEnabled = state.IsSlideInputEnabled;
         _slideCombo.Opacity = 1;
-        _slideCombo.Foreground = isUrl
+        _slideCombo.Foreground = state.IsUrlInputEnabled
             ? new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70))
             : Brushes.Black;
+    }
+
+    private void RenderInputState(HyperlinkDialogViewState state)
+    {
+        _urlRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Url;
+        _slideRadio.IsChecked = state.TargetKind == HyperlinkDialogTargetKind.Slide;
+        _urlBox.Text = state.UrlText;
+        _slideCombo.SelectedIndex = state.SelectedSlideIndex;
+        _tooltipBox.Text = state.TooltipText;
+        RenderTargetState(state);
     }
 
     private void ApplyWpfButtonChrome()
@@ -258,13 +284,13 @@ internal sealed class HyperlinkDialog : Window
         var buttons = row.Children.OfType<Button>().ToArray();
         if (buttons.Length > 0)
         {
-            buttons[0].Background = Brushes.White;
+            buttons[0].Background = FreePBrushes.White;
             buttons[0].BorderBrush = WpfDefaultButtonBorderBrush;
         }
         if (buttons.Length > 1)
         {
             buttons[1].Background = WpfCancelButtonBackgroundBrush;
-            buttons[1].BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8));
+            buttons[1].BorderBrush = FreePBrushes.DisabledBorder;
         }
 
         var disabledComboBackground = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
@@ -300,25 +326,17 @@ internal sealed class HyperlinkDialog : Window
 
     private bool Apply()
     {
-        var selectedSlideId = (_slideCombo.SelectedItem as HyperlinkDialogSlideOption)?.Id;
-        var plan = HyperlinkDialogPlanner.BuildResult(
-            _urlRadio.IsChecked == true
-                ? HyperlinkDialogTargetKind.Url
-                : HyperlinkDialogTargetKind.Slide,
-            _urlBox.Text,
-            selectedSlideId,
-            _tooltipBox.Text);
+        var plan = _session.TryAccept();
 
         if (!plan.ShouldApply)
         {
             var validation = plan.Validation!;
-            _validationText.Text = validation.Message;
+            _validationText.Text = _session.State.ValidationText;
             _validationText.IsVisible = true;
             FocusField(validation.FocusField);
             return false;
         }
 
-        Result = plan.Result;
         _validationText.Text = string.Empty;
         _validationText.IsVisible = true;
         if (IsVisible)

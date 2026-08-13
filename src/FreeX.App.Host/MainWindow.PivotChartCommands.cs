@@ -3,6 +3,8 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using FreeX.App.Presentation.Charts.Editing;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -28,7 +30,11 @@ public partial class MainWindow
             return;
 
         if (!TryExecuteCommand(
-                new AddPivotChartCommand(_currentSheetId, pivotTable.Name, dialog.Result.ChartType, $"{pivotTable.Name} Chart"),
+                ChartCommandWorkflowPlanner.BuildAddPivotChartCommand(
+                    _currentSheetId,
+                    pivotTable,
+                    dialog.Result.ChartType,
+                    $"{pivotTable.Name} Chart"),
                 "Insert PivotChart"))
             return;
 
@@ -58,7 +64,12 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!TryExecuteCommand(new ChangePivotChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType), "Change PivotChart Type"))
+        if (!TryExecuteCommand(
+                ChartCommandWorkflowPlanner.BuildChangePivotChartTypeCommand(
+                    _currentSheetId,
+                    chart,
+                    dialog.Result.ChartType),
+                "Change PivotChart Type"))
             return;
 
         UpdateViewport();
@@ -88,19 +99,7 @@ public partial class MainWindow
             return;
 
         if (!TryExecuteCommand(
-                new ConfigurePivotChartOptionsCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    dialog.Result.ChartStyleId,
-                    dialog.Result.ShowFieldButtons,
-                    dialog.Result.ShowReportFilterButtons,
-                    dialog.Result.ShowAxisFieldButtons,
-                    dialog.Result.ShowValueFieldButtons,
-                    dialog.Result.ShowDataTable,
-                    dialog.Result.ShowDataTableLegendKeys,
-                    dialog.Result.RoundedCorners,
-                    dialog.Result.ShowHiddenData,
-                    dialog.Result.BlankDisplayMode),
+                ChartCommandWorkflowPlanner.BuildPivotChartOptionsCommand(_currentSheetId, chart, dialog.Result),
                 "PivotChart Options"))
             return;
 
@@ -131,7 +130,7 @@ public partial class MainWindow
         if (pivotTable is null)
             return;
 
-        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var headers = PivotSourceContext.ReadHeaders(_workbook, pivotTable, sheet);
         _pivotFieldMenuContextCaption = PivotUiPlanner.ResolvePivotChartFieldButtonCaption(pivotTable, headers, fieldButton);
         if (string.IsNullOrWhiteSpace(_pivotFieldMenuContextCaption))
             return;
@@ -149,7 +148,7 @@ public partial class MainWindow
         menu.IsOpen = true;
     }
 
-    private static PivotFieldDropZone? ResolvePivotChartFieldButtonZone(
+    private static PivotFieldBucket? ResolvePivotChartFieldButtonZone(
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
         string fieldButton,
@@ -158,19 +157,19 @@ public partial class MainWindow
         if (string.Equals(fieldButton, "Values", StringComparison.OrdinalIgnoreCase) ||
             PivotUiPlanner.FindDataFieldIndex(pivotTable, caption) is not null)
         {
-            return PivotFieldDropZone.Values;
+            return PivotFieldBucket.Values;
         }
 
         var sourceIndex = PivotUiPlanner.FindSourceFieldIndex(headers, caption);
         if (sourceIndex is null)
             return null;
 
-        if (pivotTable.PageFields.Any(field => field.SourceFieldIndex == sourceIndex.Value))
-            return PivotFieldDropZone.Filters;
-        if (pivotTable.ColumnFields.Any(field => field.SourceFieldIndex == sourceIndex.Value))
-            return PivotFieldDropZone.Columns;
-
-        return PivotFieldDropZone.Rows;
+        return PivotUiPlanner.ResolvePivotChartFieldArea(pivotTable, sourceIndex.Value) switch
+        {
+            PivotHeaderArea.Page => PivotFieldBucket.Filters,
+            PivotHeaderArea.Column => PivotFieldBucket.Columns,
+            _ => PivotFieldBucket.Rows
+        };
     }
 
     private static PivotTableModel? FindPivotTableByName(Sheet sheet, string name)
@@ -203,12 +202,15 @@ public partial class MainWindow
     private PivotChartFieldContextMenuState BuildPivotChartFieldContextMenuState()
     {
         var context = TryResolvePivotFieldMenuContext();
-        var filterState = context is { SourceFieldIndex: { } sourceIndex }
+        var filterState = context is { SourceFieldIndex: { } sourceIndex } &&
+                          ToPivotHeaderArea(context.Zone) is { } area
             ? PivotFieldFilterSummary.CreateState(
                 context.PivotTable,
                 sourceIndex,
+                area,
                 PivotUiPlanner.FieldCaption(context.Headers, sourceIndex),
-                ReadPivotFieldItems(context.Sheet, context.PivotTable, sourceIndex))
+                PivotSourceContext.ReadItems(_workbook, context.Sheet, context.PivotTable, sourceIndex),
+                WpfResourceKeyTextResolver.Instance)
             : null;
         var valueFieldIndex = context is null
             ? null

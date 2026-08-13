@@ -52,9 +52,9 @@ public sealed class InsertDepth2Tests
         return view;
     }
 
-    // Minimal callbacks for the required (non-optional) RibbonHostCallbacks fields; optional AV-INSERT2
+    // Minimal callbacks for the required (non-optional) FreeWRibbonHostExecutionPorts fields; optional AV-INSERT2
     // launchers can be supplied per test.
-    private static RibbonHostCallbacks Callbacks(
+    private static FreeWRibbonHostExecutionPorts Callbacks(
         Action? hyperlink = null,
         Action? editHyperlink = null,
         Action? hyperlinkTooltip = null,
@@ -90,7 +90,7 @@ public sealed class InsertDepth2Tests
     public void Registry_resolves_all_avinsert2_command_ids()
     {
         var view = MakeView();
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         var ids = new[]
         {
@@ -120,8 +120,8 @@ public sealed class InsertDepth2Tests
     public void Whole_ribbon_definition_resolves_in_registry()
     {
         // Ensures the new dropdowns/buttons added to the Insert tab are all wired (registry-completeness).
-        var definition = FreeWRibbon.BuildDefinition();
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), Callbacks());
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), Callbacks());
 
         var ids = definition.Tabs
             .SelectMany(t => t.Groups)
@@ -139,7 +139,7 @@ public sealed class InsertDepth2Tests
     {
         // The four AV-INSERT2 host callbacks must default to null so existing call sites still compile and
         // the registry no-ops when the shell did not supply them.
-        var callbacks = new RibbonHostCallbacks(
+        var callbacks = new FreeWRibbonHostExecutionPorts(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },
             ToggleReviewingPane: () => { }, ToggleRevealFormatting: () => { }, OpenFindReplaceDialog: () => { },
@@ -157,7 +157,7 @@ public sealed class InsertDepth2Tests
         callbacks.InsertTextFromFile.Should().BeNull();
 
         // Executing the dialog-driven commands with null callbacks must not throw.
-        var registry = FreeWRibbon.BuildRegistry(MakeView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(MakeView(), callbacks);
         Exec(registry, "freew.insert-hyperlink");
         Exec(registry, "freew.edit-hyperlink");
         Exec(registry, "freew.remove-hyperlink");
@@ -180,7 +180,7 @@ public sealed class InsertDepth2Tests
     {
         var view = MakeView("");
         // The dialog launcher is simulated by a callback that inserts a known link.
-        var registry = FreeWRibbon.BuildRegistry(view,
+        var registry = FreeWAvaloniaRibbonCommands.Build(view,
             Callbacks(hyperlink: () => view.InsertHyperlink("Anthropic", "https://anthropic.com")));
 
         Exec(registry, "freew.insert-hyperlink");
@@ -195,7 +195,7 @@ public sealed class InsertDepth2Tests
     public void Wpf_hyperlink_command_id_routes_to_existing_hyperlink_callback()
     {
         var view = MakeView("");
-        var registry = FreeWRibbon.BuildRegistry(view,
+        var registry = FreeWAvaloniaRibbonCommands.Build(view,
             Callbacks(hyperlink: () => view.InsertHyperlink("WPF Link", "https://wpf.example")));
 
         Exec(registry, "freew.hyperlink");
@@ -210,7 +210,7 @@ public sealed class InsertDepth2Tests
         var view = MakeView("");
         view.InsertHyperlink("Link", "https://old.example");
         view.MoveCaretToBlockForTest(0, 2);
-        var registry = FreeWRibbon.BuildRegistry(view,
+        var registry = FreeWAvaloniaRibbonCommands.Build(view,
             Callbacks(editHyperlink: () => view.EditHyperlink("https://new.example")));
 
         Exec(registry, "freew.edit-hyperlink");
@@ -225,7 +225,7 @@ public sealed class InsertDepth2Tests
         var view = MakeView("");
         view.InsertHyperlink("Link", "https://old.example");
         view.MoveCaretToBlockForTest(0, 2);
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         Exec(registry, "freew.remove-hyperlink");
 
@@ -240,7 +240,7 @@ public sealed class InsertDepth2Tests
         var view = MakeView("");
         view.InsertHyperlink("Link", "https://old.example");
         view.MoveCaretToBlockForTest(0, 2);
-        var registry = FreeWRibbon.BuildRegistry(view,
+        var registry = FreeWAvaloniaRibbonCommands.Build(view,
             Callbacks(hyperlinkTooltip: () => view.SetHyperlinkTooltip("Screen tip")));
 
         Exec(registry, "freew.hyperlink-tooltip");
@@ -266,7 +266,7 @@ public sealed class InsertDepth2Tests
     public void Insert_bookmark_command_marks_caret_paragraph_through_callback()
     {
         var view = MakeView("Target");
-        var registry = FreeWRibbon.BuildRegistry(view,
+        var registry = FreeWAvaloniaRibbonCommands.Build(view,
             Callbacks(bookmark: () => view.InsertBookmark("Mark1")));
 
         Exec(registry, "freew.insert-bookmark");
@@ -281,7 +281,7 @@ public sealed class InsertDepth2Tests
     public void Wpf_bookmark_command_ids_route_to_existing_bookmark_callback(string commandId)
     {
         var view = MakeView("Target");
-        var registry = FreeWRibbon.BuildRegistry(view,
+        var registry = FreeWAvaloniaRibbonCommands.Build(view,
             Callbacks(bookmark: () => view.InsertBookmark(commandId.Replace('.', '-'))));
 
         Exec(registry, commandId);
@@ -295,7 +295,7 @@ public sealed class InsertDepth2Tests
         var view = MakeView("Jump target");
         view.InsertBookmark("Target1");
         view.SetSelectionRangePublic(0, 0, 0, 4);
-        var registry = FreeWRibbon.BuildRegistry(view,
+        var registry = FreeWAvaloniaRibbonCommands.Build(view,
             Callbacks(linkBookmark: () => view.ApplyInternalLink("Target1")));
 
         Exec(registry, "freew.link-bookmark");
@@ -328,7 +328,7 @@ public sealed class InsertDepth2Tests
         view.LoadDocument(doc);
 
         var before = view.Document.Blocks.Count;
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
         Exec(registry, "freew.cover-page.default");
 
         view.Document.Blocks.Count.Should().BeGreaterThan(before, "cover-page inserts blocks at the start");
@@ -358,7 +358,7 @@ public sealed class InsertDepth2Tests
     public void Drop_cap_command_enlarges_leading_letter()
     {
         var view = MakeView("Hello");
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         Exec(registry, "freew.drop-cap.dropped");
 
@@ -394,7 +394,7 @@ public sealed class InsertDepth2Tests
     {
         var view = MakeView("Hello");
         view.ApplyDropCap();
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         Exec(registry, "freew.drop-cap.none");
 
@@ -418,7 +418,7 @@ public sealed class InsertDepth2Tests
         var ran = await OnUiThread(() =>
         {
             var droppedView = MakeView("Hello world from a wrapped paragraph");
-            var droppedRegistry = FreeWRibbon.BuildRegistry(droppedView, Callbacks());
+            var droppedRegistry = FreeWAvaloniaRibbonCommands.Build(droppedView, Callbacks());
             Exec(droppedRegistry, "freew.drop-cap.dropped");
             droppedView.Measure(new global::Avalonia.Size(816, 4000));
             var droppedPlan = droppedView.DropCapLayoutPlans.Single();
@@ -426,7 +426,7 @@ public sealed class InsertDepth2Tests
             droppedInset = droppedPlan.BodyTextLeftInsetDip;
 
             var inMarginView = MakeView("Margin body text keeps its column");
-            var inMarginRegistry = FreeWRibbon.BuildRegistry(inMarginView, Callbacks());
+            var inMarginRegistry = FreeWAvaloniaRibbonCommands.Build(inMarginView, Callbacks());
             hyphenAliasWorked = inMarginRegistry.TryGet("freew.drop-cap-in-margin", out _);
             Exec(inMarginRegistry, "freew.drop-cap-in-margin");
             inMarginView.Measure(new global::Avalonia.Size(816, 4000));
@@ -455,7 +455,7 @@ public sealed class InsertDepth2Tests
         doc.Properties.Title = "Doc Title";
         var view = new DocumentView();
         view.LoadDocument(doc);
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         Exec(registry, "freew.quick-parts.title");
 
@@ -472,7 +472,7 @@ public sealed class InsertDepth2Tests
     public void Quick_part_extended_document_property_inserts_live_field(string commandId, RunFieldKind expectedKind)
     {
         var view = MakeView("");
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         Exec(registry, commandId);
 
@@ -499,7 +499,7 @@ public sealed class InsertDepth2Tests
     public void Quick_part_snippet_inserts_text_through_callback()
     {
         var view = MakeView("");
-        var registry = FreeWRibbon.BuildRegistry(view,
+        var registry = FreeWAvaloniaRibbonCommands.Build(view,
             Callbacks(quickPart: () => view.InsertQuickPartText("Snippet body")));
 
         Exec(registry, "freew.quick-parts.snippet");
@@ -523,7 +523,7 @@ public sealed class InsertDepth2Tests
     public void Insert_file_command_uses_text_from_file_callback()
     {
         var invoked = 0;
-        var registry = FreeWRibbon.BuildRegistry(MakeView(""),
+        var registry = FreeWAvaloniaRibbonCommands.Build(MakeView(""),
             Callbacks(textFromFile: () => invoked++));
 
         Exec(registry, "freew.insert-file");
@@ -564,7 +564,7 @@ public sealed class InsertDepth2Tests
         source.Blocks.Clear();
         source.Blocks.Add(new Paragraph("Imported"));
         source.Blocks.Add(Table.Create(1, 1));
-        var registry = FreeWRibbon.BuildRegistry(view,
+        var registry = FreeWAvaloniaRibbonCommands.Build(view,
             Callbacks(textFromFile: () => view.InsertDocument(source)));
 
         Exec(registry, "freew.insert-file");
@@ -577,7 +577,7 @@ public sealed class InsertDepth2Tests
     public void Wordart_command_inserts_undoable_model_run()
     {
         var view = MakeView("");
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         Exec(registry, "freew.wordart");
 
@@ -594,7 +594,7 @@ public sealed class InsertDepth2Tests
     public void Object_command_inserts_embedded_object_placeholder()
     {
         var view = MakeView("");
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         Exec(registry, "freew.object");
 
@@ -618,7 +618,7 @@ public sealed class InsertDepth2Tests
         paragraph.Runs.Add(new Run("stale") { FieldKind = RunFieldKind.Author });
         var view = new DocumentView();
         view.LoadDocument(doc);
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         Exec(registry, "freew.update-fields");
 
@@ -638,7 +638,7 @@ public sealed class InsertDepth2Tests
         });
         var view = new DocumentView();
         view.LoadDocument(doc);
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         Exec(registry, "freew.toggle-field-codes");
 
@@ -658,7 +658,7 @@ public sealed class InsertDepth2Tests
     public void Equation_default_inserts_equation_run()
     {
         var view = MakeView("");
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         Exec(registry, "freew.equation.default");
 
@@ -673,7 +673,7 @@ public sealed class InsertDepth2Tests
     public void Equation_fraction_preset_inserts_fraction()
     {
         var view = MakeView("");
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         Exec(registry, "freew.equation.fraction");
 
@@ -696,7 +696,7 @@ public sealed class InsertDepth2Tests
     public void Equation_extended_gallery_preset_inserts_expected_structure(string commandId, MathRunKind expectedKind)
     {
         var view = MakeView("");
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
         Exec(registry, commandId);
 

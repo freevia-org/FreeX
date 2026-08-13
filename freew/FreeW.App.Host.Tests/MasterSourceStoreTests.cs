@@ -9,12 +9,18 @@ using Xunit;
 
 namespace FreeW.App.Host.Tests;
 
-public sealed class MasterSourceStoreTests
+public sealed class MasterSourceStoreTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.MasterSourceStoreTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
+    private string TemporaryPath(string fileName) => Path.Combine(_temporaryDirectory.Path, fileName);
+
     [Fact]
     public void MasterStore_AddSource_PersistsAndReloads()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"master-sources-test-{Guid.NewGuid()}.json");
+        var path = TemporaryPath("master-sources-test.json");
         try
         {
             var store1 = new MasterSourceStore();
@@ -118,7 +124,7 @@ public sealed class MasterSourceStoreTests
     [Fact]
     public void MasterStore_JsonRoundTrip_PreservesStructuredAuthors()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"master-sources-structured-{Guid.NewGuid()}.json");
+        var path = TemporaryPath("master-sources-structured.json");
         try
         {
             var store = new MasterSourceStore
@@ -166,7 +172,7 @@ public sealed class MasterSourceStoreTests
     [Fact]
     public void MasterStore_JsonRoundTrip_PreservesReportInstitution()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"master-sources-report-{Guid.NewGuid()}.json");
+        var path = TemporaryPath("master-sources-report.json");
         try
         {
             var store = new MasterSourceStore
@@ -207,7 +213,7 @@ public sealed class MasterSourceStoreTests
     [Fact]
     public void MasterStore_JsonRoundTrip_PreservesStructuredAccessedDate()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"master-sources-accessed-{Guid.NewGuid()}.json");
+        var path = TemporaryPath("master-sources-accessed.json");
         try
         {
             var store = new MasterSourceStore
@@ -246,7 +252,7 @@ public sealed class MasterSourceStoreTests
     [Fact]
     public void MasterStore_JsonRoundTrip_PreservesBookSectionFields()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"master-sources-book-section-{Guid.NewGuid()}.json");
+        var path = TemporaryPath("master-sources-book-section.json");
         try
         {
             var store = new MasterSourceStore
@@ -294,7 +300,7 @@ public sealed class MasterSourceStoreTests
     [Fact]
     public void MasterStore_JsonRoundTrip_PreservesConferenceProceedingsFields()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"master-sources-conference-{Guid.NewGuid()}.json");
+        var path = TemporaryPath("master-sources-conference.json");
         try
         {
             var store = new MasterSourceStore
@@ -338,7 +344,7 @@ public sealed class MasterSourceStoreTests
     [Fact]
     public void MasterStore_JsonRoundTrip_PreservesSourceManagerBreadthFields()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"master-sources-breadth-{Guid.NewGuid()}.json");
+        var path = TemporaryPath("master-sources-breadth.json");
         try
         {
             var store = new MasterSourceStore

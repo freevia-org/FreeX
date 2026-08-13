@@ -1,5 +1,4 @@
 using Free.Shared.AppServices;
-using Free.Shared.Localization;
 using Free.Shared.Shell;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
@@ -9,6 +8,29 @@ namespace FreeW.App.Presentation.Backstage;
 
 public static class BackstagePaneSurfacePlanner
 {
+    public const string WindowAutomationId = "FreeWBackstageWindow";
+
+    public static BackstagePaneComposerProfile ComposerProfile { get; } = new()
+    {
+        Metrics = new BackstagePaneMetrics(
+            HeadingFontSize: 26,
+            HeadingMargin: new BackstageVisualThickness(0, 0, 0, 18),
+            DescriptionFontSize: 12,
+            SectionHeaderFontSize: 15,
+            SectionHeaderMargin: new BackstageVisualThickness(0, 16, 0, 6),
+            DetailGridMargin: new BackstageVisualThickness(0, 2),
+            DetailLabelColumnWidth: 120,
+            DetailFontSize: 12,
+            ActionFontSize: 14,
+            ActionDescriptionFontSize: 11,
+            ActionRowMargin: new BackstageVisualThickness(0, 0, 0, 10),
+            ActionDescriptionMargin: new BackstageVisualThickness(0, 2, 0, 0)),
+        PaneSpacing = 0,
+        UseLinkActionRows = true,
+        UseTextBlockActionContent = true,
+        WrapPanesInScrollViewer = true,
+    };
+
     public static BackstageHomePaneVisualMetrics HomePaneVisualMetrics { get; } =
         new(
             PaneMaxWidth: 720,
@@ -70,6 +92,7 @@ public static class BackstagePaneSurfacePlanner
             DescriptionMargin: new(0, 2, 0, 0));
 
     private const string OpenSearchAutomationName = "Search recent documents";
+    private const string OpenSearchAutomationId = "OpenSearchBox";
     private const string OpenDocumentsTabLabel = "Documents";
     private const string OpenFoldersTabLabel = "Folders";
     private const string OpenEmptyDocumentsText = "No recent documents match this search.";
@@ -79,6 +102,8 @@ public static class BackstagePaneSurfacePlanner
     private const string SaveAsFileNameHeading = "File name";
     private const string SaveAsTypeHeading = "Save as type";
     private const string SaveAsButtonLabel = "Save";
+    private const string SaveAsFileNameAutomationId = "SaveAsSuggestedFileName";
+    private const string SaveAsTypeAutomationId = "SaveAsSelectedExtension";
 
     public static BackstagePrintPaneSurfaceSpec BuildPrintPane(
         string displayName,
@@ -115,7 +140,8 @@ public static class BackstagePaneSurfacePlanner
         Action? restrictEditing,
         Action? inspectDocument,
         Action? checkAccessibility,
-        TextDocument? document = null)
+        TextDocument? document = null,
+        Func<string, string?>? getText = null)
     {
         ArgumentNullException.ThrowIfNull(documentFields);
 
@@ -123,7 +149,7 @@ public static class BackstagePaneSurfacePlanner
             BackstageViewTextResources.Info.Title,
             BackstageViewTextResources.Info.Description,
             documentFields.ToArray(),
-            BackstageInfoSafetyPanePlanner.Build(document)
+            BackstageInfoSafetyPanePlanner.Build(document, getText)
                 .Select(group => new BackstageSurfaceActionGroup(
                     group.Heading,
                     group.Actions.Select(action => new BackstageSurfaceActionRow(
@@ -195,7 +221,9 @@ public static class BackstagePaneSurfacePlanner
         return new BackstageOpenPaneSurfaceSpec(
             BackstageViewTextResources.Open.Title,
             BackstageViewTextResources.Open.Description,
-            new BackstageOpenPaneSearchSurface(OpenSearchAutomationName),
+            new BackstageOpenPaneSearchSurface(
+                OpenSearchAutomationName,
+                OpenSearchAutomationId),
             new BackstageOpenPaneTabSurface(
                 OpenDocumentsTabLabel,
                 OpenFoldersTabLabel,
@@ -253,7 +281,9 @@ public static class BackstagePaneSurfacePlanner
             new BackstageSaveAsInlineSurface(
                 SaveAsFileNameHeading,
                 SaveAsTypeHeading,
-                SaveAsButtonLabel),
+                SaveAsButtonLabel,
+                SaveAsFileNameAutomationId,
+                SaveAsTypeAutomationId),
             BackstageSaveAsFileTypePlanner.BuildInlinePlan(formatList, displayName, currentPath),
             groups);
     }
@@ -353,7 +383,10 @@ public sealed record BackstageActionPaneSurfaceSpec(
     string Title,
     string Description,
     BackstageActionPaneVisualMetrics VisualMetrics,
-    IReadOnlyList<BackstageActionGroup> Groups);
+    IReadOnlyList<BackstageActionGroup> Groups)
+{
+    public BackstageActionPaneSpec ToPaneSpec() => new(Title, Description, Groups);
+}
 
 public sealed record BackstageHomePaneSurfaceSpec(
     string Title,
@@ -380,7 +413,18 @@ public sealed record BackstageAccountPaneSurfaceSpec(
     string Description,
     IReadOnlyList<SisterBackstageAccountFieldGroup> Groups,
     BackstageAccountPaneVisualMetrics VisualMetrics,
-    BackstageSurfaceActionRow OptionsAction);
+    BackstageSurfaceActionRow OptionsAction)
+{
+    public BackstageAccountPaneSpec ToPaneSpec() => new(
+        Title,
+        Description,
+        Groups,
+        OptionsAction.Label,
+        OptionsAction.Invoke)
+    {
+        OptionsAutomationId = OptionsAction.AutomationId,
+    };
+}
 
 public sealed record BackstageSurfaceActionGroup(
     string Heading,
@@ -402,7 +446,9 @@ public sealed record BackstageOpenPaneSurfaceSpec(
     BackstageOpenPaneTabSurface Tabs,
     BackstageOpenPanePlan Plan);
 
-public sealed record BackstageOpenPaneSearchSurface(string AutomationName);
+public sealed record BackstageOpenPaneSearchSurface(
+    string AutomationName,
+    string AutomationId);
 
 public sealed record BackstageOpenPaneTabSurface(
     string DocumentsTabLabel,
@@ -486,7 +532,9 @@ public sealed record BackstageSaveAsPaneSurfaceSpec(
 public sealed record BackstageSaveAsInlineSurface(
     string FileNameHeading,
     string SaveAsTypeHeading,
-    string SaveButtonLabel);
+    string SaveButtonLabel,
+    string FileNameAutomationId,
+    string FileTypeAutomationId);
 
 public sealed record BackstageExportPaneSurfaceText(
     string Title,
@@ -499,7 +547,7 @@ public sealed record BackstageExportPaneSurfaceText(
     string PdfOnlyActionLabel = BackstageViewTextResources.CreatePdfLabel)
 {
     public static BackstageExportPaneSurfaceText FreeW { get; } =
-        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW).Export);
+        FromDescriptor(FreeWBackstagePaneTextCatalog.Descriptor.Export);
 
     public static BackstageExportPaneSurfaceText FromDescriptor(
         SisterBackstageExportPaneTextDescriptor descriptor,
@@ -509,23 +557,13 @@ public sealed record BackstageExportPaneSurfaceText(
         ArgumentNullException.ThrowIfNull(descriptor);
 
         return new BackstageExportPaneSurfaceText(
-            Resolve(descriptor.Heading, getText),
-            Resolve(descriptor.Description, getText),
-            Resolve(descriptor.FixedLayoutGroupHeading, getText),
-            Resolve(descriptor.PdfActionLabel, getText),
-            Resolve(descriptor.PdfActionDescription, getText),
-            descriptor.XpsActionLabel is null ? null : Resolve(descriptor.XpsActionLabel, getText),
-            descriptor.XpsActionDescription is null ? null : Resolve(descriptor.XpsActionDescription, getText),
+            descriptor.Heading.Resolve(getText),
+            descriptor.Description.Resolve(getText),
+            descriptor.FixedLayoutGroupHeading.Resolve(getText),
+            descriptor.PdfActionLabel.Resolve(getText),
+            descriptor.PdfActionDescription.Resolve(getText),
+            descriptor.XpsActionLabel?.Resolve(getText),
+            descriptor.XpsActionDescription?.Resolve(getText),
             pdfOnlyActionLabel);
-    }
-
-    private static string Resolve(ResourceTextDescriptor descriptor, Func<string, string?>? getText)
-    {
-        ArgumentNullException.ThrowIfNull(descriptor);
-
-        return LocalizedFallbackTextResolver.Resolve(
-            descriptor.ResourceKey,
-            descriptor.FallbackText,
-            getText);
     }
 }

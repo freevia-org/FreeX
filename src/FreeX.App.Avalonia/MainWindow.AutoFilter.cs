@@ -23,7 +23,6 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private Flyout? _autoFilterFlyout;
-    internal bool AutoFilterFlyoutOpenForTest => _autoFilterFlyout is not null;
 
     private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);
 
@@ -47,31 +46,8 @@ public sealed partial class MainWindow
 
         // Determine per-column active-filter state (mirrors WPF ActiveAutoFilterColumns logic).
         var sheet = _session.ActiveSheet;
-        var isActive = false;
-        if (AutoFilterHeaderButtonPlanner.TryGetAutoFilterRange(sheet) is { } range)
-        {
-            var colOffset = (int)(address.Col - range.Start.Col);
-            isActive = sheet.AutoFilter?.FilterColumns.Any(fc => fc.ColumnId == colOffset) == true;
-
-            // R72-commands-sort-filter-4-2: AutoFilterRangeResolver.TryGetEffectiveAutoFilterRange
-            // falls back to a structured (Excel) table's own range when the sheet has no
-            // worksheet-level <autoFilter> -- in that case a filtered column's state lives in
-            // table.FilterColumns (FilterCommand.ApplyToStructuredTableIfMatched), never in
-            // sheet.AutoFilter, so the check above alone always misses table filters and the
-            // dropdown arrow never shows the filtered state for one. Fall back to the matching
-            // table's own FilterColumns.
-            if (!isActive)
-            {
-                foreach (var table in sheet.StructuredTables)
-                {
-                    if (!table.Range.Equals(range))
-                        continue;
-
-                    isActive = table.FilterColumns.Any(fc => fc.ColumnId == colOffset);
-                    break;
-                }
-            }
-        }
+        var isActive = AutoFilterHeaderButtonPlanner.TryGetAutoFilterRange(sheet) is { } range &&
+                       AutoFilterHeaderButtonPlanner.IsColumnActive(sheet, range, address.Col);
 
         // Build a crisp drawn chevron button matching WPF's drawn geometry + gradient background.
         // Triangle points mirror WPF DrawAutoFilterGlyph: (cx-3,cy-2)-(cx+3,cy-2)-(cx,cy+2).
@@ -127,7 +103,7 @@ public sealed partial class MainWindow
             Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand),
         };
         AutomationProperties.SetAutomationId(button, $"AutoFilterButton_{address.Row}_{address.Col}");
-        AutomationProperties.SetName(button, "Filter");
+        AutomationProperties.SetName(button, UiText.CreateAutomationName(UiText.Get("PivotFieldFilter_Filter")));
         button.Click += (_, _) => OpenAutoFilterFlyout(button, address);
 
         var grid = new AvaloniaGrid { ClipToBounds = true };
@@ -180,31 +156,33 @@ public sealed partial class MainWindow
             _session.Workbook,
             sheet,
             dropdownPlan,
-            InvariantAutoFilterMenuTextProvider.Instance,
-            InvariantAutoFilterMenuTextProvider.BlankDisplayText);
-        var model = AutoFilterMenuPlanner.Build(menuPlan);
+            AvaloniaPlannerTextResources.AutoFilter,
+            AvaloniaPlannerTextResources.AutoFilter.BlankDisplayText);
+        var model = AutoFilterMenuPlanner.Build(
+            menuPlan,
+            AvaloniaPlannerTextResources.AutoFilter);
 
         var panel = new StackPanel { Spacing = 4, MinWidth = 260, MaxWidth = 340 };
         var allItems = AutoFilterMenuPlanner.CreateDialogItems(model).ToList();
-        var visibleItems = AutoFilterMenuPlanner.FilterItems(allItems, string.Empty).ToList();
+        var visibleItems = new List<AutoFilterDialogItem>();
         var checkBoxes = new List<CheckBox>();
         var checklistPanel = new StackPanel();
         var updatingSelectAll = false;
         Control? initialFocusTarget = null;
         var flyout = new Flyout
         {
-            Placement = PlacementMode.BottomEdgeAlignedLeft,
+            Placement = ToNativeAutoFilterPlacement(AutoFilterPopupPlacementPlanner.PreferredEdge),
             ShowMode = FlyoutShowMode.Standard,
         };
         var searchBox = new TextBox
         {
-            PlaceholderText = "Search",
+            PlaceholderText = UiText.Get("AutoFilter_SectionSearch"),
             MinHeight = 26,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(searchBox, $"AutoFilterSearchBox_{headerCell.Row}_{headerCell.Col}");
-        AutomationProperties.SetName(searchBox, "Search");
+        AutomationProperties.SetName(searchBox, UiText.CreateAutomationName(UiText.Get("AutoFilter_SectionSearch")));
         var addSelectionBox = new CheckBox
         {
             Content = UiText.Get("AutoFilter_AddCurrentSelectionToFilter"),
@@ -214,14 +192,14 @@ public sealed partial class MainWindow
         };
         var selectAll = new CheckBox
         {
-            Content = "Select All",
+            Content = StripDisplayMnemonic(UiText.Get("AutoFilter_SelectAll2")),
             IsThreeState = true,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
         var criteriaBox = new TextBox
         {
-            PlaceholderText = "Custom criteria",
+            PlaceholderText = UiText.Get("AutoFilter_CustomCriteriaPlaceholder"),
             MinHeight = 26,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -230,7 +208,8 @@ public sealed partial class MainWindow
 
         void RefreshChecklist()
         {
-            visibleItems = AutoFilterMenuPlanner.FilterItems(allItems, searchBox.Text).ToList();
+            var state = AutoFilterMenuPlanner.PlanChecklistState(allItems, searchBox.Text);
+            visibleItems = state.VisibleItems.ToList();
             checklistPanel.Children.Clear();
             checkBoxes.Clear();
 
@@ -253,18 +232,18 @@ public sealed partial class MainWindow
                 checklistPanel.Children.Add(box);
             }
 
-            selectAll.IsEnabled = visibleItems.Count > 0;
+            selectAll.IsEnabled = state.IsChecklistEnabled;
             updatingSelectAll = true;
             try
             {
-                selectAll.IsChecked = AutoFilterMenuPlanner.SelectAllState(visibleItems);
+                selectAll.IsChecked = state.SelectAllState;
             }
             finally
             {
                 updatingSelectAll = false;
             }
-            addSelectionBox.IsVisible = !string.IsNullOrWhiteSpace(searchBox.Text);
-            addSelectionBox.IsEnabled = visibleItems.Count > 0;
+            addSelectionBox.IsVisible = state.IsAddCurrentSelectionVisible;
+            addSelectionBox.IsEnabled = state.IsAddCurrentSelectionEnabled;
         }
 
         void AddMenuCommand(AutoFilterMenuItem item, Action onClick, bool isEnabled = true)
@@ -336,9 +315,11 @@ public sealed partial class MainWindow
                         option =>
                         {
                             flyout.Hide();
-                            RunAutoFilterCommand(
-                                AutoFilterDropdownMenuPlanner.CreateSortByColorCommand(_session.ActiveSheet.Id, range, columnOffset, option),
-                                UiText.Get("ShellLoc_SortedByColor"));
+                            RunAutoFilterResult(
+                                range,
+                                columnOffset,
+                                AutoFilterDialogCriteriaPlanner.BuildSortByColorResult(
+                                    new AutoFilterColorFilter(option.Kind, option.Color)));
                         },
                         "AutoFilter_SortByColor"));
                     break;
@@ -378,7 +359,7 @@ public sealed partial class MainWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             IsDefault = true,
             MinWidth = 72,
         };
@@ -416,6 +397,13 @@ public sealed partial class MainWindow
         (initialFocusTarget ?? searchBox).Focus();
     }
 
+    private static PlacementMode ToNativeAutoFilterPlacement(AutoFilterPopupPlacementEdge edge) =>
+        edge switch
+        {
+            AutoFilterPopupPlacementEdge.BottomStart => PlacementMode.BottomEdgeAlignedLeft,
+            _ => PlacementMode.BottomEdgeAlignedLeft
+        };
+
     private void CloseAutoFilterFlyout()
     {
         if (_autoFilterFlyout is not { } flyout)
@@ -437,18 +425,21 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(selector, "AutoFilterCriteriaOperatorBox");
-        AutomationProperties.SetName(selector, model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)?.Label ?? "Filters");
+        AutomationProperties.SetName(
+            selector,
+            model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)?.Label
+                ?? UiText.Get("AutoFilter_FiltersAutomationName"));
 
         var valueBox = new TextBox
         {
-            PlaceholderText = "Value",
+            PlaceholderText = UiText.Get("ConditionalFormat_ValueLabel"),
             MinHeight = 26,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
         var secondValueBox = new TextBox
         {
-            PlaceholderText = "Maximum",
+            PlaceholderText = UiText.Get("ConditionalFormat_MaximumLabel"),
             MinHeight = 26,
             IsVisible = false,
             FontSize = 12,
@@ -488,7 +479,8 @@ public sealed partial class MainWindow
         var panel = new StackPanel { Spacing = 4 };
         panel.Children.Add(new TextBlock
         {
-            Text = model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)?.Label ?? "Filters",
+            Text = model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)?.Label
+                ?? UiText.Get("AutoFilter_FiltersAutomationName"),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,
@@ -621,112 +613,61 @@ public sealed partial class MainWindow
             return;
         }
 
-        RunAutoFilter(range, columnOffset: 0, allowedValues: []);
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var plan = _filterWorkflowSession.CreateClearAllPlan(sheet, range);
+        var result = _session.ExecuteReviewCommand(plan.Command);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_FilterFailed"));
+            return;
+        }
+
+        _filterWorkflowSession.RecordSuccessfulClearAll(plan);
+        RecalculateAfterAutoFilterMutation();
+        RefreshShell(UiText.Get("ShellLoc_ClearedFilter"));
     }
 
     private void RunAutoFilter(GridRange range, uint columnOffset, IReadOnlyList<string> allowedValues)
-    {
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        var result = _session.ExecuteReviewCommand(
-            new FilterCommand(_session.ActiveSheet.Id, range, columnOffset, allowedValues));
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_FilterFailed"));
-            return;
-        }
-
-        RecalculateAfterAutoFilterMutation();
-        RefreshShell(allowedValues.Count == 0 ? UiText.Get("ShellLoc_ClearedFilter") : UiText.Get("ShellLoc_AppliedFilter"));
-    }
-
-    private void RunAutoFilterSort(GridRange range, uint columnOffset, bool ascending)
-    {
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        var result = _session.ExecuteReviewCommand(
-            new SortCommand(_session.ActiveSheet.Id, range, columnOffset, ascending));
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_SortFailed"));
-            return;
-        }
-
-        RecalculateAfterAutoFilterMutation();
-        RefreshShell(ascending ? UiText.Get("ShellLoc_SortedAToZ") : UiText.Get("ShellLoc_SortedZToA"));
-    }
+        => RunAutoFilterPlan(_filterWorkflowSession.PlanAllowedValues(
+            _session.ActiveSheet.Id,
+            range,
+            columnOffset,
+            allowedValues));
 
     private void RunAutoFilterResult(GridRange range, uint columnOffset, AutoFilterDialogResult result)
     {
-        if (result.Action == AutoFilterDialogAction.ClearFilter)
+        var plan = _filterWorkflowSession.PlanDialogResult(
+            _session.ActiveSheet.Id,
+            range,
+            columnOffset,
+            result);
+        if (!plan.Success)
         {
-            RunAutoFilter(range, columnOffset, allowedValues: []);
+            ShowEditIssue(UiText.Get(WorksheetFilterMessagePlanner.GetPlanErrorResourceKey(plan)));
             return;
         }
 
-        if (result.SortDirection != AutoFilterSortDirection.None)
-        {
-            RunAutoFilterSort(range, columnOffset, result.SortDirection == AutoFilterSortDirection.Ascending);
-            return;
-        }
-
-        if (result.ColorFilter is { } colorFilter)
-        {
-            IWorkbookCommand? command = colorFilter.Kind switch
-            {
-                AutoFilterColorFilterKind.FontColor when colorFilter.Color is { } fontColor =>
-                    new CellFontColorFilterCommand(_session.ActiveSheet.Id, range, columnOffset, fontColor),
-                AutoFilterColorFilterKind.NoFill =>
-                    new CellNoFillColorFilterCommand(_session.ActiveSheet.Id, range, columnOffset),
-                AutoFilterColorFilterKind.CellFillColor when colorFilter.Color is { } fillColor =>
-                    new CellFillColorFilterCommand(_session.ActiveSheet.Id, range, columnOffset, fillColor),
-                _ => null
-            };
-            if (command is not null)
-                RunAutoFilterCommand(command, UiText.Get("ShellLoc_AppliedFilter"));
-            return;
-        }
-
-        var filterText = result.CriteriaText.TrimStart();
-        if (!string.IsNullOrWhiteSpace(filterText))
-        {
-            if (!FilterPromptPlanner.TryPlan(result.CriteriaText, out var promptPlan, out var promptError) || promptPlan is null)
-            {
-                ShowEditIssue(FormatFilterPromptPlanError(promptError));
-                return;
-            }
-
-            RunAutoFilterCommand(
-                promptPlan.CreateCommand(_session.ActiveSheet.Id, range, columnOffset),
-                UiText.Get("ShellLoc_AppliedFilter"));
-            return;
-        }
-
-        if (result.SelectedValues.Count == 0)
-        {
-            ShowEditIssue(UiText.Get("MainWindowMessage_FilterSelectAtLeastOneItem"));
-            return;
-        }
-
-        RunAutoFilter(range, columnOffset, result.SelectedValues);
+        RunAutoFilterPlan(plan);
     }
 
-    private void RunAutoFilterCommand(IWorkbookCommand command, string successMessage)
+    private void RunAutoFilterPlan(WorksheetFilterMutationPlan plan)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var result = _session.ExecuteReviewCommand(command);
+        var result = _session.ExecuteReviewCommand(plan.CreateCommand());
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_FilterFailed"));
+            var fallback = UiText.Get(WorksheetFilterMessagePlanner.GetCommandFailureResourceKey(plan.Kind));
+            ShowEditIssue(result.ErrorMessage ?? fallback);
             return;
         }
 
+        _filterWorkflowSession.RecordSuccessfulMutation(plan);
         RecalculateAfterAutoFilterMutation();
-        RefreshShell(successMessage);
+        RefreshShell(UiText.Get(WorksheetFilterMessagePlanner.GetSuccessResourceKey(plan.Kind)));
     }
 
     // Filter visibility and sort order are workbook state, but they are not ordinary cell edits.
@@ -734,24 +675,4 @@ public sealed partial class MainWindow
     // same interaction as the corresponding WPF host path.
     private void RecalculateAfterAutoFilterMutation() => _session.RecalculateWorkbook();
 
-    internal void RunAutoFilterForTest(
-        GridRange range,
-        uint columnOffset,
-        IReadOnlyList<string> allowedValues) =>
-        RunAutoFilter(range, columnOffset, allowedValues);
-
-    private static string FormatFilterPromptPlanError(FilterPromptPlanError error) =>
-        error switch
-        {
-            FilterPromptPlanError.TopBottomSyntax => UiText.Get("FilterPrompt_ErrorTopBottomSyntax"),
-            FilterPromptPlanError.PercentageRange => UiText.Get("FilterPrompt_ErrorPercentageRange"),
-            FilterPromptPlanError.PositiveItemCount => UiText.Get("FilterPrompt_ErrorPositiveItemCount"),
-            FilterPromptPlanError.CompositeSyntax => UiText.Get("FilterPrompt_ErrorCompositeSyntax"),
-            FilterPromptPlanError.DateBetweenSyntax => UiText.Get("FilterPrompt_ErrorDateBetweenSyntax"),
-            FilterPromptPlanError.BetweenSyntax => UiText.Get("FilterPrompt_ErrorBetweenSyntax"),
-            FilterPromptPlanError.TextToMatch => UiText.Get("FilterPrompt_ErrorTextToMatch"),
-            FilterPromptPlanError.ComparisonNumber => UiText.Get("FilterPrompt_ErrorComparisonNumber"),
-            FilterPromptPlanError.DateFormat => UiText.Get("FilterPrompt_ErrorDateFormat"),
-            _ => UiText.Get("MainWindowMessage_FilterUnsupportedCriterion")
-        };
 }

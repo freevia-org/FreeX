@@ -262,7 +262,7 @@ public sealed partial class AutoFilterDialog
 
     private void ApplySortCommand(AutoFilterSortDirection direction)
     {
-        CommitResult(BuildResult(
+        CommitResult(AutoFilterDialogCriteriaPlanner.BuildResult(
             direction,
             _allItems,
             string.Empty,
@@ -270,14 +270,6 @@ public sealed partial class AutoFilterDialog
             null,
             addCurrentSelectionToFilter: false));
     }
-
-    public static (string Ascending, string Descending) GetSortLabels(AutoFilterMenuFilterKind filterKind) =>
-        filterKind switch
-        {
-            AutoFilterMenuFilterKind.Number => (UiText.Get("AutoFilter_SortSmallestToLargest"), UiText.Get("AutoFilter_SortLargestToSmallest")),
-            AutoFilterMenuFilterKind.Date => (UiText.Get("AutoFilter_SortOldestToNewest"), UiText.Get("AutoFilter_SortNewestToOldest")),
-            _ => (UiText.Get("AutoFilter_SortAToZ"), UiText.Get("AutoFilter_SortZToA"))
-        };
 
     private void SetSortLabels(AutoFilterMenuPlan menuPlan)
     {
@@ -295,7 +287,9 @@ public sealed partial class AutoFilterDialog
 
     private void SetSortLabels(AutoFilterMenuFilterKind filterKind)
     {
-        var labels = GetSortLabels(filterKind);
+        var labels = AutoFilterDropdownMenuPlanner.GetSortLabels(
+            filterKind,
+            WpfResourceKeyTextResolver.Resources.AutoFilter);
         SetMenuCommandButtonContent(_sortAscendingButton, labels.Ascending, RibbonCommandIconKind.SortAscending);
         SetMenuCommandButtonContent(_sortDescendingButton, labels.Descending, RibbonCommandIconKind.SortDescending);
     }
@@ -472,7 +466,7 @@ public sealed partial class AutoFilterDialog
     private void ApplyColorChoice(AutoFilterColorFilter colorFilter)
     {
         _selectedColorFilter = colorFilter;
-        CommitResult(BuildResult(
+        CommitResult(AutoFilterDialogCriteriaPlanner.BuildResult(
             AutoFilterSortDirection.None,
             _allItems,
             _searchBox.Text,
@@ -540,18 +534,18 @@ public sealed partial class AutoFilterDialog
     }
 
     private void ApplySortByColorChoice(AutoFilterColorFilter colorFilter) =>
-        CommitResult(BuildSortByColorResult(colorFilter));
+        CommitResult(AutoFilterDialogCriteriaPlanner.BuildSortByColorResult(colorFilter));
 
     private void ApplySearchTextChange()
     {
-        ReplaceItems(FilterItems(_allItems, _searchBox.Text));
+        var state = AutoFilterMenuPlanner.PlanChecklistState(_allItems, _searchBox.Text);
+        ReplaceItems(state.VisibleItems);
 
-        var hasSearchText = !string.IsNullOrWhiteSpace(_searchBox.Text);
-        _addCurrentSelectionToFilterBox.Visibility = hasSearchText
+        _addCurrentSelectionToFilterBox.Visibility = state.IsAddCurrentSelectionVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
-        _addCurrentSelectionToFilterBox.IsEnabled = hasSearchText && _items.Count > 0;
-        if (!hasSearchText)
+        _addCurrentSelectionToFilterBox.IsEnabled = state.IsAddCurrentSelectionEnabled;
+        if (state.ShouldClearAddCurrentSelection)
             _addCurrentSelectionToFilterBox.IsChecked = false;
     }
 
@@ -560,7 +554,7 @@ public sealed partial class AutoFilterDialog
         if (_updatingSelectAllBox)
             return;
 
-        ReplaceAllItems(SetSelectionForSearch(_allItems, _searchBox.Text, isSelected));
+        ReplaceAllItems(AutoFilterDialogCriteriaPlanner.SetSelectionForSearch(_allItems, _searchBox.Text, isSelected));
     }
 
     private void UpdateSelectAllBoxState()
@@ -568,24 +562,11 @@ public sealed partial class AutoFilterDialog
         _updatingSelectAllBox = true;
         try
         {
-            var hasItems = _items.Count > 0;
-            _selectAllBox.IsEnabled = hasItems;
-            _checklistBox.IsEnabled = hasItems;
-            _addCurrentSelectionToFilterBox.IsEnabled =
-                _addCurrentSelectionToFilterBox.Visibility == Visibility.Visible && hasItems;
-
-            if (_items.Count == 0)
-            {
-                _selectAllBox.IsChecked = false;
-                return;
-            }
-
-            var selectedCount = _items.Count(item => item.IsSelected);
-            _selectAllBox.IsChecked = selectedCount == _items.Count
-                ? true
-                : selectedCount == 0
-                    ? false
-                    : null;
+            var state = AutoFilterMenuPlanner.PlanChecklistState(_allItems, _searchBox.Text);
+            _selectAllBox.IsEnabled = state.IsChecklistEnabled;
+            _checklistBox.IsEnabled = state.IsChecklistEnabled;
+            _addCurrentSelectionToFilterBox.IsEnabled = state.IsAddCurrentSelectionEnabled;
+            _selectAllBox.IsChecked = state.SelectAllState;
         }
         finally
         {

@@ -233,9 +233,12 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             harness.ContextMenuTargetKind(2, 2).Should().Be("Picture");
             harness.OpenKeyboardContextMenu();
 
-            harness.FocusedMenuHeader.Should().Be("_Format Picture...");
+            harness.FocusedMenuHeader.Should().Be("Cu_t");
             harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
             harness.OpenMenuHeaders.Should().ContainInOrder([
+                "Cu_t",
+                "_Copy",
+                "_Paste",
                 "_Format Picture...",
                 "_Crop...",
                 "_Reset Crop",
@@ -243,7 +246,6 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 "_Selection Pane..."
             ]);
             harness.OpenMenuHeaders.Should().NotContain("_Format Cells...");
-            harness.OpenMenuHeaders.Should().NotContain("Cu_t");
         });
     }
 
@@ -260,9 +262,12 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             harness.ContextMenuTargetKind(3, 3).Should().Be("Shape");
             harness.OpenKeyboardContextMenu();
 
-            harness.FocusedMenuHeader.Should().Be("_Format Shape...");
+            harness.FocusedMenuHeader.Should().Be("Cu_t");
             harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
             harness.OpenMenuHeaders.Should().ContainInOrder([
+                "Cu_t",
+                "_Copy",
+                "_Paste",
                 "_Format Shape...",
                 "_Size and Properties...",
                 "_Rotate...",
@@ -274,7 +279,6 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 "Send _Backward"
             ]);
             harness.OpenMenuHeaders.Should().NotContain("_Format Cells...");
-            harness.OpenMenuHeaders.Should().NotContain("Cu_t");
         });
     }
 
@@ -291,9 +295,12 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             harness.ContextMenuTargetKind(4, 4).Should().Be("TextBox");
             harness.OpenKeyboardContextMenu();
 
-            harness.FocusedMenuHeader.Should().Be("_Format Text Box...");
+            harness.FocusedMenuHeader.Should().Be("Cu_t");
             harness.ContextMenuPlacementTargetName.Should().Be("SheetGrid");
             harness.OpenMenuHeaders.Should().ContainInOrder([
+                "Cu_t",
+                "_Copy",
+                "_Paste",
                 "_Format Text Box...",
                 "_Size and Properties...",
                 "_Rotate...",
@@ -305,7 +312,6 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             harness.OpenMenuHeaders.Should().NotContain("Bring _Forward");
             harness.OpenMenuHeaders.Should().NotContain("Send _Backward");
             harness.OpenMenuHeaders.Should().NotContain("_Format Cells...");
-            harness.OpenMenuHeaders.Should().NotContain("Cu_t");
         });
     }
 
@@ -317,7 +323,8 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             using var harness = MainWindowHarness.Create();
 
             harness.SeedRegionFilterData();
-            harness.SelectRegionFilterRange();
+            var filterRange = harness.SelectRegionFilterRange();
+            harness.SetAutoFilterRange(filterRange);
             harness.ApplyAllowedValuesFilter("West");
 
             harness.FilterHiddenRows.Should().Contain(3);
@@ -442,7 +449,6 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         private readonly MethodInfo _applyAutoFilterDialogResult;
         private readonly MethodInfo _reapplyAutoFilter;
         private readonly MethodInfo _clearFilterButtonClick;
-        private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
 
         private MainWindowHarness(MainWindow window, RecordingUserMessageService messageService)
@@ -470,9 +476,6 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             _clearFilterButtonClick = typeof(MainWindow)
                 .GetMethod("ClearFilterButton_Click", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ClearFilterButton_Click");
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
             _currentSheetIdField = typeof(MainWindow)
                 .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
@@ -627,7 +630,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
 
         public void ApplyAllowedValuesFilter(GridRange range, params string[] allowedValues)
         {
-            var result = AutoFilterDialog.BuildResult(
+            var result = AutoFilterDialogCriteriaPlanner.BuildResult(
                 AutoFilterSortDirection.None,
                 allowedValues.Select(value => new AutoFilterDialogItem(value, value, true)),
                 "",
@@ -727,8 +730,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             }
         }
 
-        private Workbook CurrentWorkbook =>
-            (Workbook)_workbookField.GetValue(_window)!;
+        private Workbook CurrentWorkbook => _window.Session.Workbook;
 
         private ContextMenu? ActiveContextMenu
         {

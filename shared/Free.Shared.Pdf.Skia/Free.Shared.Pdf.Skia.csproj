@@ -11,6 +11,7 @@
          (HarfBuzz shaping + automatic font embedding/subsetting) so non-WinAnsi text exports
          without bundling a font. Mirrors the Free.Shared.Shell / Free.Shared.Shell.Wpf split. -->
     <ProjectReference Include="..\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="..\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,8 +21,6 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Free.Shared.Pdf.Tests" />
     <InternalsVisibleTo Include="Free.Shared.Pdf.Skia.Tests" />
-    <InternalsVisibleTo Include="FreeX.App.Avalonia" />
-    <InternalsVisibleTo Include="FreeX.App.Avalonia.Tests" />
   </ItemGroup>
 
 </Project>

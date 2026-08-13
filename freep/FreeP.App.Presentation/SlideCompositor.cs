@@ -1146,12 +1146,13 @@ public static class SlideCompositor
     private static bool TryParseZoomRgb(string? value, out SrgbColor color)
     {
         color = default;
-        var normalized = value?.Trim().TrimStart('#');
-        if (normalized is not { Length: 6 }
-            || !int.TryParse(normalized, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+        if (!RgbColorTextCodec.TryParse(
+                value,
+                RgbColorTextProfile.DrawingMl,
+                out var rgb))
             return false;
 
-        color = new SrgbColor((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+        color = new SrgbColor(rgb.R, rgb.G, rgb.B);
         return true;
     }
 
@@ -2402,8 +2403,8 @@ public static class SlideCompositor
                     BaselineOffset = run.BaselineOffset,
                     Bold          = bold,
                     Italic        = italic,
-                    Underline     = run.Underline,
-                    Strikethrough = run.Strikethrough,
+                    Underline     = run.Underline || run.Field?.Underline == true,
+                    Strikethrough = run.Strikethrough || run.Field?.Strikethrough == true,
                     RightToLeft   = run.RightToLeft,
                     Color         = color,
                     TextFill      = resolvedTextFill,
@@ -2426,75 +2427,12 @@ public static class SlideCompositor
                     }).ToList()
                 : Array.Empty<ResolvedTabStop>();
 
-            // Wave 19A: bullet computation ─────────────────────────────────────────
-            // Determine effective bullet kind (paragraph > inherited style).
-            var effectiveBulletKind = para.BulletKind;
-            string? effectiveBulletChar = para.BulletChar;
-            ImagePart? effectiveBulletImage = para.BulletImage;
-            AutoNumType effectiveAutoNumType = para.AutoNumType;
-            ThemeAwareColor? effectiveBulletColor = null;
-            if (para.BulletColorFollowsText)
-                effectiveBulletColor = null;
-            else if (para.BulletColor is not null)
-                effectiveBulletColor = para.BulletColor;
-            else if (inheritedStyle?.BulletColorFollowsText == true)
-                effectiveBulletColor = null;
-            else
-                effectiveBulletColor = inheritedStyle?.BulletColor;
-
-            double? effectiveBulletSizePt = null;
-            int? effectiveBulletSizePct = null;
-            if (para.BulletSizeFollowsText)
-            {
-                effectiveBulletSizePt = null;
-                effectiveBulletSizePct = null;
-            }
-            else if (para.BulletSizePt.HasValue)
-            {
-                effectiveBulletSizePt = para.BulletSizePt;
-            }
-            else if (para.BulletSizePct.HasValue)
-            {
-                effectiveBulletSizePct = para.BulletSizePct;
-            }
-            else if (inheritedStyle?.BulletSizeFollowsText == true)
-            {
-                effectiveBulletSizePt = null;
-                effectiveBulletSizePct = null;
-            }
-            else if (inheritedStyle?.BulletSizePt.HasValue == true)
-            {
-                effectiveBulletSizePt = inheritedStyle.BulletSizePt;
-            }
-            else
-            {
-                effectiveBulletSizePct = inheritedStyle?.BulletSizePct;
-            }
-
-            string? effectiveBulletFont = null;
-            if (para.BulletFontFollowsText)
-                effectiveBulletFont = null;
-            else if (!string.IsNullOrEmpty(para.BulletFontFamily))
-                effectiveBulletFont = para.BulletFontFamily;
-            else if (inheritedStyle?.BulletFontFollowsText == true)
-                effectiveBulletFont = null;
-            else
-                effectiveBulletFont = inheritedStyle?.BulletFontFamily;
-
-            // BU1: When paragraph has an explicit <a:buNone/>, BulletSuppressed is true — do NOT
-            // re-inherit the style bullet; the paragraph actively opts out of any inherited bullet.
-            // Only inherit when the bullet element is simply absent (BulletSuppressed == false).
-            if (!para.BulletSuppressed && effectiveBulletKind == BulletKind.None && inheritedStyle?.BulletKind.HasValue == true)
-            {
-                effectiveBulletKind = inheritedStyle.BulletKind!.Value;
-                if (effectiveBulletKind == BulletKind.Char && effectiveBulletChar is null)
-                    effectiveBulletChar = inheritedStyle.BulletChar;
-                if (effectiveBulletKind == BulletKind.Auto)
-                    effectiveAutoNumType = inheritedStyle.AutoNumType;
-            }
+            var marker = PresentationListMarkerPlanner.Resolve(
+                para,
+                inheritedStyle,
+                autoNumState);
 
             // Build bullet text and per-paragraph indent info.
-            string bulletText = string.Empty;
             var bulletSeedRun = SelectBulletSeedRun(resolvedRuns);
             SrgbColor bulletColor = bulletSeedRun?.Color ?? SrgbColor.Black;
             string bulletFontFamily = bulletSeedRun?.FontFamily ?? fallbackFont;
@@ -2510,45 +2448,16 @@ public static class SlideCompositor
                 hangingDip = -indentEmu / EmuPerDip; // hanging: bullet at indentDip-hangingDip
 
             // Override bullet color when explicitly set.
-            if (effectiveBulletColor is not null)
-                bulletColor = ThemeColorResolver.Resolve(effectiveBulletColor, theme, effectiveClrMap);
+            if (marker.Color is not null)
+                bulletColor = ThemeColorResolver.Resolve(marker.Color, theme, effectiveClrMap);
 
             // Override bullet font when set.
-            if (!string.IsNullOrEmpty(effectiveBulletFont))
-                bulletFontFamily = ResolveLatinFont(effectiveBulletFont, theme);
+            if (!string.IsNullOrEmpty(marker.FontFamily))
+                bulletFontFamily = ResolveLatinFont(marker.FontFamily, theme);
 
             // Resolve bullet size from buSzPts or buSzPct after run/theme fallback.
-            if (effectiveBulletSizePt.HasValue && effectiveBulletSizePt.Value > 0)
-                bulletFontSizePt = effectiveBulletSizePt.Value * fontScale;
-            else if (effectiveBulletSizePct.HasValue && effectiveBulletSizePct.Value > 0)
-                bulletFontSizePt = bulletFontSizePt * effectiveBulletSizePct.Value / 100000.0;
-
-            switch (effectiveBulletKind)
-            {
-                case BulletKind.Char:
-                    bulletText = effectiveBulletChar ?? "•";
-                    autoNumState.Break();
-                    break;
-
-                case BulletKind.Auto:
-                {
-                    int value = autoNumState.Next(
-                        para.Level,
-                        effectiveAutoNumType,
-                        para.AutoNumStartAt,
-                        para.AutoNumStartAtSpecified);
-                    bulletText = autoNumState.FormatTemplate(
-                        para.Level,
-                        effectiveAutoNumType,
-                        value,
-                        para.AutoNumTextTemplate);
-                    break;
-                }
-
-                default:
-                    autoNumState.Break();
-                    break;
-            }
+            bulletFontSizePt = marker.ResolveFontSizePt(bulletFontSizePt, fontScale)
+                ?? bulletFontSizePt;
 
             resolvedParas.Add(new ResolvedParagraph
             {
@@ -2561,16 +2470,16 @@ public static class SlideCompositor
                     ?? inheritedStyle?.RightToLeft
                     ?? false,
                 Level = para.Level,
-                BulletKind = effectiveBulletKind,
-                BulletChar = effectiveBulletChar,
-                BulletImage = effectiveBulletKind == BulletKind.Image ? effectiveBulletImage : null,
+                BulletKind = marker.Kind,
+                BulletChar = marker.Character,
+                BulletImage = marker.Image,
                 SpaceBeforePt = para.SpaceBeforePt ?? 0,
                 SpaceAfterPt = para.SpaceAfterPt ?? 0,
                 LineSpacingPercent = para.LineSpacingPercent,
                 LineSpacingPointsExact = para.LineSpacingPointsExact,
                 TabStops = resolvedTabStops,  // Wave 18B
                 // Wave 19A:
-                BulletText       = bulletText,
+                BulletText       = marker.Text,
                 BulletColor      = bulletColor,
                 BulletFontFamily = bulletFontFamily,
                 BulletFontSizePt = bulletFontSizePt,

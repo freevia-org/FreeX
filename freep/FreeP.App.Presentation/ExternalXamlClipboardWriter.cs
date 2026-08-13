@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Xml;
+using Free.Shared.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -459,6 +460,6 @@ internal static class ExternalXamlClipboardWriter
 
     private sealed record PackageImage(string Path, byte[] Bytes, string ContentType)
     {
-        public string Extension => System.IO.Path.GetExtension(Path).TrimStart('.');
+        public string Extension => FilePathPolicy.GetExtensionOrEmpty(Path).TrimStart('.');
     }
 }

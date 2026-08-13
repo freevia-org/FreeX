@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.TextToColumns;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -95,10 +96,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("TableLoc_TtcWizardTitle", 1, 3),
-            Width = TextToColumnsParityDialogWidth,
-            Height = TextToColumnsParityDialogHeight,
-            MinWidth = TextToColumnsParityFixture.MinimumWindowWidth,
-            MinHeight = TextToColumnsParityFixture.MinimumWindowHeight,
+            Width = TextToColumnsDialogWidth,
+            Height = TextToColumnsDialogHeight,
+            MinWidth = TextToColumnsDialogMetrics.MinimumWindowWidth,
+            MinHeight = TextToColumnsDialogMetrics.MinimumWindowHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -258,7 +259,7 @@ public sealed partial class MainWindow
                     2 => TextToColumnsTextQualifier.None,
                     _ => TextToColumnsTextQualifier.DoubleQuote,
                 },
-                FixedWidthBreakPositions: ParseBreakPositions(breaksBox.Text),
+                FixedWidthBreakPositions: TextToColumnsFixedWidthBreakPlanner.ParseBreakPositions(breaksBox.Text),
                 ColumnFormats: orderedFormats);
         }
 
@@ -267,23 +268,20 @@ public sealed partial class MainWindow
             overwriteConfirmed = false;
             warningText.IsVisible = false;
 
-            TextToColumnsOptions options;
-            try
-            {
-                options = TextToColumnsDialogPlanner.BuildOptions(BuildState());
-            }
-            catch (ArgumentException ex)
+            if (!TextToColumnsDialogPlanner.TryBuildOptions(BuildState(), out var options, out var previewIssue))
             {
                 previewHost.Child = null;
                 previewHost1.Child = null;
-                statusText.Text = ex.Message;
+                statusText.Text = TextToColumnsDialogPlanner
+                    .DescribeValidationIssue(previewIssue)
+                    .Message.Resolve(UiText.Get, UiText.Format);
                 return;
             }
 
             var preview = TextToColumnsPlanner.Preview(
                 sources,
                 options,
-                TextToColumnsParityFixture.PreviewRowLimit);
+                TextToColumnsDialogMetrics.PreviewRowLimit);
             previewColumnCount = Math.Max(1, preview.ColumnCount);
             statusText.Text = UiText.Format("TableLoc_TtcSplittingStatus", sources.Count, previewColumnCount);
 
@@ -417,35 +415,38 @@ public sealed partial class MainWindow
             {
                 currentStep = 3;
                 SyncWizardNavigation();
-                warningText.Text = UiText.Get("TextToColumns_EnterASingleDestinationCellSuchAsF2");
+                warningText.Text = TextToColumnsDialogPlanner
+                    .DescribeValidationIssue(TextToColumnsDialogValidationIssue.InvalidDestination)
+                    .Message.Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 destinationBox.Focus();
                 destinationBox.SelectAll();
                 return;
             }
 
-            TextToColumnsOptions options;
-            try
+            if (!TextToColumnsDialogPlanner.TryBuildOptions(BuildState(), out var options, out var optionsIssue))
             {
-                options = TextToColumnsDialogPlanner.BuildOptions(BuildState());
-            }
-            catch (ArgumentException ex)
-            {
-                warningText.Text = ex.Message;
+                warningText.Text = TextToColumnsDialogPlanner
+                    .DescribeValidationIssue(optionsIssue)
+                    .Message.Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 return;
             }
 
             if (!TextToColumnsDialogPlanner.TryParseAdvancedSeparator(decimalSeparatorBox.Text, out var decimalSeparator))
             {
-                warningText.Text = UiText.Get("TextToColumns_EnterASingleDecimalSeparator");
+                warningText.Text = TextToColumnsDialogPlanner
+                    .DescribeValidationIssue(TextToColumnsDialogValidationIssue.InvalidDecimalSeparator)
+                    .Message.Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 return;
             }
 
             if (!TextToColumnsDialogPlanner.TryParseAdvancedSeparator(thousandsSeparatorBox.Text, out var thousandsSeparator))
             {
-                warningText.Text = UiText.Get("TextToColumns_EnterASingleThousandsSeparator");
+                warningText.Text = TextToColumnsDialogPlanner
+                    .DescribeValidationIssue(TextToColumnsDialogValidationIssue.InvalidThousandsSeparator)
+                    .Message.Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 return;
             }
@@ -464,7 +465,9 @@ public sealed partial class MainWindow
                 advancedOptions);
             if (edits.Count == 0)
             {
-                warningText.Text = UiText.Get("TableLoc_TtcNoColumnsToWrite");
+                warningText.Text = TextToColumnsDialogPlanner
+                    .DescribeValidationIssue(TextToColumnsDialogValidationIssue.NoColumnsToWrite)
+                    .Message.Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 return;
             }
@@ -747,7 +750,7 @@ public sealed partial class MainWindow
         var col = range.Start.Col;
         var texts = new List<string>();
         for (var row = range.Start.Row; row <= range.End.Row; row++)
-            texts.Add(FormatScalarValue(sheet.GetValue(row, col)));
+            texts.Add(SpreadsheetDisplayFormatter.FormatScalarValue(sheet.GetValue(row, col)));
 
         // Drop trailing empty rows so a single-cell selection that happens to span blanks does nothing.
         while (texts.Count > 0 && string.IsNullOrEmpty(texts[^1]))
@@ -772,22 +775,6 @@ public sealed partial class MainWindow
 
         RefreshShell(UiText.Format("TableLoc_TtcSplitIntoColumns", FormatRangeReference(range)));
         return true;
-    }
-
-    /// <summary>Parses a comma/space-separated list of fixed-width break positions, ignoring junk tokens.</summary>
-    private static IReadOnlyList<int> ParseBreakPositions(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return [];
-
-        var positions = new List<int>();
-        foreach (var token in text.Split([',', ' ', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (int.TryParse(token, out var value) && value > 0)
-                positions.Add(value);
-        }
-
-        return positions;
     }
 
     /// <summary>

@@ -95,9 +95,8 @@ public interface ISpeechEngine
 /// listener expects.</para>
 ///
 /// <para><b>Start position</b> is a paragraph index into the <em>ordered, non-empty</em> segment list (Word
-/// reads from the caret, or the selection, to the end). The host supplies its renderer-specific body-block
-/// caret index; <see cref="ResolveStartSegmentIndex"/> maps it through the same recursive reading order used
-/// for extraction, and the controller clamps the resulting segment index into range.</para>
+/// reads from the caret, or the selection, to the end). The host maps the caret/selection to that index;
+/// the controller clamps it into range.</para>
 /// </summary>
 public sealed class ReadAloudController
 {
@@ -125,6 +124,19 @@ public sealed class ReadAloudController
 
     /// <summary>True while speech is playing or paused (i.e. a read-through is active).</summary>
     public bool IsActive => State != ReadAloudState.Stopped;
+
+    /// <summary>True when the current engine can suspend and continue an utterance.</summary>
+    public bool SupportsPause => _engine.SupportsPause;
+
+    public bool CanPause => State == ReadAloudState.Playing && SupportsPause;
+
+    public bool CanResume => State == ReadAloudState.Paused && SupportsPause;
+
+    public bool CanStop => IsActive;
+
+    public bool CanMovePrevious => IsActive && _current >= 0;
+
+    public bool CanMoveNext => IsActive && _current >= 0 && _current < _segments.Count - 1;
 
     /// <summary>The ordered, non-empty segments queued for the current read-through (empty when stopped).</summary>
     public IReadOnlyList<ReadAloudSegment> Segments => _segments;
@@ -155,28 +167,23 @@ public sealed class ReadAloudController
     }
 
     /// <summary>
-    /// Maps a renderer's top-level body-block caret index to the first speakable segment at or after that
-    /// block. All non-empty paragraphs in earlier blocks are counted in exactly the same recursive order as
-    /// <see cref="ExtractSegments"/>, including paragraphs inside tables nested to any depth. A negative
-    /// block index maps to the document start. An index beyond the body maps past all segments and is later
-    /// clamped by <see cref="Start(TextDocument, int)"/>.
+    /// Maps a renderer caret block to the first speakable segment at or after that body block. Tables count
+    /// all non-empty cell paragraphs in reading order, matching <see cref="ExtractSegments"/>. A caret before
+    /// the body maps to zero; a caret beyond the body maps one past the final segment and is subsequently
+    /// clamped by <see cref="Start"/>.
     /// </summary>
-    public static int ResolveStartSegmentIndex(TextDocument document, int bodyBlockIndex)
+    public static int MapCaretBlockToSegmentIndex(TextDocument document, int caretBlockIndex)
     {
         ArgumentNullException.ThrowIfNull(document);
-
-        if (bodyBlockIndex <= 0)
+        if (caretBlockIndex <= 0 || document.Blocks.Count == 0)
             return 0;
 
         var segmentIndex = 0;
-        var precedingBlockCount = Math.Min(bodyBlockIndex, document.Blocks.Count);
-        for (var blockIndex = 0; blockIndex < precedingBlockCount; blockIndex++)
+        var blocksBeforeCaret = Math.Min(caretBlockIndex, document.Blocks.Count);
+        for (var blockIndex = 0; blockIndex < blocksBeforeCaret; blockIndex++)
         {
-            foreach (var paragraph in EnumerateParagraphsInBlock(document.Blocks[blockIndex]))
-            {
-                if (!string.IsNullOrWhiteSpace(paragraph.PlainText))
-                    segmentIndex++;
-            }
+            segmentIndex += EnumerateParagraphs(document.Blocks[blockIndex])
+                .Count(IsSpeakable);
         }
 
         return segmentIndex;
@@ -186,9 +193,9 @@ public sealed class ReadAloudController
     // nested in table cells (row by row, cell by cell), including tables nested inside table cells to
     // any depth — the same walk DocumentInspector uses.
     private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document) =>
-        document.Blocks.SelectMany(EnumerateParagraphsInBlock);
+        document.Blocks.SelectMany(EnumerateParagraphs);
 
-    private static IEnumerable<Paragraph> EnumerateParagraphsInBlock(Block block)
+    private static IEnumerable<Paragraph> EnumerateParagraphs(Block block)
     {
         if (block is Paragraph paragraph)
         {
@@ -200,17 +207,18 @@ public sealed class ReadAloudController
             yield break;
 
         foreach (var row in table.Rows)
+        foreach (var cell in row.Cells)
         {
-            foreach (var cell in row.Cells)
-            {
-                foreach (var cellParagraph in cell.Paragraphs)
-                    yield return cellParagraph;
-                foreach (var nestedTable in cell.NestedTables)
-                    foreach (var nestedParagraph in EnumerateParagraphsInBlock(nestedTable))
-                        yield return nestedParagraph;
-            }
+            foreach (var cellParagraph in cell.Paragraphs)
+                yield return cellParagraph;
+            foreach (var nestedTable in cell.NestedTables)
+            foreach (var nestedParagraph in EnumerateParagraphs(nestedTable))
+                yield return nestedParagraph;
         }
     }
+
+    private static bool IsSpeakable(Paragraph paragraph) =>
+        !string.IsNullOrWhiteSpace(paragraph.PlainText);
 
     /// <summary>
     /// Starts reading <paramref name="document"/> aloud from <paramref name="startParagraphIndex"/> (a
@@ -222,15 +230,46 @@ public sealed class ReadAloudController
     {
         ArgumentNullException.ThrowIfNull(document);
 
+        Start(ExtractSegments(document), startParagraphIndex);
+    }
+
+    /// <summary>
+    /// Starts a read-through from a precomputed segment plan. Presentation workflows use this overload to
+    /// normalize a request once before handing the ordered speech sequence to the controller.
+    /// </summary>
+    public void Start(IReadOnlyList<ReadAloudSegment> segments, int startParagraphIndex = 0)
+    {
+        ArgumentNullException.ThrowIfNull(segments);
+
         Stop();
 
-        _segments = ExtractSegments(document);
-        if (_segments.Count == 0)
+        if (segments.Count == 0)
             return;
 
+        _segments = [.. segments];
         _current = Math.Clamp(startParagraphIndex, 0, _segments.Count - 1);
         SetState(ReadAloudState.Playing);
         SpeakCurrent();
+    }
+
+    /// <summary>Pauses the active utterance when the engine supports it.</summary>
+    public bool Pause()
+    {
+        if (!CanPause || !_engine.TryPause())
+            return false;
+
+        SetState(ReadAloudState.Paused);
+        return true;
+    }
+
+    /// <summary>Resumes a paused utterance when the engine supports it.</summary>
+    public bool Resume()
+    {
+        if (!CanResume || !_engine.TryResume())
+            return false;
+
+        SetState(ReadAloudState.Playing);
+        return true;
     }
 
     /// <summary>
@@ -239,23 +278,36 @@ public sealed class ReadAloudController
     /// </summary>
     public void TogglePause()
     {
-        if (!_engine.SupportsPause)
-            return;
-
         switch (State)
         {
             case ReadAloudState.Playing:
-                if (_engine.TryPause())
-                    SetState(ReadAloudState.Paused);
+                Pause();
                 break;
             case ReadAloudState.Paused:
-                if (_engine.TryResume())
-                    SetState(ReadAloudState.Playing);
+                Resume();
                 break;
             case ReadAloudState.Stopped:
             default:
                 break;
         }
+    }
+
+    /// <summary>Restarts the preceding segment, or the first segment when already at the beginning.</summary>
+    public bool MovePrevious()
+    {
+        if (!CanMovePrevious)
+            return false;
+
+        return MoveTo(Math.Max(0, _current - 1));
+    }
+
+    /// <summary>Moves to and starts the next segment when one is available.</summary>
+    public bool MoveNext()
+    {
+        if (!CanMoveNext)
+            return false;
+
+        return MoveTo(_current + 1);
     }
 
     /// <summary>Stops the read-through, cancelling any speech and clearing the queue. Idempotent.</summary>
@@ -281,6 +333,16 @@ public sealed class ReadAloudController
         var segment = _segments[_current];
         SegmentStarted?.Invoke(segment);
         _engine.SpeakAsync(segment.Text, OnSegmentCompleted);
+    }
+
+    private bool MoveTo(int segmentIndex)
+    {
+        _engine.Stop();
+        _current = segmentIndex;
+        if (State == ReadAloudState.Paused)
+            SetState(ReadAloudState.Playing);
+        SpeakCurrent();
+        return true;
     }
 
     // Invoked by the engine when a segment finishes naturally. Advance to the next segment (if still

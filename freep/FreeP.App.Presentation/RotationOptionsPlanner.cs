@@ -2,12 +2,37 @@ using System.Globalization;
 
 namespace FreeP.App.Compositor;
 
+public enum RotationOptionsDialogField
+{
+    Rotation,
+    Hint,
+}
+
+public enum RotationOptionsDialogAction
+{
+    Accept,
+    Cancel,
+}
+
 public sealed record RotationOptionsSurfacePlan(
-    string Title,
-    string RotationLabel,
-    string Hint,
-    string OkLabel,
-    string CancelLabel);
+    PresentationDialogSurfacePlan<RotationOptionsDialogField, RotationOptionsDialogAction> Schema)
+{
+    public string Title => Schema.Title;
+
+    public string RotationLabel => Field(RotationOptionsDialogField.Rotation).Label;
+
+    public string Hint => Field(RotationOptionsDialogField.Hint).Label;
+
+    public string OkLabel => Action(RotationOptionsDialogAction.Accept).Label;
+
+    public string CancelLabel => Action(RotationOptionsDialogAction.Cancel).Label;
+
+    public PresentationDialogFieldPlan<RotationOptionsDialogField> Field(
+        RotationOptionsDialogField field) => Schema.Field(field);
+
+    public PresentationDialogActionPlan<RotationOptionsDialogAction> Action(
+        RotationOptionsDialogAction action) => Schema.Action(action);
+}
 
 /// <summary>Shared policy for PowerPoint-style exact shape rotation entry.</summary>
 public static class RotationOptionsPlanner
@@ -16,12 +41,42 @@ public static class RotationOptionsPlanner
     public const double MinimumDegrees = -360;
     public const double MaximumDegrees = 360;
 
-    public static RotationOptionsSurfacePlan BuildSurfacePlan() => new(
-        "Rotation Options",
-        "Rotation (degrees)",
-        "Enter an angle from -360 to 360 degrees. Positive values rotate clockwise.",
-        "OK",
-        "Cancel");
+    public static RotationOptionsSurfacePlan Surface { get; } = new(
+        new PresentationDialogSurfacePlan<RotationOptionsDialogField, RotationOptionsDialogAction>(
+            "Rotation Options",
+            "Rotation Options dialog",
+            "FreeP.RotationOptions.Window",
+            [
+                new(
+                    RotationOptionsDialogField.Rotation,
+                    PresentationDialogControlKind.Text,
+                    "Rotation (degrees)",
+                    "Rotation angle in degrees",
+                    "FreeP.RotationOptions.Rotation",
+                    "Enter a finite angle from -360 to 360 degrees."),
+                new(
+                    RotationOptionsDialogField.Hint,
+                    PresentationDialogControlKind.Label,
+                    "Enter an angle from -360 to 360 degrees. Positive values rotate clockwise.",
+                    "Rotation angle guidance",
+                    "FreeP.RotationOptions.Hint"),
+            ],
+            [
+                new(
+                    RotationOptionsDialogAction.Accept,
+                    "OK",
+                    "Apply rotation",
+                    "FreeP.RotationOptions.Accept",
+                    IsDefault: true),
+                new(
+                    RotationOptionsDialogAction.Cancel,
+                    "Cancel",
+                    "Cancel rotation",
+                    "FreeP.RotationOptions.Cancel",
+                    IsCancel: true),
+            ]));
+
+    public static RotationOptionsSurfacePlan BuildSurfacePlan() => Surface;
 
     public static bool TryParse(string? text, out double degrees)
     {

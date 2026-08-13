@@ -79,6 +79,12 @@ public sealed class LocTests
     public void SharedCatalog_FallsBackAcrossCulturesAndPreservesFormattingContracts()
     {
         WithUiCulture("en-US", () => Loc.Get("Ribbon_Command_Bold_Label")).Should().Be("Bold");
+        WithUiCulture("en-US", () => Loc.Get("Options_AppLanguageSystemDefault"))
+            .Should().Be("Use system default");
+        WithUiCulture("en-AU", () => Loc.Get("Options_AppLanguageSystemDefault"))
+            .Should().Be("Use system default");
+        WithUiCulture("fr-FR", () => Loc.Get("Options_AppLanguageSystemDefault"))
+            .Should().Be("Utiliser les valeurs par défaut du système");
         WithUiCulture("en-US", () => Loc.Format("File_CommandFailedFormat", "Open", "Denied"))
             .Should().Be("Open failed: Denied");
         WithUiCulture("fr-FR", () => Loc.Get("Common_ConfirmTitle")).Should().Be("Confirmation");
@@ -189,6 +195,9 @@ public sealed class LocTests
         keys.Should().Contain("CreateTable_Title");
         keys.Should().Contain("CreateTable_RangeLabel");
         keys.Should().Contain("CreateTable_HeadersCheckBox");
+        keys.Should().Contain("ConditionalFormatDialog_RuleType_CellValue");
+        keys.Should().Contain("ConditionalFormatDialog_RuleType_TopBottom");
+        keys.Should().Contain("ConditionalFormatDialog_RuleType_UniqueValues");
         keys.Should().Contain("MainWindow_Header_RecommendedPivotTables");
         keys.Should().Contain("RecommendedPivotTables_BlankPivotTable");
         keys.Should().Contain("RecommendedPivotTables_NoRecommendationsHeading");
@@ -201,7 +210,7 @@ public sealed class LocTests
         // returned [[key]] placeholders in the Avalonia/Linux backstage nav rail.
         WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Info")).Should().Be("Info");
         WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Home")).Should().Be("Home");
-        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_New")).Should().Be("New");
+        WithUiCulture("en-US", () => Loc.Get("Common_New")).Should().Be("New");
         WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Open")).Should().Be("Open");
         WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Share")).Should().Be("Share");
         WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Print")).Should().Be("Print");

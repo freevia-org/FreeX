@@ -1,0 +1,188 @@
+using System.Text;
+using Free.Shared.AppServices;
+using Free.Shared.IO;
+using FreeW.App.Presentation.Shell;
+using FreeW.Core.IO;
+
+namespace FreeW.App.Presentation.Tests;
+
+public sealed class FreeWDocumentFileWorkflowTests : IDisposable
+{
+    private readonly TestTemporaryDirectory _temporaryDirectory = new(nameof(FreeWDocumentFileWorkflowTests));
+    private string TempDirectory => _temporaryDirectory.Path;
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
+    [Fact]
+    public async Task OpenPathAsync_LoadsUpdatesFieldsAndPublishesLifecycleMetadata()
+    {
+        var events = new List<string>();
+        var opened = Document("opened");
+        opened.UpdateFieldsOnOpen = true;
+        var adapter = new RecordingAdapter(".docx", canSave: true, opened);
+        var path = Path.Combine(TempDirectory, "Opened.docx");
+        await File.WriteAllTextAsync(path, "payload");
+        var (workflow, lifecycle) = CreateWorkflow(adapter, events);
+
+        var result = await workflow.OpenPathAsync(path);
+
+        result.Succeeded.Should().BeTrue();
+        lifecycle.CurrentPath.Should().Be(path);
+        lifecycle.IsDirty.Should().BeFalse();
+        lifecycle.RecentEntries.Select(entry => entry.Path).Should().Contain(path);
+        events.Should().Equal("load:opened", "file-name:Opened.docx", "update-fields", "changed");
+    }
+
+    [Fact]
+    public async Task OpenPathAsync_SuppressedRecentStillPublishesCurrentPath()
+    {
+        var adapter = new RecordingAdapter(".docx", canSave: true, Document("opened"));
+        var path = Path.Combine(TempDirectory, "Recovery.docx");
+        await File.WriteAllTextAsync(path, "payload");
+        var (workflow, lifecycle) = CreateWorkflow(adapter);
+
+        var result = await workflow.OpenPathAsync(path, suppressRecentFiles: true);
+
+        result.Succeeded.Should().BeTrue();
+        lifecycle.CurrentPath.Should().Be(path);
+        lifecycle.RecentEntries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SavePathAsync_PublishesNormalSaveButNotSaveCopy()
+    {
+        var events = new List<string>();
+        var adapter = new RecordingAdapter(".docx", canSave: true, Document("loaded"));
+        var (workflow, lifecycle) = CreateWorkflow(adapter, events, Document("saved"));
+        lifecycle.MarkDirty();
+        var savePath = Path.Combine(TempDirectory, "Saved.docx");
+
+        var saved = await workflow.SavePathAsync(savePath);
+        lifecycle.MarkDirty();
+        var copyPath = Path.Combine(TempDirectory, "Copy.docx");
+        var copied = await workflow.SavePathAsync(
+            copyPath,
+            kind: DocumentSaveExecutionKind.SaveCopy);
+
+        saved.Succeeded.Should().BeTrue();
+        copied.Succeeded.Should().BeTrue();
+        lifecycle.CurrentPath.Should().Be(savePath);
+        lifecycle.IsDirty.Should().BeTrue("Save Copy must not clear edits made after the normal save");
+        lifecycle.RecentEntries.Select(entry => entry.Path).Should().Contain(savePath).And.NotContain(copyPath);
+        File.ReadAllText(savePath).Should().Be("saved");
+        File.ReadAllText(copyPath).Should().Be("saved");
+        events.Should().ContainInOrder("prepare", "file-name:Saved.docx", "changed", "prepare");
+    }
+
+    [Fact]
+    public async Task SaveCurrentPathAsync_ReadOnlyFormatRequestsSaveAs()
+    {
+        var adapter = new RecordingAdapter(".legacy", canSave: false, Document("loaded"));
+        var (workflow, _) = CreateWorkflow(adapter);
+
+        var result = await workflow.SaveCurrentPathAsync(Path.Combine(TempDirectory, "ReadOnly.legacy"));
+
+        result.RequiresSaveAs.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ImportPdfTextPathAsync_LoadsUntitledDirtyDocument()
+    {
+        var pdfAdapter = new RecordingAdapter(".pdf", canSave: false, Document("imported"));
+        var lifecycle = CreateLifecycle();
+        lifecycle.MarkSavedWithPath(Path.Combine(TempDirectory, "Before.docx"), suppressRecentFiles: true);
+        var loaded = TextDocument.CreateEmpty();
+        var workflow = new FreeWDocumentFileWorkflow(
+            lifecycle,
+            new DocumentPersistenceWorkflow(adapters: [], pdfImportAdapters: [pdfAdapter]),
+            new FreeWDocumentFilePorts(
+                () => loaded,
+                (document, _) =>
+                {
+                    loaded = document;
+                    return ValueTask.CompletedTask;
+                }));
+        var path = Path.Combine(TempDirectory, "Imported.pdf");
+        await File.WriteAllTextAsync(path, "payload");
+
+        var result = await workflow.ImportPdfTextPathAsync(path);
+
+        result.Succeeded.Should().BeTrue();
+        loaded.PlainText.Trim().Should().Be("imported");
+        lifecycle.CurrentPath.Should().BeNull();
+        lifecycle.IsDirty.Should().BeTrue();
+    }
+
+    private (FreeWDocumentFileWorkflow Workflow, FileCommandWorkflow Lifecycle) CreateWorkflow(
+        IDocumentFileAdapter adapter,
+        List<string>? events = null,
+        TextDocument? currentDocument = null)
+    {
+        events ??= [];
+        currentDocument ??= TextDocument.CreateEmpty();
+        var lifecycle = CreateLifecycle(() => events.Add("changed"));
+        var workflow = new FreeWDocumentFileWorkflow(
+            lifecycle,
+            new DocumentPersistenceWorkflow([adapter]),
+            new FreeWDocumentFilePorts(
+                () => currentDocument,
+                (document, _) =>
+                {
+                    events.Add($"load:{document.PlainText.Trim()}");
+                    return ValueTask.CompletedTask;
+                },
+                PrepareDocumentAsync: _ =>
+                {
+                    events.Add("prepare");
+                    return ValueTask.CompletedTask;
+                },
+                UpdateFieldsAsync: _ =>
+                {
+                    events.Add("update-fields");
+                    return ValueTask.CompletedTask;
+                },
+                SetCurrentFileName: name => events.Add($"file-name:{name}")));
+        return (workflow, lifecycle);
+    }
+
+    private FileCommandWorkflow CreateLifecycle(Action? onChanged = null) =>
+        new(
+            maxRecentEntries: static () => 10,
+            onChanged: onChanged ?? (() => { }),
+            promptSaveChanges: static _ => SaveChangesPrompt.DontSave,
+            save: static () => true,
+            loadRecentFilesStore: () => RecentFilesStore.Load(
+                Path.Combine(TempDirectory, "recent.json")));
+
+    private static TextDocument Document(string text)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph(text));
+        return document;
+    }
+
+    private sealed class RecordingAdapter(
+        string extension,
+        bool canSave,
+        TextDocument loadDocument) : IDocumentFileAdapter
+    {
+        public string Extension => extension;
+
+        public string FormatName => extension == ".pdf" ? "PDF Document" : "Test Document";
+
+        public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
+            [new(extension, extension == ".pdf" ? "PDF Document" : "Test Document", CanOpen: true, CanSave: canSave)];
+
+        public TextDocument Load(Stream stream) => loadDocument;
+
+        public void Save(TextDocument document, Stream stream)
+        {
+            if (!canSave)
+                throw new NotSupportedException();
+
+            using var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true);
+            writer.Write(document.PlainText.Trim());
+        }
+    }
+}

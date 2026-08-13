@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeX.App.Services;
@@ -10,9 +11,41 @@ public partial class FormatCellsDialog
 {
     private static void PopulateBorder(ComboBox styleBox, TextBox colorBox, CellBorder border)
     {
-        styleBox.ItemsSource = Enum.GetNames(typeof(BorderStyle));
-        styleBox.SelectedItem = border.Style.ToString();
+        styleBox.ItemsSource = FormatCellsBorderPalettePlanner.StyleChoices;
+        styleBox.SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(border.Style);
         colorBox.Text = ColorInputParser.FormatRgbColor(border.Color);
+    }
+
+    private void PopulateBorderColorPalette()
+    {
+        DlgBorderLinePalettePanel.Children.Clear();
+        foreach (var entry in FormatCellsBorderPalettePlanner.ColorEntries)
+        {
+            var label = UiText.Get(entry.ResourceKey);
+            var button = new Button
+            {
+                Width = 22,
+                Height = 18,
+                Padding = new Thickness(0),
+                BorderBrush = Brushes.Gray,
+                ToolTip = label,
+                Tag = entry
+            };
+            AutomationProperties.SetName(button, label);
+
+            if (entry.Color is { } color)
+            {
+                button.Background = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+                button.Click += DlgBorderLineColorSwatchButton_Click;
+            }
+            else
+            {
+                button.Content = "...";
+                button.Click += DlgBorderLineColorPickerButton_Click;
+            }
+
+            DlgBorderLinePalettePanel.Children.Add(button);
+        }
     }
 
     private void DlgBorderLineColorPickerButton_Click(object sender, RoutedEventArgs e) =>
@@ -20,8 +53,8 @@ public partial class FormatCellsDialog
 
     private void DlgBorderLineColorSwatchButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string colorText })
-            DlgBorderLineColorBox.Text = colorText;
+        if (sender is Button { Tag: FormatCellsBorderColorEntry { Color: { } color } })
+            DlgBorderLineColorBox.Text = ColorInputParser.FormatRgbColor(color);
     }
 
     private void DlgBorderTopColorPickerButton_Click(object sender, RoutedEventArgs e) =>
@@ -91,22 +124,22 @@ public partial class FormatCellsDialog
     private void ApplyBorderSide(ComboBox styleBox, TextBox colorBox)
     {
         var nextStyle = FormatCellsDialogPlanner.NextBorderSideStyle(
-            styleBox.SelectedItem as string,
-            DlgBorderLineStyleList.SelectedItem as string ?? DlgBorderLineStyleBox.SelectedItem as string);
+            SelectedBorderStyle(styleBox.SelectedItem),
+            SelectedBorderStyle(DlgBorderLineStyleList.SelectedItem ?? DlgBorderLineStyleBox.SelectedItem, BorderStyle.Thin));
         SetBorderSide(styleBox, colorBox, nextStyle);
         UpdateBorderPreview();
     }
 
     private void SetBorderSide(ComboBox styleBox, TextBox colorBox, BorderStyle style)
     {
-        styleBox.SelectedItem = style.ToString();
+        styleBox.SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(style);
         if (style != BorderStyle.None)
             colorBox.Text = DlgBorderLineColorBox.Text;
     }
 
     private CellBorder SelectedBorderLine() =>
         FormatCellsDialogPlanner.CreateSelectedBorderLine(
-            DlgBorderLineStyleList.SelectedItem as string ?? DlgBorderLineStyleBox.SelectedItem as string,
+            SelectedBorderStyle(DlgBorderLineStyleList.SelectedItem ?? DlgBorderLineStyleBox.SelectedItem, BorderStyle.Thin),
             DlgBorderLineColorBox.Text);
 
     private void UpdateBorderPreview()
@@ -114,10 +147,10 @@ public partial class FormatCellsDialog
         if (DlgBorderPreviewArea is null)
             return;
 
-        var top = PreviewThickness(DlgBorderTopStyleBox.SelectedItem as string);
-        var right = PreviewThickness(DlgBorderRightStyleBox.SelectedItem as string);
-        var bottom = PreviewThickness(DlgBorderBottomStyleBox.SelectedItem as string);
-        var left = PreviewThickness(DlgBorderLeftStyleBox.SelectedItem as string);
+        var top = PreviewThickness(SelectedBorderStyle(DlgBorderTopStyleBox.SelectedItem));
+        var right = PreviewThickness(SelectedBorderStyle(DlgBorderRightStyleBox.SelectedItem));
+        var bottom = PreviewThickness(SelectedBorderStyle(DlgBorderBottomStyleBox.SelectedItem));
+        var left = PreviewThickness(SelectedBorderStyle(DlgBorderLeftStyleBox.SelectedItem));
 
         DlgBorderPreviewArea.BorderThickness = new Thickness(left, top, right, bottom);
         DlgBorderPreviewArea.BorderBrush = BrushForColor(
@@ -126,7 +159,7 @@ public partial class FormatCellsDialog
         DlgBorderLineColorPreview.Background = BrushForColor(TryParseColor(DlgBorderLineColorBox.Text), Brushes.Black);
 
         var insideThickness = _borderPresetInside is { } inside
-            ? PreviewThickness(inside.Style.ToString())
+            ? PreviewThickness(inside.Style)
             : 0;
         var insideBrush = _borderPresetInside is { } insideBorder
             ? BrushForColor(insideBorder.Color, Brushes.Black)
@@ -139,23 +172,16 @@ public partial class FormatCellsDialog
         DlgBorderPreviewInsideHorizontal.Visibility = insideThickness > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private static double PreviewThickness(string? selectedStyle)
+    private static BorderStyle SelectedBorderStyle(object? selectedItem, BorderStyle fallback = BorderStyle.None) =>
+        selectedItem is FormatCellsBorderStyleChoice choice ? choice.Style : fallback;
+
+    private static double PreviewThickness(BorderStyle selectedStyle)
         => selectedStyle switch
         {
-            nameof(BorderStyle.None) => 0,
-            nameof(BorderStyle.Medium) => 2,
-            nameof(BorderStyle.Thick) => 3,
-            nameof(BorderStyle.Double) => 3,
+            BorderStyle.None => 0,
+            BorderStyle.Medium => 2,
+            BorderStyle.Thick => 3,
+            BorderStyle.Double => 3,
             _ => 1
         };
-}
-
-public sealed record FormatCellsBorderSelection(
-    bool Clear,
-    CellBorder? Outline,
-    CellBorder? Inside)
-{
-    public static FormatCellsBorderSelection None { get; } = new(false, null, null);
-
-    public bool HasRangeOperations => Clear || Outline is not null || Inside is not null;
 }

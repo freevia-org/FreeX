@@ -13,20 +13,20 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void RemoveDuplicatesDialog_BuildsColumnOffsetSelectionAndBulkToggleStates()
     {
-        var columns = RemoveDuplicatesDialog.SelectAll(4);
+        var columns = RemoveDuplicatesPlanner.SelectAll(4);
         columns.Should().AllSatisfy(column => column.IsSelected.Should().BeTrue());
 
-        var cleared = RemoveDuplicatesDialog.ClearAll(columns);
+        var cleared = RemoveDuplicatesPlanner.ClearAll(columns);
         cleared.Should().AllSatisfy(column => column.IsSelected.Should().BeFalse());
 
-        var selected = RemoveDuplicatesDialog.CreateResult(
+        var selected = RemoveDuplicatesPlanner.GetSelectedColumnOffsets(
             [
                 new RemoveDuplicateColumnChoice(0, "Region", true),
                 new RemoveDuplicateColumnChoice(1, "Sales", false),
                 new RemoveDuplicateColumnChoice(2, "Rep", true)
             ]);
 
-        selected.SelectedColumnOffsets.Should().Equal(0u, 2u);
+        selected.Should().Equal(0u, 2u);
     }
 
     [Fact]
@@ -35,6 +35,7 @@ public sealed partial class DataToolDialogTests
         StaTestRunner.Run(() =>
         {
             var dialog = new RemoveDuplicatesDialog(
+                CreateRemoveDuplicatesRange(),
                 [
                     new RemoveDuplicateColumnChoice(0, "Region", true),
                     new RemoveDuplicateColumnChoice(1, "Sales", true)
@@ -76,6 +77,7 @@ public sealed partial class DataToolDialogTests
         StaTestRunner.Run(() =>
         {
             var dialog = new RemoveDuplicatesDialog(
+                CreateRemoveDuplicatesRange(),
                 [
                     new RemoveDuplicateColumnChoice(0, "Region", true),
                     new RemoveDuplicateColumnChoice(1, "Sales", true)
@@ -137,7 +139,7 @@ public sealed partial class DataToolDialogTests
             new CellAddress(sheetId, 1, 1),
             new CellAddress(sheetId, 8, 3));
 
-        RemoveDuplicatesDialog.BuildColumnChoices(sheet, range).Should().Equal(
+        RemoveDuplicatesPlanner.BuildColumnChoices(sheet, range).Should().Equal(
             new RemoveDuplicateColumnChoice(0, "Region", true),
             new RemoveDuplicateColumnChoice(1, "Sales", true),
             new RemoveDuplicateColumnChoice(2, "Column C", true));
@@ -153,7 +155,7 @@ public sealed partial class DataToolDialogTests
             new CellAddress(sheetId, 1, 2),
             new CellAddress(sheetId, 8, 4));
 
-        RemoveDuplicatesDialog.BuildColumnChoices(sheet, range, hasHeaders: false).Should().Equal(
+        RemoveDuplicatesPlanner.BuildColumnChoices(sheet, range, hasHeaders: false).Should().Equal(
             new RemoveDuplicateColumnChoice(0, "Column B", true),
             new RemoveDuplicateColumnChoice(1, "Column C", true),
             new RemoveDuplicateColumnChoice(2, "Column D", true));
@@ -172,7 +174,7 @@ public sealed partial class DataToolDialogTests
             new CellAddress(sheetId, 1, 1),
             new CellAddress(sheetId, 4, 2));
 
-        RemoveDuplicatesDialog.GuessHasHeaders(sheet, range).Should().BeTrue();
+        RemoveDuplicatesPlanner.GuessHasHeaders(sheet, range).Should().BeTrue();
 
         var numericSheet = new Sheet(sheetId, "Numbers");
         numericSheet.SetCell(new CellAddress(sheetId, 1, 1), new NumberValue(10));
@@ -180,7 +182,7 @@ public sealed partial class DataToolDialogTests
         numericSheet.SetCell(new CellAddress(sheetId, 2, 1), new NumberValue(10));
         numericSheet.SetCell(new CellAddress(sheetId, 2, 2), new NumberValue(30));
 
-        RemoveDuplicatesDialog.GuessHasHeaders(numericSheet, range).Should().BeFalse();
+        RemoveDuplicatesPlanner.GuessHasHeaders(numericSheet, range).Should().BeFalse();
     }
 
     [Fact]
@@ -191,11 +193,11 @@ public sealed partial class DataToolDialogTests
             new CellAddress(sheetId, 1, 1),
             new CellAddress(sheetId, 8, 3));
 
-        RemoveDuplicatesDialog.ExcludeHeaderRow(range, hasHeaders: true).Should().Be(new GridRange(
+        RemoveDuplicatesPlanner.ExcludeHeaderRow(range, hasHeaders: true).Should().Be(new GridRange(
             new CellAddress(sheetId, 2, 1),
             new CellAddress(sheetId, 8, 3)));
-        RemoveDuplicatesDialog.ExcludeHeaderRow(range, hasHeaders: false).Should().Be(range);
-        RemoveDuplicatesDialog.ExcludeHeaderRow(new GridRange(range.Start, range.Start), hasHeaders: true)
+        RemoveDuplicatesPlanner.ExcludeHeaderRow(range, hasHeaders: false).Should().Be(range);
+        RemoveDuplicatesPlanner.ExcludeHeaderRow(new GridRange(range.Start, range.Start), hasHeaders: true)
             .Should()
             .Be(new GridRange(range.Start, range.Start));
     }
@@ -203,7 +205,14 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void RemoveDuplicatesDialog_ResultCapturesHeaderFlag()
     {
-        var result = new RemoveDuplicatesDialogResult([0u, 2u], HasHeaders: true);
+        var result = RemoveDuplicatesPlanner.CreatePlan(
+            CreateRemoveDuplicatesRange(),
+            hasHeaders: true,
+            [
+                new RemoveDuplicateColumnChoice(0, "Region", true),
+                new RemoveDuplicateColumnChoice(1, "Sales", false),
+                new RemoveDuplicateColumnChoice(2, "Rep", true)
+            ]).Plan!;
 
         result.SelectedColumnOffsets.Should().Equal(0u, 2u);
         result.HasHeaders.Should().BeTrue();
@@ -214,8 +223,7 @@ public sealed partial class DataToolDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSourcesWithSeparator(
             string.Empty,
-            "RemoveDuplicatesDialog.cs",
-            "RemoveDuplicatesDialog.Planning.cs");
+            "RemoveDuplicatesDialog.cs");
         var mainWindowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("UiText.Get(\"RemoveDuplicates_SelectAll\")");
@@ -226,10 +234,7 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("Target = _columnsPanel");
         source.Should().Contain("_columnsPanel.Focusable = true");
         source.Should().Contain("_columnsPanel.GotKeyboardFocus");
-        source.Should().Contain("ServicesRemoveDuplicatesPlanner.BuildColumnChoices");
-        source.Should().Contain("ServicesRemoveDuplicatesPlanner.GetSelectedColumnOffsets");
-        source.Should().Contain("ServicesRemoveDuplicatesPlanner.GuessHasHeaders");
-        source.Should().Contain("ServicesRemoveDuplicatesPlanner.ExcludeHeaderRow");
+        source.Should().Contain("RemoveDuplicatesPlanner.CreatePlan(");
         source.Should().NotContain("SpreadsheetDisplayFormatter");
         source.Should().NotContain("ScalarValue?");
         source.Should().NotContain("NumberValue or DateTimeValue or BoolValue");
@@ -239,9 +244,9 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("RefreshColumnLabels");
         source.Should().Contain("HasHeaders");
         mainWindowSource.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
-        mainWindowSource.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
-        mainWindowSource.Should().Contain("RemoveDuplicatesPlanner.CreatePlan(");
-        mainWindowSource.Should().Contain("dialog.Result.SelectedColumnOffsets");
+        mainWindowSource.Should().Contain("RemoveDuplicatesPlanner.BuildColumnChoices(");
+        mainWindowSource.Should().Contain("RemoveDuplicatesPlanner.GuessHasHeaders(");
+        mainWindowSource.Should().Contain("var plan = dialog.Result;");
         mainWindowSource.Should().Contain("var command = plan.CreateCommand(sheetId);");
         mainWindowSource.Should().NotContain("var activeRange = RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders);");
         mainWindowSource.Should().NotContain("new RemoveDuplicateRowsCommand(");
@@ -269,5 +274,13 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("_boxes.Count == 0 ? null : _boxes[0]");
         source.Should().Contain("firstColumnBox.Focus();");
         source.Should().Contain("Keyboard.Focus(firstColumnBox);");
+    }
+
+    private static GridRange CreateRemoveDuplicatesRange()
+    {
+        var sheetId = SheetId.New();
+        return new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 8, 3));
     }
 }

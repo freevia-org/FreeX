@@ -1,12 +1,10 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net;
-using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using FreeP.App.Compositor;
+using FreeP.VisualEvidence;
+using Free.ToolsShared;
 
 namespace FreeP.RenderCompare;
 
@@ -70,20 +68,10 @@ internal sealed record WholeWindowVisualEvidenceSummary(
 
 internal static class WholeWindowVisualEvidence
 {
-    private const string HostOutputArgument = "--whole-window-visual-evidence-output";
-    private const string HostScenarioArgument = "--whole-window-visual-evidence-scenario";
     private const double MaximumChangedPixelRatio = 0.20;
     private const double MaximumMeanChannelDelta = 18.0;
     private const int MaximumPerceptualHashDistance = 18;
     private const double BoundsTolerance = 3.0;
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
 
     internal static int Run(string outputDirectory, string wpfExecutable, string avaloniaExecutable, TimeSpan timeout)
     {
@@ -96,39 +84,38 @@ internal static class WholeWindowVisualEvidence
             throw new FileNotFoundException("Avalonia capture host was not found.", avaloniaExecutable);
 
         Directory.CreateDirectory(outputDirectory);
-        var runRoot = Path.Combine(Path.GetTempPath(), "freep-whole-window-evidence-" + Guid.NewGuid().ToString("N"));
+        using var runDirectory = new VisualEvidenceRunDirectory(
+            FreePVisualEvidenceRoutes.WholeWindow.TemporaryDirectoryPrefix);
+        var runRoot = runDirectory.Path;
         var runnerLimitations = new List<string>();
-        try
-        {
-            var wpf = CaptureHost("wpf", wpfExecutable, outputDirectory, runRoot, timeout, runnerLimitations);
-            var avalonia = CaptureHost("avalonia", avaloniaExecutable, outputDirectory, runRoot, timeout, runnerLimitations);
-            var summary = BuildSummary(wpf, avalonia, outputDirectory, runnerLimitations);
-            WriteReports(outputDirectory, summary);
-            WriteArtifactManifest(outputDirectory);
-            Console.WriteLine($"Whole-window paired captures: {summary.PairedCaptureCount}/{summary.ScenarioCount}");
-            Console.WriteLine($"Pass: {summary.PassCount}; mismatch: {summary.MismatchCount}; limitation: {summary.LimitationCount}; duplicate captures: {summary.DuplicateCaptureCount}");
-            Console.WriteLine($"Summary: {Path.Combine(outputDirectory, "summary.json")}");
-            return summary.LimitationCount == 0 && summary.PairedCaptureCount == summary.ScenarioCount ? 0 : 1;
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(runRoot))
-                    Directory.Delete(runRoot, recursive: true);
-            }
-            catch (IOException ex)
-            {
-                Console.Error.WriteLine($"Temporary whole-window capture cleanup was incomplete: {ex.Message}");
-            }
-        }
+        var wpf = CaptureHost(
+            FreePVisualEvidenceCaptureOrchestration.WpfHost,
+            wpfExecutable,
+            outputDirectory,
+            runRoot,
+            timeout,
+            runnerLimitations);
+        var avalonia = CaptureHost(
+            FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
+            avaloniaExecutable,
+            outputDirectory,
+            runRoot,
+            timeout,
+            runnerLimitations);
+        var summary = BuildSummary(wpf, avalonia, outputDirectory, runnerLimitations);
+        WriteReports(outputDirectory, summary);
+        WriteArtifactManifest(outputDirectory);
+        Console.WriteLine($"Whole-window paired captures: {summary.PairedCaptureCount}/{summary.ScenarioCount}");
+        Console.WriteLine($"Pass: {summary.PassCount}; mismatch: {summary.MismatchCount}; limitation: {summary.LimitationCount}; duplicate captures: {summary.DuplicateCaptureCount}");
+        Console.WriteLine($"Summary: {Path.Combine(outputDirectory, "summary.json")}");
+        return summary.LimitationCount == 0 && summary.PairedCaptureCount == summary.ScenarioCount ? 0 : 1;
     }
 
     internal static int RegenerateReports(string outputDirectory)
     {
         outputDirectory = Path.GetFullPath(outputDirectory);
-        var wpf = ReadHostManifest(outputDirectory, "wpf");
-        var avalonia = ReadHostManifest(outputDirectory, "avalonia");
+        var wpf = ReadHostManifest(outputDirectory, FreePVisualEvidenceCaptureOrchestration.WpfHost);
+        var avalonia = ReadHostManifest(outputDirectory, FreePVisualEvidenceCaptureOrchestration.AvaloniaHost);
         var summary = BuildSummary(wpf, avalonia, outputDirectory);
         WriteReports(outputDirectory, summary);
         WriteArtifactManifest(outputDirectory);
@@ -572,9 +559,9 @@ internal static class WholeWindowVisualEvidence
             MaximumPerceptualHashDistance,
             thresholdPassed,
             heatmapRelativePath,
-            Sha256(wpfPath),
-            Sha256(avaloniaPath),
-            Sha256(heatmapPath));
+            VisualEvidenceToolSupport.Sha256(wpfPath),
+            VisualEvidenceToolSupport.Sha256(avaloniaPath),
+            VisualEvidenceToolSupport.Sha256(heatmapPath));
     }
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> DuplicateScenarioMap(
@@ -601,45 +588,70 @@ internal static class WholeWindowVisualEvidence
         TimeSpan timeout,
         List<string> runnerLimitations)
     {
-        var finalHostDirectory = Path.Combine(outputDirectory, host);
-        var finalFullDirectory = Path.Combine(finalHostDirectory, "full");
-        var finalClientDirectory = Path.Combine(finalHostDirectory, "client");
-        Directory.CreateDirectory(finalFullDirectory);
-        Directory.CreateDirectory(finalClientDirectory);
+        var outputPlan = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
+            outputDirectory,
+            host,
+            FreePVisualEvidenceRoutes.WholeWindow);
+        outputPlan.EnsureDirectories();
         var captures = new List<WholeWindowVisualEvidenceCapture>();
         var hostLimitations = new List<string>();
 
         foreach (var scenario in WholeWindowVisualEvidenceCatalog.All)
         {
             Console.WriteLine($"[{host}] {scenario.Id}");
-            var scenarioRoot = Path.Combine(runRoot, host, scenario.Id);
+            var scenarioRoot = FreePVisualEvidenceCaptureOrchestration.CreateScenarioRunRoot(
+                runRoot,
+                host,
+                scenario.Id);
             Directory.CreateDirectory(scenarioRoot);
             var result = RunScenario(executable, scenarioRoot, scenario.Id, timeout);
-            var manifestPath = Path.Combine(scenarioRoot, host, "manifest.json");
-            if (!File.Exists(manifestPath))
+            var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
+                scenarioRoot,
+                host,
+                scenario.Id,
+                FreePVisualEvidenceRoutes.WholeWindow);
+            var scenarioManifest = FreePVisualEvidenceCaptureOrchestration.ReadScenarioManifest<
+                WholeWindowVisualEvidenceHostManifest,
+                WholeWindowVisualEvidenceCapture>(
+                    scenarioOutput.HostManifestPath,
+                    FreePVisualEvidenceCaptureOrchestration.ToolManifestJsonOptions,
+                    scenario.Id,
+                    manifest => manifest.Captures,
+                    capture => capture.ScenarioId);
+            if (scenarioManifest.Status == VisualEvidenceScenarioManifestStatus.MissingManifest)
             {
                 runnerLimitations.Add($"{host} {scenario.Id}: {result} No host manifest was produced.");
                 continue;
             }
 
-            var manifest = JsonSerializer.Deserialize<WholeWindowVisualEvidenceHostManifest>(File.ReadAllText(manifestPath), JsonOptions);
-            var capture = manifest?.Captures.SingleOrDefault(item => StringComparer.Ordinal.Equals(item.ScenarioId, scenario.Id));
+            var manifest = scenarioManifest.Manifest;
+            var capture = scenarioManifest.Capture;
             if (capture is null)
             {
                 runnerLimitations.Add($"{host} {scenario.Id}: {result} The host manifest contained no matching capture.");
                 continue;
             }
 
-            var sourceFull = Path.Combine(scenarioRoot, capture.FullImagePath.Replace('/', Path.DirectorySeparatorChar));
-            var sourceClient = Path.Combine(scenarioRoot, capture.ClientImagePath.Replace('/', Path.DirectorySeparatorChar));
-            if (!IsNonzeroFile(sourceFull) || !IsNonzeroFile(sourceClient))
+            var sourceFull = FreePVisualEvidenceCaptureOrchestration.ResolveDeclaredPath(
+                scenarioRoot,
+                capture.FullImagePath);
+            var sourceClient = FreePVisualEvidenceCaptureOrchestration.ResolveDeclaredPath(
+                scenarioRoot,
+                capture.ClientImagePath);
+            if (!FreePVisualEvidenceCaptureOrchestration.IsNonzeroFile(sourceFull) ||
+                !FreePVisualEvidenceCaptureOrchestration.IsNonzeroFile(sourceClient))
             {
                 runnerLimitations.Add($"{host} {scenario.Id}: {result} One or both declared PNGs were missing or empty.");
                 continue;
             }
 
-            var finalFull = Path.Combine(finalFullDirectory, scenario.Id + ".png");
-            var finalClient = Path.Combine(finalClientDirectory, scenario.Id + ".png");
+            var finalScenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
+                outputDirectory,
+                host,
+                scenario.Id,
+                FreePVisualEvidenceRoutes.WholeWindow);
+            var finalFull = finalScenarioOutput.FullImagePath!;
+            var finalClient = finalScenarioOutput.ClientImagePath!;
             File.Copy(sourceFull, finalFull, overwrite: true);
             File.Copy(sourceClient, finalClient, overwrite: true);
             var fullValidation = TryValidateContent(finalFull);
@@ -656,10 +668,10 @@ internal static class WholeWindowVisualEvidence
             captures.Add(capture with
             {
                 CaptureStatus = contentValid ? capture.CaptureStatus : "invalid-pixel-content",
-                FullImagePath = $"{host}/full/{scenario.Id}.png",
-                ClientImagePath = $"{host}/client/{scenario.Id}.png",
-                FullImageSha256 = Sha256(finalFull),
-                ClientImageSha256 = Sha256(finalClient),
+                FullImagePath = finalScenarioOutput.FullImageRelativePath!,
+                ClientImagePath = finalScenarioOutput.ClientImageRelativePath!,
+                FullImageSha256 = VisualEvidenceToolSupport.Sha256(finalFull),
+                ClientImageSha256 = VisualEvidenceToolSupport.Sha256(finalClient),
                 Limitations = capture.Limitations.Concat(contentLimitations).ToArray(),
             });
             if (manifest is not null)
@@ -673,45 +685,45 @@ internal static class WholeWindowVisualEvidence
             WholeWindowVisualEvidenceCatalog.TargetDpi,
             WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
             WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
-            DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+            FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
             captures,
             hostLimitations.Distinct(StringComparer.Ordinal).ToArray());
-        File.WriteAllText(Path.Combine(finalHostDirectory, "manifest.json"), JsonSerializer.Serialize(hostManifest, JsonOptions));
+        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
+            outputPlan.ManifestPath,
+            hostManifest,
+            FreePVisualEvidenceCaptureOrchestration.ToolManifestJsonOptions);
         return hostManifest;
     }
 
     private static string RunScenario(string executable, string outputRoot, string scenarioId, TimeSpan timeout)
-    {
-        using var process = Process.Start(new ProcessStartInfo
-        {
-            FileName = executable,
-            WorkingDirectory = Path.GetDirectoryName(executable)!,
-            UseShellExecute = false,
-            Arguments = $"{Quote(HostOutputArgument)} {Quote(outputRoot)} {Quote(HostScenarioArgument)} {Quote(scenarioId)}",
-        });
-        if (process is null)
-            return "The process did not start.";
-        if (!process.WaitForExit((int)timeout.TotalMilliseconds))
-        {
-            process.Kill(entireProcessTree: true);
-            process.WaitForExit();
-            return $"PID {process.Id} timed out after {timeout.TotalSeconds:0} seconds and its exact owned process tree was stopped.";
-        }
-        return $"PID {process.Id} exited with code {process.ExitCode}.";
-    }
+        => VisualEvidenceToolSupport.RunScenario(
+            FreePVisualEvidenceCaptureOrchestration.CreateScenarioProcessPlan(
+                executable,
+                outputRoot,
+                FreePVisualEvidenceRoutes.WholeWindow,
+                scenarioId,
+                timeout,
+                "exact owned process tree"));
 
     private static WholeWindowVisualEvidenceHostManifest ReadHostManifest(string outputDirectory, string host)
     {
-        var path = Path.Combine(outputDirectory, host, "manifest.json");
-        if (!File.Exists(path))
-            throw new FileNotFoundException($"{host} whole-window evidence manifest was not found.", path);
-        return JsonSerializer.Deserialize<WholeWindowVisualEvidenceHostManifest>(File.ReadAllText(path), JsonOptions)
-            ?? throw new InvalidDataException($"{host} whole-window evidence manifest could not be read.");
+        var path = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
+            outputDirectory,
+            host,
+            FreePVisualEvidenceRoutes.WholeWindow).ManifestPath;
+        return VisualEvidenceToolSupport.ReadManifest<WholeWindowVisualEvidenceHostManifest>(
+            path,
+            FreePVisualEvidenceCaptureOrchestration.ToolManifestJsonOptions,
+            $"{host} whole-window evidence manifest was not found.",
+            $"{host} whole-window evidence manifest could not be read.");
     }
 
     private static void WriteReports(string outputDirectory, WholeWindowVisualEvidenceSummary summary)
     {
-        File.WriteAllText(Path.Combine(outputDirectory, "summary.json"), JsonSerializer.Serialize(summary, JsonOptions));
+        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
+            Path.Combine(outputDirectory, "summary.json"),
+            summary,
+            FreePVisualEvidenceCaptureOrchestration.ToolManifestJsonOptions);
         File.WriteAllText(Path.Combine(outputDirectory, "report.md"), BuildMarkdown(summary));
         File.WriteAllText(Path.Combine(outputDirectory, "report.html"), BuildHtml(summary));
     }
@@ -823,12 +835,13 @@ internal static class WholeWindowVisualEvidence
             {
                 path = Path.GetRelativePath(outputDirectory, path).Replace('\\', '/'),
                 length = new FileInfo(path).Length,
-                sha256 = Sha256(path),
+                sha256 = VisualEvidenceToolSupport.Sha256(path),
             })
             .ToArray();
-        File.WriteAllText(
+        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
             Path.Combine(outputDirectory, "artifact-manifest.json"),
-            JsonSerializer.Serialize(new { schemaVersion = 1, artifacts = entries }, JsonOptions));
+            new { schemaVersion = 1, artifacts = entries },
+            FreePVisualEvidenceCaptureOrchestration.ToolManifestJsonOptions);
     }
 
     private static string EvidenceLinks(WholeWindowVisualEvidenceComparison comparison)
@@ -872,14 +885,12 @@ internal static class WholeWindowVisualEvidence
     private static string NormalizeTabId(string id) =>
         StringComparer.OrdinalIgnoreCase.Equals(id, "FileTab") ? "file" : id;
 
-    private static bool IsNonzeroFile(string path) => File.Exists(path) && new FileInfo(path).Length > 0;
-
     private static string EvidencePath(string root, string relativePath) =>
         Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
 
     private static ImageContentValidation? TryValidateContent(string path)
     {
-        if (!IsNonzeroFile(path))
+        if (!FreePVisualEvidenceCaptureOrchestration.IsNonzeroFile(path))
             return null;
         try
         {
@@ -895,7 +906,7 @@ internal static class WholeWindowVisualEvidence
         string path,
         WholeWindowVisualEvidenceBounds bounds)
     {
-        if (!IsNonzeroFile(path) || !bounds.IsVisible)
+        if (!FreePVisualEvidenceCaptureOrchestration.IsNonzeroFile(path) || !bounds.IsVisible)
             return null;
         try
         {
@@ -913,11 +924,4 @@ internal static class WholeWindowVisualEvidence
             ? "valid."
             : string.Join(", ", validation.Failures) + ".";
 
-    private static string Quote(string value) => '"' + value.Replace("\"", "\\\"") + '"';
-
-    private static string Sha256(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
-    }
 }

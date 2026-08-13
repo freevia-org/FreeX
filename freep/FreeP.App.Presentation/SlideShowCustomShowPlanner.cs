@@ -41,7 +41,12 @@ public sealed record SlideShowCustomShowSummary(
 public sealed record SlideShowCustomShowSlideOption(
     int Index,
     string SlideId,
-    string Title);
+    string Title)
+{
+    public string DisplayText => $"Slide {Index + 1}: {Title}";
+
+    public override string ToString() => DisplayText;
+}
 
 public sealed record SlideShowCustomShowAuthoringPlan(
     IReadOnlyList<SlideShowCustomShowSummary> CustomShows,

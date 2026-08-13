@@ -27,6 +27,12 @@ public sealed class AutosaveServiceTests
     }
 
     [Fact]
+    public void DefaultInterval_RemainsFiveMinutes()
+    {
+        AutosaveService.DefaultInterval.Should().Be(TimeSpan.FromMinutes(5));
+    }
+
+    [Fact]
     public void OnTimerTick_WhenDirtyAndGenerationChanged_WritesSnapshot()
     {
         using var dir = new TestTemporaryDirectory();
@@ -43,6 +49,25 @@ public sealed class AutosaveServiceTests
 
         File.Exists(store.GetSnapshotPath("test-w0")).Should().BeTrue();
         File.Exists(store.GetSidecarPath("test-w0")).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Attach_WithWindowId_UsesCanonicalPerLaunchSnapshotIdentity()
+    {
+        using var dir = new TestTemporaryDirectory();
+        var store = new AutosaveSnapshotStore(dir.Path);
+        var service = new AutosaveService(store);
+        var source = new StubSource(dirty: true, generation: 1);
+        var windowId = Guid.Parse("12345678-90ab-cdef-1234-567890abcdef");
+
+        service.Attach(source, windowId);
+        service.OnTimerTick();
+
+        var launchTag = AutosaveSnapshotStore.LaunchId.ToString("N")[..8];
+        var expectedId = FormattableString.Invariant(
+            $"recovery-{Environment.ProcessId}-{launchTag}-12345678");
+        File.Exists(store.GetSnapshotPath(expectedId)).Should().BeTrue();
+        File.Exists(store.GetSidecarPath(expectedId)).Should().BeTrue();
     }
 
     [Fact]
@@ -160,6 +185,25 @@ public sealed class AutosaveServiceTests
     }
 
     [Fact]
+    public void TryEmergencySnapshot_WithoutSource_UsesAttachedWorkbook()
+    {
+        using var dir = new TestTemporaryDirectory();
+        var store = new AutosaveSnapshotStore(dir.Path);
+        var service = new AutosaveService(store);
+        var source = new StubSource(dirty: true, generation: 7, filePath: @"C:\work.xlsx", name: "work");
+        service.Attach(source, "emergency-bound-source");
+
+        Action act = service.TryEmergencySnapshot;
+
+        act.Should().NotThrow();
+        File.Exists(store.GetSnapshotPath("emergency-bound-source")).Should().BeTrue();
+        var sidecarJson = File.ReadAllText(store.GetSidecarPath("emergency-bound-source"));
+        var sidecar = AutosaveSnapshotStore.TryDeserializeSidecar(sidecarJson);
+        sidecar.Should().NotBeNull();
+        sidecar!.DocumentId.Should().Be(source.DocumentId);
+    }
+
+    [Fact]
     public void TryEmergencySnapshot_WhenNotDirty_DoesNotWriteSnapshot()
     {
         // R74-services-autosave-recovery-4-2: an emergency crash-handler snapshot bypasses the
@@ -203,5 +247,21 @@ public sealed class AutosaveServiceTests
         service.OnTimerTick(); // should be a no-op
 
         File.Exists(store.GetSnapshotPath("test-dispose-w0")).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Dispose_PreventsBoundEmergencySnapshot()
+    {
+        using var dir = new TestTemporaryDirectory();
+        var store = new AutosaveSnapshotStore(dir.Path);
+        var service = new AutosaveService(store);
+        var source = new StubSource(dirty: true, generation: 1);
+
+        service.Attach(source, "test-dispose-emergency");
+        service.Dispose();
+        service.TryEmergencySnapshot();
+
+        File.Exists(store.GetSnapshotPath("test-dispose-emergency")).Should().BeFalse();
+        File.Exists(store.GetSidecarPath("test-dispose-emergency")).Should().BeFalse();
     }
 }

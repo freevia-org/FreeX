@@ -18,6 +18,29 @@ public sealed record TableOfAuthoritiesDialogState(
     CitationCategory? CategoryFilter,
     ToaTabLeader TabLeader);
 
+public sealed record TableOfAuthoritiesDialogInput(
+    bool? UsePassim,
+    bool? KeepOriginalFormatting,
+    TableOfAuthoritiesCategoryChoice? CategorySelection,
+    TableOfAuthoritiesTabLeaderChoice? TabLeaderSelection);
+
+public enum TableOfAuthoritiesDialogField
+{
+    Category,
+    TabLeader
+}
+
+public sealed record TableOfAuthoritiesDialogValidation(
+    TableOfAuthoritiesDialogField Field,
+    string Message);
+
+public sealed record TableOfAuthoritiesDialogAcceptance(
+    ToaOptions? Options,
+    TableOfAuthoritiesDialogValidation? Validation)
+{
+    public bool IsAccepted => Options is not null && Validation is null;
+}
+
 public readonly record struct TableOfAuthoritiesDialogVisualMetrics(
     double DialogWidth,
     double OuterInset,
@@ -36,19 +59,14 @@ public readonly record struct TableOfAuthoritiesDialogVisualMetrics(
 public static class TableOfAuthoritiesDialogPlanner
 {
     public const string Title = "Table of Authorities";
+    public const int DialogWidth = 380;
+    public const int OuterMargin = 16;
+    public const int ButtonWidth = 80;
     public const string CategoryLabel = "Category:";
     public const string UsePassimLabel = "Use passim";
     public const string KeepOriginalFormattingLabel = "Keep original formatting";
     public const string TabLeaderLabel = "Tab leader:";
     public const string AllCategoriesLabel = "(All)";
-
-    /// <summary>
-    /// WPF-authority geometry at the dialog harness's 96-DPI logical coordinate space. The
-    /// Avalonia compensation values describe measured template paint offsets, not alternate
-    /// product layout: its combo template paints the same compact field two pixels shorter, its
-    /// content needs one additional right inset, and its action row needs a one-pixel downward
-    /// offset to occupy the same painted bounds as WPF.
-    /// </summary>
     public static TableOfAuthoritiesDialogVisualMetrics VisualMetrics { get; } = new(
         DialogWidth: 380,
         OuterInset: 16,
@@ -63,6 +81,8 @@ public static class TableOfAuthoritiesDialogPlanner
         AvaloniaComboBoxHeightCompensation: -2,
         AvaloniaOuterRightCompensation: 1,
         AvaloniaActionTopCompensation: 1);
+    public const string MissingCategoryMessage = "Select a category.";
+    public const string MissingTabLeaderMessage = "Select a tab leader.";
 
     public static TableOfAuthoritiesDialogState DefaultState { get; } =
         BuildInitialState(ToaOptions.Default);
@@ -78,6 +98,14 @@ public static class TableOfAuthoritiesDialogPlanner
             KeepOriginalFormatting: true,
             CategoryFilter: CitationCategory.Statutes,
             TabLeader: ToaTabLeader.Dashes);
+
+    public static TableOfAuthoritiesDialogSession CreateSession(ToaOptions options) =>
+        new(options);
+
+    public static TableOfAuthoritiesCommitPlan PlanCommit(
+        ToaOptions? options,
+        bool useDefaultsWhenUnavailable = false) =>
+        new(options ?? (useDefaultsWhenUnavailable ? ToaOptions.Default : null));
 
     /// <summary>
     /// Returns the shared options seed for a dialog evidence state. The validation-error route has
@@ -133,6 +161,40 @@ public static class TableOfAuthoritiesDialogPlanner
             CategoryFilter = state.CategoryFilter,
             TabLeader = state.TabLeader
         };
+
+    public static TableOfAuthoritiesDialogAcceptance PlanAcceptance(
+        TableOfAuthoritiesDialogInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var category = input.CategorySelection;
+        if (category is null
+            || category.Category is { } selectedCategory && !Enum.IsDefined(selectedCategory))
+        {
+            return new TableOfAuthoritiesDialogAcceptance(
+                Options: null,
+                new TableOfAuthoritiesDialogValidation(
+                    TableOfAuthoritiesDialogField.Category,
+                    MissingCategoryMessage));
+        }
+
+        var tabLeader = input.TabLeaderSelection;
+        if (tabLeader is null || !Enum.IsDefined(tabLeader.Leader))
+        {
+            return new TableOfAuthoritiesDialogAcceptance(
+                Options: null,
+                new TableOfAuthoritiesDialogValidation(
+                    TableOfAuthoritiesDialogField.TabLeader,
+                    MissingTabLeaderMessage));
+        }
+
+        var state = new TableOfAuthoritiesDialogState(
+            input.UsePassim is true,
+            input.KeepOriginalFormatting is true,
+            category.Category,
+            tabLeader.Leader);
+        return new TableOfAuthoritiesDialogAcceptance(BuildOptions(state), Validation: null);
+    }
 
     public static int SelectCategoryIndex(
         IReadOnlyList<TableOfAuthoritiesCategoryChoice> choices,

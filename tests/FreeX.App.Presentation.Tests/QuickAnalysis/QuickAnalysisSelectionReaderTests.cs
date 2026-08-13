@@ -104,4 +104,39 @@ public sealed class QuickAnalysisSelectionReaderTests
 
         description.HasHeaderRow.Should().BeFalse();
     }
+
+    [Fact]
+    public void Describe_FullStructuredTableUsesExplicitHeaderAndExcludesTotalsFromData()
+    {
+        var sheet = CreateSheet();
+        var tableRange = Range(sheet, 1, 1, 5, 2);
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 7,
+            Name = "Sales",
+            DisplayName = "Sales",
+            Range = tableRange,
+            HeaderRowCount = 1,
+            TotalsRowShown = true,
+            TotalsRowCount = 1
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        for (uint row = 2; row <= 4; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"R{row}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row * 10));
+        }
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new NumberValue(999));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(999));
+
+        var description = QuickAnalysisSelectionReader.Describe(sheet, tableRange);
+
+        description.IsStructuredTableSelection.Should().BeTrue();
+        description.HasHeaderRow.Should().BeTrue();
+        description.DataRowCount.Should().Be(3);
+        description.ColumnKinds.Should().Equal(
+            QuickAnalysisColumnKind.Text,
+            QuickAnalysisColumnKind.Numeric);
+    }
 }

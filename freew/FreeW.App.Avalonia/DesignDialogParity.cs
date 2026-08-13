@@ -10,17 +10,18 @@ using FreeW.Core.Model;
 namespace FreeW.App.Avalonia;
 
 /// <summary>Avalonia counterpart of WPF's Create New Theme Colors dialog.</summary>
-public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
+public sealed partial class CustomizeThemeColorsDialog : FreeWDialogWindow
 {
-    internal const double WpfWidthForTests = 440;
-    internal const double WpfLabelColumnWidthForTests = 190;
-    internal const double WpfColorRowHeightForTests = 29.4;
-    internal const double WpfButtonWidthForTests = 72;
+    private const double DialogWidth = 440;
+    private const double LabelColumnWidth = 190;
+    private const double ColorRowHeight = 29.4;
+    private const double ActionButtonWidth = 72;
 
     private readonly DocumentTheme _current;
     private readonly TextBox[] _colorBoxes;
     private readonly TextBox _nameBox;
     private readonly TextBlock _status = new();
+    private readonly DesignDialogText _text;
 
     public DocumentTheme? Result { get; private set; }
 
@@ -28,12 +29,13 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
     {
         ArgumentNullException.ThrowIfNull(current);
         _current = current;
+        _text = DesignDialogTextCatalog.Resolve(UiText.Get);
         var state = CustomizeThemeColorsDialogPlanner.BuildInitialState(current);
         _colorBoxes = state.ColorHexTexts.Select(text => MakeTextBox(text, 120)).ToArray();
         _nameBox = MakeTextBox(state.NameText, 200);
 
         Title = CustomizeThemeColorsDialogPlanner.Title;
-        Width = WpfWidthForTests;
+        Width = DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -55,7 +57,7 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
                 index,
                 CustomizeThemeColorsDialogPlanner.Slots[index].Label,
                 _colorBoxes[index],
-                WpfColorRowHeightForTests,
+                ColorRowHeight,
                 new Thickness(0, 0, 8, 0));
         content.Children.Add(grid);
         content.Children.Add(new Border
@@ -70,7 +72,7 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
             0,
             CustomizeThemeColorsDialogPlanner.NameLabel,
             _nameBox,
-            WpfColorRowHeightForTests,
+            ColorRowHeight,
             new Thickness(0, 0, 8, 0));
         content.Children.Add(nameGrid);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, InsertDialogLayout.ChromeStyle, new Thickness(0, 8, 0, 0));
@@ -80,8 +82,6 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
         Content = content;
     }
 
-    internal bool AcceptForTests() => Accept(closeOnSuccess: false);
-
     private bool Accept(bool closeOnSuccess)
     {
         if (!CustomizeThemeColorsDialogPlanner.TryBuildResult(
@@ -90,7 +90,7 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
                 out var result,
                 out var validation))
         {
-            _status.Text = validation?.Message ?? "Enter valid theme colors.";
+            _status.Text = validation?.Message ?? _text.InvalidThemeColorsMessage;
             _status.IsVisible = true;
             (_colorBoxes.ElementAtOrDefault(validation?.SlotIndex ?? 0) ?? _nameBox).Focus();
             return false;
@@ -105,12 +105,12 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
 
     private StackPanel CreateActionRow()
     {
-        var ok = new Button { Content = "OK", IsDefault = true };
-        AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDialogLayout.ChromeStyle, WpfButtonWidthForTests, isDefault: true);
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDialogLayout.ChromeStyle, ActionButtonWidth, isDefault: true);
         ok.Click += (_, _) => Accept(closeOnSuccess: true);
 
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
-        AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDialogLayout.ChromeStyle, WpfButtonWidthForTests);
+        var cancel = new Button { Content = UiText.Get("Common_CancelText"), IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDialogLayout.ChromeStyle, ActionButtonWidth);
         cancel.Click += (_, _) => Close();
 
         return AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0));
@@ -119,7 +119,7 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
     private static Grid CreateGrid()
     {
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(WpfLabelColumnWidthForTests) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(LabelColumnWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         return grid;
     }
@@ -133,8 +133,9 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
 }
 
 /// <summary>Avalonia counterpart of WPF's Create New Theme Fonts dialog.</summary>
-public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
+public sealed partial class CustomizeThemeFontsDialog : FreeWDialogWindow
 {
+    private readonly CustomizeThemeFontsDialogSession _session;
     private readonly ComboBox _heading;
     private readonly ComboBox _body;
     private readonly TextBox _name;
@@ -145,7 +146,8 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
     public CustomizeThemeFontsDialog(DocumentFontSet current)
     {
         ArgumentNullException.ThrowIfNull(current);
-        var state = CustomizeThemeFontsDialogPlanner.BuildInitialState(current);
+        _session = CustomizeThemeFontsDialogPlanner.CreateSession(current);
+        var state = _session.InitialState;
         _heading = MakeFontBox(state.HeadingFontText);
         _body = MakeFontBox(state.BodyFontText);
         _name = new TextBox { Text = state.NameText, MinWidth = CustomizeThemeFontsDialogPlanner.FieldMinWidth };
@@ -158,7 +160,7 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
-        var content = new StackPanel { Margin = new Thickness(14) };
+        var content = new StackPanel { Margin = new Thickness(CustomizeThemeFontsDialogPlanner.DialogMargin) };
         content.Children.Add(new TextBlock
         {
             Text = CustomizeThemeFontsDialogPlanner.Hint,
@@ -172,8 +174,8 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var rowLabelMargin = new Thickness(0, CustomizeThemeFontsDialogPlanner.RowMargin, CustomizeThemeFontsDialogPlanner.LabelRightMargin, CustomizeThemeFontsDialogPlanner.RowMargin);
         var rowFieldMargin = new Thickness(0, CustomizeThemeFontsDialogPlanner.RowMargin, 0, CustomizeThemeFontsDialogPlanner.RowMargin);
-        InsertDialogLayout.AddLabeledRow(grid, 0, "Heading font:", _heading, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
-        InsertDialogLayout.AddLabeledRow(grid, 1, "Body font:", _body, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
+        InsertDialogLayout.AddLabeledRow(grid, 0, CustomizeThemeFontsDialogPlanner.HeadingFontLabel, _heading, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
+        InsertDialogLayout.AddLabeledRow(grid, 1, CustomizeThemeFontsDialogPlanner.BodyFontLabel, _body, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
         var separator = new Border
         {
             Height = CustomizeThemeFontsDialogPlanner.SeparatorHeight,
@@ -184,7 +186,7 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
         Grid.SetColumnSpan(separator, 2);
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.Children.Add(separator);
-        InsertDialogLayout.AddLabeledRow(grid, 3, "Name:", _name, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
+        InsertDialogLayout.AddLabeledRow(grid, 3, CustomizeThemeFontsDialogPlanner.NameLabel, _name, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
         grid.Margin = new Thickness(0, 0, 0, CustomizeThemeFontsDialogPlanner.DialogMargin);
         content.Children.Add(grid);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, InsertDialogLayout.ChromeStyle, new Thickness(0, 8, 0, 0));
@@ -193,22 +195,19 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
         Content = content;
     }
 
-    internal bool AcceptForTests() => Accept(closeOnSuccess: false);
-
     private bool Accept(bool closeOnSuccess)
     {
-        if (!CustomizeThemeFontsDialogPlanner.TryBuildResult(
-                new CustomizeThemeFontsDialogInput(_heading.Text, _body.Text, _name.Text),
-                out var result,
-                out var validation))
+        var acceptance = _session.PlanAcceptance(
+            new CustomizeThemeFontsDialogInput(_heading.Text, _body.Text, _name.Text));
+        if (!acceptance.IsAccepted)
         {
-            _status.Text = validation?.Message ?? "Enter both font names.";
+            _status.Text = acceptance.ErrorMessage;
             _status.IsVisible = true;
-            (validation?.Field == CustomizeThemeFontsDialogField.BodyFont ? _body : _heading).Focus();
+            (acceptance.FocusField == CustomizeThemeFontsDialogField.BodyFont ? _body : _heading).Focus();
             return false;
         }
 
-        Result = result;
+        Result = acceptance.Result;
         _status.IsVisible = false;
         if (closeOnSuccess)
             Close();
@@ -236,7 +235,7 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
 }
 
 /// <summary>Avalonia page-color picker matching WPF's palette, No Color, and More Colors flow.</summary>
-public sealed class PageColorDialog : FreeWDialogWindow
+public sealed partial class PageColorDialog : FreeWDialogWindow
 {
     private readonly ComboBox _palette;
     private readonly TextBox _custom;
@@ -247,6 +246,7 @@ public sealed class PageColorDialog : FreeWDialogWindow
 
     public PageColorDialog(string? currentHex)
     {
+        var text = DesignDialogTextCatalog.Resolve(UiText.Get);
         var state = PageColorDialogPlanner.BuildInitialState(currentHex);
         _palette = new ComboBox { ItemsSource = PageColorDialogPlanner.Palette.Select(item => item.Label).ToArray(), SelectedIndex = state.SelectedPaletteIndex, MinWidth = 220 };
         _custom = new TextBox { Text = state.CustomColorText, MinWidth = 220 };
@@ -264,8 +264,8 @@ public sealed class PageColorDialog : FreeWDialogWindow
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(125) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, "Color:", _palette);
-        InsertDialogLayout.AddLabeledRow(grid, 1, "More Colors:", _custom);
+        InsertDialogLayout.AddLabeledRow(grid, 0, text.PageColorLabel, _palette);
+        InsertDialogLayout.AddLabeledRow(grid, 1, text.MoreColorsLabel, _custom);
         content.Children.Add(grid);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, InsertDialogLayout.ChromeStyle, new Thickness(0, 8, 0, 0));
         content.Children.Add(_status);
@@ -273,14 +273,6 @@ public sealed class PageColorDialog : FreeWDialogWindow
         var cancel = InsertDialogLayout.MakeButton("Cancel", (_, _) => Close());
         content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)));
         Content = content;
-    }
-
-    internal bool AcceptForTests() => TryAccept();
-
-    internal void SelectCustomColorForTests(string value)
-    {
-        _palette.SelectedIndex = -1;
-        _custom.Text = value;
     }
 
     private void AcceptAndClose()
@@ -310,13 +302,14 @@ public sealed class PageColorDialog : FreeWDialogWindow
 }
 
 /// <summary>Small modal selector for the same Effects catalog exposed by WPF's Design gallery.</summary>
-public sealed class ThemeEffectsDialog : FreeWDialogWindow
+public sealed partial class ThemeEffectsDialog : FreeWDialogWindow
 {
     private readonly ComboBox _effects;
     public DocumentEffectSet? Result { get; private set; }
 
     public ThemeEffectsDialog(string? currentName)
     {
+        var text = DesignDialogTextCatalog.Resolve(UiText.Get);
         _effects = new ComboBox
         {
             ItemsSource = DocumentEffectSet.Catalog.Select(effect => effect.Name).ToArray(),
@@ -326,7 +319,7 @@ public sealed class ThemeEffectsDialog : FreeWDialogWindow
             MinWidth = 220,
         };
         AvaloniaCompactDialogChrome.ApplyComboBox(_effects, InsertDialogLayout.ChromeStyle);
-        Title = "Effects";
+        Title = text.EffectsTitle;
         Width = 330;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -337,7 +330,7 @@ public sealed class ThemeEffectsDialog : FreeWDialogWindow
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, "Effect set:", _effects);
+        InsertDialogLayout.AddLabeledRow(grid, 0, text.EffectSetLabel, _effects);
         content.Children.Add(grid);
         var ok = InsertDialogLayout.MakeButton("OK", (_, _) =>
         {
@@ -349,21 +342,17 @@ public sealed class ThemeEffectsDialog : FreeWDialogWindow
         Content = content;
     }
 
-    internal bool AcceptForTests()
-    {
-        Result = DocumentEffectSet.Catalog[Math.Clamp(_effects.SelectedIndex, 0, DocumentEffectSet.Catalog.Count - 1)];
-        return true;
-    }
 }
 
 /// <summary>Small modal selector for WPF's Design Style Sets gallery.</summary>
-public sealed class StyleSetDialog : FreeWDialogWindow
+public sealed partial class StyleSetDialog : FreeWDialogWindow
 {
     private readonly ComboBox _styleSets;
     public DocumentStyleSet? Result { get; private set; }
 
     public StyleSetDialog(string? currentName)
     {
+        var text = DesignDialogTextCatalog.Resolve(UiText.Get);
         _styleSets = new ComboBox
         {
             ItemsSource = DocumentStyleSet.Catalog.Select(styleSet => styleSet.Name).ToArray(),
@@ -373,7 +362,7 @@ public sealed class StyleSetDialog : FreeWDialogWindow
             MinWidth = 220,
         };
         AvaloniaCompactDialogChrome.ApplyComboBox(_styleSets, InsertDialogLayout.ChromeStyle);
-        Title = "Style Sets";
+        Title = text.StyleSetsTitle;
         Width = 330;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -384,7 +373,7 @@ public sealed class StyleSetDialog : FreeWDialogWindow
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, "Style set:", _styleSets);
+        InsertDialogLayout.AddLabeledRow(grid, 0, text.StyleSetLabel, _styleSets);
         content.Children.Add(grid);
         var ok = InsertDialogLayout.MakeButton("OK", (_, _) =>
         {
@@ -396,11 +385,6 @@ public sealed class StyleSetDialog : FreeWDialogWindow
         Content = content;
     }
 
-    internal bool AcceptForTests()
-    {
-        Result = DocumentStyleSet.Catalog[Math.Clamp(_styleSets.SelectedIndex, 0, DocumentStyleSet.Catalog.Count - 1)];
-        return true;
-    }
 }
 
 /// <summary>Lifecycle-only confirmation window for a future shell callback, matching the WPF default action wording.</summary>

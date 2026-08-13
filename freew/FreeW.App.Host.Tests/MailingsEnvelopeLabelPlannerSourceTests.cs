@@ -10,11 +10,13 @@ public sealed class MailingsEnvelopeLabelPlannerSourceTests
         var source = File.ReadAllText(
             Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
 
-        source.Should().Contain("MailingsEnvelopeLabelPlanner.GetEnvelopeSizes()");
+        source.Should().Contain("MailingsEnvelopeLabelPlanner.CreateEnvelopeDialogPlan()");
         source.Should().Contain("MailingsEnvelopeLabelPlanner.PlanEnvelope(");
-        source.Should().Contain("MailingsEnvelopeLabelPlanner.GetLabelPresets()");
+        source.Should().Contain("MailingsEnvelopeLabelPlanner.CreateLabelDialogPlan()");
         source.Should().Contain("MailingsEnvelopeLabelPlanner.PlanLabel(");
-        source.Should().Contain("MailingsEnvelopeLabelPlanner.CustomLabelPresetIndex");
+        source.Should().NotContain("MailingsEnvelopeLabelPlanner.GetEnvelopeSizes()");
+        source.Should().NotContain("MailingsEnvelopeLabelPlanner.GetLabelPresets()");
+        source.Should().NotContain("MailingsEnvelopeLabelPlanner.CustomLabelPresetIndex");
         source.Should().NotContain("private readonly record struct EnvelopeSize");
         source.Should().NotContain("private readonly record struct LabelPreset");
         source.Should().NotContain("private static readonly EnvelopeSize[]");

@@ -269,6 +269,83 @@ public sealed class QuickAnalysisModelBuilderTests
         tables.Select(s => s.Table!.TableKind).Should().NotContain(QuickAnalysisTableKind.PivotTable);
     }
 
+    [Fact]
+    public void StructuredTableSelection_DoesNotOfferFormatAsTableAgain()
+    {
+        var sheet = new Workbook("Book").AddSheet("Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 5, 2));
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 5,
+            Name = "Sales",
+            DisplayName = "Sales",
+            Range = range,
+            HeaderRowCount = 1
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        for (uint row = 2; row <= 5; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"R{row}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row));
+        }
+
+        var model = QuickAnalysisModelBuilder.Build(QuickAnalysisSelectionReader.Describe(sheet, range));
+
+        model.AllSuggestions().Should().NotContain(s => s.Id == "table.table");
+    }
+
+    [Fact]
+    public void PartialStructuredTableOverlap_DoesNotOfferFormatAsTable()
+    {
+        var sheet = new Workbook("Book").AddSheet("Sheet1");
+        var tableRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 5, 2));
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 6,
+            Name = "Sales",
+            DisplayName = "Sales",
+            Range = tableRange,
+            HeaderRowCount = 1
+        });
+        for (uint row = 1; row <= 6; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"R{row}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(row));
+        }
+        var selection = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 6, 3));
+
+        var description = QuickAnalysisSelectionReader.Describe(sheet, selection);
+        var model = QuickAnalysisModelBuilder.Build(description);
+
+        description.StructuredTableContext.Should().BeNull();
+        description.OverlapsStructuredTable.Should().BeTrue();
+        model.AllSuggestions().Should().NotContain(s => s.Id == "table.table");
+    }
+
+    [Fact]
+    public void SelectionAtLastColumn_OmitsAdjacentTotalsAndSparklines()
+    {
+        var selection = Selection(
+            1, CellAddress.MaxCol - 1, 5, CellAddress.MaxCol,
+            hasHeaderRow: false,
+            QuickAnalysisColumnKind.Numeric,
+            QuickAnalysisColumnKind.Numeric);
+
+        var model = QuickAnalysisModelBuilder.Build(selection);
+
+        model.HasGroup(QuickAnalysisGroup.Totals).Should().BeFalse();
+        model.HasGroup(QuickAnalysisGroup.Sparklines).Should().BeFalse();
+        model.HasGroup(QuickAnalysisGroup.Formatting).Should().BeTrue();
+    }
+
     // ── Header detection effect ────────────────────────────────────────────
 
     [Fact]

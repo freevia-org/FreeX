@@ -58,7 +58,7 @@ public sealed partial class MainWindow
 
         var okButton = new Button
         {
-            Content = UiText.Get("MoveCopySheet_Ok"),
+            Content = UiText.Get("Common_OkText"),
             IsDefault = true,
             MinWidth = 84,
         };
@@ -66,7 +66,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(okButton, "MoveCopySheetOkButton");
         var cancelButton = new Button
         {
-            Content = UiText.Get("MoveCopySheet_Cancel"),
+            Content = UiText.Get("Common_CancelText"),
             IsCancel = true,
             MinWidth = 84,
         };

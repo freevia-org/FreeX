@@ -8,9 +8,7 @@ namespace Free.Shared.Ribbon.Wpf;
 
 /// <summary>
 /// Attached properties that build an Office-style two-line tooltip (bold title + grey description)
-/// on any FrameworkElement, plus a keytip value used by the renderer. Ported from FreeX's app-neutral
-/// helper; the FreeX-only keytip-navigation helpers (which depended on a scope planner) are omitted
-/// because the shared renderer never calls them.
+/// on any FrameworkElement, plus key-tip metadata and recursive submenu navigation shared by WPF hosts.
 /// </summary>
 public static class RibbonTooltip
 {
@@ -34,6 +32,60 @@ public static class RibbonTooltip
 
     public static void SetKeyTip(DependencyObject o, string v) => o.SetValue(KeyTipProperty, v);
     public static string? GetKeyTip(DependencyObject o) => (string?)o.GetValue(KeyTipProperty);
+
+    public static bool TryOpenSubmenuForKeyTip(ItemsControl menu, string keyTip) =>
+        TryOpenSubmenuForKeyTip(menu, keyTip, out _);
+
+    public static bool TryOpenSubmenuForKeyTip(ItemsControl menu, string keyTip, out MenuItem? openedSubmenu) =>
+        TryOpenSubmenuForKeyTip(menu, keyTip, scopePrefix: null, out openedSubmenu);
+
+    public static bool TryOpenSubmenuForKeyTip(
+        ItemsControl menu,
+        string keyTip,
+        string? scopePrefix,
+        out MenuItem? openedSubmenu)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+
+        var normalizedKeyTip = RibbonKeyTipText.Normalize(keyTip);
+        if (normalizedKeyTip is null)
+        {
+            openedSubmenu = null;
+            return false;
+        }
+
+        foreach (var item in menu.Items.OfType<MenuItem>())
+        {
+            if (!item.IsEnabled)
+                continue;
+
+            var scopedKeyTip = RibbonKeyTipText.ApplyScopePrefix(GetKeyTip(item), scopePrefix);
+            if (string.Equals(scopedKeyTip, normalizedKeyTip, StringComparison.OrdinalIgnoreCase) &&
+                item.Items.Count > 0)
+            {
+                item.IsSubmenuOpen = true;
+                openedSubmenu = item;
+                return true;
+            }
+
+            var wasOpen = item.IsSubmenuOpen;
+            if (item.Items.Count > 0)
+                item.IsSubmenuOpen = true;
+
+            if (TryOpenSubmenuForKeyTip(item, normalizedKeyTip, scopePrefix, out openedSubmenu))
+            {
+                item.IsSubmenuOpen = true;
+                if (openedSubmenu is not null)
+                    openedSubmenu.IsSubmenuOpen = true;
+                return true;
+            }
+
+            item.IsSubmenuOpen = wasOpen;
+        }
+
+        openedSubmenu = null;
+        return false;
+    }
 
     private static void OnKeyTipChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {

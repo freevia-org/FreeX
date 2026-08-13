@@ -62,7 +62,7 @@ public enum PageTextAlignment
 /// (top-left of the text block, measured via the supplied text measurer) the renderer can draw from.
 /// A merged cell is reported once as the anchor block, sized to span the merged region clipped to the
 /// page. <see cref="Fill"/> and <see cref="Font"/>'s color already carry the cell's conditional-format
-/// result merged over its raw style (see <c>PageContentRenderModelBuilder.EvaluateConditionalFormat</c>);
+/// result merged over its raw style (see <see cref="ConditionalFormatRenderEvaluator"/>);
 /// <see cref="DataBar"/>/<see cref="IconSet"/> carry the resolved data-bar/icon-set conditional format
 /// (when the cell's highest-priority matching rule of that kind produced one) for a renderer to paint
 /// as its own overlay glyph -- no current renderer paints them yet, so they render as absent (fill/text
@@ -173,6 +173,16 @@ public sealed record PagePictureBlock(
     string ContentType);
 
 /// <summary>
+/// One "As displayed on sheet" comment annotation resolved into page-space geometry. The host only
+/// chooses native brushes/fonts and paints the indicator triangle, box, and text.
+/// </summary>
+public sealed record PageDisplayedCommentBlock(
+    CellCommentDisplayKind Kind,
+    string Text,
+    IReadOnlyList<LayoutPoint> IndicatorPoints,
+    LayoutRect Bounds);
+
+/// <summary>
 /// The complete, backend-agnostic content of one printed page: the page rectangle, the printable
 /// area inset by margins, and ordered render instructions a renderer paints in list order (fills,
 /// gridlines, the outer grid border, headings, cell text/borders, charts, pictures, text boxes, and
@@ -192,7 +202,8 @@ public sealed record PageContentLayout(
     IReadOnlyList<PageTextBoxBlock> TextBoxes,
     IReadOnlyList<PageHeaderFooterRun> HeaderRuns,
     IReadOnlyList<PageHeaderFooterRun> FooterRuns,
-    IReadOnlyList<PagePictureBlock> Pictures)
+    IReadOnlyList<PagePictureBlock> Pictures,
+    IReadOnlyList<PageDisplayedCommentBlock> Comments)
 {
     public bool PrintGridlines => GridLines.Count > 0;
     public bool PrintHeadings => ColumnHeadings.Count > 0 || RowHeadings.Count > 0;

@@ -1,28 +1,37 @@
 using System.Text;
+using Free.Shared.AppServices.Printing;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Recording.Tests;
 
-public sealed class LinuxNativeOutputTests
+public sealed class LinuxNativeOutputTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.LinuxNativeOutputTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
     [Fact]
-    public void Capability_detection_requires_a_real_queue_and_software_encoder()
+    public void Video_encoder_selection_is_shared_across_hosts()
+    {
+        LinuxNativeOutputCapabilityDetector.SelectSoftwareEncoder(
+                " V..... mpeg4 MPEG-4 part 2\n" +
+                " V....D libx264 H.264 / AVC / MPEG-4 AVC")
+            .Should().Be("libx264");
+    }
+
+    [Fact]
+    public void Capability_detection_reports_the_available_software_encoder()
     {
         var detector = new LinuxNativeOutputCapabilityDetector(
             new FakeExecutableLocator(
-                ("lp", "/usr/bin/lp"),
-                ("lpstat", "/usr/bin/lpstat"),
                 ("ffmpeg", "/usr/bin/ffmpeg")),
             new FakeProbeRunner
             {
-                DefaultPrinterOutput = "system default destination: office",
                 EncoderOutput = " V..... libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
             });
 
         var capabilities = detector.Detect(canCaptureNarrationOverride: true);
 
-        capabilities.Print.CanPrint.Should().BeTrue();
-        capabilities.Print.PrinterName.Should().Be("office");
         capabilities.Video.CanEncodeMp4.Should().BeTrue();
         capabilities.Video.EncoderName.Should().Be("libx264");
         capabilities.Video.CanCaptureNarration.Should().BeTrue();
@@ -30,70 +39,21 @@ public sealed class LinuxNativeOutputTests
     }
 
     [Fact]
-    public void Capability_detection_does_not_claim_printing_without_a_cups_queue()
+    public void Recording_source_does_not_own_printer_discovery_or_submission()
     {
-        var detector = new LinuxNativeOutputCapabilityDetector(
-            new FakeExecutableLocator(
-                ("lp", "/usr/bin/lp"),
-                ("lpstat", "/usr/bin/lpstat"),
-                ("ffmpeg", "/usr/bin/ffmpeg")),
-            new FakeProbeRunner
-            {
-                DefaultPrinterOutput = "no system default destination",
-                QueueOutput = string.Empty,
-                EncoderOutput = " V..... mpeg4              MPEG-4 part 2",
-            });
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Recording",
+            "Recording",
+            "LinuxNativeOutput.cs"));
 
-        var capabilities = detector.Detect(canCaptureNarrationOverride: false);
-
-        capabilities.Print.CanPrint.Should().BeFalse();
-        capabilities.Print.Reason.Should().Contain("No available Linux print queue");
-        capabilities.Video.CanEncodeMp4.Should().BeTrue();
-        capabilities.Video.CanCaptureNarration.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Print_adapter_rejects_empty_or_non_pdf_payload_without_starting_a_process()
-    {
-        var adapter = new LinuxNativePrintHandoffAdapter(
-            new LinuxNativePrintCapability(true, "/usr/bin/lp", "office", "ready"));
-
-        var result = await adapter.PrintAsync(Array.Empty<byte>(), "Deck");
-
-        result.Succeeded.Should().BeFalse();
-        result.Canceled.Should().BeFalse();
-        result.FailureReason.Should().Contain("valid non-empty PDF");
-    }
-
-    [Fact]
-    public async Task Linux_print_adapter_submits_the_pdf_to_the_exact_lp_process_when_available()
-    {
-        if (!OperatingSystem.IsLinux())
-            return;
-
-        var directory = Path.Combine(Path.GetTempPath(), $"freep-print-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(directory);
-        var executable = Path.Combine(directory, "lp");
-        var captured = Path.Combine(directory, "submitted.pdf");
-        try
-        {
-            await File.WriteAllTextAsync(
-                executable,
-                $"#!/bin/sh\ncp \"$5\" \"{captured}\"\nexit 0\n");
-            File.SetUnixFileMode(executable, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-
-            var result = await new LinuxNativePrintHandoffAdapter(
-                new LinuxNativePrintCapability(true, executable, "office", "ready"))
-                .PrintAsync(Encoding.ASCII.GetBytes("%PDF-1.7\n%%EOF\n"), "Deck");
-
-            result.Succeeded.Should().BeTrue(result.FailureReason);
-            File.ReadAllText(captured).Should().Contain("%PDF-1.7");
-        }
-        finally
-        {
-            if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: true);
-        }
+        source.Should().NotContain("LinuxNativePrint")
+            .And.NotContain("ILinuxNativePrintHandoffAdapter")
+            .And.NotContain("lpstat")
+            .And.NotContain("BuildLpArguments")
+            .And.NotContain("BuildLprArguments");
     }
 
     [Fact]
@@ -115,7 +75,7 @@ public sealed class LinuxNativeOutputTests
             [],
             []);
 
-        var output = Path.Combine(Path.GetTempPath(), $"freep-invalid-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "invalid-print.mp4");
         var result = await adapter.ExportAsync(package, output);
 
         result.Succeeded.Should().BeFalse();
@@ -146,7 +106,7 @@ public sealed class LinuxNativeOutputTests
             .Should()
             .Equal("frames/slide-01-frame-0001.png");
 
-        var output = Path.Combine(Path.GetTempPath(), $"freep-real-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "real-video.mp4");
         try
         {
             var result = await new LinuxVideoExportAdapter(
@@ -167,7 +127,7 @@ public sealed class LinuxNativeOutputTests
     [Fact]
     public async Task Linux_ffmpeg_export_muxes_persisted_narration_at_its_slide_start_time()
     {
-        var output = Path.Combine(Path.GetTempPath(), $"freep-narrated-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "narrated-video.mp4");
         var runner = new CapturingVideoProcessRunner(output);
         var presentation = Presentation.CreateEmpty();
         presentation.Slides.Add(new Slide
@@ -218,7 +178,7 @@ public sealed class LinuxNativeOutputTests
     [Fact]
     public async Task Linux_ffmpeg_export_muxes_persisted_caption_as_timed_mov_text()
     {
-        var output = Path.Combine(Path.GetTempPath(), $"freep-captioned-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "captioned-video.mp4");
         var runner = new CapturingVideoProcessRunner(output);
         var presentation = Presentation.CreateEmpty();
         presentation.Slides.Add(new Slide
@@ -272,7 +232,7 @@ public sealed class LinuxNativeOutputTests
     [Fact]
     public async Task Linux_ffmpeg_export_muxes_persisted_camera_as_timed_picture_in_picture()
     {
-        var output = Path.Combine(Path.GetTempPath(), $"freep-camera-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "camera-video.mp4");
         var runner = new CapturingVideoProcessRunner(output);
         var presentation = FreeP.Core.Model.Presentation.CreateEmpty();
         presentation.Slides.Add(new FreeP.Core.Model.Slide
@@ -327,7 +287,7 @@ public sealed class LinuxNativeOutputTests
     [Fact]
     public async Task Video_export_cancellation_removes_partial_output_after_runner_is_cancelled()
     {
-        var output = Path.Combine(Path.GetTempPath(), $"freep-cancelled-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "cancelled-video.mp4");
         await File.WriteAllTextAsync(output, "partial");
         var runner = new BlockingProcessRunner(output);
         using var cts = new CancellationTokenSource();
@@ -356,7 +316,7 @@ public sealed class LinuxNativeOutputTests
     [Fact]
     public async Task Video_export_deletes_output_when_encoder_returns_invalid_bytes()
     {
-        var output = Path.Combine(Path.GetTempPath(), $"freep-invalid-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "invalid-video.mp4");
         var package = FreeP.App.Compositor.PresentationVideoFramePackageExecutor.BuildPackage(
             FreeP.Core.Model.Presentation.CreateEmpty(),
             new FreeP.App.Compositor.PresentationVideoExportRequest(
@@ -389,55 +349,52 @@ public sealed class LinuxNativeOutputTests
                 IncludeNarration: includeNarration),
             static (_, _, _, _) => EvenTwoByTwoPng);
 
-    private sealed class BlockingProcessRunner(string outputPath) : ILinuxNativeProcessRunner
+    private sealed class BlockingProcessRunner(string outputPath) : IProcessRunner
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool CancellationObserved { get; private set; }
 
-        public async Task<LinuxNativeProcessResult> RunAsync(
-            string executable,
-            IReadOnlyList<string> arguments,
-            CancellationToken cancellationToken)
+        public async Task<ProcessResult> RunAsync(
+            ProcessInvocation invocation,
+            CancellationToken cancellationToken = default)
         {
             Started.SetResult();
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-                return new LinuxNativeProcessResult(0, string.Empty, string.Empty, false);
+                return new ProcessResult(0, string.Empty, string.Empty);
             }
             catch (OperationCanceledException)
             {
                 CancellationObserved = true;
                 await File.WriteAllTextAsync(outputPath, "partial-after-kill");
-                return new LinuxNativeProcessResult(-1, string.Empty, string.Empty, true);
+                throw;
             }
         }
     }
 
-    private sealed class InvalidOutputProcessRunner(string outputPath) : ILinuxNativeProcessRunner
+    private sealed class InvalidOutputProcessRunner(string outputPath) : IProcessRunner
     {
-        public async Task<LinuxNativeProcessResult> RunAsync(
-            string executable,
-            IReadOnlyList<string> arguments,
-            CancellationToken cancellationToken)
+        public async Task<ProcessResult> RunAsync(
+            ProcessInvocation invocation,
+            CancellationToken cancellationToken = default)
         {
             await File.WriteAllTextAsync(outputPath, "not an mp4", cancellationToken);
-            return new LinuxNativeProcessResult(0, string.Empty, string.Empty, false);
+            return new ProcessResult(0, string.Empty, string.Empty);
         }
     }
 
-    private sealed class CapturingVideoProcessRunner(string outputPath) : ILinuxNativeProcessRunner
+    private sealed class CapturingVideoProcessRunner(string outputPath) : IProcessRunner
     {
         public List<string> Arguments { get; } = [];
 
-        public Task<LinuxNativeProcessResult> RunAsync(
-            string executable,
-            IReadOnlyList<string> arguments,
-            CancellationToken cancellationToken)
+        public Task<ProcessResult> RunAsync(
+            ProcessInvocation invocation,
+            CancellationToken cancellationToken = default)
         {
-            Arguments.AddRange(arguments);
+            Arguments.AddRange(invocation.Arguments);
             File.WriteAllBytes(outputPath, Encoding.ASCII.GetBytes("0000ftyp0000moov0000mdat"));
-            return Task.FromResult(new LinuxNativeProcessResult(0, string.Empty, string.Empty, false));
+            return Task.FromResult(new ProcessResult(0, string.Empty, string.Empty));
         }
     }
 
@@ -453,8 +410,6 @@ public sealed class LinuxNativeOutputTests
 
     private sealed class FakeProbeRunner : ILinuxRecordingProbeRunner
     {
-        public string DefaultPrinterOutput { get; init; } = string.Empty;
-        public string QueueOutput { get; init; } = string.Empty;
         public string EncoderOutput { get; init; } = string.Empty;
 
         public LinuxRecordingProbeResult Run(
@@ -462,14 +417,6 @@ public sealed class LinuxNativeOutputTests
             IReadOnlyList<string> arguments,
             TimeSpan timeout)
         {
-            if (fileName.EndsWith("lpstat", StringComparison.Ordinal))
-            {
-                var output = arguments.Contains("-d", StringComparer.Ordinal)
-                    ? DefaultPrinterOutput
-                    : QueueOutput;
-                return new LinuxRecordingProbeResult(0, output, string.Empty);
-            }
-
             return new LinuxRecordingProbeResult(0, EncoderOutput, string.Empty);
         }
     }

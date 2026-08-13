@@ -84,23 +84,18 @@ public sealed class MainWindowOutlineCommandLifecycleTests
 
         private readonly MainWindow _window;
         private readonly WorkbookWindowRegistry _registry;
-        private readonly WorkbookDocumentState _documentState;
         private readonly CommandBus _commandBus;
-        private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
         private readonly FieldInfo _navigationRevisionField;
 
         private MainWindowHarness(
             MainWindow window,
             WorkbookWindowRegistry registry,
-            WorkbookDocumentState documentState,
             CommandBus commandBus)
         {
             _window = window;
             _registry = registry;
-            _documentState = documentState;
             _commandBus = commandBus;
-            _workbookField = GetField("_workbook");
             _currentSheetIdField = GetField("_currentSheetId");
             _navigationRevisionField = GetField("_navigationCacheRevision");
             Sibling = new TestWorkbookWindow { DocumentId = CurrentWorkbook.Id };
@@ -119,7 +114,7 @@ public sealed class MainWindowOutlineCommandLifecycleTests
             }
         }
 
-        private Workbook CurrentWorkbook => (Workbook)_workbookField.GetValue(_window)!;
+        private Workbook CurrentWorkbook => _window.Session.Workbook;
 
         public static MainWindowHarness Create()
         {
@@ -149,7 +144,7 @@ public sealed class MainWindowOutlineCommandLifecycleTests
             window.Show();
             window.UpdateLayout();
             PumpDispatcher();
-            return new MainWindowHarness(window, registry, documentState, commandBus);
+            return new MainWindowHarness(window, registry, commandBus);
         }
 
         public void SeedColumnGroups(bool collapse)
@@ -185,12 +180,12 @@ public sealed class MainWindowOutlineCommandLifecycleTests
         }
 
         public LifecycleSnapshot CaptureLifecycle() =>
-            new(_documentState.DirtyGeneration, NavigationRevision);
+            new(_window.Session.DirtyGeneration, NavigationRevision);
 
         public void AssertLifecycleAdvanced(LifecycleSnapshot before)
         {
-            _documentState.IsDirty.Should().BeTrue();
-            _documentState.DirtyGeneration.Should().Be(before.DirtyGeneration + 1);
+            _window.Session.IsDirty.Should().BeTrue();
+            _window.Session.DirtyGeneration.Should().Be(before.DirtyGeneration + 1);
             NavigationRevision.Should().BeGreaterThan(before.NavigationRevision);
             Sibling.RefreshCount.Should().Be(1);
             _commandBus.GetUndoStackDepth(CurrentWorkbook.Id).Should().Be(1);

@@ -11,23 +11,6 @@ using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
 
-public sealed record ChartTrendlineOptionsDialogResult(
-    bool ShowTrendline,
-    ChartTrendlineType Type,
-    int Period,
-    int Order,
-    bool ShowEquation,
-    bool ShowRSquared,
-    CellColor? Color,
-    double Thickness,
-    ChartLineDashStyle DashStyle)
-{
-    public ChartTrendlineInput ToInput() =>
-        new(ShowTrendline, Type, Period, Order, ShowEquation, ShowRSquared, Color, Thickness, DashStyle);
-
-    public ChartLayoutOptions ToOptions() => ChartTrendlinePlanner.Plan(ToInput());
-}
-
 public sealed class ChartTrendlineOptionsDialog : Window
 {
     private readonly CheckBox _showBox = new() { Content = LabelText(ChartTrendlineDialogFieldId.ShowTrendline) };
@@ -40,7 +23,7 @@ public sealed class ChartTrendlineOptionsDialog : Window
     private readonly TextBox _colorBox = new();
     private readonly TextBox _thicknessBox = new();
 
-    public ChartTrendlineOptionsDialogResult Result { get; private set; }
+    public ChartTrendlineInput Result { get; private set; }
 
     public ChartTrendlineOptionsDialog(ChartModel chart)
     {
@@ -57,7 +40,7 @@ public sealed class ChartTrendlineOptionsDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static ChartTrendlineOptionsDialogResult FromChart(ChartModel chart)
+    public static ChartTrendlineInput FromChart(ChartModel chart)
     {
         var input = ChartTrendlinePlanner.Read(chart);
         return CreateResult(
@@ -72,7 +55,7 @@ public sealed class ChartTrendlineOptionsDialog : Window
             input.DashStyle ?? chart.TrendlineDashStyle);
     }
 
-    public static ChartTrendlineOptionsDialogResult CreateResult(
+    public static ChartTrendlineInput CreateResult(
         bool showTrendline,
         ChartTrendlineType type,
         int period,
@@ -83,7 +66,7 @@ public sealed class ChartTrendlineOptionsDialog : Window
         double thickness,
         ChartLineDashStyle dashStyle)
     {
-        var input = ChartTrendlinePlanner.Normalize(new ChartTrendlineInput(
+        return ChartTrendlinePlanner.Normalize(new ChartTrendlineInput(
             showTrendline,
             type,
             period,
@@ -93,16 +76,6 @@ public sealed class ChartTrendlineOptionsDialog : Window
             color,
             thickness,
             dashStyle));
-        return new(
-            input.ShowTrendline,
-            input.Type,
-            input.Period,
-            input.Order,
-            input.ShowEquation,
-            input.ShowRSquared,
-            input.Color,
-            input.Thickness ?? thickness,
-            input.DashStyle ?? dashStyle);
     }
 
     private StackPanel CreateContent()
@@ -135,7 +108,7 @@ public sealed class ChartTrendlineOptionsDialog : Window
         return root;
     }
 
-    private void Load(ChartTrendlineOptionsDialogResult result)
+    private void Load(ChartTrendlineInput result)
     {
         _showBox.IsChecked = result.ShowTrendline;
         _typeBox.SelectedItem = result.Type;
@@ -144,8 +117,8 @@ public sealed class ChartTrendlineOptionsDialog : Window
         _equationBox.IsChecked = result.ShowEquation;
         _rSquaredBox.IsChecked = result.ShowRSquared;
         _colorBox.Text = ChartDialogHelpers.FormatColor(result.Color);
-        _thicknessBox.Text = result.Thickness.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        _dashBox.SelectedItem = result.DashStyle;
+        _thicknessBox.Text = result.Thickness.GetValueOrDefault().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _dashBox.SelectedItem = result.DashStyle.GetValueOrDefault();
     }
 
     private void FocusInitialKeyboardTarget()
@@ -194,14 +167,15 @@ public sealed class ChartTrendlineOptionsDialog : Window
 
     private void ShowPlannerParseWarning(ChartTrendlineDialogParseIssue issue)
     {
-        var (message, target) = issue switch
+        var presentation = ChartValidationPresentationPlanner.Describe(issue);
+        var target = presentation.FocusTarget switch
         {
-            ChartTrendlineDialogParseIssue.Order => (UiText.Get("ChartTrendline_InvalidOrderMessage"), _orderBox),
-            ChartTrendlineDialogParseIssue.Color => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _colorBox),
-            ChartTrendlineDialogParseIssue.Thickness => (UiText.Get("ChartTrendline_InvalidWidthMessage"), _thicknessBox),
-            _ => (UiText.Get("ChartTrendline_InvalidPeriodMessage"), _periodBox)
+            ChartTrendlineDialogFieldId.Order => _orderBox,
+            ChartTrendlineDialogFieldId.LineColor => _colorBox,
+            ChartTrendlineDialogFieldId.LineThickness => _thicknessBox,
+            _ => _periodBox
         };
-        ShowInvalidInputWarning(message, target);
+        ShowInvalidInputWarning(presentation.Message.Resolve(UiText.Get, UiText.Format), target);
     }
 
     private void ShowInvalidInputWarning(string message, TextBox target)

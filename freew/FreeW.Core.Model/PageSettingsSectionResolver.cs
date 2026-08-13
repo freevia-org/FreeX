@@ -18,6 +18,28 @@ namespace FreeW.Core.Model;
 /// </summary>
 public static class PageSettingsSectionResolver
 {
+    public static int ResolveSectionIndex(TextDocument document, int blockIndex)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var sectionCount = document.Sections.Count;
+        if (sectionCount <= 1)
+            return 0;
+        if (blockIndex < 0 || blockIndex >= document.Blocks.Count)
+            return sectionCount - 1;
+
+        var sectionIndex = 0;
+        for (var index = 0; index < blockIndex; index++)
+        {
+            if (document.Blocks[index] is Paragraph { SectionBreak: not null }
+                && sectionIndex < sectionCount - 1)
+            {
+                sectionIndex++;
+            }
+        }
+
+        return sectionIndex;
+    }
+
     public static PageSettings Resolve(TextDocument document, int sectionIndex)
     {
         ArgumentNullException.ThrowIfNull(document);

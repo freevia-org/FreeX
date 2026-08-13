@@ -6,8 +6,8 @@ namespace FreeX.Ribbon.Definitions;
 /// <summary>
 /// The Home tab authored declaratively to match the original FreeX/Excel layout: per-command preferred
 /// sizes (Paste large, Cut/Copy/Format Painter medium, Bold/Italic/… icon-only), explicit two-row groups
-/// (Font, Alignment, Number), inline separators, and a narrow font-size combo. Command ids match the
-/// catalog <c>CommandName</c>s so the registry binds them to the existing handlers.
+/// (Font, Alignment, Number), inline separators, and a narrow font-size combo. Stable command ids bind
+/// directly to the host's typed command registry.
 /// </summary>
 public static class HomeRibbonDefinition
 {
@@ -80,7 +80,7 @@ public static class HomeRibbonDefinition
                 .Large("Format as Table", "Format as Table", Ico.Table, "T", dropdown: true)
                 .Large("Cell Styles", "Cell Styles", Ico.Theme, "J", menu: HomeRibbonMenus.CellStyles))
 
-            .Group("HomeCellsGroup", "Cells", "E", priority: 50, g => g
+            .Group("HomeCellsGroup", "Cells", "E", priority: 65, g => g
                 .Medium("Insert", "Insert", Ico.Insert, "I", menu: HomeRibbonMenus.Insert)
                 .Medium("Delete", "Delete", Ico.Delete, "D", menu: HomeRibbonMenus.Delete)
                 .Medium("Format", "Format", Ico.Size, "O", menu: HomeRibbonMenus.Format))

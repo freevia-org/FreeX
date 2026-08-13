@@ -30,7 +30,7 @@ public sealed class R82_EnterDirectionAndEndModeHomeTests
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
             {
-                SetOptions(window, moveSelectionAfterEnter: true, direction: FreeXEnterDirection.Right);
+                SetOptions(window, moveSelectionAfterEnter: true, direction: AppOptionsEnterDirection.Right);
                 var sheetId = workbook.GetSheetAt(0).Id;
                 R49MainWindowTestHarness.Invoke(window, "SetActiveCell", new CellAddress(sheetId, 2, 2)); // B2
 
@@ -56,7 +56,7 @@ public sealed class R82_EnterDirectionAndEndModeHomeTests
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
             {
-                SetOptions(window, moveSelectionAfterEnter: false, direction: FreeXEnterDirection.Down);
+                SetOptions(window, moveSelectionAfterEnter: false, direction: AppOptionsEnterDirection.Down);
                 var sheetId = workbook.GetSheetAt(0).Id;
                 var current = new CellAddress(sheetId, 2, 2); // B2
                 R49MainWindowTestHarness.Invoke(window, "SetActiveCell", current);
@@ -84,7 +84,7 @@ public sealed class R82_EnterDirectionAndEndModeHomeTests
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
             {
-                SetOptions(window, moveSelectionAfterEnter: true, direction: FreeXEnterDirection.Down);
+                SetOptions(window, moveSelectionAfterEnter: true, direction: AppOptionsEnterDirection.Down);
                 var sheetId = workbook.GetSheetAt(0).Id;
                 R49MainWindowTestHarness.Invoke(window, "SetActiveCell", new CellAddress(sheetId, 2, 2)); // B2
 
@@ -157,11 +157,11 @@ public sealed class R82_EnterDirectionAndEndModeHomeTests
         });
     }
 
-    private static void SetOptions(MainWindow window, bool moveSelectionAfterEnter, FreeXEnterDirection direction)
+    private static void SetOptions(MainWindow window, bool moveSelectionAfterEnter, AppOptionsEnterDirection direction)
     {
         var field = typeof(MainWindow).GetField("_options", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingFieldException(nameof(MainWindow), "_options");
-        var options = (FreeXOptions)field.GetValue(window)!;
+        var options = (AppOptions)field.GetValue(window)!;
         options.MoveSelectionAfterEnter = moveSelectionAfterEnter;
         options.AfterEnterDirection = direction;
     }

@@ -437,6 +437,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         var printSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
         var autoFilterSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs"));
         var errorCheckingSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ErrorChecking.cs"));
+        var parityCaptureSource = File.ReadAllText(RepoFile(
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         getDataSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle GetDataDialogChromeStyle => new(FormulaBarFontFamily);");
         getDataSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, GetDataDialogChromeStyle, minWidth, isDefault);");
@@ -465,7 +467,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
 
         errorCheckingSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle ErrorCheckingDialogChromeStyle => new(FormulaBarFontFamily);");
         errorCheckingSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, ErrorCheckingDialogChromeStyle);");
-        errorCheckingSource.Should().Contain("ErrorCheckingDialogPlanner.CreateParityIssues(sheetId)");
+        errorCheckingSource.Should().NotContain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
+        parityCaptureSource.Should().Contain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
         errorCheckingSource.Should().Contain("Width = ErrorCheckingDialogPlanner.AvaloniaClientWidth");
         errorCheckingSource.Should().Contain("Height = ErrorCheckingDialogPlanner.AvaloniaClientHeight");
         errorCheckingSource.Should().Contain("HorizontalAlignment = AvaloniaHorizontalAlignment.Left");
@@ -539,17 +542,6 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
     private static int CountOccurrences(string source, string value) =>
         source.Split(value, StringSplitOptions.None).Length - 1;
 
-    private static string RepoFile(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.FindFileFromBaseDirectory(parts);
 }

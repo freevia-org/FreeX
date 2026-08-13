@@ -18,6 +18,7 @@ internal sealed class PasteSpecialDialog : FreeWDialogWindow
             ListBoxItemMinHeight = 21,
             ListBoxItemPadding = new Thickness(4, 0),
         };
+    private readonly PasteSpecialDialogSession _session = new();
 
     private readonly ListBox _list = new()
     {
@@ -38,23 +39,23 @@ internal sealed class PasteSpecialDialog : FreeWDialogWindow
 
     private PasteSpecialDialog()
     {
-        Title = "Paste Special";
+        Title = PasteSpecialDialogSession.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _list.ItemsSource = PasteSpecialOptionCatalog.Options;
+        _list.ItemsSource = _session.Options;
         _list.SelectedIndex = 0;
-        _description.Text = PasteSpecialOptionCatalog.Options[0].Description;
+        _description.Text = _session.State.Description;
         _list.SelectionChanged += (_, _) => RefreshDescription();
         _list.DoubleTapped += (_, _) => Accept();
 
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(new TextBlock
         {
-            Text = "Paste As:",
+            Text = PasteSpecialDialogSession.PasteAsLabel,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 4),
         });
@@ -95,14 +96,14 @@ internal sealed class PasteSpecialDialog : FreeWDialogWindow
 
     private void RefreshDescription()
     {
-        if (_list.SelectedItem is PasteSpecialOptionChoice row)
-            _description.Text = row.Description;
+        _description.Text = _session.UpdateSelection(_list.SelectedIndex).Description;
     }
 
     private void Accept()
     {
-        if (_list.SelectedItem is PasteSpecialOptionChoice row)
-            Close(row.Option);
+        _session.UpdateSelection(_list.SelectedIndex);
+        if (_session.PlanAcceptance() is { } option)
+            Close(option);
     }
 
 }

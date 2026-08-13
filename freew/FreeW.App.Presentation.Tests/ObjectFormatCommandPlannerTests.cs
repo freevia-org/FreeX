@@ -5,6 +5,14 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class ObjectFormatCommandPlannerTests
 {
     [Theory]
+    [InlineData(false, "Shape Position")]
+    [InlineData(true, "Shape Position in Group")]
+    public void ShapePositionDialogTitle_ReflectsCoordinateSpace(bool isGroupLocal, string expected)
+    {
+        ObjectFormatCommandPlanner.ShapePositionDialogTitle(isGroupLocal).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(ObjectFormatTarget.Picture, "image")]
     [InlineData(ObjectFormatTarget.Shape, "shape")]
     public void PrefixFor_ReturnsRibbonCommandPrefix(ObjectFormatTarget target, string expectedPrefix)

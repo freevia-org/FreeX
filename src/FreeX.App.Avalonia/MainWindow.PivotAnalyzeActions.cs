@@ -1,6 +1,4 @@
-using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.PivotUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using System.Diagnostics;
@@ -10,10 +8,8 @@ namespace FreeX.App.Avalonia;
 /// <summary>
 /// Real handlers for the lower-effort PivotTable Analyze contextual-tab commands that reuse existing Core
 /// commands without a new dialog: Field Settings (the value-field dialog targeting the active pivot's first
-/// value field), Show Details (<see cref="DrillDownPivotTableCommand"/>), Clear
-/// (<see cref="ClearPivotTableViewCommand"/>), Select (move the selection onto the pivot's target range), and
-/// the +/- Buttons display toggle (<see cref="ConfigurePivotTableOptionsCommand"/>'s
-/// <c>showExpandCollapseButtons</c>). Each resolves the active pivot through
+/// value field), Show Details, Clear, Select (move the selection onto the pivot's target range), and the +/-
+/// Buttons display toggle. Each resolves the active pivot through
 /// <see cref="MainWindow.ResolveInsertControlPivot"/> (the same fallback the other Analyze handlers use) and
 /// reports an honest status when no pivot/value cell applies, mirroring the WPF host's
 /// PivotTable{Clear,Select,ShowDetails,Field}Btn handlers.
@@ -30,16 +26,18 @@ public sealed partial class MainWindow
     /// </summary>
     private void OpenActivePivotFieldSettings()
     {
-        if (!TryBeginPivotOption(out var pivot))
+        if (!TryResolvePivotApplicationTarget(out var applicationTarget))
             return;
 
-        if (pivot!.DataFields.Count == 0)
+        var pivot = applicationTarget.PivotTable;
+        if (pivot.DataFields.Count == 0)
         {
             RefreshShell(UiText.Get("PivotAnalyze_FieldSettingsNoValueField"));
             return;
         }
 
-        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+        var headers = PivotApplication.ReadSourceHeaders(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot));
         var field = pivot.DataFields[0];
         var caption = string.IsNullOrWhiteSpace(field.Name)
             ? PivotFieldListPaneBuilder.FieldCaption(headers, field.SourceFieldIndex)
@@ -58,56 +56,46 @@ public sealed partial class MainWindow
 
     // ── Analyze ▸ Actions ▸ Clear / Select ───────────────────────────────────────
 
-    /// <summary>Clear — empties the active pivot's rendered layout via <see cref="ClearPivotTableViewCommand"/>.</summary>
+    /// <summary>Clear — empties the active pivot's rendered layout through the shared application session.</summary>
     private void ClearActivePivotTable()
     {
-        if (!TryBeginPivotOption(out var pivot))
+        if (!TryResolvePivotApplicationTarget(out var target))
             return;
 
-        ExecutePivotTabCommand(
-            new ClearPivotTableViewCommand(_session.ActiveSheet.Id, pivot!.Name),
-            UiText.Format("PivotAnalyze_Cleared", pivot.Name));
+        ApplyPivotApplicationPlan(PivotApplication.PlanClear(target));
     }
 
     /// <summary>Select — moves the selection onto the active pivot's full target range.</summary>
     private void SelectActivePivotTable()
     {
-        if (!TryBeginPivotOption(out var pivot))
+        if (!TryResolvePivotApplicationTarget(out var target))
             return;
 
-        var source = pivot!.LastRenderedRange ?? pivot.TargetRange;
-        // Re-anchor onto the active sheet id: a loaded pivot range may carry a placeholder sheet id.
-        var sheetId = _session.ActiveSheet.Id;
-        var range = new GridRange(
-            new CellAddress(sheetId, source.Start.Row, source.Start.Col),
-            new CellAddress(sheetId, source.End.Row, source.End.Col));
-        _session.SelectRange(range);
-        _pivotPaneSignature = null;
-        RefreshShell(UiText.Format("PivotAnalyze_Selected", pivot.Name));
+        ApplyPivotApplicationPlan(PivotApplication.PlanSelect(target));
     }
 
     // ── Analyze ▸ Active Field ▸ Show Details ────────────────────────────────────
 
     /// <summary>
-    /// Show Details — drills the active cell into a new detail worksheet via
-    /// <see cref="DrillDownPivotTableCommand"/>. The command adds the detail sheet and returns its anchor, so
-    /// the shared review path (<see cref="ExecutePivotTabCommand"/>) switches to it automatically.
+    /// Show Details — drills the active cell into a new detail worksheet. The command behind the shared plan
+    /// adds the detail sheet and returns its anchor, so
+    /// the shared application session switches to it automatically.
     /// </summary>
     private void ShowActivePivotDetails()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
 
-        var pivot = PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell);
-        if (pivot is null)
+        var plan = PivotApplication.PlanShowDetails(
+            _session.ActiveSheet.Id,
+            _session.SelectedRange);
+        if (!plan.CanApply)
         {
             RefreshShell(UiText.Get("PivotAnalyze_ShowDetailsPrompt"));
             return;
         }
 
-        ExecutePivotTabCommand(
-            new DrillDownPivotTableCommand(_session.ActiveSheet.Id, pivot.Name, _session.ActiveCell),
-            UiText.Format("PivotAnalyze_ShowDetailsDone", pivot.Name));
+        ApplyPivotApplicationPlan(plan);
     }
 
     /// <summary>
@@ -120,15 +108,16 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return false;
 
-        var target = PivotUiPlanner.ResolveShowDetailsTarget(_session.ActiveSheet, _session.SelectedRange);
-        if (target is null)
+        var plan = PivotApplication.PlanShowDetails(
+            _session.ActiveSheet.Id,
+            _session.SelectedRange);
+        if (!plan.CanApply)
             return false;
 
-        var result = _session.ExecuteReviewCommand(
-            new DrillDownPivotTableCommand(_session.ActiveSheet.Id, target.PivotTableName, target.PivotCell));
-        if (!result.Success)
+        var outcome = PivotApplication.Execute(plan);
+        if (!outcome.Success)
         {
-            RefreshShell(result.ErrorMessage ?? UiText.Get("PivotLoc_UpdateFailed"));
+            RefreshShell(outcome.Message?.Detail ?? UiText.Get("PivotLoc_UpdateFailed"));
             return false;
         }
 
@@ -138,8 +127,7 @@ public sealed partial class MainWindow
             _pivotDetailsDoubleClickHandledTimestamp = Stopwatch.GetTimestamp();
         }
 
-        _pivotPaneSignature = null;
-        RefreshShell(UiText.Format("PivotAnalyze_ShowDetailsDone", target.PivotTableName));
+        ApplyPivotApplicationOutcome(outcome);
         return true;
     }
 
@@ -154,15 +142,11 @@ public sealed partial class MainWindow
         return elapsed <= TimeSpan.FromMilliseconds(500);
     }
 
-    /// <summary>Test seam for the real WPF-parity double-click precedence route.</summary>
-    internal bool TryShowPivotTableDetailsFromDoubleClickForTest() =>
-        TryShowPivotTableDetailsFromDoubleClick();
-
     // ── Analyze ▸ Show ▸ +/- Buttons ─────────────────────────────────────────────
 
     /// <summary>
-    /// +/- Buttons — toggles <see cref="PivotTableModel.ShowExpandCollapseButtons"/> via
-    /// <see cref="ConfigurePivotTableOptionsCommand"/> (carrying the layout/style flags untouched).
+    /// +/- Buttons — toggles <see cref="PivotTableModel.ShowExpandCollapseButtons"/> through a shared
+    /// design-options plan while carrying the layout/style flags untouched.
     /// </summary>
     private void TogglePivotExpandCollapseButtons()
     {
@@ -170,10 +154,11 @@ public sealed partial class MainWindow
             return;
 
         var value = !pivot!.ShowExpandCollapseButtons;
-        // Carry the layout/style snapshot untouched (BuildPivotOptionsCommand) and add the expand/collapse flag.
-        var command = BuildPivotOptionsCommand(pivot, CapturePivotOptions(pivot), showExpandCollapseButtons: value);
-        ExecutePivotTabCommand(
-            command,
+        ApplyPivotApplicationPlan(
+            PlanPivotDesignOptions(
+                pivot,
+                PivotOptionsPlanner.CaptureDesignValues(pivot),
+                showExpandCollapseButtons: value),
             value ? UiText.Get("PivotAnalyze_PlusMinusOn") : UiText.Get("PivotAnalyze_PlusMinusOff"));
     }
 }

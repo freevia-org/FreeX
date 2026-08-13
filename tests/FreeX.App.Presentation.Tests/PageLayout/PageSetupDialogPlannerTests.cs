@@ -174,12 +174,15 @@ public sealed class PageSetupDialogPlannerTests
                 PrintErrorValueIndex = 3,
                 PrintCommentsIndex = 2,
                 PageOrderIndex = 1,
-                Header = new WorksheetHeaderFooter("L", "H", "R"),
-                Footer = new WorksheetHeaderFooter("L", "F", "R"),
-                DifferentFirstPage = true,
-                DifferentOddEvenPages = true,
-                ScaleHeaderFooterWithDocument = false,
-                AlignHeaderFooterWithMargins = false,
+                HeaderFooter = new HeaderFooterEditorState
+                {
+                    Header = new WorksheetHeaderFooter("L", "H", "R"),
+                    Footer = new WorksheetHeaderFooter("L", "F", "R"),
+                    DifferentFirstPage = true,
+                    DifferentOddEvenPages = true,
+                    ScaleWithDocument = false,
+                    AlignWithMargins = false,
+                },
             });
 
         fields.Orientation.Should().Be(WorksheetPageOrientation.Landscape);
@@ -191,10 +194,10 @@ public sealed class PageSetupDialogPlannerTests
         fields.PrintErrorValue.Should().Be(WorksheetPrintErrorValue.NotAvailable);
         fields.PrintComments.Should().Be(WorksheetPrintComments.AsDisplayed);
         fields.PageOrder.Should().Be(WorksheetPageOrder.OverThenDown);
-        fields.Header.Center.Should().Be("H");
-        fields.Footer.Center.Should().Be("F");
-        fields.DifferentFirstPage.Should().BeTrue();
-        fields.ScaleHeaderFooterWithDocument.Should().BeFalse();
+        fields.HeaderFooter.Header.Center.Should().Be("H");
+        fields.HeaderFooter.Footer.Center.Should().Be("F");
+        fields.HeaderFooter.DifferentFirstPage.Should().BeTrue();
+        fields.HeaderFooter.ScaleWithDocument.Should().BeFalse();
     }
 
     [Fact]

@@ -19,6 +19,52 @@ public sealed class GetPivotDataFormulaPlannerTests
     }
 
     [Fact]
+    public void CreatePointModeFunctionCall_OwnsOptionExternalAndSingleCellPolicy()
+    {
+        var (workbook, sheet, _) = CreateRowPivot();
+        var formulaCell = CellAddress.Parse("A10", sheet.Id);
+        var pivotCell = CellAddress.Parse("F4", sheet.Id);
+
+        GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(
+                workbook,
+                formulaCell,
+                sheet.Id,
+                new GridRange(pivotCell, pivotCell),
+                generateGetPivotData: true,
+                selectedWorkbookName: null)
+            .Should()
+            .Be("GETPIVOTDATA(\"Sum of Amount\",E2,\"Region\",\"West\")");
+
+        GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(
+                workbook,
+                formulaCell,
+                sheet.Id,
+                new GridRange(pivotCell, pivotCell),
+                generateGetPivotData: false,
+                selectedWorkbookName: null)
+            .Should()
+            .BeNull();
+        GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(
+                workbook,
+                formulaCell,
+                sheet.Id,
+                new GridRange(pivotCell, pivotCell),
+                generateGetPivotData: true,
+                selectedWorkbookName: "Other.xlsx")
+            .Should()
+            .BeNull();
+        GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(
+                workbook,
+                formulaCell,
+                sheet.Id,
+                new GridRange(pivotCell, CellAddress.Parse("F5", sheet.Id)),
+                generateGetPivotData: true,
+                selectedWorkbookName: null)
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
     public void Create_MatrixValueCell_IncludesRowAndColumnItems()
     {
         var workbook = new Workbook("Book");

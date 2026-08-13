@@ -12,6 +12,7 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly BordersAndShadingDialogSession _session;
     private readonly ComboBox _setting;
     private readonly ComboBox _lineStyle;
     private readonly ComboBox _color;
@@ -34,62 +35,62 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private BordersAndShadingDialog(Window? owner, ParagraphFormatting paragraph, PageBorder? pageBorder)
     {
+        _session = new BordersAndShadingDialogSession(paragraph, pageBorder, CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
         Owner = owner;
-        System.Windows.Automation.AutomationProperties.SetAutomationId(this, "BordersAndShadingDialog");
-        Title = "Borders and Shading";
+        System.Windows.Automation.AutomationProperties.SetAutomationId(this, BordersAndShadingDialogPlanner.AutomationId);
+        Title = BordersAndShadingDialogPlanner.Title;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var border = paragraph.Border;
-
-        _setting = Combo(BordersAndShadingDialogPlanner.SettingNames, BordersAndShadingDialogPlanner.SettingIndexFor(border));
-        _lineStyle = Combo(BordersAndShadingDialogPlanner.LineStyleNames, BordersAndShadingDialogPlanner.IndexOfLineStyle(border?.LineStyle ?? BorderLineStyle.Single));
-        _color = ColorCombo(border?.ColorHex ?? "#000000");
-        _width = NumberBox(BordersAndShadingDialogPlanner.FormatPoints(border?.WidthPt ?? 0.5, CultureInfo.CurrentCulture));
-        _top = EdgeBox("Top", border?.Top ?? true);
-        _left = EdgeBox("Left", border?.Left ?? true);
-        _bottom = EdgeBox("Bottom", border?.Bottom ?? true);
-        _right = EdgeBox("Right", border?.Right ?? true);
+        _setting = Combo(BordersAndShadingDialogPlanner.SettingNames, state.ParagraphSettingIndex);
+        _lineStyle = Combo(BordersAndShadingDialogPlanner.LineStyleNames, state.ParagraphLineStyleIndex);
+        _color = ColorCombo(state.ParagraphColorIndex);
+        _width = NumberBox(state.ParagraphWidthText);
+        _top = EdgeBox(BordersAndShadingDialogPlanner.TopLabel, state.Top);
+        _left = EdgeBox(BordersAndShadingDialogPlanner.LeftLabel, state.Left);
+        _bottom = EdgeBox(BordersAndShadingDialogPlanner.BottomLabel, state.Bottom);
+        _right = EdgeBox(BordersAndShadingDialogPlanner.RightLabel, state.Right);
         _setting.SelectionChanged += (_, _) => ApplyParagraphSetting();
 
-        _pageSetting = Combo(BordersAndShadingDialogPlanner.SettingNames, pageBorder is null ? 0 : 1);
-        _pageLineStyle = Combo(BordersAndShadingDialogPlanner.LineStyleNames, BordersAndShadingDialogPlanner.IndexOfLineStyle(pageBorder?.LineStyle ?? BorderLineStyle.Single));
-        _pageColor = ColorCombo(pageBorder?.ColorHex ?? "#000000");
-        _pageWidth = NumberBox(BordersAndShadingDialogPlanner.FormatPoints(pageBorder?.WidthPt ?? 1.0, CultureInfo.CurrentCulture));
+        _pageSetting = Combo(BordersAndShadingDialogPlanner.SettingNames, state.PageSettingIndex);
+        _pageLineStyle = Combo(BordersAndShadingDialogPlanner.LineStyleNames, state.PageLineStyleIndex);
+        _pageColor = ColorCombo(state.PageColorIndex);
+        _pageWidth = NumberBox(state.PageWidthText);
         _pageArtStyle = Combo(
             BordersAndShadingDialogPlanner.ArtBorders.Select(a => a.Label).ToArray(),
-            BordersAndShadingDialogPlanner.ArtIndexFor(pageBorder?.ArtId ?? 0));
+            state.PageArtIndex);
 
-        _shadingColor = ColorCombo(paragraph.ShadingColorHex ?? "#FFFFFF", includeNone: true,
-            selectNone: string.IsNullOrEmpty(paragraph.ShadingColorHex));
-        _shadingPattern = Combo(BordersAndShadingDialogPlanner.PatternNames, BordersAndShadingDialogPlanner.IndexOfPattern(paragraph.ShadingPattern));
+        _shadingColor = ColorCombo(state.ShadingColorIndex, includeNone: true);
+        _shadingPattern = Combo(BordersAndShadingDialogPlanner.PatternNames, state.ShadingPatternIndex);
 
-        SetAutomationId(_setting, "BordersAndShadingParagraphSetting");
-        SetAutomationId(_lineStyle, "BordersAndShadingParagraphStyle");
-        SetAutomationId(_color, "BordersAndShadingParagraphColor");
-        SetAutomationId(_width, "BordersAndShadingParagraphWidth");
-        SetAutomationId(_top, "BordersAndShadingTopEdge");
-        SetAutomationId(_left, "BordersAndShadingLeftEdge");
-        SetAutomationId(_bottom, "BordersAndShadingBottomEdge");
-        SetAutomationId(_right, "BordersAndShadingRightEdge");
-        SetAutomationId(_pageSetting, "BordersAndShadingPageSetting");
-        SetAutomationId(_pageLineStyle, "BordersAndShadingPageStyle");
-        SetAutomationId(_pageColor, "BordersAndShadingPageColor");
-        SetAutomationId(_pageWidth, "BordersAndShadingPageWidth");
-        SetAutomationId(_pageArtStyle, "BordersAndShadingPageArt");
-        SetAutomationId(_shadingColor, "BordersAndShadingShadingColor");
-        SetAutomationId(_shadingPattern, "BordersAndShadingShadingPattern");
+        SetAutomationId(_setting, BordersAndShadingDialogPlanner.ParagraphSettingAutomationId);
+        SetAutomationId(_lineStyle, BordersAndShadingDialogPlanner.ParagraphStyleAutomationId);
+        SetAutomationId(_color, BordersAndShadingDialogPlanner.ParagraphColorAutomationId);
+        SetAutomationId(_width, BordersAndShadingDialogPlanner.ParagraphWidthAutomationId);
+        SetAutomationId(_top, BordersAndShadingDialogPlanner.TopEdgeAutomationId);
+        SetAutomationId(_left, BordersAndShadingDialogPlanner.LeftEdgeAutomationId);
+        SetAutomationId(_bottom, BordersAndShadingDialogPlanner.BottomEdgeAutomationId);
+        SetAutomationId(_right, BordersAndShadingDialogPlanner.RightEdgeAutomationId);
+        SetAutomationId(_pageSetting, BordersAndShadingDialogPlanner.PageSettingAutomationId);
+        SetAutomationId(_pageLineStyle, BordersAndShadingDialogPlanner.PageStyleAutomationId);
+        SetAutomationId(_pageColor, BordersAndShadingDialogPlanner.PageColorAutomationId);
+        SetAutomationId(_pageWidth, BordersAndShadingDialogPlanner.PageWidthAutomationId);
+        SetAutomationId(_pageArtStyle, BordersAndShadingDialogPlanner.PageArtAutomationId);
+        SetAutomationId(_shadingColor, BordersAndShadingDialogPlanner.ShadingColorAutomationId);
+        SetAutomationId(_shadingPattern, BordersAndShadingDialogPlanner.ShadingPatternAutomationId);
 
         var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
-        var bordersTab = new TabItem { Header = "Borders", Content = BuildBordersTab() };
-        var pageBorderTab = new TabItem { Header = "Page Border", Content = BuildPageBorderTab() };
-        var shadingTab = new TabItem { Header = "Shading", Content = BuildShadingTab() };
-        SetAutomationId(bordersTab, "BordersAndShadingBordersTab");
-        SetAutomationId(pageBorderTab, "BordersAndShadingPageBorderTab");
-        SetAutomationId(shadingTab, "BordersAndShadingShadingTab");
+        SetAutomationId(tabs, BordersAndShadingDialogPlanner.TabsAutomationId);
+        var bordersTab = new TabItem { Header = BordersAndShadingDialogPlanner.BordersTabLabel, Content = BuildBordersTab() };
+        var pageBorderTab = new TabItem { Header = BordersAndShadingDialogPlanner.PageBorderTabLabel, Content = BuildPageBorderTab() };
+        var shadingTab = new TabItem { Header = BordersAndShadingDialogPlanner.ShadingTabLabel, Content = BuildShadingTab() };
+        SetAutomationId(bordersTab, BordersAndShadingDialogPlanner.BordersTabAutomationId);
+        SetAutomationId(pageBorderTab, BordersAndShadingDialogPlanner.PageBorderTabAutomationId);
+        SetAutomationId(shadingTab, BordersAndShadingDialogPlanner.ShadingTabAutomationId);
         tabs.Items.Add(bordersTab);
         tabs.Items.Add(pageBorderTab);
         tabs.Items.Add(shadingTab);
@@ -97,8 +98,8 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(14, 12, 14, 12));
         var ok = (Button)buttons.Children[0];
         var cancel = (Button)buttons.Children[1];
-        SetAutomationId(ok, "BordersAndShadingOkButton");
-        SetAutomationId(cancel, "BordersAndShadingCancelButton");
+        SetAutomationId(ok, BordersAndShadingDialogPlanner.AcceptButtonAutomationId);
+        SetAutomationId(cancel, BordersAndShadingDialogPlanner.CancelButtonAutomationId);
 
         var root = new DockPanel();
         DockPanel.SetDock(buttons, Dock.Bottom);
@@ -112,11 +113,11 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private Grid BuildBordersTab()
     {
         var grid = TwoColumnGrid(7);
-        AddRow(grid, 0, "Setting:", _setting);
-        AddRow(grid, 1, "Style:", _lineStyle);
-        AddRow(grid, 2, "Colour:", _color);
-        AddRow(grid, 3, "Width (pt):", _width);
-        AddRow(grid, 4, "Edges:", EdgeRow(_top, _bottom));
+        AddRow(grid, 0, BordersAndShadingDialogPlanner.SettingLabel, _setting);
+        AddRow(grid, 1, BordersAndShadingDialogPlanner.StyleLabel, _lineStyle);
+        AddRow(grid, 2, BordersAndShadingDialogPlanner.ColorLabel, _color);
+        AddRow(grid, 3, BordersAndShadingDialogPlanner.WidthLabel, _width);
+        AddRow(grid, 4, BordersAndShadingDialogPlanner.EdgesLabel, EdgeRow(_top, _bottom));
         AddRow(grid, 5, string.Empty, EdgeRow(_left, _right));
         return grid;
     }
@@ -124,19 +125,19 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private Grid BuildPageBorderTab()
     {
         var grid = TwoColumnGrid(5);
-        AddRow(grid, 0, "Setting:", _pageSetting);
-        AddRow(grid, 1, "Style:", _pageLineStyle);
-        AddRow(grid, 2, "Art border:", _pageArtStyle);
-        AddRow(grid, 3, "Colour:", _pageColor);
-        AddRow(grid, 4, "Width (pt):", _pageWidth);
+        AddRow(grid, 0, BordersAndShadingDialogPlanner.SettingLabel, _pageSetting);
+        AddRow(grid, 1, BordersAndShadingDialogPlanner.StyleLabel, _pageLineStyle);
+        AddRow(grid, 2, BordersAndShadingDialogPlanner.ArtBorderLabel, _pageArtStyle);
+        AddRow(grid, 3, BordersAndShadingDialogPlanner.ColorLabel, _pageColor);
+        AddRow(grid, 4, BordersAndShadingDialogPlanner.WidthLabel, _pageWidth);
         return grid;
     }
 
     private Grid BuildShadingTab()
     {
         var grid = TwoColumnGrid(2);
-        AddRow(grid, 0, "Fill:", _shadingColor);
-        AddRow(grid, 1, "Pattern:", _shadingPattern);
+        AddRow(grid, 0, BordersAndShadingDialogPlanner.FillLabel, _shadingColor);
+        AddRow(grid, 1, BordersAndShadingDialogPlanner.PatternLabel, _shadingPattern);
         return grid;
     }
 
@@ -168,21 +169,16 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
         return combo;
     }
 
-    private static ComboBox ColorCombo(string seedHex, bool includeNone = false, bool selectNone = false)
+    private static ComboBox ColorCombo(int selectedIndex, bool includeNone = false)
     {
         var combo = new ComboBox { MinWidth = 160 };
-        var selectedIndex = 0;
         if (includeNone)
-            combo.Items.Add(new ComboBoxItem { Content = "No Colour", Tag = (string?)null });
-        var offset = combo.Items.Count;
-        for (var i = 0; i < BordersAndShadingDialogPlanner.Palette.Count; i++)
+            combo.Items.Add(new ComboBoxItem { Content = BordersAndShadingDialogPlanner.NoColorLabel, Tag = (string?)null });
+        foreach (var hex in BordersAndShadingDialogPlanner.Palette)
         {
-            var hex = BordersAndShadingDialogPlanner.Palette[i];
             combo.Items.Add(SwatchItem(hex));
-            if (string.Equals(hex, seedHex, StringComparison.OrdinalIgnoreCase))
-                selectedIndex = offset + i;
         }
-        combo.SelectedIndex = includeNone && selectNone ? 0 : selectedIndex;
+        combo.SelectedIndex = Math.Clamp(selectedIndex, 0, combo.Items.Count - 1);
         return combo;
     }
 
@@ -243,7 +239,7 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private void ApplyParagraphSetting()
     {
-        var plan = BordersAndShadingDialogPlanner.PlanParagraphSetting(_setting.SelectedIndex);
+        var plan = _session.PlanParagraphSetting(_setting.SelectedIndex);
         if (plan.EdgeValue is { } edgeValue)
             SetEdges(edgeValue);
         SetEdgesEnabled(plan.EdgesEnabled);
@@ -284,16 +280,14 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
             ShadingColorHex: SelectedColor(_shadingColor),
             ShadingPatternIndex: _shadingPattern.SelectedIndex);
 
-        if (!BordersAndShadingDialogPlanner.TryBuildResult(
-                input,
-                CultureInfo.CurrentCulture,
-                out _result,
-                out var errorMessage))
+        var acceptance = _session.PlanAcceptance(input);
+        if (!acceptance.IsAccepted)
         {
-            DialogMessageHelper.ShowWarning(this, errorMessage ?? BordersAndShadingDialogPlanner.WidthValidationMessage);
+            DialogMessageHelper.ShowWarning(this, acceptance.ValidationMessage ?? BordersAndShadingDialogPlanner.WidthValidationMessage);
             return;
         }
 
+        _result = acceptance.Result;
         Close();
     }
 

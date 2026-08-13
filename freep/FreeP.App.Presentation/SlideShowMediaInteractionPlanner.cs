@@ -21,6 +21,29 @@ public sealed record SlideShowMediaClickPlan(
     public static SlideShowMediaClickPlan NotMedia { get; } = new(false, false, null);
 }
 
+public sealed record SlideShowMediaEntryItemPlan(
+    SlideShape Shape,
+    SlideShowMediaShapePlan Surface,
+    PresentationMediaTranscriptTrackDescriptor? CaptionTrack)
+{
+    public uint ShapeId => Shape.Id;
+
+    public MediaInfo Media => Shape.Media!;
+}
+
+public sealed record SlideShowMediaSlideEntryPlan(
+    IReadOnlyList<SlideShowMediaEntryItemPlan> Items)
+{
+    public IReadOnlyList<SlideShowMediaShapePlan> Active =>
+        Items.Select(item => item.Surface).ToArray();
+
+    public bool HasPlayableSource => Items.Any(item => item.Surface.HasSource);
+}
+
+public sealed record SlideShowMediaActiveSlotMonitorPlan(
+    PresentationMediaTranscriptTrackDescriptor? CaptionTrack,
+    SlideShowMediaPlaybackHandle? Playback);
+
 public readonly record struct SlideShowMediaTrimWindow(
     TimeSpan Start,
     TimeSpan End)
@@ -56,12 +79,59 @@ public static class SlideShowMediaInteractionPlanner
     {
         ArgumentNullException.ThrowIfNull(slide);
 
-        return EnumerateShapes(slide.Shapes)
-            .Where(shape => shape.Kind == SlideShapeKind.Media
-                && shape.Media is not null
-                && (showNarration || shape.Media.IsVideo))
+        return EnumerateEligibleShapes(slide, showNarration)
             .Select(shape => BuildShapePlan(shape, slideDipW, slideDipH, canvasW, canvasH, showMediaControls))
             .ToArray();
+    }
+
+    public static SlideShowMediaSlideEntryPlan PlanSlideEntry(
+        Slide slide,
+        double slideDipW,
+        double slideDipH,
+        double canvasW,
+        double canvasH,
+        IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? captionTracks = null,
+        uint? preferredCaptionShapeId = null,
+        int? preferredCaptionTrackIndex = null,
+        int? captionSlideIndex = null,
+        int? preferredCaptionSlideIndex = null,
+        bool showMediaControls = true,
+        bool showNarration = true)
+    {
+        ArgumentNullException.ThrowIfNull(slide);
+
+        var items = EnumerateEligibleShapes(slide, showNarration)
+            .Select(shape => new SlideShowMediaEntryItemPlan(
+                shape,
+                BuildShapePlan(
+                    shape,
+                    slideDipW,
+                    slideDipH,
+                    canvasW,
+                    canvasH,
+                    showMediaControls),
+                SelectCaptionTrack(
+                    captionTracks,
+                    shape.Id,
+                    preferredCaptionShapeId,
+                    preferredCaptionTrackIndex,
+                    captionSlideIndex,
+                    preferredCaptionSlideIndex)))
+            .ToArray();
+        return new SlideShowMediaSlideEntryPlan(items);
+    }
+
+    public static bool ShouldRunPeriodicUpdates(
+        IEnumerable<SlideShowMediaActiveSlotMonitorPlan> slots,
+        SlideShowMediaPlaybackSession playbackSession)
+    {
+        ArgumentNullException.ThrowIfNull(slots);
+        ArgumentNullException.ThrowIfNull(playbackSession);
+
+        return slots.Any(slot =>
+            slot.CaptionTrack is not null
+            || slot.Playback is { } playback
+            && playbackSession.RequiresPeriodicUpdate(playback));
     }
 
     public static SlideShowMediaClickPlan PlanClick(
@@ -268,6 +338,33 @@ public static class SlideShowMediaInteractionPlanner
             showMediaControls,
             media.ShowWhenStopped);
     }
+
+    private static PresentationMediaTranscriptTrackDescriptor? SelectCaptionTrack(
+        IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? captionTracks,
+        uint shapeId,
+        uint? preferredCaptionShapeId,
+        int? preferredCaptionTrackIndex,
+        int? captionSlideIndex,
+        int? preferredCaptionSlideIndex) =>
+        captionSlideIndex is int currentSlideIndex
+            ? PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
+                captionTracks,
+                currentSlideIndex,
+                shapeId,
+                preferredCaptionSlideIndex,
+                preferredCaptionShapeId == shapeId ? preferredCaptionTrackIndex : null)
+            : PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
+                captionTracks,
+                shapeId,
+                preferredCaptionShapeId == shapeId ? preferredCaptionTrackIndex : null);
+
+    private static IEnumerable<SlideShape> EnumerateEligibleShapes(
+        Slide slide,
+        bool showNarration) =>
+        EnumerateShapes(slide.Shapes).Where(shape =>
+            shape.Kind == SlideShapeKind.Media
+            && shape.Media is not null
+            && (showNarration || shape.Media.IsVideo));
 
     private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
     {

@@ -155,39 +155,42 @@ public sealed class ReviewCommentAndCustomShowSessionTests
             source.Should().NotContain("PresentationCommentMutationService.Apply(");
             source.Should().NotContain("BuildAddCommentPlan(");
             source.Should().NotContain("TryApplyCommentMutationPlan(");
-            source.Should().Contain("BuildCustomShowSessionPlan(");
+            source.Should().Contain("new CustomShowDialog(");
+            source.Should().Contain("_customShowSession");
+            source.Should().Contain("TryStartCustomSlideShow");
+            source.Should().NotContain("BuildCustomShowSessionPlan(");
+            source.Should().NotContain("ApplyCustomShowDialogMutation(");
+            source.Should().NotContain("internal SlideShowCustomShowMutationResult CreateCustomShow(");
+            source.Should().NotContain("internal SlideShowCustomShowMutationResult RenameCustomShow(");
+            source.Should().NotContain("internal SlideShowCustomShowMutationResult DeleteCustomShow(");
+            source.Should().NotContain("internal SlideShowCustomShowMutationResult UpdateCustomShowSlides(");
+            source.Should().NotContain("internal SlideShowCustomShowMutationResult MoveCustomShowSlide(");
         }
 
         foreach (var source in new[] { wpfDialog, avaloniaDialog })
         {
-            source.Should().Contain("BuildCustomShowSessionPlan(");
-            source.Should().Contain("SlideShowCustomShowSessionPlanner.BuildDragReorderPlan(");
+            source.Should().Contain("SlideShowCustomShowDialogSession");
+            source.Should().Contain("SlideShowCustomShowDialogController");
+            source.Should().Contain("ISlideShowCustomShowDialogView");
+            source.Should().Contain("customShowSession.CreateDialogSession(");
+            source.Should().Contain("_controller.Reorder(");
+            source.Should().NotContain("SlideShowCustomShowDialogTransitionDispatcher.Dispatch(");
+            source.Should().NotContain("private readonly SlideShowCustomShowDialogSession _session");
+            source.Should().NotContain("MainWindow _host");
+            source.Should().NotContain("SlideShowCustomShowSessionPlanner.");
+            source.Should().NotContain("SlideShowCustomShowPlanner.");
             source.Should().NotContain("BuildCustomShowSlideDragReorderPlan(");
             source.Should().NotContain("FormatShowListText(");
             source.Should().NotContain("new SlideShowCustomShowDragReorderPlan(");
+            source.Should().NotContain("switch (transition.RenderScope)");
+            source.Should().NotContain("_host.CreateCustomShow(");
+            source.Should().NotContain("_host.RenameCustomShow(");
+            source.Should().NotContain("_host.UpdateCustomShowSlides(");
+            source.Should().NotContain("_host.DeleteCustomShow(");
+            source.Should().NotContain("_host.MoveCustomShowSlide(");
         }
     }
 
-    private static string ReadWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var parts = new string[relativeParts.Length + 1];
-            parts[0] = directory.FullName;
-            relativeParts.CopyTo(parts, 1);
-
-            var candidate = Path.Combine(parts);
-            if (File.Exists(candidate))
-            {
-                return File.ReadAllText(candidate);
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(
-            "Could not locate workspace file.",
-            Path.Combine(relativeParts));
-    }
+    private static string ReadWorkspaceFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

@@ -55,14 +55,12 @@ public static class PresentationFileDialogPlanner
     public static bool TryResolveSavePickerPath(string path, out string resolvedPath)
     {
         resolvedPath = string.Empty;
-        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(Path.GetFileName(path)))
+        if (!FilePathPolicy.TryGetFileName(path, out _))
             return false;
 
-        resolvedPath = Path.GetExtension(path) switch
-        {
-            null or "" => path + DefaultPresentationExtension,
-            _ => path,
-        };
+        resolvedPath = FilePathPolicy.TryGetExtension(path, out _)
+            ? path
+            : path + DefaultPresentationExtension;
         if (!PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(resolvedPath))
         {
             resolvedPath = string.Empty;
@@ -80,7 +78,7 @@ public static class PresentationFileDialogPlanner
 
     private static string GetSaveAsDefaultExtension(string? sourceName)
     {
-        var sourceExtension = Path.GetExtension(sourceName ?? string.Empty);
+        var sourceExtension = FilePathPolicy.GetExtensionOrEmpty(sourceName);
         return PresentationFilePersistenceWorkflow.IsPowerPointPackagePath(sourceName ?? string.Empty)
             ? sourceExtension.ToLowerInvariant()
             : DefaultPresentationExtension;

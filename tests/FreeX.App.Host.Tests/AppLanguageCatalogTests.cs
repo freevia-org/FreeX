@@ -1,7 +1,6 @@
 using FluentAssertions;
-using FreeX.App.Host;
 using FreeX.App.Localization;
-using HostAppLanguageCatalog = FreeX.App.Host.AppLanguageCatalog;
+using System.IO;
 using PortableAppLanguageCatalog = FreeX.App.Localization.AppLanguageCatalog;
 
 namespace FreeX.App.Host.Tests;
@@ -9,19 +8,13 @@ namespace FreeX.App.Host.Tests;
 public sealed class AppLanguageCatalogTests
 {
     [Fact]
-    public void CreateOptions_ForwardsToPortableCatalog()
+    public void HostFacade_IsRemovedInFavorOfPortableCatalog()
     {
-        var cultureNames = new[]
-        {
-            "uk-UA",
-            "en-US",
-            "not-a-culture",
-            "fr-FR"
-        };
-
-        HostAppLanguageCatalog.CreateOptions(cultureNames)
-            .Should()
-            .Equal(PortableAppLanguageCatalog.CreateOptions(cultureNames));
+        File.Exists(Path.Combine(
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            "src",
+            "FreeX.App.Host",
+            "AppLanguageCatalog.cs")).Should().BeFalse();
     }
 
     [Theory]
@@ -35,6 +28,9 @@ public sealed class AppLanguageCatalogTests
         string? input,
         string expected)
     {
-        HostAppLanguageCatalog.NormalizeCultureName(input).Should().Be(expected);
+        AppLocalizationContractTestSupport.AssertNormalizedCultureName(
+            PortableAppLanguageCatalog.NormalizeCultureName,
+            input,
+            expected);
     }
 }

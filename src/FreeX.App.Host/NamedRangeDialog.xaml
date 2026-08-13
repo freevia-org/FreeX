@@ -25,13 +25,7 @@
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                 <Label Content="{local:Loc Key=NamedRange_Filter}" Target="{Binding ElementName=FilterBox}" VerticalAlignment="Center"/>
-                <ComboBox x:Name="FilterBox" Width="190" SelectedIndex="0" SelectionChanged="FilterBox_SelectionChanged">
-                    <ComboBoxItem Content="{local:Loc Key=NamedRange_AllNames}"/>
-                    <ComboBoxItem Content="{local:Loc Key=NamedRange_NamesScopedToWorkbook}"/>
-                    <ComboBoxItem Content="{local:Loc Key=NamedRange_NamesScopedToWorksheet}"/>
-                    <ComboBoxItem Content="{local:Loc Key=NamedRange_NamesWithErrors}"/>
-                    <ComboBoxItem Content="{local:Loc Key=NamedRange_NamesWithoutErrors}"/>
-                </ComboBox>
+                <ComboBox x:Name="FilterBox" Width="190" SelectedIndex="0" SelectionChanged="FilterBox_SelectionChanged"/>
             </StackPanel>
         </DockPanel>
 
@@ -47,7 +41,7 @@
                         <GridViewColumn Header="{local:Loc Key=NamedRange_RefersTo}" Width="210"
                                         DisplayMemberBinding="{Binding RefersTo}"/>
                         <GridViewColumn Header="{local:Loc Key=NamedRange_Scope}" Width="100"
-                                        DisplayMemberBinding="{Binding Scope}"/>
+                                        DisplayMemberBinding="{Binding ScopeLabel}"/>
                         <GridViewColumn Header="{local:Loc Key=NamedRange_Comment}" Width="120"
                                         DisplayMemberBinding="{Binding Comment}"/>
                     </GridView>

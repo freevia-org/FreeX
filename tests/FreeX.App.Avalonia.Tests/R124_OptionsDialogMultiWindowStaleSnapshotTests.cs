@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -77,9 +76,9 @@ public sealed class R124_OptionsDialogMultiWindowStaleSnapshotTests
                     // independently opens Options, which independently calls AppOptionsStore.Load() at
                     // dialog-open time, before either has saved anything -- so both dialogs start from
                     // the identical on-disk defaults.
-                    var taskA = InvokePrivateTaskAsync(windowA, "ShowOptionsDialogAsync");
+                    var taskA = windowA.ShowOptionsDialogForTestAsync();
                     var dialogA = FindOwnedOptionsWindow(windowA);
-                    var taskB = InvokePrivateTaskAsync(windowB, "ShowOptionsDialogAsync");
+                    var taskB = windowB.ShowOptionsDialogForTestAsync();
                     var dialogB = FindOwnedOptionsWindow(windowB);
 
                     // OptionsShowGridlinesCheckBox lives on the "Advanced" category page, which is not
@@ -162,7 +161,7 @@ public sealed class R124_OptionsDialogMultiWindowStaleSnapshotTests
                 {
                     window.Show();
 
-                    var task = InvokePrivateTaskAsync(window, "ShowOptionsDialogAsync");
+                    var task = window.ShowOptionsDialogForTestAsync();
                     var dialog = FindOwnedOptionsWindow(window);
                     SelectAdvancedCategory(dialog);
 
@@ -253,13 +252,4 @@ public sealed class R124_OptionsDialogMultiWindowStaleSnapshotTests
         }
     }
 
-    private static Task InvokePrivateTaskAsync(MainWindow owner, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName,
-            BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Missing production dialog opener {methodName}.");
-        return method.Invoke(owner, null) as Task
-            ?? throw new InvalidOperationException($"Production dialog opener {methodName} did not return Task.");
-    }
 }

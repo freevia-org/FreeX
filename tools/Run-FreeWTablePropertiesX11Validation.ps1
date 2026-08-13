@@ -17,12 +17,13 @@ New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 $startArgs = @{
     Action = "Start"
     App = "FreeW"
+    Host = "Validation"
     Port = $Port
     OutputDir = $OutputDir
     SessionMetadataPath = $sessionMetadata
-    AppEnvironment = @(
-        "FREEW_TABLE_PROPERTIES_X11_SEED=1",
-        "FREEW_TABLE_PROPERTIES_X11_RESULT=/work/table-properties-result.json")
+    AppArgument = @(
+        "--table-properties-x11-validation",
+        "/work/table-properties-result.json")
 }
 if ($SkipImageBuild) { $startArgs.SkipImageBuild = $true }
 if ($SkipPublish) { $startArgs.SkipPublish = $true }

@@ -8,6 +8,7 @@ using Avalonia.Themes.Fluent;
 using AvaloniaTextOptions = Avalonia.Media.TextOptions;
 using AvaloniaTextRenderingMode = Avalonia.Media.TextRenderingMode;
 using Free.Shared.AppServices;
+using Free.Shared.Pdf.Skia;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
@@ -641,6 +642,7 @@ public sealed class DocumentViewHeadlessTests
             using var stream = new System.IO.MemoryStream();
             var result = FreeW.App.Avalonia.Pdf.FreeWAvaloniaPdfExport.Save(view, stream);
             result.PageCount.Should().BeGreaterThan(0);
+            result.Backend.Should().BeOneOf(PdfExportBackend.Skia, PdfExportBackend.PortableWinAnsi);
             bytes = stream.ToArray();
         });
 
@@ -656,13 +658,14 @@ public sealed class DocumentViewHeadlessTests
     [Fact]
     public async Task MainWindow_tracks_dirty_and_new_document_state_with_shared_file_command_workflow()
     {
+        using var temporaryDirectory = new TestTemporaryDirectory("FreeW.Avalonia.Tests-");
         var ran = await OnUiThreadAsync(async () =>
         {
             var window = new MainWindow(
                 Array.Empty<string>(),
                 new FreeWOptions(),
                 ApplicationOptionsStore<FreeWOptions>.ForPath(
-                    Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.Tests", Guid.NewGuid().ToString("N"), "settings.json")),
+                    Path.Combine(temporaryDirectory.Path, "settings.json")),
                 promptSaveChangesAsync: _ => Task.FromResult(SaveChangesPrompt.DontSave));
             var shellWorkflow = GetPrivateField<SisterAvaloniaFileCommandWorkflow>(window, "_fileWorkflow");
             var workflow = shellWorkflow.Workflow;
@@ -875,6 +878,56 @@ public sealed class DocumentViewHeadlessTests
         thirdCaretPage.Should().Be(1);
         paragraph!.Runs.Select(run => run.IsColumnBreak).Should().Equal(false, true, false, true, false);
         paragraph.PlainText.Should().Be("BeforeMiddleAfter");
+    }
+
+    [Fact]
+    public async Task InlineFlowBreaks_InListItem_UseSharedPrecedenceAndSourceOffsets()
+    {
+        var pageCount = 0;
+        var firstCaretPage = -1;
+        var middleCaretPage = -1;
+        IReadOnlyList<(char Ch, double X, double W, double Y, double LineHeight, bool IsSubscript)> placed = [];
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Page.ColumnCount = 2;
+            doc.Page.ColumnSpacingPt = 36;
+            var paragraph = new Paragraph
+            {
+                Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet },
+                Runs =
+                {
+                    new Run("Before"),
+                    new Run(string.Empty) { IsPageBreak = true, IsColumnBreak = true },
+                    new Run("Middle"),
+                    Run.ColumnBreak(),
+                    new Run("After")
+                }
+            };
+            doc.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 5000));
+            pageCount = view.PageCount;
+            placed = view.GetPlacedForBlock(0);
+
+            view.MoveCaretToBlockForTest(0, 0);
+            firstCaretPage = view.CaretPageIndex;
+            view.MoveCaretToBlockForTest(0, "Before".Length);
+            middleCaretPage = view.CaretPageIndex;
+        });
+
+        if (!ran)
+            return;
+
+        pageCount.Should().Be(2);
+        string.Concat(placed.Select(item => item.Ch)).Should().Be("BeforeMiddleAfter");
+        firstCaretPage.Should().Be(0);
+        middleCaretPage.Should().Be(1, "a page break takes precedence over the simultaneous column flag");
+        placed["Before".Length].X.Should().BeApproximately(placed[0].X, 1);
+        placed["BeforeMiddle".Length].X.Should().BeGreaterThan(placed["Before".Length].X + 100);
     }
 
     [Fact]

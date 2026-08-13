@@ -2,23 +2,14 @@ using FreeW.App.Avalonia.Editing;
 using Free.Shared.AppServices.Printing;
 using Free.Shared.Pdf;
 using Free.Shared.Pdf.Skia;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia.Pdf;
-
-/// <summary>Which backend produced the exported PDF bytes.</summary>
-public enum FreeWAvaloniaPdfBackend
-{
-    /// <summary>Unicode-capable Skia/HarfBuzz writer with automatically embedded/subset fonts.</summary>
-    Skia,
-
-    /// <summary>Dependency-free WinAnsi (Helvetica) writer used when Skia is unavailable.</summary>
-    PortableWinAnsi,
-}
 
 /// <summary>Result of an Avalonia FreeW PDF export: the page count plus the backend used.</summary>
 public sealed record FreeWAvaloniaPdfExportResult(
     int PageCount,
-    FreeWAvaloniaPdfBackend Backend,
+    PdfExportBackend Backend,
     IReadOnlyList<string> ImageDiagnostics);
 
 /// <summary>
@@ -42,35 +33,18 @@ public static class FreeWAvaloniaPdfExport
         return Write(document, stream);
     }
 
-    public static FreeWAvaloniaPdfExportResult Save(DocumentView view, string path)
-    {
-        ArgumentNullException.ThrowIfNull(view);
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (!string.IsNullOrWhiteSpace(directory))
-            Directory.CreateDirectory(directory);
-
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-        return Save(view, stream);
-    }
-
     public static FreeWAvaloniaPdfExportResult Save(
         DocumentView view,
-        string path,
+        Stream stream,
         PrintSelection selection)
     {
         ArgumentNullException.ThrowIfNull(view);
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(selection);
+        if (!stream.CanWrite)
+            throw new ArgumentException("PDF export requires a writable stream.", nameof(stream));
 
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (!string.IsNullOrWhiteSpace(directory))
-            Directory.CreateDirectory(directory);
-
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-        var document = PrintPdfContentPlanner.Apply(view.BuildPdfContent(), selection);
-        return Write(document, stream);
+        return Write(FreeWFixedLayoutPdfPlanner.Apply(view.BuildPdfContent(), selection), stream);
     }
 
     private static FreeWAvaloniaPdfExportResult Write(PdfContentDocument document, Stream stream)
@@ -83,26 +57,20 @@ public static class FreeWAvaloniaPdfExport
         // Skia shapes (HarfBuzz) and automatically embeds/subsets the fonts it draws, so non-WinAnsi
         // text exports correctly without bundling a font. When the Skia native asset is missing it
         // throws on first use; we then fall back to the dependency-free WinAnsi writer.
-        try
-        {
-            var pageCount = SkiaPdfWriter.Write(document, stream, imageDiagnostics);
-            return new FreeWAvaloniaPdfExportResult(pageCount, FreeWAvaloniaPdfBackend.Skia, imageDiagnostics);
-        }
-        catch (Exception ex) when (IsSkiaUnavailable(ex))
-        {
-            if (stream.CanSeek)
+        var result = PdfBackendFallbackExecutor.Execute(
+            stream,
+            target => SkiaPdfWriter.Write(document, target, imageDiagnostics),
+            target =>
             {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
+                imageDiagnostics.Clear();
+                var bytes = PortablePdfWriter.WriteToBytes(
+                    document,
+                    "FreeW portable PDF",
+                    imageDiagnostics);
+                target.Write(bytes);
+                return document.Pages.Count;
+            });
 
-            imageDiagnostics.Clear();
-            var bytes = PortablePdfWriter.WriteToBytes(document, "FreeW portable PDF", imageDiagnostics);
-            stream.Write(bytes);
-            return new FreeWAvaloniaPdfExportResult(document.Pages.Count, FreeWAvaloniaPdfBackend.PortableWinAnsi, imageDiagnostics);
-        }
+        return new FreeWAvaloniaPdfExportResult(result.Result, result.Backend, imageDiagnostics);
     }
-
-    private static bool IsSkiaUnavailable(Exception ex) =>
-        SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex);
 }

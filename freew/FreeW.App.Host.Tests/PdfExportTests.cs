@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
@@ -16,8 +17,12 @@ namespace FreeW.App.Host.Tests;
 /// pages to a PDF via PDFsharp; these tests confirm it produces non-empty, well-formed PDF bytes from a
 /// sample document. Runs on STA because it builds the real WPF editing surface and rasterises pages.
 /// </summary>
-public sealed class PdfExportTests
+public sealed class PdfExportTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.PdfExportTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
     [StaFact]
     public void RenderToBytes_SampleDocument_ProducesNonEmptyPdf()
     {
@@ -35,16 +40,26 @@ public sealed class PdfExportTests
     }
 
     [StaFact]
-    public void Save_SampleDocument_WritesNonEmptyFile()
+    public void SharedWorkflow_SampleDocument_WritesNonEmptyFile()
     {
         var view = BuildSampleView();
         var paginator = PrintLayout.BuildPaginator(view);
-        var path = Path.Combine(Path.GetTempPath(), $"freew-pdf-{Guid.NewGuid():N}.pdf");
+        var path = Path.Combine(_temporaryDirectory.Path, "sample.pdf");
 
         try
         {
-            PdfExport.Save(paginator, path, "Sample");
+            var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Pdf, "Sample");
+            var execution = FreeWExportWorkflow.ExecuteAsync(
+                plan,
+                path,
+                (stream, _) =>
+                {
+                    var bytes = PdfExport.RenderToBytes(paginator, "Sample");
+                    stream.Write(bytes);
+                    return ValueTask.FromResult(new FreeWExportArtifact(paginator.PageCount, "WPF"));
+                }).GetAwaiter().GetResult();
 
+            Assert.True(execution.Succeeded, execution.Message);
             Assert.True(File.Exists(path));
             Assert.True(new FileInfo(path).Length > 0, "Exported PDF file should not be empty.");
             var header = new byte[5];
@@ -70,8 +85,8 @@ public sealed class PdfExportTests
         source.Blocks.Add(new Paragraph("Quarterly Report") { StyleId = "Heading1" });
         source.Blocks.Add(new Paragraph("This document was produced from a real .docx file and exported to PDF through the shared PDF tier."));
 
-        var docxPath = Path.Combine(Path.GetTempPath(), $"freew-sample-{Guid.NewGuid():N}.docx");
-        var pdfPath = Path.Combine(Path.GetTempPath(), $"freew-sample-{Guid.NewGuid():N}.pdf");
+        var docxPath = Path.Combine(_temporaryDirectory.Path, "sample.docx");
+        var pdfPath = Path.Combine(_temporaryDirectory.Path, "sample-from-docx.pdf");
         try
         {
             FreeW.Core.IO.DocxWriter.Write(source, docxPath);
@@ -81,8 +96,18 @@ public sealed class PdfExportTests
             view.LoadModel(loaded);
             var paginator = PrintLayout.BuildPaginator(view);
 
-            PdfExport.Save(paginator, pdfPath, "Quarterly Report");
+            var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Pdf, "Quarterly Report");
+            var execution = FreeWExportWorkflow.ExecuteAsync(
+                plan,
+                pdfPath,
+                (stream, _) =>
+                {
+                    var bytes = PdfExport.RenderToBytes(paginator, "Quarterly Report");
+                    stream.Write(bytes);
+                    return ValueTask.FromResult(new FreeWExportArtifact(paginator.PageCount, "WPF"));
+                }).GetAwaiter().GetResult();
 
+            Assert.True(execution.Succeeded, execution.Message);
             Assert.True(File.Exists(pdfPath));
             var bytes = File.ReadAllBytes(pdfPath);
             Assert.True(bytes.Length > 0);

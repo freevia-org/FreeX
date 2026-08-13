@@ -242,10 +242,17 @@ public sealed class ParagraphDialogVisualParityTests
             "tools",
             "FreeW.DialogVisualHarness.Wpf",
             "Program.cs"));
+        var catalog = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "tools",
+            "FreeW.DialogVisualHarness",
+            "FreeWDialogEvidenceCatalog.cs"));
 
-        avaloniaHarness.Should().Contain(
-            "scenario.RouteId is \"accessibility-report\" or \"font\" or \"paragraph\" or \"multilevel-list\" or \"paste-special\" or \"style\" or \"manage-styles\"");
-        wpfHarness.Should().Contain("scenario.RouteId is \"font\" or \"paragraph\"");
+        avaloniaHarness.Should().Contain("plan.UseWpfAuthoritySize");
+        wpfHarness.Should().Contain("FreeWDialogFixtureKind.DefaultParagraphFormatting");
+        catalog.Should().Contain("Pair(\"paragraph\", \"ParagraphBreaksDialog\", \"ParagraphDialog\"");
+        catalog.Should().Contain("useWpfAuthoritySize: true");
         wpfHarness.Should().Contain("Populate(dialog, scenario);");
         avaloniaHarness.Should().Contain("button is ToggleButton or RepeatButton");
     }

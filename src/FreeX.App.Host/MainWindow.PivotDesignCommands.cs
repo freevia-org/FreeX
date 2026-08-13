@@ -1,6 +1,5 @@
 using System.Linq;
 using System.Windows;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -24,21 +23,14 @@ public partial class MainWindow
 
     private void PivotBlankRowsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-            ApplyPivotOptions(
+        if (TryGetActivePivotTable(out var sheet, out var pivotTable))
+            ApplyPivotDesignOptions(
+                sheet,
                 pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                !pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout);
+                PivotOptionsPlanner.CaptureDesignValues(pivotTable) with
+                {
+                    BlankLineAfterItems = !pivotTable.BlankLineAfterItems,
+                });
     }
 
     private void PivotStyleGalleryBtn_Click(object sender, RoutedEventArgs e)
@@ -48,259 +40,98 @@ public partial class MainWindow
 
     private void PivotRowHeadersBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-            ApplyPivotOptions(
+        if (TryGetActivePivotTable(out var sheet, out var pivotTable))
+            ApplyPivotDesignOptions(
+                sheet,
                 pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                !pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout);
+                PivotOptionsPlanner.CaptureDesignValues(pivotTable) with
+                {
+                    ShowRowHeaders = !pivotTable.ShowRowHeaders,
+                });
     }
 
     private void PivotColumnHeadersBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-            ApplyPivotOptions(
+        if (TryGetActivePivotTable(out var sheet, out var pivotTable))
+            ApplyPivotDesignOptions(
+                sheet,
                 pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                pivotTable.ShowRowHeaders,
-                !pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout);
+                PivotOptionsPlanner.CaptureDesignValues(pivotTable) with
+                {
+                    ShowColumnHeaders = !pivotTable.ShowColumnHeaders,
+                });
     }
 
     private void PivotBandedRowsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-            ApplyPivotOptions(
+        if (TryGetActivePivotTable(out var sheet, out var pivotTable))
+            ApplyPivotDesignOptions(
+                sheet,
                 pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                !pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout);
+                PivotOptionsPlanner.CaptureDesignValues(pivotTable) with
+                {
+                    ShowRowStripes = !pivotTable.ShowRowStripes,
+                });
     }
 
     private void PivotBandedColumnsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-            ApplyPivotOptions(
+        if (TryGetActivePivotTable(out var sheet, out var pivotTable))
+            ApplyPivotDesignOptions(
+                sheet,
                 pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                !pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout);
+                PivotOptionsPlanner.CaptureDesignValues(pivotTable) with
+                {
+                    ShowColumnStripes = !pivotTable.ShowColumnStripes,
+                });
     }
 
     private void PivotExpandCollapseButtonsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-            ApplyPivotOptions(
+        if (TryGetActivePivotTable(out var sheet, out var pivotTable))
+            ApplyPivotDesignOptions(
+                sheet,
                 pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout,
+                PivotOptionsPlanner.CaptureDesignValues(pivotTable),
                 showExpandCollapseButtons: !pivotTable.ShowExpandCollapseButtons);
     }
 
     private void PivotFieldHeadersBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-            ApplyPivotOptions(
+        if (TryGetActivePivotTable(out var sheet, out var pivotTable))
+            ApplyPivotDesignOptions(
+                sheet,
                 pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout,
-                showFieldHeaders: !pivotTable.ShowFieldHeaders);
+                PivotOptionsPlanner.CaptureDesignValues(pivotTable) with
+                {
+                    ShowFieldHeaders = !pivotTable.ShowFieldHeaders,
+                });
     }
 
-    private void ApplyPivotOptions(PivotTableModel pivotTable, PivotTableOptionsDialogResult result) =>
-        ApplyPivotOptions(
-            pivotTable,
-            result.ShowRowGrandTotals,
-            result.ShowColumnGrandTotals,
-            result.ShowSubtotals,
-            result.SubtotalPlacement,
-            result.RepeatItemLabels,
-            result.BlankLineAfterItems,
-            result.StyleName,
-            result.ShowRowHeaders,
-            result.ShowColumnHeaders,
-            result.ShowRowStripes,
-            result.ShowColumnStripes,
-            result.ReportLayout,
-            emptyValueText: result.EmptyValueText,
-            updateEmptyValueText: true,
-            errorCaption: result.ErrorValueText,
-            updateErrorCaption: true,
-            refreshOnOpen: result.RefreshOnOpen,
-            saveSourceData: result.SaveSourceData,
-            enableRefresh: result.EnableRefresh,
-            preserveSourceSortFilter: result.PreserveSourceSortFilter,
-            missingItemsLimit: result.MissingItemsLimit,
-            updateMissingItemsLimit: true,
-            printTitles: result.PrintTitles,
-            printExpandCollapseButtons: result.PrintExpandCollapseButtons,
-            altTextTitle: result.AltTextTitle,
-            altTextDescription: result.AltTextDescription,
-            compactRowLabelIndent: result.CompactRowLabelIndent,
-            updateAltText: true,
-            showExpandCollapseButtons: result.ShowExpandCollapseButtons,
-            autofitColumnsOnUpdate: result.AutofitColumnsOnUpdate,
-            preserveFormattingOnUpdate: result.PreserveFormattingOnUpdate,
-            showFieldHeaders: result.ShowFieldHeaders,
-            showContextualTooltips: result.ShowContextualTooltips,
-            showPropertiesInTooltips: result.ShowPropertiesInTooltips,
-            showClassicLayout: result.ShowClassicLayout,
-            mergeAndCenterLabels: result.MergeAndCenterLabels,
-            showItemsWithNoDataOnRows: result.ShowItemsWithNoDataOnRows,
-            showItemsWithNoDataOnColumns: result.ShowItemsWithNoDataOnColumns,
-            pageOverThenDown: result.PageOverThenDown,
-            pageWrap: result.PageWrap,
-            enableDrill: result.EnableDrill);
-
-    private void ApplyPivotOptions(
-        PivotTableModel pivotTable,
-        bool showRowGrandTotals,
-        bool showColumnGrandTotals,
-        bool showSubtotals,
-        PivotSubtotalPlacement subtotalPlacement,
-        bool repeatItemLabels,
-        bool blankLineAfterItems,
-        string styleName,
-        bool showRowHeaders,
-        bool showColumnHeaders,
-        bool showRowStripes,
-        bool showColumnStripes,
-        PivotReportLayout reportLayout,
-        string? emptyValueText = null,
-        bool updateEmptyValueText = false,
-        string? errorCaption = null,
-        bool updateErrorCaption = false,
-        bool? refreshOnOpen = null,
-        bool? saveSourceData = null,
-        bool? enableRefresh = null,
-        bool? preserveSourceSortFilter = null,
-        int? missingItemsLimit = null,
-        bool updateMissingItemsLimit = false,
-        bool? printTitles = null,
-        bool? printExpandCollapseButtons = null,
-        string? altTextTitle = null,
-        string? altTextDescription = null,
-        int? compactRowLabelIndent = null,
-        bool updateAltText = false,
-        bool? showExpandCollapseButtons = null,
-        bool? autofitColumnsOnUpdate = null,
-        bool? preserveFormattingOnUpdate = null,
-        bool? showFieldHeaders = null,
-        bool? showContextualTooltips = null,
-        bool? showPropertiesInTooltips = null,
-        bool? showClassicLayout = null,
-        bool? mergeAndCenterLabels = null,
-        bool? showItemsWithNoDataOnRows = null,
-        bool? showItemsWithNoDataOnColumns = null,
-        bool? pageOverThenDown = null,
-        int? pageWrap = null,
-        bool? enableDrill = null)
+    private void ApplyPivotOptions(PivotTableModel pivotTable, PivotOptionsDialogValues values)
     {
-        if (!TryExecuteCommand(
-                new ConfigurePivotTableOptionsCommand(
-                    _currentSheetId,
-                    pivotTable.Name,
-                    showRowGrandTotals,
-                    showColumnGrandTotals,
-                    showSubtotals,
-                    subtotalPlacement,
-                    repeatItemLabels,
-                    blankLineAfterItems,
-                    styleName,
-                    showRowHeaders,
-                    showColumnHeaders,
-                    showRowStripes,
-                    showColumnStripes,
-                    reportLayout,
-                    emptyValueText,
-                    updateEmptyValueText,
-                    refreshOnOpen,
-                    saveSourceData,
-                    enableRefresh,
-                    preserveSourceSortFilter,
-                    missingItemsLimit,
-                    updateMissingItemsLimit,
-                    printTitles,
-                    printExpandCollapseButtons,
-                    altTextTitle,
-                    altTextDescription,
-                    compactRowLabelIndent,
-                    updateAltText,
-                    showExpandCollapseButtons,
-                    autofitColumnsOnUpdate,
-                    preserveFormattingOnUpdate,
-                    showFieldHeaders,
-                    showContextualTooltips,
-                    showPropertiesInTooltips,
-                    showClassicLayout,
-                    mergeAndCenterLabels,
-                    showItemsWithNoDataOnRows,
-                    showItemsWithNoDataOnColumns,
-                    pageOverThenDown,
-                    pageWrap,
-                    errorCaption,
-                    updateErrorCaption,
-                    enableDrill: enableDrill),
-                "PivotTable Options"))
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
             return;
 
-        UpdateViewport();
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanDialogOptions(
+                new PivotApplicationTarget(sheet, pivotTable),
+                values),
+            "PivotTable Options");
     }
+
+    private void ApplyPivotDesignOptions(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        PivotDesignOptionsValues values,
+        bool? showExpandCollapseButtons = null) =>
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanDesignOptions(
+                new PivotApplicationTarget(sheet, pivotTable),
+                values,
+                showExpandCollapseButtons),
+            "PivotTable Options");
 
     private void ShowPivotTableOptionsDialog()
     {
@@ -344,26 +175,19 @@ public partial class MainWindow
 
     private void ShowPivotStyleGalleryDialog()
     {
-        if (!TryGetActivePivotTable(out _, out var pivotTable))
+        if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
             return;
 
         var dialog = new PivotStyleGalleryDialog(pivotTable.StyleName) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyPivotOptions(
-            pivotTable: pivotTable,
-            showRowGrandTotals: pivotTable.ShowRowGrandTotals,
-            showColumnGrandTotals: pivotTable.ShowColumnGrandTotals,
-            showSubtotals: pivotTable.ShowSubtotals,
-            subtotalPlacement: pivotTable.SubtotalPlacement,
-            repeatItemLabels: pivotTable.RepeatItemLabels,
-            blankLineAfterItems: pivotTable.BlankLineAfterItems,
-            styleName: dialog.Result.StyleName,
-            showRowHeaders: pivotTable.ShowRowHeaders,
-            showColumnHeaders: pivotTable.ShowColumnHeaders,
-            showRowStripes: pivotTable.ShowRowStripes,
-            showColumnStripes: pivotTable.ShowColumnStripes,
-            reportLayout: pivotTable.ReportLayout);
+        ApplyPivotDesignOptions(
+            sheet,
+            pivotTable,
+            PivotOptionsPlanner.CaptureDesignValues(pivotTable) with
+            {
+                StyleName = dialog.Result.StyleName,
+            });
     }
 }

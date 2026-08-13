@@ -28,6 +28,8 @@ public readonly record struct TextParagraphPlacement(
     double MaxWidthDip,
     TextBulletPlacement? Bullet)
 {
+    public TextParagraphRenderRoute RenderRoute { get; init; }
+
     public TextParagraphPlacement(
         int paragraphIndex,
         int columnIndex,
@@ -87,6 +89,49 @@ public readonly record struct TextRunPlacement(
     double X,
     double Width,
     bool RightToLeft);
+
+public readonly record struct TextBaselineFragmentMeasure(
+    double WidthDip,
+    double AscentDip,
+    double HeightDip);
+
+public readonly record struct TextBaselineFragmentPlacement(
+    int RunIndex,
+    string Text,
+    double X,
+    double Y,
+    double WidthDip,
+    double AscentDip,
+    double HeightDip,
+    bool RightToLeft);
+
+public sealed record TextBaselineLinePlan(
+    double TopY,
+    double BaselineY,
+    double WidthDip,
+    double HeightDip,
+    IReadOnlyList<TextBaselineFragmentPlacement> Fragments);
+
+public readonly record struct TextInlineRunMeasure(
+    double WidthDip,
+    double AscentDip,
+    double HeightDip);
+
+public readonly record struct TextInlineRunPlacement(
+    int RunIndex,
+    double X,
+    double Y,
+    double WidthDip,
+    double AscentDip,
+    double HeightDip,
+    bool RightToLeft);
+
+public sealed record TextInlineBaselineLinePlan(
+    double TopY,
+    double BaselineY,
+    double WidthDip,
+    double HeightDip,
+    IReadOnlyList<TextInlineRunPlacement> Runs);
 
 public readonly record struct TextColumnLayout(
     TextLayoutArea Area,
@@ -175,8 +220,64 @@ public sealed record TextBlockLayoutPlan(
     TextLayoutArea Area,
     IReadOnlyList<TextParagraphPlacement> Paragraphs);
 
+public readonly record struct TextNativeMeasurement<TArtifact>(
+    TArtifact Artifact,
+    double HeightDip,
+    double WidthDip = 0);
+
+public readonly record struct TextParagraphMeasurementRequest(
+    int ParagraphIndex,
+    ResolvedTextLayout Text,
+    ResolvedParagraph Paragraph,
+    double MaxWidthDip,
+    bool UseIdealMetrics);
+
+public sealed record TextMeasuredBlockLayoutPlan<TArtifact>(
+    ResolvedTextLayout RenderText,
+    TextAutoFitOverflowPlan AutoFit,
+    TextBlockLayoutPlan Layout,
+    IReadOnlyDictionary<int, TArtifact> Artifacts);
+
+public enum TextColumnMeasurementPhase
+{
+    WrapProbe,
+    LineLayout,
+    Render
+}
+
+public readonly record struct TextColumnMeasurementRequest(
+    TextColumnMeasurementPhase Phase,
+    int ParagraphIndex,
+    int LineIndex,
+    ResolvedParagraph Paragraph,
+    double MaxWidthDip,
+    bool Wrap,
+    double HorizontalScale);
+
+public sealed record TextContinuousColumnLinePlan<TArtifact>(
+    ResolvedParagraph Paragraph,
+    TextColumnLinePlacement Placement,
+    TArtifact Artifact,
+    double HorizontalScale);
+
+public sealed record TextContinuousColumnFlowPlan<TArtifact>(
+    bool IsApplicable,
+    TextColumnLayout Layout,
+    IReadOnlyList<TextContinuousColumnLinePlan<TArtifact>> Lines);
+
 public sealed record TextTabLayoutPlan(
     IReadOnlyList<TextTabSegmentPlacement> Segments);
+
+public sealed record TextTabLeaderFillPlan(
+    char Glyph,
+    int GlyphCount,
+    double StartX,
+    double EndX)
+{
+    public bool ShouldDraw => Glyph != '\0' && GlyphCount > 0;
+    public double SpanWidth => Math.Max(0, EndX - StartX);
+    public string Text => ShouldDraw ? new string(Glyph, GlyphCount) : string.Empty;
+}
 
 public static class TextLayoutPlanner
 {
@@ -199,6 +300,28 @@ public static class TextLayoutPlanner
             TabStopLeader.Equal => '=',
             _ => '\0',
         };
+
+    public static TextTabLeaderFillPlan PlanTabLeaderFill(
+        TabStopLeader leader,
+        double startX,
+        double endX,
+        Func<char, double> measureGlyphWidth)
+    {
+        ArgumentNullException.ThrowIfNull(measureGlyphWidth);
+
+        var glyph = GetTabLeaderGlyph(leader);
+        var spanWidth = endX - startX;
+        if (glyph == '\0' || !double.IsFinite(spanWidth) || spanWidth < 1)
+            return new(glyph, 0, startX, endX);
+
+        var glyphWidth = measureGlyphWidth(glyph);
+        if (!double.IsFinite(glyphWidth) || glyphWidth <= 0)
+            return new(glyph, 0, startX, endX);
+
+        var glyphCount = (int)Math.Floor(spanWidth / glyphWidth);
+        return new(glyph, Math.Max(0, glyphCount), startX, endX);
+    }
+
     public const double ImportedAptosBodyOriginOffsetY = 6.0;
     public const double RuntimeAutoFitMinimumFontScale = 0.60;
     public const double RuntimeAutoFitMaximumLineSpacingReduction = 0.20;
@@ -553,6 +676,298 @@ public static class TextLayoutPlanner
     public static double BaselineOffsetToDip(int? baselineOffset, double fontSizePt) =>
         baselineOffset.GetValueOrDefault() / 100000.0 * PointsToDip(fontSizePt);
 
+    public static IReadOnlyList<string> SplitColumnText(
+        string text,
+        double maxWidthDip,
+        bool wrap,
+        Func<string, double> measureText)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(measureText);
+
+        if (!wrap || maxWidthDip <= 0)
+            return new[] { text };
+
+        var words = text.Replace('\r', ' ').Replace('\n', ' ')
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0)
+            return new[] { string.Empty };
+
+        var lines = new List<string>();
+        string current = string.Empty;
+        foreach (var word in words)
+        {
+            string candidate = current.Length == 0 ? word : current + " " + word;
+            if (current.Length > 0 && measureText(candidate) > maxWidthDip)
+            {
+                lines.Add(current);
+                current = word;
+            }
+            else
+            {
+                current = candidate;
+            }
+        }
+
+        if (current.Length > 0)
+            lines.Add(current);
+        return lines;
+    }
+
+    public static ResolvedParagraph CloneParagraphWithText(
+        ResolvedParagraph paragraph,
+        ResolvedRun run,
+        string text)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(text);
+
+        return new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun
+                {
+                    Text = text,
+                    FontFamily = run.FontFamily,
+                    FontSizePt = run.FontSizePt,
+                    BaselineOffset = run.BaselineOffset,
+                    Bold = run.Bold,
+                    Italic = run.Italic,
+                    Underline = run.Underline,
+                    Strikethrough = run.Strikethrough,
+                    Color = run.Color,
+                    TextFill = run.TextFill,
+                    TextOutline = run.TextOutline,
+                    TextShadow = run.TextShadow,
+                    TextReflection = run.TextReflection,
+                    TextGlow = run.TextGlow,
+                    TextSoftEdge = run.TextSoftEdge,
+                    MathLayout = run.MathLayout
+                }
+            },
+            Align = paragraph.Align,
+            RightToLeft = paragraph.RightToLeft,
+            Level = paragraph.Level,
+            BulletKind = paragraph.BulletKind,
+            BulletChar = paragraph.BulletChar,
+            BulletImage = paragraph.BulletImage,
+            SpaceBeforePt = paragraph.SpaceBeforePt,
+            SpaceAfterPt = paragraph.SpaceAfterPt,
+            TabStops = paragraph.TabStops,
+            BulletText = paragraph.BulletText,
+            BulletColor = paragraph.BulletColor,
+            BulletFontFamily = paragraph.BulletFontFamily,
+            BulletFontSizePt = paragraph.BulletFontSizePt,
+            IndentDip = paragraph.IndentDip,
+            HangingDip = paragraph.HangingDip
+        };
+    }
+
+    /// <summary>
+    /// Plans wrapped baseline fragments while native renderers provide text metrics.
+    /// The full-run measurement used for aligned and RTL placement intentionally
+    /// preserves the existing renderer behavior.
+    /// </summary>
+    public static IReadOnlyList<TextBaselineLinePlan> PlanBaselineLines(
+        ResolvedParagraph paragraph,
+        double startX,
+        double startY,
+        double maxWidthDip,
+        Func<ResolvedRun, string, bool, TextBaselineFragmentMeasure> measureText)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(measureText);
+
+        var lines = new List<TextBaselineLineBuilder> { new() };
+
+        void NewLine() => lines.Add(new TextBaselineLineBuilder());
+
+        void AddMeasured(int runIndex, ResolvedRun run, string text)
+        {
+            bool rightToLeft = ResolveRunRightToLeft(paragraph.RightToLeft, text);
+            var measure = measureText(run, text, rightToLeft);
+            var line = lines[^1];
+            if (line.Fragments.Count > 0 && line.WidthDip + measure.WidthDip > maxWidthDip)
+            {
+                NewLine();
+                line = lines[^1];
+            }
+
+            line.Fragments.Add(new TextBaselineFragmentBuilder(
+                runIndex,
+                text,
+                measure,
+                rightToLeft));
+            line.WidthDip += measure.WidthDip;
+            line.AscentDip = Math.Max(line.AscentDip, measure.AscentDip);
+            line.HeightDip = Math.Max(line.HeightDip, measure.HeightDip);
+        }
+
+        for (int runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+        {
+            var run = paragraph.Runs[runIndex];
+            for (int index = 0; index < run.Text.Length;)
+            {
+                char first = run.Text[index];
+                if (first is '\r' or '\n')
+                {
+                    if (first == '\r' && index + 1 < run.Text.Length && run.Text[index + 1] == '\n')
+                        index++;
+                    NewLine();
+                    index++;
+                    continue;
+                }
+
+                bool whitespace = char.IsWhiteSpace(first);
+                int end = index + 1;
+                while (end < run.Text.Length && run.Text[end] is not '\r' and not '\n' &&
+                       char.IsWhiteSpace(run.Text[end]) == whitespace)
+                {
+                    end++;
+                }
+
+                string token = run.Text[index..end];
+                var line = lines[^1];
+                bool rightToLeft = ResolveRunRightToLeft(paragraph.RightToLeft, token);
+                double tokenWidth = measureText(run, token, rightToLeft).WidthDip;
+                if (whitespace &&
+                    (line.Fragments.Count == 0 || line.WidthDip + tokenWidth > maxWidthDip))
+                {
+                    index = end;
+                    continue;
+                }
+
+                if (!whitespace && tokenWidth > maxWidthDip)
+                {
+                    foreach (char character in token)
+                        AddMeasured(runIndex, run, character.ToString());
+                }
+                else
+                {
+                    AddMeasured(runIndex, run, token);
+                }
+
+                index = end;
+            }
+        }
+
+        var plans = new List<TextBaselineLinePlan>(lines.Count);
+        double lineY = startY;
+        foreach (var line in lines)
+        {
+            double baselineY = lineY + line.AscentDip;
+            var fragments = new List<TextBaselineFragmentPlacement>(line.Fragments.Count);
+            if (line.Fragments.Count > 0)
+            {
+                var lineParagraph = new ResolvedParagraph
+                {
+                    Runs = line.Fragments
+                        .Select(fragment => paragraph.Runs[fragment.RunIndex])
+                        .ToArray(),
+                    Align = paragraph.Align,
+                    RightToLeft = paragraph.RightToLeft
+                };
+                var placements = PlanRunPlacements(
+                    lineParagraph,
+                    startX,
+                    maxWidthDip,
+                    (run, rightToLeft) => measureText(run, run.Text, rightToLeft).WidthDip);
+                foreach (var placement in placements)
+                {
+                    var fragment = line.Fragments[placement.RunIndex];
+                    fragments.Add(new TextBaselineFragmentPlacement(
+                        fragment.RunIndex,
+                        fragment.Text,
+                        placement.X,
+                        baselineY - fragment.Measure.AscentDip - BaselineOffsetToDip(
+                            paragraph.Runs[fragment.RunIndex].BaselineOffset,
+                            paragraph.Runs[fragment.RunIndex].FontSizePt),
+                        fragment.Measure.WidthDip,
+                        fragment.Measure.AscentDip,
+                        fragment.Measure.HeightDip,
+                        fragment.RightToLeft));
+                }
+            }
+
+            plans.Add(new TextBaselineLinePlan(
+                lineY,
+                baselineY,
+                line.WidthDip,
+                line.HeightDip,
+                fragments));
+            lineY += Math.Max(1, line.HeightDip);
+        }
+
+        return plans;
+    }
+
+    /// <summary>
+    /// Plans one baseline-aligned inline line while native renderers provide
+    /// text and math metrics. Run placements remain in visual order.
+    /// </summary>
+    public static TextInlineBaselineLinePlan PlanInlineBaselineLine(
+        ResolvedParagraph paragraph,
+        double startX,
+        double startY,
+        double availableWidthDip,
+        Func<int, ResolvedRun, bool, TextInlineRunMeasure> measureRun)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(measureRun);
+
+        var measures = new TextInlineRunMeasure[paragraph.Runs.Count];
+        var widths = new double[paragraph.Runs.Count];
+        var directions = new bool[paragraph.Runs.Count];
+        double lineAscentDip = 0;
+        double lineHeightDip = 0;
+        double lineWidthDip = 0;
+        for (int runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+        {
+            var run = paragraph.Runs[runIndex];
+            bool rightToLeft = run.RightToLeft
+                ?? ResolveRunRightToLeft(paragraph.RightToLeft, run.Text);
+            var measure = measureRun(runIndex, run, rightToLeft);
+            double widthDip = Math.Max(0, measure.WidthDip);
+
+            measures[runIndex] = measure with { WidthDip = widthDip };
+            widths[runIndex] = widthDip;
+            directions[runIndex] = rightToLeft;
+            lineWidthDip += widthDip;
+            lineAscentDip = Math.Max(lineAscentDip, measure.AscentDip);
+            lineHeightDip = Math.Max(lineHeightDip, measure.HeightDip);
+        }
+
+        double baselineY = startY + lineAscentDip;
+        var placements = PlanMeasuredRunPlacements(
+            paragraph,
+            startX,
+            availableWidthDip,
+            widths,
+            directions);
+        var runs = new List<TextInlineRunPlacement>(placements.Count);
+        foreach (var placement in placements)
+        {
+            var measure = measures[placement.RunIndex];
+            runs.Add(new TextInlineRunPlacement(
+                placement.RunIndex,
+                placement.X,
+                baselineY - measure.AscentDip,
+                measure.WidthDip,
+                measure.AscentDip,
+                measure.HeightDip,
+                placement.RightToLeft));
+        }
+
+        return new TextInlineBaselineLinePlan(
+            startY,
+            baselineY,
+            lineWidthDip,
+            lineHeightDip,
+            runs);
+    }
+
     public static TextParagraphMeasure CreateParagraphMeasure(
         int paragraphIndex,
         double heightDip,
@@ -625,7 +1040,8 @@ public static class TextLayoutPlanner
         var area = GetTextArea(text, bounds);
         double lineSpacingScale = GetLineSpacingScale(text, autoFitPlan);
         double totalHeight = paragraphs.Sum(p => p.TotalHeightDip * lineSpacingScale);
-        double currentY = ComputeStartY(area, totalHeight, text.Anchor);
+        double currentY = ComputeStartY(area, totalHeight, text.Anchor)
+            - ResolveImportedAptosBodyOriginOffsetY(text);
 
         var placements = new List<TextParagraphPlacement>(paragraphs.Count);
         foreach (var paragraph in paragraphs)
@@ -642,11 +1058,46 @@ public static class TextLayoutPlanner
                 paragraphX,
                 currentY,
                 Math.Max(1, area.Width - resolvedParagraph.IndentDip),
-                PlanBulletPlacement(resolvedParagraph, paragraphX, currentY)));
+                PlanBulletPlacement(resolvedParagraph, paragraphX, currentY))
+            {
+                RenderRoute = PlanParagraphRenderRoute(resolvedParagraph, text)
+            });
             currentY += (paragraph.HeightDip + paragraph.SpaceAfterDip) * lineSpacingScale;
         }
 
         return new TextBlockLayoutPlan(area, placements);
+    }
+
+    public static TextMeasuredBlockLayoutPlan<TArtifact> PlanMeasuredBodyText<TArtifact>(
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        Func<TextParagraphMeasurementRequest, TextNativeMeasurement<TArtifact>> measureParagraph)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(measureParagraph);
+
+        var initialArea = GetTextArea(text, bounds);
+        var (initialMeasures, _) = MeasureParagraphs(
+            text,
+            initialArea.Width,
+            lineSpacingScale: 1.0,
+            applyParagraphLineSpacing: true,
+            measureParagraph);
+        var autoFit = PlanNormalAutoFitOverflow(text, initialArea.Height, initialMeasures);
+        var renderText = ApplyAutoFitPlan(text, autoFit);
+        var renderArea = GetTextArea(renderText, bounds);
+        var (measures, artifacts) = MeasureParagraphs(
+            renderText,
+            renderArea.Width,
+            lineSpacingScale: 1.0,
+            applyParagraphLineSpacing: true,
+            measureParagraph);
+
+        return new TextMeasuredBlockLayoutPlan<TArtifact>(
+            renderText,
+            autoFit,
+            PlanBodyText(renderText, bounds, measures, autoFit),
+            artifacts);
     }
 
     public static TextColumnLayout GetColumnLayout(ResolvedTextLayout text, LayoutRect bounds) =>
@@ -710,11 +1161,151 @@ public static class TextLayoutPlanner
                 paragraphX,
                 currentY,
                 Math.Max(1, layout.ColumnWidthDip - resolvedParagraph.IndentDip),
-                PlanBulletPlacement(resolvedParagraph, paragraphX, currentY)));
+                PlanBulletPlacement(resolvedParagraph, paragraphX, currentY))
+            {
+                RenderRoute = PlanParagraphRenderRoute(resolvedParagraph, text)
+            });
             currentY += paragraph.HeightDip + paragraph.SpaceAfterDip;
         }
 
         return new TextBlockLayoutPlan(layout.Area, placements);
+    }
+
+    public static TextMeasuredBlockLayoutPlan<TArtifact> PlanMeasuredColumns<TArtifact>(
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        Func<TextParagraphMeasurementRequest, TextNativeMeasurement<TArtifact>> measureParagraph)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(measureParagraph);
+
+        var initialLayout = GetColumnLayout(text, bounds);
+        var (initialMeasures, _) = MeasureParagraphs(
+            text,
+            initialLayout.ColumnWidthDip,
+            lineSpacingScale: 1.0,
+            applyParagraphLineSpacing: false,
+            measureParagraph);
+        var autoFit = PlanNormalAutoFitOverflow(
+            text,
+            GetAutoFitCapacityHeight(initialLayout),
+            initialMeasures);
+        var renderText = ApplyAutoFitPlan(text, autoFit);
+        var renderLayout = GetColumnLayout(renderText, bounds, autoFit);
+        var (measures, artifacts) = MeasureParagraphs(
+            renderText,
+            renderLayout.ColumnWidthDip,
+            renderLayout.LineSpacingScale,
+            applyParagraphLineSpacing: false,
+            measureParagraph);
+
+        return new TextMeasuredBlockLayoutPlan<TArtifact>(
+            renderText,
+            autoFit,
+            PlanColumns(renderText, renderLayout, measures),
+            artifacts);
+    }
+
+    public static bool CanUseContinuousColumnFlow(ResolvedTextLayout text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        return text.ColumnCount > 1 &&
+            text.AutoFitKind == TextAutoFitKind.None &&
+            !text.HasStoredFontScale &&
+            text.Paragraphs.All(paragraph =>
+                paragraph.Runs.Count == 1 &&
+                PlanParagraphRenderRoute(paragraph, text) == TextParagraphRenderRoute.Plain);
+    }
+
+    public static TextContinuousColumnFlowPlan<TArtifact> PlanMeasuredContinuousColumnFlow<TArtifact>(
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        Func<TextColumnMeasurementRequest, TextNativeMeasurement<TArtifact>> measure,
+        Func<ResolvedParagraph, double>? horizontalScaleResolver = null)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(measure);
+
+        if (!CanUseContinuousColumnFlow(text))
+        {
+            return new TextContinuousColumnFlowPlan<TArtifact>(
+                false,
+                default,
+                Array.Empty<TextContinuousColumnLinePlan<TArtifact>>());
+        }
+
+        var layout = GetColumnLayout(text, bounds);
+        var fragments = new Dictionary<(int ParagraphIndex, int LineIndex),
+            (ResolvedParagraph Paragraph, double HorizontalScale)>();
+        var lineMeasures = new List<TextColumnLineMeasure>();
+
+        for (int paragraphIndex = 0; paragraphIndex < text.Paragraphs.Count; paragraphIndex++)
+        {
+            var paragraph = text.Paragraphs[paragraphIndex];
+            var run = paragraph.Runs[0];
+            double horizontalScale = Math.Clamp(
+                horizontalScaleResolver?.Invoke(paragraph) ?? 1.0,
+                0.01,
+                100.0);
+            var lines = SplitColumnText(
+                run.Text,
+                layout.ColumnWidthDip / horizontalScale,
+                text.Wrap,
+                candidate => measure(new TextColumnMeasurementRequest(
+                    TextColumnMeasurementPhase.WrapProbe,
+                    paragraphIndex,
+                    -1,
+                    CloneParagraphWithText(paragraph, run, candidate),
+                    0,
+                    false,
+                    horizontalScale)).WidthDip);
+
+            for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
+            {
+                var fragment = CloneParagraphWithText(paragraph, run, lines[lineIndex]);
+                var native = measure(new TextColumnMeasurementRequest(
+                    TextColumnMeasurementPhase.LineLayout,
+                    paragraphIndex,
+                    lineIndex,
+                    fragment,
+                    layout.ColumnWidthDip,
+                    text.Wrap,
+                    horizontalScale));
+                fragments[(paragraphIndex, lineIndex)] = (fragment, horizontalScale);
+                lineMeasures.Add(new TextColumnLineMeasure(
+                    paragraphIndex,
+                    lineIndex,
+                    native.HeightDip,
+                    lineIndex == 0 ? PointsToDip(paragraph.SpaceBeforePt) : 0,
+                    lineIndex == lines.Count - 1 ? PointsToDip(paragraph.SpaceAfterPt) : 0,
+                    lineIndex == 0,
+                    lineIndex == lines.Count - 1));
+            }
+        }
+
+        var linesToRender = new List<TextContinuousColumnLinePlan<TArtifact>>();
+        foreach (var placement in PlanColumnLines(text, layout, lineMeasures))
+        {
+            var (fragment, horizontalScale) =
+                fragments[(placement.ParagraphIndex, placement.LineIndex)];
+            bool useScaledUnwrappedArtifact = horizontalScale < 1.0;
+            var native = measure(new TextColumnMeasurementRequest(
+                TextColumnMeasurementPhase.Render,
+                placement.ParagraphIndex,
+                placement.LineIndex,
+                fragment,
+                useScaledUnwrappedArtifact ? 0 : placement.MaxWidthDip,
+                useScaledUnwrappedArtifact ? false : text.Wrap,
+                horizontalScale));
+            linesToRender.Add(new TextContinuousColumnLinePlan<TArtifact>(
+                fragment,
+                placement,
+                native.Artifact,
+                horizontalScale));
+        }
+
+        return new TextContinuousColumnFlowPlan<TArtifact>(true, layout, linesToRender);
     }
 
     public static IReadOnlyList<TextColumnLinePlacement> PlanColumnLines(
@@ -756,6 +1347,44 @@ public static class TextLayoutPlanner
         }
 
         return placements;
+    }
+
+    private static (
+        List<TextParagraphMeasure> Measures,
+        Dictionary<int, TArtifact> Artifacts) MeasureParagraphs<TArtifact>(
+        ResolvedTextLayout text,
+        double maxWidthDip,
+        double lineSpacingScale,
+        bool applyParagraphLineSpacing,
+        Func<TextParagraphMeasurementRequest, TextNativeMeasurement<TArtifact>> measureParagraph)
+    {
+        var measures = new List<TextParagraphMeasure>();
+        var artifacts = new Dictionary<int, TArtifact>();
+        for (int paragraphIndex = 0; paragraphIndex < text.Paragraphs.Count; paragraphIndex++)
+        {
+            var paragraph = text.Paragraphs[paragraphIndex];
+            if (paragraph.Runs.Count == 0)
+                continue;
+
+            var native = measureParagraph(new TextParagraphMeasurementRequest(
+                paragraphIndex,
+                text,
+                paragraph,
+                maxWidthDip,
+                text.AutoFitKind == TextAutoFitKind.None));
+            artifacts[paragraphIndex] = native.Artifact;
+            measures.Add(CreateParagraphMeasure(
+                paragraphIndex,
+                native.HeightDip,
+                paragraph.SpaceBeforePt,
+                paragraph.SpaceAfterPt,
+                lineSpacingScale,
+                applyParagraphLineSpacing
+                    ? ResolveParagraphLineSpacingScale(paragraph, native.HeightDip)
+                    : 1.0));
+        }
+
+        return (measures, artifacts);
     }
 
     public static TextStackedVerticalLayoutPlan PlanStackedVerticalText(
@@ -927,14 +1556,30 @@ public static class TextLayoutPlanner
 
         var widths = new double[runs.Count];
         var directions = new bool[runs.Count];
-        double totalWidth = 0;
         for (int i = 0; i < runs.Count; i++)
         {
             directions[i] = runs[i].RightToLeft
                 ?? ResolveRunRightToLeft(paragraph.RightToLeft, runs[i].Text);
             widths[i] = Math.Max(0, measureRun(runs[i], directions[i]));
-            totalWidth += widths[i];
         }
+
+        return PlanMeasuredRunPlacements(
+            paragraph,
+            startX,
+            availableWidth,
+            widths,
+            directions);
+    }
+
+    private static IReadOnlyList<TextRunPlacement> PlanMeasuredRunPlacements(
+        ResolvedParagraph paragraph,
+        double startX,
+        double availableWidth,
+        IReadOnlyList<double> widths,
+        IReadOnlyList<bool> directions)
+    {
+        var runs = paragraph.Runs;
+        double totalWidth = widths.Sum();
 
         double alignWidth = availableWidth > 0 ? availableWidth : totalWidth;
         double leadingOffset = paragraph.Align switch
@@ -987,6 +1632,20 @@ public static class TextLayoutPlanner
         }
 
         return paragraphRightToLeft;
+    }
+
+    private readonly record struct TextBaselineFragmentBuilder(
+        int RunIndex,
+        string Text,
+        TextBaselineFragmentMeasure Measure,
+        bool RightToLeft);
+
+    private sealed class TextBaselineLineBuilder
+    {
+        public List<TextBaselineFragmentBuilder> Fragments { get; } = new();
+        public double WidthDip { get; set; }
+        public double AscentDip { get; set; }
+        public double HeightDip { get; set; }
     }
 
     private static bool IsRtlStrongCharacter(char c) =>

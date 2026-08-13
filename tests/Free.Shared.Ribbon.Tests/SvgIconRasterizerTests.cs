@@ -9,7 +9,8 @@ public sealed class SvgIconRasterizerTests
     [Fact]
     public void Painted_bounds_load_omits_viewbox_backing_without_changing_default_load()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"freex-svg-{Guid.NewGuid():N}.svg");
+        using var temporaryDirectory = new TestTemporaryDirectory("free-shared-ribbon-svg-");
+        var path = Path.Combine(temporaryDirectory.Path, "icon.svg");
         File.WriteAllText(
             path,
             """
@@ -18,7 +19,6 @@ public sealed class SvgIconRasterizerTests
             </svg>
             """);
 
-        try
         {
             var defaultGroup = SvgIconRasterizer.LoadFile(path).Drawing
                 .Should().BeOfType<DrawingGroup>().Subject;
@@ -36,10 +36,6 @@ public sealed class SvgIconRasterizerTests
             var paintedLine = paintedGroup.Children[0].Should().BeOfType<GeometryDrawing>().Subject;
             paintedLine.Pen.Should().NotBeNull();
             paintedLine.Geometry.Should().BeOfType<LineGeometry>();
-        }
-        finally
-        {
-            File.Delete(path);
         }
     }
 }

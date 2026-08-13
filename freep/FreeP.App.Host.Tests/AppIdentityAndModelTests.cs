@@ -27,7 +27,9 @@ public sealed class AppIdentityAndModelTests
         var changes = 0;
         bus.Changed += () => changes++;
 
-        bus.Execute(new AddSlideCommand(new Slide { Title = "Slide 2" }));
+        bus.Execute(new InsertSlideCommand(
+            presentation.Slides.Count,
+            new Slide { Title = "Slide 2" }));
         presentation.Slides.Should().HaveCount(2);
         bus.CanUndo.Should().BeTrue();
 

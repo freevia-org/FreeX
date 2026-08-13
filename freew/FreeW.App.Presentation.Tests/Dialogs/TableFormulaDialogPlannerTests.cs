@@ -100,6 +100,23 @@ public sealed class TableFormulaDialogPlannerTests
         error.Should().Be(TableFormulaDialogPlanner.ValidationMessage);
     }
 
+    [Fact]
+    public void Session_OwnsCatalogMutationAndAcceptance()
+    {
+        var session = new TableFormulaDialogSession(
+            new TableFormulaDialogInitialState("=SUM(ABOVE)", 3));
+
+        session.InitialState.NumberFormatIndex.Should().Be(3);
+        session.Functions.Should().Equal(TableFormulaDialogPlanner.Functions);
+        session.NumberFormats.Should().Equal(TableFormulaDialogPlanner.NumberFormats);
+        session.PasteFunction("1+", "average").Should().Be(
+            new TableFormulaPasteResult("=1+AVERAGE()", 11));
+        session.PlanAcceptance(new TableFormulaDialogInput("   ", "0"))
+            .ValidationMessage.Should().Be(TableFormulaDialogPlanner.ValidationMessage);
+        session.PlanAcceptance(new TableFormulaDialogInput(" =SUM(LEFT) ", " #,##0 "))
+            .Result.Should().Be(new TableFormulaField("=SUM(LEFT)", "#,##0"));
+    }
+
     private static Table Grid(params string[][] rows)
     {
         var table = new Table();
@@ -112,5 +129,26 @@ public sealed class TableFormulaDialogPlannerTests
         }
 
         return table;
+    }
+}
+
+public sealed class TableFormulaDialogSessionOwnershipTests
+{
+    [Theory]
+    [InlineData("FreeW.App.Host")]
+    [InlineData("FreeW.App.Avalonia")]
+    public void RenderersDelegateFormulaLifetimeToSession(string project)
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "freew", project,
+            project.EndsWith("Host", StringComparison.Ordinal) ? "TableFormulaDialog.cs" : "TableDialogs.cs"));
+
+        source.Should().Contain("TableFormulaDialogSession");
+        source.Should().Contain("_session.NumberFormats");
+        source.Should().Contain("_session.Functions");
+        source.Should().Contain("_session.PasteFunction(");
+        source.Should().Contain("_session.PlanAcceptance(");
+        source.Should().NotContain("TableFormulaDialogPlanner.TryBuildResult(");
+        source.Should().NotContain("TableFormulaDialogPlanner.PasteFunction(");
     }
 }

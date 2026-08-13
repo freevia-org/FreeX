@@ -9,7 +9,6 @@ using Avalonia.Media;
 using Avalonia.Threading;
 
 using FreeX.App.Presentation.DrawingUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -18,11 +17,10 @@ public sealed partial class MainWindow
 {
     private TextBox? _textBoxInlineEditor;
     private Border? _textBoxInlineEditorChrome;
-    private Guid? _textBoxInlineEditingId;
-    private string? _textBoxInlineOriginalText;
+    private readonly TextBoxInlineEditSession _textBoxInlineEditSession = new();
 
     private bool IsTextBoxInlineEditorVisible =>
-        _textBoxInlineEditor is { IsVisible: true } && _textBoxInlineEditingId is not null;
+        _textBoxInlineEditor is { IsVisible: true } && _textBoxInlineEditSession.IsActive;
 
     private bool IsTextBoxInlineEditorActive => IsTextBoxInlineEditorVisible;
 
@@ -34,7 +32,7 @@ public sealed partial class MainWindow
         HideDataValidationDropdown();
 
         if (IsTextBoxInlineEditorVisible &&
-            _textBoxInlineEditingId != textBoxId &&
+            !_textBoxInlineEditSession.IsEditing(textBoxId) &&
             !HideTextBoxInlineEditor(commit: true))
         {
             return;
@@ -45,9 +43,8 @@ public sealed partial class MainWindow
             return;
 
         EnsureTextBoxInlineEditor();
-        _textBoxInlineEditingId = textBox.Id;
-        _textBoxInlineOriginalText = textBox.Text;
-        _textBoxInlineEditor!.Text = textBox.Text;
+        var startPlan = _textBoxInlineEditSession.Begin(textBox);
+        _textBoxInlineEditor!.Text = startPlan.Text;
         _textBoxInlineEditor.CaretIndex = _textBoxInlineEditor.Text?.Length ?? 0;
         _textBoxInlineEditor.SelectionStart = _textBoxInlineEditor.CaretIndex;
         _textBoxInlineEditor.SelectionEnd = _textBoxInlineEditor.CaretIndex;
@@ -56,8 +53,8 @@ public sealed partial class MainWindow
         _ribbonContextSource.OnDrawingObjectSelected(SelectionPaneObjectKind.TextBox);
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
-        RequestTextBoxInlinePhysicalLayoutObservation();
-        RefreshShell("Ready");
+        RequestOptionalTextBoxInlineLayoutObservation();
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         FocusTextBoxInlineEditor();
     }
 
@@ -93,16 +90,16 @@ public sealed partial class MainWindow
         _textBoxInlineEditor.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
         _textBoxInlineEditor.SetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled);
         AutomationProperties.SetAutomationId(_textBoxInlineEditor, "TextBoxInlineEditor");
-        AutomationProperties.SetName(_textBoxInlineEditor, "Text box inline editor");
-        AutomationProperties.SetHelpText(_textBoxInlineEditor, "Edits the selected text box in place.");
+        AutomationProperties.SetName(_textBoxInlineEditor, UiText.Get("TextBoxInlineEditor_AutomationName"));
+        AutomationProperties.SetHelpText(_textBoxInlineEditor, UiText.Get("TextBoxInlineEditor_HelpText"));
         _textBoxInlineEditor.KeyDown += TextBoxInlineEditor_KeyDown;
-        _textBoxInlineEditor.LayoutUpdated += TextBoxInlineEditor_LayoutUpdated;
         _textBoxInlineEditor.TextChanged += (_, _) =>
         {
-            if (_textBoxInlineEditingId is { } textBoxId && _textBoxInlineEditor.IsVisible)
-                RecordTextBoxInlinePhysicalEvidence("editing", textBoxId);
+            if (_textBoxInlineEditSession.EditingTextBoxId is { } textBoxId && _textBoxInlineEditor.IsVisible)
+                RecordOptionalTextBoxInlineObservation("editing", textBoxId);
         };
         _textBoxInlineEditor.LostFocus += TextBoxInlineEditor_LostFocus;
+        AttachOptionalTextBoxInlineObservation();
     }
 
     private void AddTextBoxInlineEditorOverlay(
@@ -111,7 +108,7 @@ public sealed partial class MainWindow
         bool showHeadings,
         double zoomFactor)
     {
-        if (_textBoxInlineEditingId is not { } textBoxId ||
+        if (_textBoxInlineEditSession.EditingTextBoxId is not { } textBoxId ||
             GetCurrentSheetTextBox(textBoxId) is not { } textBox)
         {
             return;
@@ -193,22 +190,21 @@ public sealed partial class MainWindow
 
     private bool HideTextBoxInlineEditor(bool commit, bool refresh = true)
     {
-        if (_textBoxInlineEditor is null || _textBoxInlineEditingId is not { } textBoxId)
+        if (_textBoxInlineEditor is null || !_textBoxInlineEditSession.IsActive)
             return true;
 
         var textChanged = false;
         if (commit)
         {
-            var plan = TextBoxInlineEditPlanner.CreateCommitPlan(
-                _textBoxInlineOriginalText,
-                _textBoxInlineEditor.Text ?? string.Empty);
+            var plan = _textBoxInlineEditSession.CreateCommitPlan(
+                _session.ActiveSheet.Id,
+                _textBoxInlineEditor.Text)!;
             if (plan.TextChanged)
             {
-                var result = _session.ExecuteReviewCommand(
-                    new SetTextBoxTextCommand(_session.ActiveSheet.Id, textBoxId, plan.Text));
+                var result = _session.ExecuteReviewCommand(plan.Command!);
                 if (!result.Success)
                 {
-                    ShowEditIssue(result.ErrorMessage ?? "Could not edit text box.");
+                    ShowEditIssue(result.ErrorMessage ?? UiText.Get("TextBoxInlineEditor_EditFailed"));
                     return false;
                 }
 
@@ -219,8 +215,7 @@ public sealed partial class MainWindow
         _textBoxInlineEditor.IsVisible = false;
         if (_textBoxInlineEditorChrome is not null)
             _textBoxInlineEditorChrome.IsVisible = false;
-        _textBoxInlineEditingId = null;
-        _textBoxInlineOriginalText = null;
+        _textBoxInlineEditSession.Complete();
         if (refresh)
             RefreshShell(textChanged ? "Edit Text Box" : "Ready");
         return true;
@@ -228,7 +223,7 @@ public sealed partial class MainWindow
 
     private void TextBoxInlineEditor_KeyDown(object? sender, KeyEventArgs args)
     {
-        var action = TextBoxInlineEditPlanner.PlanKeyDown(
+        var action = _textBoxInlineEditSession.PlanKeyDown(
             ToTextBoxInlineEditKey(args.Key),
             args.KeyModifiers != KeyModifiers.None);
         if (action == TextBoxInlineEditKeyAction.None)
@@ -236,21 +231,21 @@ public sealed partial class MainWindow
 
         if (action == TextBoxInlineEditKeyAction.Cancel)
         {
-            var textBoxId = _textBoxInlineEditingId;
-            _textBoxInlineEditor!.Text = _textBoxInlineOriginalText ?? string.Empty;
+            var cancelPlan = _textBoxInlineEditSession.CreateCancelPlan();
+            _textBoxInlineEditor!.Text = cancelPlan?.OriginalText ?? string.Empty;
             HideTextBoxInlineEditor(commit: false);
-            if (textBoxId is { } canceledTextBoxId)
-                RecordTextBoxInlinePhysicalEvidence("canceled", canceledTextBoxId);
+            if (cancelPlan is { } canceled)
+                RecordOptionalTextBoxInlineObservation("canceled", canceled.TextBoxId);
             _sheetGridHost.Focus();
             args.Handled = true;
             return;
         }
 
-        var committedTextBoxId = _textBoxInlineEditingId;
+        var committedTextBoxId = _textBoxInlineEditSession.EditingTextBoxId;
         if (HideTextBoxInlineEditor(commit: true))
         {
             if (committedTextBoxId is { } textBoxId)
-                RecordTextBoxInlinePhysicalEvidence("committed", textBoxId);
+                RecordOptionalTextBoxInlineObservation("committed", textBoxId);
             _sheetGridHost.Focus();
         }
 
@@ -266,7 +261,7 @@ public sealed partial class MainWindow
 
     private void CommitTextBoxInlineEditorLostFocusIfNeeded()
     {
-        if (!TextBoxInlineEditPlanner.ShouldCommitLostFocus(
+        if (!_textBoxInlineEditSession.ShouldCommitLostFocus(
                 IsTextBoxInlineEditorVisible,
                 _textBoxInlineEditor?.IsFocused == true,
                 ReferenceEquals(FocusManager?.GetFocusedElement(), _textBoxInlineEditor)))
@@ -299,21 +294,4 @@ public sealed partial class MainWindow
 
         _activeDataValidationDropdown = null;
     }
-
-    internal bool IsTextBoxInlineEditorActiveForTest => IsTextBoxInlineEditorActive;
-    internal TextBox? TextBoxInlineEditorForTest => _textBoxInlineEditor;
-
-    internal void BeginTextBoxInlineEditForTest(Guid textBoxId) => BeginTextBoxInlineEdit(textBoxId);
-
-    internal void RaiseTextBoxInlineEditorKeyDownForTest(KeyEventArgs args)
-    {
-        if (_textBoxInlineEditor is null)
-            throw new InvalidOperationException("No text box inline editor exists.");
-
-        TextBoxInlineEditor_KeyDown(_textBoxInlineEditor, args);
-    }
-
-    internal void InsertTextBoxAtActiveCellForTest() => InsertTextBoxAtActiveCell();
-
-    internal void RefreshShellForViewportPanForTest() => RefreshShellForViewportPan("Ready");
 }

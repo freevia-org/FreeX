@@ -1,3 +1,5 @@
+using Free.Shared.Localization;
+
 namespace FreeX.App.Services;
 
 /// <summary>
@@ -10,7 +12,7 @@ namespace FreeX.App.Services;
 /// </summary>
 public static class FormulaIssueSummaryFormatter
 {
-    public static string Format(int issueCount, string emptySummaryKey, WorkbookInfoDisplayStrings strings)
+    public static string Format(int issueCount, string emptySummaryKey, ResourceKeyTextResolver strings)
     {
         ArgumentNullException.ThrowIfNull(strings);
 

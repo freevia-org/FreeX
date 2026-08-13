@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 
 using Avalonia.Automation;
@@ -21,27 +20,27 @@ public sealed class DialogTabCycleFocusGraphTests
 
     [Fact]
     public async Task DataValidation_AllTabsCycleForwardAndReverse_AndEscapeCloses() =>
-        await AssertTabbedDialogAsync("ShowDataValidationInputDialogAsync", "DataValidationTabStrip", 3, "DataValidationTypeBox");
+        await AssertTabbedDialogAsync(DialogRoute.DataValidation, "DataValidationTabStrip", 3, "DataValidationTypeBox");
 
     [Fact]
     public async Task FindReplace_AllTabsCycleForwardAndReverse_AndEscapeCloses() =>
-        await AssertTabbedDialogAsync("ShowFindReplaceTabbedDialogAsync", "FindReplaceTabs", 2, "FindReplaceFindBox");
+        await AssertTabbedDialogAsync(DialogRoute.FindReplace, "FindReplaceTabs", 2, "FindReplaceFindBox");
 
     [Fact]
     public async Task FormatCells_AllTabsCycleForwardAndReverse_AndEscapeCloses() =>
-        await AssertTabbedDialogAsync("ShowFormatCellsInputDialogAsync", "FormatCellsTabStrip", 6, "FormatCellsNumberCategoryList");
+        await AssertTabbedDialogAsync(DialogRoute.FormatCells, "FormatCellsTabStrip", 6, "FormatCellsNumberCategoryList");
 
     [Fact]
     public async Task PageSetup_AllTabsCycleForwardAndReverse_AndEscapeCloses() =>
         await AssertPageSetupGraphAsync(
-            "ShowPageSetupDialogAsync",
+            DialogRoute.PageSetup,
             initialTabIndex: 0,
             initialAutomationId: "PageSetupOrientationBox");
 
     [Fact]
     public async Task HeaderFooterRoute_UsesDedicatedEditorScope_AndEscapeCloses() =>
         await AssertTabbedDialogAsync(
-            "ShowHeaderFooterDialogAsync",
+            DialogRoute.HeaderFooter,
             "HeaderFooterTabs",
             2,
             "HeaderFooterHeaderCenterBox");
@@ -53,7 +52,7 @@ public sealed class DialogTabCycleFocusGraphTests
         {
             var owner = new MainWindow([]);
             owner.Show();
-            var opener = InvokeOpener(owner, "ShowHeaderFooterDialogAsync");
+            var opener = OpenDialogAsync(owner, DialogRoute.HeaderFooter);
             var dialog = await WaitForOwnedDialogAsync(owner);
             try
             {
@@ -87,9 +86,7 @@ public sealed class DialogTabCycleFocusGraphTests
                     .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 await AwaitClosedAsync(opener);
 
-                var session = (WorkbookSession)typeof(MainWindow)
-                    .GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!
-                    .GetValue(owner)!;
+                var session = owner.Session;
                 var sheet = session.ActiveSheet;
                 sheet.PageHeader.Left.Should().Be("header-left");
                 sheet.PageHeader.Center.Should().Be("header-center");
@@ -122,7 +119,7 @@ public sealed class DialogTabCycleFocusGraphTests
         {
             var owner = new MainWindow([]);
             owner.Show();
-            var opener = InvokeOpener(owner, "ShowSymbolPickerAsync");
+            var opener = OpenDialogAsync(owner, DialogRoute.SymbolPicker);
             var dialog = await WaitForOwnedDialogAsync(owner);
             try
             {
@@ -157,13 +154,13 @@ public sealed class DialogTabCycleFocusGraphTests
         }, CancellationToken.None);
     }
 
-    private static async Task AssertTabbedDialogAsync(string openerName, string tabAutomationId, int tabCount, string initialAutomationId)
+    private static async Task AssertTabbedDialogAsync(DialogRoute route, string tabAutomationId, int tabCount, string initialAutomationId)
     {
         await Session.Dispatch(async () =>
         {
             var owner = new MainWindow([]);
             owner.Show();
-            var opener = InvokeOpener(owner, openerName);
+            var opener = OpenDialogAsync(owner, route);
             var dialog = await WaitForOwnedDialogAsync(owner);
             try
             {
@@ -174,18 +171,18 @@ public sealed class DialogTabCycleFocusGraphTests
                     tabs.SelectedIndex = index;
                     dialog.UpdateLayout();
                     Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                    var initialAutomationIdForTab = InitialAutomationIdForTab(openerName, index, initialAutomationId);
+                    var initialAutomationIdForTab = InitialAutomationIdForTab(route, index, initialAutomationId);
                     var initial = ResolveInitialTarget(
                             initialAutomationIdForTab is null
                                 ? null
                                 : FindByAutomationId<Control>(dialog, initialAutomationIdForTab))
                         ?? FindFirstFocusableVisibleDescendant((tabs.SelectedItem as TabItem)?.Content as Control)
-                        ?? throw new InvalidOperationException($"No focus target for {openerName} tab {index}.");
+                        ?? throw new InvalidOperationException($"No focus target for {route} tab {index}.");
                     AssertFullCycle(dialog, initial);
                 }
 
                 Send(dialog, Key.Escape);
-                dialog.IsVisible.Should().BeFalse($"Escape must close {openerName}");
+                dialog.IsVisible.Should().BeFalse($"Escape must close {route}");
             }
             finally
             {
@@ -203,7 +200,7 @@ public sealed class DialogTabCycleFocusGraphTests
     }
 
     private static async Task AssertPageSetupGraphAsync(
-        string openerName,
+        DialogRoute route,
         int initialTabIndex,
         string initialAutomationId)
     {
@@ -211,7 +208,7 @@ public sealed class DialogTabCycleFocusGraphTests
         {
             var owner = new MainWindow([]);
             owner.Show();
-            var opener = InvokeOpener(owner, openerName);
+            var opener = OpenDialogAsync(owner, route);
             var dialog = await WaitForOwnedDialogAsync(owner);
             try
             {
@@ -226,12 +223,12 @@ public sealed class DialogTabCycleFocusGraphTests
                     var initial = index == initialTabIndex
                         ? FindByAutomationId<Control>(dialog, initialAutomationId)
                         : FindFirstFocusableVisibleDescendant((tabs.SelectedItem as TabItem)?.Content as Control);
-                    initial.Should().NotBeNull($"No focus target for {openerName} tab {index}.");
+                    initial.Should().NotBeNull($"No focus target for {route} tab {index}.");
                     AssertFullCycle(dialog, initial!);
                 }
 
                 Send(dialog, Key.Escape);
-                dialog.IsVisible.Should().BeFalse($"Escape must close {openerName}");
+                dialog.IsVisible.Should().BeFalse($"Escape must close {route}");
             }
             finally
             {
@@ -295,10 +292,10 @@ public sealed class DialogTabCycleFocusGraphTests
             ?? listBox.GetVisualDescendants().OfType<ListBoxItem>().FirstOrDefault();
     }
 
-    private static string? InitialAutomationIdForTab(string openerName, int tabIndex, string firstTabAutomationId) =>
-        openerName switch
+    private static string? InitialAutomationIdForTab(DialogRoute route, int tabIndex, string firstTabAutomationId) =>
+        route switch
         {
-            "ShowFormatCellsInputDialogAsync" => tabIndex switch
+            DialogRoute.FormatCells => tabIndex switch
             {
                 0 => firstTabAutomationId,
                 1 => "FormatCellsHorizontalAlignmentBox",
@@ -308,7 +305,7 @@ public sealed class DialogTabCycleFocusGraphTests
                 5 => "FormatCellsLockedBox",
                 _ => throw new ArgumentOutOfRangeException(nameof(tabIndex)),
             },
-            "ShowFindReplaceTabbedDialogAsync" => tabIndex switch
+            DialogRoute.FindReplace => tabIndex switch
             {
                 0 => firstTabAutomationId,
                 1 => "FindReplaceReplaceFindBox",
@@ -326,24 +323,26 @@ public sealed class DialogTabCycleFocusGraphTests
         return match;
     }
 
-    private static Task InvokeOpener(MainWindow owner, string methodName)
+    private static Task OpenDialogAsync(MainWindow owner, DialogRoute route) =>
+        route switch
+        {
+            DialogRoute.DataValidation => owner.ShowDataValidationInputDialogForTestAsync(),
+            DialogRoute.FindReplace => owner.ShowFindReplaceTabbedDialogForTestAsync(),
+            DialogRoute.FormatCells => owner.ShowFormatCellsInputDialogForTestAsync(),
+            DialogRoute.PageSetup => owner.ShowPageSetupDialogForTestAsync(),
+            DialogRoute.HeaderFooter => owner.ShowHeaderFooterDialogForTestAsync(),
+            DialogRoute.SymbolPicker => owner.ShowSymbolPickerForTestAsync(),
+            _ => throw new ArgumentOutOfRangeException(nameof(route)),
+        };
+
+    private enum DialogRoute
     {
-        var parameterCount = methodName switch
-        {
-            "ShowFindReplaceTabbedDialogAsync" => 1,
-            "ShowFormatCellsInputDialogAsync" => 2,
-            "ShowPageSetupDialogAsync" => 2,
-            _ => 0,
-        };
-        var method = typeof(MainWindow).GetMethods(BindingFlags.Instance | BindingFlags.NonPublic).Single(candidate => candidate.Name == methodName && candidate.GetParameters().Length == parameterCount);
-        var args = methodName switch
-        {
-            "ShowFindReplaceTabbedDialogAsync" => new object?[] { false },
-            "ShowFormatCellsInputDialogAsync" => new object?[] { null, 0 },
-            "ShowPageSetupDialogAsync" => new object?[] { Enum.GetValues(method.GetParameters()[0].ParameterType).GetValue(0), false },
-            _ => [],
-        };
-        return method.Invoke(owner, args) as Task ?? throw new InvalidOperationException($"{methodName} did not return Task.");
+        DataValidation,
+        FindReplace,
+        FormatCells,
+        PageSetup,
+        HeaderFooter,
+        SymbolPicker,
     }
 
     private static async Task<Window> WaitForOwnedDialogAsync(MainWindow owner)

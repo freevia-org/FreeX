@@ -218,10 +218,12 @@ public static class ReviewBalloonLayoutPlanner
         return resolved;
     }
 
-    public static string TruncatePreview(string text, int maxLength)
+    public static string TruncatePreview(string text, int maxLength, string suffix = "...")
     {
         ArgumentNullException.ThrowIfNull(text);
-        return text.Length <= maxLength ? text : text[..maxLength] + "...";
+        ArgumentNullException.ThrowIfNull(suffix);
+        ArgumentOutOfRangeException.ThrowIfNegative(maxLength);
+        return text.Length <= maxLength ? text : text[..maxLength] + suffix;
     }
 
     private static bool ShouldShowRevision(RevisionEntry entry, ReviewDisplayPolicy policy) =>

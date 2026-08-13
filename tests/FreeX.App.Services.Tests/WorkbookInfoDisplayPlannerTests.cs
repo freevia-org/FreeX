@@ -1,5 +1,6 @@
 using System.Globalization;
 using FluentAssertions;
+using Free.Shared.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -136,7 +137,7 @@ public sealed class WorkbookInfoDisplayPlannerTests
         missing.LastModified.Should().Be("missing");
     }
 
-    private static WorkbookInfoDisplayStrings Strings() =>
+    private static ResourceKeyTextResolver Strings() =>
         new(GetText, (key, args) => string.Format(CultureInfo.InvariantCulture, GetText(key), args));
 
     private static string GetText(string key) => key switch

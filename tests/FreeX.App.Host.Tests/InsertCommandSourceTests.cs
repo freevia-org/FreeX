@@ -21,23 +21,24 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("private void SparklineColumnBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"column\");");
         insertSource.Should().Contain("private void SparklineWinLossBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"winloss\");");
         insertSource.Should().Contain("new SparklineDialog(");
-        insertSource.Should().Contain("new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind)");
+        insertSource.Should().Contain("SparklinePlanner.BuildInsertCommand(");
+        DialogSourceTestSupport.ReadPresentationSources("SparklineUI", "SparklinePlanner.cs")
+            .Should().Contain("new AddSparklineCommand(");
 
         pivotSource.Should().Contain("private void PivotTableBtn_Click(object sender, RoutedEventArgs e)");
-        pivotSource.Should().Contain("PivotCreatePlanner.CreateSourceRangePlan(sheet, SheetGrid.SelectedRange)");
-        pivotSource.Should().Contain("ShowPivotTableSourceRangeError(sourcePlan.Error)");
+        pivotSource.Should().Contain("PivotApplication.PrepareCreate(_currentSheetId, SheetGrid.SelectedRange)");
         pivotSource.Should().Contain("new PivotTableDialog(");
-        pivotSource.Should().Contain("PivotCreatePlanner.CreateDefaultLayout(sourceSheet, dialogSourceRange)");
-        pivotSource.Should().Contain("PivotCreatePlanner.SuggestName(_workbook)");
-        pivotSource.Should().Contain("PivotCreatePlanner.BuildInPlaceCommand(");
-        pivotSource.Should().Contain("PivotCreatePlanner.BuildNewWorksheetCommand(");
-        pivotSource.Should().Contain("ActivateNewWorksheetAtA1(createdSheetId)");
+        pivotSource.Should().Contain("PivotApplication.PlanCreate(");
+        pivotSource.Should().Contain("new PivotCreateSubmission(");
+        pivotSource.Should().NotContain("PivotCreatePlanner.BuildCommand(");
         pivotSource.Should().Contain("private void PivotInsertSlicerBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("new InsertSlicerDialog(headers, fieldName)");
-        pivotSource.Should().Contain("new AddSlicerCommand(dialog.Result.SlicerName, pivotTable.Name, dialog.Result.FieldName)");
+        pivotSource.Should().Contain("PivotApplication.PlanInsertSlicer(");
+        pivotSource.Should().NotContain("new AddSlicerCommand(");
         pivotSource.Should().Contain("private void PivotInsertTimelineBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("new InsertTimelineDialog(headers, fieldName)");
-        pivotSource.Should().Contain("new AddTimelineCommand(dialog.Result.TimelineName, pivotTable.Name, dialog.Result.DateFieldName)");
+        pivotSource.Should().Contain("PivotApplication.PlanInsertTimeline(");
+        pivotSource.Should().NotContain("new AddTimelineCommand(");
     }
 
     [Fact]
@@ -76,11 +77,11 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("var address = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId).Start;");
         insertSource.Should().Contain("new SetHyperlinkCommand(");
         insertSource.Should().Contain("new HyperlinkMetadata(");
-        insertSource.Should().Contain("ToCoreHyperlinkTargetKind(dialog.Result.LinkType)");
+        insertSource.Should().Contain("dialog.Result.LinkType,");
         insertSource.Should().Contain("private void InsertCommentBtn_Click(object sender, RoutedEventArgs e) => ReviewNewThreadedCommentBtn_Click(sender, e);");
         insertSource.Should().Contain("new HeaderFooterDialog(sheet)");
         insertSource.Should().Contain("PageSetupCommandFactory.BuildHeaderFooterCommand(");
-        insertSource.Should().Contain("new PageSetupHeaderFooterRequest");
+        insertSource.Should().Contain("dialog.ResultState");
         insertSource.Should().NotContain("new SetHeaderFooterCommand(");
         insertSource.Should().Contain("new SymbolPickerDialog");
         insertSource.Should().Contain("CreateSingleCellEditCommand(currentAddress, Cell.FromValue(new TextValue(currentText)))");

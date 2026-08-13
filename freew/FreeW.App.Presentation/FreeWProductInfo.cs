@@ -19,17 +19,17 @@ public static class FreeWProductInfo
 
     public static string GetVersionText(Assembly assembly)
     {
-        ArgumentNullException.ThrowIfNull(assembly);
+        var version = AssemblyVersionMetadata.FromAssembly(assembly);
         return AppVersionFormatter.FormatVersionText(
-            assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+            version.InformationalVersion);
     }
 
     public static string GetBuildVersionText(Assembly assembly)
     {
-        ArgumentNullException.ThrowIfNull(assembly);
+        var version = AssemblyVersionMetadata.FromAssembly(assembly);
         return AppVersionFormatter.FormatBuildVersionText(
-            assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
-            assembly.GetName().Version?.ToString());
+            version.InformationalVersion,
+            version.AssemblyVersion);
     }
 
     public static string CreateAboutText(Assembly assembly, string uiFramework)

@@ -1,6 +1,9 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Wpf;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 
@@ -8,8 +11,13 @@ namespace FreeX.App.Host;
 
 public sealed class WorkbookStatisticsDialog : Window
 {
-    public WorkbookStatisticsDialog(WorkbookStatistics statistics)
+    private readonly IPlatformClipboard _platformClipboard;
+
+    public WorkbookStatisticsDialog(
+        WorkbookStatistics statistics,
+        IPlatformClipboard? platformClipboard = null)
     {
+        _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(Dispatcher);
         Title = UiText.Get("WorkbookStatistics_WorkbookStatistics");
         Width = WorkbookStatisticsDialogPlanner.Width;
         Height = WorkbookStatisticsDialogPlanner.Height;
@@ -25,7 +33,7 @@ public sealed class WorkbookStatisticsDialog : Window
     public static string CreateMessage(WorkbookStatistics statistics) =>
         WorkbookStatisticsFormatter.Format(statistics);
 
-    private static Grid CreateTextContent(string message)
+    private Grid CreateTextContent(string message)
     {
         var root = new Grid { Margin = new Thickness(16) };
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -45,7 +53,9 @@ public sealed class WorkbookStatisticsDialog : Window
             MinHeight = 260
         };
         AutomationProperties.SetName(statisticsBlock, UiText.Get("WorkbookStatistics_WorkbookStatistics"));
-        AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
+        AutomationProperties.SetAutomationId(
+            statisticsBlock,
+            FreeXAutomationIdCatalog.WorkbookStatisticsSummary);
         AutomationProperties.SetHelpText(statisticsBlock, UiText.Get("WorkbookStatistics_SummarizesSheetCellFormulaCommentAndObjectCountsForTheWorkbook"));
         root.Children.Add(statisticsBlock);
 
@@ -55,7 +65,7 @@ public sealed class WorkbookStatisticsDialog : Window
         return root;
     }
 
-    private static StackPanel CreateButtonRow(DependencyObject root, string message)
+    private StackPanel CreateButtonRow(DependencyObject root, string message)
     {
         var row = new StackPanel
         {
@@ -64,8 +74,8 @@ public sealed class WorkbookStatisticsDialog : Window
             Margin = new Thickness(0, 12, 0, 0)
         };
 
-        const string copyContent = "_Copy to Clipboard";
-        const string copyHelpText = "Copy the workbook statistics report to the Clipboard.";
+        var copyContent = UiText.Get("WorkbookStatistics_CopyToClipboard");
+        var copyHelpText = UiText.Get("WorkbookStatistics_CopyToClipboardHelpText");
         var copy = new Button
         {
             Content = copyContent,
@@ -73,7 +83,9 @@ public sealed class WorkbookStatisticsDialog : Window
             Margin = new Thickness(0, 0, 8, 0)
         };
         AutomationProperties.SetName(copy, UiText.CreateAutomationName(copyContent));
-        AutomationProperties.SetAutomationId(copy, "WorkbookStatisticsCopyButton");
+        AutomationProperties.SetAutomationId(
+            copy,
+            FreeXAutomationIdCatalog.WorkbookStatisticsCopyButton);
         AutomationProperties.SetHelpText(copy, copyHelpText);
         copy.Click += (_, _) => CopyMessageToClipboard(message);
         row.Children.Add(copy);
@@ -92,12 +104,14 @@ public sealed class WorkbookStatisticsDialog : Window
         return row;
     }
 
-    private static void CopyMessageToClipboard(string message)
+    private void CopyMessageToClipboard(string message)
     {
         try
         {
-            Clipboard.SetText(message, TextDataFormat.UnicodeText);
-            Clipboard.Flush();
+            _ = _platformClipboard.WriteAsync(new PlatformClipboardContent(Text: message))
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
         }
         catch (Exception ex) when (IsClipboardUnavailableException(ex))
         {

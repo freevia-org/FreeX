@@ -778,7 +778,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
                     var invertedColumn = xmlLayout.PaneColumnSplit is { } xSplitTwips
                         ? InvertSplitTwipsToIndex(
                             xSplitTwips,
-                            col => SplitCharacterWidthToPixels(sheet.ColumnWidths.TryGetValue(col, out var width) ? width : sheet.DefaultColumnWidth),
+                            col => ExcelColumnWidthConverter.ColumnWidthToPixels(
+                                sheet.ColumnWidths.TryGetValue(col, out var width) ? width : sheet.DefaultColumnWidth),
                             CellAddress.MaxCol)
                         : null;
 
@@ -1049,18 +1050,6 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
         }
 
         return null;
-    }
-
-    // Mirrors XlsxWorksheetViewWriter's own CharacterWidthToPixels (duplicated here rather than
-    // sharing a helper across an internal split in the same project's view-write/view-read halves).
-    private static double SplitCharacterWidthToPixels(double width)
-    {
-        if (!double.IsFinite(width) || width <= 0)
-            return 0;
-
-        return width < 1
-            ? Math.Round(width * 12.0, MidpointRounding.AwayFromZero)
-            : Math.Round(width * 7.0 + 5.0, MidpointRounding.AwayFromZero);
     }
 
     private static XlsxLoadPhaseDiagnostics MeasureLoadPhase(Action action)
@@ -1691,7 +1680,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
 
             var changed = false;
             if (root.Element(workbookNs + "workbookPr") is { } workbookPr)
-                changed |= XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr);
+                changed |= XlsxWorkbookLeafElementNormalizer.Normalize(workbookPr);
             foreach (var customWorkbookViews in root.Elements(workbookNs + "customWorkbookViews").ToList())
             {
                 changed |= XlsxWorkbookCustomViewNormalizer.NormalizeCustomWorkbookViewsElement(customWorkbookViews);
@@ -1707,7 +1696,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             changed |= XlsxWorkbookPivotCachesNormalizer.NormalizeWorkbookRoot(root, workbookNs);
             changed |= XlsxWorkbookExtensionListNormalizer.NormalizeWorkbookRoot(root, workbookNs);
             if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
-                changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
+                changed |= XlsxWorkbookLeafElementNormalizer.Normalize(fileVersion);
             if (root.Element(workbookNs + "functionGroups") is { } functionGroups)
                 changed |= XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
 

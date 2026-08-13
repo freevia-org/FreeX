@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Panes;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -12,18 +13,22 @@ namespace FreeW.App.Avalonia;
 /// <summary>
 /// FreeW Avalonia reviewing pane: tracked-changes list with Accept / Reject per-entry and Accept-All /
 /// Reject-All bulk actions. Mirrors the WPF host's Reviewing Pane behaviour using Avalonia controls.
-/// Consumes the portable revision model and shared resolution coordinator; it does not duplicate mutation
-/// or undo logic.
+/// Consumes <see cref="RevisionList"/> (enumerate, per-entry accept/reject) and
+/// <see cref="TrackChanges"/> (bulk accept/reject, has-revisions) from the portable model tier;
+/// does NOT duplicate any model logic.
 ///
 /// Construction: pass the <see cref="DocumentView"/> once. Wire
 /// <see cref="DocumentView.DocumentChanged"/> to call <see cref="Refresh"/>. Toggle
 /// <see cref="IsVisible"/> via the Review ribbon command (<c>freew.reviewingpane</c>); defaults to hidden.
 ///
-/// Accept/reject are fully wired: per-entry and bulk buttons delegate to <see cref="DocumentView"/>, which
-/// routes every resolution through <see cref="RevisionResolutionCoordinator"/> and the document undo bus.
+/// Accept/reject and bulk actions delegate portable targeting and transitions to
+/// <see cref="ReviewingPaneSession"/>; the renderer only invalidates and projects native controls.
 /// </summary>
-public sealed class ReviewingPane : SidePaneBase
+public sealed partial class ReviewingPane : SidePaneBase
 {
+    private static readonly ReviewingPanePresentationDescriptor Presentation =
+        ReviewingPanePresentationPlanner.For(ReviewingPanePresentationProfile.DetailedAvalonia);
+
     // ── State ─────────────────────────────────────────────────────────────────
 
     private readonly ListBox _revisionList;
@@ -31,32 +36,39 @@ public sealed class ReviewingPane : SidePaneBase
     private readonly ComboBox _sortCombo;
     private readonly Button _acceptAllButton;
     private readonly Button _rejectAllButton;
-    private IReadOnlyList<RevisionEntry> _revisions = Array.Empty<RevisionEntry>();
-    private ReviewRevisionSortOrder _sortOrder = ReviewRevisionSortOrder.Sequence;
+    private readonly ReviewingPaneSession _session;
 
     // ── Construction ──────────────────────────────────────────────────────────
 
     public ReviewingPane(DocumentView editor)
-        : base(editor, "Tracked Changes", width: 280, chromeBorderThickness: new Thickness(1, 0, 0, 0), includeSeparator: true)
+        : base(editor, Presentation.PaneTitle, width: 280, chromeBorderThickness: new Thickness(1, 0, 0, 0), includeSeparator: true)
     {
+        _session = new ReviewingPaneSession(
+            () => ReviewingPaneSession.Enumerate(editor.Document),
+            new ReviewingPaneMutationActions(
+                entry => ResolveEntry(entry, accept: true),
+                entry => ResolveEntry(entry, accept: false),
+                editor.AcceptAllRevisions,
+                editor.RejectAllRevisions));
+
         // --- Accept-All / Reject-All buttons ------------------------------------
         _acceptAllButton = new Button
         {
-            Content = "Accept All",
+            Content = Presentation.Actions.AcceptAll.Label,
             Padding = new Thickness(8, 3),
             Margin = new Thickness(0, 0, 4, 0),
             IsEnabled = false,
         };
-        ToolTip.SetTip(_acceptAllButton, "Accept all tracked changes");
+        ToolTip.SetTip(_acceptAllButton, Presentation.Actions.AcceptAll.ToolTip);
         _acceptAllButton.Click += OnAcceptAll;
 
         _rejectAllButton = new Button
         {
-            Content = "Reject All",
+            Content = Presentation.Actions.RejectAll.Label,
             Padding = new Thickness(8, 3),
             IsEnabled = false,
         };
-        ToolTip.SetTip(_rejectAllButton, "Reject all tracked changes");
+        ToolTip.SetTip(_rejectAllButton, Presentation.Actions.RejectAll.ToolTip);
         _rejectAllButton.Click += OnRejectAll;
 
         var bulkRow = new StackPanel
@@ -79,16 +91,13 @@ public sealed class ReviewingPane : SidePaneBase
         {
             Width = 132,
         };
-        foreach (var option in ReviewRevisionSortPlanner.Options)
+        foreach (var option in Presentation.SortOptions)
             _sortCombo.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Order });
-        _sortCombo.SelectedIndex = ReviewRevisionSortPlanner.IndexOf(_sortOrder);
+        _sortCombo.SelectedIndex = 0;
         _sortCombo.SelectionChanged += (_, _) =>
         {
             if (_sortCombo.SelectedItem is ComboBoxItem { Tag: ReviewRevisionSortOrder order })
-            {
-                _sortOrder = order;
-                Refresh();
-            }
+                Render(_session.SetSortOrder(order));
         };
 
         var sortRow = new StackPanel
@@ -98,7 +107,7 @@ public sealed class ReviewingPane : SidePaneBase
         };
         sortRow.Children.Add(new TextBlock
         {
-            Text = "Sort:",
+            Text = Presentation.SortLabel,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0),
         });
@@ -110,13 +119,7 @@ public sealed class ReviewingPane : SidePaneBase
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
         };
-        _revisionList.SelectionChanged += (_, _) =>
-        {
-            if (_revisionList.SelectedItem is RevisionItemView item)
-            {
-                _editor.NavigateToRevision(item.Entry);
-            }
-        };
+        _revisionList.SelectionChanged += OnRevisionSelected;
 
         // Dock bulk row and count label into InnerLayout (base added header + separator already).
         //   [bulkRow]      Dock.Top
@@ -139,84 +142,84 @@ public sealed class ReviewingPane : SidePaneBase
     /// </summary>
     public override void Refresh()
     {
-        var revisions = ReviewRevisionSortPlanner.Sort(RevisionList.Enumerate(_editor.Document), _sortOrder);
-        var previousIndex = _revisionList.SelectedIndex;
-        _revisions = revisions;
-        var hasRevisions = revisions.Count > 0;
+        Render(_session.Refresh());
+    }
 
-        _acceptAllButton.IsEnabled = hasRevisions;
-        _rejectAllButton.IsEnabled = hasRevisions;
-        var paneState = ReviewingPaneStatePlanner.BuildRefreshState(revisions.Count, previousIndex);
-        _countLabel.Text = paneState.StatusText;
+    private void Render(ReviewingPaneOutcome outcome)
+    {
+        var state = outcome.State;
+        _acceptAllButton.IsEnabled = state.HasRevisions;
+        _rejectAllButton.IsEnabled = state.HasRevisions;
+        _countLabel.Text = ReviewingPanePresentationPlanner.BuildCountText(
+            state.Entries.Count,
+            ReviewingPanePresentationProfile.DetailedAvalonia);
 
-        var items = revisions.Select(r => new RevisionItemView(r, this)).ToArray();
+        var items = state.Entries.Select(revision => new RevisionItemView(revision, this)).ToArray();
+        _revisionList.SelectionChanged -= OnRevisionSelected;
         _revisionList.ItemsSource = items;
-        _revisionList.SelectedIndex = paneState.SelectedIndex;
+        _revisionList.SelectedIndex = state.SelectedIndex;
+        _revisionList.SelectionChanged += OnRevisionSelected;
+
+        if (outcome.NavigateToRevision is { } target)
+            _editor.NavigateToRevision(target);
+    }
+
+    private void OnRevisionSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        Render(_session.SelectIndex(_revisionList.SelectedIndex));
     }
 
     /// <summary>Steps through tracked changes using WPF's open, refresh, and wrapping semantics.</summary>
     internal bool StepRevision(int direction, bool refresh = true)
     {
-        if (direction == 0)
-            throw new ArgumentOutOfRangeException(nameof(direction));
-
-        if (refresh)
-            Refresh();
-        var next = ReviewingPaneStatePlanner.ResolveStep(
-            _revisions.Count,
-            _revisionList.SelectedIndex,
-            direction);
-        if (next < 0)
-            return false;
-        _revisionList.SelectedIndex = next;
-        return true;
+        var outcome = _session.Step(direction, refresh);
+        Render(outcome);
+        return outcome.NavigateToRevision is not null;
     }
 
     // ── Accept / Reject per-entry (called from item rows) ────────────────────
 
     internal void AcceptEntry(RevisionEntry entry)
     {
-        _editor.AcceptRevision(entry);
+        Render(_session.Accept(entry));
     }
 
     internal void RejectEntry(RevisionEntry entry)
     {
-        _editor.RejectRevision(entry);
+        Render(_session.Reject(entry));
     }
 
     // ── Bulk handlers ─────────────────────────────────────────────────────────
 
     private void OnAcceptAll(object? sender, RoutedEventArgs e)
     {
-        _editor.AcceptAllRevisions();
+        Render(_session.AcceptAll());
     }
 
     private void OnRejectAll(object? sender, RoutedEventArgs e)
     {
-        _editor.RejectAllRevisions();
+        Render(_session.RejectAll());
     }
 
-    // ── Test-support ──────────────────────────────────────────────────────────
-
-    /// <summary>Number of revision rows currently shown in the list (for headless testing).</summary>
-    internal int RevisionItemCount => (_revisionList.ItemsSource as RevisionItemView[])?.Length ?? 0;
-    internal int SelectedRevisionIndexForTest => _revisionList.SelectedIndex;
-    internal RevisionEntry? SelectedRevision => (_revisionList.SelectedItem as RevisionItemView)?.Entry;
-    internal RevisionEntry? SelectedRevisionForTest => SelectedRevision;
-    internal ReviewRevisionSortOrder SortOrderForTest => _sortOrder;
-
-    internal void SetSortOrderForTest(ReviewRevisionSortOrder order)
-    {
-        _sortCombo.SelectedIndex = ReviewRevisionSortPlanner.IndexOf(order);
-    }
+    // ── Document refresh ──────────────────────────────────────────────────────
 
     /// <summary>
-    /// Enumerates the tracked-change entries for <paramref name="doc"/> via the model tier — the same
-    /// list the pane would show. Exposed for headless tests only.
+    /// Signals the editor that the document model was mutated outside the command bus (accept/reject
+    /// bypass undo/redo, matching Word's behaviour). The editor re-renders and raises
+    /// <see cref="DocumentView.DocumentChanged"/>, which re-triggers <see cref="Refresh"/> via the
+    /// <see cref="MainWindow"/> wiring.
     /// </summary>
-    internal static IReadOnlyList<RevisionEntry> EnumerateRevisions(TextDocument doc) =>
-        RevisionList.Enumerate(doc);
+    private bool ResolveEntry(RevisionEntry entry, bool accept)
+    {
+        var applied = accept
+            ? ReviewingPaneSession.Accept(_editor.Document, entry)
+            : ReviewingPaneSession.Reject(_editor.Document, entry);
+        if (applied)
+            _editor.InvalidateAfterExternalMutation();
+        return applied;
+    }
 
+    internal RevisionEntry? SelectedRevision => _session.State.SelectedRevision;
     // ── Row item ──────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -228,7 +231,9 @@ public sealed class ReviewingPane : SidePaneBase
         public RevisionItemView(RevisionEntry entry, ReviewingPane pane)
         {
             Entry = entry;
-            var row = ReviewingPaneRowPlanner.Build(entry);
+            var presentation = ReviewingPanePresentationPlanner.BuildRevision(
+                entry,
+                ReviewingPanePresentationProfile.DetailedAvalonia);
 
             // Kind badge (coloured pill).
             var kindBadge = new Border
@@ -239,7 +244,7 @@ public sealed class ReviewingPane : SidePaneBase
                 Margin = new Thickness(0, 0, 6, 0),
                 Child = new TextBlock
                 {
-                    Text = row.KindLabel,
+                    Text = presentation.KindLabel,
                     FontSize = 10,
                     FontWeight = FontWeight.SemiBold,
                     Foreground = Brushes.White,
@@ -249,7 +254,7 @@ public sealed class ReviewingPane : SidePaneBase
             // Author name.
             var author = new TextBlock
             {
-                Text = row.AuthorLabel,
+                Text = presentation.AuthorText,
                 FontWeight = FontWeight.SemiBold,
                 FontSize = 11,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -260,19 +265,20 @@ public sealed class ReviewingPane : SidePaneBase
             topRow.Children.Add(kindBadge);
             topRow.Children.Add(author);
 
-            // The shared plan normalizes line endings and whitespace using WPF's established row contract.
+            // Snippet of affected text (truncated for readability).
             var snippetBlock = new TextBlock
             {
-                Text = row.PreviewText,
+                Text = presentation.SnippetText,
                 FontSize = 11,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 2),
             };
 
+            // Date (parsed from W3CDTF; falls back to raw string when not parseable).
             var dateBlock = new TextBlock
             {
-                Text = row.DateLabel,
+                Text = presentation.DateText,
                 FontSize = 10,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
                 Margin = new Thickness(0, 0, 0, 2),
@@ -281,21 +287,21 @@ public sealed class ReviewingPane : SidePaneBase
             // Per-entry Accept / Reject buttons.
             var acceptBtn = new Button
             {
-                Content = "Accept",
+                Content = Presentation.Actions.AcceptSelected.Label,
                 Padding = new Thickness(6, 2),
                 Margin = new Thickness(0, 0, 4, 0),
                 FontSize = 10,
             };
-            ToolTip.SetTip(acceptBtn, row.AcceptToolTip);
+            ToolTip.SetTip(acceptBtn, presentation.AcceptToolTip);
             acceptBtn.Click += (_, _) => pane.AcceptEntry(entry);
 
             var rejectBtn = new Button
             {
-                Content = "Reject",
+                Content = Presentation.Actions.RejectSelected.Label,
                 Padding = new Thickness(6, 2),
                 FontSize = 10,
             };
-            ToolTip.SetTip(rejectBtn, row.RejectToolTip);
+            ToolTip.SetTip(rejectBtn, presentation.RejectToolTip);
             rejectBtn.Click += (_, _) => pane.RejectEntry(entry);
 
             var btnRow = new StackPanel { Orientation = Orientation.Horizontal };
@@ -305,9 +311,9 @@ public sealed class ReviewingPane : SidePaneBase
             // Vertical card layout.
             var card = new StackPanel { Margin = new Thickness(4, 4, 4, 2) };
             card.Children.Add(topRow);
-            if (row.PreviewText.Length > 0)
+            if (presentation.SnippetText.Length > 0)
                 card.Children.Add(snippetBlock);
-            if (row.DateLabel.Length > 0)
+            if (presentation.DateText.Length > 0)
                 card.Children.Add(dateBlock);
             card.Children.Add(btnRow);
 

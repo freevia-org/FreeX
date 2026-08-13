@@ -1,5 +1,8 @@
+global using PageSetupDialogTab = FreeW.App.Presentation.Dialogs.PageSetupDialogTabKind;
+
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -12,20 +15,8 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-public enum PageSetupDialogTab
-{
-    Margins,
-    Paper,
-    Layout
-}
-
-public sealed record PageSetupDialogOutcome(
-    PageSetupDialogResult Settings,
-    bool LineNumbersRequested,
-    bool BordersRequested);
-
 /// <summary>Avalonia chrome for the shared WPF-authoritative three-tab Page Setup contract.</summary>
-public sealed class PageSetupDialog : FreeWDialogWindow
+public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControlSource
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = PageLayoutDialogChrome.Style;
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
@@ -57,26 +48,24 @@ public sealed class PageSetupDialog : FreeWDialogWindow
     private readonly TextBox _footerDistance;
     private readonly ComboBox _verticalAlignment;
     private readonly TextBlock _status = PageLayoutDialogChrome.Status();
+    private readonly PageSetupDialogSession _session;
     private bool _suppressPaperSync;
-    private bool _lineNumbersRequested;
-    private bool _bordersRequested;
 
     public PageSetupDialog(
         PageSettings current,
-        PageSetupDialogTab initialTab = PageSetupDialogTab.Margins,
+        PageSetupDialogTabKind initialTab = PageSetupDialogTabKind.Margins,
         SectionBreakKind sectionStart = SectionBreakKind.NextPage)
     {
         ArgumentNullException.ThrowIfNull(current);
         var metrics = PageSetupDialogPlanner.PresentationMetrics;
-        var validation = metrics.Validation;
-        PageLayoutDialogChrome.Configure(this, PageSetupDialogPlanner.Title, metrics.WindowWidth);
+        var surface = PageSetupDialogPlanner.Surface;
+        PageLayoutDialogChrome.Configure(this, surface.Title, metrics.WindowWidth);
 
-        var state = PageSetupDialogPlanner.BuildInitialState(
+        _session = PageSetupDialogPlanner.CreateSession(
             current,
             sectionStart,
-            PageSetupDialogPlanner.HostPaperOptions,
-            validation.GeometryMode,
             DialogCulture);
+        var state = _session.InitialState;
         _top = NumberBox(state.MarginTopText);
         _bottom = NumberBox(state.MarginBottomText);
         _left = NumberBox(state.MarginLeftText);
@@ -86,16 +75,17 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         _orientation = Combo(PageSetupDialogPlanner.OrientationNames, state.OrientationIndex);
         _multiplePages = Combo(PageSetupDialogPlanner.MultiplePagesNames, state.MultiplePagesIndex);
         _applyTo = Combo(PageSetupDialogPlanner.ApplyToNames, 0);
-        _paperSize = Combo(PageSetupDialogPlanner.HostPaperOptions.Select(option => option.HostLabel), state.PaperSizeIndex);
+        _paperSize = Combo(_session.PaperOptions.Select(option => option.HostLabel), state.PaperSizeIndex);
         _width = NumberBox(state.WidthText);
         _height = NumberBox(state.HeightText);
         _sectionStart = Combo(PageSetupDialogPlanner.SectionStartNames, state.SectionStartIndex);
-        _differentFirstPage = Check(PageSetupDialogPlanner.DifferentFirstPageLabel, state.DifferentFirstPage, new Thickness(0));
-        _differentOddEven = Check(PageSetupDialogPlanner.DifferentOddEvenLabel, state.DifferentOddEvenPages, ToThickness(metrics.SecondCheckMargin));
+        _differentFirstPage = Check(surface.LayoutToggles[0].Label, state.DifferentFirstPage, new Thickness(0));
+        _differentOddEven = Check(surface.LayoutToggles[1].Label, state.DifferentOddEvenPages, ToThickness(metrics.SecondCheckMargin));
         _headerDistance = NumberBox(state.HeaderDistanceText);
         _footerDistance = NumberBox(state.FooterDistanceText);
         _verticalAlignment = Combo(PageSetupDialogPlanner.VerticalAlignmentNames, state.VerticalAlignmentIndex);
 
+        ApplyEnabledState(_session.EnabledState);
         _paperSize.SelectionChanged += (_, _) => ApplyPaperPreset();
         _width.TextChanged += (_, _) => SyncPaperToCustom();
         _height.TextChanged += (_, _) => SyncPaperToCustom();
@@ -106,9 +96,12 @@ public sealed class PageSetupDialog : FreeWDialogWindow
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch
         };
-        tabs.Items.Add(new TabItem { Header = metrics.TabNames[0], Content = BuildMarginsTab() });
-        tabs.Items.Add(new TabItem { Header = metrics.TabNames[1], Content = BuildPaperTab() });
-        tabs.Items.Add(new TabItem { Header = metrics.TabNames[2], Content = BuildLayoutTab() });
+        foreach (var tabSpec in surface.Tabs)
+        {
+            var tab = new TabItem { Header = tabSpec.Header, Content = BuildTab(tabSpec) };
+            AutomationProperties.SetAutomationId(tab, tabSpec.AutomationId);
+            tabs.Items.Add(tab);
+        }
         tabs.SelectedIndex = (int)initialTab;
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             tabs,
@@ -149,42 +142,18 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         {
             foreach (var button in ((Panel)actions).Children.OfType<Button>())
                 AvaloniaCompactDialogChrome.ApplyButton(button, actionStyle, metrics.ActionButtonWidth);
-            PageLayoutDialogChrome.FocusAndSelect(_top);
+            ApplyFocus(_session.InitialFocusPlan);
         };
-        PageLayoutDialogChrome.WireEscape<PageSetupDialogOutcome?>(this);
+        PageLayoutDialogChrome.WireEscape<PageSetupDialogAcceptance?>(this);
     }
 
-    private Control BuildMarginsTab()
+    private Control BuildTab(PageSetupDialogTabSpec tab)
     {
         var panel = TabPanel();
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.TopMarginLabel, _top));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.BottomMarginLabel, _bottom));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.LeftMarginLabel, _left));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.RightMarginLabel, _right));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.GutterLabel, _gutter));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.GutterPositionLabel, _gutterPosition));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.OrientationLabel, _orientation));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.MultiplePagesLabel, _multiplePages));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.ApplyToLabel, _applyTo));
-        return panel;
-    }
-
-    private Control BuildPaperTab()
-    {
-        var panel = TabPanel();
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.PaperSizeLabel, _paperSize));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.CustomWidthLabel, _width));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.CustomHeightLabel, _height));
-        return panel;
-    }
-
-    private Control BuildLayoutTab()
-    {
-        var panel = TabPanel();
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.SectionStartLabel, _sectionStart));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.VerticalAlignmentLabel, _verticalAlignment));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.HeaderDistanceLabel, _headerDistance));
-        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.FooterDistanceLabel, _footerDistance));
+        foreach (var row in tab.Rows)
+            panel.Children.Add(PageSetupRow(row.Label, ControlFor(row.Kind)));
+        if (tab.Kind != PageSetupDialogTabKind.Layout)
+            return panel;
 
         var metrics = PageSetupDialogPlanner.PresentationMetrics;
         var checks = new StackPanel { Margin = new Thickness(0, metrics.CheckGroupTopSpacing, 0, 0) };
@@ -198,90 +167,110 @@ public sealed class PageSetupDialog : FreeWDialogWindow
             Spacing = AuthorityLauncherSpacing,
             Margin = new Thickness(AuthorityLauncherLeftInset, metrics.LauncherTopSpacing, 0, 0)
         };
-        var lineNumbers = new Button { Content = PageSetupDialogPlanner.LineNumbersLabel };
-        var borders = new Button { Content = PageSetupDialogPlanner.BordersLabel };
-        AvaloniaCompactDialogChrome.ApplyButton(lineNumbers, DialogChromeStyle, minWidth: metrics.LauncherButtonWidth);
-        AvaloniaCompactDialogChrome.ApplyButton(borders, DialogChromeStyle, minWidth: metrics.LauncherButtonWidth);
-        lineNumbers.Click += (_, _) =>
+        foreach (var launcher in PageSetupDialogPlanner.Surface.LayoutLaunchers)
         {
-            _lineNumbersRequested = true;
-            Accept();
-        };
-        borders.Click += (_, _) =>
-        {
-            _bordersRequested = true;
-            Accept();
-        };
-        launchers.Children.Add(lineNumbers);
-        launchers.Children.Add(borders);
+            var button = new Button { Content = launcher.Label };
+            AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: metrics.LauncherButtonWidth);
+            button.Click += (_, _) => Accept(launcher.FollowUp);
+            launchers.Children.Add(button);
+        }
         panel.Children.Add(launchers);
         return panel;
     }
 
+    private Control ControlFor(PageSetupDialogControlKind kind) => kind switch
+    {
+        PageSetupDialogControlKind.MarginTop => _top,
+        PageSetupDialogControlKind.MarginBottom => _bottom,
+        PageSetupDialogControlKind.MarginLeft => _left,
+        PageSetupDialogControlKind.MarginRight => _right,
+        PageSetupDialogControlKind.Gutter => _gutter,
+        PageSetupDialogControlKind.GutterPosition => _gutterPosition,
+        PageSetupDialogControlKind.Orientation => _orientation,
+        PageSetupDialogControlKind.MultiplePages => _multiplePages,
+        PageSetupDialogControlKind.ApplyTo => _applyTo,
+        PageSetupDialogControlKind.PaperSize => _paperSize,
+        PageSetupDialogControlKind.PageWidth => _width,
+        PageSetupDialogControlKind.PageHeight => _height,
+        PageSetupDialogControlKind.SectionStart => _sectionStart,
+        PageSetupDialogControlKind.VerticalAlignment => _verticalAlignment,
+        PageSetupDialogControlKind.HeaderDistance => _headerDistance,
+        PageSetupDialogControlKind.FooterDistance => _footerDistance,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
     private void ApplyPaperPreset()
     {
-        var preset = PageSetupDialogPlanner.ApplyPaperPreset(
-            PageSetupDialogPlanner.HostPaperOptions,
-            _paperSize.SelectedIndex,
-            DialogCulture);
-        if (preset is null)
-            return;
-
-        _suppressPaperSync = true;
-        _width.Text = preset.Value.WidthText;
-        _height.Text = preset.Value.HeightText;
-        _suppressPaperSync = false;
+        ApplyPaperProjection(_session.PlanPaperSelection(_paperSize.SelectedIndex));
     }
 
     private void SyncPaperToCustom()
     {
-        if (_suppressPaperSync ||
-            !double.TryParse(_width.Text, NumberStyles.Float, DialogCulture, out var width) ||
-            !double.TryParse(_height.Text, NumberStyles.Float, DialogCulture, out var height))
+        if (_suppressPaperSync)
             return;
 
-        _paperSize.SelectedIndex = PageSetupDialogPlanner.PaperIndexFor(
-            PageSetupDialogPlanner.HostPaperOptions,
-            width,
-            height);
+        var plan = _session.PlanDimensionEdit(_width.Text, _height.Text, _paperSize.SelectedIndex);
+        ApplyEnabledState(plan.EnabledState);
+        if (plan.UpdatePaperSize)
+            _paperSize.SelectedIndex = plan.PaperSizeIndex;
     }
 
     private void Accept()
     {
-        var validation = PageSetupDialogPlanner.PresentationMetrics.Validation;
-        var input = new PageSetupDialogInput(
-            MarginTopText: _top.Text,
-            MarginBottomText: _bottom.Text,
-            MarginLeftText: _left.Text,
-            MarginRightText: _right.Text,
-            GutterText: _gutter.Text,
-            OrientationIndex: _orientation.SelectedIndex,
-            MultiplePagesIndex: _multiplePages.SelectedIndex,
-            WidthText: _width.Text,
-            HeightText: _height.Text,
-            PaperSizeIndex: _paperSize.SelectedIndex,
-            SectionStartIndex: _sectionStart.SelectedIndex,
-            DifferentFirstPage: _differentFirstPage.IsChecked == true,
-            DifferentOddEvenPages: _differentOddEven.IsChecked == true,
-            HeaderDistanceText: _headerDistance.Text,
-            FooterDistanceText: _footerDistance.Text,
-            VerticalAlignmentIndex: _verticalAlignment.SelectedIndex,
-            UseSelectedPaperPreset: validation.UseSelectedPaperPreset,
-            GeometryMode: validation.GeometryMode,
-            ValidationProfile: validation.ValidationProfile,
-            GutterPositionIndex: _gutterPosition.SelectedIndex);
-        if (!PageSetupDialogPlanner.TryBuildResult(
-                input,
-                PageSetupDialogPlanner.HostPaperOptions,
-                DialogCulture,
-                out var result,
-                out var error))
+        Accept(PageSetupDialogFollowUp.None);
+    }
+
+    private void Accept(PageSetupDialogFollowUp followUp)
+    {
+        var acceptance = _session.PlanAcceptance(this, followUp);
+        if (!acceptance.IsAccepted)
         {
-            PageLayoutDialogChrome.ShowError(_status, error ?? validation.Message);
+            PageLayoutDialogChrome.ShowError(_status, acceptance.ErrorMessage!);
+            ApplyFocus(acceptance.FocusPlan!);
             return;
         }
 
-        Close(new PageSetupDialogOutcome(result!, _lineNumbersRequested, _bordersRequested));
+        Close(acceptance);
+    }
+
+    private void ApplyFocus(PageSetupDialogFocusPlan plan)
+    {
+        var target = plan.Field switch
+        {
+            PageSetupDialogField.MarginTop => _top,
+            PageSetupDialogField.MarginBottom => _bottom,
+            PageSetupDialogField.MarginLeft => _left,
+            PageSetupDialogField.MarginRight => _right,
+            PageSetupDialogField.Gutter => _gutter,
+            PageSetupDialogField.PageWidth => _width,
+            PageSetupDialogField.PageHeight => _height,
+            PageSetupDialogField.HeaderDistance => _headerDistance,
+            PageSetupDialogField.FooterDistance => _footerDistance,
+            _ => _top,
+        };
+
+        if (plan.SelectAllOnFocus)
+            PageLayoutDialogChrome.FocusAndSelect(target);
+        else
+            target.Focus();
+    }
+
+    private void ApplyPaperProjection(PageSetupPaperSelectionPlan plan)
+    {
+        ApplyEnabledState(plan.EnabledState);
+        if (!plan.UpdateDimensions)
+            return;
+
+        _suppressPaperSync = true;
+        _width.Text = plan.WidthText!;
+        _height.Text = plan.HeightText!;
+        _suppressPaperSync = false;
+    }
+
+    private void ApplyEnabledState(PageSetupDialogEnabledState state)
+    {
+        _width.IsEnabled = state.WidthEnabled;
+        _height.IsEnabled = state.HeightEnabled;
     }
 
     public static void ApplyResult(DocumentView editor, PageSetupDialogResult result) =>
@@ -290,19 +279,19 @@ public sealed class PageSetupDialog : FreeWDialogWindow
     public static async Task ShowAndApplyAsync(
         Window owner,
         DocumentView editor,
-        PageSetupDialogTab initialTab = PageSetupDialogTab.Margins,
+        PageSetupDialogTabKind initialTab = PageSetupDialogTabKind.Margins,
         Func<Task>? openLineNumbers = null,
         Func<Task>? openBorders = null)
     {
         var outcome = await new PageSetupDialog(editor.Document.Page, initialTab)
-            .ShowDialog<PageSetupDialogOutcome?>(owner);
+            .ShowDialog<PageSetupDialogAcceptance?>(owner);
         if (outcome is null)
             return;
 
-        ApplyResult(editor, outcome.Settings);
-        if (outcome.LineNumbersRequested && openLineNumbers is not null)
+        ApplyResult(editor, outcome.Result!);
+        if (outcome.FollowUp == PageSetupDialogFollowUp.LineNumbers && openLineNumbers is not null)
             await openLineNumbers();
-        else if (outcome.BordersRequested && openBorders is not null)
+        else if (outcome.FollowUp == PageSetupDialogFollowUp.Borders && openBorders is not null)
             await openBorders();
         editor.Focus();
     }
@@ -377,6 +366,24 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
         return box;
     }
+
+    string? IPageSetupDialogControlSource.MarginTopText => _top.Text;
+    string? IPageSetupDialogControlSource.MarginBottomText => _bottom.Text;
+    string? IPageSetupDialogControlSource.MarginLeftText => _left.Text;
+    string? IPageSetupDialogControlSource.MarginRightText => _right.Text;
+    string? IPageSetupDialogControlSource.GutterText => _gutter.Text;
+    int IPageSetupDialogControlSource.GutterPositionIndex => _gutterPosition.SelectedIndex;
+    int IPageSetupDialogControlSource.OrientationIndex => _orientation.SelectedIndex;
+    int IPageSetupDialogControlSource.MultiplePagesIndex => _multiplePages.SelectedIndex;
+    string? IPageSetupDialogControlSource.WidthText => _width.Text;
+    string? IPageSetupDialogControlSource.HeightText => _height.Text;
+    int IPageSetupDialogControlSource.PaperSizeIndex => _paperSize.SelectedIndex;
+    int IPageSetupDialogControlSource.SectionStartIndex => _sectionStart.SelectedIndex;
+    bool IPageSetupDialogControlSource.DifferentFirstPage => _differentFirstPage.IsChecked == true;
+    bool IPageSetupDialogControlSource.DifferentOddEvenPages => _differentOddEven.IsChecked == true;
+    string? IPageSetupDialogControlSource.HeaderDistanceText => _headerDistance.Text;
+    string? IPageSetupDialogControlSource.FooterDistanceText => _footerDistance.Text;
+    int IPageSetupDialogControlSource.VerticalAlignmentIndex => _verticalAlignment.SelectedIndex;
 
     private static Thickness ToThickness(PageSetupDialogThickness value) =>
         new(value.Left, value.Top, value.Right, value.Bottom);

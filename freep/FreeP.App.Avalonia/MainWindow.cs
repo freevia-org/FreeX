@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -8,15 +7,16 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
-using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using Free.Shared.AppServices;
 using Free.Shared.AppServices.Printing;
+#if FREEP_WINDOWS_CAPTURE
+using Free.Shared.AppServices.Windows;
+#endif
 using Free.Shared.Drawing;
 using Free.Shared.IO;
-using Free.Shared.Pdf;
 using Free.Shared.Pdf.Skia;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
@@ -24,10 +24,10 @@ using Free.Shared.Ribbon.KeyTips;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 using FreeP.App.Avalonia.Backstage;
 using FreeP.App.Avalonia.Printing;
 using FreeP.App.Compositor;
-using FreeP.App.Compositor.Printing;
 using FreeP.App.Recording;
 #if FREEP_WINDOWS_CAPTURE
 using FreeP.App.Recording.Windows;
@@ -66,147 +66,68 @@ namespace FreeP.App.Avalonia;
 ///
 /// Deferred to later Avalonia parity: transitions, animations, and full platform dialogs.
 /// </summary>
-public sealed partial class MainWindow : Window
+public sealed partial class MainWindow : Window,
+    IPresentationAltTextPaneHostView,
+    IPresentationMediaPaneHostView,
+    IPresentationReadingOrderPaneHostView
 {
+    partial void InitializeConditionalHost();
+    partial void RecordStartupObservation(string stage);
+    partial void RegisterStartupOpenedObservation();
+    partial void CoordinateAnimationPaneRequestObserver();
+    partial void NotifyHyperlinkAppliedObserver();
+    partial void ConfigureSlideShowObserver(SlideShowWindow window);
+    partial void OverrideCloseCancellation(ref bool cancel);
+    partial void ObserveNativeOutputDetectionCompleted();
+    partial void ResolveOpenPickerOverride(FileOpenPickerPlan plan, ref Task<string?>? selectionTask);
+    partial void ResolveSavePickerOverride(FileSavePickerPlan plan, ref Task<string?>? selectionTask);
+    partial void ResolveVideoPickerOverride(
+        FileSavePickerPlan plan,
+        ref Task<PresentationFilePickerResult>? resultTask);
+    partial void ResolvePictureBulletPayloadOverride(ref Task<PresentationPictureBulletPayload?>? payloadTask);
+    partial void ResolveHyperlinkDialogOverride(
+        HyperlinkDialogRequest request,
+        ref Task<Hyperlink?>? resultTask);
+
+    private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeP;
+
     // Avalonia text metrics place the action row two pixels above WPF without this compensation.
     private const double ReadingOrderActionTopCompensation = 2;
 
-    private const string DefaultTitle = "FreeP";
-    private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
-    private static readonly FilePickerFileType PictureFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            PresentationFileTextResources.PictureFileTypeName,
-            ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.svg", "*.wmf", "*.emf"],
-            ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/svg+xml", "image/x-wmf", "image/x-emf"]);
-    private static readonly FilePickerFileType VideoFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            PresentationFileTextResources.VideoFileTypeName,
-            ["*.mp4", "*.mov", "*.avi", "*.wmv", "*.m4v"],
-            ["video/mp4", "video/quicktime", "video/x-msvideo", "video/x-ms-wmv", "video/x-m4v"]);
-    private static readonly FilePickerFileType AudioFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            PresentationFileTextResources.AudioFileTypeName,
-            PresentationMediaFileTypeCatalog.AudioFilePatterns,
-            PresentationMediaFileTypeCatalog.AudioMimeTypes);
-    private static readonly FilePickerFileType EmbeddedObjectFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            OleInsertionPlanner.PickerTitle,
-            ["*.xlsx", "*.xlsm", "*.xls", "*.docx", "*.doc", "*.pptx", "*.ppt"],
-            [
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "application/vnd.ms-excel.sheet.macroEnabled.12",
-                "application/vnd.ms-excel",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "application/msword",
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                "application/vnd.ms-powerpoint",
-            ]);
-
-    private static readonly (string CommandId, Action<EditingSession> Execute)[] ArrangeCommandRoutes =
-    [
-        ("freep.arrange.group", static editor => editor.GroupSelectedShapes()),
-        ("freep.arrange.ungroup", static editor => editor.UngroupSelected()),
-        (ShapeChangePlanner.RectangleCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Rectangle)),
-        (ShapeChangePlanner.RoundedRectangleCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.RoundedRectangle)),
-        (ShapeChangePlanner.EllipseCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Ellipse)),
-        (ShapeChangePlanner.TriangleCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Triangle)),
-        (ShapeChangePlanner.DiamondCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Diamond)),
-        (ShapeChangePlanner.RightArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.RightArrow)),
-        (ShapeChangePlanner.HexagonCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Hexagon)),
-        (ShapeChangePlanner.ParallelogramCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Parallelogram)),
-        (ShapeChangePlanner.TrapezoidCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Trapezoid)),
-        (ShapeChangePlanner.LeftArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.LeftArrow)),
-        (ShapeChangePlanner.Star5CommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Star5)),
-        (ShapeChangePlanner.UpArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.UpArrow)),
-        (ShapeChangePlanner.DownArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.DownArrow)),
-        (ShapeChangePlanner.CrossCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Cross)),
-        (ShapeChangePlanner.PlusSignCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.PlusSign)),
-        (ShapeChangePlanner.PentagonCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Pentagon)),
-        (ShapeChangePlanner.OctagonCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Octagon)),
-        (ShapeChangePlanner.LeftRightArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.LeftRightArrow)),
-        (ShapeChangePlanner.UpDownArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.UpDownArrow)),
-        (ShapeChangePlanner.Star8CommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Star8)),
-        (ShapeChangePlanner.ChevronCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Chevron)),
-        (ShapeChangePlanner.HomePlateCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.HomePlate)),
-        (ShapeChangePlanner.RightTriangleCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.RightTriangle)),
-        (ShapeChangePlanner.MinusSignCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.MinusSign)),
-        (ShapeChangePlanner.MultiplySignCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.MultiplySign)),
-        (ShapeChangePlanner.DivideSignCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.DivideSign)),
-        (ShapeChangePlanner.EqualSignCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.EqualSign)),
-        (ShapeChangePlanner.NotEqualSignCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.NotEqualSign)),
-        (ShapeChangePlanner.WaveCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Wave)),
-        (ShapeChangePlanner.RectangularCalloutCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.RectangularCallout)),
-        (ShapeChangePlanner.RoundedRectangularCalloutCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.RoundedRectangularCallout)),
-        (ShapeChangePlanner.OvalCalloutCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.OvalCallout)),
-        (ShapeChangePlanner.ExplosionCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Explosion)),
-        (ShapeChangePlanner.RibbonCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Ribbon)),
-        (ShapeChangePlanner.FlowchartProcessCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.FlowchartProcess)),
-        (ShapeChangePlanner.FlowchartDecisionCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.FlowchartDecision)),
-        (ShapeChangePlanner.FlowchartDataCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.FlowchartData)),
-        (ShapeChangePlanner.FlowchartPredefinedProcessCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.FlowchartPredefinedProcess)),
-        (ShapeChangePlanner.FlowchartDocumentCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.FlowchartDocument)),
-        (ShapeChangePlanner.FlowchartTerminatorCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.FlowchartTerminator)),
-        (ShapeChangePlanner.LineCalloutCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.LineCallout)),
-        (ShapeChangePlanner.CylinderCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Cylinder)),
-        (ShapeChangePlanner.ChordCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Chord)),
-        (ShapeChangePlanner.HeartCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Heart)),
-        ("freep.arrange.bring-to-front", static editor => editor.BringToFront()),
-        ("freep.arrange.bring-forward", static editor => editor.BringForward()),
-        ("freep.arrange.send-backward", static editor => editor.SendBackward()),
-        ("freep.arrange.send-to-back", static editor => editor.SendToBack()),
-        ("freep.arrange.flip-horizontal", static editor => editor.FlipSelectedHorizontal()),
-        ("freep.arrange.flip-vertical", static editor => editor.FlipSelectedVertical()),
-        ("freep.arrange.rotate-left-90", static editor => editor.RotateSelectedLeft90()),
-        ("freep.arrange.rotate-right-90", static editor => editor.RotateSelectedRight90()),
-        ("freep.arrange.align-left", static editor => editor.AlignLeft()),
-        ("freep.arrange.align-center-h", static editor => editor.AlignCenterH()),
-        ("freep.arrange.align-right", static editor => editor.AlignRight()),
-        ("freep.arrange.align-top", static editor => editor.AlignTop()),
-        ("freep.arrange.align-middle", static editor => editor.AlignMiddle()),
-        ("freep.arrange.align-bottom", static editor => editor.AlignBottom()),
-        ("freep.arrange.align-left-to-slide", static editor => editor.AlignLeftToSlide()),
-        ("freep.arrange.align-center-h-to-slide", static editor => editor.AlignCenterHToSlide()),
-        ("freep.arrange.align-right-to-slide", static editor => editor.AlignRightToSlide()),
-        ("freep.arrange.align-top-to-slide", static editor => editor.AlignTopToSlide()),
-        ("freep.arrange.align-middle-to-slide", static editor => editor.AlignMiddleToSlide()),
-        ("freep.arrange.align-bottom-to-slide", static editor => editor.AlignBottomToSlide()),
-        ("freep.arrange.distribute-h", static editor => editor.DistributeHorizontally()),
-        ("freep.arrange.distribute-v", static editor => editor.DistributeVertically()),
-    ];
+    private static readonly SisterAppFileTextSpec FileText = PresentationFileTextResources.Presentation;
 
     // ── Presentation model ─────────────────────────────────────────────────────
 
-    private Presentation _presentation = Presentation.CreateEmpty();
+    private readonly PresentationWorkareaSession _workareaSession;
+    private Presentation _presentation => _workareaSession.Presentation;
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
-    private readonly StartupDirtyTrace? _startupDirtyTrace;
+    private readonly PresentationFileCommandSession _fileSession;
     private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
-    private readonly AvaloniaPresentationClipboardService _clipboardService;
-    private Func<FileOpenPickerPlan, Task<string?>>? _openPickerOverrideForTests;
-    private Func<FileSavePickerPlan, Task<string?>>? _savePickerOverrideForTests;
-    internal Func<FileSavePickerPlan, Task<VideoPickerSelectionForTests?>>? VideoPickerOverrideForTests { get; set; }
+    private readonly PresentationPlatformClipboardSession _clipboardService;
     private int _ownerFocusRestoreCount;
-    private Task _clipboardOperation = Task.CompletedTask;
+    private readonly PresentationClipboardOperationQueue _clipboardOperationQueue = new();
     private readonly FreePOptions _options;
-    private readonly ApplicationOptionsStore<FreePOptions> _optionsStore;
+    private readonly FreePOptionsRuntimeSession _optionsRuntime;
+    private readonly IApplicationOptionsStore<FreePOptions> _optionsStore;
     private LinuxNativeOutputCapabilities _nativeOutputCapabilities;
-    private ILinuxNativePrintHandoffAdapter _nativePrintAdapter;
     private readonly IPlatformPrintService _printService;
     private readonly Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>
         _showPrintSelectionDialog;
-    private readonly bool _portablePrintWorkflowEnabled;
     private PrinterDiscoveryResult? _latestPrinterDiscovery;
+    private string? _selectedPrinterName;
     private ILinuxVideoExportAdapter _videoExportAdapter;
-    private PresentationNativePrintHandoffHostCapabilities _nativePrintHostCapabilities;
+    private readonly PresentationNativePrintHandoffHostCapabilities _nativePrintHostCapabilities;
     private PresentationVideoExportHandoffHostCapabilities _videoExportHostCapabilities;
     private readonly Func<LinuxNativeOutputCapabilities>? _nativeOutputCapabilityDetector;
     private readonly Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? _printOutputPackageFactory;
-    private readonly Func<PresentationVideoExportRequest?, PresentationVideoFramePackage>? _videoFramePackageFactory;
+    private readonly Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
+        _videoFramePackageArtifactFactory;
     private bool _nativeOutputDetectionStarted;
     private CancellationTokenSource? _nativeOutputCancellation;
 
     // ── Editing session ────────────────────────────────────────────────────────
 
-    internal EditingSession Editor { get; private set; } = null!;
+    internal EditingSession Editor => _workareaSession.Editor;
 
     // ── UI elements ────────────────────────────────────────────────────────────
 
@@ -219,15 +140,15 @@ public sealed partial class MainWindow : Window
     private readonly ListBox _slidePaneList;
     private readonly Border _slidePaneInsertionIndicator;
     private readonly Button _slidePaneNewSlideButton;
-    private SlidePaneSessionState _slidePaneSessionState = SlidePaneSessionState.Empty;
-    private SlidePaneSessionProjection? _slidePaneProjection;
-    private readonly List<SlidePaneThumbnailVisualPlan> _slidePaneRenderedThumbnailPlans = new();
-    private readonly List<SlidePaneSectionHeaderVisualPlan> _slidePaneRenderedSectionHeaderPlans = new();
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
     private readonly BackstageView _backstage;
-    private Task<LinuxNativePrintResult> _backstagePrintOperation =
-        Task.FromResult(LinuxNativePrintResult.Failed("No Backstage print action has run."));
+    private Task<PrintSubmissionResult> _backstagePrintOperation =
+        Task.FromResult(new PrintSubmissionResult(
+            PrintSubmissionStatus.Failed,
+            null,
+            Message: PresentationShellTextCatalog.Resolve(
+                PresentationShellTextCatalog.BackstagePrintNotRunStatus)));
     private CancellationTokenSource? _printCancellation;
     private readonly Border _titleBar;
     private IReadOnlyList<Button> _quickAccessButtons = [];
@@ -241,7 +162,6 @@ public sealed partial class MainWindow : Window
     private Border _reviewCommentsPaneHost = null!;
     private ScrollViewer _reviewCommentsPaneScrollViewer = null!;
     private StackPanel _reviewCommentsPanePanel = null!;
-    private bool _reviewCommentsPaneRequested;
     private readonly PresentationReviewWorkflowSession _reviewWorkflowSession;
     private Border _altTextPaneHost = null!;
     private TextBlock _altTextPaneHeading = null!;
@@ -253,13 +173,12 @@ public sealed partial class MainWindow : Window
     private CheckBox _altTextDecorativeCheck = null!;
     private Button _altTextApplyButton = null!;
     private Button _altTextCloseButton = null!;
-    private bool _altTextPaneRefreshing;
+    private readonly PresentationAltTextPaneHostCoordinator _altTextPaneHostCoordinator;
     private Border _accessibilityCheckerPaneHost = null!;
     private TextBlock _accessibilityCheckerPaneHeading = null!;
     private TextBlock _accessibilityCheckerPaneMessage = null!;
     private StackPanel _accessibilityCheckerReviewDetailsPanel = null!;
     private StackPanel _accessibilityCheckerRowsPanel = null!;
-    private int? _selectedAccessibilityCheckerRowIndex;
     private readonly List<string> _accessibilityCheckerTableStructureReviewRenderedLines = new();
     private Border _readingOrderPaneHost = null!;
     private SelectionPane _selectionPane = null!;
@@ -268,6 +187,7 @@ public sealed partial class MainWindow : Window
     private StackPanel _readingOrderPaneItemsPanel = null!;
     private Button _readingOrderMoveEarlierButton = null!;
     private Button _readingOrderMoveLaterButton = null!;
+    private readonly PresentationReadingOrderPaneHostCoordinator _readingOrderPaneHostCoordinator;
     private Border _proofingPaneHost = null!;
     private TextBlock _proofingPaneHeading = null!;
     private TextBlock _proofingPaneMessage = null!;
@@ -318,9 +238,14 @@ public sealed partial class MainWindow : Window
     private Button _mediaCaptionReplaceButton = null!;
     private Button _mediaCaptionDeleteButton = null!;
     private Button _mediaCaptionCloseButton = null!;
-    private bool _mediaCaptionPaneRefreshing;
-    private int? _selectedMediaCaptionTrackIndex;
-    private int? _selectedMediaBookmarkIndex;
+    private readonly PresentationMediaPaneHostCoordinator _mediaPaneHostCoordinator;
+    private readonly PresentationSmartArtTextPaneSession _smartArtTextPaneSession;
+    private readonly PresentationZoomAuthoringSession _zoomAuthoringSession;
+    private readonly PresentationDomainContextMenuSession _domainContextMenuSession;
+    private readonly PresentationNotesPaneSession _notesPaneSession;
+    private readonly PresentationHyperlinkWorkflowSession _hyperlinkWorkflowSession;
+    private readonly AnimationPaneSession _animationPaneSession;
+    private readonly SlideShowCustomShowSession _customShowSession;
     private Border _smartArtTextPaneHost = null!;
     private TextBlock _smartArtTextPaneHeading = null!;
     private TextBlock _smartArtTextPaneMessage = null!;
@@ -334,7 +259,6 @@ public sealed partial class MainWindow : Window
     private Button _smartArtTextPaneCloseButton = null!;
     private WrapPanel _smartArtTextPaneCommandActions = null!;
     private bool _smartArtTextPaneRefreshing;
-    private string? _selectedSmartArtTextPaneModelId;
     private Border _animationPaneHost = null!;
     private TextBlock _animationPaneHeading = null!;
     private TextBlock _animationPaneMessage = null!;
@@ -342,9 +266,6 @@ public sealed partial class MainWindow : Window
     private StackPanel _animationPaneItemsPanel = null!;
     private Button _animationPanePreviewButton = null!;
     private readonly PresentationPaneAccessibilityAdapter _paneAccessibility = new();
-    private int _selectedAnimationIndex = -1;
-    private AnimationPanePlaybackSessionPlan? _animationPanePlaybackSessionPlan;
-    private AnimationPanePlaybackWorkflowEvidencePlan? _animationPanePlaybackWorkflowEvidencePlan;
     private readonly List<string> _animationPaneRenderedRows = new();
     private readonly List<string> _animationPaneRenderedPlaybackControls = new();
     private int _animationPaneEffectOptionControlCount;
@@ -376,6 +297,7 @@ public sealed partial class MainWindow : Window
     private Control? _ribbonControl;
     private RibbonDefinition? _ribbonDefinition;
     private RibbonCommandRegistry? _ribbonCommandRegistry;
+    private FreePRibbonHostActionEndpoints? _ribbonHostActionEndpoints;
     private readonly RibbonStateStore _ribbonStateStore = new();
     private bool _ribbonKeyTipsVisible;
     private string? _ribbonKeyTipTabId;
@@ -392,114 +314,24 @@ public sealed partial class MainWindow : Window
     private bool _restoreSlidePaneFocusAfterRefresh;
     private sealed record SlidePaneSectionHeaderTag(string SectionId, int SectionIndex);
 
-    // ── Smoke surface ──────────────────────────────────────────────────────────
-
-    /// <summary>True once the ribbon has been built. Read by the launch-smoke coordinator.</summary>
-    internal bool HasToolbar { get; private set; }
-
-    /// <summary>Current slide count — read by the launch-smoke coordinator.</summary>
-    internal int SlideCount => _presentation.Slides.Count;
-
-    /// <summary>Current slide index (0-based) — read by the launch-smoke coordinator.</summary>
     internal int CurrentSlideIndex => Editor?.CurrentSlideIndex ?? -1;
-    internal bool RibbonKeyTipsVisibleForTests => _ribbonKeyTipsVisible;
-    internal bool RibbonKeyTipMenuOpenForTests => _ribbonKeyTipMenuItems is not null;
-    internal bool RibbonKeyTipFlyoutOpenForTests => _ribbonKeyTipFlyout?.IsOpen == true;
-    internal bool SlideCanvasFocusedForTests => _slideCanvas.IsFocused;
-    internal IReadOnlyList<MenuItem> RibbonKeyTipRenderedMenuItemsForTests =>
-        _ribbonKeyTipRenderedMenuItems ?? Array.Empty<MenuItem>();
-    internal void SetRibbonKeyTipMenuScopeForTests(RibbonMenu menu, MenuFlyout flyout)
-    {
-        _ribbonKeyTipsVisible = true;
-        _ribbonKeyTipMenuItems = menu.Items;
-        _ribbonKeyTipFlyout = flyout;
-        _ribbonKeyTipRenderedMenuItems = flyout.Items.OfType<MenuItem>().ToArray();
-        _ribbonKeyTipSequence = string.Empty;
-    }
-    internal bool HandleRibbonMenuKeyTipForTests(string token) => TryHandleRibbonMenuKeyTip(token);
-    internal RibbonCommandRegistry RibbonCommandRegistryForTests => _ribbonCommandRegistry!;
-    internal Control? RibbonControlForTests => _ribbonControl;
-    internal Border TitleBarForTests => _titleBar;
-    internal IReadOnlyList<Button> QuickAccessButtonsForTests => _quickAccessButtons;
-    internal string StatusTextForTests => _statusText.Text ?? string.Empty;
-    internal bool HasWindowIconForTests => Icon is not null;
-    internal int OwnerFocusRestoreCountForTests => _ownerFocusRestoreCount;
-    internal void RaiseKeyDownForTests(KeyEventArgs args) => MainWindow_KeyDown(this, args);
-    internal Task ClipboardOperationForTests => _clipboardOperation;
-    internal int SlidePaneSlideItemCount => _slidePaneList.Items
-        .OfType<ListBoxItem>()
-        .Count(item => item.Tag is int);
-    internal int SlidePaneSectionHeaderCount => _slidePaneList.Items
-        .OfType<ListBoxItem>()
-        .Count(item => item.Tag is SlidePaneSectionHeaderTag);
-    internal bool IsSlidePaneInsertionIndicatorVisible => _slidePaneInsertionIndicator.IsVisible;
-    internal bool IsSlidePaneNewSlideButtonVisible => _slidePaneNewSlideButton.IsVisible;
-    internal string? SlidePaneNewSlideButtonText => _slidePaneNewSlideButton.Content?.ToString();
-    internal string? SlidePaneNewSlideButtonAutomationName => AutomationProperties.GetName(_slidePaneNewSlideButton);
-    internal Button SlidePaneNewSlideButtonForTests => _slidePaneNewSlideButton;
-    internal IReadOnlyList<string?> SelectionPaneRenameToolTipsForTests => _selectionPane.RenameToolTipsForTests;
-    internal bool IsShellShortcutTargetForTests(Control? focused) => IsShellShortcutTarget(focused);
-    internal ListBoxItem? SelectedSlidePaneItemForTests => GetCurrentSlidePaneItem();
-    internal IReadOnlyList<SlidePaneThumbnailVisualPlan> SlidePaneRenderedThumbnailPlans => _slidePaneRenderedThumbnailPlans;
-    internal IReadOnlyList<SlidePaneSectionHeaderVisualPlan> SlidePaneRenderedSectionHeaderPlans => _slidePaneRenderedSectionHeaderPlans;
-    internal IReadOnlyList<string?> SlidePaneSectionHeaderAutomationNamesForTests => _slidePaneList.Items
-        .OfType<ListBoxItem>()
-        .Where(item => item.Tag is SlidePaneSectionHeaderTag)
-        .Select(AutomationProperties.GetName)
-        .ToArray();
-    internal IReadOnlyList<string?> SlidePaneThumbnailAutomationNamesForTests => _slidePaneList.Items
-        .OfType<ListBoxItem>()
-        .Where(item => item.Tag is int)
-        .Select(AutomationProperties.GetName)
-        .ToArray();
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
-    internal int DirtyGeneration => _fileWorkflow.DirtyGeneration;
-    internal IReadOnlyList<StartupDirtyTraceEntry> StartupDirtyTraceForTests =>
-        _startupDirtyTrace?.Entries ?? Array.Empty<StartupDirtyTraceEntry>();
-    internal bool IsCloseDecisionPendingForTests => _closeCoordinator.IsClosePending;
-    internal PresentationViewShowState ViewShowStateForTests => _viewShowState;
-    internal PresentationViewZoomState ViewZoomStateForTests => _viewZoomState;
-    internal PresentationViewZoomState SlideCanvasViewZoomStateForTests => _slideCanvas.ViewZoomState;
-    internal bool? GestureSnapToGridForTests => _gestureHandler?.SnapToGrid;
-    internal bool? GestureSnapToShapesForTests => _gestureHandler?.SnapToShapes;
 
     internal string? CurrentPath => _fileWorkflow.CurrentPath;
 
     internal IReadOnlyList<RecentFileEntry> RecentEntries => _fileWorkflow.RecentEntries;
 
     internal PresentationCommentPanePlan? LastCommentPanePlan => _reviewWorkflowSession.LastCommentPanePlan;
-    internal PresentationCommentNavigationPlan? LastCommentNavigationPlan => _reviewWorkflowSession.LastCommentNavigationPlan;
-    internal PresentationCommentMentionPickerPlan? LastCommentMentionPickerPlan { get; private set; }
-    internal PresentationCommentMentionInsertionPlan? LastCommentMentionInsertionPlan { get; private set; }
-    internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
-    internal PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan { get; private set; }
-    internal PresentationSlideTitleMutationPlan? LastSlideTitleMutationPlan { get; private set; }
-    internal PresentationChartTitleMutationPlan? LastChartTitleMutationPlan { get; private set; }
-    internal PresentationTableHeaderRowMutationPlan? LastTableHeaderRowMutationPlan { get; private set; }
-    internal PresentationTableStructureReviewPlan? LastTableStructureReviewPlan { get; private set; }
-    internal PresentationTableStructureReviewDisplayPlan? LastTableStructureReviewDisplayPlan { get; private set; }
-    internal PresentationAltTextRequestPlan? LastAltTextRequestPlan => _reviewWorkflowSession.LastAltTextRequestPlan;
-    internal PresentationAltTextPanePlan? LastAltTextPanePlan => _reviewWorkflowSession.LastAltTextPanePlan;
+    internal PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan =>
+        _reviewWorkflowSession.LastAccessibilityCheckerPanePlan;
+    internal PresentationTableStructureReviewDisplayPlan? LastTableStructureReviewDisplayPlan =>
+        _reviewWorkflowSession.LastTableStructureReviewDisplayPlan;
     internal PresentationReadingOrderPlan? LastReadingOrderPlan => _reviewWorkflowSession.LastReadingOrderPlan;
-    internal PresentationProofingRequestPlan? LastProofingRequestPlan => _reviewWorkflowSession.LastProofingRequestPlan;
-    internal PresentationProofingExecutionPlan? LastProofingExecutionPlan => _reviewWorkflowSession.LastProofingExecutionPlan;
     internal PresentationProofingPanePlan? LastProofingPanePlan => _reviewWorkflowSession.LastProofingPanePlan;
-    internal PresentationMediaTranscriptPlan? LastMediaTranscriptPlan { get; private set; }
-    internal PresentationMediaCaptionAuthoringPanePlan? LastMediaCaptionAuthoringPanePlan { get; private set; }
-    internal PresentationMediaCaptionAuthoringMutationPlan? LastMediaCaptionAuthoringMutationPlan { get; private set; }
-    internal PresentationMediaCaptionTrackMutationResult? LastMediaCaptionTrackMutationResult { get; private set; }
-    internal SmartArtTextPaneApplyResult? LastSmartArtTextPaneApplyResult { get; private set; }
-    internal SmartArtNodeEditResult? LastSmartArtTextPaneEditResult { get; private set; }
-    internal SmartArtTextPaneKeyboardRoute? LastSmartArtTextPaneKeyboardRoute { get; private set; }
-    internal SmartArtColorApplyResult? LastSmartArtColorApplyResult { get; private set; }
-    internal SmartArtDataPartRewriteResult? LastSmartArtDataPartRewriteResult { get; private set; }
-    internal SmartArtDrawingCacheRegenerationResult? LastSmartArtDrawingCacheRegenerationResult { get; private set; }
-    internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
-    internal AnimationPaneWorkflowEvidencePlan? LastAnimationPaneWorkflowEvidencePlan { get; private set; }
-    internal AnimationPanePlaybackSessionPlan? LastAnimationPanePlaybackSessionPlan => _animationPanePlaybackSessionPlan;
-    internal AnimationPanePlaybackWorkflowEvidencePlan? LastAnimationPanePlaybackWorkflowEvidencePlan =>
-        _animationPanePlaybackWorkflowEvidencePlan;
+    internal PresentationMediaPaneHostCoordinator MediaPaneHost => _mediaPaneHostCoordinator;
+    internal PresentationMediaCaptionAuthoringPanePlan? LastMediaCaptionAuthoringPanePlan =>
+        _mediaPaneHostCoordinator.LastCaptionAuthoringPanePlan;
     internal FindReplaceWorkflowPlan? LastFindReplaceWorkflowPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastCustomSlideSizeRequestPlan { get; private set; }
     internal SlideSizeDialogInitialState? LastCustomSlideSizeInitialState { get; private set; }
@@ -509,8 +341,6 @@ public sealed partial class MainWindow : Window
     internal HeaderFooterApplyPlan? LastHeaderFooterApplyPlan { get; private set; }
     internal HyperlinkDialogRequest? LastHyperlinkDialogRequest { get; private set; }
     internal HyperlinkDialogApplyPlan? LastHyperlinkDialogApplyPlan { get; private set; }
-    internal Func<HyperlinkDialogRequest, Task<Hyperlink?>>? HyperlinkDialogResultProviderForTests { get; set; }
-    internal Func<Task<PresentationPictureBulletPayload?>>? PictureBulletPayloadProviderForTests { get; set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
@@ -523,239 +353,21 @@ public sealed partial class MainWindow : Window
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
     internal PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor { get; private set; }
-    internal LinuxNativePrintResult? LastNativePrintResult { get; private set; }
-    internal PrinterDiscoveryResult? LatestPrinterDiscoveryForTests => _latestPrinterDiscovery;
-    internal PrintSelection? LastPrintSelectionForTests { get; private set; }
+    internal PrintSubmissionResult? LastPrintSubmissionResult { get; private set; }
+    private PrintSelection? _lastPrintSelection;
     internal LinuxVideoExportResult? LastVideoExportResult { get; private set; }
-    internal bool NativeOutputDetectionStartedForTests => _nativeOutputDetectionStarted;
-    internal PresentationNativePrintHandoffHostCapabilities NativePrintHostCapabilitiesForTests => _nativePrintHostCapabilities;
-    internal PresentationVideoExportHandoffHostCapabilities VideoExportHostCapabilitiesForTests => _videoExportHostCapabilities;
-    internal void StartNativeOutputCapabilityDetectionForTests() => StartNativeOutputCapabilityDetection();
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
-    internal bool IsLayoutPickerVisible => _layoutPickerHost?.IsVisible == true;
-    internal bool IsTablePickerVisible => _tablePickerHost?.IsVisible == true;
-    internal SlideSizeDialog? ActiveSlideSizeDialog => _slideSizeDialog;
-    internal HeaderFooterDialog? ActiveHeaderFooterDialog => _headerFooterDialog;
-    internal SlideShowSettingsDialog? ActiveSlideShowSettingsDialog => _slideShowSettingsDialog;
-    internal int TablePickerChoiceButtonCount => LastTablePickerPlan?.Choices.Count ?? 0;
-    internal int TablePickerDefaultChoiceCount => LastTablePickerPlan?.Choices.Count(choice => choice.IsDefault) ?? 0;
-    internal int LayoutPickerChoiceButtonCount => LastLayoutPickerPlan?.Choices.Count ?? 0;
-    internal int LayoutPickerGroupHeaderCount => LastLayoutPickerPlan?.Groups.Count ?? 0;
-    internal int LayoutPickerThumbnailPlaceholderCount =>
-        LastLayoutPickerPlan?.Choices.Sum(choice => choice.ThumbnailPlaceholders.Count) ?? 0;
-    internal int LayoutPickerCurrentChoiceCount =>
-        LastLayoutPickerPlan?.Choices.Count(choice => choice.Chrome.IsCurrent) ?? 0;
-    internal bool IsReviewCommentsPaneVisible => _reviewCommentsPaneHost?.IsVisible == true;
-    internal int ReviewCommentsPaneCommentCount => LastCommentPanePlan?.Comments.Count ?? 0;
-    internal int ReviewCommentsPaneActionButtonCount => LastCommentPanePlan?.Actions.Count ?? 0;
-    internal int ReviewCommentsPaneSelectedCommentCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
-    internal string ReviewCommentsPaneSummary => LastCommentPanePlan?.DeckSummaryLabel ?? string.Empty;
-    internal IReadOnlyList<string> ReviewCommentsPaneFilterStates =>
-        LastCommentPanePlan?.Filters.Select(filter =>
-            $"{filter.Kind}|{filter.Label}|{filter.Count}|{filter.IsSelected}|{filter.HasMatches}").ToArray() ?? [];
-    internal IReadOnlyList<string> ReviewCommentsPaneRenderedActionStates =>
-        EnumerateReviewPaneButtons(_reviewCommentsPanePanel)
-            .Where(button => button.Tag is string commandId &&
-                commandId.StartsWith("freep.review.comments.", StringComparison.Ordinal))
-            .Select(button => $"{button.Tag}|{button.Content}|{button.IsEnabled}")
-            .ToArray();
-    internal IReadOnlyList<string> ReviewCommentsPaneRenderedMentionLines =>
-        EnumerateReviewPaneText(_reviewCommentsPanePanel)
-            .Where(text => text.StartsWith("Mentions:", StringComparison.Ordinal))
-            .ToArray();
-    internal IReadOnlyList<string> ReviewCommentsPaneRenderedMentionActions =>
-        EnumerateReviewPaneButtons(_reviewCommentsPanePanel)
-            .Where(button => button.Tag is string tag &&
-                tag.StartsWith("comment-mention:", StringComparison.Ordinal))
-            .Select(button => $"{button.Tag}|{button.Content}|{button.IsEnabled}")
-            .ToArray();
-    internal bool InvokeReviewCommentPaneMentionActionForTests(string tag, string? candidateLabel = null)
-    {
-        var button = EnumerateReviewPaneButtons(_reviewCommentsPanePanel)
-            .FirstOrDefault(candidate => string.Equals(candidate.Tag as string, tag, StringComparison.Ordinal));
-        if (button is null)
-            return false;
-
-        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        var item = button.ContextMenu?.Items.OfType<MenuItem>()
-            .FirstOrDefault(candidate => candidateLabel is null ||
-                string.Equals(candidate.Header as string, candidateLabel, StringComparison.Ordinal));
-        if (item is null)
-            return candidateLabel is null;
-
-        item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-        return true;
-    }
-    internal bool IsAltTextPaneVisible => _altTextPaneHost?.IsVisible == true;
-    internal bool IsAltTextPaneApplyEnabled => _altTextApplyButton?.IsEnabled == true;
-    internal string AltTextPaneTitleLabel => _altTextTitleLabel?.Text ?? string.Empty;
-    internal string AltTextPaneTitleText => _altTextTitleBox?.Text ?? string.Empty;
-    internal string AltTextPaneTitlePlaceholder => _altTextTitleBox?.PlaceholderText ?? string.Empty;
-    internal string AltTextPaneDescriptionLabel => _altTextDescriptionLabel?.Text ?? string.Empty;
-    internal string AltTextPaneDescriptionText => _altTextDescriptionBox?.Text ?? string.Empty;
-    internal string AltTextPaneDescriptionPlaceholder => _altTextDescriptionBox?.PlaceholderText ?? string.Empty;
-    internal bool IsAltTextPaneDecorativeChecked => _altTextDecorativeCheck?.IsChecked == true;
-    internal string AltTextPaneMessage => _altTextPaneMessage?.Text ?? string.Empty;
-    internal bool IsSmartArtTextPaneVisible => _smartArtTextPaneHost?.IsVisible == true;
-    internal int SmartArtTextPaneRowCount => _smartArtTextPaneRowsPanel?.Children.OfType<TextBox>().Count() ?? 0;
-    internal int SmartArtTextPaneSelectedRowCount =>
-        _smartArtTextPaneRowsPanel?.Children.OfType<TextBox>().Count(box =>
-            box.Tag is SmartArtNodeOutlineItem item &&
-            StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId)) ?? 0;
-    internal int SmartArtTextPaneActionButtonCount => _smartArtTextPaneActionButtons.Count;
-    internal int SmartArtTextPaneEnabledActionButtonCount =>
-        _smartArtTextPaneActionButtons.Count(button => button.IsEnabled);
-    internal int SmartArtTextPaneCommandActionCount =>
-        _smartArtTextPaneCommandActions?.Children.OfType<Button>().Count() ?? 0;
-    internal bool SmartArtTextPaneCommandActionsWrap =>
-        _smartArtTextPaneCommandActions is not null;
-    internal string SmartArtTextPaneMessage => _smartArtTextPaneMessage?.Text ?? string.Empty;
-    internal IReadOnlyList<string> SmartArtTextPaneRenderedRows =>
-        _smartArtTextPaneRowsPanel?.Children.OfType<TextBox>()
-            .Select(box => box.Tag is SmartArtNodeOutlineItem item
-                ? $"{item.ModelId}|{item.Level}|{item.IsAssistant}|{box.Text}"
-                : box.Text ?? string.Empty)
-            .ToArray() ?? [];
-    internal bool IsAccessibilityCheckerPaneVisible => _accessibilityCheckerPaneHost?.IsVisible == true;
-    internal int AccessibilityCheckerPaneRowCount => LastAccessibilityCheckerPanePlan?.Rows.Count ?? 0;
-    internal int AccessibilityCheckerPaneSelectedRowCount =>
-        LastAccessibilityCheckerPanePlan?.Rows.Count(row => row.IsSelected) ?? 0;
-    internal string AccessibilityCheckerPaneHeading => _accessibilityCheckerPaneHeading?.Text ?? string.Empty;
-    internal string AccessibilityCheckerPaneMessage => _accessibilityCheckerPaneMessage?.Text ?? string.Empty;
-    internal IReadOnlyList<string> AccessibilityCheckerTableStructureReviewRenderedLines =>
-        _accessibilityCheckerTableStructureReviewRenderedLines.ToArray();
-    internal bool IsReadingOrderPaneVisible => _readingOrderPaneHost?.IsVisible == true;
-    internal int ReadingOrderPaneItemCount => LastReadingOrderPlan?.Items.Count ?? 0;
-    internal string ReadingOrderPaneHeading => _readingOrderPaneHeading?.Text ?? string.Empty;
-    internal string ReadingOrderPaneMessage => _readingOrderPaneMessage?.Text ?? string.Empty;
-    internal bool IsReadingOrderMoveEarlierEnabled => _readingOrderMoveEarlierButton?.IsEnabled == true;
-    internal bool IsReadingOrderMoveLaterEnabled => _readingOrderMoveLaterButton?.IsEnabled == true;
-    internal bool IsProofingPaneVisible => _proofingPaneHost?.IsVisible == true;
-    internal int ProofingPaneIssueRowCount => LastProofingPanePlan?.Rows.Count ?? 0;
-    internal int ProofingPaneSelectedIssueCount => LastProofingPanePlan?.Rows.Count(row => row.IsSelected) ?? 0;
-    internal bool IsProofingPaneCorrectionEnabled =>
-        LastProofingPanePlan?.Actions.SingleOrDefault(action =>
-            action.CommandId == PresentationReviewWorkflowPlanner.ProofingApplyCorrectionCommandId)?.IsEnabled == true;
-    internal bool IsProofingPaneIgnoreEnabled =>
-        LastProofingPanePlan?.Actions.SingleOrDefault(action =>
-            action.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreCommandId)?.IsEnabled == true;
-    internal bool IsProofingPaneIgnoreAllEnabled =>
-        LastProofingPanePlan?.Actions.SingleOrDefault(action =>
-            action.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreAllCommandId)?.IsEnabled == true;
-    internal bool IsProofingPaneAddToDictionaryEnabled =>
-        LastProofingPanePlan?.Actions.SingleOrDefault(action =>
-            action.CommandId == PresentationReviewWorkflowPlanner.ProofingAddToDictionaryCommandId)?.IsEnabled == true;
-    internal string ProofingPaneHeading => _proofingPaneHeading?.Text ?? string.Empty;
-    internal string ProofingPaneMessage => _proofingPaneMessage?.Text ?? string.Empty;
-    internal bool IsMediaCaptionPaneVisible => _mediaCaptionPaneHost?.IsVisible == true;
-    internal string MediaCaptionPaneHeading => _mediaCaptionPaneHeading?.Text ?? string.Empty;
-    internal string MediaCaptionPaneMessage => _mediaCaptionPaneMessage?.Text ?? string.Empty;
-    internal int MediaCaptionPaneTrackCount => LastMediaCaptionAuthoringPanePlan?.Tracks.Count ?? 0;
-    internal bool IsMediaCaptionCreateEnabled => _mediaCaptionCreateButton?.IsEnabled == true;
-    internal bool IsMediaCaptionReplaceEnabled => _mediaCaptionReplaceButton?.IsEnabled == true;
-    internal bool IsMediaCaptionDeleteEnabled => _mediaCaptionDeleteButton?.IsEnabled == true;
-    internal string MediaCaptionPaneTranscriptText => _mediaCaptionTranscriptBox?.Text ?? string.Empty;
-    internal int MediaVolumePercent => _mediaVolumeSlider is null ? 80 : (int)Math.Round(_mediaVolumeSlider.Value);
-    internal bool IsMediaVolumeApplyEnabled => _mediaVolumeApplyButton?.IsEnabled == true;
-    internal MediaPlaybackStartMode MediaPlaybackStartMode => _mediaStartModeBox?.SelectedIndex == 1
-        ? MediaPlaybackStartMode.Automatically
-        : MediaPlaybackStartMode.InClickSequence;
-    internal bool MediaLoop => _mediaLoopCheckBox?.IsChecked == true;
-    internal bool MediaShowWhenStopped => _mediaShowWhenStoppedCheckBox?.IsChecked != false;
-    internal bool MediaRewindAfterPlaying => _mediaRewindAfterPlayingCheckBox?.IsChecked == true;
-    internal bool MediaPlayFullScreen => _mediaPlayFullScreenCheckBox?.IsChecked == true;
-    internal int MediaStopAfterSlides => int.TryParse(_mediaStopAfterSlidesBox?.Text, out var value)
-        ? Math.Max(1, value)
-        : 1;
-    internal string? ReadingOrderMoveEarlierDisabledReason =>
-        LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
-            action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)?.DisabledReason;
-    internal string? ReadingOrderMoveLaterDisabledReason =>
-        LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
-            action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)?.DisabledReason;
+    internal bool IsSmartArtTextPaneVisible =>
+        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.SmartArtText);
+    internal bool IsAccessibilityCheckerPaneVisible =>
+        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.AccessibilityChecker);
+    internal bool IsProofingPaneVisible =>
+        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.Proofing);
+    internal bool IsMediaCaptionPaneVisible =>
+        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.MediaCaption);
     internal bool IsAnimationPaneVisible => _animationPaneHost?.IsVisible == true;
-    internal bool EditPointsEnabledForTests => _slideCanvas.EditPointsEnabled;
-    internal int AnimationPaneItemCount => LastAnimationPaneTimelinePlan?.Items.Count ?? 0;
-    internal int AnimationPaneRenderedItemCount => _animationPaneItemsPanel?.Children.Count ?? 0;
-    internal string AnimationPaneHeading => LastAnimationPaneWorkflowEvidencePlan?.View.Heading
-        ?? _animationPaneHeading?.Text
-        ?? string.Empty;
-    internal string AnimationPaneMessage => _animationPaneMessage?.Text ?? string.Empty;
-    internal bool IsAnimationPanePreviewEnabled => _animationPanePreviewButton?.IsEnabled == true;
-    internal IReadOnlyList<string> AnimationPanePlaybackControls => _animationPaneRenderedPlaybackControls;
-    internal IReadOnlyList<string> AnimationPaneRenderedRows => _animationPaneRenderedRows;
-    internal IReadOnlyList<string> AnimationPaneWorkflowEvidenceLines =>
-        LastAnimationPaneWorkflowEvidencePlan?.EvidenceLines ?? Array.Empty<string>();
-    internal int AnimationPaneEffectOptionControlCount => _animationPaneEffectOptionControlCount;
-    internal int AnimationPaneTriggerControlCount => _animationPaneTriggerControlCount;
-    internal int AnimationPaneDurationControlCount => _animationPaneDurationControlCount;
-    internal int AnimationPaneDelayControlCount => _animationPaneDelayControlCount;
-    internal FindReplaceDialog? ActiveFindReplaceDialog => _findReplaceDialog;
-    internal bool IsFindReplaceDialogVisible => _findReplaceDialog?.IsVisible == true;
-    internal bool IsFindReplaceReplaceInputVisible => _findReplaceDialog?.ShowReplace == true;
-    internal bool IsPrintOptionsPaneVisible => _printOptionsPaneHost?.IsVisible == true;
-    internal IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> PaneAccessibilitySnapshotForTests =>
-        _paneAccessibility.BuildSnapshot();
-    internal void FocusRepresentativePanesForAccessibilityValidation()
-    {
-        _slidePaneList.Focus();
-    }
-    internal string PaneAccessibilitySnapshotSerializationForTests =>
-        _paneAccessibility.SerializeSnapshot();
-    internal TextBox NotesPaneForAccessibilityTests => _notesBox;
-    internal ListBox SlidePaneForAccessibilityTests => _slidePaneList;
-    internal Border CommentsPaneForAccessibilityTests => _reviewCommentsPaneHost;
-    internal IReadOnlyList<Control> CommentsPaneItemsForAccessibilityTests =>
-        _reviewCommentsPanePanel is null
-            ? Array.Empty<Control>()
-            : _reviewCommentsPanePanel.Children
-                .OfType<Control>()
-                .Where(item => AutomationProperties.GetAutomationId(item)
-                    ?.StartsWith("FreePCommentsPaneItem", StringComparison.Ordinal) == true)
-                .ToArray();
-    internal SelectionPane SelectionPaneForAccessibilityTests => _selectionPane;
-    internal Border AnimationPaneForAccessibilityTests => _animationPaneHost;
-    internal IReadOnlyList<Control> SelectionPaneItemsForAccessibilityTests =>
-        _selectionPane?.AccessibilityItemsForTests ?? Array.Empty<Control>();
-    internal IReadOnlyList<Control> AnimationPaneItemsForAccessibilityTests =>
-        _animationPaneItemsPanel?.Children.OfType<Control>().ToArray() ?? Array.Empty<Control>();
-    internal IReadOnlyList<Control> SlidePaneItemsForAccessibilityTests =>
-        _slidePaneList is null
-            ? Array.Empty<Control>()
-            : _slidePaneList.Items
-                .OfType<ListBoxItem>()
-                .Where(item => AutomationProperties.GetAutomationId(item)
-                    ?.StartsWith("FreePSlidePaneItem", StringComparison.Ordinal) == true)
-                .Cast<Control>()
-                .ToArray();
-    internal string PrintOptionsPaneHeading => _printOptionsPaneHeading?.Text ?? string.Empty;
-    internal string PrintOptionsPaneMessage => _printOptionsPaneMessage?.Text ?? string.Empty;
-    internal int PrintOptionsPaneRenderedRowCount => _printOptionsPaneRowsPanel?.Children.Count ?? 0;
-    internal IReadOnlyList<string> PrintOptionsPaneRenderedOptionLines => _printOptionsPaneRenderedOptionLines;
-    internal IReadOnlyList<string> PrintOptionsPaneRenderedPreviewRows => _printOptionsPaneRenderedPreviewRows;
-    internal IReadOnlyList<string> PrintOptionsPaneRenderedLayoutRows => _printOptionsPaneRenderedLayoutRows;
-    internal IReadOnlyList<string> PrintOptionsPaneRenderedRangeRows => _printOptionsPaneRenderedRangeRows;
-    internal bool ApplyPrintCustomRangeForTests(string rangeText)
-    {
-        if (_printCustomRangeInput is null || _printCustomRangeApplyButton is null)
-            return false;
-
-        _printCustomRangeInput.Text = rangeText;
-        _printCustomRangeApplyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        return true;
-    }
-    internal bool ApplyBackstageCustomPrintRangeForTests(string rangeText) =>
-        _backstage.ApplyCustomPrintRangeForTests(rangeText);
-    internal IReadOnlyList<(string AutomationId, bool IsEnabled)> BackstagePrintActionsForTests =>
-        _backstage.PrintActionsForTests;
-    internal bool InvokeBackstagePrintActionForTests(string automationId) =>
-        _backstage.InvokePrintActionForTests(automationId);
-    internal Task<LinuxNativePrintResult> BackstagePrintOperationForTests => _backstagePrintOperation;
-    internal bool IsBackstageOpen => _backstage.IsOpen;
-    internal string? CurrentBackstagePaneLabel => _backstage.CurrentPaneLabel;
-    internal IReadOnlyList<SisterBackstageEntryPlan<Control>> BackstageEntries => _backstage.Entries;
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -775,53 +387,57 @@ public sealed partial class MainWindow : Window
         FreePOptions? options = null,
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
         Func<string, Exception, Task>? showFileCommandErrorAsync = null,
-        IPresentationSystemClipboard? systemClipboard = null,
+        IPlatformClipboard? systemClipboard = null,
         IPresentationClipboardShapeRenderer? clipboardRenderer = null,
         LinuxNativeOutputCapabilities? nativeOutputCapabilities = null,
-        ILinuxNativePrintHandoffAdapter? nativePrintAdapter = null,
         ILinuxVideoExportAdapter? videoExportAdapter = null,
         Func<LinuxNativeOutputCapabilities>? nativeOutputCapabilityDetector = null,
         Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? printOutputPackageFactory = null,
-        Func<PresentationVideoExportRequest?, PresentationVideoFramePackage>? videoFramePackageFactory = null,
-        bool enableStartupDirtyTrace = false,
+        Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
+            videoFramePackageArtifactFactory = null,
         IPlatformPrintService? printService = null,
         Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>?
             showPrintSelectionDialog = null,
-        ApplicationOptionsStore<FreePOptions>? optionsStore = null)
+        IApplicationOptionsStore<FreePOptions>? optionsStore = null)
     {
-        _startupDirtyTrace = enableStartupDirtyTrace ? new StartupDirtyTrace() : null;
-        Title = DefaultTitle;
+        InitializeConditionalHost();
+        Title = FreePApplicationFrameDescriptor.Title.ApplicationName;
         Width = 1280;
         Height = 760;
         MinWidth = 800;
         MinHeight = 500;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Background = FreePBrushes.SheetSurface;
         ApplyWindowIcon();
-        _optionsStore = optionsStore ?? ApplicationOptionsStore<FreePOptions>.Create();
         _options = options ?? new FreePOptions();
-        _options.Normalize();
+        _optionsRuntime = new FreePOptionsRuntimeSession(_options);
+        _optionsStore = optionsStore ?? new InMemoryApplicationOptionsStore<FreePOptions>(_options);
         _nativeOutputCapabilities = nativeOutputCapabilities ??
-            LinuxNativeOutputCapabilities.Unavailable("Native output capability detection is pending.");
-        _nativePrintAdapter = nativePrintAdapter ?? CreateNativePrintAdapter(_nativeOutputCapabilities.Print);
-        _printService = printService ?? new CupsPrintService();
+            LinuxNativeOutputCapabilities.Unavailable(PresentationShellTextCatalog.Resolve(
+                PresentationShellTextCatalog.NativeOutputDetectionPendingStatus));
+        _printService = printService ?? CreatePlatformPrintService();
         _showPrintSelectionDialog = showPrintSelectionDialog ??
-            ((owner, discovery, requested, cancellationToken) =>
-                CupsPrintDialog.ShowAsync(owner, discovery, requested, cancellationToken: cancellationToken));
-        _portablePrintWorkflowEnabled = printService is not null || nativePrintAdapter is null;
+            ShowPlatformPrintSelectionDialogAsync;
         _videoExportAdapter = videoExportAdapter ?? CreateVideoExportAdapter(_nativeOutputCapabilities.Video);
-        _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_nativeOutputCapabilities.Print);
+        _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_printService);
         _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
         _nativeOutputCapabilityDetector = nativeOutputCapabilityDetector ??
             (nativeOutputCapabilities is null ? DetectNativeOutputCapabilities : null);
         _printOutputPackageFactory = printOutputPackageFactory;
-        _videoFramePackageFactory = videoFramePackageFactory;
-        _clipboardService = new AvaloniaPresentationClipboardService(
-            systemClipboard ?? new AvaloniaPresentationSystemClipboard(
+        _videoFramePackageArtifactFactory = videoFramePackageArtifactFactory;
+        var resolvedClipboardRenderer = clipboardRenderer ?? new AvaloniaClipboardShapeRenderer();
+        _clipboardService = new PresentationPlatformClipboardSession(
+            systemClipboard ?? new AvaloniaPlatformClipboard(
                 () => TopLevel.GetTopLevel(this)?.Clipboard),
-            clipboardRenderer ?? new AvaloniaClipboardShapeRenderer());
+            resolvedClipboardRenderer.RenderSelection,
+            static content => PresentationClipboardPlatformMapper.ToPlatformContent(
+                content,
+                PresentationClipboardPlatformMapper.ResolveNativeScope(),
+                PresentationClipboardPlatformMapper.ResolveNativeXamlPackageFormat(),
+                PresentationClipboardPlatformMapper.ResolveNativeRtfFormat()),
+            PresentationClipboardPlatformIdentityStrategy.ContentIdentity(
+                AvaloniaClipboardShapeRenderer.NormalizePng));
 
-        // Build editing session around the initial empty presentation.
-        RebuildEditor();
+        _workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());
         // ── Core UI elements ──────────────────────────────────────────────────
 
         _slideCanvas = new SlideCanvas
@@ -836,6 +452,7 @@ public sealed partial class MainWindow : Window
             MaxHeight   = 520,
             Padding     = new Thickness(4),
             Background  = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
+            SelectionMode = SelectionMode.Multiple,
         };
         _slidePaneList.SelectionChanged += OnSlidePaneSelectionChanged;
 
@@ -854,27 +471,28 @@ public sealed partial class MainWindow : Window
         {
             AcceptsReturn   = true,
             TextWrapping    = TextWrapping.Wrap,
-            PlaceholderText = "Click to add notes",
+            PlaceholderText = PresentationPaneTextResources.NotesPlaceholder,
             MinHeight       = FreePShellVisualMetrics.NotesPaneHeight,
             MaxHeight       = 120,
             Padding         = new Thickness(8, 4),
             FontSize        = 12,
-            Background      = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xF0)),
+            Background      = FreePBrushes.NotesHintSurface,
             BorderThickness = new Thickness(0, 1, 0, 0),
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderBrush     = FreePBrushes.PaneBorder,
         };
         _notesBox.TextChanged += OnNotesTextChanged;
         _notesBox.KeyDown += OnNotesKeyDown;
 
         _statusText = SisterAppStatusBarChrome.CreateInfoText(
-            foreground: ResolveThemeBrush("FreePWhiteBrush", Brushes.White),
+            foreground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White),
             margin: new Thickness(12, 0, 0, 0));
         _fileWorkflow = new SisterAvaloniaFileCommandWorkflow(
             owner: this,
             titleSpec: new SisterAvaloniaFileTitleSpec(
-                ApplicationName: DefaultTitle,
-                Separator: " \u2014 ",
-                ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication),
+                ApplicationName: FreePApplicationFrameDescriptor.Title.ApplicationName,
+                Separator: FreePApplicationFrameDescriptor.Title.Separator,
+                DirtyMarker: FreePApplicationFrameDescriptor.Title.DirtyMarker,
+                ApplicationPlacement: FreePApplicationFrameDescriptor.Title.ApplicationPlacement),
             maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: OnFileWorkflowChanged,
             loadRecentFilesStore: loadRecentFilesStore,
@@ -882,39 +500,111 @@ public sealed partial class MainWindow : Window
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
             restoreOwnerFocus: RestoreOwnerFocus);
-        _startupDirtyTrace?.Record("file-workflow-created", _fileWorkflow);
+        _fileSession = new PresentationFileCommandSession(
+            () => _presentation,
+            LoadPresentationContent,
+            new PresentationFileLifecycleAdapter(
+                _fileWorkflow.Workflow,
+                (action, load) => _fileWorkflow.NewAsync(action, load),
+                _fileWorkflow.OpenAsync,
+                _fileWorkflow.ConfirmCloseAllowedAsync),
+            new AvaloniaPresentationFilePickerPort(this),
+            new AvaloniaPresentationFileRenderPort(),
+            new AvaloniaPresentationPrintPort(this),
+            new AvaloniaPresentationVideoPort(this),
+            new AvaloniaPresentationFileFeedbackPort(this),
+            getImageExportRange: () => PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex),
+            getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
+            printPackageFactory: _printOutputPackageFactory,
+            videoPackageArtifactFactory: _videoFramePackageArtifactFactory);
+        RecordStartupObservation("file-workflow-created");
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
-            confirmCloseAllowedAsync: () => _fileWorkflow.ConfirmCloseAllowedAsync("closing"),
+            confirmCloseAllowedAsync: () => _fileSession.ConfirmCloseAllowedAsync(),
             requestClose: Close,
             restoreOwnerFocus: RestoreOwnerFocus);
 
+        _readingOrderPaneHostCoordinator = new(_workareaSession.Panes, this);
         _reviewWorkflowSession = new(
             () => Editor,
             new PresentationReviewWorkflowSessionCallbacks(
                 MarkDirty: () => _fileWorkflow.MarkDirty(),
                 RefreshCanvas: RefreshCanvas,
                 RefreshNotesPane: RefreshNotesPane,
-                RefreshAccessibilitySummaryPlan: RefreshAccessibilitySummaryPlan,
+                RenderAccessibilityCheckerPaneIfVisible: RenderAccessibilityCheckerPaneIfVisible,
+                PresentAccessibilityCheckerPane: PresentAccessibilityCheckerPane,
+                OpenAltTextPane: () => ShowAltTextPane(),
+                OpenHyperlinkDialog: () => OpenHyperlinkDialog(),
+                OpenMediaCaptionPane: () => MediaPaneHost.Show(),
                 RenderCommentPane: ShowReviewCommentsPane,
                 RenderAltTextPaneIfVisible: RenderAltTextPaneIfVisible,
+                RenderReadingOrderPaneIfVisible: plan => _readingOrderPaneHostCoordinator.RenderIfVisible(plan),
+                PresentReadingOrderPane: plan => _readingOrderPaneHostCoordinator.Present(plan),
                 RenderProofingPaneIfVisible: RenderProofingPaneIfVisible,
+                PresentProofingPane: PresentProofingPane,
                 UpdateAfterCommentMutation: UpdateStatus,
                 UpdateAfterCommentNavigation: UpdateStatus,
                 UpdateAfterProofingCorrection: UpdateStatus));
+        _altTextPaneHostCoordinator = new(
+            _reviewWorkflowSession,
+            _workareaSession.Panes,
+            this);
+        _mediaPaneHostCoordinator = new(
+            new PresentationMediaPaneSession(
+                () => Editor,
+                new PresentationMediaPaneSessionCallbacks(
+                    MarkDirty: () => _fileWorkflow.MarkDirty(),
+                    RefreshReviewWorkflowPlans: RefreshReviewWorkflowPlans,
+                    UpdateHost: UpdateStatus)),
+            _workareaSession.Panes,
+            this);
+        _smartArtTextPaneSession = new(
+            () => Editor,
+            new PresentationSmartArtTextPaneSessionCallbacks(
+                MarkDirty: () => _fileWorkflow.MarkDirty(),
+                RefreshCanvas: RefreshCanvas,
+                UpdateHost: UpdateStatus,
+                RenderPane: RenderSmartArtTextPane));
+        _zoomAuthoringSession = new(
+            () => Editor,
+            new PresentationZoomAuthoringSessionCallbacks(
+                MarkDirty: () => _fileWorkflow.MarkDirty(),
+                RefreshCanvas: RefreshCanvas,
+                UpdateHost: UpdateStatus,
+                RenderSlidePreview: (presentation, slideIndex, widthPx, heightPx) =>
+                    SlideRenderer.RenderToBytes(
+                        presentation,
+                        slideIndex,
+                        widthPx,
+                        heightPx)));
+        _domainContextMenuSession = new(
+            () => Editor,
+            new PresentationDomainContextMenuSessionCallbacks(
+                OpenChartPointOptions: (seriesIndex, pointIndex) =>
+                    OpenChartPointOptionsDialog(seriesIndex, pointIndex),
+                OpenChartSeriesOptions: seriesIndex => OpenChartSeriesOptionsDialog(seriesIndex),
+                OpenChartAxisOptions: axisKind => OpenChartAxisOptionsDialog(axisKind),
+                OpenChartTextOptions: textTarget => OpenChartTextOptionsDialog(textTarget),
+                OpenChartAreaOptions: areaTarget => OpenChartAreaOptionsDialog(areaTarget),
+                OpenChartOptions: OpenChartDisplayOptionsDialog));
+        _notesPaneSession = new(() => Editor);
+        _hyperlinkWorkflowSession = new(() => Editor);
+        _animationPaneSession = new(() => Editor);
+        _customShowSession = new(() => Editor);
+
 
         // ── Root layout ───────────────────────────────────────────────────────
 
         var ribbon = BuildRibbon();
         var statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
-            Background: ResolveThemeBrush(
-                "FreePStatusSurfaceBrush",
-                new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))),
+            Background: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.StatusSurfaceBrush,
+                FreePBrushes.Accent),
             LeftContent: _statusText)).Root;
         var frame = SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(
             chrome: ribbon,
             workArea: BuildBody(),
             statusBar: statusBar));
-        _backstage = new BackstageView(BuildBackstageCallbacks());
+        _backstage = new BackstageView(BuildBackstageEndpoints());
         var clientRoot = new Grid();
         clientRoot.Children.Add(frame.Root);
         clientRoot.Children.Add(_backstage);
@@ -922,19 +612,19 @@ public sealed partial class MainWindow : Window
         var windowFrame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(
             Window: this,
             Body: clientRoot,
-            TitleBarBackground: ResolveThemeBrush(
-                "FreePTitleBarBrush",
-                new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))),
-            TitleBarForeground: ResolveThemeBrush("FreePWhiteBrush", Brushes.White),
+            TitleBarBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.TitleBarBrush,
+                FreePBrushes.Accent),
+            TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White),
             TitleBarHeight: FreePShellVisualMetrics.TitleBarHeight));
         _titleBar = windowFrame.TitleBar;
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
             windowFrame.QatHost,
             new SisterQuickAccessToolbarActions(
-                Save: () => _ = FileSaveAsync(),
-                Undo: () => Editor.Undo(),
-                Redo: () => Editor.Redo()),
-            ResolveThemeBrush("FreePWhiteBrush", Brushes.White));
+                Save: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.SavePresentation),
+                Undo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Undo),
+                Redo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)),
+            AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White));
 
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 
@@ -970,11 +660,15 @@ public sealed partial class MainWindow : Window
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
         Deactivated += (_, _) => SetRibbonKeyTipsVisible(false);
-        Closing += (_, e) => e.Cancel =
-            !_allowCloseWithoutDirtyPromptForPhysicalValidation &&
-            _closeCoordinator.ShouldCancelClosing();
+        Closing += (_, e) =>
+        {
+            var cancel = _closeCoordinator.ShouldCancelClosing();
+            OverrideCloseCancellation(ref cancel);
+            e.Cancel = cancel;
+        };
         Closed += (_, _) =>
         {
+            _workareaSession.Dispose();
             CloseActiveOleHost();
             _findReplaceDialog?.Close();
             _slideSizeDialog?.Close(false);
@@ -984,53 +678,60 @@ public sealed partial class MainWindow : Window
 
         // ── Initial content ───────────────────────────────────────────────────
 
-        var startupPresentation = startupArguments
-            .FirstOrDefault(a => IsSupportedPresentationPath(a) && File.Exists(a));
-        _startupDirtyTrace?.Record(
-            startupPresentation is null ? "startup-load-not-requested" : "startup-load-begin",
-            _fileWorkflow);
+        var startupOpenSession = new PresentationStartupOpenSession(_fileSession);
+        var startupOpenPlan = startupOpenSession.Plan(startupArguments);
+        var primaryStartupEntry = startupOpenPlan.Entries.FirstOrDefault(entry => !entry.OpenInNewWindow);
+        RecordStartupObservation(
+            primaryStartupEntry is null && !startupOpenPlan.ShouldReportMissingPath
+                ? "startup-load-not-requested"
+                : "startup-load-begin");
 
-        Exception? startupOpenError = null;
-        if (startupPresentation is not null)
+        PresentationFileCommandResult? startupOpenResult;
+        if (primaryStartupEntry is not null)
         {
-            try
+            startupOpenResult = startupOpenSession
+                .OpenAsync(primaryStartupEntry, reportFeedback: false)
+                .GetAwaiter()
+                .GetResult();
+            if (startupOpenResult.Succeeded)
+                RecordStartupObservation("startup-load-saved");
+            else
             {
-                var result = PresentationFilePersistenceWorkflow.Open(startupPresentation);
-                LoadPresentationAsSaved(result.Presentation, result.SavedPath, result.SuppressRecentFiles);
-                _startupDirtyTrace?.Record("startup-load-saved", _fileWorkflow);
-                _statusText.Text = SisterAppFileTextPlanner.FormatOpened(Path.GetFileName(startupPresentation));
-            }
-            catch (Exception ex)
-            {
-                startupOpenError = ex;
                 LoadPresentationAsSaved(_presentation, path: null);
-                _startupDirtyTrace?.Record("startup-load-failed-fallback-saved", _fileWorkflow);
-                _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                    SisterAppFileTextPlanner.OpenCommand,
-                    ex.Message);
+                RecordStartupObservation("startup-load-failed-fallback-saved");
             }
         }
         else
         {
+            startupOpenResult = startupOpenSession
+                .ReportFirstUnopenableAsync(startupOpenPlan, reportFeedback: false)
+                .GetAwaiter()
+                .GetResult();
             LoadPresentationAsSaved(_presentation, path: null);
-            _startupDirtyTrace?.Record("startup-empty-saved", _fileWorkflow);
+            RecordStartupObservation(startupOpenResult is null
+                ? "startup-empty-saved"
+                : "startup-load-failed-fallback-saved");
         }
 
-        SeedPhysicalSmartArtTextPaneIfRequested();
-        SeedPhysicalHyperlinkFixtureIfRequested();
-        _startupDirtyTrace?.Record("startup-seeds-complete", _fileWorkflow);
+        var additionalStartupEntries = startupOpenPlan.Entries
+            .Where(entry => entry.OpenInNewWindow)
+            .ToArray();
+
+        RecordStartupObservation("startup-seeds-complete");
 
         Content = windowFrame.Root;
-        _startupDirtyTrace?.Record("content-assigned", _fileWorkflow);
+        RecordStartupObservation("content-assigned");
         UpdateStatus();
-        _startupDirtyTrace?.Record("constructor-complete", _fileWorkflow);
-        Opened += (_, _) => _startupDirtyTrace?.Record("window-opened", _fileWorkflow);
-        if (startupOpenError is not null)
+        RecordStartupObservation("constructor-complete");
+        RegisterStartupOpenedObservation();
+        if (startupOpenResult is not null || additionalStartupEntries.Length > 0)
         {
-            var error = startupOpenError;
-            Opened += async (_, _) => await _fileWorkflow.ShowFileCommandErrorAsync(
-                "Could not open the presentation",
-                error);
+            Opened += async (_, _) =>
+            {
+                if (startupOpenResult is not null)
+                    await startupOpenSession.ReportFeedbackAsync(startupOpenResult);
+                await OpenAdditionalStartupPresentationsAsync(additionalStartupEntries);
+            };
         }
 
         if (_nativeOutputCapabilityDetector is not null)
@@ -1044,120 +745,24 @@ public sealed partial class MainWindow : Window
         Focus();
     }
 
-    private void SeedPhysicalAnimationPaneFixtureIfRequested()
+    private async Task OpenAdditionalStartupPresentationsAsync(
+        IReadOnlyList<StartupFileOpenEntry> entries)
     {
-        if (!string.Equals(
-                Environment.GetEnvironmentVariable("FREEP_PHYSICAL_ANIMATION_PANE_SEED"),
-                "1",
-                StringComparison.Ordinal) ||
-            Editor.CurrentSlide is null ||
-            Editor.CurrentSlide.Animations.Count > 0)
+        foreach (var entry in entries)
         {
-            return;
-        }
-
-        var shape = Editor.InsertTextBox("Animation Pane sample");
-        Editor.CurrentSlide.Animations.Add(new ShapeAnimation
-        {
-            ShapeId = shape.Id,
-            Kind = AnimationKind.Entrance,
-            Preset = AnimationPreset.Fade,
-            Trigger = AnimationTrigger.OnClick,
-            DurationMs = 500,
-        });
-        RefreshCanvas();
-    }
-
-    private void SeedPhysicalSmartArtTextPaneIfRequested()
-    {
-        if (!string.Equals(
-                Environment.GetEnvironmentVariable("FREEP_PHYSICAL_SMARTART_TEXT_PANE_SEED"),
-                "1",
-                StringComparison.Ordinal) ||
-            Editor.CurrentSlide is null)
-        {
-            return;
-        }
-
-        var smartArt = Editor.CurrentSlide.Shapes.FirstOrDefault(shape => shape.SmartArt is not null);
-        if (smartArt is null)
-        {
-            return;
-        }
-
-        Editor.Select(smartArt.Id);
-        ShowSmartArtTextPane();
-        RefreshCanvas();
-    }
-
-    private void SeedPhysicalHyperlinkFixtureIfRequested()
-    {
-        if (!string.Equals(
-                Environment.GetEnvironmentVariable("FREEP_PHYSICAL_HYPERLINK_SEED"),
-                "1",
-                StringComparison.Ordinal) ||
-            _presentation.Slides.Count != 1)
-        {
-            return;
-        }
-
-        var firstSlide = Editor.CurrentSlide ?? _presentation.Slides[0];
-        var shapeWidth = DrawingMlCoordinateUnits.EmuPerInch * 4;
-        var shapeHeight = DrawingMlCoordinateUnits.EmuPerInch * 2;
-        var linkShape = new SlideShape
-        {
-            Id = 9001,
-            Name = "Physical internal-slide hyperlink target",
-            Kind = SlideShapeKind.AutoShape,
-            AutoShapeKind = DrawingShapeKind.Rectangle,
-            OffsetXEmu = (_presentation.SlideSizeCxEmu - shapeWidth) / 2,
-            OffsetYEmu = (_presentation.SlideSizeCyEmu - shapeHeight) / 2,
-            ExtentCxEmu = shapeWidth,
-            ExtentCyEmu = shapeHeight,
-            Fill = new ShapeFill.Solid(new SrgbColor(0x44, 0x72, 0xC3)),
-            TextBody = new TextBody
-            {
-                Wrap = true,
-                Paragraphs = { new Paragraph { Runs = { new Run { Text = "CLICK LINK TO SLIDE 2" } } } },
-            },
-        };
-        Editor.AddShape(linkShape);
-        if (linkShape.ExtentCxEmu <= 0 || linkShape.ExtentCyEmu <= 0 ||
-            !firstSlide.Shapes.Any(shape => shape.Id == linkShape.Id))
-        {
-            throw new InvalidOperationException("Physical hyperlink fixture did not create a visible slide-1 rectangle.");
-        }
-        Editor.InsertSlide();
-        Editor.InsertTextBox("TARGET SLIDE 2");
-        Editor.SelectSlide(0);
-        Editor.Select(linkShape.Id);
-        RefreshCanvas();
-        var fixturePostconditionPath = Environment.GetEnvironmentVariable("FREEP_PHYSICAL_HYPERLINK_FIXTURE_POSTCONDITION");
-        if (!string.IsNullOrWhiteSpace(fixturePostconditionPath))
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(fixturePostconditionPath)!);
-            File.WriteAllText(
-                fixturePostconditionPath,
-                $"slide1Id={firstSlide.Id}\nslide2Id={_presentation.Slides[1].Id}\ncurrentSlideIndex={Editor.CurrentSlideIndex}\nshapeOffsetXEmu={linkShape.OffsetXEmu}\nshapeOffsetYEmu={linkShape.OffsetYEmu}\nshapeExtentCxEmu={linkShape.ExtentCxEmu}\nshapeExtentCyEmu={linkShape.ExtentCyEmu}\nslideSizeCxEmu={_presentation.SlideSizeCxEmu}\nslideSizeCyEmu={_presentation.SlideSizeCyEmu}\n");
+            var window = new MainWindow(
+                [],
+                loadRecentFilesStore: null,
+                options: _options,
+                optionsStore: _optionsStore);
+            window.Show();
+            var startupOpenSession = new PresentationStartupOpenSession(window._fileSession);
+            await startupOpenSession.OpenAsync(entry);
         }
     }
 
-    private void ApplyWindowIcon()
-    {
-        var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "FreeP.ico");
-        if (!File.Exists(iconPath))
-            return;
-
-        try
-        {
-            using var stream = File.OpenRead(iconPath);
-            Icon = new WindowIcon(stream);
-        }
-        catch
-        {
-            // An unsupported desktop icon must not prevent the presentation from opening.
-        }
-    }
+    private void ApplyWindowIcon() =>
+        AvaloniaWindowIconLoader.TryApply(this, "FreeP.ico");
 
     private void StartNativeOutputCapabilityDetection()
     {
@@ -1169,17 +774,19 @@ public sealed partial class MainWindow : Window
             task =>
             {
                 if (task.IsCanceled || task.IsFaulted)
+                {
+                    Dispatcher.UIThread.Post(() => ObserveNativeOutputDetectionCompleted());
                     return;
+                }
 
                 Dispatcher.UIThread.Post(() =>
                 {
                     _nativeOutputCapabilities = task.Result;
-                    _nativePrintAdapter = CreateNativePrintAdapter(_nativeOutputCapabilities.Print);
                     _videoExportAdapter = CreateVideoExportAdapter(_nativeOutputCapabilities.Video);
-                    _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_nativeOutputCapabilities.Print);
                     _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
+                    ObserveNativeOutputDetectionCompleted();
                     if (_printOptionsPaneHost?.IsVisible == true)
-                        RenderPrintOptionsPane(RefreshPrintBackstagePlan());
+                        RenderPrintOptionsPane(RefreshPrintBackstagePlan(_printOptionsPaneRequest));
                 });
             },
             CancellationToken.None,
@@ -1187,39 +794,7 @@ public sealed partial class MainWindow : Window
             TaskScheduler.Default);
     }
 
-    private static IBrush ResolveThemeBrush(string key, IBrush fallback)
-    {
-        if (Application.Current is { } app &&
-            app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
-            value is IBrush brush)
-        {
-            return brush;
-        }
-
-        return fallback;
-    }
-
     // ── Editor construction ────────────────────────────────────────────────────
-
-    private void RebuildEditor()
-    {
-        var bus = new PresentationCommandBus(_presentation);
-        Editor  = new EditingSession(_presentation, bus);
-        _selectionPane?.SetEditor(Editor);
-
-        Editor.Changed             += OnEditorChanged;
-        Editor.CurrentSlideChanged += OnCurrentSlideChanged;
-        Editor.SelectionChanged    += OnEditorSelectionChanged;
-        Editor.ActiveTableCellChanged += OnEditorActiveTableCellChanged;
-    }
-
-    private void RebuildEditorAndRewireInteraction()
-    {
-        RebuildEditor();
-        // Only re-wire if the interaction layer has already been built (BuildBody sets it up).
-        if (_adorner is not null)
-            RewireInteractionToEditor();
-    }
 
     // ── Body layout ────────────────────────────────────────────────────────────
 
@@ -1281,7 +856,7 @@ public sealed partial class MainWindow : Window
 
         _canvasHost = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
+            Background = FreePBrushes.PlaceholderSurface,
             ClipToBounds = true,
             Child      = canvasStack,
         };
@@ -1291,8 +866,8 @@ public sealed partial class MainWindow : Window
         };
         _layoutPickerHost = new Border
         {
-            Background      = Brushes.White,
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background      = FreePBrushes.White,
+            BorderBrush     = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(0, 1, 0, 0),
             MaxHeight       = 220,
             IsVisible       = false,
@@ -1311,8 +886,8 @@ public sealed partial class MainWindow : Window
         };
         _tablePickerHost = new Border
         {
-            Background      = Brushes.White,
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background      = FreePBrushes.White,
+            BorderBrush     = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(0, 1, 0, 0),
             IsVisible       = false,
             Child           = new StackPanel
@@ -1326,7 +901,7 @@ public sealed partial class MainWindow : Window
                         Margin = new Thickness(10, 8, 10, 2),
                         FontSize = 11,
                         FontWeight = FontWeight.SemiBold,
-                        Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                        Foreground = FreePBrushes.PaneText,
                     },
                     _tablePickerPanel,
                 },
@@ -1339,8 +914,8 @@ public sealed partial class MainWindow : Window
         };
         _reviewCommentsPaneHost = new Border
         {
-            Background      = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xE8)),
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+            Background      = FreePBrushes.NotesSurface,
+            BorderBrush     = FreePBrushes.DisabledBorder,
             BorderThickness = new Thickness(0, 1, 0, 0),
             MaxHeight       = 100,
             IsVisible       = false,
@@ -1444,56 +1019,48 @@ public sealed partial class MainWindow : Window
         var proofingPlan = LastProofingPanePlan;
         var captionPlan = LastMediaCaptionAuthoringPanePlan;
         var smartArtItemCount = _smartArtTextPaneRowsPanel?.Children.Count ?? 0;
-        var selectionPlan = PresentationSelectionPanePlanner.Build(
-            Editor.CurrentSlide,
-            Editor.CurrentSlideIndex,
-            Editor.SelectedShapeIds);
-        var animationPlan = AnimationPanePlanner.BuildTimelinePlan(
-            Editor.CurrentSlide,
-            Editor.SelectedShapeIds,
-            _selectedAnimationIndex,
-            isPlaybackRunning: _animationPanePlaybackSessionPlan?.IsRunning == true);
-        LastAnimationPaneTimelinePlan = animationPlan;
+        var selectionPlan = _selectionPane.CurrentPlan;
+        var animationPlan = _animationPaneSession.Refresh();
         var selectedSmartArtRow = _smartArtTextPaneRowsPanel?.Children
             .OfType<TextBox>()
             .FirstOrDefault(box =>
                 box.Tag is SmartArtNodeOutlineItem item &&
-                StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId));
+                StringComparer.Ordinal.Equals(item.ModelId, _smartArtTextPaneSession.SelectedModelId));
 
         _paneAccessibility.ApplyPane(_slidePaneList, PresentationPaneAccessibilityPlanner.SlidePaneId, true,
             _presentation.Slides.Count, Editor.CurrentSlideIndex);
         _paneAccessibility.ApplyPane(_notesBox, PresentationPaneAccessibilityPlanner.NotesPaneId, true, 1);
         _paneAccessibility.ApplyPane(_reviewCommentsPaneHost, PresentationPaneAccessibilityPlanner.CommentsPaneId,
-            _reviewCommentsPaneHost.IsVisible,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReviewComments),
             commentPlan?.Comments.Count ?? 0, commentPlan?.SelectedCommentIndex ?? -1);
         _paneAccessibility.ApplyPane(_accessibilityCheckerPaneHost, PresentationPaneAccessibilityPlanner.AccessibilityPaneId,
-            _accessibilityCheckerPaneHost.IsVisible,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.AccessibilityChecker),
             accessibilityPlan?.Rows.Count ?? _accessibilityCheckerRowsPanel?.Children.Count ?? 0,
             accessibilityPlan?.SelectedRowIndex ?? -1);
         _paneAccessibility.ApplyPane(_altTextPaneHost, PresentationPaneAccessibilityPlanner.AltTextPaneId,
-            _altTextPaneHost.IsVisible, 3);
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.AltText), 3);
         _paneAccessibility.ApplyPane(_readingOrderPaneHost, PresentationPaneAccessibilityPlanner.ReadingOrderPaneId,
-            _readingOrderPaneHost.IsVisible,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReadingOrder),
             readingOrderPlan?.Items.Count ?? _readingOrderPaneItemsPanel?.Children.Count ?? 0,
             readingOrderPlan?.SelectedItemIndex ?? -1);
         _paneAccessibility.ApplyPane(_proofingPaneHost, PresentationPaneAccessibilityPlanner.ProofingPaneId,
-            _proofingPaneHost.IsVisible,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.Proofing),
             proofingPlan?.Rows.Count ?? _proofingPaneRowsPanel?.Children.Count ?? 0,
             proofingPlan?.SelectedRowIndex ?? -1);
         _paneAccessibility.ApplyPane(_mediaCaptionPaneHost, PresentationPaneAccessibilityPlanner.MediaCaptionPaneId,
-            _mediaCaptionPaneHost.IsVisible,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.MediaCaption),
             captionPlan?.Tracks.Count ?? _mediaCaptionTrackBox?.Items.Count ?? 0,
             captionPlan?.SelectedTrackIndex ?? _mediaCaptionTrackBox?.SelectedIndex ?? -1);
         _paneAccessibility.ApplyPane(_smartArtTextPaneHost, PresentationPaneAccessibilityPlanner.SmartArtTextPaneId,
-            _smartArtTextPaneHost.IsVisible,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.SmartArtText),
             smartArtItemCount,
             selectedSmartArtRow is null || _smartArtTextPaneRowsPanel is null
                 ? -1
                 : _smartArtTextPaneRowsPanel.Children.IndexOf(selectedSmartArtRow));
         _paneAccessibility.ApplyPane(_selectionPane, PresentationPaneAccessibilityPlanner.SelectionPaneId,
-            _selectionPane.IsVisible,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.Selection),
             selectionPlan.Items.Count,
-            Array.FindIndex(selectionPlan.Items.ToArray(), item => item.IsSelected));
+            selectionPlan.SelectedItemIndex);
         _paneAccessibility.ApplyPane(_animationPaneHost, PresentationPaneAccessibilityPlanner.AnimationPaneId,
             _animationPaneHost.IsVisible,
             animationPlan?.Items.Count ?? _animationPaneItemsPanel?.Children.Count ?? 0,
@@ -1504,10 +1071,10 @@ public sealed partial class MainWindow : Window
     {
         _printOptionsPaneHeading = new TextBlock
         {
-            Text = "Print",
+            Text = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.PrintSurfacePrintHeading),
             FontSize = 26,
             FontWeight = FontWeight.Light,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            Foreground = FreePBrushes.PaneHeadingText,
             Margin = new Thickness(0, 0, 0, 18),
         };
         _printOptionsPaneMessage = new TextBlock
@@ -1522,7 +1089,7 @@ public sealed partial class MainWindow : Window
         };
         _printOptionsPaneExecuteButton = new Button
         {
-            Content = "Print",
+            Content = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.PrintSurfacePrintHeading),
             HorizontalAlignment = HorizontalAlignment.Left,
             MinWidth = 88,
             Margin = new Thickness(0, 16, 0, 0),
@@ -1549,7 +1116,7 @@ public sealed partial class MainWindow : Window
         {
             Width = 1010,
             IsVisible = false,
-            Background = Brushes.White,
+            Background = FreePBrushes.White,
             BorderThickness = new Thickness(0),
             Child = new ScrollViewer
             {
@@ -1564,7 +1131,7 @@ public sealed partial class MainWindow : Window
     {
         _altTextPaneHeading = new TextBlock
         {
-            Text = "Alt Text",
+            Text = PresentationPaneTextResources.AltTextHeading,
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),
@@ -1572,7 +1139,7 @@ public sealed partial class MainWindow : Window
         _altTextPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             Margin = new Thickness(12, 0, 12, 8),
         };
         _altTextTitleLabel = BuildAltTextPaneLabel();
@@ -1593,7 +1160,7 @@ public sealed partial class MainWindow : Window
         {
             MinWidth = 72,
             Padding = new Thickness(10, 4),
-            Content = "Close",
+            Content = PresentationPaneTextResources.CloseCommand,
         };
 
         _altTextTitleBox.TextChanged += (_, _) => RefreshVisibleAltTextPaneFromFields();
@@ -1638,8 +1205,8 @@ public sealed partial class MainWindow : Window
         {
             Width = 292,
             IsVisible = false,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.White,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = panel,
         };
@@ -1668,7 +1235,7 @@ public sealed partial class MainWindow : Window
     {
         _mediaCaptionPaneHeading = new TextBlock
         {
-            Text = "Media Captions",
+            Text = PresentationPaneTextResources.MediaCaptionsHeading,
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),
@@ -1676,7 +1243,7 @@ public sealed partial class MainWindow : Window
         _mediaCaptionPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             Margin = new Thickness(12, 0, 12, 8),
         };
         _mediaCaptionTrackBox = new ComboBox
@@ -1686,14 +1253,13 @@ public sealed partial class MainWindow : Window
         };
         _mediaCaptionTrackBox.SelectionChanged += (_, _) =>
         {
-            if (_mediaCaptionPaneRefreshing || LastMediaCaptionAuthoringPanePlan is null)
+            if (_mediaPaneHostCoordinator.IsUpdating || LastMediaCaptionAuthoringPanePlan is null)
                 return;
             var selectedIndex = _mediaCaptionTrackBox.SelectedIndex;
-            _selectedMediaCaptionTrackIndex = selectedIndex >= 0
+            _mediaPaneHostCoordinator.SelectCaptionTrack(selectedIndex >= 0
                 && selectedIndex < LastMediaCaptionAuthoringPanePlan.Tracks.Count
                     ? LastMediaCaptionAuthoringPanePlan.Tracks[selectedIndex].TrackIndex
-                    : null;
-            RefreshVisibleMediaCaptionPaneFromFields();
+                    : null);
         };
 
         _mediaCaptionLabelText = BuildMediaCaptionPaneLabel();
@@ -1705,7 +1271,7 @@ public sealed partial class MainWindow : Window
         _mediaCaptionTranscriptText = BuildMediaCaptionPaneLabel();
         _mediaCaptionTranscriptBox = BuildMediaCaptionPaneTextBox(singleLine: false);
         _mediaVolumeText = BuildMediaCaptionPaneLabel();
-        _mediaVolumeText.Text = "Playback volume";
+        _mediaVolumeText.Text = PresentationPaneTextResources.PlaybackVolume;
         _mediaVolumeSlider = new Slider
         {
             Minimum = 0,
@@ -1714,86 +1280,90 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(12, 0, 12, 4),
         };
         _mediaVolumeApplyButton = BuildMediaCaptionPaneButton();
-        _mediaVolumeApplyButton.Content = "Apply volume";
-        _mediaVolumeApplyButton.Click += (_, _) => ApplyMediaVolumePane();
+        _mediaVolumeApplyButton.Content = PresentationPaneTextResources.ApplyVolume;
+        _mediaVolumeApplyButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyVolume();
         _mediaStartModeText = BuildMediaCaptionPaneLabel();
-        _mediaStartModeText.Text = "Playback start";
+        _mediaStartModeText.Text = PresentationPaneTextResources.PlaybackStart;
         _mediaStartModeBox = new ComboBox
         {
             Margin = new Thickness(12, 0, 12, 4),
             MinHeight = 28,
-            ItemsSource = new object[] { "On click", "Automatically" },
+            ItemsSource = PresentationPaneTextResources.MediaPlaybackStartOptions
+                .Select(option => option.Label)
+                .ToArray(),
         };
         _mediaLoopCheckBox = new CheckBox
         {
-            Content = "Loop until stopped",
+            Content = PresentationPaneTextResources.LoopUntilStopped,
             Margin = new Thickness(12, 2, 12, 4),
         };
         _mediaShowWhenStoppedCheckBox = new CheckBox
         {
-            Content = "Show when stopped",
+            Content = PresentationPaneTextResources.ShowWhenStopped,
             Margin = new Thickness(12, 2, 12, 4),
             IsChecked = true,
         };
         _mediaRewindAfterPlayingCheckBox = new CheckBox
         {
-            Content = "Rewind after playing",
+            Content = PresentationPaneTextResources.RewindAfterPlaying,
             Margin = new Thickness(12, 2, 12, 4),
         };
         _mediaPlayFullScreenCheckBox = new CheckBox
         {
-            Content = "Play full screen",
+            Content = PresentationPaneTextResources.PlayFullScreen,
             Margin = new Thickness(12, 2, 12, 4),
         };
         _mediaStopAfterSlidesText = BuildMediaCaptionPaneLabel();
-        _mediaStopAfterSlidesText.Text = "Stop after slides";
+        _mediaStopAfterSlidesText.Text = PresentationPaneTextResources.StopAfterSlides;
         _mediaStopAfterSlidesBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaStopAfterSlidesBox.Text = "1";
         _mediaPlaybackApplyButton = BuildMediaCaptionPaneButton();
-        _mediaPlaybackApplyButton.Content = "Apply playback";
-        _mediaPlaybackApplyButton.Click += (_, _) => ApplyMediaPlaybackPane();
+        _mediaPlaybackApplyButton.Content = PresentationPaneTextResources.ApplyPlayback;
+        _mediaPlaybackApplyButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyPlayback();
         _mediaTrimStartText = BuildMediaCaptionPaneLabel();
-        _mediaTrimStartText.Text = "Trim start (ms)";
+        _mediaTrimStartText.Text = PresentationPaneTextResources.TrimStartMilliseconds;
         _mediaTrimStartBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaTrimEndText = BuildMediaCaptionPaneLabel();
-        _mediaTrimEndText.Text = "Trim end (ms)";
+        _mediaTrimEndText.Text = PresentationPaneTextResources.TrimEndMilliseconds;
         _mediaTrimEndBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaFadeInText = BuildMediaCaptionPaneLabel();
-        _mediaFadeInText.Text = "Fade in (ms)";
+        _mediaFadeInText.Text = PresentationPaneTextResources.FadeInMilliseconds;
         _mediaFadeInBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaFadeOutText = BuildMediaCaptionPaneLabel();
-        _mediaFadeOutText.Text = "Fade out (ms)";
+        _mediaFadeOutText.Text = PresentationPaneTextResources.FadeOutMilliseconds;
         _mediaFadeOutBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaTimingApplyButton = BuildMediaCaptionPaneButton();
-        _mediaTimingApplyButton.Content = "Apply timing";
-        _mediaTimingApplyButton.Click += (_, _) => ApplyMediaTimingPane();
+        _mediaTimingApplyButton.Content = PresentationPaneTextResources.ApplyTiming;
+        _mediaTimingApplyButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyTiming();
         _mediaBookmarkText = BuildMediaCaptionPaneLabel();
-        _mediaBookmarkText.Text = "Media bookmarks";
+        _mediaBookmarkText.Text = PresentationPaneTextResources.MediaBookmarks;
         _mediaBookmarkBox = new ComboBox { Margin = new Thickness(12, 0, 12, 4), MinHeight = 28 };
         _mediaBookmarkBox.SelectionChanged += (_, _) =>
         {
-            if (_mediaCaptionPaneRefreshing)
+            if (_mediaPaneHostCoordinator.IsUpdating)
                 return;
-            _selectedMediaBookmarkIndex = _mediaBookmarkBox.SelectedItem is ComboBoxItem { Tag: int index }
+            _mediaPaneHostCoordinator.SelectBookmark(_mediaBookmarkBox.SelectedItem is ComboBoxItem { Tag: int index }
                 ? index
-                : null;
-            RefreshVisibleMediaCaptionPaneFromFields();
+                : null);
         };
         _mediaBookmarkNameText = BuildMediaCaptionPaneLabel();
-        _mediaBookmarkNameText.Text = "Bookmark name";
+        _mediaBookmarkNameText.Text = PresentationPaneTextResources.BookmarkName;
         _mediaBookmarkNameBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaBookmarkTimeText = BuildMediaCaptionPaneLabel();
-        _mediaBookmarkTimeText.Text = "Bookmark time (ms)";
+        _mediaBookmarkTimeText.Text = PresentationPaneTextResources.BookmarkTimeMilliseconds;
         _mediaBookmarkTimeBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaBookmarkCreateButton = BuildMediaCaptionPaneButton();
-        _mediaBookmarkCreateButton.Content = "Add bookmark";
-        _mediaBookmarkCreateButton.Click += (_, _) => ApplyMediaBookmarkCreatePane();
+        _mediaBookmarkCreateButton.Content = PresentationPaneTextResources.AddBookmark;
+        _mediaBookmarkCreateButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyBookmark(
+            PresentationMediaBookmarkMutationIntentKind.Create);
         _mediaBookmarkReplaceButton = BuildMediaCaptionPaneButton();
-        _mediaBookmarkReplaceButton.Content = "Replace bookmark";
-        _mediaBookmarkReplaceButton.Click += (_, _) => ApplyMediaBookmarkReplacePane();
+        _mediaBookmarkReplaceButton.Content = PresentationPaneTextResources.ReplaceBookmark;
+        _mediaBookmarkReplaceButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyBookmark(
+            PresentationMediaBookmarkMutationIntentKind.Replace);
         _mediaBookmarkDeleteButton = BuildMediaCaptionPaneButton();
-        _mediaBookmarkDeleteButton.Content = "Delete bookmark";
-        _mediaBookmarkDeleteButton.Click += (_, _) => ApplyMediaBookmarkDeletePane();
+        _mediaBookmarkDeleteButton.Content = PresentationPaneTextResources.DeleteBookmark;
+        _mediaBookmarkDeleteButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyBookmark(
+            PresentationMediaBookmarkMutationIntentKind.Delete);
         _mediaCaptionCreateButton = BuildMediaCaptionPaneButton();
         _mediaCaptionReplaceButton = BuildMediaCaptionPaneButton();
         _mediaCaptionDeleteButton = BuildMediaCaptionPaneButton();
@@ -1803,16 +1373,16 @@ public sealed partial class MainWindow : Window
         _mediaCaptionLanguageBox.TextChanged += (_, _) => RefreshVisibleMediaCaptionPaneFromFields();
         _mediaCaptionSourceBox.TextChanged += (_, _) => RefreshVisibleMediaCaptionPaneFromFields();
         _mediaCaptionTranscriptBox.TextChanged += (_, _) => RefreshVisibleMediaCaptionPaneFromFields();
-        _mediaCaptionCreateButton.Click += (_, _) => ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Create);
-        _mediaCaptionReplaceButton.Click += (_, _) => ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Replace);
-        _mediaCaptionDeleteButton.Click += (_, _) => ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Delete);
-        _mediaCaptionCloseButton.Click += (_, _) => HideMediaCaptionPane();
+        _mediaCaptionCreateButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Create);
+        _mediaCaptionReplaceButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Replace);
+        _mediaCaptionDeleteButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Delete);
+        _mediaCaptionCloseButton.Click += (_, _) => _mediaPaneHostCoordinator.Hide();
 
         return new Border
         {
             Width = 320,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+            Background = FreePBrushes.White,
+            BorderBrush = FreePBrushes.DisabledBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             IsVisible = false,
             Child = new StackPanel
@@ -1907,9 +1477,10 @@ public sealed partial class MainWindow : Window
 
     private Border BuildSmartArtTextPaneHost()
     {
+        var chrome = PresentationPaneTextResources.BuildSmartArtTextPaneChrome();
         _smartArtTextPaneHeading = new TextBlock
         {
-            Text = "SmartArt Text Pane",
+            Text = chrome.Heading,
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),
@@ -1917,7 +1488,7 @@ public sealed partial class MainWindow : Window
         _smartArtTextPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             Margin = new Thickness(12, 0, 12, 8),
         };
         _smartArtTextPaneRowsPanel = new StackPanel
@@ -1926,35 +1497,35 @@ public sealed partial class MainWindow : Window
         };
         _smartArtTextPaneAssistantButton = new Button
         {
-            Content = "Toggle Assistant",
+            Content = chrome.ToggleAssistant,
             MinWidth = 120,
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _smartArtTextPanePictureButton = new Button
         {
-            Content = "Replace picture",
+            Content = chrome.ReplacePicture,
             MinWidth = 120,
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _smartArtTextPaneClearPictureButton = new Button
         {
-            Content = "Remove picture",
+            Content = chrome.RemovePicture,
             MinWidth = 120,
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _smartArtTextPaneApplyButton = new Button
         {
-            Content = "Apply",
+            Content = chrome.Apply,
             MinWidth = 72,
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _smartArtTextPaneCloseButton = new Button
         {
-            Content = "Close",
+            Content = chrome.Close,
             MinWidth = 72,
             Padding = new Thickness(10, 4),
         };
@@ -1968,38 +1539,8 @@ public sealed partial class MainWindow : Window
         {
             Margin = new Thickness(12, 0, 12, 4),
         };
-        AddSmartArtTextPaneActionButton(
-            "Add sibling",
-            "Add a sibling row after the selected SmartArt row.",
-            SmartArtNodeEditKind.AddSiblingAfter);
-        AddSmartArtTextPaneActionButton(
-            "Add child",
-            "Add a child row below the selected SmartArt row.",
-            SmartArtNodeEditKind.AddChild);
-        AddSmartArtTextPaneActionButton(
-            "Remove",
-            "Remove the selected SmartArt row.",
-            SmartArtNodeEditKind.Remove);
-        AddSmartArtTextPaneActionButton(
-            "Move up",
-            "Move the selected SmartArt row earlier.",
-            SmartArtNodeEditKind.MoveUp);
-        AddSmartArtTextPaneActionButton(
-            "Move down",
-            "Move the selected SmartArt row later.",
-            SmartArtNodeEditKind.MoveDown);
-        AddSmartArtTextPaneActionButton(
-            "Promote",
-            "Promote the selected SmartArt row.",
-            SmartArtNodeEditKind.Promote);
-        AddSmartArtTextPaneActionButton(
-            "Demote",
-            "Demote the selected SmartArt row.",
-            SmartArtNodeEditKind.Demote);
-        AddSmartArtTextPaneActionButton(
-            "Add assistant",
-            "Add an assistant below the selected hierarchy row.",
-            SmartArtNodeEditKind.AddAssistant);
+        foreach (var action in chrome.OutlineActions)
+            AddSmartArtTextPaneActionButton(action.Label, action.ToolTip, action.Kind);
 
         // Keep the fixed-width pane usable at the same 320px width as WPF: the
         // command row must wrap instead of measuring wider than its host and
@@ -2034,8 +1575,8 @@ public sealed partial class MainWindow : Window
         {
             Width = 320,
             IsVisible = false,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.White,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = new DockPanel
             {
@@ -2078,7 +1619,7 @@ public sealed partial class MainWindow : Window
     {
         _accessibilityCheckerPaneHeading = new TextBlock
         {
-            Text = "Accessibility",
+            Text = PresentationPaneTextResources.AccessibilityHeading,
             FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
@@ -2089,7 +1630,7 @@ public sealed partial class MainWindow : Window
             FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             Margin = new Thickness(12, 0, 12, 8),
         };
         _accessibilityCheckerRowsPanel = new StackPanel
@@ -2119,8 +1660,8 @@ public sealed partial class MainWindow : Window
         {
             Width = 320,
             IsVisible = false,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.White,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = new DockPanel
             {
@@ -2141,7 +1682,7 @@ public sealed partial class MainWindow : Window
     {
         _proofingPaneHeading = new TextBlock
         {
-            Text = "Spelling",
+            Text = PresentationPaneTextResources.ProofingHeading,
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),
@@ -2149,7 +1690,7 @@ public sealed partial class MainWindow : Window
         _proofingPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             Margin = new Thickness(12, 0, 12, 8),
         };
         _proofingPaneRowsPanel = new StackPanel
@@ -2172,8 +1713,8 @@ public sealed partial class MainWindow : Window
         {
             Width = 320,
             IsVisible = false,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.White,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = new DockPanel
             {
@@ -2194,7 +1735,7 @@ public sealed partial class MainWindow : Window
     {
         _readingOrderPaneHeading = new TextBlock
         {
-            Text = "Reading Order",
+            Text = PresentationPaneTextResources.ReadingOrderHeading,
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),
@@ -2203,7 +1744,7 @@ public sealed partial class MainWindow : Window
         {
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             Margin = new Thickness(12, 0, 12, 8),
         };
         _readingOrderMoveEarlierButton = new Button
@@ -2275,8 +1816,8 @@ public sealed partial class MainWindow : Window
         {
             Width = PresentationReadingOrderPaneVisualMetrics.PaneWidth,
             IsVisible = false,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.White,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = panel,
         };
@@ -2286,22 +1827,22 @@ public sealed partial class MainWindow : Window
     {
         _animationPaneHeading = new TextBlock
         {
-            Text = "Animation Pane",
+            Text = _animationPaneSession.ControlSchema.Heading,
             FontSize = 12,
             FontWeight = FontWeight.SemiBold,
-            Foreground = Brushes.White,
+            Foreground = FreePBrushes.White,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
         };
         _animationPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             IsVisible = false,
         };
         _animationPanePreviewButton = new Button
         {
-            Content = "Preview",
+            Content = PresentationPaneTextResources.AnimationPreview,
             Padding = new Thickness(6, 2),
             Margin = new Thickness(0, 4, 6, 4),
         };
@@ -2321,7 +1862,7 @@ public sealed partial class MainWindow : Window
 
         var header = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            Background = FreePBrushes.Accent,
             Padding = new Thickness(0, 4, 4, 4),
             Child = new DockPanel
             {
@@ -2349,8 +1890,8 @@ public sealed partial class MainWindow : Window
         {
             Width = 240,
             IsVisible = false,
-            Background = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.DisabledSurface,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = panel,
         };
@@ -2443,34 +1984,27 @@ public sealed partial class MainWindow : Window
     private bool TryOpenOleInPlace(SlideShape shape)
     {
 #if FREEP_WINDOWS_CAPTURE
-        if (shape.Kind != SlideShapeKind.Ole
-            || shape.OleObject is null
-            || Math.Abs(shape.RotationDeg) > 0.01
-            || shape.FlipH
-            || shape.FlipV)
+        var plan = OleActivationCoordinator.PlanInPlaceActivation(
+            shape,
+            _slideCanvas.CurrentTransform);
+        if (plan is null)
             return false;
 
         CloseActiveOleHost();
-        var bounds = SlideCanvasGeometryPlanner.EmuBoundsToScreen(
-            shape.OffsetXEmu,
-            shape.OffsetYEmu,
-            shape.ExtentCxEmu,
-            shape.ExtentCyEmu,
-            _slideCanvas.CurrentTransform);
         var overlayBounds = new Rect(
-            bounds.Left,
-            bounds.Top,
-            bounds.Width,
-            bounds.Height);
+            plan.Bounds.Left,
+            plan.Bounds.Top,
+            plan.Bounds.Width,
+            plan.Bounds.Height);
 
         return AvaloniaOleInPlaceHost.TryShow(
             _oleOverlay,
-            shape.OleObject,
+            plan.OleObject,
             overlayBounds,
             onActivationFailed: () =>
             {
                 CloseActiveOleHost();
-                OleActivationService.TryActivate(shape.OleObject);
+                OleActivationService.TryActivate(plan.OleObject);
             },
             out _activeOleHost);
 #else
@@ -2505,290 +2039,85 @@ public sealed partial class MainWindow : Window
         if (!e.GetCurrentPoint(_slideCanvas).Properties.IsRightButtonPressed)
             return;
 
-        var slide = Editor.CurrentSlide;
-        if (slide is null || Editor.Presentation is null)
-            return;
-
         var point = e.GetPosition(_slideCanvas);
         var slidePoint = _slideCanvas.CurrentTransform.ScreenToSlide(point.X, point.Y);
-        var hitId = ShapeHitTester.HitTest(slide, Editor.Presentation, slidePoint.X, slidePoint.Y);
-        var shape = hitId.HasValue
-            ? ShapeTreeLookup.Find(slide, hitId.Value)
-            : null;
-        if (shape?.Kind == SlideShapeKind.Chart && shape.Chart is not null &&
-            ChartSubtargetHitTester.TryHitTest(slide, Editor.Presentation, slidePoint.X, slidePoint.Y, out var chartHit))
-        {
-            Editor.Select(shape.Id);
-            var chartMenu = BuildChartContextMenu(chartHit);
-            _slideCanvas.ContextMenu = chartMenu;
-            chartMenu.Open(_slideCanvas);
-            e.Handled = true;
-            return;
-        }
-
-        if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
+        var plan = _domainContextMenuSession.BuildAtSlidePoint(slidePoint.X, slidePoint.Y);
+        if (plan is null)
             return;
 
-        var cellHit = TableCellHitTester.HitTest(shape, slidePoint.X, slidePoint.Y);
-        if (!cellHit.HasValue)
-            return;
-
-        Editor.Select(shape.Id);
-        Editor.SetActiveTableCell(cellHit.Value.Row, cellHit.Value.Col);
-        var menu = BuildTableContextMenu(shape);
+        var menu = BuildDomainContextMenu(plan);
         _slideCanvas.ContextMenu = menu;
         menu.Open(_slideCanvas);
         e.Handled = true;
     }
 
-    private ContextMenu BuildChartContextMenu(ChartSubtargetHit hit)
+    private ContextMenu BuildDomainContextMenu(PresentationDomainContextMenuPlan plan)
     {
         var menu = new ContextMenu
         {
-            // WPF opens chart context menus at the right-click location.
+            // Avalonia opens domain context menus at the right-click location.
             Placement = PlacementMode.Pointer,
         };
-        void Add(string header, Action action)
+        foreach (var entry in plan.Entries)
         {
-            var item = new MenuItem { Header = header };
-            item.Click += (_, _) => action();
-            menu.Items.Add(item);
+            if (entry.Kind == PresentationDomainContextMenuEntryKind.Separator)
+                menu.Items.Add(new Separator());
+            else
+                menu.Items.Add(BuildDomainContextMenuItem(entry));
         }
-
-        switch (hit.Kind)
-        {
-            case ChartSubtargetKind.Point:
-            {
-                var waterfall = Editor.CurrentSlide?.Shapes
-                    .FirstOrDefault(shape => shape.Id == hit.ShapeId)?.Chart;
-                if (waterfall?.ChartType == ChartType.Waterfall && hit.PointIndex >= 0)
-                {
-                    var isTotal = waterfall.WaterfallTotalPointIndices?.Contains(hit.PointIndex) == true;
-                    Add(isTotal ? "Clear Total" : "Set as Total", () =>
-                    {
-                        Editor.Select(hit.ShapeId);
-                        Editor.SetWaterfallPointTotal(hit.PointIndex, !isTotal);
-                    });
-                    menu.Items.Add(new Separator());
-                }
-                Add("Format Data Point...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
-                Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
-                break;
-            }
-            case ChartSubtargetKind.DataLabel:
-                Add("Format Data Label...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
-                Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
-                break;
-            case ChartSubtargetKind.Series:
-                Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
-                break;
-            case ChartSubtargetKind.CategoryAxis:
-                Add("Format Category Axis...", () => OpenChartAxisOptionsDialog(ChartAxisKind.Category));
-                break;
-            case ChartSubtargetKind.ValueAxis:
-                Add("Format Value Axis...", () => OpenChartAxisOptionsDialog(ChartAxisKind.Value));
-                break;
-            case ChartSubtargetKind.AxisTitle:
-                Add("Format Axis...", () => OpenChartAxisOptionsDialog(hit.AxisKind ?? ChartAxisKind.Value));
-                break;
-            case ChartSubtargetKind.Title:
-                Add("Format Chart Title...", () => OpenChartTextOptionsDialog(ChartTextTarget.Title));
-                break;
-            case ChartSubtargetKind.Legend:
-                Add("Format Chart Legend...", () => OpenChartTextOptionsDialog(ChartTextTarget.Legend));
-                break;
-            case ChartSubtargetKind.PlotArea:
-                Add("Format Plot Area...", () => OpenChartAreaOptionsDialog(ChartAreaFormattingTarget.PlotArea));
-                break;
-            default:
-                Add("Format Chart Area...", OpenChartAreaOptionsDialog);
-                break;
-        }
-
-        menu.Items.Add(new Separator());
-        Add("Chart Options...", OpenChartDisplayOptionsDialog);
         return menu;
     }
 
-    private ContextMenu BuildTableContextMenu(SlideShape shape)
+    private MenuItem BuildDomainContextMenuItem(PresentationDomainContextMenuEntryPlan entry)
     {
-        var menu = new ContextMenu
+        var item = new MenuItem
         {
-            // WPF opens table context menus at the right-click location.
-            Placement = PlacementMode.Pointer,
+            Header = entry.Text,
+            IsEnabled = entry.IsEnabled,
         };
-
-        void Add(string header, bool isEnabled, Action action)
+        if (entry.Children is { Count: > 0 })
         {
-            var item = new MenuItem { Header = header, IsEnabled = isEnabled };
-            item.Click += (_, _) => action();
-            menu.Items.Add(item);
+            foreach (var child in entry.Children)
+                item.Items.Add(BuildDomainContextMenuItem(child));
         }
-
-        var state = CurrentTableCellEditState();
-        Add("Insert Row Above", state.CanInsertRow, () => TryInsertActiveTableRowAbove(shape.Id));
-        Add("Insert Row Below", state.CanInsertRow, () => TryInsertActiveTableRowBelow(shape.Id));
-        menu.Items.Add(new Separator());
-        Add("Insert Column Left", state.CanInsertColumn, () => TryInsertActiveTableColumnLeft(shape.Id));
-        Add("Insert Column Right", state.CanInsertColumn, () => TryInsertActiveTableColumnRight(shape.Id));
-        menu.Items.Add(new Separator());
-        Add("Delete Row", state.CanDeleteRow, () => TryDeleteActiveTableRow(shape.Id));
-        Add("Delete Column", state.CanDeleteColumn, () => TryDeleteActiveTableColumn(shape.Id));
-        menu.Items.Add(new Separator());
-
-        var widthMenu = new MenuItem { Header = "Column Width" };
-        foreach (var (label, inches) in new[]
+        else if (entry.Action is { } action)
         {
-            ("0.75 in", 0.75),
-            ("1.00 in", 1.00),
-            ("1.25 in", 1.25),
-            ("1.50 in", 1.50),
-            ("2.00 in", 2.00),
-        })
-        {
-            var widthItem = new MenuItem { Header = label };
-            widthItem.Click += (_, _) =>
-            {
-                Editor.Select(shape.Id);
-                Editor.TryApplyActiveTableColumnWidth(
-                    (long)Math.Round(inches * DrawingMlCoordinateUnits.EmuPerInch));
-            };
-            widthMenu.Items.Add(widthItem);
+            item.Click += (_, _) =>
+                _domainContextMenuSession.Execute(action, TryExecuteInlineTableAction);
         }
-        menu.Items.Add(widthMenu);
-
-        var canMerge = state.CanMergeWithRight || state.CanMergeWithBelow;
-        var canSplit = state.CanSplitCell;
-
-        var mergeItem = new MenuItem { Header = "Merge with Right Cell", IsEnabled = canMerge };
-        if (canMerge)
-            mergeItem.Click += (_, _) => TryMergeActiveTableCell(shape.Id);
-        menu.Items.Add(mergeItem);
-
-        var splitItem = new MenuItem { Header = "Split Cell", IsEnabled = canSplit };
-        if (canSplit)
-            splitItem.Click += (_, _) => TrySplitActiveTableCell(shape.Id);
-        menu.Items.Add(splitItem);
-        return menu;
+        return item;
     }
 
-    private TableCellEditState CurrentTableCellEditState() =>
-        TableCellEditPlanner.PlanSelectedCell(
-            Editor.CurrentSlide,
-            Editor.SelectedShapeIds,
-            Editor.ActiveTableCell);
-
-    private bool TryRouteActiveTableCommand(
-        Func<AvaloniaInCanvasTextEditor, bool> inlineAction,
-        Func<TableCellEditState, bool> canApply,
-        Func<EditingSession, bool> fallbackAction,
-        uint? fallbackShapeId = null)
+    private bool TryExecuteInlineTableAction(PresentationDomainContextAction action)
     {
-        if (_textEditor?.IsCellEditActive == true)
-            return inlineAction(_textEditor);
+        if (_textEditor?.IsCellEditActive != true)
+            return false;
 
-        if (fallbackShapeId is { } shapeId)
-            Editor.Select(shapeId);
-
-        var state = CurrentTableCellEditState();
-        return canApply(state) && fallbackAction(Editor);
+        return action.Kind switch
+        {
+            PresentationDomainContextActionKind.InsertTableRowAbove =>
+                _textEditor.TryInsertActiveTableRowAbove(),
+            PresentationDomainContextActionKind.InsertTableRowBelow =>
+                _textEditor.TryInsertActiveTableRowBelow(),
+            PresentationDomainContextActionKind.InsertTableColumnLeft =>
+                _textEditor.TryInsertActiveTableColumnLeft(),
+            PresentationDomainContextActionKind.InsertTableColumnRight =>
+                _textEditor.TryInsertActiveTableColumnRight(),
+            PresentationDomainContextActionKind.DeleteTableRow =>
+                _textEditor.TryDeleteActiveTableRow(),
+            PresentationDomainContextActionKind.DeleteTableColumn =>
+                _textEditor.TryDeleteActiveTableColumn(),
+            PresentationDomainContextActionKind.MergeTableCell =>
+                _textEditor.TryMergeActiveTableCell(),
+            PresentationDomainContextActionKind.SplitTableCell =>
+                _textEditor.TrySplitActiveTableCell(),
+            _ => false,
+        };
     }
 
-    private bool TryInsertActiveTableRowAbove(uint? fallbackShapeId = null) =>
-        TryRouteActiveTableCommand(
-            editor => editor.TryInsertActiveTableRowAbove(),
-            state => state.CanInsertRow,
-            editor =>
-            {
-                editor.InsertRowAbove();
-                return true;
-            },
-            fallbackShapeId);
 
-    private bool TryInsertActiveTableRowBelow(uint? fallbackShapeId = null) =>
-        TryRouteActiveTableCommand(
-            editor => editor.TryInsertActiveTableRowBelow(),
-            state => state.CanInsertRow,
-            editor =>
-            {
-                editor.InsertRowBelow();
-                return true;
-            },
-            fallbackShapeId);
 
-    private bool TryInsertActiveTableColumnLeft(uint? fallbackShapeId = null) =>
-        TryRouteActiveTableCommand(
-            editor => editor.TryInsertActiveTableColumnLeft(),
-            state => state.CanInsertColumn,
-            editor =>
-            {
-                editor.InsertColumnLeft();
-                return true;
-            },
-            fallbackShapeId);
 
-    private bool TryInsertActiveTableColumnRight(uint? fallbackShapeId = null) =>
-        TryRouteActiveTableCommand(
-            editor => editor.TryInsertActiveTableColumnRight(),
-            state => state.CanInsertColumn,
-            editor =>
-            {
-                editor.InsertColumnRight();
-                return true;
-            },
-            fallbackShapeId);
-
-    private bool TryDeleteActiveTableRow(uint? fallbackShapeId = null) =>
-        TryRouteActiveTableCommand(
-            editor => editor.TryDeleteActiveTableRow(),
-            state => state.CanDeleteRow,
-            editor =>
-            {
-                editor.DeleteRow();
-                return true;
-            },
-            fallbackShapeId);
-
-    private bool TryDeleteActiveTableColumn(uint? fallbackShapeId = null) =>
-        TryRouteActiveTableCommand(
-            editor => editor.TryDeleteActiveTableColumn(),
-            state => state.CanDeleteColumn,
-            editor =>
-            {
-                editor.DeleteColumn();
-                return true;
-            },
-            fallbackShapeId);
-
-    private bool TryMergeActiveTableCell(uint? fallbackShapeId = null) =>
-        TryRouteActiveTableCommand(
-            editor => editor.TryMergeActiveTableCell(),
-            state => state.CanMergeWithRight || state.CanMergeWithBelow,
-            editor => editor.TryMergeActiveTableCell(),
-            fallbackShapeId);
-
-    private bool TrySplitActiveTableCell(uint? fallbackShapeId = null) =>
-        TryRouteActiveTableCommand(
-            editor => editor.TrySplitActiveTableCell(),
-            state => state.CanSplitCell,
-            editor => editor.TrySplitActiveTableCell(),
-            fallbackShapeId);
-
-    internal ContextMenu? BuildTableContextMenuForTests(uint shapeId)
-    {
-        var shape = Editor.CurrentSlide is { } slide ? ShapeTreeLookup.Find(slide, shapeId) : null;
-        return shape?.Kind == SlideShapeKind.Table && shape.Table is not null
-            ? BuildTableContextMenu(shape)
-            : null;
-    }
-
-    internal bool ActivateTableCellEditForTests(uint shapeId, int row, int col)
-    {
-        _textEditor?.ActivateCellEdit(shapeId, row, col);
-        return _textEditor?.IsCellEditActive == true;
-    }
-
-    internal bool IsTableCellEditActiveForTests => _textEditor?.IsCellEditActive == true;
 
     // ── Ribbon ─────────────────────────────────────────────────────────────────
 
@@ -2811,7 +2140,7 @@ public sealed partial class MainWindow : Window
     private Control BuildRibbon()
     {
         var registry = BuildCommandRegistry();
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         _ribbonDefinition = definition;
         _ribbonCommandRegistry = registry;
 
@@ -2823,12 +2152,11 @@ public sealed partial class MainWindow : Window
             onFileTabSelected: ShowBackstage,
             stateStore: _ribbonStateStore);
 
-        HasToolbar = true;
         return new Border
         {
             Height          = FreePShellVisualMetrics.RibbonHeight,
-            Background      = Brushes.White,
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+            Background      = FreePBrushes.White,
+            BorderBrush     = FreePBrushes.GridBorder,
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child           = _ribbonControl,
         };
@@ -2836,1010 +2164,206 @@ public sealed partial class MainWindow : Window
 
     internal RibbonCommandRegistry BuildCommandRegistry()
     {
-        var r = new RibbonCommandRegistry();
-
-        // File operations
-        r.Register("freep.file.new",     new ActionRibbonCommand(FileNew));
-        r.Register("freep.file.open",    new ActionRibbonCommand(() => _ = FileOpenAsync()));
-        r.Register("freep.file.save",    new ActionRibbonCommand(() => _ = FileSaveAsync()));
-        r.Register("freep.file.save-as", new ActionRibbonCommand(() => _ = FileSaveAsAsync()));
-        r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
-        r.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
-        r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
-        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() =>
-        {
-            RefreshHandoutLayoutPlan();
-            ShowPrintBackstage();
-        }));
-        r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => _ = FileExportVideoAsync()));
-        
-
-        // Slide navigation/management
-        r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
-        r.Register("freep.duplicate-slide", new ActionRibbonCommand(() => Editor.DuplicateCurrentSlide()));
-        r.Register("freep.delete-slide",    new ActionRibbonCommand(() => Editor.DeleteCurrentSlide()));
-        r.Register(SlideZoomInsertionPlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenSlideZoomDialogAsync()));
-        r.Register(SectionZoomInsertionPlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenSectionZoomDialogAsync()));
-        r.Register(SummaryZoomInsertionPlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenSummaryZoomDialogAsync()));
-        r.Register(ZoomTargetPlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenZoomTargetDialogAsync()));
-        r.Register(SummaryZoomTargetPlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenSummaryZoomTargetsDialogAsync()));
-        r.Register(ZoomObjectPropertiesPlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenZoomObjectPropertiesDialogAsync()));
-        r.Register(ZoomCoverImagePlanner.CommandId,
-            new ActionRibbonCommand(() => _ = OpenZoomCoverImagePickerAsync()));
-        r.Register(ZoomCoverImagePlanner.ResetCommandId,
-            new ActionRibbonCommand(() => _ = RestoreZoomPreviewAsync()));
-        r.Register(PresentationDesignCommandPlanner.LayoutCommandId, new ActionRibbonCommand(() =>
-            PresentationDesignCommandPlanner.TryApply(
-                Editor,
-                PresentationDesignCommandPlanner.LayoutPlan,
-                OnDesignHostRequest)));
-
-        // Clipboard
-        r.Register("freep.copy", new ActionRibbonCommand(() =>
-            QueueClipboardCopy()));
-        r.Register("freep.cut", new ActionRibbonCommand(() =>
-            QueueClipboardCut()));
-        r.Register("freep.paste", new ActionRibbonCommand(() =>
-            QueueClipboardPaste()));
-        r.Register("freep.format-painter", new ActionRibbonCommand(() =>
-        {
-            if (Editor.SelectedShapeIds.Count == 1 && _gestureHandler?.BeginFormatPainter() == true)
-                return;
-
-            // Preserve the existing one-click multi-selection behavior: the first selected
-            // shape is the source and all other selected shapes are painted immediately.
-            Editor.CopyFormatting();
-            Editor.ApplyFormattingToSelection();
-        }));
-
-        // Font formatting
-        r.Register("freep.font-family", new ContextRibbonCommand(ctx =>
-        {
-            if (string.IsNullOrEmpty(ctx.SelectedValue))
-                return;
-
-            if (TryApplyCurrentSlideNotesValueFormat(
-                    TableCellTextValueFormatKind.FontFamily,
-                    ctx.SelectedValue)) return;
-
-            if (_textEditor?.TryApplyActiveShapeFontFamily(ctx.SelectedValue) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellFontFamily(ctx.SelectedValue) == true) return;
-            if (Editor.TryApplyActiveTableCellFontFamily(ctx.SelectedValue)) return;
-            Editor.SetFontFamilyOnSelection(ctx.SelectedValue);
-        }));
-        r.Register("freep.font-size", new ContextRibbonCommand(ctx =>
-        {
-            if (!TryGetRibbonFontSize(ctx, out double sizePt))
-                return;
-
-            if (TryApplyCurrentSlideNotesValueFormat(TableCellTextValueFormatKind.FontSize, sizePt)) return;
-
-            if (_textEditor?.TryApplyActiveShapeFontSize(sizePt) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellFontSize(sizePt) == true) return;
-            if (Editor.TryApplyActiveTableCellFontSize(sizePt)) return;
-            Editor.SetFontSizeOnSelection(sizePt);
-        }));
-        r.Register("freep.font-color", new ContextRibbonCommand(ctx =>
-        {
-            if (!TryGetRibbonFontColor(ctx, out var color))
-                return;
-
-            if (TryApplyCurrentSlideNotesValueFormat(TableCellTextValueFormatKind.Color, color)) return;
-
-            if (_textEditor?.TryApplyActiveShapeColor(color) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellColor(color) == true) return;
-            if (Editor.TryApplyActiveTableCellColor(color)) return;
-            Editor.SetColorOnSelection(color);
-        }));
-        r.Register("freep.text-autofit", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TextAutoFitOptionParser.TryParse(selection, out var kind))
-                return;
-
-            Editor.SetTextAutoFitOnSelection(kind);
-        }));
-        r.Register("freep.text-direction", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TextVerticalTypeOptionParser.TryParse(selection, out var verticalType))
-                return;
-
-            if (_textEditor?.TryApplyActiveTableCellTextVerticalType(verticalType) == true)
-                return;
-            if (Editor.TryApplyActiveTableCellTextVerticalType(verticalType))
-                return;
-            Editor.SetTextVerticalTypeOnSelection(verticalType);
-        }));
-        r.Register("freep.text-columns", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TextColumnCountOptionParser.TryParse(selection, out var count))
-                return;
-
-            Editor.SetTextColumnCountOnSelection(count);
-        }));
-        r.Register("freep.text-column-spacing", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TextColumnSpacingOptionParser.TryParse(selection, out var spacingEmu))
-                return;
-
-            Editor.SetTextColumnSpacingOnSelection(spacingEmu);
-        }));
-        r.Register("freep.table-cell-fill", new ContextRibbonCommand(ctx =>
-        {
-            if (!TryGetRibbonFontColor(ctx, out var color))
-                return;
-
-            if (_textEditor?.TryApplyActiveTableCellFill(color) == true)
-                return;
-            Editor.TryApplyActiveTableCellFill(color);
-        }));
-        r.Register("freep.table-cell-anchor", new ContextRibbonCommand(ctx =>
-        {
-            if (!TryGetRibbonTableCellAnchor(ctx, out var anchor))
-                return;
-
-            if (_textEditor?.TryApplyActiveTableCellAnchor(anchor) == true)
-                return;
-            Editor.TryApplyActiveTableCellAnchor(anchor);
-        }));
-        r.Register("freep.table-cell-border", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TableCellBorderOptionParser.TryParse(selection, out var side, out var outline))
-                return;
-
-            if (_textEditor?.TryApplyActiveTableCellBorder(side, outline) == true)
-                return;
-            Editor.TryApplyActiveTableCellBorder(side, outline);
-        }));
-        r.Register("freep.table-cell-inset", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TableCellInsetOptionParser.TryParse(selection, out var side, out var insetPt))
-                return;
-
-            if (_textEditor?.TryApplyActiveTableCellInset(side, insetPt) == true)
-                return;
-            Editor.TryApplyActiveTableCellInset(side, insetPt);
-        }));
-        r.Register("freep.table-row-height", new ContextRibbonCommand(ctx =>
-        {
-            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
-                value is not string selection ||
-                !TableRowHeightOptionParser.TryParse(selection, out var heightEmu))
-                return;
-
-            if (_textEditor?.TryApplyActiveTableRowHeight(heightEmu) == true)
-                return;
-            Editor.TryApplyActiveTableRowHeight(heightEmu);
-        }));
-        r.Register(TableCellEditPlanner.MergeCellsCommandId,
-            new TableCellRouteRibbonCommand(
-                () => TryMergeActiveTableCell(),
-                () =>
-                {
-                    var state = CurrentTableCellEditState();
-                    return state.CanMergeWithRight || state.CanMergeWithBelow;
-                }));
-        r.Register(TableCellEditPlanner.SplitCellCommandId,
-            new TableCellRouteRibbonCommand(
-                () => TrySplitActiveTableCell(),
-                () => CurrentTableCellEditState().CanSplitCell));
-        r.Register(TableCellEditPlanner.DistributeRowsCommandId,
-            new TableCellRouteRibbonCommand(
-                () => Editor.TryDistributeActiveTableRows(),
-                () => Editor.ActiveTableCell is not null));
-        r.Register(TableCellEditPlanner.DistributeColumnsCommandId,
-            new TableCellRouteRibbonCommand(
-                () => Editor.TryDistributeActiveTableColumns(),
-                () => Editor.ActiveTableCell is not null));
-        r.Register(TableCellEditPlanner.InsertRowAboveCommandId,
-            new TableCellRouteRibbonCommand(
-                () => TryInsertActiveTableRowAbove(),
-                () => CurrentTableCellEditState().CanInsertRow));
-        r.Register(TableCellEditPlanner.InsertRowBelowCommandId,
-            new TableCellRouteRibbonCommand(
-                () => TryInsertActiveTableRowBelow(),
-                () => CurrentTableCellEditState().CanInsertRow));
-        r.Register(TableCellEditPlanner.InsertColumnLeftCommandId,
-            new TableCellRouteRibbonCommand(
-                () => TryInsertActiveTableColumnLeft(),
-                () => CurrentTableCellEditState().CanInsertColumn));
-        r.Register(TableCellEditPlanner.InsertColumnRightCommandId,
-            new TableCellRouteRibbonCommand(
-                () => TryInsertActiveTableColumnRight(),
-                () => CurrentTableCellEditState().CanInsertColumn));
-        r.Register(TableCellEditPlanner.DeleteRowCommandId,
-            new TableCellRouteRibbonCommand(
-                () => TryDeleteActiveTableRow(),
-                () => CurrentTableCellEditState().CanDeleteRow));
-        r.Register(TableCellEditPlanner.DeleteColumnCommandId,
-            new TableCellRouteRibbonCommand(
-                () => TryDeleteActiveTableColumn(),
-                () => CurrentTableCellEditState().CanDeleteColumn));
-        r.Register(TableCellEditPlanner.TableFirstRowCommandId,
-            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.FirstRow)));
-        r.Register(TableCellEditPlanner.TableLastRowCommandId,
-            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.LastRow)));
-        r.Register(TableCellEditPlanner.TableFirstColCommandId,
-            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.FirstCol)));
-        r.Register(TableCellEditPlanner.TableLastColCommandId,
-            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.LastCol)));
-        r.Register(TableCellEditPlanner.TableBandRowCommandId,
-            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.BandRow)));
-        r.Register(TableCellEditPlanner.TableBandColCommandId,
-            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.BandCol)));
-        r.Register("freep.bold", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind.Bold)) return;
-            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold) == true) return;
-            if (Editor.ToggleBoldOnActiveTableCell()) return;
-            Editor.ToggleBoldOnSelection();
-        }));
-        r.Register("freep.italic", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind.Italic)) return;
-            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Italic) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Italic) == true) return;
-            if (Editor.ToggleItalicOnActiveTableCell()) return;
-            Editor.ToggleItalicOnSelection();
-        }));
-        r.Register("freep.underline", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind.Underline)) return;
-            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Underline) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline) == true) return;
-            if (Editor.ToggleUnderlineOnActiveTableCell()) return;
-            Editor.ToggleUnderlineOnSelection();
-        }));
-        r.Register("freep.strikethrough", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind.Strikethrough)) return;
-            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Strikethrough) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Strikethrough) == true) return;
-            if (Editor.ToggleStrikethroughOnActiveTableCell()) return;
-            Editor.ToggleStrikethroughOnSelection();
-        }));
-        r.Register("freep.superscript", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind.Superscript)) return;
-            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Superscript) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Superscript) == true) return;
-            if (Editor.ToggleSuperscriptOnActiveTableCell()) return;
-            Editor.ToggleSuperscriptOnSelection();
-        }));
-        r.Register("freep.subscript", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind.Subscript)) return;
-            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Subscript) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Subscript) == true) return;
-            if (Editor.ToggleSubscriptOnActiveTableCell()) return;
-            Editor.ToggleSubscriptOnSelection();
-        }));
-        r.Register("freep.paragraph.align-left", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Alignment, TextAlign.Left)) return;
-            if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Left) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left) == true) return;
-            Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left);
-        }));
-        r.Register("freep.paragraph.align-center", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Alignment, TextAlign.Center)) return;
-            if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Center) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center) == true) return;
-            Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center);
-        }));
-        r.Register("freep.paragraph.align-right", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Alignment, TextAlign.Right)) return;
-            if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Right) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right) == true) return;
-            Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right);
-        }));
-        r.Register("freep.paragraph.align-justify", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Alignment, TextAlign.Justify)) return;
-            if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Justify) == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify) == true) return;
-            Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify);
-        }));
-        r.Register("freep.bullets", new ContextRibbonCommand(ctx =>
-        {
-            if (TableCellListPresetCatalog.TryGet(ctx.SelectedValue, out var bulletPreset) &&
-                bulletPreset is not null)
-            {
-                if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.ListPreset, bulletPreset)) return;
-                if (_textEditor?.TryApplyActiveShapeParagraphListPreset(bulletPreset) == true) return;
-                if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(bulletPreset) == true) return;
-                Editor.TryApplyActiveTableCellParagraphListPreset(bulletPreset);
-                return;
-            }
-
-            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.BulletToggle)) return;
-            if (_textEditor?.TryApplyActiveShapeParagraphBulletToggle() == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true) return;
-            Editor.TryApplyActiveTableCellParagraphBulletToggle();
-        }));
-        r.Register("freep.numbering", new ContextRibbonCommand(ctx =>
-        {
-            if (TableCellListPresetCatalog.TryGet(ctx.SelectedValue, out var numberingPreset) &&
-                numberingPreset is not null)
-            {
-                if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.ListPreset, numberingPreset)) return;
-                if (_textEditor?.TryApplyActiveShapeParagraphListPreset(numberingPreset) == true) return;
-                if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(numberingPreset) == true) return;
-                Editor.TryApplyActiveTableCellParagraphListPreset(numberingPreset);
-                return;
-            }
-
-            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.NumberingToggle)) return;
-            if (_textEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true) return;
-            Editor.TryApplyActiveTableCellParagraphNumberingToggle();
-        }));
-        RegisterListGalleryPresetCommands(r);
-        r.Register("freep.indent-increase", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Indent)) return;
-            if (_textEditor?.TryApplyActiveShapeParagraphIndent() == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphIndent() == true) return;
-            Editor.TryApplyActiveTableCellParagraphIndent();
-        }));
-        r.Register("freep.indent-decrease", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Outdent)) return;
-            if (_textEditor?.TryApplyActiveShapeParagraphOutdent() == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphOutdent() == true) return;
-            Editor.TryApplyActiveTableCellParagraphOutdent();
-        }));
-        r.Register("freep.increase-indent", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Indent)) return;
-            if (_textEditor?.TryApplyActiveShapeParagraphIndent() == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphIndent() == true) return;
-            Editor.TryApplyActiveTableCellParagraphIndent();
-        }));
-        r.Register("freep.decrease-indent", new ActionRibbonCommand(() =>
-        {
-            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Outdent)) return;
-            if (_textEditor?.TryApplyActiveShapeParagraphOutdent() == true) return;
-            if (_textEditor?.TryApplyActiveTableCellParagraphOutdent() == true) return;
-            Editor.TryApplyActiveTableCellParagraphOutdent();
-        }));
-
-        foreach (var route in ArrangeCommandRoutes)
-        {
-            r.Register(route.CommandId, new ActionRibbonCommand(() => route.Execute(Editor)));
-        }
-        r.Register(RotationOptionsPlanner.CommandId,
-            new ActionRibbonCommand(OpenRotationOptionsDialog));
-        r.Register(OleActivationPlanner.OpenEmbeddedObjectCommandId,
-            new ActionRibbonCommand(() =>
-            {
-                OleActivationPlanner.TryOpenInlineFirst(
-                    () => _textEditor?.TryActivateInlineOleObject() == true,
-                    () =>
-                    {
-                        if (Editor.SelectedOleObject is not { } ole)
-                            return false;
-                        OleActivationService.TryActivate(ole);
-                        return true;
-                    });
-            }));
-        r.Register(OleInsertionPlanner.InsertEmbeddedObjectCommandId,
-            new ActionRibbonCommand(() => _ = InsertEmbeddedObjectFromFileAsync()));
-        r.Register("freep.arrange.edit-points", new EditPointsToggleCommand(_slideCanvas));
-
-        // Insert objects/text
-        foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)
-        {
-            if (plan.CommandId == SlideObjectInsertionPlanner.Table3x3CommandId)
-            {
-                r.Register(plan.CommandId, new ActionRibbonCommand(OpenTablePicker));
-                continue;
-            }
-
-            if (plan.RequiresPicturePayload)
-            {
-                r.Register(plan.CommandId, new ActionRibbonCommand(() => _ = InsertPictureFromFileAsync()));
-                continue;
-            }
-
-            if (plan.RequiresMediaPayload)
-            {
-                var isVideo = plan.CommandId == SlideObjectInsertionPlanner.VideoCommandId;
-                r.Register(plan.CommandId, new ActionRibbonCommand(() => _ = InsertMediaFromFileAsync(isVideo)));
-                continue;
-            }
-
-            r.Register(plan.CommandId, new ActionRibbonCommand(() =>
-                SlideObjectInsertionPlanner.Apply(Editor, plan)));
-        }
-
-        r.Register(
-            PictureCropAuthoringPlanner.InsetCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedPictureCrop(PictureCropAuthoringPlanner.Inset())));
-        r.Register(
-            PictureCropAuthoringPlanner.ResetCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedPictureCrop(PictureCropAuthoringPlanner.Reset())));
-        r.Register(
-            PictureColorEffectAuthoringPlanner.GrayscaleCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedPictureColorEffects(PictureColorEffectAuthoringPlanner.Grayscale())));
-        r.Register(
-            PictureColorEffectAuthoringPlanner.ResetCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedPictureColorEffects(PictureColorEffectAuthoringPlanner.Reset())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.NoneCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeShadow(ShapeEffectAuthoringPlanner.None())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.SubtleCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeShadow(ShapeEffectAuthoringPlanner.Subtle())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.OffsetCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeShadow(ShapeEffectAuthoringPlanner.Offset())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.GlowNoneCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeGlow(ShapeEffectAuthoringPlanner.GlowNone())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.GlowSubtleCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeGlow(ShapeEffectAuthoringPlanner.GlowSubtle())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.GlowStrongCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeGlow(ShapeEffectAuthoringPlanner.GlowStrong())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.SoftEdgeNoneCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeSoftEdge(ShapeEffectAuthoringPlanner.SoftEdgeNone())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.SoftEdgeSubtleCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeSoftEdge(ShapeEffectAuthoringPlanner.SoftEdgeSubtle())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.SoftEdgeStrongCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeSoftEdge(ShapeEffectAuthoringPlanner.SoftEdgeStrong())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.BevelNoneCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeBevel(ShapeEffectAuthoringPlanner.BevelNone())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.BevelSubtleCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeBevel(ShapeEffectAuthoringPlanner.BevelSubtle())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.BevelStrongCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShapeBevel(ShapeEffectAuthoringPlanner.BevelStrong())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.Shape3dNoneCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dNone())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.Shape3dSubtleCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dSubtle())));
-        r.Register(
-            ShapeEffectAuthoringPlanner.Shape3dStrongCommandId,
-            new ActionRibbonCommand(() => Editor.SetSelectedShape3d(ShapeEffectAuthoringPlanner.Shape3dStrong())));
-
-        r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
-        r.Register(ChartDataDialogPlanner.ChangeChartTypeCommandId, new ActionRibbonCommand(OpenChartDataDialog));
-        foreach (var option in ChartDataDialogPlanner.ChartTypeOptions)
-        {
-            var chartType = option.Value;
-            r.Register(
-                ChartDataDialogPlanner.ChangeChartTypeOptionCommandId(chartType),
-                new ActionRibbonCommand(() => Editor.ChangeSelectedChartType(chartType)));
-        }
-        r.Register(ChartDisplayOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDisplayOptionsDialog));
-        r.Register(ChartAxisOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAxisOptionsDialog));
-        r.Register(ChartSeriesOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartSeriesOptionsDialog));
-        r.Register(
-            ChartPointOptionsPlanner.CommandId,
-            new ActionRibbonCommand(() => OpenChartPointOptionsDialog()));
-        r.Register(ChartLayoutOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartLayoutOptionsDialog));
-        r.Register(ChartExSeriesLayoutPlanner.CommandId, new ActionRibbonCommand(OpenChartExSeriesLayoutDialog));
-        r.Register(ChartDataTableOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDataTableOptionsDialog));
-        r.Register(ChartBubbleOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartBubbleOptionsDialog));
-        r.Register(ChartPieOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartPieOptionsDialog));
-        r.Register(ChartPlotStyleOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartPlotStyleOptionsDialog));
-        r.Register(Chart3DViewOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChart3DViewOptionsDialog));
-        r.Register(ChartTextOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartTextOptionsDialog));
-        r.Register(ChartAreaOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAreaOptionsDialog));
-        r.Register(ChartProtectionOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartProtectionOptionsDialog));
-        r.Register(ShapeTransparencyPlanner.FillCommandId, new ActionRibbonCommand(() => Editor.SetSelectedFillTransparency(0)));
-        r.Register(ShapeTransparencyPlanner.OutlineCommandId, new ActionRibbonCommand(() => Editor.SetSelectedOutlineTransparency(0)));
-        foreach (var option in ShapeTransparencyPlanner.Options)
-        {
-            r.Register(
-                ShapeTransparencyPlanner.OptionCommandId(ShapeTransparencyTarget.Fill, option.Percent),
-                new ActionRibbonCommand(() => Editor.SetSelectedFillTransparency(option.Percent)));
-            r.Register(
-                ShapeTransparencyPlanner.OptionCommandId(ShapeTransparencyTarget.Outline, option.Percent),
-                new ActionRibbonCommand(() => Editor.SetSelectedOutlineTransparency(option.Percent)));
-        }
-        r.Register("freep.insert-link", new ActionRibbonCommand(OpenHyperlinkDialog));
-        r.Register("freep.remove-link", new ActionRibbonCommand(() =>
-        {
-            if (_textEditor?.TryApplySelectedShapeRunHyperlink(null) == true)
-                return;
-            Editor.RemoveShapeHyperlink();
-        }));
-        r.Register(HeaderFooterCommandPlanner.HeaderFooterCommandId,
-            new ActionRibbonCommand(() => OpenHeaderFooterDialog(HeaderFooterCommandFocus.HeaderFooter)));
-        r.Register(HeaderFooterCommandPlanner.DateTimeCommandId,
-            new ActionRibbonCommand(() => OpenHeaderFooterDialog(HeaderFooterCommandFocus.DateTime)));
-        r.Register(HeaderFooterCommandPlanner.SlideNumberCommandId,
-            new ActionRibbonCommand(() => OpenHeaderFooterDialog(HeaderFooterCommandFocus.SlideNumber)));
-        r.Register(SmartArtAuthoringPlanner.ThemeAccentsCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.ThemeAccents)));
-        r.Register(SmartArtAuthoringPlanner.SingleAccentCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.SingleAccent)));
-        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent2CommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent2)));
-        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent3CommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent3)));
-        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent4CommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent4)));
-        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent5CommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent5)));
-        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent6CommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent6)));
-        r.Register(SmartArtAuthoringPlanner.GrayscaleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.Grayscale)));
-        foreach (var entry in SmartArtAuthoringPlanner.ColorGallery)
-        {
-            var preset = entry.Preset;
-            r.Register(entry.CommandId,
-                new ActionRibbonCommand(() => ApplySmartArtColorPreset(preset)));
-        }
-        r.Register(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicProcess)));
-        r.Register(SmartArtAuthoringPlanner.AccentProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.AccentProcess)));
-        r.Register(SmartArtAuthoringPlanner.AscendingProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.AscendingProcess)));
-        r.Register(SmartArtAuthoringPlanner.DescendingProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.DescendingProcess)));
-        r.Register(SmartArtAuthoringPlanner.BasicTimelineLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicTimeline)));
-        r.Register(SmartArtAuthoringPlanner.CircleAccentTimelineLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.CircleAccentTimeline)));
-        r.Register(SmartArtAuthoringPlanner.PhasedProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PhasedProcess)));
-        r.Register(SmartArtAuthoringPlanner.StepDownProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.StepDownProcess)));
-        r.Register(SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ContinuousBlockProcess)));
-        r.Register(SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.SegmentedProcess)));
-        r.Register(SmartArtAuthoringPlanner.ChevronProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ChevronProcess)));
-        r.Register(SmartArtAuthoringPlanner.BasicChevronProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicChevronProcess)));
-        r.Register(SmartArtAuthoringPlanner.ClosedChevronProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ClosedChevronProcess)));
-        r.Register(SmartArtAuthoringPlanner.BendingProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BendingProcess)));
-        r.Register(SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.AlternatingProcess)));
-        r.Register(SmartArtAuthoringPlanner.ArrowRibbonLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ArrowRibbon)));
-        r.Register(SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.CircleProcess)));
-        r.Register(SmartArtAuthoringPlanner.CircleArrowProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.CircleArrowProcess)));
-        r.Register(SmartArtAuthoringPlanner.IncreasingCircleProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.IncreasingCircleProcess)));
-        r.Register(SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.FunnelProcess)));
-        r.Register(SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalProcess)));
-        r.Register(SmartArtAuthoringPlanner.VerticalBoxListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBoxList)));
-        r.Register(SmartArtAuthoringPlanner.VerticalBlockListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBlockList)));
-        r.Register(SmartArtAuthoringPlanner.VerticalChevronListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalChevronList)));
-        r.Register(SmartArtAuthoringPlanner.VerticalArrowListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalArrowList)));
-        r.Register(SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBulletList)));
-        r.Register(SmartArtAuthoringPlanner.VerticalPictureListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalPictureList)));
-        r.Register(SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalBulletList)));
-        r.Register(SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalBlockList)));
-        r.Register(SmartArtAuthoringPlanner.TrapezoidListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TrapezoidList)));
-        r.Register(SmartArtAuthoringPlanner.GroupedListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.GroupedList)));
-        r.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicCycle)));
-        r.Register(SmartArtAuthoringPlanner.MultidirectionalCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.MultidirectionalCycle)));
-        r.Register(SmartArtAuthoringPlanner.Cycle2LayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.Cycle2)));
-        r.Register(SmartArtAuthoringPlanner.ContinuousCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ContinuousCycle)));
-        r.Register(SmartArtAuthoringPlanner.GearCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.GearCycle)));
-        r.Register(SmartArtAuthoringPlanner.TextCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TextCycle)));
-        r.Register(SmartArtAuthoringPlanner.BlockCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BlockCycle)));
-        r.Register(SmartArtAuthoringPlanner.NonDirectionalCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.NonDirectionalCycle)));
-        r.Register(SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicBlockList)));
-        r.Register(SmartArtAuthoringPlanner.BasicListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicList)));
-        r.Register(SmartArtAuthoringPlanner.List2LayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.List2)));
-        r.Register(SmartArtAuthoringPlanner.StackedListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.StackedList)));
-        r.Register(SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.DescendingBlockList)));
-        r.Register(SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicPyramid)));
-        r.Register(SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PyramidList)));
-        r.Register(SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.InvertedPyramid)));
-        r.Register(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialCycle)));
-        r.Register(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicRadial)));
-        r.Register(SmartArtAuthoringPlanner.RadialClusterLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialCluster)));
-        r.Register(SmartArtAuthoringPlanner.RadialListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialList)));
-        r.Register(SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicMatrix)));
-        r.Register(SmartArtAuthoringPlanner.TitledMatrixLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TitledMatrix)));
-        r.Register(SmartArtAuthoringPlanner.GridMatrixLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.GridMatrix)));
-        r.Register(SmartArtAuthoringPlanner.BasicRelationshipLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicRelationship)));
-        r.Register(SmartArtAuthoringPlanner.OpposingIdeasLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.OpposingIdeas)));
-        r.Register(SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ConvergingRadial)));
-        r.Register(SmartArtAuthoringPlanner.DivergingRadialLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.DivergingRadial)));
-        r.Register(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicVenn)));
-        r.Register(SmartArtAuthoringPlanner.RadialVennLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialVenn)));
-        r.Register(SmartArtAuthoringPlanner.TargetListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TargetList)));
-        r.Register(SmartArtAuthoringPlanner.StackedVennLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.StackedVenn)));
-        r.Register(SmartArtAuthoringPlanner.InterlockingRingsLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.InterlockingRings)));
-        r.Register(SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicHierarchy)));
-        r.Register(SmartArtAuthoringPlanner.Hierarchy3LayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.Hierarchy3)));
-        r.Register(SmartArtAuthoringPlanner.HorizontalHierarchyLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalHierarchy)));
-        r.Register(SmartArtAuthoringPlanner.OrgChartLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.OrgChart)));
-        r.Register(SmartArtAuthoringPlanner.NameAndTitleOrgChartLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.NameAndTitleOrgChart)));
-        r.Register(SmartArtAuthoringPlanner.PictureCaptionListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureCaptionList)));
-        r.Register(SmartArtAuthoringPlanner.PictureAccentListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureAccentList)));
-        r.Register(SmartArtAuthoringPlanner.PictureStackLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureStack)));
-        r.Register(SmartArtAuthoringPlanner.PictureLineupLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureLineup)));
-        r.Register(SmartArtAuthoringPlanner.PictureStripsLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureStrips)));
-        r.Register(SmartArtAuthoringPlanner.ContinuousPictureListLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ContinuousPictureList)));
-        r.Register(SmartArtAuthoringPlanner.PictureGridLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureGrid)));
-        r.Register(SmartArtAuthoringPlanner.PictureAccentProcessLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureAccentProcess)));
-        r.Register(SmartArtAuthoringPlanner.LabeledHierarchyLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.LabeledHierarchy)));
-        r.Register(SmartArtAuthoringPlanner.TableHierarchyLayoutCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TableHierarchy)));
-        r.Register(SmartArtAuthoringPlanner.SimpleQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Simple)));
-        r.Register(SmartArtAuthoringPlanner.ModerateQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Moderate)));
-        r.Register(SmartArtAuthoringPlanner.IntenseQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Intense)));
-        r.Register(SmartArtAuthoringPlanner.SubtleQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Subtle)));
-        r.Register(SmartArtAuthoringPlanner.SoftEdgeQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.SoftEdge)));
-        r.Register(SmartArtAuthoringPlanner.InsertQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Insert)));
-        r.Register(SmartArtAuthoringPlanner.CartoonQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Cartoon)));
-        r.Register(SmartArtAuthoringPlanner.PowderQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Powder)));
-        r.Register(SmartArtAuthoringPlanner.PolishedQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Polished)));
-        r.Register(SmartArtAuthoringPlanner.BrickSceneQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.BrickScene)));
-        r.Register(SmartArtAuthoringPlanner.FlatSceneQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.FlatScene)));
-        r.Register(SmartArtAuthoringPlanner.MetallicSceneQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.MetallicScene)));
-        r.Register(SmartArtAuthoringPlanner.SunsetSceneQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.SunsetScene)));
-        r.Register(SmartArtAuthoringPlanner.BirdsEyeSceneQuickStyleCommandId,
-            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.BirdsEyeScene)));
-        r.Register(SmartArtAuthoringPlanner.ConvertToShapesCommandId,
-            new ActionRibbonCommand(ConvertSelectedSmartArtToShapes));
-        r.Register(
-            SmartArtEditingPlanner.OpenTextPaneCommandId,
-            new ActionRibbonCommand(() => ShowSmartArtTextPane()));
-
-        // Undo / Redo
-        r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));
-        r.Register("freep.redo", new ActionRibbonCommand(() => Editor.Redo()));
-        r.Register("freep.find", new ActionRibbonCommand(OpenFindDialog));
-        r.Register("freep.replace", new ActionRibbonCommand(OpenFindReplaceDialog));
-        RegisterReviewWorkflowCommands(r);
-        RegisterViewShowCommands(r);
-        RegisterViewZoomCommands(r);
-
-        foreach (var plan in PresentationTransitionCommandPlanner.BuiltInPlans)
-        {
-            r.Register(
-                plan.CommandId,
-                plan.Intent == PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick
-                    ? new TransitionAdvanceOnClickToggleCommand(Editor, plan)
-                    : new ContextRibbonCommand(ctx =>
-                        PresentationTransitionCommandPlanner.TryApply(
-                            Editor,
-                            plan,
-                            ctx.SelectedValue,
-                            () => _ = PickTransitionSoundAsync())));
-        }
-
-        foreach (var plan in PresentationDesignCommandPlanner.BuiltInPlans)
-        {
-            r.Register(plan.CommandId, new ActionRibbonCommand(() =>
-                PresentationDesignCommandPlanner.TryApply(Editor, plan, OnDesignHostRequest)));
-        }
-
-        foreach (var plan in PresentationAnimationCommandPlanner.BuiltInPlans)
-        {
-            r.Register(
-                plan.CommandId,
-                plan.Intent == PresentationAnimationCommandIntentKind.TogglePane
-                    ? new AnimationPaneToggleCommand(
-                        Editor,
-                        plan,
-                        () => IsAnimationPaneVisible,
-                        OnAnimationPaneRequested)
-                    : new ContextRibbonCommand(ctx =>
-                        PresentationAnimationCommandPlanner.TryApply(
-                            Editor,
-                            plan,
-                            ctx.SelectedValue,
-                            OnAnimationPaneRequested)));
-        }
-
-        // Slide show
-        r.Register("freep.slideshow.from-beginning",
-            new ActionRibbonCommand(() => StartSlideShow(fromStart: true)));
-        r.Register("freep.slideshow.from-current-slide",
-            new ActionRibbonCommand(() => StartSlideShow(fromStart: false)));
-        r.Register("freep.slideshow.rehearse-timings",
-            new ActionRibbonCommand(() => StartSlideShowWithTiming(
-                FreeP.App.Compositor.SlideShowTimingIntent.RehearseTimings)));
-        r.Register("freep.slideshow.record-timings",
-            new ActionRibbonCommand(() => StartSlideShowWithTiming(
-                FreeP.App.Compositor.SlideShowTimingIntent.RecordTimings)));
-        r.Register("freep.slideshow.custom-shows",
-            new ActionRibbonCommand(OpenCustomShowDialog));
-        r.Register(SlideShowSettingsPlanner.CommandId,
-            new ActionRibbonCommand(OpenSlideShowSettingsDialog));
-
-        return r;
+        return FreePRibbonHostRegistryComposer.Build(
+            Editor,
+            _ribbonStateStore,
+            CreateRibbonHostProfile()).Registry;
     }
 
-    private void RegisterListGalleryPresetCommands(RibbonCommandRegistry registry)
-    {
-        foreach (var item in PresentationListGalleryPlanner.BuildPlans().SelectMany(plan => plan.Items))
+    private FreePRibbonHostProfile CreateRibbonHostProfile() =>
+        FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts
         {
-            if (!item.IsEnabled || item.ListPreset is null)
-                continue;
-
-            registry.Register(item.CommandId, new ActionRibbonCommand(() =>
+        ActionEndpoints = GetRibbonHostActionEndpoints(),
+        QueryEndpoints = new FreePRibbonHostQueryEndpoints
+        {
+            BeginFormatPainter = () => _gestureHandler?.BeginFormatPainter() == true,
+            CanMergeTableCells = () =>
+                _domainContextMenuSession.CanExecuteCurrentTableAction(
+                    PresentationDomainContextActionKind.MergeTableCell),
+            CanSplitTableCell = () =>
+                _domainContextMenuSession.CanExecuteCurrentTableAction(
+                    PresentationDomainContextActionKind.SplitTableCell),
+            EditPointsEnabled = () => _slideCanvas.EditPointsEnabled,
+            AnimationPaneVisible = () => IsAnimationPaneVisible,
+            ViewShowState = () => _viewShowState,
+            ViewZoomState = () => _viewZoomState,
+        },
+        TextActionTargets = CreateRibbonTextActionTargets(),
+        DesignCommands = new FreePRibbonDesignCommandEndpoints
+        {
+            OpenCustomSlideSize = OnCustomSlideSizeRequested,
+            OpenLayoutPicker = OnLayoutPickerRequested,
+        },
+        FileCommands = new FreePRibbonFileCommandEndpoints
+        {
+            New = FileNew,
+            Open = () => _ = FileOpenAsync(),
+            Save = () => _ = FileSaveAsync(),
+            SaveAs = () => _ = FileSaveAsAsync(),
+            ExportPdf = () => _ = FileExportPdfAsync(),
+            ExportNotesPagePdf = () => _ = FileExportNotesPagePdfAsync(),
+            ExportImages = () => _ = FileExportImagesAsync(),
+            Print = () =>
             {
-                if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.ListPreset, item.ListPreset)) return;
-                if (_textEditor?.TryApplyActiveShapeParagraphListPreset(item.ListPreset) == true) return;
-                if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(item.ListPreset) == true) return;
-                Editor.TryApplyActiveTableCellParagraphListPreset(item.ListPreset);
-            }));
-        }
-
-        registry.Register(
-            PresentationListGalleryPlanner.ImageBulletCommandId,
-            new ActionRibbonCommand(() => _ = ApplyPictureBulletFromFileAsync()));
-    }
-
-    private static bool TryGetRibbonFontSize(RibbonCommandContext ctx, out double sizePt)
-    {
-        sizePt = 0;
-        if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value))
-            return false;
-
-        switch (value)
+                RefreshHandoutLayoutPlan();
+                ShowPrintBackstage();
+            },
+            ExportVideo = () => _ = FileExportVideoAsync(),
+        },
+        OleCommands = new FreePRibbonOleCommandEndpoints
         {
-            case double d:
-                sizePt = d;
-                break;
-            case float f:
-                sizePt = f;
-                break;
-            case int i:
-                sizePt = i;
-                break;
-            case decimal m:
-                sizePt = (double)m;
-                break;
-            case string s:
-                var text = s.Trim();
-                if (text.EndsWith("pt", StringComparison.OrdinalIgnoreCase))
-                    text = text[..^2].Trim();
-                if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out sizePt))
-                    return false;
-                break;
-            default:
-                return false;
-        }
+            InsertEmbeddedObject = () => _ = InsertEmbeddedObjectFromFileAsync(),
+            TryOpenInlineEmbeddedObject = () => _textEditor?.TryActivateInlineOleObject() == true,
+            TryOpenSelectedEmbeddedObject = ole =>
+            {
+                OleActivationService.TryActivate(ole);
+                return true;
+            },
+        },
+    });
 
-        return sizePt > 0 && !double.IsNaN(sizePt) && !double.IsInfinity(sizePt);
-    }
-
-    private static bool TryGetRibbonFontColor(RibbonCommandContext ctx, out ThemeAwareColor? color)
-    {
-        color = null;
-        if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value))
-            return false;
-
-        switch (value)
+    private FreePRibbonHostActionEndpoints GetRibbonHostActionEndpoints() =>
+        _ribbonHostActionEndpoints ??= new FreePRibbonHostActionEndpoints
         {
-            case ThemeAwareColor themeColor:
-                color = themeColor;
-                return true;
-            case SrgbColor srgb:
-                color = new ThemeAwareColor(srgb);
-                return true;
-            case string s:
-                return TryParseRibbonFontColor(s, out color);
-            default:
-                return false;
-        }
-    }
-
-    private static bool TryGetRibbonTableCellAnchor(RibbonCommandContext ctx, out TableCellAnchor? anchor)
-    {
-        anchor = null;
-        if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value))
-            return false;
-
-        switch (value)
-        {
-            case TableCellAnchor cellAnchor:
-                anchor = cellAnchor;
-                return true;
-            case string s:
-                return TryParseRibbonTableCellAnchor(s, out anchor);
-            default:
-                return false;
-        }
-    }
-
-    private static bool TryParseRibbonTableCellAnchor(string? value, out TableCellAnchor? anchor)
-    {
-        anchor = null;
-        if (string.IsNullOrWhiteSpace(value))
-            return false;
-
-        switch (value.Trim().ToLowerInvariant())
-        {
-            case "automatic":
-            case "auto":
-            case "default":
-                return true;
-            case "top":
-                anchor = TableCellAnchor.Top;
-                return true;
-            case "middle":
-            case "center":
-            case "centre":
-                anchor = TableCellAnchor.Middle;
-                return true;
-            case "bottom":
-                anchor = TableCellAnchor.Bottom;
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    private static bool TryParseRibbonFontColor(string? value, out ThemeAwareColor? color)
-    {
-        color = null;
-        if (string.IsNullOrWhiteSpace(value))
-            return false;
-
-        var text = value.Trim();
-        if (text.Equals("automatic", StringComparison.OrdinalIgnoreCase) ||
-            text.Equals("auto", StringComparison.OrdinalIgnoreCase) ||
-            text.Equals("default", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        var hex = text.StartsWith("#", StringComparison.Ordinal) ? text[1..] : text;
-        if (hex.Length == 6 &&
-            int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int rgb))
-        {
-            color = new ThemeAwareColor(SrgbColor.FromRgb(rgb));
-            return true;
-        }
-
-        color = text.ToLowerInvariant() switch
-        {
-            "black" => ThemeAwareColor.Black,
-            "white" => ThemeAwareColor.White,
-            "red" => new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)),
-            "green" => new ThemeAwareColor(SrgbColor.FromRgb(0x008000)),
-            "blue" => new ThemeAwareColor(SrgbColor.FromRgb(0x0000FF)),
-            "yellow" => new ThemeAwareColor(SrgbColor.FromRgb(0xFFFF00)),
-            "orange" => new ThemeAwareColor(SrgbColor.FromRgb(0xF4B183)),
-            "purple" => new ThemeAwareColor(SrgbColor.FromRgb(0x7030A0)),
-            "dark-red" or "dark red" => new ThemeAwareColor(SrgbColor.FromRgb(0x800000)),
-            "dark-blue" or "dark blue" => new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)),
-            _ => null,
+            Copy = QueueClipboardCopy,
+            Cut = QueueClipboardCut,
+            Paste = QueueClipboardPaste,
+            InsertPicture = () => _ = InsertPictureFromFileAsync(),
+            InsertVideo = () => _ = InsertMediaFromFileAsync(isVideo: true),
+            InsertAudio = () => _ = InsertMediaFromFileAsync(isVideo: false),
+            OpenTablePicker = OpenTablePicker,
+            MergeTableCells = () =>
+            {
+                _domainContextMenuSession.ExecuteCurrentTableAction(
+                    PresentationDomainContextActionKind.MergeTableCell,
+                    TryExecuteInlineTableAction);
+            },
+            SplitTableCell = () =>
+            {
+                _domainContextMenuSession.ExecuteCurrentTableAction(
+                    PresentationDomainContextActionKind.SplitTableCell,
+                    TryExecuteInlineTableAction);
+            },
+            PickPictureBullet = () => _ = ApplyPictureBulletFromFileAsync(),
+            InsertSlideZoom = () => _ = OpenSlideZoomDialogAsync(),
+            InsertSectionZoom = () => _ = OpenSectionZoomDialogAsync(),
+            InsertSummaryZoom = () => _ = OpenSummaryZoomDialogAsync(),
+            EditZoomTarget = () => _ = OpenZoomTargetDialogAsync(),
+            EditSummaryZoomTargets = () => _ = OpenSummaryZoomTargetsDialogAsync(),
+            FormatZoom = () => _ = OpenZoomObjectPropertiesDialogAsync(),
+            SetZoomCoverImage = () => _ = OpenZoomCoverImagePickerAsync(),
+            ResetZoomCoverImage = () => _ = RestoreZoomPreviewAsync(),
+            OpenHeaderFooter = OpenHeaderFooterDialog,
+            ApplySmartArtColor = preset => ApplySmartArtColorPreset(preset),
+            ApplySmartArtLayout = preset => ApplySmartArtLayoutPreset(preset),
+            ApplySmartArtQuickStyle = preset => ApplySmartArtQuickStylePreset(preset),
+            ConvertSmartArtToShapes = () => ConvertSelectedSmartArtToShapes(),
+            OpenSmartArtTextPane = () => ShowSmartArtTextPane(),
+            OpenChartData = OpenChartDataDialog,
+            OpenChartDisplayOptions = OpenChartDisplayOptionsDialog,
+            OpenChartAxisOptions = () => OpenChartAxisOptionsDialog(),
+            OpenChartSeriesOptions = () => OpenChartSeriesOptionsDialog(),
+            OpenChartPointOptions = () => OpenChartPointOptionsDialog(),
+            OpenChartLayoutOptions = OpenChartLayoutOptionsDialog,
+            OpenChartExSeriesLayout = OpenChartExSeriesLayoutDialog,
+            OpenChartDataTableOptions = OpenChartDataTableOptionsDialog,
+            OpenChartBubbleOptions = OpenChartBubbleOptionsDialog,
+            OpenChartPieOptions = OpenChartPieOptionsDialog,
+            OpenChartPlotStyleOptions = OpenChartPlotStyleOptionsDialog,
+            OpenChart3DViewOptions = OpenChart3DViewOptionsDialog,
+            OpenChartTextOptions = OpenChartTextOptionsDialog,
+            OpenChartAreaOptions = OpenChartAreaOptionsDialog,
+            OpenChartProtectionOptions = OpenChartProtectionOptionsDialog,
+            OpenHyperlink = OpenHyperlinkDialog,
+            OpenRotationOptions = OpenRotationOptionsDialog,
+            SetEditPointsEnabled = _slideCanvas.SetEditPointsMode,
+            OpenFind = OpenFindDialog,
+            OpenReplace = OpenFindReplaceDialog,
+            ShowCommentsPane = () => ShowReviewCommentsPane(),
+            ShowAccessibilityPane = () => ShowAccessibilityCheckerPane(),
+            ShowAltTextPane = () => ShowAltTextPane(),
+            ShowReadingOrderPane = () => ShowReadingOrderPane(),
+            ShowSelectionPane = () => ShowSelectionPane(),
+            ShowProofingPane = () => ShowProofingPane(),
+            AddComment = () => AddComment(PresentationPaneTextResources.NewCommentDefault),
+            EditComment = () => EditSelectedComment(GetSelectedCommentText()),
+            ReplyComment = () => ReplyToSelectedComment(PresentationPaneTextResources.NewReplyDefault),
+            DeleteComment = () => DeleteSelectedComment(),
+            PreviousComment = () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment),
+            NextComment = () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment),
+            ResolveComment = () => ResolveSelectedComment(),
+            ReopenComment = () => ReopenSelectedComment(),
+            ApplyViewShowState = ApplyPresentationViewShowState,
+            ApplyViewZoomState = ApplyPresentationViewZoomState,
+            PickTransitionSound = () => _ = PickTransitionSoundAsync(),
+            ToggleAnimationPane = OnAnimationPaneRequested,
+            StartSlideShowFromBeginning = () => StartSlideShow(fromStart: true),
+            StartSlideShowFromCurrent = () => StartSlideShow(fromStart: false),
+            RehearseTimings = () => StartSlideShowWithTiming(SlideShowTimingIntent.RehearseTimings),
+            RecordTimings = () => StartSlideShowWithTiming(SlideShowTimingIntent.RecordTimings),
+            OpenCustomShows = OpenCustomShowDialog,
+            OpenSlideShowSettings = OpenSlideShowSettingsDialog,
         };
 
-        return color is not null;
-    }
-
-    private void OnDesignHostRequest(PresentationDesignCommandPlan plan)
+    private FreePRibbonTextActionTargets CreateRibbonTextActionTargets() => new()
     {
-        switch (plan.Intent)
+        Notes = FreePRibbonTextActionEndpointFactory.CreateFormattingTarget(
+            TryApplyCurrentSlideNotesTextFormat,
+            TryApplyCurrentSlideNotesValueFormat,
+            TryApplyCurrentSlideNotesParagraphFormat),
+        Shape = new FreePRibbonTextActionEndpoints
         {
-            case PresentationDesignCommandIntentKind.RequestCustomSlideSize:
-                OnCustomSlideSizeRequested(plan);
-                break;
-            case PresentationDesignCommandIntentKind.RequestLayoutPicker:
-                OnLayoutPickerRequested(plan);
-                break;
-        }
-    }
+            ToggleFormat = format => _textEditor?.TryApplyActiveShapeTextFormat(format) == true,
+            SetParagraphAlignment = alignment =>
+                _textEditor?.TryApplyActiveShapeParagraphAlignment(alignment) == true,
+            ApplyListPreset = preset =>
+                _textEditor?.TryApplyActiveShapeParagraphListPreset(preset) == true,
+            ToggleBullets = () =>
+                _textEditor?.TryApplyActiveShapeParagraphBulletToggle() == true,
+            ToggleNumbering = () =>
+                _textEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true,
+            Indent = () => _textEditor?.TryApplyActiveShapeParagraphIndent() == true,
+            Outdent = () => _textEditor?.TryApplyActiveShapeParagraphOutdent() == true,
+            SetFontFamily = family => _textEditor?.TryApplyActiveShapeFontFamily(family) == true,
+            SetFontSize = sizePt => _textEditor?.TryApplyActiveShapeFontSize(sizePt) == true,
+            SetColor = color => _textEditor?.TryApplyActiveShapeColor(color) == true,
+            RemoveHyperlink = () =>
+                _textEditor?.TryApplySelectedShapeRunHyperlink(null) == true,
+        },
+        Table = new FreePRibbonTextActionEndpoints
+        {
+            ToggleFormat = format => _textEditor?.TryApplyActiveTableCellTextFormat(format) == true,
+            SetParagraphAlignment = alignment =>
+                _textEditor?.TryApplyActiveTableCellParagraphAlignment(alignment) == true,
+            ApplyListPreset = preset =>
+                _textEditor?.TryApplyActiveTableCellParagraphListPreset(preset) == true,
+            ToggleBullets = () =>
+                _textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true,
+            ToggleNumbering = () =>
+                _textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true,
+            Indent = () => _textEditor?.TryApplyActiveTableCellParagraphIndent() == true,
+            Outdent = () => _textEditor?.TryApplyActiveTableCellParagraphOutdent() == true,
+            SetFontFamily = family => _textEditor?.TryApplyActiveTableCellFontFamily(family) == true,
+            SetFontSize = sizePt => _textEditor?.TryApplyActiveTableCellFontSize(sizePt) == true,
+            SetColor = color => _textEditor?.TryApplyActiveTableCellColor(color) == true,
+            SetTextVerticalType = verticalType =>
+                _textEditor?.TryApplyActiveTableCellTextVerticalType(verticalType) == true,
+            SetTableCellFill = color => _textEditor?.TryApplyActiveTableCellFill(color) == true,
+            SetTableCellAnchor = anchor => _textEditor?.TryApplyActiveTableCellAnchor(anchor) == true,
+            SetTableCellBorder = (side, outline) =>
+                _textEditor?.TryApplyActiveTableCellBorder(side, outline) == true,
+            SetTableCellInset = (side, value) =>
+                _textEditor?.TryApplyActiveTableCellInset(side, value) == true,
+            SetTableRowHeight = height => _textEditor?.TryApplyActiveTableRowHeight(height) == true,
+        },
+    };
 
     private void OnCustomSlideSizeRequested(PresentationDesignCommandPlan plan)
     {
         LastCustomSlideSizeRequestPlan = plan;
-        LastCustomSlideSizeInitialState = SlideSizeDialogPlanner.BuildInitialState(
-            _presentation.SlideSizeCxEmu,
-            _presentation.SlideSizeCyEmu,
-            SlideSizeDialogUnit.Inches);
         OpenSlideSizeDialog();
-        _statusText.Text = "Slide Size";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(
+            PresentationShellTextCatalog.SlideSizeDialogStatus);
     }
 
     private void OnLayoutPickerRequested(PresentationDesignCommandPlan plan)
@@ -3849,7 +2373,8 @@ public sealed partial class MainWindow : Window
             _presentation,
             Editor.CurrentSlideIndex);
         ShowLayoutPicker(LastLayoutPickerPlan);
-        _statusText.Text = $"Layout picker: {LastLayoutPickerPlan.Choices.Count} choices";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(
+            PresentationShellTextCatalog.LayoutPickerStatus(LastLayoutPickerPlan.Choices.Count));
     }
 
     internal bool ApplyLayoutChoice(string layoutId)
@@ -3874,7 +2399,8 @@ public sealed partial class MainWindow : Window
     {
         LastTablePickerPlan = TableInsertionPickerPlanner.BuildPlan();
         ShowTablePicker(LastTablePickerPlan);
-        _statusText.Text = $"Table picker: {LastTablePickerPlan.Choices.Count} choices";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(
+            PresentationShellTextCatalog.TablePickerStatus(LastTablePickerPlan.Choices.Count));
     }
 
     internal bool ApplyTablePickerChoice(int rows, int columns)
@@ -3904,18 +2430,18 @@ public sealed partial class MainWindow : Window
             var button = new Button
             {
                 Tag = choice,
-                Content = choice.IsDefault ? $"{choice.Label} (default)" : choice.Label,
+                Content = choice.DisplayLabel,
                 Margin = new Thickness(2),
                 Padding = new Thickness(6, 4),
                 MinWidth = 74,
                 BorderBrush = choice.IsDefault
-                    ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
-                    : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+                    ? FreePBrushes.Accent
+                    : FreePBrushes.DisabledBorder,
                 Background = choice.IsDefault
-                    ? new SolidColorBrush(Color.FromRgb(0xFE, 0xF2, 0xEC))
-                    : Brushes.White,
+                    ? FreePBrushes.SelectedSwatchSurface
+                    : FreePBrushes.White,
             };
-            AutomationProperties.SetAutomationId(button, $"table-{choice.Rows}x{choice.Columns}");
+            AutomationProperties.SetAutomationId(button, choice.AutomationId);
             button.Click += (_, _) =>
             {
                 if (button.Tag is TableInsertionPickerChoice tableChoice)
@@ -3948,7 +2474,7 @@ public sealed partial class MainWindow : Window
                 Margin = new Thickness(10, 8, 10, 2),
                 FontSize = 11,
                 FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                Foreground = FreePBrushes.PaneText,
             });
 
             var groupPanel = new WrapPanel
@@ -3968,8 +2494,8 @@ public sealed partial class MainWindow : Window
                     HorizontalContentAlignment = HorizontalAlignment.Stretch,
                     IsEnabled = choice.Chrome.IsEnabled,
                 };
-                AutomationProperties.SetName(button, BuildLayoutChoiceLabel(choice));
-                AutomationProperties.SetAutomationId(button, $"layout-{choice.LayoutId}");
+                AutomationProperties.SetName(button, choice.DisplayLabel);
+                AutomationProperties.SetAutomationId(button, choice.AutomationId);
                 button.Click += (_, _) =>
                 {
                     if (button.Tag is string layoutId)
@@ -4002,6 +2528,7 @@ public sealed partial class MainWindow : Window
         HideLayoutPicker();
         HideTablePicker();
         var dialog = new SlideSizeDialog(Editor);
+        LastCustomSlideSizeInitialState = dialog.InitialState;
         _slideSizeDialog = dialog;
         dialog.Closed += (_, _) =>
         {
@@ -4023,7 +2550,6 @@ public sealed partial class MainWindow : Window
     internal void OpenHeaderFooterDialog(HeaderFooterCommandFocus focus)
     {
         LastHeaderFooterFocus = focus;
-        LastHeaderFooterState = HeaderFooterCommandPlanner.BuildState(Editor);
         if (_headerFooterDialog is not null)
         {
             _headerFooterDialog.Activate();
@@ -4033,8 +2559,10 @@ public sealed partial class MainWindow : Window
         HideLayoutPicker();
         HideTablePicker();
         var dialog = new HeaderFooterDialog(Editor, focus);
+        LastHeaderFooterState = dialog.InitialState;
         _headerFooterDialog = dialog;
-        _statusText.Text = "Header and Footer";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(
+            PresentationShellTextCatalog.HeaderFooterDialogStatus);
         dialog.Closed += (_, _) =>
         {
             LastHeaderFooterApplyPlan = dialog.LastApplyPlan;
@@ -4062,7 +2590,8 @@ public sealed partial class MainWindow : Window
 
         var dialog = new SlideShowSettingsDialog(Editor);
         _slideShowSettingsDialog = dialog;
-        _statusText.Text = "Set Up Slide Show";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(
+            PresentationShellTextCatalog.SlideShowSettingsDialogStatus);
         dialog.Closed += (_, _) => _slideShowSettingsDialog = null;
         if (IsVisible)
             _ = dialog.ShowDialog<bool?>(this);
@@ -4070,19 +2599,11 @@ public sealed partial class MainWindow : Window
             dialog.Show();
     }
 
-    private static string BuildLayoutChoiceLabel(PresentationLayoutChoice choice)
-    {
-        var currentPrefix = choice.IsCurrent ? "Current - " : string.Empty;
-        var placeholders = choice.PlaceholderCount == 1 ? "1 placeholder" : $"{choice.PlaceholderCount} placeholders";
-        return $"{currentPrefix}{choice.DisplayName}\n{choice.MasterDisplayName} - {placeholders}";
-    }
-
     private static Control BuildLayoutChoiceTile(PresentationLayoutChoice choice)
     {
-        var (borderBrush, backgroundBrush) = BuildLayoutChoiceBrushes(choice.Chrome);
         var label = new TextBlock
         {
-            Text = BuildLayoutChoiceLabel(choice),
+            Text = choice.DisplayLabel,
             TextWrapping = TextWrapping.Wrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             FontSize = 11,
@@ -4106,7 +2627,8 @@ public sealed partial class MainWindow : Window
             {
                 Text = choice.Chrome.BadgeText,
                 FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                Foreground = BrushFromHex(
+                    PresentationDesignCommandPlanner.LayoutPickerVisuals.BadgeForegroundBrushHex),
                 FontWeight = FontWeight.SemiBold,
                 Margin = new Thickness(0, 3, 0, 0),
             });
@@ -4114,8 +2636,8 @@ public sealed partial class MainWindow : Window
 
         return new Border
         {
-            BorderBrush = borderBrush,
-            Background = backgroundBrush,
+            BorderBrush = BrushFromHex(choice.Chrome.BorderBrushHex),
+            Background = BrushFromHex(choice.Chrome.BackgroundBrushHex),
             BorderThickness = new Thickness(choice.Chrome.BorderThicknessDip),
             Padding = new Thickness(8),
             Child = stack,
@@ -4128,20 +2650,22 @@ public sealed partial class MainWindow : Window
         {
             Width = PresentationDesignCommandPlanner.LayoutThumbnailWidthDip,
             Height = PresentationDesignCommandPlanner.LayoutThumbnailHeightDip,
-            Background = Brushes.White,
+            Background = BrushFromHex(
+                PresentationDesignCommandPlanner.LayoutPickerVisuals.ThumbnailBackgroundBrushHex),
         };
 
         foreach (var placeholder in choice.ThumbnailPlaceholders)
         {
+            var visual = placeholder.Visual;
             var rect = new AvaloniaRectangle
             {
                 Width = placeholder.Bounds.Width,
                 Height = placeholder.Bounds.Height,
-                Fill = BuildLayoutPlaceholderFill(placeholder.PlaceholderType),
-                Stroke = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)),
-                StrokeThickness = 1,
-                RadiusX = 1,
-                RadiusY = 1,
+                Fill = BrushFromHex(visual.FillBrushHex),
+                Stroke = BrushFromHex(visual.StrokeBrushHex),
+                StrokeThickness = visual.StrokeThicknessDip,
+                RadiusX = visual.CornerRadiusDip,
+                RadiusY = visual.CornerRadiusDip,
             };
             Canvas.SetLeft(rect, placeholder.Bounds.X);
             Canvas.SetTop(rect, placeholder.Bounds.Y);
@@ -4150,318 +2674,122 @@ public sealed partial class MainWindow : Window
 
         return new Border
         {
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9)),
-            BorderThickness = new Thickness(1),
+            BorderBrush = BrushFromHex(
+                PresentationDesignCommandPlanner.LayoutPickerVisuals.ThumbnailBorderBrushHex),
+            BorderThickness = new Thickness(
+                PresentationDesignCommandPlanner.LayoutPickerVisuals.ThumbnailBorderThicknessDip),
             Child = canvas,
         };
     }
 
-    private static IBrush BuildLayoutPlaceholderFill(PlaceholderType type) =>
-        type is PlaceholderType.Title or PlaceholderType.CenteredTitle or PlaceholderType.SubTitle
-            ? new SolidColorBrush(Color.FromRgb(0xF8, 0xDD, 0xD1))
-            : new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xF6));
-
-    private static (IBrush Border, IBrush Background) BuildLayoutChoiceBrushes(
-        PresentationLayoutChoiceChrome chrome) =>
-        chrome.State switch
-        {
-            PresentationLayoutChoiceChromeState.Current => (
-                new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
-                new SolidColorBrush(Color.FromRgb(0xFF, 0xF4, 0xEF))),
-            PresentationLayoutChoiceChromeState.Disabled => (
-                new SolidColorBrush(Color.FromRgb(0xA6, 0xA6, 0xA6)),
-                new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3))),
-            _ => (
-                new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
-                Brushes.White),
-        };
-
     private async Task InsertPictureFromFileAsync()
     {
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.InsertPictureCommand);
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                SisterAppFileTextPlanner.InsertPicturePickerTitle,
-                [PictureFileType]));
-
-        if (file is null)
-            return;
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-
-            var payload = SlideObjectInsertionPlanner.CreatePicturePayload(memory.ToArray(), file.Name);
-            var added = SlideObjectInsertionPlanner.ApplyCommand(
-                Editor,
-                SlideObjectInsertionPlanner.PictureCommandId,
-                payload);
-
-            if (added is not null)
-                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.InsertPictureCommand, ex.Message);
-        }
+        var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.Picture);
+        MaterializePresentationAssetImportResult(result, showInsertedStatus: true);
     }
 
     private async Task InsertMediaFromFileAsync(bool isVideo)
     {
-        var command = isVideo
-            ? PresentationFileTextResources.InsertVideoCommand
-            : PresentationFileTextResources.InsertAudioCommand;
-        var pickerTitle = isVideo
-            ? PresentationFileTextResources.InsertVideoPickerTitle
-            : PresentationFileTextResources.InsertAudioPickerTitle;
-
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(command);
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                pickerTitle,
-                [isVideo ? VideoFileType : AudioFileType]));
-
-        if (file is null)
-            return;
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-
-            var payload = SlideObjectInsertionPlanner.CreateMediaPayload(memory.ToArray(), file.Name, isVideo);
-            var plan = isVideo
-                ? SlideObjectInsertionPlanner.VideoCommandId
-                : SlideObjectInsertionPlanner.AudioCommandId;
-            var added = SlideObjectInsertionPlanner.ApplyCommand(
-                Editor,
-                plan,
-                mediaPayload: payload);
-
-            if (added is not null)
-                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(command, ex.Message);
-        }
+        var kind = isVideo
+            ? PresentationAssetImportKind.Video
+            : PresentationAssetImportKind.Audio;
+        var result = await ImportPresentationAssetAsync(kind);
+        MaterializePresentationAssetImportResult(result, showInsertedStatus: true);
     }
 
     private async Task InsertEmbeddedObjectFromFileAsync()
     {
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                OleInsertionPlanner.PickerTitle);
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                OleInsertionPlanner.PickerTitle,
-                [EmbeddedObjectFileType]));
-
-        if (file is null)
-            return;
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-            Editor.InsertEmbeddedObject(memory.ToArray(), file.Name);
-            _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                OleInsertionPlanner.PickerTitle,
-                ex.Message);
-        }
+        var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.EmbeddedObject);
+        MaterializePresentationAssetImportResult(result, showInsertedStatus: true);
     }
 
     private async Task PickTransitionSoundAsync()
     {
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                PresentationFileTextResources.InsertAudioCommand);
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                PresentationFileTextResources.InsertAudioPickerTitle,
-                [AudioFileType]));
-
-        if (file is null)
-        {
-            return;
-        }
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-
-            Editor.SetCurrentSlideTransitionSound(new TransitionSound
-            {
-                AudioBytes = memory.ToArray(),
-                ContentType = SlideObjectInsertionPlanner.InferMediaContentType(file.Name, isVideo: false),
-                IsBuiltIn = false,
-            });
-            _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                PresentationFileTextResources.InsertAudioCommand,
-                ex.Message);
-        }
+        var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.TransitionSound);
+        MaterializePresentationAssetImportResult(result, showInsertedStatus: true);
     }
 
     // ── File lifecycle ─────────────────────────────────────────────────────────
 
-    internal Task ApplyPictureBulletFromFileAsyncForTests() => ApplyPictureBulletFromFileAsync();
 
     private async Task ApplyPictureBulletFromFileAsync()
     {
-        try
+        Task<PresentationPictureBulletPayload?>? payloadOverride = null;
+        ResolvePictureBulletPayloadOverride(ref payloadOverride);
+        if (payloadOverride is not null)
         {
-            var payload = PictureBulletPayloadProviderForTests is { } provider
-                ? await provider()
-                : await PickPictureBulletPayloadAsync();
-
-            if (payload is null)
-                return;
-
-            if (_textEditor?.TryApplyActiveShapeParagraphPictureBullet(payload) == true)
+            try
             {
-                _statusText.Text = "Picture bullet applied.";
-                return;
+                var payload = await payloadOverride;
+                if (payload is not null && ApplyImportedPictureBullet(payload))
+                {
+                    _statusText.Text = PresentationShellTextCatalog.Resolve(
+                        PresentationShellTextCatalog.PictureBulletAppliedStatus);
+                }
             }
-
-            if (_textEditor?.TryApplyActiveTableCellParagraphPictureBullet(payload) == true)
+            catch (Exception ex)
             {
-                _statusText.Text = "Picture bullet applied.";
-                return;
+                _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                    FileText,
+                    PresentationShellTextCatalog.Resolve(
+                        PresentationShellTextCatalog.PictureBulletCommandName),
+                    ex.Message);
             }
+            return;
+        }
 
-            if (Editor.TryApplyActiveTableCellParagraphPictureBullet(payload))
-                _statusText.Text = "Picture bullet applied.";
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed("Picture Bullet", ex.Message);
-        }
+        var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.PictureBullet);
+        MaterializePresentationAssetImportResult(
+            result,
+            successStatus: PresentationShellTextCatalog.Resolve(
+                PresentationShellTextCatalog.PictureBulletAppliedStatus));
     }
 
-    private async Task<PresentationPictureBulletPayload?> PickPictureBulletPayloadAsync()
+    private void ShowDomainDialog(Window dialog)
     {
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
+        if (IsVisible)
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable("Picture Bullet");
-            return null;
+            _ = dialog.ShowDialog<bool?>(this);
+            return;
         }
 
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                "Choose Picture Bullet",
-                [PictureFileType]));
-
-        if (file is null)
-            return null;
-
-        await using var source = await file.OpenReadAsync();
-        using var memory = new MemoryStream();
-        await source.CopyToAsync(memory);
-
-        return PresentationPictureBulletAuthoringPlanner.CreatePayloadFromFileName(
-            memory.ToArray(),
-            file.Name);
+        dialog.Show();
     }
 
     internal void OpenChartDataDialog()
     {
-        if (!Editor.CanEditSelectedChartData)
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartData))
             return;
 
-        var dialog = new ChartDataDialog(Editor);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartDataDialog(Editor));
     }
 
     internal void OpenChartDisplayOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting)
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDisplayOptions))
             return;
 
-        var dialog = new ChartDisplayOptionsDialog(Editor);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartDisplayOptionsDialog(Editor));
     }
 
     internal void OpenChartAxisOptionsDialog() => OpenChartAxisOptionsDialog(null);
 
     internal void OpenChartAxisOptionsDialog(ChartAxisKind? initialAxis)
     {
-        if (!Editor.CanEditSelectedChartFormatting)
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartAxisOptions))
             return;
 
-        var dialog = new ChartAxisOptionsDialog(Editor, initialAxis);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartAxisOptionsDialog(Editor, initialAxis));
     }
 
     internal void OpenChartSeriesOptionsDialog() => OpenChartSeriesOptionsDialog(null);
 
     internal void OpenChartSeriesOptionsDialog(int? initialSeriesIndex)
     {
-        if (!Editor.CanEditSelectedChartFormatting)
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartSeriesOptions))
             return;
 
-        var dialog = new ChartSeriesOptionsDialog(Editor, initialSeriesIndex);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartSeriesOptionsDialog(Editor, initialSeriesIndex));
     }
 
     private void OnChartPointDoubleClick(ChartPointHit hit)
@@ -4472,182 +2800,101 @@ public sealed partial class MainWindow : Window
 
     internal void OpenChartPointOptionsDialog(int? seriesIndex = null, int? pointIndex = null)
     {
-        if (!Editor.CanEditSelectedChartFormatting)
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPointOptions))
             return;
 
-        var dialog = new ChartPointOptionsDialog(Editor, seriesIndex, pointIndex);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartPointOptionsDialog(Editor, seriesIndex, pointIndex));
     }
 
     internal void OpenChartLayoutOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting)
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartLayoutOptions))
             return;
 
-        var dialog = new ChartLayoutOptionsDialog(Editor);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartLayoutOptionsDialog(Editor));
     }
 
     internal void OpenChartExSeriesLayoutDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting
-            || !ChartExSeriesLayoutPlanner.CanEdit(Editor.SelectedChart))
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartExSeriesLayout))
             return;
 
-        var dialog = new ChartExSeriesLayoutDialog(Editor);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartExSeriesLayoutDialog(Editor));
     }
 
     internal void OpenChartDataTableOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting)
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDataTableOptions))
             return;
 
-        var dialog = new ChartDataTableOptionsDialog(Editor);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartDataTableOptionsDialog(Editor));
     }
 
     internal void OpenChartBubbleOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting
-            || Editor.SelectedChart is not { ChartType: ChartType.Bubble })
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartBubbleOptions))
             return;
 
-        var dialog = new ChartBubbleOptionsDialog(Editor);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartBubbleOptionsDialog(Editor));
     }
 
     internal void OpenChartPieOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting
-            || Editor.SelectedChart is not { ChartType: ChartType.Pie or ChartType.Doughnut })
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPieOptions))
             return;
 
-        var dialog = new ChartPieOptionsDialog(Editor);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartPieOptionsDialog(Editor));
     }
 
     internal void OpenChartPlotStyleOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting
-            || Editor.SelectedChart is not { ChartType: ChartType.Scatter or ChartType.Radar })
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPlotStyleOptions))
             return;
 
-        var dialog = new ChartPlotStyleOptionsDialog(Editor);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartPlotStyleOptionsDialog(Editor));
     }
 
     internal void OpenChart3DViewOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting)
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.Chart3DViewOptions))
             return;
 
-        var dialog = new Chart3DViewOptionsDialog(Editor);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new Chart3DViewOptionsDialog(Editor));
     }
 
     internal void OpenChartTextOptionsDialog() => OpenChartTextOptionsDialog(ChartTextTarget.Chart);
 
     internal void OpenChartTextOptionsDialog(ChartTextTarget target)
     {
-        if (!Editor.CanEditSelectedChartFormatting)
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartTextOptions))
             return;
 
-        var dialog = new ChartTextOptionsDialog(Editor, target);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartTextOptionsDialog(Editor, target));
     }
 
     internal void OpenChartAreaOptionsDialog() => OpenChartAreaOptionsDialog(null);
 
     internal void OpenChartAreaOptionsDialog(ChartAreaFormattingTarget? initialTarget)
     {
-        if (!Editor.CanEditSelectedChartFormatting) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartAreaOptions)) return;
         var dialog = new ChartAreaOptionsDialog(Editor, initialTarget);
         dialog.ShowDialog(this);
     }
 
     internal void OpenChartProtectionOptionsDialog()
     {
-        if (Editor.SelectedChart is null)
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartProtectionOptions))
             return;
 
-        var dialog = new ChartProtectionOptionsDialog(Editor);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new ChartProtectionOptionsDialog(Editor));
     }
 
     internal void OpenRotationOptionsDialog()
     {
-        if (Editor.SelectedShapeIds.Count == 0)
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.RotationOptions))
             return;
 
-        var dialog = new RotationOptionsDialog(Editor);
-        if (IsVisible)
-        {
-            _ = dialog.ShowDialog<bool?>(this);
-            return;
-        }
-
-        dialog.Show();
+        ShowDomainDialog(new RotationOptionsDialog(Editor));
     }
 
     /// <summary>
@@ -4665,53 +2912,41 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(commandName, ex.Message);
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, commandName, ex.Message);
         }
     }
 
     internal void OpenHyperlinkDialog() =>
-        RunGuarded(async () => await OpenHyperlinkDialogAsync(), "Hyperlink");
+        RunGuarded(
+            async () => await OpenHyperlinkDialogAsync(),
+            UiText.Get("Ribbon_Command_InsertLink_Label"));
 
-    internal Task<HyperlinkDialogApplyPlan> OpenHyperlinkDialogAsyncForTests() =>
-        OpenHyperlinkDialogAsync();
 
     private async Task<HyperlinkDialogApplyPlan> OpenHyperlinkDialogAsync()
     {
         Hyperlink? selectedRunHyperlink = null;
         var editsSelectedRun = _textEditor is not null
             && _textEditor.TryGetSelectedShapeRunHyperlink(out selectedRunHyperlink);
-        var request = HyperlinkDialogPlanner.BuildDialogRequest(
-            Editor.Presentation.Slides,
-            editsSelectedRun ? selectedRunHyperlink : Editor.SelectedShapeHyperlink);
-        LastHyperlinkDialogRequest = request;
+        var request = _hyperlinkWorkflowSession.BuildRequest(
+            editsSelectedRun,
+            selectedRunHyperlink);
+        LastHyperlinkDialogRequest = request.DialogRequest;
 
-        var result = HyperlinkDialogResultProviderForTests is { } provider
-            ? await provider(request)
-            : await ShowHyperlinkDialogAsync(request);
+        Task<Hyperlink?>? resultOverride = null;
+        ResolveHyperlinkDialogOverride(request.DialogRequest, ref resultOverride);
+        var result = resultOverride is not null
+            ? await resultOverride
+            : await ShowHyperlinkDialogAsync(request.DialogRequest);
 
-        var applyPlan = HyperlinkDialogPlanner.BuildApplyPlan(result);
-        LastHyperlinkDialogApplyPlan = applyPlan;
-        if (applyPlan.ShouldApply)
-        {
-            var hyperlink = new Hyperlink
-            {
-                Url = applyPlan.Url,
-                TargetSlideId = applyPlan.TargetSlideId,
-                Tooltip = applyPlan.Tooltip,
-            };
-            if (!editsSelectedRun || _textEditor?.TryApplySelectedShapeRunHyperlink(hyperlink) != true)
-            {
-                Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip);
-                var authoringPostconditionPath = Environment.GetEnvironmentVariable("FREEP_PHYSICAL_HYPERLINK_AUTHORING_POSTCONDITION");
-                if (!string.IsNullOrWhiteSpace(authoringPostconditionPath))
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(authoringPostconditionPath)!);
-                    File.WriteAllText(authoringPostconditionPath, $"selectedShapeId={Editor.SelectedShapeIds.SingleOrDefault()}\ntargetSlideId={applyPlan.TargetSlideId}\n");
-                }
-            }
-        }
+        var workflowResult = _hyperlinkWorkflowSession.Apply(
+            request,
+            result,
+            hyperlink => _textEditor?.TryApplySelectedShapeRunHyperlink(hyperlink) == true);
+        LastHyperlinkDialogApplyPlan = workflowResult.ApplyPlan;
+        if (workflowResult.Target == PresentationHyperlinkApplyTarget.SelectedShape)
+            NotifyHyperlinkAppliedObserver();
 
-        return applyPlan;
+        return workflowResult.ApplyPlan;
     }
 
     private async Task<Hyperlink?> ShowHyperlinkDialogAsync(HyperlinkDialogRequest request)
@@ -4724,327 +2959,175 @@ public sealed partial class MainWindow : Window
         return null;
     }
 
-    internal void OpenSlideZoomDialog() => RunGuarded(OpenSlideZoomDialogAsync, "Slide Zoom");
+    internal void OpenSlideZoomDialog() =>
+        RunGuarded(OpenSlideZoomDialogAsync, UiText.Get("Shell_Command_SlideZoom"));
 
     internal async Task OpenSlideZoomDialogAsync()
     {
-        var options = SlideZoomInsertionPlanner.BuildTargetOptions(
-            Editor.Presentation.Slides,
-            Editor.CurrentSlideIndex);
-        if (options.Count == 0 || !IsVisible)
+        var request = _zoomAuthoringSession.BuildSlideInsertionRequest();
+        if (request is null || !IsVisible)
             return;
 
-        var dialog = new SlideZoomDialog(options);
+        var dialog = new SlideZoomDialog(
+            request.Options,
+            request.Title,
+            request.SelectedTargetId);
         var result = await dialog.ShowDialog<bool?>(this);
-        if (result == true && dialog.SelectedTargetSlideId is { Length: > 0 } targetSlideId)
-        {
-            var shape = Editor.InsertSlideZoom(targetSlideId);
-            var targetSlideIndex = Editor.Presentation.Slides.FindIndex(slide =>
-                string.Equals(slide.Id, targetSlideId, StringComparison.OrdinalIgnoreCase));
-            AttachZoomPreview(shape, targetSlideIndex);
-        }
+        if (result == true)
+            _zoomAuthoringSession.ApplySlideInsertion(dialog.SelectedTargetSlideId);
     }
 
-    internal void OpenSectionZoomDialog() => RunGuarded(OpenSectionZoomDialogAsync, "Section Zoom");
+    internal void OpenSectionZoomDialog() =>
+        RunGuarded(OpenSectionZoomDialogAsync, UiText.Get("Shell_Command_SectionZoom"));
 
     internal async Task OpenSectionZoomDialogAsync()
     {
-        var options = SectionZoomInsertionPlanner.BuildTargetOptions(
-            Editor.Presentation,
-            Editor.CurrentSlideIndex);
-        if (options.Count == 0 || !IsVisible)
+        var request = _zoomAuthoringSession.BuildSectionInsertionRequest();
+        if (request is null || !IsVisible)
             return;
 
-        var dialog = new SectionZoomDialog(options);
+        var dialog = new SectionZoomDialog(
+            request.Options,
+            request.Title,
+            request.SelectedTargetId);
         var result = await dialog.ShowDialog<bool?>(this);
-        if (result == true && dialog.SelectedTargetSectionId is { Length: > 0 } targetSectionId)
-        {
-            var shape = Editor.InsertSectionZoom(targetSectionId);
-            if (SummaryZoomPreviewPlanner.TryResolveTargetSlideIndex(
-                    Editor.Presentation, targetSectionId, out var targetSlideIndex))
-                AttachZoomPreview(shape, targetSlideIndex);
-        }
+        if (result == true)
+            _zoomAuthoringSession.ApplySectionInsertion(dialog.SelectedTargetSectionId);
     }
 
-    internal void OpenSummaryZoomDialog() => RunGuarded(OpenSummaryZoomDialogAsync, "Summary Zoom");
+    internal void OpenSummaryZoomDialog() =>
+        RunGuarded(OpenSummaryZoomDialogAsync, UiText.Get("Shell_Command_SummaryZoom"));
 
     internal async Task OpenSummaryZoomDialogAsync()
     {
-        var options = SummaryZoomInsertionPlanner.BuildTargetOptions(
-            Editor.Presentation,
-            Editor.CurrentSlideIndex);
-        if (options.Count < 2 || !IsVisible)
+        var request = _zoomAuthoringSession.BuildSummaryInsertionRequest();
+        if (request is null || !IsVisible)
             return;
 
-        var dialog = new SummaryZoomDialog(options);
+        var dialog = new SummaryZoomDialog(
+            request.Options,
+            request.Title,
+            request.SelectedTargetIds);
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true)
-        {
-            var shape = Editor.InsertSummaryZoom(dialog.SelectedTargetSectionIds);
-            AttachSummaryZoomPreviews(shape);
-        }
+            _zoomAuthoringSession.ApplySummaryInsertion(dialog.SelectedTargetSectionIds);
     }
 
-    internal void OpenZoomTargetDialog() => RunGuarded(OpenZoomTargetDialogAsync, "Zoom Target");
+    internal void OpenZoomTargetDialog() =>
+        RunGuarded(OpenZoomTargetDialogAsync, UiText.Get("Shell_Command_ZoomTarget"));
 
     internal async Task OpenZoomTargetDialogAsync()
     {
-        var selectedShapeId = GetSingleSelectedShapeId();
-        var shape = selectedShapeId is uint id && Editor.CurrentSlide is { } slide
-            ? ShapeTreeLookup.Find(slide, id)
-            : null;
-        var info = shape?.PreservedObject;
-        if (selectedShapeId is not uint zoomShapeId
-            || shape?.Kind != SlideShapeKind.Zoom
-            || info?.ObjectKind != PreservedObjectKind.Zoom
-            || info.SummaryZoomTargets.Count != 0
-            || !IsVisible)
+        var request = _zoomAuthoringSession.BuildSelectedTargetRequest();
+        if (request is null || !IsVisible)
             return;
 
-        if (info.ZoomTargetSlideNumericId is uint targetNumericId)
+        if (request.Kind == PresentationZoomTargetKind.Slide)
         {
-            var options = SlideZoomInsertionPlanner.BuildTargetOptions(
-                Editor.Presentation.Slides, Editor.CurrentSlideIndex);
-            var currentId = Editor.Presentation.Slides.FirstOrDefault(slide => slide.NumericId == targetNumericId)?.Id;
-            var dialog = new SlideZoomDialog(options, ZoomTargetPlanner.DialogTitle, currentId);
+            var dialog = new SlideZoomDialog(
+                request.Options,
+                request.Title,
+                request.SelectedTargetId);
             var result = await dialog.ShowDialog<bool?>(this);
-            if (result == true && dialog.SelectedTargetSlideId is { Length: > 0 } targetSlideId
-                && Editor.SetSlideZoomTarget(zoomShapeId, targetSlideId))
-            {
-                var targetIndex = Editor.Presentation.Slides.FindIndex(slide =>
-                    string.Equals(slide.Id, targetSlideId, StringComparison.OrdinalIgnoreCase));
-                AttachZoomPreview(shape, targetIndex);
-            }
+            if (result == true)
+                _zoomAuthoringSession.ApplySelectedTarget(request, dialog.SelectedTargetSlideId);
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(info.ZoomTargetSectionId))
-        {
-            var options = SectionZoomInsertionPlanner.BuildTargetOptions(Editor.Presentation, Editor.CurrentSlideIndex);
-            var dialog = new SectionZoomDialog(options, ZoomTargetPlanner.DialogTitle, info.ZoomTargetSectionId);
-            var result = await dialog.ShowDialog<bool?>(this);
-            if (result == true && dialog.SelectedTargetSectionId is { Length: > 0 } targetSectionId
-                && Editor.SetSectionZoomTarget(zoomShapeId, targetSectionId)
-                && SummaryZoomPreviewPlanner.TryResolveTargetSlideIndex(
-                    Editor.Presentation, targetSectionId, out var targetIndex))
-                AttachZoomPreview(shape, targetIndex);
-        }
+        var sectionDialog = new SectionZoomDialog(
+            request.Options,
+            request.Title,
+            request.SelectedTargetId);
+        var sectionResult = await sectionDialog.ShowDialog<bool?>(this);
+        if (sectionResult == true)
+            _zoomAuthoringSession.ApplySelectedTarget(request, sectionDialog.SelectedTargetSectionId);
     }
 
-    internal void OpenSummaryZoomTargetsDialog() => RunGuarded(OpenSummaryZoomTargetsDialogAsync, "Summary Zoom Targets");
+    internal void OpenSummaryZoomTargetsDialog() =>
+        RunGuarded(OpenSummaryZoomTargetsDialogAsync, UiText.Get("Shell_Command_SummaryZoomTargets"));
 
     internal async Task OpenSummaryZoomTargetsDialogAsync()
     {
-        var selectedShapeId = GetSingleSelectedShapeId();
-        var shape = selectedShapeId is uint id && Editor.CurrentSlide is { } slide
-            ? ShapeTreeLookup.Find(slide, id)
-            : null;
-        var info = shape?.PreservedObject;
-        if (selectedShapeId is not uint zoomShapeId
-            || shape?.Kind != SlideShapeKind.Zoom
-            || info?.ObjectKind != PreservedObjectKind.Zoom
-            || info.SummaryZoomTargets.Count < 2
-            || !IsVisible)
+        var request = _zoomAuthoringSession.BuildSelectedSummaryTargetsRequest();
+        if (request is null || !IsVisible)
             return;
 
-        var options = SummaryZoomInsertionPlanner.BuildTargetOptions(
-            Editor.Presentation, Editor.CurrentSlideIndex);
-        var selected = info.SummaryZoomTargets.Select(target => target.SectionId).ToArray();
-        var dialog = new SummaryZoomDialog(options, SummaryZoomTargetPlanner.DialogTitle, selected);
+        var dialog = new SummaryZoomDialog(
+            request.Options,
+            request.Title,
+            request.SelectedTargetIds);
         var result = await dialog.ShowDialog<bool?>(this);
-        if (result == true
-            && Editor.SetSummaryZoomTargets(zoomShapeId, dialog.SelectedTargetSectionIds))
-            AttachSummaryZoomPreviews(shape);
-    }
-
-    private void AttachSummaryZoomPreviews(SlideShape shape)
-    {
-        var widthPx = SummaryZoomPreviewPlanner.DefaultPreviewWidthPx;
-        var heightPx = SummaryZoomPreviewPlanner.ResolvePreviewHeightPx(Editor.Presentation, widthPx);
-        SummaryZoomPreviewPlanner.AttachPreviewImages(
-            Editor.Presentation,
-            shape,
-            slideIndex => SlideRenderer.RenderToBytes(
-                Editor.Presentation, slideIndex, widthPx, heightPx));
-    }
-
-    private void AttachZoomPreview(SlideShape shape, int targetSlideIndex)
-    {
-        if (targetSlideIndex < 0)
-            return;
-
-        var widthPx = SummaryZoomPreviewPlanner.DefaultPreviewWidthPx;
-        var heightPx = SummaryZoomPreviewPlanner.ResolvePreviewHeightPx(Editor.Presentation, widthPx);
-        SummaryZoomPreviewPlanner.AttachPreviewImage(
-            Editor.Presentation,
-            shape,
-            targetSlideIndex,
-            slideIndex => SlideRenderer.RenderToBytes(
-                Editor.Presentation, slideIndex, widthPx, heightPx));
+        if (result == true)
+            _zoomAuthoringSession.ApplySelectedSummaryTargets(
+                request,
+                dialog.SelectedTargetSectionIds);
     }
 
     internal async Task OpenZoomObjectPropertiesDialogAsync()
     {
-        var current = Editor.SelectedZoomObjectProperties;
-        if (current is null || !IsVisible)
+        var request = _zoomAuthoringSession.BuildSelectedPropertiesRequest();
+        if (request is null || !IsVisible)
             return;
 
-        var selectedShapeId = GetSingleSelectedShapeId();
-        var selectedInfo = selectedShapeId is uint shapeId && Editor.CurrentSlide is { } slide
-            ? ShapeTreeLookup.Find(slide, shapeId)?.PreservedObject
-            : null;
-        var summaryTargets = selectedInfo?.SummaryZoomTargets
-            ?? (IReadOnlyList<SummaryZoomTarget>)Array.Empty<SummaryZoomTarget>();
-        var summaryTileProperties = summaryTargets.Count == 0
-            ? Array.Empty<ZoomObjectProperties>()
-            : summaryTargets.Select(target =>
-                ZoomObjectPropertiesPlanner.EffectiveSummaryTile(selectedInfo, target.SectionId)).ToArray();
-        var dialog = new ZoomObjectPropertiesDialog(current, summaryTargets, summaryTileProperties);
+        var dialog = new ZoomObjectPropertiesDialog(
+            request.Properties,
+            request.SummaryTargets,
+            request.SummaryTileProperties);
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true)
         {
-            var changed = dialog.ApplySummaryPropertiesToAllTiles
-                ? Editor.SetSelectedZoomObjectProperties(dialog.Properties)
-                : dialog.SummaryTileProperties is { } tileProperties
-                && selectedShapeId is uint summaryPropertiesShapeId
-                ? Editor.SetSummaryZoomTileProperties(
-                    summaryPropertiesShapeId,
-                    tileProperties.SectionId,
-                    tileProperties.Properties)
-                : Editor.SetSelectedZoomObjectProperties(dialog.Properties);
-            if (dialog.SummaryTileLayout is { } tile && selectedShapeId is uint summaryShapeId)
-                changed |= Editor.SetSummaryZoomTileLayout(
-                    summaryShapeId,
-                    tile.SectionId,
-                    tile.OffsetFactorX,
-                    tile.OffsetFactorY,
-                    tile.ScaleFactorX,
-                    tile.ScaleFactorY);
-            if (changed)
-            {
-                _fileWorkflow.MarkDirty();
-                RefreshCanvas();
-                UpdateStatus();
-            }
+            _zoomAuthoringSession.ApplySelectedProperties(
+                request,
+                new PresentationZoomPropertiesApplyRequest(
+                    dialog.Properties,
+                    dialog.ApplySummaryPropertiesToAllTiles,
+                    dialog.SummaryTileProperties,
+                    dialog.SummaryTileLayout));
         }
     }
 
     internal async Task OpenZoomCoverImagePickerAsync()
     {
-        var selectedShapeId = GetSingleSelectedShapeId();
-        if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
-            return;
-
-        var shape = ShapeTreeLookup.Find(slide, selectedShapeId.Value);
-        if (shape?.Kind != SlideShapeKind.Zoom || shape.PreservedObject is not { } info)
+        var request = _zoomAuthoringSession.BuildSelectedCoverTargetRequest();
+        if (request is null)
             return;
 
         string? summarySectionId = null;
-        if (info.SummaryZoomTargets.Count > 0)
+        if (request.RequiresSummaryTarget)
         {
-            var targetOptions = info.SummaryZoomTargets
-                .Select(target => (target.SectionId, string.IsNullOrWhiteSpace(target.Title)
-                    ? target.SectionId
-                    : target.Title))
-                .ToArray();
-            var targetDialog = new SummaryZoomCoverImageTargetDialog(targetOptions);
+            var targetDialog = new SummaryZoomCoverImageTargetDialog(request.SummaryTargetOptions);
             var targetResult = await targetDialog.ShowDialog<bool?>(this);
             if (targetResult != true)
                 return;
             summarySectionId = targetDialog.SelectedTargetSectionId;
         }
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                ZoomCoverImagePlanner.DialogTitle);
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                ZoomCoverImagePlanner.DialogTitle,
-                [PictureFileType]));
-        if (file is null)
-            return;
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-            var contentType = SlideObjectInsertionPlanner.InferPictureContentType(file.Name);
-            var applied = summarySectionId is null
-                ? Editor.SetSelectedZoomCoverImage(memory.ToArray(), contentType)
-                : Editor.SetSummaryZoomTileCoverImage(
-                    shape.Id, summarySectionId, memory.ToArray(), contentType);
-            if (applied)
-            {
-                _fileWorkflow.MarkDirty();
-                RefreshCanvas();
-                UpdateStatus();
-            }
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                ZoomCoverImagePlanner.DialogTitle,
-                ex.Message);
-        }
+        var result = await ImportPresentationAssetAsync(
+            PresentationAssetImportKind.ZoomCoverImage,
+            (bytes, contentType) => _zoomAuthoringSession.ApplySelectedCoverImage(
+                request,
+                summarySectionId,
+                bytes,
+                contentType));
+        MaterializePresentationAssetImportResult(result);
     }
 
     internal async Task RestoreZoomPreviewAsync()
     {
-        var selectedShapeId = GetSingleSelectedShapeId();
-        if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
-            return;
-
-        var shape = ShapeTreeLookup.Find(slide, selectedShapeId.Value);
-        if (shape?.Kind != SlideShapeKind.Zoom || shape.PreservedObject is not { } info)
+        var request = _zoomAuthoringSession.BuildSelectedCoverTargetRequest();
+        if (request is null)
             return;
 
         string? summarySectionId = null;
-        if (info.SummaryZoomTargets.Count > 0)
+        if (request.RequiresSummaryTarget)
         {
-            var targetOptions = info.SummaryZoomTargets
-                .Select(target => (target.SectionId, string.IsNullOrWhiteSpace(target.Title)
-                    ? target.SectionId
-                    : target.Title))
-                .ToArray();
-            var targetDialog = new SummaryZoomCoverImageTargetDialog(targetOptions);
+            var targetDialog = new SummaryZoomCoverImageTargetDialog(request.SummaryTargetOptions);
             var targetResult = await targetDialog.ShowDialog<bool?>(this);
             if (targetResult != true)
                 return;
             summarySectionId = targetDialog.SelectedTargetSectionId;
         }
 
-        var targetIndex = summarySectionId is not null
-            ? SummaryZoomPreviewPlanner.TryResolveTargetSlideIndex(
-                Editor.Presentation, summarySectionId, out var summaryIndex)
-                ? summaryIndex
-                : -1
-            : ZoomNavigationService.TryGetTargetSlideIndex(
-                Editor.Presentation, info, out var singleIndex)
-                ? singleIndex
-                : -1;
-        if (targetIndex < 0)
-            return;
-
-        var widthPx = SummaryZoomPreviewPlanner.DefaultPreviewWidthPx;
-        var heightPx = SummaryZoomPreviewPlanner.ResolvePreviewHeightPx(
-            Editor.Presentation, widthPx);
-        var preview = SlideRenderer.RenderToBytes(
-            Editor.Presentation, targetIndex, widthPx, heightPx);
-        var applied = summarySectionId is null
-            ? Editor.ResetSelectedZoomCoverImage(preview, "image/png")
-            : Editor.ResetSummaryZoomTileCoverImage(
-                shape.Id, summarySectionId, preview, "image/png");
-        if (applied)
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshCanvas();
-            UpdateStatus();
-        }
+        _zoomAuthoringSession.RestoreSelectedPreview(request, summarySectionId);
     }
 
     internal void OpenFindDialog() =>
@@ -5086,52 +3169,23 @@ public sealed partial class MainWindow : Window
             dialog.Show();
     }
 
-    internal FindReplaceWorkflowPlan SetFindReplaceDialogInputForTests(
-        string? query,
-        string? replacement = null,
-        bool matchCase = false,
-        bool wholeWord = false)
-    {
-        var dialog = _findReplaceDialog ?? throw new InvalidOperationException("Find/Replace is not open.");
-        LastFindReplaceWorkflowPlan = dialog.SetInputForTests(query, replacement, matchCase, wholeWord);
-        return LastFindReplaceWorkflowPlan;
-    }
 
-    internal FindReplaceWorkflowPlan NavigateFindReplaceDialogForTests(int direction)
-    {
-        var dialog = _findReplaceDialog ?? throw new InvalidOperationException("Find/Replace is not open.");
-        LastFindReplaceWorkflowPlan = dialog.NavigateForTests(direction);
-        return LastFindReplaceWorkflowPlan;
-    }
 
-    internal FindReplaceWorkflowPlan ReplaceAllFindReplaceDialogForTests()
-    {
-        var dialog = _findReplaceDialog ?? throw new InvalidOperationException("Find/Replace is not open.");
-        LastFindReplaceWorkflowPlan = dialog.ReplaceAllForTests();
-        return LastFindReplaceWorkflowPlan;
-    }
 
     private void FileNew() => _ = FileNewAsync();
 
-    internal Task<bool> FileNewAsyncForTests() => FileNewAsync();
 
-    private Task<bool> FileNewAsync() =>
-        _fileWorkflow.NewAsync(
-            FileText.NewAction,
-            () =>
-            {
-                LoadPresentationContent(Presentation.CreateEmpty());
-                return Task.CompletedTask;
-            });
+    private async Task<bool> FileNewAsync() =>
+        (await _fileSession.NewAsync()).Succeeded;
 
-    private BackstageCallbacks BuildBackstageCallbacks() => new(
+    private PresentationBackstageEndpoints BuildBackstageEndpoints() => new(
         GetPresentation: () => _presentation,
-        GetDisplayName: () => _fileWorkflow.DisplayName,
-        GetIsDirty: () => _fileWorkflow.IsDirty,
-        GetCurrentPath: () => _fileWorkflow.CurrentPath,
-        GetRecentEntries: () => _fileWorkflow.RecentEntries,
+        GetDisplayName: () => _fileSession.DisplayName,
+        GetIsDirty: () => _fileSession.IsDirty,
+        GetCurrentPath: () => _fileSession.CurrentPath,
+        GetRecentEntries: () => _fileSession.RecentEntries,
         GetCurrentOptions: () => _options,
-        GetDataFolder: ResolveDataFolderLabel,
+        GetDataFolder: FreePApplicationFrameDescriptor.ResolveDataFolderLabel,
         OpenOptions: () => _ = OpenOptionsAsync(),
         New: FileNew,
         Open: () => _ = FileOpenAsync(),
@@ -5141,16 +3195,10 @@ public sealed partial class MainWindow : Window
         ExportPdf: () => _ = FileExportPdfAsync(),
         ExportNotesPagePdf: () => _ = FileExportNotesPagePdfAsync(),
         ExportImages: () => _ = FileExportImagesAsync(),
-        GetPrintPlan: () => RefreshPrintBackstagePlan(),
-        GetPrintPlanForCustomRange: rangeText => RefreshPrintBackstagePlan(
-            new PresentationPrintRequest(
-                PresentationPrintLayoutKind.FullPageSlides,
-                new PresentationSlideRangeRequest(
-                    PresentationSlideRangeKind.CustomRange,
-                    CustomRangeText: rangeText))),
+        GetPrintPlan: RefreshPrintBackstagePlan,
         Print: request => _backstagePrintOperation = ExecutePrintWorkflowAsync(request),
         ExportVideo: () => _ = FileExportVideoAsync(),
-        CanExportVideo: () => _nativeOutputCapabilities.Video.CanEncodeMp4);
+        CanExportVideo: () => _fileSession.CanExportVideo);
 
     private Control? _backstageRestoreFocus;
 
@@ -5165,7 +3213,7 @@ public sealed partial class MainWindow : Window
     private void ShowPrintBackstage()
     {
         HidePrintOptionsPane();
-        ShowBackstage("Print");
+        ShowBackstage(PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.PrintSurfacePrintHeading));
     }
 
     private void HideBackstageAndRestoreFocus()
@@ -5176,44 +3224,16 @@ public sealed partial class MainWindow : Window
         (target is { IsVisible: true, Focusable: true } ? target : _slideCanvas).Focus();
     }
 
-    internal void ShowBackstageForTests() => ShowBackstage();
-
-    internal bool ActivateBackstageEntryForTests(string label) => _backstage.TryActivateEntry(label);
-
-    internal Control? CurrentBackstagePaneContentForTests => _backstage.CurrentPaneContent;
-
-    internal bool HandleBackstageKeyForTests(Key key) => _backstage.HandleKey(key);
-
     private void OpenRecentPath(string path) => _ = OpenRecentPathAsync(path);
 
-    private Task<bool> OpenRecentPathAsync(string path) =>
-        _fileWorkflow.OpenAsync(
-            FileText.OpenAction,
-            () => Task.FromResult<string?>(path),
-            TryLoadPresentationFileAsync);
+    private async Task<bool> OpenRecentPathAsync(string path) =>
+        (await _fileSession.OpenRecentPathAsync(path)).Succeeded;
 
-    private Task<bool> FileOpenAsync() =>
-        _fileWorkflow.OpenAsync(
-            FileText.OpenAction,
-            PromptOpenPathAsync,
-            TryLoadPresentationFileAsync);
-
-    internal Task<bool> FileOpenAsyncForTests() => FileOpenAsync();
-    internal Task<bool> FileSaveAsAsyncForTests() => FileSaveAsAsync();
-
-    internal void SetFilePickerOverridesForTests(
-        Func<FileOpenPickerPlan, Task<string?>>? openPicker,
-        Func<FileSavePickerPlan, Task<string?>>? savePicker)
-    {
-        _openPickerOverrideForTests = openPicker;
-        _savePickerOverrideForTests = savePicker;
-    }
-
-    private static string ResolveDataFolderLabel() =>
-        AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
+    private async Task<bool> FileOpenAsync() =>
+        (await _fileSession.OpenAsync()).Succeeded;
 
     // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the
-    // shared _options instance the Backstage and FileCommands read) and persists them through the shared
+    // shared _options instance the Backstage and file-command session read) and persists it through the shared
     // ApplicationOptionsStore so they survive a restart.
     internal async Task OpenOptionsAsync()
     {
@@ -5222,82 +3242,30 @@ public sealed partial class MainWindow : Window
         if (dialog.Result is not { } edited)
             return;
 
-        _options.RecentFilesCap = edited.RecentFilesCap;
-        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
-        _options.UiLanguage = edited.UiLanguage;
-        _options.Normalize();
-
-        _optionsStore.Save(_options);
+        _optionsRuntime.ApplyAndPersist(
+            edited,
+            _ => _optionsStore.Save(_options));
     }
 
-    private async Task<string?> PromptOpenPathAsync()
+    private async Task<bool> FileSaveAsync()
     {
-        var plan = PresentationFileDialogPlanner.BuildOpenPickerPlan();
-        if (_openPickerOverrideForTests is { } pickerOverride)
-            return await pickerOverride(plan);
-
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
+        var opensSaveAsPicker = _fileSession.CurrentPath is null;
+        try
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.OpenCommand);
-            return null;
+            return (await _fileSession.SaveAsync()).Succeeded;
         }
-
-        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromDescriptors(FileText.OpenPickerTitle, plan.FileTypes));
-
-        if (file is null)
-            return null;
-
-        var path = file.LocalPath;
-        if (path is null)
-            _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(SisterAppFileTextPlanner.OpenCommand);
-
-        return path;
+        finally
+        {
+            if (opensSaveAsPicker)
+                RestoreOwnerFocus();
+        }
     }
-
-    private Task<bool> FileSaveAsync() =>
-        _fileWorkflow.SaveAsync(
-            TrySavePresentationFileAsync,
-            FileSaveAsAsync);
 
     private async Task<bool> FileSaveAsAsync()
     {
         try
         {
-            var plan = PresentationFileDialogPlanner.BuildSavePickerPlan(_fileWorkflow.CurrentFileName);
-            if (_savePickerOverrideForTests is { } pickerOverride)
-            {
-                var overriddenPath = await pickerOverride(plan);
-                if (overriddenPath is null)
-                    return false;
-
-                return await TrySavePickerPathAsync(overriddenPath);
-            }
-
-            if (!AvaloniaFilePickerService.CanSave(StorageProvider))
-            {
-                _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.SaveCommand);
-                return false;
-            }
-
-            using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-                StorageProvider,
-                AvaloniaFilePickerSaveRequest.FromSavePlan(
-                    FileText.SavePickerTitle,
-                    plan,
-                    showOverwritePrompt: true));
-
-            var path = file?.LocalPath;
-            if (path is null)
-            {
-                if (file is not null)
-                    _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(SisterAppFileTextPlanner.SaveCommand);
-
-                return false;
-            }
-
-            return await TrySavePickerPathAsync(path);
+            return (await _fileSession.SaveAsAsync()).Succeeded;
         }
         finally
         {
@@ -5305,346 +3273,67 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task<bool> TrySavePickerPathAsync(string path)
-    {
-        if (!PresentationFileDialogPlanner.TryResolveSavePickerPath(path, out var resolvedPath))
-        {
-            var error = new InvalidDataException(PresentationFileDialogPlanner.UnsupportedSavePathMessage);
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                SisterAppFileTextPlanner.SaveCommand,
-                error.Message);
-            await _fileWorkflow.ShowFileCommandErrorAsync("Could not save the presentation", error);
-            return false;
-        }
-
-        return await TrySavePresentationFileAsync(resolvedPath);
-    }
-
-    private async Task<bool> FileExportPdfAsync()
-    {
-        if (!AvaloniaFilePickerService.CanSave(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                FileText,
-                PresentationExportPlanner.PdfExportCommandText);
-            return false;
-        }
-
-        var plan = PresentationExportPlanner.BuildPdfExportPickerPlan(_fileWorkflow.CurrentFileName);
-
-        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.PdfExportPickerTitle, plan));
-
-        var path = file?.LocalPath;
-        if (path is null)
-        {
-            if (file is not null)
-            {
-                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
-                    FileText,
-                    PresentationExportPlanner.PdfExportCommandText);
-            }
-
-            return false;
-        }
-
-        try
-        {
-            var imageDiagnostics = new List<string>();
-            var bytes = ExportPdfRasterBytes(_presentation, imageDiagnostics);
-            ExportAtomicWriter.WriteAllBytes(path, bytes);
-            _statusText.Text = imageDiagnostics.Count == 0
-                ? $"Exported {Path.GetFileName(path)}"
-                : $"Exported {Path.GetFileName(path)} ({imageDiagnostics.Count} image warning(s))";
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                PresentationExportPlanner.PdfExportCommandText,
-                ex.Message);
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Renders every slide to a raster PDF exactly as <see cref="FileExportPdfAsync"/> does, and
-    /// appends into <paramref name="imageDiagnostics"/> both loss points that can occur along the way:
-    /// <see cref="SkiaRasterPdfWriter"/> reporting a page whose already-composited slide PNG cannot be
-    /// decoded (rare -- that PNG is one <see cref="SlideRenderer"/> just encoded, so it is always
-    /// well-formed), and the <see cref="SlideImageRenderDiagnostics"/> capture installed around the
-    /// render reporting a picture <c>SlideCanvas</c> dropped one layer further down while compositing
-    /// the slide itself -- the actual loss point for an undecodable embedded picture. Internal (not
-    /// private) so FreeP.App.Avalonia.Tests can exercise this exact production composition.
-    /// </summary>
-    internal static byte[] ExportPdfRasterBytes(Presentation presentation, List<string> imageDiagnostics)
-    {
-        using (SlideImageRenderDiagnostics.Capture(imageDiagnostics))
-        {
-            return PresentationRasterPdfExporter.ExportToBytes(
-                presentation,
-                request: null,
-                SlideRenderer.RenderToBytes,
-                document => SkiaRasterPdfWriter.WriteToBytes(document, imageDiagnostics));
-        }
-    }
+    private async Task<bool> FileExportPdfAsync() =>
+        (await _fileSession.ExportPdfAsync()).Succeeded;
 
     private async Task<bool> FileExportNotesPagePdfAsync()
     {
-        if (!AvaloniaFilePickerService.CanSave(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                FileText,
-                PresentationExportPlanner.NotesPagePdfExportCommandText);
-            return false;
-        }
-
-        // Notes-page PDF exports the whole deck (one notes page per slide), matching the WPF
-        // host (FreeP.App.Host/FileCommands.cs ExportNotesPagePdf, range: null -> AllSlides) and
-        // this shell's own slides-PDF export (FileExportPdfAsync above, which also exports the
-        // full deck). Do not narrow this to the current slide only.
         var range = new PresentationSlideRangeRequest(PresentationSlideRangeKind.AllSlides);
-        var exportPlan = PresentationExportPlanner.BuildNotesPagePdfExportPlan(range, _presentation.Slides.Count);
-        var request = new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
-            PresentationPrintLayoutKind.NotesPages,
-            range));
-        LastNotesPagePdfRenderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
-            _presentation,
-            request);
-        if (!exportPlan.CanExecute)
-        {
-            _statusText.Text = exportPlan.DisabledReason ?? PresentationExportPlanner.NotesPagePdfExportCommandText;
-            return false;
-        }
-
-        var plan = PresentationExportPlanner.BuildNotesPagePdfExportPickerPlan(_fileWorkflow.CurrentFileName);
-
-        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.NotesPagePdfExportPickerTitle, plan));
-
-        var path = file?.LocalPath;
-        if (path is null)
-        {
-            if (file is not null)
-            {
-                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
-                    FileText,
-                    PresentationExportPlanner.NotesPagePdfExportCommandText);
-            }
-
-            return false;
-        }
-
-        try
-        {
-            // Populated by the shared writer when an embedded picture's bytes cannot be decoded
-            // (corrupt or an unrecognized format), so that loss is surfaced instead of the export
-            // looking clean. SkiaPdfWriter.WriteToBytesWithPortableFallback is deliberately kept
-            // single-parameter (see its doc comment) so this replicates its Skia/portable fallback
-            // here to forward diagnostics through.
-            var imageDiagnostics = new List<string>();
-            ExportAtomicWriter.WriteAllBytes(
-                path,
-                PresentationNotesPagePdfExporter.ExportToBytes(
-                    _presentation,
-                    request,
-                    document => WriteVectorPdfWithPortableFallback(document, imageDiagnostics)));
-            _statusText.Text = imageDiagnostics.Count == 0
-                ? $"Exported {Path.GetFileName(path)}"
-                : $"Exported {Path.GetFileName(path)} ({imageDiagnostics.Count} image warning(s))";
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                PresentationExportPlanner.NotesPagePdfExportCommandText,
-                ex.Message);
-            return false;
-        }
+        var result = await _fileSession.ExportNotesPagePdfAsync(range);
+        LastNotesPagePdfRenderPlan = _fileSession.LastNotesPagePdfRenderPlan;
+        return result.Succeeded;
     }
 
-    /// <summary>
-    /// Mirrors <see cref="SkiaPdfWriter.WriteToBytesWithPortableFallback"/>'s Skia-then-portable
-    /// fallback, but forwards <paramref name="imageDiagnostics"/> through to whichever writer actually
-    /// runs. WriteToBytesWithPortableFallback itself is deliberately kept single-parameter (bound as a
-    /// bare method group elsewhere), so callers that need diagnostics reproduce its logic here instead.
-    /// </summary>
-    private static byte[] WriteVectorPdfWithPortableFallback(
-        Free.Shared.Pdf.PdfContentDocument document,
-        List<string> imageDiagnostics)
-    {
-        try
-        {
-            return SkiaPdfWriter.WriteToBytes(document, imageDiagnostics);
-        }
-        catch (Exception ex) when (SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex))
-        {
-            imageDiagnostics.Clear();
-            return PortablePdfWriter.WriteToBytes(document, imageDiagnostics: imageDiagnostics);
-        }
-    }
-
-    internal PresentationImageExportResult FileExportImagesToFolder(
+    internal async Task<PresentationImageExportResult> FileExportImagesToFolder(
         string outputDirectory,
         PresentationSlideRangeRequest? range = null)
     {
-        var imageDiagnostics = new List<string>();
-        var result = FileExportImagesToFolderCore(
-            _presentation,
-            new PresentationImageExportRequest(
-                outputDirectory,
-                BaseFileName: Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentFileName),
-                SlideRange: range),
-            imageDiagnostics);
-        if (imageDiagnostics.Count > 0)
-        {
-            _statusText.Text =
-                $"Exported {result.ExportedSlides.Count} image(s) to {Path.GetFileName(outputDirectory)} " +
-                $"({imageDiagnostics.Count} image warning(s)): {string.Join(" ", imageDiagnostics)}";
-        }
-
-        return result;
+        var result = await _fileSession.ExportImagesToFolderAsync(outputDirectory, range);
+        if (!result.Succeeded || _fileSession.LastImageExportResult is null)
+            throw result.Error?.Exception ?? new InvalidOperationException(result.Message);
+        return _fileSession.LastImageExportResult;
     }
 
-    /// <summary>
-    /// Renders every requested slide to a PNG exactly as <see cref="FileExportImagesToFolder"/> does, and
-    /// appends into <paramref name="imageDiagnostics"/> any picture <c>SlideCanvas</c> drops while
-    /// compositing a slide -- the same loss point <see cref="ExportPdfRasterBytes"/> surfaces for the raster
-    /// PDF path (see <see cref="SlideImageRenderDiagnostics"/>), but was previously unwired here, so an
-    /// undecodable embedded picture silently disappeared from File &gt; Export &gt; Images with no
-    /// diagnostic at all. Internal (not private) so FreeP.App.Avalonia.Tests can exercise this exact
-    /// production composition.
-    /// </summary>
-    internal static PresentationImageExportResult FileExportImagesToFolderCore(
-        Presentation presentation,
-        PresentationImageExportRequest request,
-        List<string> imageDiagnostics)
-    {
-        using (SlideImageRenderDiagnostics.Capture(imageDiagnostics))
-        {
-            return PresentationImageExportExecutor.Export(
-                presentation,
-                request,
-                SlideRenderer.RenderToBytes);
-        }
-    }
-
-    private async Task<bool> FileExportImagesAsync()
-    {
-        if (!StorageProvider.CanPickFolder)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                FileText,
-                PresentationExportPlanner.ImageExportCommandText);
-            return false;
-        }
-
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = PresentationExportPlanner.ImageExportPickerTitle,
-            AllowMultiple = false,
-        });
-
-        var folder = folders.Count == 0 ? null : folders[0];
-        var path = folder?.TryGetLocalPath();
-        if (path is null)
-        {
-            if (folder is not null)
-            {
-                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
-                    FileText,
-                    PresentationExportPlanner.ImageExportCommandText);
-            }
-
-            return false;
-        }
-
-        try
-        {
-            FileExportImagesToFolder(path, BuildCurrentSlideImageExportRange());
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                PresentationExportPlanner.ImageExportCommandText,
-                ex.Message);
-            return false;
-        }
-    }
-
-    private PresentationSlideRangeRequest BuildCurrentSlideImageExportRange() =>
-        new(
-            PresentationSlideRangeKind.CurrentSlide,
-            CurrentSlideNumber: Editor.CurrentSlideIndex + 1);
+    private async Task<bool> FileExportImagesAsync() =>
+        (await _fileSession.ExportImagesAsync()).Succeeded;
 
     internal PresentationHandoutLayoutPlan RefreshHandoutLayoutPlan(int? slidesPerPage = null)
     {
-        LastHandoutLayoutPlan = PresentationExportPlanner.BuildHandoutLayoutPlan(
-            new PresentationPrintRequest(
-                PresentationPrintLayoutKind.Handouts,
-                HandoutSlidesPerPage: slidesPerPage),
-            _presentation,
-            _presentation.SlideSizeCxEmu,
-            _presentation.SlideSizeCyEmu);
-        _statusText.Text = "Print handout layout planned";
+        LastHandoutLayoutPlan = _fileSession.BuildHandoutLayoutPlan(slidesPerPage);
+        _statusText.Text = PresentationShellTextCatalog.Resolve(LastHandoutLayoutPlan.StatusText);
         return LastHandoutLayoutPlan;
     }
 
     internal PresentationNotesPagePdfRenderPlan RefreshNotesPagePdfRenderPlan(PresentationSlideRangeRequest? range = null)
     {
-        LastNotesPagePdfRenderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
-            _presentation,
-            new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
-                PresentationPrintLayoutKind.NotesPages,
-                range)));
-        _statusText.Text = "Notes page PDF planned";
+        LastNotesPagePdfRenderPlan = _fileSession.BuildNotesPagePdfRenderPlan(range);
+        _statusText.Text = PresentationShellTextCatalog.Resolve(LastNotesPagePdfRenderPlan.StatusText);
         return LastNotesPagePdfRenderPlan;
     }
 
     internal PresentationPrintOutputPackage RefreshPrintOutputPackage(PresentationPrintRequest? request = null)
     {
-        LastPrintOutputPackage = _printOutputPackageFactory?.Invoke(request) ??
-            PresentationPrintOutputPackageExecutor.BuildPackage(
-                _presentation,
-                request,
-                SlideRenderer.RenderToBytes,
-                SkiaRasterPdfWriter.WriteToBytes,
-                SkiaPdfWriter.WriteToBytesWithPortableFallback,
-                SlideRenderer.RenderToBytesWithPrintMarkup);
-        LastPrintExecutionDescriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
-            LastPrintOutputPackage,
-            _nativePrintHostCapabilities,
-            suggestedBaseFileName: _fileWorkflow.CurrentFileName);
-        LastNativePrintHandoffPlan = LastPrintExecutionDescriptor.HandoffPlan;
+        LastPrintOutputPackage = _fileSession.BuildPrintOutputPackage(request);
+        LastPrintExecutionDescriptor = _fileSession.LastPrintExecutionDescriptor;
+        LastNativePrintHandoffPlan = _fileSession.LastNativePrintHandoffPlan;
         _statusText.Text = LastPrintOutputPackage.Plan.DisabledReason ??
-            LastNativePrintHandoffPlan.Reason;
+            LastNativePrintHandoffPlan!.Reason;
         return LastPrintOutputPackage;
     }
 
     internal PresentationNativePrintHandoffPlan RefreshNativePrintHandoffPlan(PresentationPrintRequest? request = null)
     {
-        RefreshPrintOutputPackage(request);
-        LastNativePrintHandoffPlan = LastPrintExecutionDescriptor!.HandoffPlan;
+        LastNativePrintHandoffPlan = _fileSession.ExecuteNativePrintHandoff(request);
+        LastPrintOutputPackage = _fileSession.LastPrintOutputPackage;
+        LastPrintExecutionDescriptor = _fileSession.LastPrintExecutionDescriptor;
         _statusText.Text = LastNativePrintHandoffPlan.Reason;
         return LastNativePrintHandoffPlan;
     }
 
     internal PresentationPrintBackstagePlan RefreshPrintBackstagePlan(PresentationPrintRequest? request = null)
     {
-        LastPrintBackstagePlan = PresentationPrintBackstagePlanner.Build(
-            request,
-            _presentation,
-            Editor.CurrentSlideIndex + 1,
-            request?.SlideRange?.SelectedSlideNumbers,
-            _nativePrintHostCapabilities,
-            _fileWorkflow.CurrentFileName);
-        LastNativePrintHandoffPlan = LastPrintBackstagePlan.NativePrintHandoff;
+        LastPrintBackstagePlan = _fileSession.BuildPrintBackstagePlan(request);
+        LastNativePrintHandoffPlan = _fileSession.LastNativePrintHandoffPlan;
         _statusText.Text = LastPrintBackstagePlan.DisabledReason ??
             LastPrintBackstagePlan.NativePrintHandoff.Reason;
         return LastPrintBackstagePlan;
@@ -5653,169 +3342,144 @@ public sealed partial class MainWindow : Window
     internal PresentationPrintBackstagePlan ShowPrintOptionsPane(PresentationPrintRequest? request = null)
     {
         var plan = RefreshPrintBackstagePlan(request);
-        _printOptionsPaneRequest = request ?? new PresentationPrintRequest(
-            plan.SelectedLayout.Layout.Layout,
-            plan.SelectedRange.Request,
-            plan.SelectedLayout.Layout.IsHandout ? plan.SelectedLayout.Layout.SlidesPerPage : null,
-            plan.PrintHiddenSlides,
-            plan.Options.Copies,
-            plan.Options.Collate,
-            plan.Options.ColorMode,
-            plan.Options.FrameSlides,
-            plan.Options.IncludeCommentsAndInkMarkup);
+        _printOptionsPaneRequest = PresentationBackstagePrintRequestPlanner.BuildRequest(plan);
         RenderPrintOptionsPane(plan);
         _printOptionsPaneHost.IsVisible = true;
         return plan;
     }
 
-    internal Task<LinuxNativePrintResult> ExecutePrintForTests(
-        PresentationPrintRequest? request = null,
-        CancellationToken cancellationToken = default) =>
-        ExecutePrintWorkflowAsync(request, cancellationToken);
 
-    private async Task<LinuxNativePrintResult> ExecutePrintWorkflowAsync(
+    private async Task<PrintSubmissionResult> ExecutePrintWorkflowAsync(
         PresentationPrintRequest? request = null,
         CancellationToken cancellationToken = default)
     {
-        if (!_portablePrintWorkflowEnabled || OperatingSystem.IsWindows())
-            return await ExecuteNativePrintHandoffAsync(request, cancellationToken).ConfigureAwait(true);
+        await _fileSession.PrintAsync(request, cancellationToken).ConfigureAwait(true);
+        return LastPrintSubmissionResult ?? new PrintSubmissionResult(
+            PrintSubmissionStatus.Cancelled,
+            _selectedPrinterName);
+    }
 
-        var requestedRequest = request ?? new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides);
+    private async Task<PrintSubmissionResult> ExecutePrintWorkflowCoreAsync(
+        PresentationPrintRequest request,
+        Func<PresentationPrintRequest, PresentationPrintOutputPackage> buildPackage,
+        CancellationToken cancellationToken,
+        bool promptForSelection = true)
+    {
+        var requestedRequest = request;
         try
         {
             _latestPrinterDiscovery = await _printService.DiscoverAsync(cancellationToken).ConfigureAwait(true);
+            if (!_latestPrinterDiscovery.IsAvailable)
+            {
+                LastPrintSubmissionResult = FromDiscovery(_latestPrinterDiscovery);
+                _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(
+                    LastPrintSubmissionResult);
+                return LastPrintSubmissionResult;
+            }
+
             var requestedSelection = new PrintSelection(
-                _nativeOutputCapabilities.Print.PrinterName ?? _latestPrinterDiscovery.DefaultPrinter,
+                _selectedPrinterName ?? _latestPrinterDiscovery.DefaultPrinter,
                 requestedRequest.Copies,
                 PrintPageRange.All,
                 PrintOrientation.Document,
                 requestedRequest.Collate);
-            var selection = await _showPrintSelectionDialog(
-                this,
-                _latestPrinterDiscovery,
-                requestedSelection,
-                cancellationToken).ConfigureAwait(true);
+            var selection = promptForSelection
+                ? await _showPrintSelectionDialog(
+                    this,
+                    _latestPrinterDiscovery,
+                    requestedSelection,
+                    cancellationToken).ConfigureAwait(true)
+                : requestedSelection;
             if (selection is null)
             {
-                LastNativePrintResult = LinuxNativePrintResult.CanceledResult();
-                _statusText.Text = LastNativePrintResult.StatusText;
-                return LastNativePrintResult;
+                LastPrintSubmissionResult = new PrintSubmissionResult(
+                    PrintSubmissionStatus.Cancelled,
+                    requestedSelection.PrinterName);
+                _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(
+                    LastPrintSubmissionResult);
+                return LastPrintSubmissionResult;
             }
 
             selection.Validate();
-            LastPrintSelectionForTests = selection;
+            _selectedPrinterName = selection.PrinterName;
+            _lastPrintSelection = selection;
             var effectiveRequest = requestedRequest with
             {
                 Copies = selection.Copies,
                 Collate = selection.Collate,
             };
-            RefreshPrintOutputPackage(effectiveRequest);
-            var package = LastPrintOutputPackage;
-            if (package is null || !package.Plan.CanBuildPackage)
+            var package = buildPackage(effectiveRequest);
+            LastPrintOutputPackage = package;
+            LastPrintExecutionDescriptor = _fileSession.LastPrintExecutionDescriptor;
+            LastNativePrintHandoffPlan = _fileSession.LastNativePrintHandoffPlan;
+            var validation = package is null
+                ? null
+                : PresentationPrintOutputPackageExecutor.ValidatePackage(package);
+            if (validation?.IsValid != true)
             {
-                LastNativePrintResult = LinuxNativePrintResult.Failed(
-                    package?.Plan.DisabledReason ?? "Printable package was not built.");
-                _statusText.Text = LastNativePrintResult.FailureReason ?? LastNativePrintResult.StatusText;
-                return LastNativePrintResult;
+                LastPrintSubmissionResult = new PrintSubmissionResult(
+                    PrintSubmissionStatus.Failed,
+                    selection.PrinterName,
+                    Message: validation?.FailureReason ??
+                        PresentationNativeCommandOutcomePlanner.PrintPackageNotBuiltFailure);
+                _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintPackageFailureStatus(
+                    LastPrintSubmissionResult.Message);
+                return LastPrintSubmissionResult;
             }
 
-            var temporaryPath = Path.Combine(Path.GetTempPath(), $"freep-print-{Guid.NewGuid():N}.pdf");
+            using var temporaryFile = TemporaryFileLease.Create("freep-print-", ".pdf");
             using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _printCancellation = linkedCancellation;
             try
             {
-                await File.WriteAllBytesAsync(temporaryPath, package.Bytes, linkedCancellation.Token).ConfigureAwait(true);
-                var submission = await _printService.SubmitAsync(
-                    temporaryPath,
-                    selection,
+                await temporaryFile.WriteAllBytesAsync(package!.Bytes, linkedCancellation.Token).ConfigureAwait(true);
+                LastPrintSubmissionResult = await _printService.SubmitAsync(
+                    temporaryFile.Path,
+                    selection with
+                    {
+                        JobTitle = PresentationFileTextResources.NormalizePrintJobName(
+                            LastNativePrintHandoffPlan?.SuggestedPrintJobName),
+                    },
                     linkedCancellation.Token).ConfigureAwait(true);
-                LastNativePrintResult = ToNativePrintResult(submission);
             }
             finally
             {
                 if (ReferenceEquals(_printCancellation, linkedCancellation))
                     _printCancellation = null;
-                TryDeletePrintFile(temporaryPath);
+                temporaryFile.Release();
             }
         }
         catch (OperationCanceledException)
         {
-            LastNativePrintResult = LinuxNativePrintResult.CanceledResult();
+            LastPrintSubmissionResult = new PrintSubmissionResult(
+                PrintSubmissionStatus.Cancelled,
+                _selectedPrinterName);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            LastNativePrintResult = LinuxNativePrintResult.Failed(ex.Message);
+            LastPrintSubmissionResult = new PrintSubmissionResult(
+                PrintSubmissionStatus.Failed,
+                _selectedPrinterName,
+                Message: ex.Message);
         }
 
-        _statusText.Text = LastNativePrintResult!.StatusText;
-        if (!LastNativePrintResult.Succeeded && !LastNativePrintResult.Canceled &&
-            LastNativePrintResult.FailureReason is not null)
-        {
-            _statusText.Text = $"{LastNativePrintResult.StatusText}: {LastNativePrintResult.FailureReason}";
-        }
+        _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(
+            LastPrintSubmissionResult!);
 
-        return LastNativePrintResult;
+        return LastPrintSubmissionResult;
     }
 
-    private static LinuxNativePrintResult ToNativePrintResult(PrintSubmissionResult submission) =>
-        submission.Status switch
-        {
-            PrintSubmissionStatus.Submitted => LinuxNativePrintResult.Success(null),
-            PrintSubmissionStatus.Cancelled => LinuxNativePrintResult.CanceledResult(),
-            _ => LinuxNativePrintResult.Failed(
-                submission.Message ?? "Portable print submission failed."),
-        };
-
-    private static void TryDeletePrintFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
-
-    internal async Task<LinuxNativePrintResult> ExecuteNativePrintHandoffAsync(
-        PresentationPrintRequest? request = null,
-        CancellationToken cancellationToken = default)
-    {
-        RefreshPrintOutputPackage(request);
-        var package = LastPrintOutputPackage;
-        if (package is null)
-        {
-            LastNativePrintResult = LinuxNativePrintResult.Failed("Printable package was not built.");
-            return LastNativePrintResult;
-        }
-
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _nativeOutputCancellation = linkedCancellation;
-        try
-        {
-            LastNativePrintResult = await _nativePrintAdapter.PrintAsync(
-                package.Bytes,
-                LastNativePrintHandoffPlan?.SuggestedPrintJobName ?? "FreeP presentation",
-                linkedCancellation.Token).ConfigureAwait(true);
-        }
-        finally
-        {
-            if (ReferenceEquals(_nativeOutputCancellation, linkedCancellation))
-                _nativeOutputCancellation = null;
-        }
-        _statusText.Text = LastNativePrintResult.StatusText;
-        if (!LastNativePrintResult.Succeeded && !LastNativePrintResult.Canceled &&
-            LastNativePrintResult.FailureReason is not null)
-        {
-            _statusText.Text = $"{LastNativePrintResult.StatusText}: {LastNativePrintResult.FailureReason}";
-        }
-
-        return LastNativePrintResult;
-    }
+    private static PrintSubmissionResult FromDiscovery(PrinterDiscoveryResult discovery) =>
+        new(
+            discovery.Status switch
+            {
+                PrinterDiscoveryStatus.Cancelled => PrintSubmissionStatus.Cancelled,
+                PrinterDiscoveryStatus.NoPrinters => PrintSubmissionStatus.NoPrinters,
+                PrinterDiscoveryStatus.Unavailable => PrintSubmissionStatus.Unavailable,
+                _ => PrintSubmissionStatus.Failed,
+            },
+            discovery.DefaultPrinter,
+            Message: discovery.Message ?? PresentationNativeCommandOutcomePlanner.PrintSubmissionFailureFallback);
 
     internal void HidePrintOptionsPane()
     {
@@ -5825,122 +3489,103 @@ public sealed partial class MainWindow : Window
 
     private void RenderPrintOptionsPane(PresentationPrintBackstagePlan plan)
     {
-        _printOptionsPaneHeading.Text = plan.Heading;
-        _printOptionsPaneMessage.Text = plan.Description;
+        var surface = PresentationBackstagePrintSurfacePlanner.Build(plan);
+        _printOptionsPaneHeading.Text = surface.Heading;
+        _printOptionsPaneMessage.Text = surface.Description;
         _printOptionsPaneRenderedOptionLines.Clear();
         _printOptionsPaneRenderedPreviewRows.Clear();
         _printOptionsPaneRenderedLayoutRows.Clear();
         _printOptionsPaneRenderedRangeRows.Clear();
         _printOptionsPaneRowsPanel.Children.Clear();
 
-        AddPrintOptionsPaneSection("Settings");
-        AddPrintOptionsPaneField("Layout", plan.SelectedLayout.Layout.DisplayName);
-        AddPrintOptionsPaneField("Slides", plan.SlideRangeSummary);
-        AddPrintOptionsPaneField("Pages", plan.PageCount.ToString(CultureInfo.InvariantCulture));
-        AddPrintOptionsPaneField("Preview", plan.PreviewPlan.PageCountText);
-        AddPrintOptionsPaneField("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included");
-        AddPrintOptionsPaneField("Options", plan.Options.DisplaySummary);
-        AddPrintOptionsPaneField("Native printer handoff", plan.NativePrintHandoff.StatusText);
+        AddPrintOptionsPaneSection(surface.SettingsHeading);
+        foreach (var field in surface.Settings)
+            AddPrintOptionsPaneField(field.Label, field.Value);
 #if FREEP_WINDOWS_CAPTURE
-        AddWindowsPrinterSelector();
+        AddWindowsPrinterSelector(surface.NativePrint);
 #endif
 
-        AddPrintOptionsPaneSection("Output options");
-
-        foreach (var choice in plan.OutputOptionChoices)
+        foreach (var group in surface.ChoiceGroups)
         {
-            var row = BuildPrintOptionsPaneChoiceSummary(
-                $"{choice.Group}: {choice.DisplayName}",
-                choice.Description,
-                choice.IsSelected,
-                choice.IsAvailable);
-            _printOptionsPaneRenderedOptionLines.Add(row);
-            AddPrintOptionsPaneChoice(row, choice.IsAvailable);
+            AddPrintOptionsPaneSection(group.Heading);
+            foreach (var choice in group.Choices)
+            {
+                var row = choice.DisplayText;
+                AddPrintOptionsPaneRenderedChoice(group.Kind, row);
+                AddPrintOptionsPaneChoice(row, choice.IsAvailable);
+            }
         }
 
-        AddPrintOptionsPaneSection("Preview");
-        foreach (var page in plan.PreviewPlan.Pages)
-        {
-            var row = BuildPrintOptionsPaneChoiceSummary(
-                page.ThumbnailLabel,
-                page.Detail,
-                page.PageNumber == 1);
-            _printOptionsPaneRenderedPreviewRows.Add(row);
-            AddPrintOptionsPaneChoice(row, isAvailable: true);
-        }
-
-        AddPrintOptionsPaneSection("Layouts");
-        foreach (var choice in plan.LayoutChoices)
-        {
-            var row = BuildPrintOptionsPaneChoiceSummary(
-                choice.Layout.DisplayName,
-                choice.PackagePlan.LayoutSummary,
-                choice.IsSelected);
-            _printOptionsPaneRenderedLayoutRows.Add(row);
-            AddPrintOptionsPaneChoice(row, isAvailable: true);
-        }
-
-        AddPrintOptionsPaneSection("Slide range");
-        foreach (var choice in plan.RangeChoices)
-        {
-            var row = BuildPrintOptionsPaneChoiceSummary(
-                choice.DisplayName,
-                choice.Description,
-                choice.Kind == plan.SelectedRange.Kind,
-                choice.IsAvailable);
-            _printOptionsPaneRenderedRangeRows.Add(row);
-            AddPrintOptionsPaneChoice(row, choice.IsAvailable);
-        }
-
-        AddPrintOptionsPaneSection("Custom range");
+        AddPrintOptionsPaneSection(surface.CustomRangeHeading);
         _printOptionsPaneRowsPanel.Children.Add(new TextBlock
         {
-            Text = "Enter slide numbers and ranges, for example 2,4-6.",
+            Text = surface.CustomRangeDescription,
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
             Margin = new Thickness(0, 0, 0, 4),
         });
         _printCustomRangeInput = new TextBox
         {
-            Text = plan.SelectedRange.Request?.CustomRangeText ?? string.Empty,
-            PlaceholderText = "e.g. 2,4-6",
+            Text = surface.CustomRangeText,
+            PlaceholderText = surface.CustomRangePlaceholder,
             MinWidth = 240,
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 6),
         };
-        AutomationProperties.SetAutomationId(_printCustomRangeInput, "FreePPrintCustomRangeInput");
+        AutomationProperties.SetAutomationId(
+            _printCustomRangeInput,
+            surface.CustomRangeInputAutomationId);
         _printCustomRangeApplyButton = new Button
         {
-            Content = "Apply range",
+            Content = surface.CustomRangeApplyLabel,
             HorizontalAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(12, 6),
         };
-        AutomationProperties.SetAutomationId(_printCustomRangeApplyButton, "FreePPrintCustomRangeApply");
+        AutomationProperties.SetAutomationId(
+            _printCustomRangeApplyButton,
+            surface.CustomRangeApplyAutomationId);
         _printCustomRangeApplyButton.Click += (_, _) =>
         {
-            var text = _printCustomRangeInput.Text?.Trim() ?? string.Empty;
-            ShowPrintOptionsPane(string.IsNullOrWhiteSpace(text)
-                ? new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides)
-                : new PresentationPrintRequest(
-                    PresentationPrintLayoutKind.FullPageSlides,
-                    new PresentationSlideRangeRequest(
-                        PresentationSlideRangeKind.CustomRange,
-                        CustomRangeText: text)));
+            var currentRequest = _printOptionsPaneRequest ??
+                PresentationBackstagePrintRequestPlanner.BuildRequest(plan);
+            ShowPrintOptionsPane(PresentationBackstagePrintRequestPlanner.WithCustomRange(
+                currentRequest,
+                _printCustomRangeInput.Text));
         };
         _printOptionsPaneRowsPanel.Children.Add(_printCustomRangeInput);
         _printOptionsPaneRowsPanel.Children.Add(_printCustomRangeApplyButton);
 
         _printOptionsPaneRowsPanel.Children.Add(new TextBlock
         {
-            Text = plan.DisabledReason ?? plan.NativePrintHandoff.Reason,
+            Text = surface.StatusText,
             TextWrapping = TextWrapping.Wrap,
             FontStyle = FontStyle.Italic,
             Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
             Margin = new Thickness(0, 8, 0, 0),
         });
         _printOptionsPaneExecuteButton.IsEnabled =
-            plan.NativePrintHandoff.CanOpenNativePrintDialog ||
-            plan.NativePrintHandoff.CanSubmitToNativePrinter;
+            PresentationBackstagePrintRequestPlanner.Validate(plan).CanPrint;
+    }
+
+    private void AddPrintOptionsPaneRenderedChoice(
+        PresentationBackstagePrintChoiceGroupKind kind,
+        string row)
+    {
+        switch (kind)
+        {
+            case PresentationBackstagePrintChoiceGroupKind.OutputOptions:
+                _printOptionsPaneRenderedOptionLines.Add(row);
+                break;
+            case PresentationBackstagePrintChoiceGroupKind.Preview:
+                _printOptionsPaneRenderedPreviewRows.Add(row);
+                break;
+            case PresentationBackstagePrintChoiceGroupKind.Layouts:
+                _printOptionsPaneRenderedLayoutRows.Add(row);
+                break;
+            case PresentationBackstagePrintChoiceGroupKind.SlideRange:
+                _printOptionsPaneRenderedRangeRows.Add(row);
+                break;
+        }
     }
 
     private void AddPrintOptionsPaneSection(string text)
@@ -5950,81 +3595,94 @@ public sealed partial class MainWindow : Window
             Text = text,
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            Foreground = FreePBrushes.PaneHeadingText,
             Margin = new Thickness(0, 16, 0, 6),
         });
     }
 
 #if FREEP_WINDOWS_CAPTURE
-    private void AddWindowsPrinterSelector()
+    private void AddWindowsPrinterSelector(PresentationNativePrintSurfacePlan surface)
     {
         if (!OperatingSystem.IsWindows())
             return;
 
-        AddPrintOptionsPaneSection("Printer");
-        var printers = WindowsNativePrintOutput.GetPrinters();
+        AddPrintOptionsPaneSection(PresentationShellTextCatalog.Resolve(surface.SectionHeading));
+        _latestPrinterDiscovery = _printService.DiscoverAsync().GetAwaiter().GetResult();
+        var printers = _latestPrinterDiscovery.Printers
+            .Select(static printer => printer.Name)
+            .ToArray();
         if (printers.Count == 0)
         {
-            AddPrintOptionsPaneField("Queue", "No Windows printer queues were detected.");
+            AddPrintOptionsPaneField(
+                PresentationShellTextCatalog.Resolve(surface.QueueLabel),
+                PresentationShellTextCatalog.Resolve(surface.NoQueuesStatus));
             return;
         }
 
         _nativePrinterPicker = new ComboBox
         {
             ItemsSource = printers,
-            SelectedItem = _nativeOutputCapabilities.Print.PrinterName,
+            SelectedItem = _selectedPrinterName ?? _latestPrinterDiscovery.DefaultPrinter,
             MinWidth = 280,
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 6),
         };
-        AutomationProperties.SetAutomationId(_nativePrinterPicker, "FreePWindowsPrinterPicker");
+        AutomationProperties.SetAutomationId(_nativePrinterPicker, surface.PrinterPickerAutomationId);
         _nativePrinterPicker.SelectionChanged += (_, _) =>
         {
             if (_nativePrinterPicker.SelectedItem is string printerName)
-                SelectWindowsPrinter(printerName);
+                SelectWindowsPrinter(printerName, surface);
         };
         _printOptionsPaneRowsPanel.Children.Add(_nativePrinterPicker);
 
         var nativeDialogButton = new Button
         {
-            Content = "Windows printer dialog",
+            Content = PresentationShellTextCatalog.Resolve(surface.NativeDialogLabel),
             MinWidth = 180,
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 6),
         };
-        AutomationProperties.SetAutomationId(nativeDialogButton, "FreePWindowsPrinterDialog");
-        nativeDialogButton.Click += (_, _) => ShowWindowsPrinterDialog();
+        AutomationProperties.SetAutomationId(nativeDialogButton, surface.NativeDialogAutomationId);
+        nativeDialogButton.Click += (_, _) => ShowWindowsPrinterDialog(surface);
         _printOptionsPaneRowsPanel.Children.Add(nativeDialogButton);
     }
 
-    private void ShowWindowsPrinterDialog()
+    private void ShowWindowsPrinterDialog(PresentationNativePrintSurfacePlan surface)
     {
         if (!WindowsNativePrintOutput.TryShowPrinterSelectionDialog(
-                _nativeOutputCapabilities.Print.PrinterName,
+                _selectedPrinterName ?? _latestPrinterDiscovery?.DefaultPrinter,
                 out var selectedPrinter) ||
             string.IsNullOrWhiteSpace(selectedPrinter))
         {
             return;
         }
 
-        SelectWindowsPrinter(selectedPrinter);
+        SelectWindowsPrinter(selectedPrinter, surface);
         if (_nativePrinterPicker is not null)
             _nativePrinterPicker.SelectedItem = selectedPrinter;
     }
 
-    private void SelectWindowsPrinter(string printerName)
+    private void SelectWindowsPrinter(
+        string printerName,
+        PresentationNativePrintSurfacePlan surface)
     {
-        var capability = WindowsNativePrintOutput.ForPrinter(printerName);
-        if (!capability.CanPrint)
+        var normalized = printerName.Trim();
+        var knownPrinter = _latestPrinterDiscovery?.Printers.FirstOrDefault(printer =>
+            string.Equals(printer.Name, normalized, StringComparison.OrdinalIgnoreCase));
+        if (knownPrinter is null)
         {
-            _statusText.Text = capability.Reason;
+            _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(
+                new PrintSubmissionResult(
+                    PrintSubmissionStatus.Failed,
+                    normalized,
+                    Message: PresentationShellTextCatalog.Resolve(
+                        PresentationShellTextCatalog.WindowsPrinterQueueUnavailableStatus(normalized))));
             return;
         }
 
-        _nativeOutputCapabilities = _nativeOutputCapabilities with { Print = capability };
-        _nativePrintAdapter = WindowsNativePrintOutput.CreateAdapter(capability);
-        _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(capability);
-        _statusText.Text = $"Printer selected: {capability.PrinterName}";
+        _selectedPrinterName = knownPrinter.Name;
+        _statusText.Text = PresentationShellTextCatalog.Resolve(
+            surface.BuildPrinterSelectedStatus(knownPrinter.Name));
     }
 #endif
 
@@ -6050,7 +3708,7 @@ public sealed partial class MainWindow : Window
             Text = value,
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            Foreground = FreePBrushes.PaneHeadingText,
         };
         Grid.SetColumn(content, 1);
         row.Children.Add(name);
@@ -6071,140 +3729,26 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private static string BuildPrintOptionsPaneChoiceSummary(
-        string label,
-        string description,
-        bool isSelected,
-        bool isAvailable = true)
-    {
-        var prefix = isSelected ? "Selected: " : string.Empty;
-        var availability = isAvailable ? string.Empty : " (unavailable)";
-        return $"{prefix}{label}{availability}\n{description}";
-    }
-
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
     {
-        LastVideoExportPlan = PresentationExportPlanner.BuildVideoExportPlan(
-            request,
-            _presentation,
-            _videoExportHostCapabilities);
+        LastVideoExportPlan = _fileSession.BuildVideoExportPlan(request);
 
-        _statusText.Text = LastVideoExportPlan.DisabledReason ?? "Video export planned";
+        _statusText.Text = LastVideoExportPlan.DisabledReason ??
+            PresentationShellTextCatalog.Resolve(LastVideoExportPlan.PlannedStatusText);
         return LastVideoExportPlan;
     }
 
-    internal Task<bool> FileExportVideoAsyncForTests() => FileExportVideoAsync();
-
-    private async Task<bool> FileExportVideoAsync()
-    {
-        if (!_nativeOutputCapabilities.Video.CanEncodeMp4)
-        {
-            _statusText.Text = _nativeOutputCapabilities.Video.Reason;
-            return false;
-        }
-
-        if (VideoPickerOverrideForTests is null && !AvaloniaFilePickerService.CanSave(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                FileText,
-                PresentationExportPlanner.VideoExportCommandText);
-            return false;
-        }
-
-        var plan = PresentationExportPlanner.BuildVideoExportPickerPlan(_fileWorkflow.CurrentFileName);
-        string? path;
-        var wasSelected = false;
-        if (VideoPickerOverrideForTests is { } pickerOverride)
-        {
-            var selection = await pickerOverride(plan);
-            if (selection is null)
-                return false;
-            wasSelected = true;
-            path = selection.LocalPath;
-        }
-        else
-        {
-            using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-                StorageProvider,
-                AvaloniaFilePickerSaveRequest.FromSavePlan(
-                    PresentationExportPlanner.VideoExportPickerTitle,
-                    plan,
-                    showOverwritePrompt: true));
-            wasSelected = file is not null;
-            path = file?.LocalPath;
-        }
-        if (path is null)
-        {
-            if (wasSelected)
-                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
-                    FileText,
-                    PresentationExportPlanner.VideoExportCommandText);
-            return false;
-        }
-
-        var result = await ExecuteVideoExportAsync(path);
-        return result.Succeeded;
-    }
-
-    /// <summary>
-    /// Diagnostics collected the last time <see cref="RefreshVideoFramePackage"/> rendered video frames --
-    /// pictures <c>SlideCanvas</c> dropped while compositing a frame (see
-    /// <see cref="SlideImageRenderDiagnostics"/>). Reset on every call, so it always reflects only the
-    /// most recent build.
-    /// </summary>
-    internal IReadOnlyList<string> LastVideoFrameImageDiagnostics { get; private set; } = [];
+    private async Task<bool> FileExportVideoAsync() =>
+        (await _fileSession.ExportVideoAsync()).Succeeded;
 
     internal PresentationVideoFramePackage RefreshVideoFramePackage(PresentationVideoExportRequest? request = null)
     {
-        if (_videoFramePackageFactory is { } factory)
-        {
-            // Test-only override: bypasses the SlideRenderer-based render entirely, so there is
-            // nothing for SlideImageRenderDiagnostics to observe.
-            LastVideoFramePackage = factory(request);
-            LastVideoFrameImageDiagnostics = [];
-        }
-        else
-        {
-            var imageDiagnostics = new List<string>();
-            LastVideoFramePackage = BuildVideoFramePackageCore(
-                _presentation, request, _videoExportHostCapabilities, imageDiagnostics);
-            LastVideoFrameImageDiagnostics = imageDiagnostics;
-        }
-
-        LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
-        LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
-            LastVideoFramePackage,
-            _videoExportHostCapabilities,
-            _fileWorkflow.CurrentFileName);
-        LastVideoExportHandoffPlan = LastVideoExecutionDescriptor.HandoffPlan;
-        _statusText.Text = LastVideoExportHandoffPlan.StatusText;
+        LastVideoFramePackage = _fileSession.BuildVideoFramePackage(request);
+        LastVideoExportPlan = _fileSession.LastVideoExportPlan;
+        LastVideoExecutionDescriptor = _fileSession.LastVideoExecutionDescriptor;
+        LastVideoExportHandoffPlan = _fileSession.LastVideoExportHandoffPlan;
+        _statusText.Text = LastVideoExportHandoffPlan!.StatusText;
         return LastVideoFramePackage;
-    }
-
-    /// <summary>
-    /// Renders every video frame exactly as <see cref="RefreshVideoFramePackage"/> does (absent a
-    /// test-only factory override), and appends into <paramref name="imageDiagnostics"/> any picture
-    /// <c>SlideCanvas</c> drops while compositing a frame -- the same loss point
-    /// <see cref="ExportPdfRasterBytes"/> surfaces for the raster PDF path (see
-    /// <see cref="SlideImageRenderDiagnostics"/>), but was previously unwired here, so an undecodable
-    /// embedded picture silently disappeared from File &gt; Export &gt; Video with no diagnostic at
-    /// all. Internal (not private) so FreeP.App.Avalonia.Tests can exercise this exact production
-    /// composition.
-    /// </summary>
-    internal static PresentationVideoFramePackage BuildVideoFramePackageCore(
-        Presentation presentation,
-        PresentationVideoExportRequest? request,
-        PresentationVideoExportHandoffHostCapabilities hostCapabilities,
-        List<string> imageDiagnostics)
-    {
-        using (SlideImageRenderDiagnostics.Capture(imageDiagnostics))
-        {
-            return PresentationVideoFramePackageExecutor.BuildPackage(
-                presentation,
-                request,
-                SlideRenderer.RenderToBytes,
-                hostCapabilities);
-        }
     }
 
     internal async Task<LinuxVideoExportResult> ExecuteVideoExportAsync(
@@ -6212,66 +3756,34 @@ public sealed partial class MainWindow : Window
         PresentationVideoExportRequest? request = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
-        RefreshVideoFramePackage(request);
-        var package = LastVideoFramePackage;
-        if (package is null)
-        {
-            LastVideoExportResult = LinuxVideoExportResult.Failed("Video frame package was not built.", outputPath);
-            return LastVideoExportResult;
-        }
-
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _nativeOutputCancellation = linkedCancellation;
-        try
-        {
-            LastVideoExportResult = await _videoExportAdapter.ExportAsync(
-                package,
-                outputPath,
-                linkedCancellation.Token,
-                _presentation.RecordingMediaArtifacts).ConfigureAwait(true);
-        }
-        finally
-        {
-            if (ReferenceEquals(_nativeOutputCancellation, linkedCancellation))
-                _nativeOutputCancellation = null;
-        }
-        _statusText.Text = LastVideoExportResult.StatusText;
-        if (!LastVideoExportResult.Succeeded && !LastVideoExportResult.Canceled &&
-            LastVideoExportResult.FailureReason is not null)
-        {
-            _statusText.Text = $"{LastVideoExportResult.StatusText}: {LastVideoExportResult.FailureReason}";
-        }
-        else if (LastVideoExportResult.Succeeded && LastVideoFrameImageDiagnostics.Count > 0)
-        {
-            _statusText.Text =
-                $"{LastVideoExportResult.StatusText} ({LastVideoFrameImageDiagnostics.Count} image warning(s)): " +
-                string.Join(" ", LastVideoFrameImageDiagnostics);
-        }
-
-        return LastVideoExportResult;
+        var result = await _fileSession.ExportVideoToPathAsync(outputPath, request, cancellationToken);
+        LastVideoFramePackage = _fileSession.LastVideoFramePackage;
+        LastVideoExportPlan = _fileSession.LastVideoExportPlan;
+        LastVideoExecutionDescriptor = _fileSession.LastVideoExecutionDescriptor;
+        LastVideoExportHandoffPlan = _fileSession.LastVideoExportHandoffPlan;
+        return LastVideoExportResult ?? LinuxVideoExportResult.Failed(
+            result.Message ?? PresentationFileTextResources.VideoExportFailed,
+            outputPath);
     }
-
-    internal void CancelNativeOutputForTests()
-    {
-        _nativeOutputCancellation?.Cancel();
-        _printCancellation?.Cancel();
-    }
-
-    internal sealed record VideoPickerSelectionForTests(string? LocalPath);
 
     private static PresentationNativePrintHandoffHostCapabilities BuildNativePrintHostCapabilities(
-        LinuxNativePrintCapability capability) =>
-        capability.CanPrint &&
-        OperatingSystem.IsWindows() &&
-        string.Equals(capability.ExecutablePath, "windows-shell-print", StringComparison.Ordinal)
-            ? PresentationNativePrintHandoffHostCapabilities.Available("Avalonia Windows print host")
-            : capability.CanPrint
-            ? PresentationNativePrintHandoffHostCapabilities.NativePrinterSubmissionAvailable(
-                "Avalonia Linux print host")
-            : PresentationNativePrintHandoffHostCapabilities.Deferred(
-                OperatingSystem.IsWindows() ? "Avalonia Windows print host" : "Avalonia Linux print host",
-                capability.Reason);
+        IPlatformPrintService printService)
+    {
+        var hostName = OperatingSystem.IsWindows()
+            ? PresentationShellTextCatalog.Resolve(
+                PresentationShellTextCatalog.AvaloniaWindowsPrintHostName)
+            : PresentationShellTextCatalog.Resolve(
+                PresentationShellTextCatalog.AvaloniaLinuxPrintHostName);
+        if (!printService.IsSupported)
+            return PresentationNativePrintHandoffHostCapabilities.Deferred(
+                hostName,
+                PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.PrintHostUnavailableStatus(hostName)));
+
+        return OperatingSystem.IsWindows()
+            ? PresentationNativePrintHandoffHostCapabilities.Available(hostName)
+            : PresentationNativePrintHandoffHostCapabilities.NativePrinterSubmissionAvailable(hostName);
+    }
 
     private static LinuxNativeOutputCapabilities DetectNativeOutputCapabilities()
     {
@@ -6282,14 +3794,43 @@ public sealed partial class MainWindow : Window
         return new LinuxNativeOutputCapabilityDetector().Detect();
     }
 
-    private static ILinuxNativePrintHandoffAdapter CreateNativePrintAdapter(
-        LinuxNativePrintCapability capability)
+    private static IPlatformPrintService CreatePlatformPrintService() =>
+        PlatformPrintServiceSelector.Select(
+#if FREEP_WINDOWS_CAPTURE
+            windowsFactory: static () => new WindowsPrintService(
+                options: new WindowsPrintServiceOptions(
+                    RequirePrinterDiscoveryBeforeSubmission: false,
+                    RejectNonZeroHandlerExitCode: false)),
+#else
+            windowsFactory: null,
+#endif
+            cupsFactory: static () => new CupsPrintService());
+
+    private static Task<PrintSelection?> ShowPlatformPrintSelectionDialogAsync(
+        Window owner,
+        PrinterDiscoveryResult discovery,
+        PrintSelection? requested,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
 #if FREEP_WINDOWS_CAPTURE
         if (OperatingSystem.IsWindows())
-            return WindowsNativePrintOutput.CreateAdapter(capability);
+        {
+            var currentPrinter = requested?.PrinterName ?? discovery.DefaultPrinter;
+            return Task.FromResult(
+                WindowsNativePrintOutput.TryShowPrinterSelectionDialog(
+                    currentPrinter,
+                    out var selectedPrinter) &&
+                !string.IsNullOrWhiteSpace(selectedPrinter)
+                    ? (requested ?? new PrintSelection()) with { PrinterName = selectedPrinter }
+                    : null);
+        }
 #endif
-        return new LinuxNativePrintHandoffAdapter(capability);
+        return CupsPrintDialog.ShowAsync(
+            owner,
+            discovery,
+            requested,
+            cancellationToken: cancellationToken);
     }
 
     private static ILinuxVideoExportAdapter CreateVideoExportAdapter(
@@ -6309,96 +3850,17 @@ public sealed partial class MainWindow : Window
             capability.ExecutablePath,
             "windows-media-composition",
             StringComparison.Ordinal);
-        return new(
-            isWindowsNative ? "Avalonia Windows video export host" : "Avalonia Linux video export host",
+        return PresentationNativeCommandOutcomePlanner.BuildVideoExportHostCapabilities(
+            isWindowsNative
+                ? PresentationVideoExportHostProfile.AvaloniaWindows
+                : PresentationVideoExportHostProfile.AvaloniaLinux,
             capability.CanEncodeMp4,
-            CanCaptureNarration: capability.CanCaptureNarration,
-            CanCaptureCameraAndMedia: capability.CanCaptureCameraAndMedia,
-            CanMuxTimedCaptions: capability.CanMuxTimedCaptions,
-            UnavailableReason: capability.CanEncodeMp4
-                ? isWindowsNative
-                    ? capability.Reason
-                    : capability.CanCaptureNarration
-                        ? "ffmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
-                        : "Video-only ffmpeg export is available; narration and captured camera picture-in-picture are unavailable."
-                : capability.Reason);
+            capability.CanCaptureNarration,
+            capability.CanCaptureCameraAndMedia,
+            capability.CanMuxTimedCaptions,
+            capability.Reason);
     }
 
-    private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)
-    {
-        registry.Register(
-            PresentationReviewWorkflowPlanner.CommentsPaneCommandId,
-            new ActionRibbonCommand(() => ShowReviewCommentsPane()));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.AccessibilityCommandId,
-            new ActionRibbonCommand(() => ShowAccessibilityCheckerPane()));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.AltTextCommandId,
-            new ActionRibbonCommand(ShowAltTextPane));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
-            new ActionRibbonCommand(() => ShowReadingOrderPane()));
-        registry.Register(
-            PresentationSelectionPanePlanner.SelectionPaneCommandId,
-            new ActionRibbonCommand(() => ShowSelectionPane()));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.ProofingCommandId,
-            new ActionRibbonCommand(() => ShowProofingPane()));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.AddCommentCommandId,
-            new ActionRibbonCommand(() => AddComment("New comment")));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.EditCommentCommandId,
-            new ActionRibbonCommand(() => EditSelectedComment(GetSelectedCommentText())));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.ReplyCommentCommandId,
-            new ActionRibbonCommand(() => ReplyToSelectedComment("New reply")));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
-            new ActionRibbonCommand(() => DeleteSelectedComment()));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.PreviousCommentCommandId,
-            new ActionRibbonCommand(() => NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment)));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.NextCommentCommandId,
-            new ActionRibbonCommand(() => NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment)));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.ResolveCommentCommandId,
-            new ActionRibbonCommand(() => ResolveSelectedComment()));
-        registry.Register(
-            PresentationReviewWorkflowPlanner.ReopenCommentCommandId,
-            new ActionRibbonCommand(() => ReopenSelectedComment()));
-    }
-
-    private void RegisterViewShowCommands(RibbonCommandRegistry registry)
-    {
-        foreach (var plan in PresentationViewShowPlanner.BuildPlans(_viewShowState))
-        {
-            registry.Register(
-                plan.CommandId,
-                new ViewShowToggleCommand(
-                    plan,
-                    () => _viewShowState,
-                    ApplyPresentationViewShowState));
-        }
-    }
-
-    private void RegisterViewZoomCommands(RibbonCommandRegistry registry)
-    {
-        foreach (var plan in PresentationViewZoomPlanner.BuiltInPlans)
-        {
-            registry.Register(
-                plan.CommandId,
-                new ContextRibbonCommand(ctx =>
-                {
-                    var result = PresentationViewZoomPlanner.Execute(
-                        _viewZoomState,
-                        plan,
-                        ctx.SelectedValue);
-                    ApplyPresentationViewZoomState(result.State);
-                }));
-        }
-    }
 
     internal void RefreshReviewWorkflowPlans()
     {
@@ -6409,7 +3871,7 @@ public sealed partial class MainWindow : Window
     private void RefreshVisibleReviewCommentsPane()
     {
         if (_reviewCommentsPaneHost is null || _reviewCommentsPanePanel is null
-            || (!_reviewCommentsPaneRequested && !_reviewCommentsPaneHost.IsVisible))
+            || !_workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReviewComments))
         {
             return;
         }
@@ -6421,7 +3883,7 @@ public sealed partial class MainWindow : Window
 
     internal PresentationCommentPanePlan ShowReviewCommentsPane()
     {
-        _reviewCommentsPaneRequested = true;
+        _workareaSession.Panes.Show(PresentationWorkareaPane.ReviewComments);
         return _reviewWorkflowSession.ShowReviewCommentsPane();
     }
 
@@ -6435,12 +3897,12 @@ public sealed partial class MainWindow : Window
         _reviewCommentsPanePanel.Children.Add(BuildAddCommentInput());
         _reviewCommentsPanePanel.Children.Add(BuildReviewCommentActions(plan.Actions));
 
-        if (plan.Comments.Count == 0)
+        if (plan.ShouldShowEmptyState)
         {
             _reviewCommentsPanePanel.Children.Add(new TextBlock
             {
-                Text       = "No comments on this slide.",
-                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Text       = plan.EmptyStateMessage,
+                Foreground = FreePBrushes.PaneMutedText,
                 Margin     = new Thickness(12, 0, 12, 10),
             });
         }
@@ -6448,12 +3910,15 @@ public sealed partial class MainWindow : Window
         {
             foreach (var (comment, itemIndex) in plan.Comments.Select((comment, index) => (comment, index)))
             {
-                var card = BuildReviewCommentCard(comment, itemIndex);
+                var card = BuildReviewCommentCard(comment, itemIndex, plan.SaveEditAction);
                 _reviewCommentsPanePanel.Children.Add(card);
             }
         }
 
-        _reviewCommentsPaneHost.IsVisible = plan.Comments.Count > 0 || _reviewCommentsPaneRequested;
+        _reviewCommentsPaneHost.IsVisible = _workareaSession.Panes.ResolveVisibility(
+            PresentationWorkareaPane.ReviewComments,
+            plan.Comments.Count > 0,
+            PresentationWorkareaPaneVisibilityPolicy.RequestedOrContent).Current.IsVisible;
         RefreshPaneAccessibilityMetadata();
     }
 
@@ -6465,14 +3930,15 @@ public sealed partial class MainWindow : Window
         };
         var close = new Button
         {
-            Content  = "Close",
+            Content  = plan.CloseAction.Label,
+            IsEnabled = plan.CloseAction.IsEnabled,
             MinWidth = PresentationCommentPaneVisualMetrics.CloseMinimumWidth,
             MinHeight = 0,
             Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
             FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
             Padding  = new Thickness(8, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
-            Tag      = "comments-pane-close",
+            Tag      = PresentationSemanticIdentityCatalog.CommentsPaneCloseTag,
             Margin   = new Thickness(6, 0, 0, 6),
         };
         close.Click += (_, _) => HideReviewCommentsPane();
@@ -6480,10 +3946,10 @@ public sealed partial class MainWindow : Window
         summaryRow.Children.Add(close);
         summaryRow.Children.Add(new TextBlock
         {
-            Text              = $"{plan.CurrentSlideSummaryLabel} | {plan.DeckSummaryLabel}",
+            Text              = plan.HeaderSummaryText,
             FontSize          = PresentationCommentPaneVisualMetrics.SummaryFontSize,
             FontWeight        = FontWeight.SemiBold,
-            Foreground        = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            Foreground        = FreePBrushes.PaneText,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(0, 0, 0, 6),
         });
@@ -6497,9 +3963,9 @@ public sealed partial class MainWindow : Window
                 summaryRow,
                 new TextBlock
                 {
-                    Text       = string.Join(" | ", plan.Filters.Select(filter => filter.Summary)),
+                    Text       = plan.FilterOptionsSummaryText,
                     FontSize   = PresentationCommentPaneVisualMetrics.FilterFontSize,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    Foreground = FreePBrushes.PaneMutedText,
                     Margin     = new Thickness(0, 0, 0, 6),
                 },
             },
@@ -6508,7 +3974,7 @@ public sealed partial class MainWindow : Window
 
     internal void HideReviewCommentsPane()
     {
-        _reviewCommentsPaneRequested = false;
+        _workareaSession.Panes.Hide(PresentationWorkareaPane.ReviewComments);
         if (_reviewCommentsPaneHost is not null)
             _reviewCommentsPaneHost.IsVisible = false;
         RefreshPaneAccessibilityMetadata();
@@ -6631,7 +4097,7 @@ public sealed partial class MainWindow : Window
         };
         var button = new Button
         {
-            Content  = "New Comment",
+            Content  = PresentationPaneTextResources.NewCommentCommand,
             MinWidth = PresentationCommentPaneVisualMetrics.AddCommentButtonMinimumWidth,
             MinHeight = 0,
             Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
@@ -6654,7 +4120,10 @@ public sealed partial class MainWindow : Window
         };
     }
 
-    private Control BuildReviewCommentCard(PresentationCommentDescriptor comment, int itemIndex)
+    private Control BuildReviewCommentCard(
+        PresentationCommentDescriptor comment,
+        int itemIndex,
+        PresentationReviewSurfaceActionPlan editAction)
     {
         var header = new StackPanel
         {
@@ -6663,7 +4132,7 @@ public sealed partial class MainWindow : Window
         };
         header.Children.Add(new Border
         {
-            Background   = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            Background   = FreePBrushes.Accent,
             CornerRadius = new CornerRadius(3),
             Padding      = new Thickness(4, 1, 4, 1),
             Margin       = new Thickness(0, 0, 6, 0),
@@ -6671,7 +4140,7 @@ public sealed partial class MainWindow : Window
             {
                 Text       = comment.InitialsBadgeText,
                 FontSize   = PresentationCommentPaneVisualMetrics.StatusFontSize,
-                Foreground = Brushes.White,
+                Foreground = FreePBrushes.White,
             },
         });
         header.Children.Add(new TextBlock
@@ -6679,14 +4148,14 @@ public sealed partial class MainWindow : Window
             Text              = comment.AuthorDisplayName,
             FontSize          = PresentationCommentPaneVisualMetrics.AuthorFontSize,
             FontWeight        = FontWeight.SemiBold,
-            Foreground        = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            Foreground        = FreePBrushes.PaneHeadingText,
             VerticalAlignment = VerticalAlignment.Center,
         });
         header.Children.Add(new TextBlock
         {
             Text              = comment.ThreadStatusLabel,
             FontSize          = PresentationCommentPaneVisualMetrics.StatusFontSize,
-            Foreground        = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            Foreground        = FreePBrushes.PaneMutedText,
             Margin            = new Thickness(6, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -6701,10 +4170,11 @@ public sealed partial class MainWindow : Window
             Text         = comment.TextPreview,
             FontSize     = PresentationCommentPaneVisualMetrics.BodyFontSize,
             TextWrapping = TextWrapping.Wrap,
-            Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            Foreground   = FreePBrushes.PaneText,
             Margin       = new Thickness(16, 2, 6, 6),
         });
-        AddMentionDetail(card, comment.MentionDetailSummary, new Thickness(0));
+        if (comment.ShouldShowMentionDetail)
+            AddMentionDetail(card, comment.MentionDetailSummary, new Thickness(0));
         if (comment.IsSelected && comment.CanEdit)
         {
             var editText = GetCommentText(comment.CommentIndex) ?? comment.TextPreview;
@@ -6721,13 +4191,14 @@ public sealed partial class MainWindow : Window
                 VerticalContentAlignment = VerticalAlignment.Center,
             };
             var mentionButton = BuildCommentMentionButton(
-                "comment-mention:edit",
+                PresentationSemanticIdentityCatalog.CommentMentionEditTag,
                 () => editInput.Text,
-                () => ResolveCommentInputCaret(editInput.Text, editInput.CaretIndex),
-                updatedText => EditSelectedComment(updatedText));
+                () => editInput.CaretIndex,
+                PresentationReviewWorkflowIntentKind.EditComment);
             var editButton = new Button
             {
-                Content = "Save",
+                Content = editAction.Label,
+                IsEnabled = editAction.IsEnabled,
                 MinWidth = 72,
                 MinHeight = 0,
                 Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
@@ -6752,19 +4223,20 @@ public sealed partial class MainWindow : Window
         {
             card.Children.Add(new TextBlock
             {
-                Text         = $"{reply.AuthorDisplayName}: {reply.TextPreview}",
+                Text         = reply.DisplayText,
                 TextWrapping = TextWrapping.Wrap,
                 FontSize     = PresentationCommentPaneVisualMetrics.ReplyFontSize,
                 Margin       = new Thickness(26, 0, 6, 4),
-                Foreground   = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                Foreground   = FreePBrushes.PaneSecondaryText,
             });
-            AddMentionDetail(card, reply.MentionDetailSummary, new Thickness(26, 0, 6, 4));
+            if (reply.ShouldShowMentionDetail)
+                AddMentionDetail(card, reply.MentionDetailSummary, new Thickness(26, 0, 6, 4));
         }
         if (comment.IsSelected && comment.CanReply)
         {
             var replyInput = new TextBox
             {
-                PlaceholderText = "Reply",
+                PlaceholderText = PresentationPaneTextResources.ReplyCommand,
                 MinWidth        = 180,
                 MinHeight       = 0,
                 Height          = PresentationCommentPaneVisualMetrics.CompactControlHeight,
@@ -6774,13 +4246,13 @@ public sealed partial class MainWindow : Window
                 Margin          = new Thickness(0, 0, 6, 0),
             };
             var mentionButton = BuildCommentMentionButton(
-                "comment-mention:reply",
+                PresentationSemanticIdentityCatalog.CommentMentionReplyTag,
                 () => replyInput.Text,
-                () => ResolveCommentInputCaret(replyInput.Text, replyInput.CaretIndex),
-                updatedText => ReplyToSelectedComment(updatedText));
+                () => replyInput.CaretIndex,
+                PresentationReviewWorkflowIntentKind.ReplyComment);
             var replyButton = new Button
             {
-                Content = "Reply",
+                Content = PresentationPaneTextResources.ReplyCommand,
                 MinWidth = 58,
                 MinHeight = 0,
                 Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
@@ -6804,8 +4276,8 @@ public sealed partial class MainWindow : Window
 
         var border = new Border
         {
-            Background      = new SolidColorBrush(comment.IsSelected ? Color.FromRgb(0xF4, 0xEC, 0xE8) : Color.FromRgb(0xFA, 0xFA, 0xFA)),
-            BorderBrush     = new SolidColorBrush(comment.IsSelected ? Color.FromRgb(0xB7, 0x47, 0x2A) : Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            Background      = comment.IsSelected ? FreePBrushes.SelectedCommentSurface : FreePBrushes.PaneSurface,
+            BorderBrush     = comment.IsSelected ? FreePBrushes.Accent : FreePBrushes.CardBorder,
             BorderThickness = new Thickness(comment.IsSelected ? 2 : 1),
             CornerRadius    = new CornerRadius(4),
             Margin          = new Thickness(0, 0, 0, PresentationCommentPaneVisualMetrics.CardBottomMargin),
@@ -6815,24 +4287,23 @@ public sealed partial class MainWindow : Window
         border.PointerPressed += (_, _) => SelectReviewComment(comment.CommentIndex);
         PresentationPaneAccessibilityAdapter.ApplyItem(
             border,
-            PresentationPaneAccessibilityPlanner.CommentsPaneId,
-            itemIndex,
-            comment.TextPreview,
-            comment.IsSelected ? "Selected" : "Not selected");
+            PresentationPaneAccessibilityPlanner.PlanItem(
+                PresentationPaneAccessibilityPlanner.CommentsPaneId,
+                itemIndex,
+                comment.TextPreview,
+                comment.IsSelected,
+                comment.AccessibilityKey));
         return border;
     }
 
     private static void AddMentionDetail(StackPanel card, string mentionDetailSummary, Thickness margin)
     {
-        if (string.Equals(mentionDetailSummary, "No mentions", StringComparison.Ordinal))
-            return;
-
         card.Children.Add(new TextBlock
         {
             Text = mentionDetailSummary,
             TextWrapping = TextWrapping.Wrap,
             FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            Foreground = FreePBrushes.PaneMutedText,
             Margin = margin,
         });
     }
@@ -6841,38 +4312,35 @@ public sealed partial class MainWindow : Window
         string tag,
         Func<string?> getText,
         Func<int> getCaretIndex,
-        Func<string, PresentationCommentMutationPlan> applyUpdatedText)
+        PresentationReviewWorkflowIntentKind intent)
     {
-        var mentionPicker = BuildCommentMentionPickerPlanForCurrentInput(getText, getCaretIndex);
-        var candidate = mentionPicker.DefaultCandidate;
+        var mentionPicker = _reviewWorkflowSession.BuildCommentMentionPickerPlanForInput(
+            getText(),
+            getCaretIndex());
         var button = new Button
         {
-            Content = mentionPicker.Candidates.Count == 1 ? candidate?.Label : "@",
+            Content = mentionPicker.TriggerLabel,
             IsEnabled = mentionPicker.HasCandidates,
             Tag = tag,
             MinWidth = 72,
         };
         button.Click += (_, _) =>
         {
-            var currentPlan = BuildCommentMentionPickerPlanForCurrentInput(getText, getCaretIndex);
-            if (currentPlan.Candidates.Count == 1)
-            {
-                ApplyCommentMentionCandidate(
-                    getText,
-                    getCaretIndex,
-                    currentPlan.DefaultCandidate,
-                    applyUpdatedText);
+            var dispatch = _reviewWorkflowSession.DispatchCommentMentionPicker(
+                intent,
+                getText(),
+                getCaretIndex());
+            if (dispatch.ApplicationResult is not null)
                 return;
-            }
 
-            if (currentPlan.HasCandidates)
+            if (dispatch.ShouldShowPicker)
             {
                 var menu = BuildCommentMentionMenu(
                     tag,
                     getText,
                     getCaretIndex,
-                    applyUpdatedText,
-                    currentPlan);
+                    intent,
+                    dispatch.PickerPlan);
                 button.ContextMenu = menu;
                 menu.Open(button);
             }
@@ -6884,7 +4352,7 @@ public sealed partial class MainWindow : Window
         string tag,
         Func<string?> getText,
         Func<int> getCaretIndex,
-        Func<string, PresentationCommentMutationPlan> applyUpdatedText,
+        PresentationReviewWorkflowIntentKind intent,
         PresentationCommentMentionPickerPlan picker)
     {
         var menu = new ContextMenu();
@@ -6893,55 +4361,26 @@ public sealed partial class MainWindow : Window
             var item = new MenuItem
             {
                 Header = candidate.Label,
-                Tag = $"{tag}:{candidate.InsertToken}",
+                Tag = PresentationSemanticIdentityCatalog.BuildCommentMentionCandidateTag(
+                    tag,
+                    candidate.InsertToken),
             };
-            item.Click += (_, _) => ApplyCommentMentionCandidate(
-                getText,
-                getCaretIndex,
-                candidate,
-                applyUpdatedText);
+            item.Click += (_, _) => _reviewWorkflowSession.ApplyCommentMention(
+                intent,
+                getText(),
+                getCaretIndex(),
+                candidate);
             menu.Items.Add(item);
         }
 
         return menu;
     }
 
-    private void ApplyCommentMentionCandidate(
-        Func<string?> getText,
-        Func<int> getCaretIndex,
-        PresentationCommentMentionCandidate? candidate,
-        Func<string, PresentationCommentMutationPlan> applyUpdatedText)
-    {
-        LastCommentMentionInsertionPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
-            getText(),
-            getCaretIndex(),
-            candidate);
-        if (LastCommentMentionInsertionPlan.ShouldApply)
-            applyUpdatedText(LastCommentMentionInsertionPlan.UpdatedText);
-    }
-
-    private PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForCurrentInput(
-        Func<string?> getText,
-        Func<int> getCaretIndex)
-    {
-        LastCommentMentionPickerPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionPickerPlanForInsertionContext(
-            _presentation.Slides,
-            getText(),
-            getCaretIndex());
-        return LastCommentMentionPickerPlan;
-    }
-
-    private static int ResolveCommentInputCaret(string? text, int caretIndex)
-    {
-        var currentText = text ?? string.Empty;
-        return caretIndex == 0 && currentText.Length > 0 ? currentText.Length : caretIndex;
-    }
-
     private void ExecuteReviewCommentAction(string commandId)
     {
         if (commandId == PresentationReviewWorkflowPlanner.AddCommentCommandId)
         {
-            AddComment("New comment");
+            AddComment(PresentationPaneTextResources.NewCommentDefault);
         }
         else if (commandId == PresentationReviewWorkflowPlanner.EditCommentCommandId)
         {
@@ -6969,8 +4408,6 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal PresentationCommentPanePlan SetSelectedReviewCommentIndexForTests(int? commentIndex)
-        => _reviewWorkflowSession.SetSelectedReviewCommentIndex(commentIndex);
 
     private void SelectReviewComment(int commentIndex)
         => _reviewWorkflowSession.SelectReviewComment(commentIndex);
@@ -7012,40 +4449,8 @@ public sealed partial class MainWindow : Window
         string? initials = null)
         => _reviewWorkflowSession.ReplyToSelectedComment(text, timestamp, author, initials);
 
-    internal PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForTests(
-        string? query = null,
-        string? currentAuthor = null,
-        string? currentInitials = null)
-    {
-        var plan = _reviewWorkflowSession.BuildCommentMentionPickerPlanForTests(query, currentAuthor, currentInitials);
-        LastCommentMentionPickerPlan = plan;
-        return plan;
-    }
 
-    internal PresentationCommentMentionInsertionPlan InsertCommentMentionForTests(
-        string? text,
-        int caretIndex,
-        PresentationCommentMentionCandidate? candidate)
-    {
-        var plan = _reviewWorkflowSession.InsertCommentMentionForTests(text, caretIndex, candidate);
-        LastCommentMentionInsertionPlan = plan;
-        return plan;
-    }
 
-    internal PresentationCommentMutationPlan InsertMentionInSelectedCommentForTests(
-        int caretIndex,
-        PresentationCommentMentionCandidate? candidate,
-        string? author = null,
-        string? initials = null)
-    {
-        var plan = _reviewWorkflowSession.InsertMentionInSelectedCommentForTests(
-            caretIndex,
-            candidate,
-            author,
-            initials);
-        LastCommentMentionInsertionPlan = _reviewWorkflowSession.LastCommentMentionInsertionPlan;
-        return plan;
-    }
 
     private string? GetSelectedCommentText() => _reviewWorkflowSession.GetSelectedCommentText();
 
@@ -7053,7 +4458,7 @@ public sealed partial class MainWindow : Window
 
     private void OnAnimationPaneRequested(PresentationAnimationCommandPlan plan)
     {
-        SeedPhysicalAnimationPaneFixtureIfRequested();
+        CoordinateAnimationPaneRequestObserver();
         _ = plan;
         if (IsAnimationPaneVisible)
             HideAnimationPane();
@@ -7063,13 +4468,9 @@ public sealed partial class MainWindow : Window
 
     internal AnimationPaneTimelinePlan RefreshAnimationPaneTimelinePlan(int selectedAnimationIndex = -1)
     {
-        LastAnimationPaneTimelinePlan = AnimationPanePlanner.BuildTimelinePlan(
-            Editor.CurrentSlide,
-            Editor.SelectedShapeIds,
-            selectedAnimationIndex,
-            isPlaybackRunning: _animationPanePlaybackSessionPlan?.IsRunning == true);
+        var plan = _animationPaneSession.Refresh(selectedAnimationIndex);
         RefreshPaneAccessibilityMetadata();
-        return LastAnimationPaneTimelinePlan;
+        return plan;
     }
 
     internal AnimationPaneTimelinePlan ShowAnimationPane(int selectedAnimationIndex = -1)
@@ -7101,11 +4502,8 @@ public sealed partial class MainWindow : Window
 
     private void RenderAnimationPane(AnimationPaneTimelinePlan plan)
     {
-        _selectedAnimationIndex = plan.SelectedIndex;
-        LastAnimationPaneWorkflowEvidencePlan =
-            AnimationPanePlanner.BuildWorkflowEvidencePlan(plan, Editor.CurrentSlideIndex);
-        var viewPlan = LastAnimationPaneWorkflowEvidencePlan.View;
-        _animationPaneHeading.Text = "Animation Pane";
+        var viewPlan = _animationPaneSession.WorkflowEvidence!.View;
+        _animationPaneHeading.Text = _animationPaneSession.ControlSchema.Heading;
         _animationPaneMessage.Text = viewPlan.Message;
         RenderAnimationPanePlaybackControls(plan, viewPlan);
 
@@ -7127,7 +4525,7 @@ public sealed partial class MainWindow : Window
             {
                 Text = viewPlan.EmptyMessage,
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Foreground = FreePBrushes.PaneMutedText,
                 Margin = new Thickness(10, 12, 10, 12),
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -7142,10 +4540,12 @@ public sealed partial class MainWindow : Window
             var card = BuildAnimationPaneItemCard(item);
             PresentationPaneAccessibilityAdapter.ApplyItem(
                 card,
-                PresentationPaneAccessibilityPlanner.AnimationPaneId,
-                i,
-                item.ShapeName,
-                item.IsSelected ? "Selected" : "Not selected");
+                PresentationPaneAccessibilityPlanner.PlanItem(
+                    PresentationPaneAccessibilityPlanner.AnimationPaneId,
+                    i,
+                    item.ShapeName,
+                    item.IsSelected,
+                    PresentationPaneAccessibilityPlanner.BuildAnimationKey(item.ShapeId, item.Index)));
             _animationPaneItemsPanel.Children.Add(card);
         }
         RefreshPaneAccessibilityMetadata();
@@ -7166,8 +4566,8 @@ public sealed partial class MainWindow : Window
                 IsEnabled = control.IsEnabled,
                 Padding = new Thickness(6, 2),
                 Margin = new Thickness(0, 4, 6, 4),
-                Background = new SolidColorBrush(Color.FromRgb(0x8F, 0x37, 0x21)),
-                Foreground = Brushes.White,
+                Background = FreePBrushes.AccentDark,
+                Foreground = FreePBrushes.White,
                 BorderThickness = new Thickness(0),
                 FontSize = 12,
                 Tag = control.CommandId,
@@ -7185,42 +4585,18 @@ public sealed partial class MainWindow : Window
     private void ExecuteAnimationPanePlaybackControl(AnimationPanePlaybackControlDescriptor control)
         => ExecuteAnimationPanePlaybackControl(control, startPreview: true);
 
-    internal AnimationPanePlaybackSessionPlan ExecuteAnimationPanePlaybackControlForTests(
-        AnimationPanePlaybackControlKind controlKind)
-    {
-        var control = RefreshAnimationPaneTimelinePlan(_selectedAnimationIndex)
-            .PlaybackControls
-            .First(candidate => candidate.Kind == controlKind);
-        return ExecuteAnimationPanePlaybackControl(control, startPreview: false);
-    }
 
     private AnimationPanePlaybackSessionPlan ExecuteAnimationPanePlaybackControl(
         AnimationPanePlaybackControlDescriptor control,
         bool startPreview)
     {
-        var timeline = LastAnimationPaneTimelinePlan ?? RefreshAnimationPaneTimelinePlan(_selectedAnimationIndex);
-        _animationPanePlaybackSessionPlan = AnimationPanePlanner.BuildPlaybackSessionPlan(timeline, control.Kind);
-        _animationPanePlaybackWorkflowEvidencePlan = AnimationPanePlanner.BuildPlaybackWorkflowEvidencePlan(
-            timeline,
-            _animationPanePlaybackSessionPlan,
-            Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>(),
-            Editor.CurrentSlideIndex);
-        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        var transition = _animationPaneSession.ExecutePlayback(control.Kind);
+        RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
 
-        if (!control.IsEnabled)
-            return _animationPanePlaybackSessionPlan;
+        if (startPreview && transition.ShouldStartPreview)
+            StartAnimationPanePreview(transition.Playback);
 
-        switch (control.Kind)
-        {
-            case AnimationPanePlaybackControlKind.PreviewCurrentSlide:
-            case AnimationPanePlaybackControlKind.PlayFromSelected:
-            case AnimationPanePlaybackControlKind.PlayCurrentSlide:
-                if (startPreview)
-                    StartAnimationPanePreview(_animationPanePlaybackSessionPlan);
-                break;
-        }
-
-        return _animationPanePlaybackSessionPlan;
+        return transition.Playback;
     }
 
     private void StartAnimationPanePreview(AnimationPanePlaybackSessionPlan session)
@@ -7236,85 +4612,56 @@ public sealed partial class MainWindow : Window
 
     private Control BuildAnimationPaneItemCard(AnimationPaneTimelineItemPlan item)
     {
-        var effectOptionItems = item.EffectOptions.Options
-            .Select(option => option.DisplayText)
-            .ToArray();
-        var selectedEffectOptionIndex = item.EffectOptions.Options
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(pair => pair.option.IsSelected)
-            .index;
+        var controls = _animationPaneSession.BuildItemControlPlan(item, canEditMotionPath: true);
 
         var effectOptionCombo = new ComboBox
         {
-            ItemsSource = effectOptionItems,
-            SelectedIndex = selectedEffectOptionIndex,
+            ItemsSource = controls.EffectOptions.Options.Select(option => option.Label).ToArray(),
+            SelectedIndex = controls.EffectOptions.SelectedIndex,
             Width = 104,
             Height = 24,
             FontSize = 10,
             Margin = new Thickness(2),
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
-            IsEnabled = item.EffectOptions.CanApply,
-            IsVisible = item.EffectOptions.Options.Count > 0,
+            IsEnabled = controls.EffectOptions.IsEnabled,
+            IsVisible = controls.EffectOptions.IsVisible,
         };
-        ToolTip.SetTip(
-            effectOptionCombo,
-            item.EffectOptions.CanApply
-                ? "Effect options"
-                : item.EffectOptions.DisabledReason);
+        ToolTip.SetTip(effectOptionCombo, controls.EffectOptions.ToolTip);
         effectOptionCombo.SelectionChanged += (_, _) =>
         {
-            if (effectOptionCombo.SelectedIndex < 0
-                || effectOptionCombo.SelectedIndex >= item.EffectOptions.Options.Count)
-            {
-                return;
-            }
-
-            ApplyAnimationPaneEffectOptionEdit(
-                item.Index,
-                item.EffectOptions.Options[effectOptionCombo.SelectedIndex].Id);
+            if (controls.EffectOptions.ResolveOptionId(effectOptionCombo.SelectedIndex) is { } optionId)
+                ApplyAnimationPaneEffectOptionEdit(item.Index, optionId);
         };
-        if (item.EffectOptions.Options.Count > 0)
+        if (controls.EffectOptions.IsVisible)
             _animationPaneEffectOptionControlCount++;
 
         var wheelSpokeCombo = new ComboBox
         {
-            ItemsSource = item.EffectOptions.WheelSpokeOptions
-                .Select(option => option.DisplayText)
-                .ToArray(),
-            SelectedIndex = item.EffectOptions.WheelSpokeOptions
-                .Select((option, index) => (option, index))
-                .FirstOrDefault(pair => pair.option.IsSelected)
-                .index,
+            ItemsSource = controls.WheelSpokes.Options.Select(option => option.Label).ToArray(),
+            SelectedIndex = controls.WheelSpokes.SelectedIndex,
             Width = 86,
             Height = 24,
             FontSize = 10,
             Margin = new Thickness(2),
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
-            IsEnabled = item.EffectOptions.CanApply,
-            IsVisible = item.EffectOptions.WheelSpokeOptions.Count > 0,
+            IsEnabled = controls.WheelSpokes.IsEnabled,
+            IsVisible = controls.WheelSpokes.IsVisible,
         };
-        ToolTip.SetTip(wheelSpokeCombo, "Wheel spokes");
+        ToolTip.SetTip(wheelSpokeCombo, controls.WheelSpokes.ToolTip);
         wheelSpokeCombo.SelectionChanged += (_, _) =>
         {
-            if (wheelSpokeCombo.SelectedIndex < 0
-                || wheelSpokeCombo.SelectedIndex >= item.EffectOptions.WheelSpokeOptions.Count)
-            {
-                return;
-            }
-
-            ApplyAnimationPaneEffectOptionEdit(
-                item.Index,
-                item.EffectOptions.WheelSpokeOptions[wheelSpokeCombo.SelectedIndex].Id);
+            if (controls.WheelSpokes.ResolveOptionId(wheelSpokeCombo.SelectedIndex) is { } optionId)
+                ApplyAnimationPaneEffectOptionEdit(item.Index, optionId);
         };
-        if (item.EffectOptions.WheelSpokeOptions.Count > 0)
+        if (controls.WheelSpokes.IsVisible)
             _animationPaneEffectOptionControlCount++;
 
         var triggerCombo = new ComboBox
         {
-            ItemsSource = AnimationPanePlanner.TriggerLabels,
-            SelectedIndex = item.TriggerIndex,
+            ItemsSource = controls.Trigger.Options.Select(option => option.Label).ToArray(),
+            SelectedIndex = controls.Trigger.SelectedIndex,
             Width = 110,
             Height = 24,
             FontSize = 10,
@@ -7322,14 +4669,14 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(triggerCombo, "Trigger");
+        ToolTip.SetTip(triggerCombo, controls.Trigger.ToolTip);
         triggerCombo.SelectionChanged += (_, _) =>
             ApplyAnimationPaneTriggerEdit(item.Index, triggerCombo.SelectedIndex);
         _animationPaneTriggerControlCount++;
 
         var durationBox = new TextBox
         {
-            Text = item.DurationText,
+            Text = controls.Duration.Text,
             Width = 48,
             Height = 24,
             FontSize = 10,
@@ -7338,7 +4685,7 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(durationBox, "Duration (seconds)");
+        ToolTip.SetTip(durationBox, controls.Duration.Descriptor.ToolTip);
         durationBox.LostFocus += (_, _) =>
         {
             var plan = ApplyAnimationPaneDurationEdit(item.Index, durationBox.Text ?? string.Empty);
@@ -7349,7 +4696,7 @@ public sealed partial class MainWindow : Window
 
         var delayBox = new TextBox
         {
-            Text = item.DelayText,
+            Text = controls.Delay.Text,
             Width = 48,
             Height = 24,
             FontSize = 10,
@@ -7358,7 +4705,7 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(delayBox, "Delay (seconds)");
+        ToolTip.SetTip(delayBox, controls.Delay.Descriptor.ToolTip);
         delayBox.LostFocus += (_, _) =>
         {
             var plan = ApplyAnimationPaneDelayEdit(item.Index, delayBox.Text ?? string.Empty);
@@ -7369,7 +4716,7 @@ public sealed partial class MainWindow : Window
         TextBox? decelerationBox = null;
         var accelerationBox = new TextBox
         {
-            Text = AnimationPanePlanner.FormatEasing(item.Acceleration),
+            Text = controls.SmoothStart.Text,
             Width = 48,
             Height = 24,
             FontSize = 10,
@@ -7378,7 +4725,7 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(accelerationBox, "Smooth start");
+        ToolTip.SetTip(accelerationBox, controls.SmoothStart.Descriptor.ToolTip);
         accelerationBox.LostFocus += (_, _) =>
         {
             var plan = ApplyAnimationPaneEasingEdit(
@@ -7391,7 +4738,7 @@ public sealed partial class MainWindow : Window
 
         decelerationBox = new TextBox
         {
-            Text = AnimationPanePlanner.FormatEasing(item.Deceleration),
+            Text = controls.SmoothEnd.Text,
             Width = 48,
             Height = 24,
             FontSize = 10,
@@ -7400,7 +4747,7 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(decelerationBox, "Smooth end");
+        ToolTip.SetTip(decelerationBox, controls.SmoothEnd.Descriptor.ToolTip);
         decelerationBox.LostFocus += (_, _) =>
         {
             var plan = ApplyAnimationPaneEasingEdit(
@@ -7414,8 +4761,8 @@ public sealed partial class MainWindow : Window
 
         var repeatCombo = new ComboBox
         {
-            ItemsSource = new[] { "1", "2", "3", "4", "Indefinitely" },
-            SelectedItem = AnimationPanePlanner.FormatRepeat(item.RepeatCount, item.RepeatIndefinitely),
+            ItemsSource = controls.Repeat.Options.Select(option => option.Label).ToArray(),
+            SelectedIndex = controls.Repeat.SelectedIndex,
             Width = 82,
             Height = 24,
             FontSize = 10,
@@ -7423,30 +4770,26 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(repeatCombo, "Repeat count");
+        ToolTip.SetTip(repeatCombo, controls.Repeat.ToolTip);
 
         var autoReverseCheck = new CheckBox
         {
-            IsChecked = item.AutoReverse,
+            IsChecked = controls.AutoReverse.IsChecked,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2),
             Tag = item.Index,
         };
-        ToolTip.SetTip(autoReverseCheck, "Auto-reverse between repeats");
+        ToolTip.SetTip(autoReverseCheck, controls.AutoReverse.Descriptor.ToolTip);
 
         void ApplyRepeat()
         {
-            var plan = AnimationPanePlanner.BuildRepeatMutationPlan(
-                Editor.CurrentSlideAnimations,
+            var plan = _animationPaneSession.ApplyRepeat(
                 item.Index,
                 repeatCombo.SelectedItem as string,
                 autoReverseCheck.IsChecked == true);
-            if (!AnimationPanePlanner.TryApplyRepeatMutation(Editor, plan)
-                && plan.DisabledReason is not null)
+            if (!plan.ShouldApply && plan.DisabledReason is not null)
             {
-                repeatCombo.SelectedItem = AnimationPanePlanner.FormatRepeat(
-                    plan.RepeatCount,
-                    plan.RepeatIndefinitely);
+                repeatCombo.SelectedItem = plan.DisplayText;
                 autoReverseCheck.IsChecked = plan.AutoReverse;
             }
         }
@@ -7456,30 +4799,31 @@ public sealed partial class MainWindow : Window
 
         var moveEarlierButton = BuildAnimationPaneActionButton(
             "▲",
-            item.CanMoveEarlier,
-            "Move earlier",
+            controls.MoveEarlier.IsEnabled,
+            controls.MoveEarlier.ToolTip,
             () => MoveAnimationPaneItem(item.Index, -1));
         var moveLaterButton = BuildAnimationPaneActionButton(
             "▼",
-            item.CanMoveLater,
-            "Move later",
+            controls.MoveLater.IsEnabled,
+            controls.MoveLater.ToolTip,
             () => MoveAnimationPaneItem(item.Index, 1));
         var removeButton = BuildAnimationPaneActionButton(
             "×",
-            true,
-            "Remove animation",
+            controls.Remove.IsEnabled,
+            controls.Remove.ToolTip,
             () => RemoveAnimationPaneItem(item.Index));
-        removeButton.Foreground = new SolidColorBrush(Color.FromRgb(0xC0, 0x20, 0x20));
-        var paragraphBuildPlan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
-            Editor.CurrentSlide,
-            item.ShapeId);
+        removeButton.Foreground = FreePBrushes.AnimationDanger;
         var paragraphBuildButton = BuildAnimationPaneActionButton(
             "¶",
-            paragraphBuildPlan.ShouldApply,
-            paragraphBuildPlan.DisabledReason ?? paragraphBuildPlan.DisplayText,
+            controls.ParagraphBuild.IsEnabled,
+            controls.ParagraphBuild.ToolTip,
             () => ToggleParagraphBuild(item.ShapeId));
-        var editMotionPathButton = item.Kind == AnimationKind.Motion
-            ? BuildAnimationPaneActionButton("Edit", true, "Edit motion path geometry", () => _ = OpenMotionPathEditorAsync(item.Index))
+        var editMotionPathButton = controls.EditMotionPath.IsVisible
+            ? BuildAnimationPaneActionButton(
+                controls.EditMotionPath.Descriptor.Label,
+                controls.EditMotionPath.IsEnabled,
+                controls.EditMotionPath.ToolTip,
+                () => _ = OpenMotionPathEditorAsync(item.Index))
             : null;
         var actionPanel = new StackPanel
         {
@@ -7523,7 +4867,7 @@ public sealed partial class MainWindow : Window
             Text = item.OrderText,
             FontSize = 11,
             FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22)),
+            Foreground = FreePBrushes.AnimationText,
             Width = 20,
             TextAlignment = TextAlignment.Center,
             Margin = new Thickness(4, 0),
@@ -7533,7 +4877,7 @@ public sealed partial class MainWindow : Window
         {
             Text = item.ShapeName,
             FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22)),
+            Foreground = FreePBrushes.AnimationText,
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxWidth = 80,
             VerticalAlignment = VerticalAlignment.Center,
@@ -7542,7 +4886,7 @@ public sealed partial class MainWindow : Window
         {
             Text = item.EffectText,
             FontSize = 10,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            Foreground = FreePBrushes.PaneMutedText,
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxWidth = 70,
             Margin = new Thickness(4, 0),
@@ -7572,9 +4916,9 @@ public sealed partial class MainWindow : Window
         var border = new Border
         {
             Background = item.IsSelected
-                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xE0, 0xD6))
-                : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+                ? FreePBrushes.AnimationSelectedSurface
+                : FreePBrushes.PaneSurface,
+            BorderBrush = FreePBrushes.GridBorder,
             BorderThickness = new Thickness(0, 0, 0, 1),
             Padding = new Thickness(4),
             Child = innerGrid,
@@ -7593,22 +4937,11 @@ public sealed partial class MainWindow : Window
 
     private void ToggleParagraphBuild(uint shapeId)
     {
-        var plan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
-            Editor.CurrentSlide,
-            shapeId);
-        if (AnimationPanePlanner.TryApplyParagraphBuildMutation(Editor, plan))
-            RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        var plan = _animationPaneSession.ToggleParagraphBuild(shapeId);
+        if (plan.ShouldApply)
+            RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
     }
 
-    internal AnimationPaneParagraphBuildMutationPlan ToggleParagraphBuildForTests(uint shapeId)
-    {
-        var plan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
-            Editor.CurrentSlide,
-            shapeId);
-        AnimationPanePlanner.TryApplyParagraphBuildMutation(Editor, plan);
-        RefreshVisibleAnimationPane(_selectedAnimationIndex);
-        return plan;
-    }
 
     private static Button BuildAnimationPaneActionButton(
         string content,
@@ -7624,8 +4957,8 @@ public sealed partial class MainWindow : Window
             Height = 18,
             Padding = new Thickness(0),
             Margin = new Thickness(1),
-            Background = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.CardBorder,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1),
             IsEnabled = isEnabled,
             VerticalAlignment = VerticalAlignment.Center,
@@ -7635,45 +4968,19 @@ public sealed partial class MainWindow : Window
         return button;
     }
 
-    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneTriggerEditForTests(
-        int animationIndex,
-        int selectedTriggerIndex)
-        => ApplyAnimationPaneTriggerEdit(animationIndex, selectedTriggerIndex);
 
-    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneDurationEditForTests(
-        int animationIndex,
-        string text)
-        => ApplyAnimationPaneDurationEdit(animationIndex, text);
 
-    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneDelayEditForTests(
-        int animationIndex,
-        string text)
-        => ApplyAnimationPaneDelayEdit(animationIndex, text);
 
-    internal AnimationPaneEasingMutationPlan ApplyAnimationPaneEasingEditForTests(
-        int animationIndex,
-        string accelerationText,
-        string decelerationText)
-        => ApplyAnimationPaneEasingEdit(animationIndex, accelerationText, decelerationText);
 
-    internal AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEditForTests(
-        int animationIndex,
-        string optionId)
-        => ApplyAnimationPaneEffectOptionEdit(animationIndex, optionId);
 
-    internal AnimationPaneReorderMutationPlan MoveAnimationPaneItemForTests(int animationIndex, int offset)
-        => MoveAnimationPaneItem(animationIndex, offset);
 
     private AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEdit(
         int animationIndex,
         string optionId)
     {
-        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
-            Editor.CurrentSlideAnimations,
-            animationIndex,
-            optionId);
-        if (AnimationPanePlanner.TryApplyEffectOptionMutation(Editor, plan))
-            RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        var plan = _animationPaneSession.ApplyEffectOption(animationIndex, optionId);
+        if (plan.ShouldApply)
+            RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
         return plan;
     }
 
@@ -7681,11 +4988,8 @@ public sealed partial class MainWindow : Window
         int animationIndex,
         int selectedTriggerIndex)
     {
-        var plan = AnimationPanePlanner.BuildTriggerMutationPlan(
-            Editor.CurrentSlideAnimations,
-            animationIndex,
-            selectedTriggerIndex);
-        ApplyAnimationPaneTimingMutation(plan);
+        var plan = _animationPaneSession.ApplyTrigger(animationIndex, selectedTriggerIndex);
+        RefreshAnimationPaneAfterTimingMutation(plan);
         return plan;
     }
 
@@ -7693,11 +4997,8 @@ public sealed partial class MainWindow : Window
         int animationIndex,
         string text)
     {
-        var plan = AnimationPanePlanner.BuildDurationMutationPlan(
-            Editor.CurrentSlideAnimations,
-            animationIndex,
-            text);
-        ApplyAnimationPaneTimingMutation(plan);
+        var plan = _animationPaneSession.ApplyDuration(animationIndex, text);
+        RefreshAnimationPaneAfterTimingMutation(plan);
         return plan;
     }
 
@@ -7705,11 +5006,8 @@ public sealed partial class MainWindow : Window
         int animationIndex,
         string text)
     {
-        var plan = AnimationPanePlanner.BuildDelayMutationPlan(
-            Editor.CurrentSlideAnimations,
-            animationIndex,
-            text);
-        ApplyAnimationPaneTimingMutation(plan);
+        var plan = _animationPaneSession.ApplyDelay(animationIndex, text);
+        RefreshAnimationPaneAfterTimingMutation(plan);
         return plan;
     }
 
@@ -7718,208 +5016,85 @@ public sealed partial class MainWindow : Window
         string accelerationText,
         string decelerationText)
     {
-        var plan = AnimationPanePlanner.BuildEasingMutationPlan(
-            Editor.CurrentSlideAnimations,
+        var plan = _animationPaneSession.ApplyEasing(
             animationIndex,
             accelerationText,
             decelerationText);
-        if (AnimationPanePlanner.TryApplyEasingMutation(Editor, plan))
-            RefreshVisibleAnimationPane(animationIndex);
+        if (plan.ShouldApply)
+            RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
         return plan;
     }
 
-    private void ApplyAnimationPaneTimingMutation(AnimationPaneTimingMutationPlan plan)
+    private void RefreshAnimationPaneAfterTimingMutation(AnimationPaneTimingMutationPlan plan)
     {
-        if (AnimationPanePlanner.TryApplyTimingMutation(Editor, plan))
-            RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        if (plan.ShouldApply)
+            RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
     }
 
     private void SelectAnimationPaneItem(int animationIndex)
     {
-        _selectedAnimationIndex = animationIndex;
-        var animations = Editor.CurrentSlideAnimations;
-        if (animationIndex >= 0 && animationIndex < animations.Count)
-            Editor.Select(animations[animationIndex].ShapeId);
-
-        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        _animationPaneSession.SelectAnimation(animationIndex);
+        RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
     }
 
     private AnimationPaneReorderMutationPlan MoveAnimationPaneItem(int animationIndex, int offset)
     {
-        var plan = AnimationPanePlanner.BuildReorderMutationPlan(
-            Editor.CurrentSlideAnimations,
-            animationIndex,
-            offset);
-        if (!AnimationPanePlanner.TryApplyReorderMutation(Editor, plan))
-            return plan;
-
-        _selectedAnimationIndex = plan.SelectedAnimationIndex;
-        RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        var plan = _animationPaneSession.MoveAnimation(animationIndex, offset);
+        if (plan.ShouldApply)
+            RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
         return plan;
     }
 
-    internal AnimationPaneRemoveMutationPlan RemoveAnimationPaneItemForTests(int animationIndex) =>
-        RemoveAnimationPaneItem(animationIndex);
 
     private AnimationPaneRemoveMutationPlan RemoveAnimationPaneItem(int animationIndex)
     {
-        var plan = AnimationPanePlanner.BuildRemoveMutationPlan(
-            Editor.CurrentSlideAnimations,
-            animationIndex);
-        if (AnimationPanePlanner.TryApplyRemoveMutation(Editor, plan))
-        {
-            _selectedAnimationIndex = plan.SelectedAnimationIndex;
-            RefreshVisibleAnimationPane(_selectedAnimationIndex);
-        }
+        var plan = _animationPaneSession.RemoveAnimation(animationIndex);
+        if (plan.ShouldApply)
+            RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
 
         return plan;
-    }
-
-    private static string FormatAvailability(bool isAvailable)
-        => isAvailable ? "available" : "unavailable";
-
-    private void RefreshAccessibilitySummaryPlan()
-    {
-        LastMediaTranscriptPlan = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(_presentation);
-        LastAccessibilitySummaryPlan =
-            PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation);
-        LastAccessibilityCheckerPanePlan =
-            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
-                _presentation,
-                LastAccessibilitySummaryPlan,
-                _selectedAccessibilityCheckerRowIndex);
-        _selectedAccessibilityCheckerRowIndex = LastAccessibilityCheckerPanePlan.SelectedRowIndex >= 0
-            ? LastAccessibilityCheckerPanePlan.SelectedRowIndex
-            : null;
-        if (IsAccessibilityCheckerPaneVisible)
-            RenderAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
     }
 
     internal PresentationAccessibilityCheckerPanePlan ShowAccessibilityCheckerPane()
     {
-        RefreshAccessibilitySummaryPlan();
-        RenderAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan!);
-        _accessibilityCheckerPaneHost.IsVisible = true;
+        var plan = _reviewWorkflowSession.ShowAccessibilityCheckerPane();
         RefreshPaneAccessibilityMetadata();
-        return LastAccessibilityCheckerPanePlan!;
+        return plan;
     }
 
     internal PresentationAccessibilityCheckerPanePlan SelectAccessibilityCheckerRow(int rowIndex)
-    {
-        RefreshAccessibilitySummaryPlan();
-        var normalized = PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(
-            LastAccessibilityCheckerPanePlan!,
-            rowIndex);
-        _selectedAccessibilityCheckerRowIndex = normalized >= 0 ? normalized : null;
-        LastAccessibilityCheckerPanePlan =
-            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
-                _presentation,
-                LastAccessibilitySummaryPlan!,
-                _selectedAccessibilityCheckerRowIndex);
-        NavigateToAccessibilityCheckerRow(
-            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(
-                LastAccessibilityCheckerPanePlan,
-                _selectedAccessibilityCheckerRowIndex));
-        if (LastAccessibilityCheckerPanePlan.SelectedRow?.CommandHint != PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId)
-            ClearTableStructureReviewDisplay();
-        RenderAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
-        _accessibilityCheckerPaneHost.IsVisible = true;
-        return LastAccessibilityCheckerPanePlan;
-    }
+        => _reviewWorkflowSession.SelectAccessibilityCheckerRow(rowIndex);
 
     internal PresentationAccessibilityCheckerPanePlan ApplyAccessibilityCheckerRowAction(int rowIndex)
-    {
-        var plan = SelectAccessibilityCheckerRow(rowIndex);
-        var row = plan.SelectedRow;
-        if (row?.CommandHint == PresentationReviewWorkflowPlanner.AltTextCommandId)
-        {
-            ShowAltTextPane();
-        }
-        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.SetSlideTitleCommandId)
-        {
-            LastSlideTitleMutationPlan =
-                PresentationReviewWorkflowPlanner.TryApplySlideTitleMutation(Editor, row.SlideIndex);
-        }
-        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.SetTableHeaderRowCommandId)
-        {
-            LastTableHeaderRowMutationPlan =
-                PresentationReviewWorkflowPlanner.TryApplyTableHeaderRowMutation(
-                    Editor,
-                    row.SlideIndex,
-                    row.ShapeId);
-            RefreshAccessibilitySummaryPlan();
-        }
-        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId)
-        {
-            LastTableStructureReviewPlan = OpenTableStructureReviewPlan(row);
-        }
-        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.InsertLinkCommandId)
-        {
-            OpenHyperlinkDialog();
-        }
-        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.ChartTitleCommandId)
-        {
-            LastChartTitleMutationPlan =
-                PresentationReviewWorkflowPlanner.TryApplyChartTitleMutation(
-                    Editor,
-                    row.SlideIndex,
-                    row.ShapeId);
-            RefreshAccessibilitySummaryPlan();
-        }
-        else if (row?.CommandHint == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId
-            || row?.Category == "Media")
-        {
-            ShowMediaCaptionPane();
-        }
+        => _reviewWorkflowSession.ApplyAccessibilityCheckerRowAction(rowIndex);
 
-        return LastAccessibilityCheckerPanePlan!;
+    private void RenderAccessibilityCheckerPaneIfVisible(
+        PresentationAccessibilityCheckerPanePlan plan)
+    {
+        if (IsAccessibilityCheckerPaneVisible)
+            RenderAccessibilityCheckerPane(plan);
     }
 
-    private PresentationTableStructureReviewPlan OpenTableStructureReviewPlan(PresentationAccessibilityCheckerRowPlan row)
+    private void PresentAccessibilityCheckerPane(PresentationAccessibilityCheckerPanePlan plan)
     {
-        var reviewPlan = PresentationReviewWorkflowPlanner.BuildTableStructureReviewPlan(
-            _presentation,
-            row.SlideIndex,
-            row.ShapeId);
-        LastTableStructureReviewDisplayPlan =
-            PresentationReviewWorkflowPlanner.BuildTableStructureReviewDisplayPlan(reviewPlan);
-        RefreshAccessibilitySummaryPlan();
-        LastAccessibilityCheckerPanePlan =
-            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
-                _presentation,
-                LastAccessibilitySummaryPlan!,
-                row.RowIndex);
-        RenderAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
+        _workareaSession.Panes.Show(PresentationWorkareaPane.AccessibilityChecker);
+        RenderAccessibilityCheckerPane(plan);
         _accessibilityCheckerPaneHost.IsVisible = true;
-        return reviewPlan;
-    }
-
-    private void NavigateToAccessibilityCheckerRow(PresentationAccessibilityCheckerNavigationPlan plan)
-    {
-        if (!plan.ShouldNavigate)
-            return;
-
-        Editor.SelectSlide(plan.TargetSlideIndex);
-        if (plan.ShouldSelectShape && plan.TargetShapeId is { } shapeId)
-            Editor.Select(shapeId);
     }
 
     private void RenderAccessibilityCheckerPane(PresentationAccessibilityCheckerPanePlan plan)
     {
-        _accessibilityCheckerPaneHeading.Text =
-            $"Accessibility - {plan.IssueCount} issues";
-        _accessibilityCheckerPaneMessage.Text = plan.SelectedRow is { } selected
-            ? $"{selected.SlideDisplay}: {selected.Title}"
-            : "No accessibility issues found.";
+        _accessibilityCheckerPaneHeading.Text = plan.Heading;
+        _accessibilityCheckerPaneMessage.Text = plan.Message;
         RenderTableStructureReviewDetails(LastTableStructureReviewDisplayPlan);
 
         _accessibilityCheckerRowsPanel.Children.Clear();
-        if (plan.Rows.Count == 0)
+        if (plan.ShouldShowEmptyState)
         {
             _accessibilityCheckerRowsPanel.Children.Add(new TextBlock
             {
-                Text = "No accessibility issues found.",
-                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Text = plan.EmptyStateMessage,
+                Foreground = FreePBrushes.PaneMutedText,
                 Margin = new Thickness(12, 0, 12, 10),
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -7942,7 +5117,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 96,
             Padding = new Thickness(8, 0),
             CornerRadius = new CornerRadius(0),
-            Background = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)),
+            Background = FreePBrushes.DisabledSurface,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xAD, 0xAD, 0xAD)),
             BorderThickness = new Thickness(1),
             HorizontalContentAlignment = HorizontalAlignment.Center,
@@ -7960,7 +5135,7 @@ public sealed partial class MainWindow : Window
             {
                 new TextBlock
                 {
-                    Text = $"{row.SlideDisplay} - {row.Title}",
+                    Text = row.DisplayTitle,
                     FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
                     FontSize = 12,
                     FontWeight = FontWeight.SemiBold,
@@ -7968,12 +5143,10 @@ public sealed partial class MainWindow : Window
                 },
                 new TextBlock
                 {
-                    Text = string.IsNullOrWhiteSpace(row.ShapeName)
-                        ? $"{row.Severity} - {row.Category}"
-                        : $"{row.Severity} - {row.Category} - {row.ShapeName}",
+                    Text = row.DisplayMetadata,
                     FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
                     FontSize = 12,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                    Foreground = FreePBrushes.PaneSecondaryText,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
@@ -7981,21 +5154,21 @@ public sealed partial class MainWindow : Window
                     Text = row.Detail,
                     FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
                     FontSize = 12,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    Foreground = FreePBrushes.PaneText,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 action,
             }
         };
 
-        if (row.IsSelected)
+        if (row.ShouldShowSelectionIndicator)
         {
             panel.Children.Insert(1, new TextBlock
             {
-                Text = "Selected issue",
+                Text = PresentationPaneTextResources.ProofingSelectedIssue,
                 FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                Foreground = FreePBrushes.Accent,
                 FontWeight = FontWeight.SemiBold,
                 Margin = new Thickness(0, 2, 0, 0),
             });
@@ -8004,11 +5177,11 @@ public sealed partial class MainWindow : Window
         var border = new Border
         {
             Background = row.IsSelected
-                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
-                : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+                ? FreePBrushes.SelectedCardSurface
+                : FreePBrushes.PaneSurface,
             BorderBrush = row.IsSelected
-                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
-                : new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+                ? FreePBrushes.Accent
+                : FreePBrushes.CardBorder,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(10),
@@ -8018,17 +5191,13 @@ public sealed partial class MainWindow : Window
         border.PointerPressed += (_, _) => SelectAccessibilityCheckerRow(row.RowIndex);
         PresentationPaneAccessibilityAdapter.ApplyItem(
             border,
-            PresentationPaneAccessibilityPlanner.AccessibilityPaneId,
-            row.RowIndex,
-            row.Title,
-            row.IsSelected ? "Selected" : "Not selected");
+            PresentationPaneAccessibilityPlanner.PlanItem(
+                PresentationPaneAccessibilityPlanner.AccessibilityPaneId,
+                row.RowIndex,
+                row.Title,
+                row.IsSelected,
+                row.AccessibilityKey));
         return border;
-    }
-
-    private void ClearTableStructureReviewDisplay()
-    {
-        LastTableStructureReviewPlan = null;
-        LastTableStructureReviewDisplayPlan = null;
     }
 
     private void RenderTableStructureReviewDetails(PresentationTableStructureReviewDisplayPlan? display)
@@ -8051,20 +5220,19 @@ public sealed partial class MainWindow : Window
         _accessibilityCheckerReviewDetailsPanel.Children.Add(new TextBlock
         {
             Text = display.Summary,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            Foreground = FreePBrushes.PaneText,
             TextWrapping = TextWrapping.Wrap,
         });
         _accessibilityCheckerReviewDetailsPanel.Children.Add(new TextBlock
         {
             Text = display.Guidance,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             TextWrapping = TextWrapping.Wrap,
         });
 
         foreach (var detail in display.Details)
         {
-            _accessibilityCheckerTableStructureReviewRenderedLines.Add(
-                $"{detail.Category}: {detail.Summary} {detail.Detail}");
+            _accessibilityCheckerTableStructureReviewRenderedLines.Add(detail.RenderedLine);
             _accessibilityCheckerReviewDetailsPanel.Children.Add(BuildTableStructureReviewDetail(detail));
         }
     }
@@ -8073,8 +5241,8 @@ public sealed partial class MainWindow : Window
     {
         return new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0xF7, 0xF7, 0xF7)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE2, 0xE2, 0xE2)),
+            Background = FreePBrushes.SubtlePaneSurface,
+            BorderBrush = FreePBrushes.SubtlePaneBorder,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(8),
@@ -8098,7 +5266,7 @@ public sealed partial class MainWindow : Window
                     new TextBlock
                     {
                         Text = detail.Detail,
-                        Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                        Foreground = FreePBrushes.PaneSecondaryText,
                         TextWrapping = TextWrapping.Wrap,
                     },
                 }
@@ -8107,14 +5275,11 @@ public sealed partial class MainWindow : Window
     }
 
     private void RefreshAltTextRequestPlan()
-    {
-        _reviewWorkflowSession.RefreshAltTextPlans(null, null, null);
-        if (IsAltTextPaneVisible && LastAltTextPanePlan is not null)
-            RenderAltTextPane(LastAltTextPanePlan);
-    }
+        => _altTextPaneHostCoordinator.RefreshSelection();
 
     internal IReadOnlyList<SmartArtNodeOutlineItem> ShowSmartArtTextPane()
     {
+        _workareaSession.Panes.Show(PresentationWorkareaPane.SmartArtText);
         var outline = RefreshSmartArtTextPane();
         _smartArtTextPaneHost.IsVisible = true;
         RefreshPaneAccessibilityMetadata();
@@ -8123,6 +5288,7 @@ public sealed partial class MainWindow : Window
 
     internal void HideSmartArtTextPane()
     {
+        _workareaSession.Panes.Hide(PresentationWorkareaPane.SmartArtText);
         if (_smartArtTextPaneHost is not null)
             _smartArtTextPaneHost.IsVisible = false;
         RefreshPaneAccessibilityMetadata();
@@ -8139,310 +5305,64 @@ public sealed partial class MainWindow : Window
 
     internal SmartArtTextPaneApplyResult ApplySmartArtTextPane()
     {
-        var smartArtShape = GetSelectedSmartArtShape();
         var rows = _smartArtTextPaneRowsPanel.Children
             .OfType<TextBox>()
             .Select(box => box.Tag is SmartArtNodeOutlineItem item
                 ? new SmartArtTextPaneOutlineRow(box.Text ?? string.Empty, item.Level, item.IsAssistant, item.ModelId)
                 : new SmartArtTextPaneOutlineRow(box.Text ?? string.Empty, 0))
             .ToArray();
-
-        if (smartArtShape is null)
-        {
-            LastSmartArtTextPaneApplyResult = SmartArtEditingPlanner.ApplyTextPaneOutline(null, rows);
-        }
-        else
-        {
-            var previousData = smartArtShape.SmartArt is { } original
-                ? SlideCloner.CloneSmartArt(original).Data
-                : null;
-            Editor.EditSmartArt(smartArtShape.Id, smartArt =>
-            {
-                LastSmartArtTextPaneApplyResult = SmartArtEditingPlanner.ApplyTextPaneOutline(
-                    smartArt.Data,
-                    rows);
-                if (LastSmartArtTextPaneApplyResult is not { Applied: true })
-                    return false;
-
-                if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape, previousData))
-                    return true;
-
-                LastSmartArtTextPaneApplyResult = LastSmartArtTextPaneApplyResult with
-                {
-                    Applied = false,
-                    Message = "SmartArt native data or drawing cache refresh failed."
-                };
-                return false;
-            });
-        }
-
-        if (LastSmartArtTextPaneApplyResult is { Applied: true })
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshCanvas();
-            UpdateStatus();
-        }
-
-        RefreshSmartArtTextPane();
-        return LastSmartArtTextPaneApplyResult!;
+        return _smartArtTextPaneSession.ApplyOutline(rows);
     }
 
-    internal SmartArtNodeEditResult? ToggleSmartArtTextPaneAssistantForTests(string? modelId = null)
-    {
-        if (modelId is not null)
-            _selectedSmartArtTextPaneModelId = modelId;
-        return ToggleSmartArtTextPaneAssistant();
-    }
 
-    internal SmartArtNodeEditResult? ApplySmartArtTextPaneEditForTests(
-        SmartArtNodeEditKind kind,
-        string? modelId = null)
-    {
-        if (modelId is not null)
-            _selectedSmartArtTextPaneModelId = modelId;
-        return ApplySmartArtTextPaneAction(kind);
-    }
 
     private SmartArtNodeEditResult? ApplySmartArtTextPaneAction(SmartArtNodeEditKind kind)
-    {
-        var targetId = _selectedSmartArtTextPaneModelId;
-        if (string.IsNullOrWhiteSpace(targetId))
-        {
-            LastSmartArtTextPaneEditResult = SmartArtNodeEditResult.NotApplied(
-                kind,
-                targetId,
-                "Select a SmartArt row first.");
-            RefreshSmartArtTextPane();
-            return LastSmartArtTextPaneEditResult;
-        }
-
-        var intent = kind switch
-        {
-            SmartArtNodeEditKind.AddSiblingAfter => SmartArtNodeEditIntent.AddSiblingAfter(
-                targetId,
-                SmartArtEditingPlanner.DefaultNewNodeText),
-            SmartArtNodeEditKind.AddChild => SmartArtNodeEditIntent.AddChild(
-                targetId,
-                SmartArtEditingPlanner.DefaultNewNodeText),
-            SmartArtNodeEditKind.Remove => SmartArtNodeEditIntent.Remove(targetId),
-            SmartArtNodeEditKind.MoveUp => SmartArtNodeEditIntent.MoveUp(targetId),
-            SmartArtNodeEditKind.MoveDown => SmartArtNodeEditIntent.MoveDown(targetId),
-            SmartArtNodeEditKind.Promote => SmartArtNodeEditIntent.Promote(targetId),
-            SmartArtNodeEditKind.Demote => SmartArtNodeEditIntent.Demote(targetId),
-            SmartArtNodeEditKind.AddAssistant => SmartArtNodeEditIntent.AddAssistant(
-                targetId,
-                "Assistant"),
-            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported SmartArt text-pane action."),
-        };
-        return ApplySmartArtTextPaneEdit(intent);
-    }
+        => _smartArtTextPaneSession.ApplyAction(kind);
 
     private SmartArtNodeEditResult? ToggleSmartArtTextPaneAssistant()
-    {
-        var smartArtShape = GetSelectedSmartArtShape();
-        var targetId = _selectedSmartArtTextPaneModelId;
-        if (smartArtShape is null || string.IsNullOrWhiteSpace(targetId))
-        {
-            LastSmartArtTextPaneEditResult = SmartArtNodeEditResult.NotApplied(
-                SmartArtNodeEditKind.ToggleAssistant,
-                targetId,
-                "Select a SmartArt hierarchy row first.");
-        }
-        else
-        {
-            LastSmartArtTextPaneEditResult = Editor.ToggleSmartArtAssistant(smartArtShape.Id, targetId);
-        }
+        => _smartArtTextPaneSession.ToggleAssistant();
 
-        if (LastSmartArtTextPaneEditResult is { Applied: true })
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshCanvas();
-            UpdateStatus();
-        }
 
-        RefreshSmartArtTextPane();
-        return LastSmartArtTextPaneEditResult;
-    }
 
-    internal SmartArtColorApplyResult ApplySmartArtColorPresetForTests(SmartArtColorPreset preset) =>
-        ApplySmartArtColorPreset(preset);
-
-    internal SmartArtLayoutApplyResult ApplySmartArtLayoutPresetForTests(SmartArtLayoutPreset preset) =>
-        ApplySmartArtLayoutPreset(preset);
-
-    internal SmartArtQuickStyleApplyResult ApplySmartArtQuickStylePresetForTests(SmartArtQuickStylePreset preset) =>
-        ApplySmartArtQuickStylePreset(preset);
 
     private SmartArtLayoutApplyResult ApplySmartArtLayoutPreset(SmartArtLayoutPreset preset)
-    {
-        var smartArtShape = GetSelectedSmartArtShape();
-        if (smartArtShape is null)
-            return SmartArtAuthoringPlanner.ApplyLayoutPreset(null, preset);
-
-        SmartArtLayoutApplyResult? result = null;
-        Editor.EditSmartArt(smartArtShape.Id, smartArt =>
-        {
-            result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, preset);
-            if (result is not { Applied: true })
-                return false;
-
-            if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape))
-                return true;
-
-            result = result with
-            {
-                Applied = false,
-                Message = "SmartArt native data or drawing cache refresh failed."
-            };
-            return false;
-        });
-
-        if (result is { Applied: true })
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshCanvas();
-            UpdateStatus();
-        }
-
-        return result ?? new SmartArtLayoutApplyResult(false, "No SmartArt layout was changed.", null, null, SmartArtFamily.Unknown);
-    }
+        => _smartArtTextPaneSession.ApplyLayoutPreset(preset);
 
     private SmartArtQuickStyleApplyResult ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset preset)
-    {
-        var smartArtShape = GetSelectedSmartArtShape();
-        if (smartArtShape is null)
-            return SmartArtAuthoringPlanner.ApplyQuickStylePreset(null, preset);
-
-        SmartArtQuickStyleApplyResult? result = null;
-        Editor.EditSmartArt(smartArtShape.Id, smartArt =>
-        {
-            result = SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, preset);
-            if (result is not { Applied: true })
-                return false;
-
-            if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape))
-                return true;
-
-            result = result with
-            {
-                Applied = false,
-                Message = "SmartArt native data or drawing cache refresh failed."
-            };
-            return false;
-        });
-
-        if (result is { Applied: true })
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshCanvas();
-            UpdateStatus();
-        }
-
-        return result ?? new SmartArtQuickStyleApplyResult(false, "No SmartArt Quick Style was changed.", null, null);
-    }
+        => _smartArtTextPaneSession.ApplyQuickStylePreset(preset);
 
     private SmartArtColorApplyResult ApplySmartArtColorPreset(SmartArtColorPreset preset)
-    {
-        var smartArtShape = GetSelectedSmartArtShape();
-        if (smartArtShape is null)
-        {
-            LastSmartArtColorApplyResult = SmartArtAuthoringPlanner.ApplyColorPreset(
-                null, preset, ResolveCurrentSlideTheme());
-            return LastSmartArtColorApplyResult;
-        }
+        => _smartArtTextPaneSession.ApplyColorPreset(preset);
 
-        Editor.EditSmartArt(smartArtShape.Id, smartArt =>
-        {
-            LastSmartArtColorApplyResult = SmartArtAuthoringPlanner.ApplyColorPreset(
-                smartArt,
-                preset,
-                ResolveCurrentSlideTheme(),
-                Editor.CurrentSlide?.ColorMapOverride);
-            if (LastSmartArtColorApplyResult is not { Applied: true })
-                return false;
-
-            if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape))
-                return true;
-
-            LastSmartArtColorApplyResult = LastSmartArtColorApplyResult with
-            {
-                Applied = false,
-                Message = "SmartArt native data or drawing cache refresh failed."
-            };
-            return false;
-        });
-
-        if (LastSmartArtColorApplyResult is { Applied: true })
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshCanvas();
-            UpdateStatus();
-        }
-
-        return LastSmartArtColorApplyResult!;
-    }
-
-    internal SmartArtNodeEditResult? ApplySmartArtTextPaneKeyboardRouteForTests(
-        SmartArtTextPaneShortcutKey key,
-        SmartArtTextPaneShortcutModifiers modifiers,
-        string? modelId = null)
-    {
-        if (modelId is not null)
-            _selectedSmartArtTextPaneModelId = modelId;
-        return ApplySmartArtTextPaneKeyboardRoute(key, modifiers);
-    }
 
     private IReadOnlyList<SmartArtNodeOutlineItem> RefreshSmartArtTextPane()
-    {
-        var shape = GetSelectedSmartArtShape();
-        var outline = SmartArtEditingPlanner.BuildOutline(shape?.SmartArt?.Data);
-        if (_selectedSmartArtTextPaneModelId is null || outline.All(item =>
-                !StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId)))
-        {
-            _selectedSmartArtTextPaneModelId = outline.FirstOrDefault()?.ModelId;
-        }
+        => _smartArtTextPaneSession.Refresh().Rows;
 
-        RenderSmartArtTextPane(shape, outline);
-        return outline;
-    }
-
-    private void RenderSmartArtTextPane(
-        SlideShape? shape,
-        IReadOnlyList<SmartArtNodeOutlineItem> outline)
+    private void RenderSmartArtTextPane(PresentationSmartArtTextPanePlan plan)
     {
         _smartArtTextPaneRefreshing = true;
         try
         {
             _smartArtTextPaneRowsPanel.Children.Clear();
-            _smartArtTextPaneHeading.Text = shape is null || string.IsNullOrWhiteSpace(shape.Name)
-                ? "SmartArt Text Pane"
-                : $"SmartArt Text Pane - {shape.Name}";
-            _smartArtTextPaneMessage.Text = shape is null
-                ? "Select a SmartArt graphic to edit its text outline."
-                : outline.Count == 0
-                    ? "The selected SmartArt graphic has no editable shared outline rows."
-                    : "Rows mirror the shared SmartArt outline.";
-            _smartArtTextPaneApplyButton.IsEnabled = shape is not null && outline.Count > 0;
-            var selectedItem = outline.FirstOrDefault(item =>
-                StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId));
-            _smartArtTextPaneAssistantButton.IsEnabled =
-                shape?.SmartArt?.Data?.Family == SmartArtFamily.Hierarchy &&
-                selectedItem is { Level: > 0 };
+            _smartArtTextPaneHeading.Text = plan.Heading;
+            _smartArtTextPaneMessage.Text = plan.Message;
+            _smartArtTextPaneApplyButton.IsEnabled = plan.CanApply;
+            _smartArtTextPaneAssistantButton.IsEnabled = plan.CanToggleAssistant;
             foreach (var button in _smartArtTextPaneActionButtons)
-                button.IsEnabled = shape is not null && selectedItem is not null;
+                button.IsEnabled = plan.CanEditSelectedRow;
 
-            for (var index = 0; index < outline.Count; index++)
+            for (var index = 0; index < plan.Rows.Count; index++)
             {
-                var item = outline[index];
+                var item = plan.Rows[index];
                 var row = BuildSmartArtTextPaneRow(item);
                 PresentationPaneAccessibilityAdapter.ApplyItem(
                     row,
-                    PresentationPaneAccessibilityPlanner.SmartArtTextPaneId,
-                    index,
-                    item.Text,
-                    StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId)
-                        ? "Selected"
-                        : "Not selected");
+                    PresentationPaneAccessibilityPlanner.PlanItem(
+                        PresentationPaneAccessibilityPlanner.SmartArtTextPaneId,
+                        index,
+                        item.Text,
+                        StringComparer.Ordinal.Equals(item.ModelId, plan.SelectedModelId),
+                        item.ModelId));
                 _smartArtTextPaneRowsPanel.Children.Add(row);
             }
         }
@@ -8454,7 +5374,9 @@ public sealed partial class MainWindow : Window
 
     private TextBox BuildSmartArtTextPaneRow(SmartArtNodeOutlineItem item)
     {
-        var selected = StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId);
+        var selected = StringComparer.Ordinal.Equals(
+            item.ModelId,
+            _smartArtTextPaneSession.SelectedModelId);
         var box = new TextBox
         {
             Text = item.Text,
@@ -8463,16 +5385,12 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(12 + (item.Level * 18), 0, 12, 6),
             Padding = new Thickness(6, 3),
             BorderBrush = selected
-                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
-                : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+                ? FreePBrushes.Accent
+                : FreePBrushes.DisabledBorder,
             BorderThickness = new Thickness(selected ? 2 : 1),
         };
-        ToolTip.SetTip(box, item.IsAssistant
-            ? "Assistant row"
-            : item.Level == 0
-                ? "Root row"
-                : $"Level {item.Level + 1} row");
-        box.GotFocus += (_, _) => _selectedSmartArtTextPaneModelId = item.ModelId;
+        ToolTip.SetTip(box, item.RoleDisplayText);
+        box.GotFocus += (_, _) => _smartArtTextPaneSession.SelectModel(item.ModelId);
         box.KeyDown += (_, e) =>
         {
             if (_smartArtTextPaneRefreshing)
@@ -8481,7 +5399,7 @@ public sealed partial class MainWindow : Window
             if (!TryMapSmartArtTextPaneKey(e.Key, e.KeyModifiers, out var key, out var modifiers))
                 return;
 
-            _selectedSmartArtTextPaneModelId = item.ModelId;
+            _smartArtTextPaneSession.SelectModel(item.ModelId);
             var result = ApplySmartArtTextPaneKeyboardRoute(key, modifiers);
             if (result is not null)
                 e.Handled = true;
@@ -8491,221 +5409,26 @@ public sealed partial class MainWindow : Window
 
     private SmartArtNodeEditResult? ApplySmartArtTextPaneKeyboardRoute(
         SmartArtTextPaneShortcutKey key,
-        SmartArtTextPaneShortcutModifiers modifiers)
-    {
-        var route = SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
-            key,
-            modifiers,
-            _selectedSmartArtTextPaneModelId);
-        LastSmartArtTextPaneKeyboardRoute = route;
-        if (route is null)
-            return null;
+        SmartArtTextPaneShortcutModifiers modifiers) =>
+        _smartArtTextPaneSession.ApplyKeyboardRoute(key, modifiers);
 
-        return ApplySmartArtTextPaneEdit(route.Intent);
-    }
-
-    private SmartArtNodeEditResult? ApplySmartArtTextPaneEdit(SmartArtNodeEditIntent intent)
-    {
-
-        var smartArtShape = GetSelectedSmartArtShape();
-        if (smartArtShape is null)
-        {
-            LastSmartArtTextPaneEditResult = SmartArtEditingPlanner.Apply(null, intent);
-        }
-        else
-        {
-            var previousData = smartArtShape.SmartArt is { } original
-                ? SlideCloner.CloneSmartArt(original).Data
-                : null;
-            Editor.EditSmartArt(smartArtShape.Id, smartArt =>
-            {
-                LastSmartArtTextPaneEditResult = SmartArtEditingPlanner.Apply(
-                    smartArt.Data,
-                    intent);
-                if (LastSmartArtTextPaneEditResult is not { Applied: true })
-                    return false;
-
-                _selectedSmartArtTextPaneModelId = LastSmartArtTextPaneEditResult.SelectedModelId;
-                if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape, previousData))
-                    return true;
-
-                LastSmartArtTextPaneEditResult = LastSmartArtTextPaneEditResult with
-                {
-                    Applied = false,
-                    Message = "SmartArt native data or drawing cache refresh failed."
-                };
-                return false;
-            });
-        }
-
-        if (LastSmartArtTextPaneEditResult is { Applied: true })
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshCanvas();
-            UpdateStatus();
-        }
-
-        RefreshSmartArtTextPane();
-        return LastSmartArtTextPaneEditResult;
-    }
-
-    internal SmartArtNodeEditResult? ApplySmartArtTextPanePictureForTests(
-        byte[] imageBytes,
-        string contentType = "image/png",
-        string? modelId = null)
-    {
-        if (modelId is not null)
-            _selectedSmartArtTextPaneModelId = modelId;
-        return ApplySmartArtTextPanePicture(imageBytes, contentType);
-    }
 
     private async Task ReplaceSmartArtTextPanePictureFromFileAsync()
     {
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable("Replace SmartArt picture");
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                "Replace SmartArt picture",
-                [PictureFileType]));
-        if (file is null)
-            return;
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-            ApplySmartArtTextPanePicture(
-                memory.ToArray(),
-                SlideObjectInsertionPlanner.InferPictureContentType(file.Name));
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                "Replace SmartArt picture",
-                ex.Message);
-        }
+        var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.SmartArtPicture);
+        MaterializePresentationAssetImportResult(result);
     }
 
     private SmartArtNodeEditResult? ApplySmartArtTextPanePicture(
         byte[] imageBytes,
-        string contentType)
-    {
-        var smartArtShape = GetSelectedSmartArtShape();
-        var targetId = _selectedSmartArtTextPaneModelId;
-        if (smartArtShape is null || string.IsNullOrWhiteSpace(targetId))
-        {
-            LastSmartArtTextPaneEditResult = SmartArtNodeEditResult.NotApplied(
-                SmartArtNodeEditKind.SetPicture,
-                targetId,
-                "Select a SmartArt row first.");
-        }
-        else
-        {
-            LastSmartArtTextPaneEditResult = Editor.ReplaceSmartArtNodePicture(
-                smartArtShape.Id,
-                targetId,
-                imageBytes,
-                contentType);
-        }
-
-        if (LastSmartArtTextPaneEditResult is { Applied: true })
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshCanvas();
-            UpdateStatus();
-        }
-
-        RefreshSmartArtTextPane();
-        return LastSmartArtTextPaneEditResult;
-    }
+        string contentType) =>
+        _smartArtTextPaneSession.ApplyPicture(imageBytes, contentType);
 
     private void ClearSmartArtTextPanePicture()
-    {
-        var smartArtShape = GetSelectedSmartArtShape();
-        var targetId = _selectedSmartArtTextPaneModelId;
-        LastSmartArtTextPaneEditResult = smartArtShape is null || string.IsNullOrWhiteSpace(targetId)
-            ? SmartArtNodeEditResult.NotApplied(
-                SmartArtNodeEditKind.ClearPicture,
-                targetId,
-                "Select a SmartArt row first.")
-            : Editor.ClearSmartArtNodePicture(smartArtShape.Id, targetId);
-
-        if (LastSmartArtTextPaneEditResult.Applied)
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshCanvas();
-            UpdateStatus();
-        }
-        RefreshSmartArtTextPane();
-    }
-
-    private bool CommitSmartArtTextPaneMutation(
-        SmartArtShape smartArt,
-        SlideShape smartArtShape,
-        SmartArtData? previousData = null)
-    {
-        LastSmartArtDataPartRewriteResult = SmartArtEditingPlanner.RewriteDataPart(smartArt);
-        if (LastSmartArtDataPartRewriteResult is not { Applied: true })
-            return false;
-
-        LastSmartArtDrawingCacheRegenerationResult = SmartArtEditingPlanner.RegenerateDrawingCache(
-            smartArt,
-            smartArtShape.OffsetXEmu,
-            smartArtShape.OffsetYEmu,
-            smartArtShape.ExtentCxEmu,
-            smartArtShape.ExtentCyEmu,
-            ResolveCurrentSlideTheme(),
-            Editor.CurrentSlide?.ColorMapOverride);
-        if (LastSmartArtDrawingCacheRegenerationResult is { Applied: true })
-            return true;
-
-        LastSmartArtDrawingCacheRegenerationResult =
-            SmartArtEditingPlanner.SynchronizePreservedDrawingText(smartArt, previousData);
-        return LastSmartArtDrawingCacheRegenerationResult is { Applied: true };
-    }
-
-    private SlideShape? GetSelectedSmartArtShape()
-    {
-        var selectedShapeId = GetSingleSelectedShapeId();
-        if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
-            return null;
-
-        var shape = ShapeTreeLookup.Find(slide, selectedShapeId.Value);
-        return shape?.Kind == SlideShapeKind.SmartArt && shape.SmartArt is not null
-            ? shape
-            : null;
-    }
+        => _smartArtTextPaneSession.ClearPicture();
 
     private void ConvertSelectedSmartArtToShapes()
-    {
-        if (Editor.SelectedShapeIds.Count != 1 ||
-            !Editor.ConvertSmartArtToShapes(Editor.SelectedShapeIds[0]))
-            return;
-
-        _fileWorkflow.MarkDirty();
-        RefreshCanvas();
-        UpdateStatus();
-    }
-
-    private PresentationTheme ResolveCurrentSlideTheme()
-    {
-        var slide = Editor.CurrentSlide;
-        var layout = slide is null
-            ? null
-            : _presentation.Layouts.FirstOrDefault(candidate =>
-                StringComparer.Ordinal.Equals(candidate.Id, slide.LayoutId));
-        var master = layout is null
-            ? null
-            : _presentation.Masters.FirstOrDefault(candidate =>
-                StringComparer.Ordinal.Equals(candidate.Id, layout.MasterId));
-        return master?.Theme ?? _presentation.Theme;
-    }
+        => _smartArtTextPaneSession.ConvertSelectedToShapes();
 
     private static bool TryMapSmartArtTextPaneKey(
         Key key,
@@ -8738,426 +5461,171 @@ public sealed partial class MainWindow : Window
         return true;
     }
 
-    internal void ShowAltTextPane()
-    {
-        RefreshAltTextPlans(proposedDescription: null, proposedTitle: null, isDecorative: null);
-        if (LastAltTextPanePlan is not null)
-            RenderAltTextPane(LastAltTextPanePlan);
-        _altTextPaneHost.IsVisible = true;
-        RefreshPaneAccessibilityMetadata();
-    }
+    internal void ShowAltTextPane() => _altTextPaneHostCoordinator.Show();
 
-    internal void HideAltTextPane()
-    {
-        if (_altTextPaneHost is not null)
-            _altTextPaneHost.IsVisible = false;
-        RefreshPaneAccessibilityMetadata();
-    }
+    internal void HideAltTextPane() => _altTextPaneHostCoordinator.Hide();
 
-    internal PresentationMediaCaptionAuthoringPanePlan ShowMediaCaptionPane()
-    {
-        RefreshMediaCaptionAuthoringPlans(null, null, null, null);
-        RenderMediaCaptionPane(LastMediaCaptionAuthoringPanePlan!);
-        _mediaCaptionPaneHost.IsVisible = true;
-        RefreshPaneAccessibilityMetadata();
-        return LastMediaCaptionAuthoringPanePlan!;
-    }
+    private PresentationMediaCaptionHostSnapshot CaptureMediaCaptionHostSnapshot() =>
+        PresentationMediaPaneHostSnapshotPlanner.CaptureCaption(
+            _mediaCaptionLabelBox?.Text,
+            _mediaCaptionLanguageBox?.Text,
+            _mediaCaptionSourceBox?.Text,
+            _mediaCaptionTranscriptBox?.Text);
 
-    internal void HideMediaCaptionPane()
+    private PresentationMediaVolumeHostSnapshot CaptureMediaVolumeHostSnapshot() =>
+        PresentationMediaPaneHostSnapshotPlanner.CaptureVolume(_mediaVolumeSlider?.Value);
+
+    private PresentationMediaPlaybackHostSnapshot CaptureMediaPlaybackHostSnapshot() =>
+        PresentationMediaPaneHostSnapshotPlanner.CapturePlayback(
+            _mediaStartModeBox?.SelectedIndex,
+            _mediaLoopCheckBox?.IsChecked,
+            _mediaShowWhenStoppedCheckBox?.IsChecked,
+            _mediaRewindAfterPlayingCheckBox?.IsChecked,
+            _mediaPlayFullScreenCheckBox?.IsChecked,
+            _mediaStopAfterSlidesBox?.Text);
+
+    private PresentationMediaTimingHostSnapshot CaptureMediaTimingHostSnapshot() =>
+        PresentationMediaPaneHostSnapshotPlanner.CaptureTiming(
+            _mediaTrimStartBox?.Text,
+            _mediaTrimEndBox?.Text,
+            _mediaFadeInBox?.Text,
+            _mediaFadeOutBox?.Text);
+
+    private PresentationMediaBookmarkHostSnapshot CaptureMediaBookmarkHostSnapshot() =>
+        PresentationMediaPaneHostSnapshotPlanner.CaptureBookmark(
+            _mediaBookmarkNameBox?.Text,
+            _mediaBookmarkTimeBox?.Text);
+
+    bool IPresentationMediaPaneHostView.IsPaneVisible => IsMediaCaptionPaneVisible;
+
+    PresentationMediaCaptionHostSnapshot IPresentationMediaPaneHostView.CaptureCaption() =>
+        CaptureMediaCaptionHostSnapshot();
+
+    PresentationMediaVolumeHostSnapshot IPresentationMediaPaneHostView.CaptureVolume() =>
+        CaptureMediaVolumeHostSnapshot();
+
+    PresentationMediaPlaybackHostSnapshot IPresentationMediaPaneHostView.CapturePlayback() =>
+        CaptureMediaPlaybackHostSnapshot();
+
+    PresentationMediaTimingHostSnapshot IPresentationMediaPaneHostView.CaptureTiming() =>
+        CaptureMediaTimingHostSnapshot();
+
+    PresentationMediaBookmarkHostSnapshot IPresentationMediaPaneHostView.CaptureBookmark() =>
+        CaptureMediaBookmarkHostSnapshot();
+
+    void IPresentationMediaPaneHostView.SetPaneVisible(bool visible)
     {
         if (_mediaCaptionPaneHost is not null)
-            _mediaCaptionPaneHost.IsVisible = false;
+            _mediaCaptionPaneHost.IsVisible = visible;
+    }
+
+    void IPresentationMediaPaneHostView.SetCaptionInput(PresentationMediaCaptionHostSnapshot input)
+    {
+        _mediaCaptionLabelBox.Text = input.Label ?? string.Empty;
+        _mediaCaptionLanguageBox.Text = input.Language ?? string.Empty;
+        _mediaCaptionSourceBox.Text = input.Source ?? string.Empty;
+        _mediaCaptionTranscriptBox.Text = input.TranscriptText ?? string.Empty;
+    }
+
+    void IPresentationMediaPaneHostView.SetVolumeInput(PresentationMediaVolumeInputPlan input) =>
+        _mediaVolumeSlider.Value = input.VolumePercent;
+
+    void IPresentationMediaPaneHostView.SetPlaybackInput(PresentationMediaPlaybackInputPlan input)
+    {
+        _mediaStartModeBox.SelectedIndex = input.StartModeIndex;
+        _mediaLoopCheckBox.IsChecked = input.Loop;
+        _mediaShowWhenStoppedCheckBox.IsChecked = input.ShowWhenStopped;
+        _mediaRewindAfterPlayingCheckBox.IsChecked = input.RewindAfterPlaying;
+        _mediaPlayFullScreenCheckBox.IsChecked = input.PlayFullScreen;
+        _mediaStopAfterSlidesBox.Text = input.StopAfterSlidesText;
+    }
+
+    void IPresentationMediaPaneHostView.SetTimingInput(PresentationMediaTimingInputPlan input)
+    {
+        _mediaTrimStartBox.Text = input.TrimStartText;
+        _mediaTrimEndBox.Text = input.TrimEndText;
+        _mediaFadeInBox.Text = input.FadeInText;
+        _mediaFadeOutBox.Text = input.FadeOutText;
+    }
+
+    void IPresentationMediaPaneHostView.SetBookmarkInput(PresentationMediaBookmarkInputPlan input)
+    {
+        _mediaBookmarkNameBox.Text = input.Name;
+        _mediaBookmarkTimeBox.Text = input.TimeText;
+    }
+
+    void IPresentationMediaPaneHostView.Render(PresentationMediaPaneHostRenderPlan plan) =>
+        RenderMediaCaptionPane(plan);
+
+    void IPresentationMediaPaneHostView.RefreshAccessibilityMetadata() =>
         RefreshPaneAccessibilityMetadata();
-    }
 
-    internal void SetMediaCaptionPaneInput(
-        string label,
-        string language,
-        string source,
-        string transcriptText,
-        int? selectedTrackIndex = null)
-    {
-        if (!IsMediaCaptionPaneVisible)
-            ShowMediaCaptionPane();
-
-        _mediaCaptionPaneRefreshing = true;
-        try
-        {
-            if (selectedTrackIndex.HasValue)
-                _selectedMediaCaptionTrackIndex = selectedTrackIndex;
-            _mediaCaptionLabelBox.Text = label;
-            _mediaCaptionLanguageBox.Text = language;
-            _mediaCaptionSourceBox.Text = source;
-            _mediaCaptionTranscriptBox.Text = transcriptText;
-        }
-        finally
-        {
-            _mediaCaptionPaneRefreshing = false;
-        }
-
-        RefreshVisibleMediaCaptionPaneFromFields();
-    }
-
-    internal void SetMediaVolumePaneInput(int volumePercent)
-    {
-        if (!IsMediaCaptionPaneVisible)
-            ShowMediaCaptionPane();
-
-        _mediaCaptionPaneRefreshing = true;
-        try
-        {
-            _mediaVolumeSlider.Value = Math.Clamp(volumePercent, 0, 100);
-        }
-        finally
-        {
-            _mediaCaptionPaneRefreshing = false;
-        }
-    }
-
-    internal void SetMediaPlaybackPaneInput(
-        MediaPlaybackStartMode startMode,
-        bool loop,
-        bool showWhenStopped = true,
-        bool rewindAfterPlaying = false,
-        bool playFullScreen = false,
-        int stopAfterSlides = 1)
-    {
-        ShowMediaCaptionPane();
-
-        _mediaCaptionPaneRefreshing = true;
-        try
-        {
-            _mediaStartModeBox.SelectedIndex = startMode == MediaPlaybackStartMode.Automatically ? 1 : 0;
-            _mediaLoopCheckBox.IsChecked = loop;
-            _mediaShowWhenStoppedCheckBox.IsChecked = showWhenStopped;
-            _mediaRewindAfterPlayingCheckBox.IsChecked = rewindAfterPlaying;
-            _mediaPlayFullScreenCheckBox.IsChecked = playFullScreen;
-            _mediaStopAfterSlidesBox.Text = Math.Max(1, stopAfterSlides).ToString();
-        }
-        finally
-        {
-            _mediaCaptionPaneRefreshing = false;
-        }
-    }
-
-    internal PresentationMediaCaptionTrackMutationResult ApplyMediaCaptionPane(
-        PresentationMediaCaptionAuthoringIntentKind intent)
-    {
-        var media = PresentationMediaTranscriptPlanner
-            .FindSelectedMediaShape(Editor.CurrentSlide, Editor.SelectedShapeIds)
-            ?.Media;
-        var descriptor = new PresentationMediaCaptionTrackAuthoringDescriptor(
-            _mediaCaptionLabelBox.Text,
-            _mediaCaptionLanguageBox.Text,
-            _mediaCaptionSourceBox.Text,
-            _mediaCaptionTranscriptBox.Text);
-        LastMediaCaptionAuthoringMutationPlan =
-            PresentationMediaTranscriptPlanner.BuildCaptionAuthoringMutationPlan(
-                media,
-                intent,
-                _selectedMediaCaptionTrackIndex ?? -1,
-                descriptor);
-        LastMediaCaptionTrackMutationResult =
-            Editor.ApplyMediaCaptionAuthoring(LastMediaCaptionAuthoringMutationPlan);
-        if (LastMediaCaptionTrackMutationResult.Succeeded)
-        {
-            _selectedMediaCaptionTrackIndex = NormalizeMediaCaptionSelectionAfterMutation(
-                media,
-                intent,
-                LastMediaCaptionTrackMutationResult.TrackIndex);
-            _fileWorkflow.MarkDirty();
-            RefreshReviewWorkflowPlans();
-            UpdateStatus();
-        }
-
-        RefreshVisibleMediaCaptionPaneFromFields();
-        return LastMediaCaptionTrackMutationResult;
-    }
-
-    internal bool ApplyMediaVolumePane()
-    {
-        var changed = Editor.SetSelectedMediaVolume(MediaVolumePercent);
-        if (changed)
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshReviewWorkflowPlans();
-            UpdateStatus();
-            RefreshVisibleMediaCaptionPaneFromFields();
-        }
-
-        return changed;
-    }
-
-    internal bool ApplyMediaPlaybackPane()
-    {
-        var changed = Editor.SetSelectedMediaPlaybackOptions(
-            MediaPlaybackStartMode,
-            MediaLoop,
-            MediaShowWhenStopped,
-            MediaRewindAfterPlaying,
-            MediaPlayFullScreen,
-            MediaStopAfterSlides);
-        if (changed)
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshReviewWorkflowPlans();
-            UpdateStatus();
-            RefreshVisibleMediaCaptionPaneFromFields();
-        }
-
-        return changed;
-    }
-
-    internal double MediaTrimStartMilliseconds => ParseMediaTiming(_mediaTrimStartBox?.Text);
-    internal double MediaTrimEndMilliseconds => ParseMediaTiming(_mediaTrimEndBox?.Text);
-    internal double MediaFadeInMilliseconds => ParseMediaTiming(_mediaFadeInBox?.Text);
-    internal double MediaFadeOutMilliseconds => ParseMediaTiming(_mediaFadeOutBox?.Text);
-
-    internal void SetMediaTimingPaneInput(double trimStart, double trimEnd, double fadeIn, double fadeOut)
-    {
-        if (!IsMediaCaptionPaneVisible)
-            ShowMediaCaptionPane();
-        _mediaCaptionPaneRefreshing = true;
-        try
-        {
-            _mediaTrimStartBox.Text = FormatMediaTiming(trimStart);
-            _mediaTrimEndBox.Text = FormatMediaTiming(trimEnd);
-            _mediaFadeInBox.Text = FormatMediaTiming(fadeIn);
-            _mediaFadeOutBox.Text = FormatMediaTiming(fadeOut);
-        }
-        finally
-        {
-            _mediaCaptionPaneRefreshing = false;
-        }
-    }
-
-    internal bool ApplyMediaTimingPane()
-    {
-        var changed = Editor.SetSelectedMediaTiming(
-            MediaTrimStartMilliseconds,
-            MediaTrimEndMilliseconds,
-            MediaFadeInMilliseconds,
-            MediaFadeOutMilliseconds);
-        if (changed)
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshReviewWorkflowPlans();
-            UpdateStatus();
-            RefreshVisibleMediaCaptionPaneFromFields();
-        }
-        return changed;
-    }
-
-    internal int MediaBookmarkCount => PresentationMediaTranscriptPlanner
-        .FindSelectedMediaShape(Editor.CurrentSlide, Editor.SelectedShapeIds)
-        ?.Media?.Bookmarks.Count ?? 0;
-
-    internal void SetMediaBookmarkPaneInput(string name, double timeMilliseconds)
-    {
-        if (!IsMediaCaptionPaneVisible)
-            ShowMediaCaptionPane();
-        _mediaCaptionPaneRefreshing = true;
-        try
-        {
-            _mediaBookmarkNameBox.Text = name;
-            _mediaBookmarkTimeBox.Text = FormatMediaTiming(timeMilliseconds);
-        }
-        finally
-        {
-            _mediaCaptionPaneRefreshing = false;
-        }
-    }
-
-    internal bool ApplyMediaBookmarkCreatePane()
-    {
-        var media = SelectedMediaForPane();
-        var name = (_mediaBookmarkNameBox.Text ?? string.Empty).Trim();
-        if (media is null || name.Length == 0)
-            return false;
-        var bookmarks = CloneMediaBookmarksForPane(media.Bookmarks);
-        bookmarks.Add(new MediaBookmarkInfo { Name = name, TimeMilliseconds = MediaBookmarkTimeMilliseconds });
-        _selectedMediaBookmarkIndex = bookmarks.Count - 1;
-        return ApplyMediaBookmarksPane(bookmarks);
-    }
-
-    internal bool ApplyMediaBookmarkReplacePane()
-    {
-        var media = SelectedMediaForPane();
-        var name = (_mediaBookmarkNameBox.Text ?? string.Empty).Trim();
-        if (media is null || name.Length == 0 || _selectedMediaBookmarkIndex is not int index
-            || index < 0 || index >= media.Bookmarks.Count)
-            return false;
-        var bookmarks = CloneMediaBookmarksForPane(media.Bookmarks);
-        bookmarks[index] = new MediaBookmarkInfo { Name = name, TimeMilliseconds = MediaBookmarkTimeMilliseconds };
-        return ApplyMediaBookmarksPane(bookmarks);
-    }
-
-    internal bool ApplyMediaBookmarkDeletePane()
-    {
-        var media = SelectedMediaForPane();
-        if (media is null || _selectedMediaBookmarkIndex is not int index
-            || index < 0 || index >= media.Bookmarks.Count)
-            return false;
-        var bookmarks = CloneMediaBookmarksForPane(media.Bookmarks);
-        bookmarks.RemoveAt(index);
-        _selectedMediaBookmarkIndex = bookmarks.Count == 0 ? null : Math.Min(index, bookmarks.Count - 1);
-        return ApplyMediaBookmarksPane(bookmarks);
-    }
-
-    internal double MediaBookmarkTimeMilliseconds => ParseMediaTiming(_mediaBookmarkTimeBox?.Text);
-
-    private MediaInfo? SelectedMediaForPane() => PresentationMediaTranscriptPlanner
-        .FindSelectedMediaShape(Editor.CurrentSlide, Editor.SelectedShapeIds)?.Media;
-
-    private bool ApplyMediaBookmarksPane(IReadOnlyList<MediaBookmarkInfo> bookmarks)
-    {
-        var changed = Editor.SetSelectedMediaBookmarks(bookmarks);
-        if (changed)
-        {
-            _fileWorkflow.MarkDirty();
-            RefreshReviewWorkflowPlans();
-            UpdateStatus();
-            RefreshVisibleMediaCaptionPaneFromFields();
-        }
-        return changed;
-    }
-
-    private void RenderMediaBookmarkOptions(MediaInfo? media)
+    private void RenderMediaBookmarkOptions(PresentationMediaPaneProjection plan)
     {
         _mediaBookmarkBox.Items.Clear();
-        if (media is null)
-        {
-            _selectedMediaBookmarkIndex = null;
-        }
-        else
-        {
-            foreach (var (bookmark, bookmarkIndex) in media.Bookmarks.Select((bookmark, index) => (bookmark, index)))
-                _mediaBookmarkBox.Items.Add(new ComboBoxItem { Content = $"{bookmarkIndex + 1}. {bookmark.Name}", Tag = bookmarkIndex });
-            if (_selectedMediaBookmarkIndex is not int index || index < 0 || index >= media.Bookmarks.Count)
-                _selectedMediaBookmarkIndex = media.Bookmarks.Count > 0 ? 0 : null;
-        }
+        foreach (var bookmark in plan.Bookmarks)
+            _mediaBookmarkBox.Items.Add(new ComboBoxItem { Content = bookmark.DisplayText, Tag = bookmark.Index });
 
-        _mediaBookmarkBox.SelectedIndex = _selectedMediaBookmarkIndex ?? -1;
-        var selected = media is not null && _selectedMediaBookmarkIndex is int selectedIndex
-            && selectedIndex >= 0 && selectedIndex < media.Bookmarks.Count
-            ? media.Bookmarks[selectedIndex]
-            : null;
-        _mediaBookmarkNameBox.Text = selected?.Name ?? string.Empty;
-        _mediaBookmarkTimeBox.Text = FormatMediaTiming(selected?.TimeMilliseconds ?? 0);
-        _mediaBookmarkBox.IsEnabled = media is not null;
-        _mediaBookmarkNameBox.IsEnabled = media is not null;
-        _mediaBookmarkTimeBox.IsEnabled = media is not null;
-        _mediaBookmarkCreateButton.IsEnabled = media is not null;
-        _mediaBookmarkReplaceButton.IsEnabled = selected is not null;
-        _mediaBookmarkDeleteButton.IsEnabled = selected is not null;
+        _mediaBookmarkBox.SelectedIndex = plan.SelectedBookmarkIndex ?? -1;
+        _mediaBookmarkNameBox.Text = plan.BookmarkName;
+        _mediaBookmarkTimeBox.Text = plan.BookmarkTimeText;
+        _mediaBookmarkBox.IsEnabled = plan.HasMedia;
+        _mediaBookmarkNameBox.IsEnabled = plan.HasMedia;
+        _mediaBookmarkTimeBox.IsEnabled = plan.HasMedia;
+        _mediaBookmarkCreateButton.IsEnabled = plan.HasMedia;
+        _mediaBookmarkReplaceButton.IsEnabled = plan.HasSelectedBookmark;
+        _mediaBookmarkDeleteButton.IsEnabled = plan.HasSelectedBookmark;
     }
 
-    private static List<MediaBookmarkInfo> CloneMediaBookmarksForPane(IEnumerable<MediaBookmarkInfo> bookmarks) =>
-        bookmarks.Select(bookmark => new MediaBookmarkInfo
-        {
-            Name = bookmark.Name,
-            TimeMilliseconds = bookmark.TimeMilliseconds
-        }).ToList();
+    private void RefreshVisibleMediaCaptionPaneFromFields() => _mediaPaneHostCoordinator.Refresh();
 
-    private void RefreshMediaCaptionAuthoringPlans(
-        string? proposedLabel,
-        string? proposedLanguage,
-        string? proposedSource,
-        string? proposedTranscriptText)
+    private void RenderMediaCaptionPane(PresentationMediaPaneHostRenderPlan hostPlan)
     {
-        LastMediaCaptionAuthoringPanePlan =
-            PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(
-                Editor.CurrentSlide,
-                Editor.CurrentSlideIndex,
-                Editor.SelectedShapeIds,
-                _selectedMediaCaptionTrackIndex,
-                proposedLabel,
-                proposedLanguage,
-                proposedSource,
-                proposedTranscriptText);
-        _selectedMediaCaptionTrackIndex = LastMediaCaptionAuthoringPanePlan.SelectedTrackIndex >= 0
-            ? LastMediaCaptionAuthoringPanePlan.SelectedTrackIndex
-            : null;
+        var plan = hostPlan.Caption;
+        var mediaPlan = hostPlan.Media;
+        var playbackPlan = hostPlan.Playback;
+        _mediaCaptionPaneHeading.Text = plan.Heading;
+        _mediaCaptionPaneMessage.Text = plan.Message;
+        RenderMediaCaptionTrackOptions(plan);
+        RenderMediaCaptionField(_mediaCaptionLabelText, _mediaCaptionLabelBox, plan.Label);
+        RenderMediaCaptionField(_mediaCaptionLanguageText, _mediaCaptionLanguageBox, plan.Language);
+        RenderMediaCaptionField(_mediaCaptionSourceText, _mediaCaptionSourceBox, plan.Source);
+        RenderMediaCaptionField(_mediaCaptionTranscriptText, _mediaCaptionTranscriptBox, plan.TranscriptText);
+        _mediaStartModeBox.SelectedIndex = playbackPlan.StartModeIndex;
+        _mediaLoopCheckBox.IsChecked = playbackPlan.Loop;
+        _mediaShowWhenStoppedCheckBox.IsChecked = playbackPlan.ShowWhenStopped;
+        _mediaRewindAfterPlayingCheckBox.IsChecked = playbackPlan.RewindAfterPlaying;
+        _mediaPlayFullScreenCheckBox.IsChecked = playbackPlan.PlayFullScreen;
+        _mediaStopAfterSlidesBox.Text = playbackPlan.StopAfterSlidesText;
+        _mediaStartModeBox.IsEnabled = mediaPlan.HasMedia;
+        _mediaLoopCheckBox.IsEnabled = mediaPlan.HasMedia;
+        _mediaShowWhenStoppedCheckBox.IsEnabled = mediaPlan.HasMedia;
+        _mediaRewindAfterPlayingCheckBox.IsEnabled = mediaPlan.HasMedia;
+        _mediaPlayFullScreenCheckBox.IsEnabled = mediaPlan.CanPlayFullScreen;
+        _mediaStopAfterSlidesBox.IsEnabled = mediaPlan.CanStopAfterSlides;
+        _mediaPlaybackApplyButton.IsEnabled = mediaPlan.HasMedia;
+        _mediaVolumeSlider.Value = mediaPlan.VolumePercent;
+        _mediaVolumeSlider.IsEnabled = mediaPlan.HasMedia;
+        _mediaVolumeApplyButton.IsEnabled = mediaPlan.HasMedia;
+        _mediaTimingApplyButton.IsEnabled = mediaPlan.HasMedia;
+        _mediaTrimStartBox.Text = mediaPlan.Timing.TrimStartText;
+        _mediaTrimEndBox.Text = mediaPlan.Timing.TrimEndText;
+        _mediaFadeInBox.Text = mediaPlan.Timing.FadeInText;
+        _mediaFadeOutBox.Text = mediaPlan.Timing.FadeOutText;
+        RenderMediaBookmarkOptions(mediaPlan);
+        ApplyMediaCaptionButtonPlan(
+            _mediaCaptionCreateButton,
+            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId));
+        ApplyMediaCaptionButtonPlan(
+            _mediaCaptionReplaceButton,
+            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneReplaceCommandId));
+        ApplyMediaCaptionButtonPlan(
+            _mediaCaptionDeleteButton,
+            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneDeleteCommandId));
+        ApplyMediaCaptionButtonPlan(
+            _mediaCaptionCloseButton,
+            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCloseCommandId));
     }
-
-    private void RefreshVisibleMediaCaptionPaneFromFields()
-    {
-        if (_mediaCaptionPaneRefreshing || !IsMediaCaptionPaneVisible)
-            return;
-
-        RefreshMediaCaptionAuthoringPlans(
-            _mediaCaptionLabelBox.Text,
-            _mediaCaptionLanguageBox.Text,
-            _mediaCaptionSourceBox.Text,
-            _mediaCaptionTranscriptBox.Text);
-        RenderMediaCaptionPane(LastMediaCaptionAuthoringPanePlan!);
-    }
-
-    private void RenderMediaCaptionPane(PresentationMediaCaptionAuthoringPanePlan plan)
-    {
-        _mediaCaptionPaneRefreshing = true;
-        try
-        {
-            _mediaCaptionPaneHeading.Text = string.IsNullOrWhiteSpace(plan.ShapeName)
-                ? "Media Captions"
-                : $"Media Captions - {plan.ShapeName}";
-            _mediaCaptionPaneMessage.Text = plan.Message;
-            RenderMediaCaptionTrackOptions(plan);
-            RenderMediaCaptionField(_mediaCaptionLabelText, _mediaCaptionLabelBox, plan.Label);
-            RenderMediaCaptionField(_mediaCaptionLanguageText, _mediaCaptionLanguageBox, plan.Language);
-            RenderMediaCaptionField(_mediaCaptionSourceText, _mediaCaptionSourceBox, plan.Source);
-            RenderMediaCaptionField(_mediaCaptionTranscriptText, _mediaCaptionTranscriptBox, plan.TranscriptText);
-            var selectedMedia = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
-                Editor.CurrentSlide,
-                Editor.SelectedShapeIds)?.Media;
-            var selectedStartMode = selectedMedia?.PlaybackStartMode ?? MediaPlaybackStartMode.InClickSequence;
-            _mediaStartModeBox.SelectedIndex = selectedStartMode == MediaPlaybackStartMode.Automatically ? 1 : 0;
-            _mediaLoopCheckBox.IsChecked = selectedMedia?.Loop ?? false;
-            _mediaShowWhenStoppedCheckBox.IsChecked = selectedMedia?.ShowWhenStopped ?? true;
-            _mediaRewindAfterPlayingCheckBox.IsChecked = selectedMedia?.RewindAfterPlaying ?? false;
-            _mediaPlayFullScreenCheckBox.IsChecked = selectedMedia?.PlayFullScreen ?? false;
-            _mediaStopAfterSlidesBox.Text = Math.Max(1, selectedMedia?.StopAfterSlides ?? 1).ToString();
-            _mediaStartModeBox.IsEnabled = selectedMedia is not null;
-            _mediaLoopCheckBox.IsEnabled = selectedMedia is not null;
-            _mediaShowWhenStoppedCheckBox.IsEnabled = selectedMedia is not null;
-            _mediaRewindAfterPlayingCheckBox.IsEnabled = selectedMedia is not null;
-            _mediaPlayFullScreenCheckBox.IsEnabled = selectedMedia is { IsVideo: true };
-            _mediaStopAfterSlidesBox.IsEnabled = selectedMedia is { IsVideo: false };
-            _mediaPlaybackApplyButton.IsEnabled = selectedMedia is not null;
-            _mediaVolumeSlider.Value = selectedMedia?.VolumePercent ?? 80;
-            _mediaVolumeSlider.IsEnabled = selectedMedia is not null;
-            _mediaVolumeApplyButton.IsEnabled = selectedMedia is not null;
-            _mediaTimingApplyButton.IsEnabled = selectedMedia is not null;
-            _mediaTrimStartBox.Text = FormatMediaTiming(selectedMedia?.TrimStartMilliseconds ?? 0);
-            _mediaTrimEndBox.Text = FormatMediaTiming(selectedMedia?.TrimEndMilliseconds ?? 0);
-            _mediaFadeInBox.Text = FormatMediaTiming(selectedMedia?.FadeInMilliseconds ?? 0);
-            _mediaFadeOutBox.Text = FormatMediaTiming(selectedMedia?.FadeOutMilliseconds ?? 0);
-            RenderMediaBookmarkOptions(selectedMedia);
-            ApplyMediaCaptionButtonPlan(
-                _mediaCaptionCreateButton,
-                GetMediaCaptionPaneAction(plan, PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId));
-            ApplyMediaCaptionButtonPlan(
-                _mediaCaptionReplaceButton,
-                GetMediaCaptionPaneAction(plan, PresentationMediaTranscriptPlanner.CaptionAuthoringPaneReplaceCommandId));
-            ApplyMediaCaptionButtonPlan(
-                _mediaCaptionDeleteButton,
-                GetMediaCaptionPaneAction(plan, PresentationMediaTranscriptPlanner.CaptionAuthoringPaneDeleteCommandId));
-            ApplyMediaCaptionButtonPlan(
-                _mediaCaptionCloseButton,
-                GetMediaCaptionPaneAction(plan, PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCloseCommandId));
-        }
-        finally
-        {
-            _mediaCaptionPaneRefreshing = false;
-        }
-    }
-
-    private static double ParseMediaTiming(string? text) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value)
-            && double.IsFinite(value) ? Math.Max(0, value) : 0;
-
-    private static string FormatMediaTiming(double value) =>
-        Math.Max(0, value).ToString("0.####", CultureInfo.CurrentCulture);
 
     private void RenderMediaCaptionTrackOptions(PresentationMediaCaptionAuthoringPanePlan plan)
     {
@@ -9167,29 +5635,21 @@ public sealed partial class MainWindow : Window
         {
             var item = new ComboBoxItem
             {
-                Content = $"{track.TrackIndex + 1}. {track.Label} ({FormatAvailability(!track.IsExternal)})",
+                Content = track.DisplayText,
                 Tag = track.TrackIndex,
             };
             PresentationPaneAccessibilityAdapter.ApplyItem(
                 item,
-                PresentationPaneAccessibilityPlanner.MediaCaptionPaneId,
-                itemIndex,
-                track.Label,
-                track.TrackIndex == plan.SelectedTrackIndex ? "Selected" : "Not selected");
+                PresentationPaneAccessibilityPlanner.PlanItem(
+                    PresentationPaneAccessibilityPlanner.MediaCaptionPaneId,
+                    itemIndex,
+                    track.Label,
+                    track.IsSelected,
+                    track.AccessibilityKey));
             _mediaCaptionTrackBox.Items.Add(item);
         }
         _mediaCaptionTrackBox.IsEnabled = plan.Tracks.Count > 0;
-        var selectedIndex = -1;
-        for (var index = 0; index < plan.Tracks.Count; index++)
-        {
-            if (plan.Tracks[index].TrackIndex == plan.SelectedTrackIndex)
-            {
-                selectedIndex = index;
-                break;
-            }
-        }
-
-        _mediaCaptionTrackBox.SelectedIndex = selectedIndex;
+        _mediaCaptionTrackBox.SelectedIndex = plan.SelectedTrackListIndex;
     }
 
     private static void RenderMediaCaptionField(
@@ -9197,19 +5657,12 @@ public sealed partial class MainWindow : Window
         TextBox textBox,
         PresentationMediaCaptionAuthoringFieldPlan field)
     {
-        label.Text = field.ValidationMessage is null
-            ? field.Label
-            : $"{field.Label} - {field.ValidationMessage}";
+        label.Text = field.DisplayLabel;
         textBox.PlaceholderText = field.Placeholder;
-        ToolTip.SetTip(textBox, field.ValidationMessage ?? field.Placeholder);
+        ToolTip.SetTip(textBox, field.ToolTip);
         textBox.IsEnabled = field.IsEnabled;
         SetTextIfChanged(textBox, field.Value);
     }
-
-    private static PresentationMediaCaptionAuthoringActionPlan GetMediaCaptionPaneAction(
-        PresentationMediaCaptionAuthoringPanePlan plan,
-        string commandId)
-        => plan.Actions.Single(action => action.CommandId == commandId);
 
     private static void ApplyMediaCaptionButtonPlan(
         Button button,
@@ -9220,30 +5673,12 @@ public sealed partial class MainWindow : Window
         ToolTip.SetTip(button, action.DisabledReason);
     }
 
-    private static int? NormalizeMediaCaptionSelectionAfterMutation(
-        MediaInfo? media,
-        PresentationMediaCaptionAuthoringIntentKind intent,
-        int changedTrackIndex)
-    {
-        if (media is null || media.CaptionTracks.Count == 0)
-            return null;
-
-        return intent == PresentationMediaCaptionAuthoringIntentKind.Delete
-            ? Math.Min(changedTrackIndex, media.CaptionTracks.Count - 1)
-            : changedTrackIndex;
-    }
-
     internal PresentationReadingOrderPlan ShowReadingOrderPane()
-    {
-        var plan = RefreshReadingOrderPlan();
-        RenderReadingOrderPane(plan);
-        _readingOrderPaneHost.IsVisible = true;
-        RefreshPaneAccessibilityMetadata();
-        return plan;
-    }
+        => _reviewWorkflowSession.ShowReadingOrderPane();
 
     internal PresentationSelectionPanePlan ShowSelectionPane()
     {
+        _workareaSession.Panes.Show(PresentationWorkareaPane.Selection);
         var plan = _selectionPane.Refresh();
         _selectionPane.IsVisible = true;
         RefreshPaneAccessibilityMetadata();
@@ -9257,145 +5692,79 @@ public sealed partial class MainWindow : Window
         => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderLater);
 
     internal PresentationReadingOrderSelectionPlan ApplyReadingOrderSelectItem(uint shapeId)
-    {
-        var plan = _reviewWorkflowSession.SelectReadingOrderItem(shapeId);
-        if (IsReadingOrderPaneVisible && LastReadingOrderPlan is not null)
-            RenderReadingOrderPane(LastReadingOrderPlan);
-        return plan;
-    }
+        => _reviewWorkflowSession.SelectReadingOrderItem(shapeId);
 
     private PresentationReadingOrderMutationPlan ApplyReadingOrderMove(
         PresentationReviewWorkflowIntentKind intent)
-    {
-        var plan = _reviewWorkflowSession.ApplyReadingOrderMove(intent);
-        if (IsReadingOrderPaneVisible && LastReadingOrderPlan is not null)
-            RenderReadingOrderPane(LastReadingOrderPlan);
-        return plan;
-    }
+        => _reviewWorkflowSession.ApplyReadingOrderMove(intent);
 
     internal void SetAltTextPaneInput(string title, string description, bool isDecorative)
+        => _altTextPaneHostCoordinator.SetInput(new(title, description, isDecorative));
+
+    internal PresentationAltTextMutationPlan ApplyAltTextPane() =>
+        _altTextPaneHostCoordinator.Apply();
+
+    private void RefreshVisibleAltTextPaneFromFields() => _altTextPaneHostCoordinator.Refresh();
+
+    private void RenderAltTextPaneIfVisible(PresentationAltTextPanePlan plan) =>
+        _altTextPaneHostCoordinator.RenderIfVisible(plan);
+
+    bool IPresentationAltTextPaneHostView.IsPaneVisible => _altTextPaneHost?.IsVisible == true;
+
+    PresentationAltTextPaneHostSnapshot IPresentationAltTextPaneHostView.CaptureInput() =>
+        new(_altTextTitleBox.Text, _altTextDescriptionBox.Text, _altTextDecorativeCheck.IsChecked == true);
+
+    void IPresentationAltTextPaneHostView.SetPaneVisible(bool visible) =>
+        _altTextPaneHost.IsVisible = visible;
+
+    void IPresentationAltTextPaneHostView.SetInput(PresentationAltTextPaneHostSnapshot input)
     {
-        if (!IsAltTextPaneVisible)
-            ShowAltTextPane();
-
-        _altTextPaneRefreshing = true;
-        try
-        {
-            _altTextTitleBox.Text = title;
-            _altTextDescriptionBox.Text = description;
-            _altTextDecorativeCheck.IsChecked = isDecorative;
-        }
-        finally
-        {
-            _altTextPaneRefreshing = false;
-        }
-
-        RefreshVisibleAltTextPaneFromFields();
+        _altTextTitleBox.Text = input.Title;
+        _altTextDescriptionBox.Text = input.Description;
+        _altTextDecorativeCheck.IsChecked = input.IsDecorative;
     }
 
-    internal PresentationAltTextMutationPlan ApplyAltTextPane()
+    void IPresentationAltTextPaneHostView.Render(PresentationAltTextPaneHostRenderPlan plan)
     {
-        var plan = ApplySelectedShapeAlternativeText(
-            _altTextDescriptionBox.Text,
-            _altTextTitleBox.Text,
-            _altTextDecorativeCheck.IsChecked == true);
-        if (LastAltTextPanePlan is not null)
-            RenderAltTextPane(LastAltTextPanePlan);
-
-        return plan;
+        _altTextPaneHeading.Text = plan.Heading;
+        _altTextPaneMessage.Text = plan.Message;
+        _altTextTitleLabel.Text = plan.Title.Label;
+        _altTextDescriptionLabel.Text = plan.Description.Label;
+        SetTextIfChanged(_altTextTitleBox, plan.Title.Value);
+        SetTextIfChanged(_altTextDescriptionBox, plan.Description.Value);
+        _altTextTitleBox.PlaceholderText = plan.Title.Placeholder;
+        _altTextDescriptionBox.PlaceholderText = plan.Description.Placeholder;
+        _altTextTitleBox.IsEnabled = plan.Title.IsEnabled;
+        _altTextDescriptionBox.IsEnabled = plan.Description.IsEnabled;
+        _altTextDecorativeCheck.Content = plan.DecorativeAction.Label;
+        _altTextDecorativeCheck.IsEnabled = plan.DecorativeAction.IsEnabled;
+        _altTextDecorativeCheck.IsChecked = plan.IsDecorative;
+        _altTextApplyButton.Content = plan.ApplyAction.Label;
+        _altTextApplyButton.IsEnabled = plan.ApplyAction.IsEnabled;
+        _altTextCloseButton.Content = plan.CloseAction.Label;
+        _altTextCloseButton.IsEnabled = plan.CloseAction.IsEnabled;
     }
 
-    private void RefreshAltTextPlans(
-        string? proposedDescription,
-        string? proposedTitle,
-        bool? isDecorative)
-        => _reviewWorkflowSession.RefreshAltTextPlans(proposedDescription, proposedTitle, isDecorative);
+    void IPresentationAltTextPaneHostView.RefreshAccessibilityMetadata() =>
+        RefreshPaneAccessibilityMetadata();
 
-    private void RefreshVisibleAltTextPaneFromFields()
+    void IPresentationReadingOrderPaneHostView.SetPaneVisible(bool visible) =>
+        _readingOrderPaneHost.IsVisible = visible;
+
+    void IPresentationReadingOrderPaneHostView.Render(PresentationReadingOrderPaneHostRenderPlan plan)
     {
-        if (_altTextPaneRefreshing || !IsAltTextPaneVisible)
-            return;
-
-        RefreshAltTextPlans(
-            _altTextDescriptionBox.Text,
-            _altTextTitleBox.Text,
-            _altTextDecorativeCheck.IsChecked == true);
-        if (LastAltTextPanePlan is not null)
-            RenderAltTextPane(LastAltTextPanePlan);
-    }
-
-    private void RenderAltTextPaneIfVisible(PresentationAltTextPanePlan plan)
-    {
-        if (IsAltTextPaneVisible)
-            RenderAltTextPane(plan);
-    }
-
-    private void RenderAltTextPane(PresentationAltTextPanePlan plan)
-    {
-        _altTextPaneRefreshing = true;
-        try
-        {
-            var applyAction = GetAltTextPaneAction(plan, PresentationReviewWorkflowPlanner.AltTextPaneApplyCommandId);
-            var decorativeAction = GetAltTextPaneAction(plan, PresentationReviewWorkflowPlanner.AltTextPaneDecorativeCommandId);
-            var closeAction = GetAltTextPaneAction(plan, PresentationReviewWorkflowPlanner.AltTextPaneCloseCommandId);
-
-            _altTextPaneHeading.Text = string.IsNullOrWhiteSpace(plan.ShapeName)
-                ? "Alt Text"
-                : $"Alt Text - {plan.ShapeName}";
-            _altTextPaneMessage.Text = plan.Message;
-            _altTextTitleLabel.Text = plan.Title.Label;
-            _altTextDescriptionLabel.Text = plan.Description.Label;
-            SetTextIfChanged(_altTextTitleBox, plan.Title.Value);
-            SetTextIfChanged(_altTextDescriptionBox, plan.Description.Value);
-            _altTextTitleBox.PlaceholderText = plan.Title.Placeholder;
-            _altTextDescriptionBox.PlaceholderText = plan.Description.Placeholder;
-            _altTextTitleBox.IsEnabled = plan.Title.IsEnabled;
-            _altTextDescriptionBox.IsEnabled = plan.Description.IsEnabled;
-            _altTextDecorativeCheck.Content = decorativeAction.Label;
-            _altTextDecorativeCheck.IsEnabled = decorativeAction.IsEnabled;
-            _altTextDecorativeCheck.IsChecked = plan.IsDecorative;
-            _altTextApplyButton.Content = applyAction.Label;
-            _altTextApplyButton.IsEnabled = applyAction.IsEnabled;
-            _altTextCloseButton.Content = closeAction.Label;
-            _altTextCloseButton.IsEnabled = closeAction.IsEnabled;
-        }
-        finally
-        {
-            _altTextPaneRefreshing = false;
-        }
-    }
-
-    private static PresentationReviewWorkflowActionPlan GetAltTextPaneAction(
-        PresentationAltTextPanePlan plan,
-        string commandId)
-        => plan.Actions.Single(action => action.CommandId == commandId);
-
-    private void RenderReadingOrderPane(PresentationReadingOrderPlan plan)
-    {
-        _readingOrderPaneHeading.Text =
-            $"Reading Order - slide {plan.SlideIndex + 1} ({plan.Items.Count} shapes)";
-        _readingOrderPaneMessage.Text = plan.SelectedItem is { } selected
-            ? $"Selected: {selected.ShapeName}"
-            : plan.Items.Count == 0
-                ? PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage
-                : PresentationReviewWorkflowPlanner.MissingReadingOrderSelectionMessage;
-
-        var moveEarlier = GetReadingOrderAction(
-            plan,
-            PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId);
-        var moveLater = GetReadingOrderAction(
-            plan,
-            PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId);
-        ApplyReadingOrderButtonPlan(_readingOrderMoveEarlierButton, moveEarlier);
-        ApplyReadingOrderButtonPlan(_readingOrderMoveLaterButton, moveLater);
+        _readingOrderPaneHeading.Text = plan.Heading;
+        _readingOrderPaneMessage.Text = plan.Message;
+        ApplyReadingOrderButtonPlan(_readingOrderMoveEarlierButton, plan.MoveEarlierAction);
+        ApplyReadingOrderButtonPlan(_readingOrderMoveLaterButton, plan.MoveLaterAction);
 
         _readingOrderPaneItemsPanel.Children.Clear();
-        if (plan.Items.Count == 0)
+        if (plan.ShouldShowEmptyState)
         {
             _readingOrderPaneItemsPanel.Children.Add(new TextBlock
             {
-                Text = PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Text = plan.EmptyStateMessage,
+                Foreground = FreePBrushes.PaneMutedText,
                 Margin = new Thickness(12, 0, 12, 10),
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -9407,22 +5776,22 @@ public sealed partial class MainWindow : Window
             var card = BuildReadingOrderItemCard(item);
             PresentationPaneAccessibilityAdapter.ApplyItem(
                 card,
-                PresentationPaneAccessibilityPlanner.ReadingOrderPaneId,
-                item.ReadingOrderIndex,
-                item.ShapeName,
-                item.IsSelected ? "Selected" : "Not selected");
+                PresentationPaneAccessibilityPlanner.PlanItem(
+                    PresentationPaneAccessibilityPlanner.ReadingOrderPaneId,
+                    item.ReadingOrderIndex,
+                    item.ShapeName,
+                    item.IsSelected,
+                    PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)));
             _readingOrderPaneItemsPanel.Children.Add(card);
         }
     }
 
-    private static PresentationReviewWorkflowActionPlan GetReadingOrderAction(
-        PresentationReadingOrderPlan plan,
-        string commandId)
-        => plan.Actions.Single(action => action.CommandId == commandId);
+    void IPresentationReadingOrderPaneHostView.RefreshAccessibilityMetadata() =>
+        RefreshPaneAccessibilityMetadata();
 
     private static void ApplyReadingOrderButtonPlan(
         Button button,
-        PresentationReviewWorkflowActionPlan action)
+        PresentationReadingOrderPaneActionRenderPlan action)
     {
         button.Content = action.Label;
         button.IsEnabled = action.IsEnabled;
@@ -9440,30 +5809,30 @@ public sealed partial class MainWindow : Window
             {
                 new TextBlock
                 {
-                    Text = $"{item.ReadingOrderIndex + 1}. {item.ShapeName}",
+                    Text = item.DisplayTitle,
                     FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
                     FontWeight = FontWeight.SemiBold,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
-                    Text = $"{item.ShapeTypeLabel} - depth {item.NestingDepth}",
+                    Text = item.Metadata,
                     FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                    Foreground = FreePBrushes.PaneSecondaryText,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
                     Text = item.AccessibilitySummary,
                     FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    Foreground = FreePBrushes.PaneText,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
-                    Text = BuildReadingOrderAltTextLine(item),
+                    Text = item.AltTextDisplayText,
                     FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    Foreground = FreePBrushes.PaneMutedText,
                     TextWrapping = TextWrapping.Wrap,
                 },
             }
@@ -9473,9 +5842,9 @@ public sealed partial class MainWindow : Window
         {
             panel.Children.Insert(1, new TextBlock
             {
-                Text = "Selected item",
+                Text = item.SelectedLabel,
                 FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                Foreground = FreePBrushes.Accent,
                 FontWeight = FontWeight.SemiBold,
                 Margin = new Thickness(0, PresentationReadingOrderPaneVisualMetrics.SelectedItemTopInset, 0, 0),
             });
@@ -9485,11 +5854,11 @@ public sealed partial class MainWindow : Window
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Background = item.IsSelected
-                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
-                : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+                ? FreePBrushes.SelectedCardSurface
+                : FreePBrushes.PaneSurface,
             BorderBrush = item.IsSelected
-                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
-                : new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+                ? FreePBrushes.Accent
+                : FreePBrushes.CardBorder,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(PresentationReadingOrderPaneVisualMetrics.CardCornerRadius),
             Padding = new Thickness(PresentationReadingOrderPaneVisualMetrics.CardPadding),
@@ -9512,29 +5881,9 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
-        ToolTip.SetTip(button, $"Select {item.ShapeName}");
+        ToolTip.SetTip(button, item.SelectionToolTip);
         button.Click += (_, _) => ApplyReadingOrderSelectItem(item.ShapeId);
         return button;
-    }
-
-    private static string BuildReadingOrderAltTextLine(PresentationReadingOrderItemPlan item)
-    {
-        if (item.IsDecorative)
-            return "Decorative object";
-
-        if (string.IsNullOrWhiteSpace(item.AlternativeTextTitle)
-            && string.IsNullOrWhiteSpace(item.AlternativeTextDescription))
-        {
-            return "Alt text: missing";
-        }
-
-        if (string.IsNullOrWhiteSpace(item.AlternativeTextDescription))
-            return $"Alt text title: {item.AlternativeTextTitle}";
-
-        if (string.IsNullOrWhiteSpace(item.AlternativeTextTitle))
-            return $"Alt text: {item.AlternativeTextDescription}";
-
-        return $"Alt text: {item.AlternativeTextTitle} - {item.AlternativeTextDescription}";
     }
 
     private static void SetTextIfChanged(TextBox textBox, string value)
@@ -9542,14 +5891,6 @@ public sealed partial class MainWindow : Window
         if (textBox.Text != value)
             textBox.Text = value;
     }
-
-    private uint? GetSingleSelectedShapeId()
-        => Editor.SelectedShapeIds.Count == 1
-            ? Editor.SelectedShapeIds[0]
-            : null;
-
-    private PresentationReadingOrderPlan RefreshReadingOrderPlan()
-        => _reviewWorkflowSession.RefreshReadingOrderPlan();
 
     internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
         string? description,
@@ -9568,50 +5909,22 @@ public sealed partial class MainWindow : Window
         => _reviewWorkflowSession.RefreshProofingRequestPlan();
 
     internal PresentationProofingPanePlan ShowProofingPane()
-    {
-        var plan = _reviewWorkflowSession.ShowProofingPane();
-        RenderProofingPane(plan);
-        _proofingPaneHost.IsVisible = true;
-        RefreshPaneAccessibilityMetadata();
-        return plan;
-    }
+        => _reviewWorkflowSession.ShowProofingPane();
 
     internal PresentationProofingPanePlan SelectProofingIssueRow(int rowIndex)
-    {
-        var plan = _reviewWorkflowSession.SelectProofingIssueRow(rowIndex);
-        RenderProofingPane(plan);
-        _proofingPaneHost.IsVisible = true;
-        RefreshPaneAccessibilityMetadata();
-        return plan;
-    }
+        => _reviewWorkflowSession.SelectProofingIssueRow(rowIndex);
 
     internal PresentationProofingCorrectionMutationPlan ApplySelectedProofingCorrection()
-    {
-        if (LastProofingPanePlan is null)
-            ShowProofingPane();
-        return _reviewWorkflowSession.ApplySelectedProofingCorrection();
-    }
+        => _reviewWorkflowSession.ApplySelectedProofingCorrection();
 
     internal PresentationProofingPanePlan IgnoreSelectedProofingIssue()
-    {
-        if (LastProofingPanePlan is null)
-            ShowProofingPane();
-        return _reviewWorkflowSession.IgnoreSelectedProofingIssue();
-    }
+        => _reviewWorkflowSession.IgnoreSelectedProofingIssue();
 
     internal PresentationProofingPanePlan IgnoreAllSelectedProofingIssues()
-    {
-        if (LastProofingPanePlan is null)
-            ShowProofingPane();
-        return _reviewWorkflowSession.IgnoreAllSelectedProofingIssues();
-    }
+        => _reviewWorkflowSession.IgnoreAllSelectedProofingIssues();
 
     internal PresentationProofingPanePlan AddSelectedProofingWordToDictionary()
-    {
-        if (LastProofingPanePlan is null)
-            ShowProofingPane();
-        return _reviewWorkflowSession.AddSelectedProofingWordToDictionary();
-    }
+        => _reviewWorkflowSession.AddSelectedProofingWordToDictionary();
 
     private void RenderProofingPaneIfVisible(PresentationProofingPanePlan plan)
     {
@@ -9619,20 +5932,26 @@ public sealed partial class MainWindow : Window
             RenderProofingPane(plan);
     }
 
+    private void PresentProofingPane(PresentationProofingPanePlan plan)
+    {
+        _workareaSession.Panes.Show(PresentationWorkareaPane.Proofing);
+        RenderProofingPane(plan);
+        _proofingPaneHost.IsVisible = true;
+        RefreshPaneAccessibilityMetadata();
+    }
+
     private void RenderProofingPane(PresentationProofingPanePlan plan)
     {
-        _proofingPaneHeading.Text = $"Spelling - {plan.IssueCount} issues";
-        _proofingPaneMessage.Text = plan.SelectedRow is { } selected
-            ? $"{selected.SlideDisplay}: change \"{selected.Text}\" to \"{selected.SuggestedReplacement}\""
-            : plan.Message;
+        _proofingPaneHeading.Text = plan.Heading;
+        _proofingPaneMessage.Text = plan.DisplayMessage;
 
         _proofingPaneRowsPanel.Children.Clear();
-        if (plan.Rows.Count == 0)
+        if (plan.ShouldShowEmptyState)
         {
             _proofingPaneRowsPanel.Children.Add(new TextBlock
             {
                 Text = plan.Message,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Foreground = FreePBrushes.PaneMutedText,
                 Margin = new Thickness(12, 0, 12, 10),
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -9710,7 +6029,8 @@ public sealed partial class MainWindow : Window
 
         var select = new Button
         {
-            Content = "Select",
+            Content = row.SelectionAction.Label,
+            IsEnabled = row.SelectionAction.IsEnabled,
             Tag = row.RowIndex,
             MinWidth = 72,
             HorizontalAlignment = HorizontalAlignment.Left,
@@ -9732,14 +6052,14 @@ public sealed partial class MainWindow : Window
             {
                 new TextBlock
                 {
-                    Text = $"{row.SlideDisplay} - {row.SourceName}",
+                    Text = row.DisplayTitle,
                     FontWeight = FontWeight.SemiBold,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
-                    Text = $"{row.Text} -> {row.SuggestedReplacement}",
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                    Text = row.ReplacementDisplayText,
+                    Foreground = FreePBrushes.PaneSecondaryText,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
@@ -9753,60 +6073,26 @@ public sealed partial class MainWindow : Window
 
         var border = new Border
         {
-            Background = row.IsSelected ? new SolidColorBrush(Color.FromRgb(0xE8, 0xF1, 0xFF)) : Brushes.Transparent,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+            Background = row.IsSelected ? FreePBrushes.SelectedRowSurface : Brushes.Transparent,
+            BorderBrush = FreePBrushes.GridBorder,
             BorderThickness = new Thickness(0, 0, 0, 1),
             Padding = new Thickness(12, 8, 12, 8),
             Child = panel,
         };
         PresentationPaneAccessibilityAdapter.ApplyItem(
             border,
-            PresentationPaneAccessibilityPlanner.ProofingPaneId,
-            row.RowIndex,
-            row.Text,
-            row.IsSelected ? "Selected" : "Not selected");
+            PresentationPaneAccessibilityPlanner.PlanItem(
+                PresentationPaneAccessibilityPlanner.ProofingPaneId,
+                row.RowIndex,
+                row.Text,
+                row.IsSelected,
+                row.AccessibilityKey));
         return border;
     }
 
-    private async Task<bool> TryLoadPresentationFileAsync(string path)
-    {
-        try
-        {
-            var result = PresentationFilePersistenceWorkflow.Open(path);
-            LoadPresentationAsSaved(result.Presentation, result.SavedPath, result.SuppressRecentFiles);
-            _statusText.Text = SisterAppFileTextPlanner.FormatOpened(Path.GetFileName(path));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.OpenCommand, ex.Message);
-            await _fileWorkflow.ShowFileCommandErrorAsync("Could not open the presentation", ex);
-            return false;
-        }
-    }
+    private async Task<bool> TrySavePresentationFileAsync(string path) =>
+        (await _fileSession.SavePathAsync(path)).Succeeded;
 
-    private async Task<bool> TrySavePresentationFileAsync(string path)
-    {
-        try
-        {
-            var result = PresentationFilePersistenceWorkflow.Save(path, _presentation);
-            _fileWorkflow.MarkSavedWithPath(result.SavedPath, result.SuppressRecentFiles);
-            _statusText.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(result.SavedPath));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.SaveCommand, ex.Message);
-            await _fileWorkflow.ShowFileCommandErrorAsync("Could not save the presentation", ex);
-            return false;
-        }
-    }
-
-    internal Task<bool> TrySavePresentationFileAsyncForTests(string path) =>
-        TrySavePresentationFileAsync(path);
-
-    private static bool IsSupportedPresentationPath(string path) =>
-        PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path);
 
     // ── Presentation load ──────────────────────────────────────────────────────
 
@@ -9822,24 +6108,7 @@ public sealed partial class MainWindow : Window
 
     private void LoadPresentationContent(Presentation presentation)
     {
-        _findReplaceDialog?.Close();
-        _presentation = presentation;
-
-        RebuildEditorAndRewireInteraction();
-        // A visible pane is a projection of the active editor. Rebind it after New/Open so
-        // rows and playback state cannot remain attached to the previous presentation.
-        _selectedAnimationIndex = -1;
-        _animationPanePlaybackSessionPlan = null;
-        _animationPanePlaybackWorkflowEvidencePlan = null;
-        HideLayoutPicker();
-        HideTablePicker();
-        RefreshSlidePane();
-        RefreshCanvas();
-        RefreshNotesPane();
-        RefreshReviewWorkflowPlans();
-        RefreshVisibleReviewCommentsPane();
-        RefreshVisibleAnimationPane();
-        UpdateStatus();
+        _workareaSession.ReplacePresentation(presentation);
     }
 
     // ── Canvas refresh ─────────────────────────────────────────────────────────
@@ -9864,31 +6133,20 @@ public sealed partial class MainWindow : Window
         try
         {
             _slidePaneList.Items.Clear();
-            _slidePaneRenderedThumbnailPlans.Clear();
-            _slidePaneRenderedSectionHeaderPlans.Clear();
-
-            _slidePaneSessionState = SlidePanePlanner.SetSelectedSlide(
-                _slidePaneSessionState,
-                Editor.CurrentSlideIndex);
-            _slidePaneProjection = SlidePanePlanner.BuildSessionProjection(
-                _presentation.Slides,
-                _presentation.Sections,
-                _slidePaneSessionState);
-            var accessibilityOrdinal = 0;
-            foreach (var entry in _slidePaneProjection.Entries)
+            var projection = _workareaSession.SlidePaneSession.Projection;
+            foreach (var projected in projection.Items)
             {
-                if (entry.Kind == SlidePaneEntryKind.SectionHeader)
+                var entry = projected.Entry;
+                if (projected.SectionHeader is { } sectionHeader)
                 {
-                    _slidePaneList.Items.Add(BuildSlidePaneSectionHeader(entry, accessibilityOrdinal++));
+                    _slidePaneList.Items.Add(BuildSlidePaneSectionHeader(
+                        projected,
+                        sectionHeader));
                     continue;
                 }
 
                 var slide = _presentation.Slides[entry.SlideIndex];
-                var plan = SlidePanePlanner.BuildThumbnailVisualPlan(
-                    entry,
-                    slide,
-                    _slidePaneProjection.SelectedSlideIndex);
-                _slidePaneRenderedThumbnailPlans.Add(plan);
+                var plan = projected.Thumbnail!;
 
                 // Small SlideCanvas thumbnail using the shared slide pane metrics.
                 var thumb = new SlideCanvas
@@ -9957,23 +6215,26 @@ public sealed partial class MainWindow : Window
                 AutomationProperties.SetName(item, plan.AccessibleName);
                 PresentationPaneAccessibilityAdapter.ApplyItem(
                     item,
-                    PresentationPaneAccessibilityPlanner.SlidePaneId,
-                    accessibilityOrdinal++,
-                    plan.AccessibleName,
-                    plan.IsSelected ? "Selected" : "Not selected",
-                    $"Slide{plan.SlideIndex + 1}");
+                    PresentationPaneAccessibilityPlanner.PlanSlideItem(
+                        projected.AccessibilityOrdinal,
+                        plan.SlideIndex,
+                        plan.AccessibleName,
+                        plan.IsSelected,
+                        plan.IsActive));
                 ToolTip.SetTip(item, plan.ToolTipText);
                 WireContextMenuLifecycle(item);
                 item.KeyDown += OnSlidePaneItemKeyDown;
                 item.PointerEntered += (_, _) =>
                 {
-                    if (item.Tag is int idx && idx != Editor.CurrentSlideIndex)
+                    if (item.Tag is int idx &&
+                        !_workareaSession.SlidePaneSession.Selection.IsSelected(idx))
                         itemChrome.Background = BrushFromHex(plan.ItemHoverBackgroundHex);
                 };
                 item.PointerExited += (_, _) =>
                 {
                     if (item.Tag is int idx)
-                        itemChrome.Background = BrushFromHex(idx == Editor.CurrentSlideIndex
+                        itemChrome.Background = BrushFromHex(
+                            _workareaSession.SlidePaneSession.Selection.IsSelected(idx)
                             ? plan.ItemSelectedBackgroundHex
                             : plan.ItemNormalBackgroundHex);
                 };
@@ -9986,8 +6247,8 @@ public sealed partial class MainWindow : Window
                 PresentationPaneAccessibilityPlanner.SlidePaneId,
                 true,
                 _presentation.Slides.Count,
-                Editor.CurrentSlideIndex);
-            SelectSlidePaneItem(Editor.CurrentSlideIndex);
+                projection.Selection.ActiveSlideIndex);
+            SyncSlidePaneSelectionFromSession(scrollActiveIntoView: false);
             if (restoreSlidePaneFocus)
             {
                 GetCurrentSlidePaneItem()?.Focus();
@@ -10002,11 +6263,10 @@ public sealed partial class MainWindow : Window
     }
 
     private ListBoxItem BuildSlidePaneSectionHeader(
-        SlidePaneEntry entry,
-        int accessibilityOrdinal)
+        PresentationSlidePaneItemProjection projected,
+        SlidePaneSectionHeaderVisualPlan plan)
     {
-        var plan = SlidePanePlanner.BuildSectionHeaderVisualPlan(entry);
-        _slidePaneRenderedSectionHeaderPlans.Add(plan);
+        var entry = projected.Entry;
         var normalBackground = BrushFromHex(plan.BackgroundHex);
         var hoverBackground = BrushFromHex(plan.HoverBackgroundHex);
 
@@ -10060,11 +6320,10 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(item, plan.AccessibleName);
         PresentationPaneAccessibilityAdapter.ApplyItem(
             item,
-            PresentationPaneAccessibilityPlanner.SlidePaneId,
-            accessibilityOrdinal,
-            plan.AccessibleName,
-            "Not selected",
-            $"Section{plan.SectionIndex + 1}");
+            PresentationPaneAccessibilityPlanner.PlanSectionItem(
+                projected.AccessibilityOrdinal,
+                plan.SectionIndex,
+                plan.AccessibleName));
         WireContextMenuLifecycle(item);
         item.PointerEntered += (_, _) => headerChrome.Background = hoverBackground;
         item.PointerExited += (_, _) => headerChrome.Background = normalBackground;
@@ -10107,18 +6366,9 @@ public sealed partial class MainWindow : Window
         return menu;
     }
 
-    internal ContextMenu BuildSlidePaneContextMenuForTests(int slideIndex) =>
-        BuildSlidePaneContextMenu(slideIndex);
 
     internal bool TryApplySlidePaneContextAction(int slideIndex, SlidePaneActionKind kind)
-    {
-        var action = kind == SlidePaneActionKind.ToggleHiddenSlide
-            ? SlidePanePlanner.BuildHiddenSlideAction(_presentation.Slides, slideIndex)
-            : SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex)
-                .FirstOrDefault(candidate => candidate.Kind == kind);
-
-        return action is not null && SlidePanePlanner.TryApplyAction(Editor, action);
-    }
+        => _workareaSession.ExecuteSlidePaneAction(kind, slideIndex);
 
     private ContextMenu BuildSlidePaneSectionContextMenu(SlidePaneEntry entry)
     {
@@ -10135,8 +6385,6 @@ public sealed partial class MainWindow : Window
         return menu;
     }
 
-    internal ContextMenu BuildSlidePaneSectionContextMenuForTests(SlidePaneEntry entry) =>
-        BuildSlidePaneSectionContextMenu(entry);
 
     private static void AddContextMenuEntries(
         ContextMenu menu,
@@ -10185,7 +6433,10 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed("Slide Pane", ex.Message);
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                UiText.Get("Shell_Command_SlidePane"),
+                ex.Message);
         }
     }
 
@@ -10194,57 +6445,37 @@ public sealed partial class MainWindow : Window
         int slideIndex,
         int sectionIndex)
     {
-        if (command is FreePContextMenuCommand.NewSlide or
-            FreePContextMenuCommand.DuplicateSlide or
-            FreePContextMenuCommand.DeleteSlide or
-            FreePContextMenuCommand.ToggleHiddenSlide)
+        var route = _workareaSession.BuildSlidePaneContextCommandRoute(
+            command,
+            slideIndex,
+            sectionIndex);
+        if (route.SlideAction is { } slideAction)
         {
-            var kind = command switch
-            {
-                FreePContextMenuCommand.NewSlide => SlidePaneActionKind.InsertAfterSlide,
-                FreePContextMenuCommand.DuplicateSlide => SlidePaneActionKind.DuplicateSlide,
-                FreePContextMenuCommand.DeleteSlide => SlidePaneActionKind.DeleteSlide,
-                _ => SlidePaneActionKind.ToggleHiddenSlide,
-            };
-            TryApplySlidePaneContextAction(slideIndex, kind);
+            _workareaSession.ExecuteSlidePaneAction(
+                slideAction.Kind,
+                slideIndex,
+                slideAction.TargetSlideIndex);
             return;
         }
 
-        var sectionActionKind = command switch
-        {
-            FreePContextMenuCommand.AddSection => SlideSectionActionKind.AddSection,
-            FreePContextMenuCommand.RenameSection => SlideSectionActionKind.RenameSection,
-            FreePContextMenuCommand.RemoveSection => SlideSectionActionKind.RemoveSection,
-            FreePContextMenuCommand.RemoveAllSections => SlideSectionActionKind.RemoveAllSections,
-            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
-        };
-        var actions = sectionActionKind == SlideSectionActionKind.AddSection
-            ? SlideSectionPlanner.BuildSlideContextActions(
-                _presentation.Slides,
-                _presentation.Sections,
-                slideIndex)
-            : SlideSectionPlanner.BuildSectionHeaderActions(
-                _presentation.Sections,
-                sectionIndex,
-                slideIndex);
-        await ApplySlideSectionActionAsync(actions.Single(candidate => candidate.Kind == sectionActionKind));
+        if (route.SectionExecution is { } sectionExecution)
+            await ApplySlideSectionActionAsync(sectionExecution);
     }
 
-    private async Task ApplySlideSectionActionAsync(SlideSectionActionPlan action)
+    private async Task ApplySlideSectionActionAsync(SlideSectionActionExecutionPlan execution)
     {
-        var execution = SlideSectionPlanner.BuildExecutionPlan(action);
         if (!execution.IsEnabled)
             return;
 
         string? promptedName = null;
         if (execution.RequiresNamePrompt)
         {
-            promptedName = await PromptSectionNameAsync(execution.PromptTitle, execution.SuggestedName);
+            promptedName = await PromptSectionNameAsync(execution);
             if (promptedName is null)
                 return;
         }
 
-        SlideSectionPlanner.TryApplyAction(Editor, execution, promptedName);
+        _workareaSession.ExecuteSlidePaneSectionAction(execution, promptedName);
     }
 
     private void ToggleSlidePaneSection(string sectionId)
@@ -10252,63 +6483,29 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(sectionId))
             return;
 
-        _slidePaneSessionState = SlidePanePlanner.ToggleSection(_slidePaneSessionState, sectionId);
-
-        RefreshSlidePane();
+        _workareaSession.ToggleSlidePaneSection(sectionId);
     }
 
-    internal bool ToggleSlidePaneSectionForTests(int sectionIndex)
-    {
-        if (sectionIndex < 0 || sectionIndex >= _presentation.Sections.Count)
-            return false;
 
-        ToggleSlidePaneSection(SlidePanePlanner.GetSectionIdentity(_presentation.Sections[sectionIndex], sectionIndex));
-        return true;
-    }
 
-    internal bool TryApplySlideSectionActionForTests(
-        SlideSectionActionKind kind,
-        int slideIndex = -1,
-        int sectionIndex = -1,
-        string? promptedName = null)
-    {
-        var action = kind == SlideSectionActionKind.AddSection
-            ? SlideSectionPlanner.BuildSlideContextActions(
-                    _presentation.Slides,
-                    _presentation.Sections,
-                    slideIndex)
-                .SingleOrDefault(candidate => candidate.Kind == kind)
-            : SlideSectionPlanner.BuildSectionHeaderActions(
-                    _presentation.Sections,
-                    sectionIndex,
-                    slideIndex)
-                .SingleOrDefault(candidate => candidate.Kind == kind);
-
-        if (action is null)
-            return false;
-
-        var execution = SlideSectionPlanner.BuildExecutionPlan(action);
-        return SlideSectionPlanner.TryApplyAction(Editor, execution, promptedName);
-    }
-
-    private async Task<string?> PromptSectionNameAsync(string title, string initialName)
+    private async Task<string?> PromptSectionNameAsync(SlideSectionActionExecutionPlan prompt)
     {
         var textBox = new TextBox
         {
-            Text = initialName,
+            Text = prompt.SuggestedName,
             MinWidth = 260,
             Margin = new Thickness(0, 0, 0, 12),
         };
 
         var ok = new Button
         {
-            Content = "OK",
+            Content = prompt.PromptAcceptText,
             Width = 76,
             Margin = new Thickness(0, 0, 8, 0),
         };
         var cancel = new Button
         {
-            Content = "Cancel",
+            Content = prompt.PromptCancelText,
             Width = 76,
         };
 
@@ -10326,7 +6523,7 @@ public sealed partial class MainWindow : Window
             {
                 new TextBlock
                 {
-                    Text = "Section name:",
+                    Text = prompt.PromptLabel,
                     Margin = new Thickness(0, 0, 0, 4),
                 },
                 textBox,
@@ -10336,7 +6533,7 @@ public sealed partial class MainWindow : Window
 
         var dialog = new Window
         {
-            Title = title,
+            Title = prompt.PromptTitle,
             Content = panel,
             SizeToContent = SizeToContent.WidthAndHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -10371,34 +6568,24 @@ public sealed partial class MainWindow : Window
         if (!point.Properties.IsLeftButtonPressed)
             return;
 
-        _slidePaneSessionState = _slidePaneSessionState with
-        {
-            DragSession = SlidePanePlanner.BeginDragSession(
-                sourceSlideIndex,
-                e.GetPosition(item).Y)
-        };
-        // Match WPF: a left-click selects the thumbnail before a possible drag
-        // starts, so a click-and-hold always operates on the clicked slide.
-        Editor.SelectSlide(sourceSlideIndex);
+        _workareaSession.BeginSlidePaneDrag(sourceSlideIndex, e.GetPosition(item).Y);
     }
 
     private void OnSlidePaneItemPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (sender is not ListBoxItem item || !_slidePaneSessionState.DragSession.IsTracking)
+        if (sender is not ListBoxItem item ||
+            !_workareaSession.SlidePaneSession.Projection.Layout.DragSession.IsTracking)
             return;
 
         var point = e.GetCurrentPoint(item);
         if (!point.Properties.IsLeftButtonPressed)
             return;
 
-        var update = SlidePanePlanner.UpdateDragSession(
-            _slidePaneSessionState.DragSession,
-            GetSlidePaneItemKinds(),
+        var update = _workareaSession.UpdateSlidePaneDrag(
             e.GetPosition(item).Y,
             e.GetPosition(_slidePaneList).Y,
             SlidePanePlanner.DefaultSlideItemHeight);
-        _slidePaneSessionState = _slidePaneSessionState with { DragSession = update.State };
-        if (!_slidePaneSessionState.DragSession.IsDragging)
+        if (!update.State.IsDragging)
             return;
 
         if (update.ShouldCapturePointer)
@@ -10410,12 +6597,8 @@ public sealed partial class MainWindow : Window
 
     private void OnSlidePaneItemPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        var completion = SlidePanePlanner.CompleteDragSession(
-            _slidePaneSessionState.DragSession,
-            _presentation.Slides.Count);
-        _slidePaneSessionState = _slidePaneSessionState with { DragSession = completion.State };
-
-        if (!completion.ShouldReleaseCapture)
+        _workareaSession.CompleteSlidePaneDrag(out var shouldReleaseCapture);
+        if (!shouldReleaseCapture)
         {
             return;
         }
@@ -10423,74 +6606,25 @@ public sealed partial class MainWindow : Window
         e.Pointer.Capture(null);
         HideSlidePaneInsertionIndicator();
 
-        SlidePanePlanner.TryApplyAction(Editor, completion.Action);
         e.Handled = true;
     }
 
     private void OnSlidePaneItemPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
-        _slidePaneSessionState = _slidePaneSessionState with
-        {
-            DragSession = SlidePanePlanner.CancelDragSession(_slidePaneSessionState.DragSession)
-        };
+        _workareaSession.CancelSlidePaneDrag();
         HideSlidePaneInsertionIndicator();
     }
 
     internal bool TryApplySlidePaneMove(int sourceSlideIndex, int targetInsertionIndex)
-    {
-        var action = SlidePanePlanner.PlanMoveAction(
-            _presentation.Slides.Count,
+        => _workareaSession.ExecuteSlidePaneAction(
+            SlidePaneActionKind.MoveSlide,
             sourceSlideIndex,
             targetInsertionIndex);
 
-        return SlidePanePlanner.TryApplyAction(Editor, action);
-    }
 
-    internal SlidePaneDropVisualPlan PreviewSlidePaneDragForTests(
-        int sourceSlideIndex,
-        double startPointerY,
-        double pointerYWithinItem,
-        double pointerYWithinPane)
-    {
-        _slidePaneSessionState = _slidePaneSessionState with
-        {
-            DragSession = SlidePanePlanner.BeginDragSession(sourceSlideIndex, startPointerY)
-        };
-        var update = SlidePanePlanner.UpdateDragSession(
-            _slidePaneSessionState.DragSession,
-            GetSlidePaneItemKinds(),
-            pointerYWithinItem,
-            pointerYWithinPane,
-            SlidePanePlanner.DefaultSlideItemHeight);
-        _slidePaneSessionState = _slidePaneSessionState with { DragSession = update.State };
-        if (update.State.IsDragging)
-            ShowSlidePaneInsertionIndicator(update.DropVisualPlan);
-        else
-            HideSlidePaneInsertionIndicator();
-
-        return update.DropVisualPlan;
-    }
-
-    internal bool CompleteSlidePaneDragForTests()
-    {
-        var completion = SlidePanePlanner.CompleteDragSession(
-            _slidePaneSessionState.DragSession,
-            _presentation.Slides.Count);
-        _slidePaneSessionState = _slidePaneSessionState with { DragSession = completion.State };
-        HideSlidePaneInsertionIndicator();
-        return completion.ShouldReleaseCapture &&
-            SlidePanePlanner.TryApplyAction(Editor, completion.Action);
-    }
 
     internal bool TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind intent)
-    {
-        var action = SlidePanePlanner.BuildKeyboardAction(
-            _presentation.Slides.Count,
-            Editor.CurrentSlideIndex,
-            intent);
-
-        return SlidePanePlanner.TryApplyAction(Editor, action);
-    }
+        => _workareaSession.ExecuteSlidePaneKeyboardAction(intent);
 
     private void OnSlidePaneItemKeyDown(object? sender, KeyEventArgs e)
     {
@@ -10574,18 +6708,10 @@ public sealed partial class MainWindow : Window
         return intent != SlidePaneKeyboardIntentKind.None;
     }
 
-    internal bool ClickSlidePaneNewSlideAffordanceForTests()
-    {
-        var before = _presentation.Slides.Count;
-        var applied = InsertSlideFromSlidePaneAffordance();
-        return applied && _presentation.Slides.Count == before + 1;
-    }
 
     private Button BuildSlidePaneNewSlideButton()
     {
-        var plan = SlidePanePlanner.BuildBottomNewSlideAffordance(
-            _presentation.Slides.Count,
-            Editor.CurrentSlideIndex);
+        var plan = _workareaSession.SlidePaneSession.Projection.BottomAffordance;
         var button = new Button
         {
             Content                    = plan.Text,
@@ -10593,8 +6719,8 @@ public sealed partial class MainWindow : Window
             Padding                    = new Thickness(0, 6),
             HorizontalAlignment        = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Center,
-            Background                 = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
-            Foreground                 = Brushes.White,
+            Background                 = FreePBrushes.Accent,
+            Foreground                 = FreePBrushes.White,
             BorderThickness            = new Thickness(0),
             CornerRadius               = new CornerRadius(3),
             FontSize                   = 12,
@@ -10609,7 +6735,9 @@ public sealed partial class MainWindow : Window
     }
 
     private bool InsertSlideFromSlidePaneAffordance() =>
-        SlidePanePlanner.TryApplyBottomNewSlideAffordance(Editor);
+        _workareaSession.ExecuteSlidePaneAction(
+            SlidePaneActionKind.InsertAfterSlide,
+            _workareaSession.SlidePaneSession.Selection.ActiveSlideIndex);
 
     private void ShowSlidePaneInsertionIndicator(SlidePaneDropVisualPlan plan)
     {
@@ -10632,34 +6760,28 @@ public sealed partial class MainWindow : Window
     private void HideSlidePaneInsertionIndicator() =>
         _slidePaneInsertionIndicator.IsVisible = false;
 
-    private IReadOnlyList<bool> GetSlidePaneItemKinds() =>
-        _slidePaneProjection?.PaneItemIsSlide ?? Array.Empty<bool>();
-
     private static IBrush BrushFromHex(string hex) =>
         new SolidColorBrush(Color.Parse(hex));
 
-    private void SelectSlidePaneItem(int slideIndex)
+    private void SyncSlidePaneSelectionFromSession(bool scrollActiveIntoView = true)
     {
-        var itemIndex = 0;
-        foreach (var item in _slidePaneList.Items)
+        var selection = _workareaSession.SlidePaneSession.Selection;
+        _slidePaneList.SelectedItems?.Clear();
+        foreach (var item in _slidePaneList.Items.OfType<ListBoxItem>())
         {
-            if (item is ListBoxItem { Tag: int itemSlideIndex } && itemSlideIndex == slideIndex)
-            {
-                _slidePaneList.SelectedIndex = itemIndex;
-                return;
-            }
-
-            itemIndex++;
+            if (item.Tag is int slideIndex && selection.IsSelected(slideIndex))
+                _slidePaneList.SelectedItems?.Add(item);
         }
 
-        _slidePaneList.SelectedIndex = -1;
+        if (scrollActiveIntoView && GetCurrentSlidePaneItem() is { } active)
+            active.BringIntoView();
     }
 
     private ListBoxItem? GetCurrentSlidePaneItem() =>
         _slidePaneList.Items
             .OfType<ListBoxItem>()
             .FirstOrDefault(item => item.Tag is int slideIndex &&
-                slideIndex == Editor.CurrentSlideIndex);
+                slideIndex == _workareaSession.SlidePaneSession.Selection.ActiveSlideIndex);
 
     private void RestoreSlidePaneFocusAfterRefresh()
     {
@@ -10672,44 +6794,32 @@ public sealed partial class MainWindow : Window
 
     private void UpdateSlidePaneItemChrome()
     {
+        var projection = _workareaSession.SlidePaneSession.Projection;
         foreach (var item in _slidePaneList.Items.OfType<ListBoxItem>())
         {
             if (item.Tag is not int slideIndex || item.Content is not Border chrome)
                 continue;
 
-            var plan = _slidePaneRenderedThumbnailPlans.FirstOrDefault(p => p.SlideIndex == slideIndex);
-            if (plan is null)
+            var projected = projection.Items.FirstOrDefault(candidate =>
+                candidate.Entry.Kind == SlidePaneEntryKind.Slide &&
+                candidate.Entry.SlideIndex == slideIndex);
+            if (projected?.Thumbnail is not { } plan)
                 continue;
 
-            var selected = slideIndex == Editor.CurrentSlideIndex;
-            chrome.Background = BrushFromHex(selected ? plan.ItemSelectedBackgroundHex : plan.ItemNormalBackgroundHex);
-            chrome.BorderBrush = BrushFromHex(selected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex);
-            chrome.BorderThickness = new Thickness(selected ? plan.SelectedBorderThickness : plan.NormalBorderThickness);
+            chrome.Background = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBackgroundHex : plan.ItemNormalBackgroundHex);
+            chrome.BorderBrush = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex);
+            chrome.BorderThickness = new Thickness(plan.IsSelected ? plan.SelectedBorderThickness : plan.NormalBorderThickness);
             AutomationProperties.SetName(item, plan.AccessibleName);
             PresentationPaneAccessibilityAdapter.ApplyItem(
                 item,
-                PresentationPaneAccessibilityPlanner.SlidePaneId,
-                GetAccessibilityOrdinalForSlide(slideIndex),
-                plan.AccessibleName,
-                selected ? "Selected" : "Not selected",
-                $"Slide{slideIndex + 1}");
+                PresentationPaneAccessibilityPlanner.PlanSlideItem(
+                    projected.AccessibilityOrdinal,
+                    slideIndex,
+                    plan.AccessibleName,
+                    plan.IsSelected,
+                    plan.IsActive));
         }
         RefreshPaneAccessibilityMetadata();
-    }
-
-    private int GetAccessibilityOrdinalForSlide(int slideIndex)
-    {
-        if (_slidePaneProjection is null)
-            return slideIndex;
-
-        for (var ordinal = 0; ordinal < _slidePaneProjection.Entries.Count; ordinal++)
-        {
-            var entry = _slidePaneProjection.Entries[ordinal];
-            if (entry.Kind == SlidePaneEntryKind.Slide && entry.SlideIndex == slideIndex)
-                return ordinal;
-        }
-
-        return slideIndex;
     }
 
     private void OnSlidePaneSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -10717,13 +6827,20 @@ public sealed partial class MainWindow : Window
         if (_slidePaneRefreshing)
             return;
 
-        if (_slidePaneList.SelectedItem is not ListBoxItem { Tag: int idx })
+        var selected = _slidePaneList.SelectedItems?
+            .OfType<ListBoxItem>()
+            .Select(item => item.Tag)
+            .OfType<int>()
+            .ToArray() ?? [];
+        var active = e.AddedItems
+            .OfType<ListBoxItem>()
+            .Select(item => item.Tag)
+            .OfType<int>()
+            .LastOrDefault(_workareaSession.SlidePaneSession.Selection.ActiveSlideIndex);
+        if (selected.Length == 0 || active < 0)
             return;
 
-        if (idx < 0 || idx >= _presentation.Slides.Count)
-            return;
-
-        Editor.SelectSlide(idx);
+        _workareaSession.ApplySlidePaneNativeSelection(selected, active);
     }
 
     // ── Notes pane ─────────────────────────────────────────────────────────────
@@ -10733,10 +6850,9 @@ public sealed partial class MainWindow : Window
         _notesRefreshing = true;
         try
         {
-            LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
-                _presentation,
-                Editor.CurrentSlideIndex);
-            _notesBox.Text = FormatNotesText(Editor.CurrentSlideNotes);
+            var plan = _notesPaneSession.BuildProjection();
+            LastNotesPagePreviewPlan = plan.Preview;
+            _notesBox.Text = plan.Text;
         }
         finally
         {
@@ -10749,15 +6865,11 @@ public sealed partial class MainWindow : Window
     {
         if (_notesRefreshing)
             return;
-        _startupDirtyTrace?.Record("notes-text-changed", _fileWorkflow);
-        var text = _notesBox.Text ?? string.Empty;
-        if (string.Equals(text, FormatNotesText(Editor.CurrentSlideNotes), StringComparison.Ordinal))
+        RecordStartupObservation("notes-text-changed");
+        var result = _notesPaneSession.ApplyText(_notesBox.Text);
+        LastNotesPagePreviewPlan = result.Plan.Preview;
+        if (!result.Changed)
             return;
-
-        Editor.SetCurrentSlideNotesText(text);
-        LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
-            _presentation,
-            Editor.CurrentSlideIndex);
         RefreshPaneAccessibilityMetadata();
     }
 
@@ -10765,9 +6877,11 @@ public sealed partial class MainWindow : Window
 
     private void OnNotesKeyDown(object? sender, KeyEventArgs e)
     {
-        if (_notesRefreshing
-            || (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0)
+        if (_notesRefreshing ||
+            (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0)
+        {
             return;
+        }
 
         var kind = e.Key switch
         {
@@ -10820,50 +6934,11 @@ public sealed partial class MainWindow : Window
             _notesBox.Text);
     }
 
-    private void OnEditorChanged()
+    private void SyncSlidePaneSelectionFromEditor()
     {
-        _startupDirtyTrace?.Record("editor-changed-before-mark", _fileWorkflow);
-        _fileWorkflow.MarkDirty();
-        _startupDirtyTrace?.Record("editor-changed", _fileWorkflow);
-        SyncRibbonCommandStates();
-        RefreshSlidePane();
-        RefreshCanvas(); // refresh canvas so shape moves/resizes are reflected immediately
-        RefreshNotesPane();
-        RefreshReviewWorkflowPlans();
-        if (IsSmartArtTextPaneVisible)
-            ShowSmartArtTextPane();
-        RefreshVisibleAnimationPane(_selectedAnimationIndex);
-        _selectionPane?.Refresh();
-        RefreshPaneAccessibilityMetadata();
-        UpdateStatus();
-    }
-
-    private void OnCurrentSlideChanged(object? sender, EventArgs e)
-    {
-        _startupDirtyTrace?.Record("current-slide-changed", _fileWorkflow);
-        _slidePaneSessionState = SlidePanePlanner.SetSelectedSlide(
-            _slidePaneSessionState,
-            Editor.CurrentSlideIndex);
-        _reviewWorkflowSession.SelectedCommentIndex = null;
-        _selectedAnimationIndex = -1;
-        _selectedMediaCaptionTrackIndex = null;
-        SyncRibbonCommandStates();
-
-        // Sync slide-pane selection without re-triggering OnSlidePaneSelectionChanged.
         _slidePaneRefreshing = true;
-        try { SelectSlidePaneItem(Editor.CurrentSlideIndex); }
+        try { SyncSlidePaneSelectionFromSession(); }
         finally { _slidePaneRefreshing = false; }
-
-        UpdateSlidePaneItemChrome();
-        RefreshCanvas();
-        RefreshNotesPane();
-        RefreshReviewWorkflowPlans();
-        RefreshVisibleReviewCommentsPane();
-        RefreshVisibleMediaCaptionPaneFromFields();
-        RefreshVisibleAnimationPane();
-        _selectionPane?.Refresh();
-        RefreshPaneAccessibilityMetadata();
-        UpdateStatus();
     }
 
     private void SyncRibbonCommandStates()
@@ -10878,33 +6953,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnEditorSelectionChanged(object? sender, EventArgs e)
-    {
-        SyncRibbonCommandStates();
-        RefreshAltTextRequestPlan();
-        RefreshReadingOrderPlan();
-        if (IsAltTextPaneVisible)
-            ShowAltTextPane();
-        if (IsSmartArtTextPaneVisible)
-            ShowSmartArtTextPane();
-        RefreshVisibleMediaCaptionPaneFromFields();
-        RefreshVisibleAnimationPane();
-        _selectionPane?.Refresh();
-        RefreshPaneAccessibilityMetadata();
-    }
-
-    private void OnEditorActiveTableCellChanged(object? sender, EventArgs e) =>
-        SyncRibbonCommandStates();
-
-    private static string FormatNotesText(TextBody? notes) => notes is null
-        ? string.Empty
-        : string.Join(
-            Environment.NewLine,
-            notes.Paragraphs.Select(p => string.Concat(p.Runs.Select(r => r.Text))));
-
     private void OnFileWorkflowChanged()
     {
-        _startupDirtyTrace?.Record("file-workflow-changed", _fileWorkflow);
+        RecordStartupObservation("file-workflow-changed");
         UpdateStatus();
     }
 
@@ -10912,12 +6963,9 @@ public sealed partial class MainWindow : Window
 
     private void UpdateStatus()
     {
-        var count   = _presentation.Slides.Count;
-        var current = Editor.CurrentSlideIndex;
-        _statusText.Text = SisterAppStatusBarTextPlanner.FormatPresentationSlideStatus(
-            current,
-            count,
-            ResolveDataFolderLabel());
+        _statusText.Text = _workareaSession
+            .BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel())
+            .Text;
     }
 
     // ── Keyboard shortcuts ─────────────────────────────────────────────────────
@@ -10938,7 +6986,7 @@ public sealed partial class MainWindow : Window
             FreePKeyboardShortcutCatalog.TryDispatch(
                 key,
                 ToKeyboardModifiers(e.KeyModifiers),
-                ExecuteKeyboardCommand))
+                _workareaSession.ExecuteCommand))
         {
             e.Handled = true;
             return;
@@ -10997,73 +7045,40 @@ public sealed partial class MainWindow : Window
         return false;
     }
 
-    private void ExecuteKeyboardCommand(FreePKeyboardCommand command)
-    {
-        switch (command)
-        {
-            case FreePKeyboardCommand.NewPresentation: FileNew(); break;
-            case FreePKeyboardCommand.OpenPresentation: _ = FileOpenAsync(); break;
-            case FreePKeyboardCommand.SavePresentation: _ = FileSaveAsync(); break;
-            case FreePKeyboardCommand.SavePresentationAs: _ = FileSaveAsAsync(); break;
-            case FreePKeyboardCommand.PrintPresentation: ShowPrintBackstage(); break;
-            case FreePKeyboardCommand.Undo: Editor.Undo(); break;
-            case FreePKeyboardCommand.Redo: Editor.Redo(); break;
-            case FreePKeyboardCommand.DeleteSelectedShapes: Editor.DeleteSelected(); break;
-            case FreePKeyboardCommand.DuplicateCurrentSlide: Editor.DuplicateCurrentSlide(); break;
-            case FreePKeyboardCommand.StartSlideShowFromBeginning: StartSlideShow(fromStart: true); break;
-            case FreePKeyboardCommand.StartSlideShowFromCurrentSlide: StartSlideShow(fromStart: false); break;
-            case FreePKeyboardCommand.Copy:
-                QueueClipboardCopy();
-                break;
-            case FreePKeyboardCommand.Cut:
-                QueueClipboardCut();
-                break;
-            case FreePKeyboardCommand.Paste:
-                QueueClipboardPaste();
-                break;
-            case FreePKeyboardCommand.Find: OpenFindDialog(); break;
-            case FreePKeyboardCommand.Replace: OpenFindReplaceDialog(); break;
-            case FreePKeyboardCommand.SelectAll: Editor.SelectAll(); break;
-            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
-        }
-    }
-
     private void QueueClipboardCopy()
     {
-        if (TryQueueActiveRichClipboard(static editor => editor.CopySelectionAsync(), "Copy"))
+        var command = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCopyCommand);
+        if (TryQueueActiveRichClipboard(static editor => editor.CopySelectionAsync(), command))
             return;
 
         var request = _clipboardService.PrepareWrite(Editor);
         QueueClipboardOperation(async () =>
             ReportClipboardWriteFailureIfAny(
-                await _clipboardService.ExecuteCopyAsync(request), "Copy", _clipboardService.LastWriteFailureMessage));
+                await _clipboardService.ExecuteCopyAsync(request),
+                command,
+                _clipboardService.LastWriteFailureMessage));
     }
 
     private void QueueClipboardCut()
     {
-        if (TryQueueActiveRichClipboard(static editor => editor.CutSelectionAsync(), "Cut"))
+        var command = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCutCommand);
+        if (TryQueueActiveRichClipboard(static editor => editor.CutSelectionAsync(), command))
             return;
 
         var request = _clipboardService.PrepareWrite(Editor);
         QueueClipboardOperation(async () =>
             ReportClipboardWriteFailureIfAny(
-                await _clipboardService.ExecuteCutAsync(request), "Cut", _clipboardService.LastWriteFailureMessage));
+                await _clipboardService.ExecuteCutAsync(request),
+                command,
+                _clipboardService.LastWriteFailureMessage));
     }
 
-    /// <summary>
-    /// Copy/Cut used to swallow OS-clipboard write failures entirely (<see
-    /// cref="AvaloniaPresentationClipboardService.LastWriteFailureMessage"/> and <see
-    /// cref="AvaloniaInCanvasTextEditor.LastWriteFailureMessage"/> went unread), leaving the user
-    /// believing content was copied when it was not -- both for whole-shape selection and for
-    /// in-place shape/table-cell text editing. Surface it in the status bar the same way other
-    /// command failures already are (e.g. Insert Picture).
-    /// </summary>
     private void ReportClipboardWriteFailureIfAny(bool succeeded, string command, string? errorMessage)
     {
         if (succeeded || errorMessage is not { } error)
             return;
 
-        _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(command, error);
+        _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, command, error);
     }
 
     private void QueueClipboardPaste()
@@ -11088,7 +7103,12 @@ public sealed partial class MainWindow : Window
         {
             var succeeded = await operation(textEditor);
             if (failureCommandName is not null)
-                ReportClipboardWriteFailureIfAny(succeeded, failureCommandName, textEditor.LastWriteFailureMessage);
+            {
+                ReportClipboardWriteFailureIfAny(
+                    succeeded,
+                    failureCommandName,
+                    textEditor.LastWriteFailureMessage);
+            }
         });
         return true;
     }
@@ -11096,46 +7116,25 @@ public sealed partial class MainWindow : Window
     private void QueueClipboardOperation(Func<Task> operation)
     {
         ArgumentNullException.ThrowIfNull(operation);
-        _clipboardOperation = RunClipboardOperationAsync(_clipboardOperation, operation);
-    }
-
-    private static async Task RunClipboardOperationAsync(Task preceding, Func<Task> operation)
-    {
-        try
-        {
-            await preceding;
-        }
-        catch
-        {
-            // A failed adapter operation must not prevent later clipboard commands.
-        }
-
-        await operation();
+        _clipboardOperationQueue.Enqueue(operation);
     }
 
     private bool TryHandleRibbonKeyTips(KeyEventArgs args)
     {
-        if (args.Key is Key.LeftAlt or Key.RightAlt ||
-            args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None)
+        var transition = AvaloniaRibbonKeyTipInputPlanner.ResolveModeTransition(
+            args.Key,
+            args.KeyModifiers,
+            _ribbonKeyTipsVisible);
+        if (transition.ModeVisible is { } modeVisible)
+            SetRibbonKeyTipsVisible(modeVisible);
+        if (!transition.ShouldRouteToken)
         {
-            SetRibbonKeyTipsVisible(!_ribbonKeyTipsVisible);
-            args.Handled = true;
-            return true;
+            if (transition.Handled)
+                args.Handled = true;
+            return transition.Handled;
         }
 
-        if (!_ribbonKeyTipsVisible)
-            return false;
-
-        if (args.Key == Key.Escape)
-        {
-            SetRibbonKeyTipsVisible(false);
-            args.Handled = true;
-            return true;
-        }
-
-        var token = ToRibbonKeyTipToken(args.Key);
-        if (token is null)
-            return false;
+        var token = transition.Token!;
 
         if (_ribbonKeyTipTabId is null)
         {
@@ -11528,12 +7527,16 @@ public sealed partial class MainWindow : Window
             ? tabId
             : null;
 
-    private static bool KeyTipEquals(string? keyTip, string sequence)
-        => string.Equals(keyTip?.Trim(), sequence, StringComparison.OrdinalIgnoreCase);
+    private static bool KeyTipEquals(string? keyTip, string sequence) =>
+        string.Equals(
+            RibbonKeyTipText.Normalize(keyTip),
+            RibbonKeyTipText.Normalize(sequence),
+            StringComparison.Ordinal);
 
-    private static bool KeyTipStartsWith(string? keyTip, string sequence)
-        => !string.IsNullOrWhiteSpace(keyTip) &&
-           keyTip.Trim().StartsWith(sequence, StringComparison.OrdinalIgnoreCase);
+    private static bool KeyTipStartsWith(string? keyTip, string sequence) =>
+        RibbonKeyTipText.Normalize(keyTip) is { } normalizedKeyTip &&
+        RibbonKeyTipText.Normalize(sequence) is { } normalizedSequence &&
+        normalizedKeyTip.StartsWith(normalizedSequence, StringComparison.Ordinal);
 
     private static bool TryMapKeyboardKey(Key key, out FreePKeyboardKey mapped)
     {
@@ -11577,16 +7580,6 @@ public sealed partial class MainWindow : Window
         return result;
     }
 
-    private static string? ToRibbonKeyTipToken(Key key)
-    {
-        var name = key.ToString();
-        if (name.Length == 1 && char.IsAsciiLetterOrDigit(name[0]))
-            return name.ToUpperInvariant();
-        if (name.Length == 2 && name[0] == 'D' && char.IsAsciiDigit(name[1]))
-            return name[1].ToString();
-        return null;
-    }
-
     // ── Slide show launch ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -11607,32 +7600,22 @@ public sealed partial class MainWindow : Window
         FreeP.App.Compositor.SlideShowTimingIntent timingIntent,
         int? animationStartIndex = null)
     {
-        if (_presentation.Slides.Count == 0)
-            return; // nothing to show
-
-        var choiceId = fromStart
-            ? SlideShowCustomShowPlanner.FullPresentationChoiceId
-            : SlideShowCustomShowPlanner.FromCurrentSlideChoiceId;
-        if (!SlideShowCustomShowPlanner.TryBuildRouteForLaunchChoice(
-                _presentation,
-                choiceId,
-                Editor.CurrentSlideIndex,
-                out var route))
-        {
+        if (!_customShowSession.TryBuildPlaybackLaunch(
+                fromStart,
+                animationStartIndex,
+                _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
+                out var launchPlan))
             return;
-        }
 
-        if (animationStartIndex is int selectedAnimationIndex)
-            route = route.WithAnimationStartIndex(selectedAnimationIndex);
-
-        var selectedCaption = GetSelectedCaptionPlaybackSelection();
+        var selectedCaption = launchPlan.CaptionSelection;
         var slideShow = new SlideShowWindow(
             _presentation,
-            route,
+            launchPlan.Route,
             Editor.SetSlideNotesText,
             selectedCaption?.SlideIndex,
             selectedCaption?.ShapeId,
             selectedCaption?.TrackIndex);
+        ConfigureSlideShowObserver(slideShow);
         if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
             slideShow.SetPresenterTimingIntent(timingIntent);
 
@@ -11649,89 +7632,35 @@ public sealed partial class MainWindow : Window
             slideShow.Show();
     }
 
-    private (int SlideIndex, uint ShapeId, int TrackIndex)? GetSelectedCaptionPlaybackSelection()
-    {
-        var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
-            Editor.CurrentSlide,
-            Editor.SelectedShapeIds);
-        return mediaShape is not null && _selectedMediaCaptionTrackIndex is int trackIndex
-            ? (Editor.CurrentSlideIndex, mediaShape.Id, trackIndex)
-            : null;
-    }
-
     internal bool TryBuildCustomSlideShowRoute(
         string? customShowName,
         int startIndex,
         out SlideShowPlaybackRoute route) =>
-        SlideShowCustomShowPlanner.TryBuildNamedCustomShowRoute(
-            _presentation,
-            customShowName,
-            startIndex,
-            out route);
+        _customShowSession.TryBuildNamedRoute(customShowName, startIndex, out route);
 
     internal SlideShowLaunchPlan BuildSlideShowLaunchPlan() =>
-        SlideShowCustomShowPlanner.BuildLaunchPlan(_presentation, Editor.CurrentSlideIndex);
-
-    internal SlideShowCustomShowAuthoringPlan BuildCustomShowAuthoringPlan() =>
-        SlideShowCustomShowPlanner.BuildAuthoringPlan(_presentation);
-
-    internal SlideShowCustomShowSessionPlan BuildCustomShowSessionPlan(
-        SlideShowCustomShowSessionState state) =>
-        SlideShowCustomShowSessionPlanner.BuildPlan(
-            BuildCustomShowAuthoringPlan(),
-            state);
-
-    internal SlideShowCustomShowMutationResult CreateCustomShow(
-        string? name,
-        IEnumerable<string?> slideIds) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.CreateCustomShow(presentation, name, slideIds));
-
-    internal SlideShowCustomShowMutationResult RenameCustomShow(
-        int customShowIndex,
-        string? name) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.RenameCustomShow(presentation, customShowIndex, name));
-
-    internal SlideShowCustomShowMutationResult DeleteCustomShow(int customShowIndex) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.DeleteCustomShow(presentation, customShowIndex));
-
-    internal SlideShowCustomShowMutationResult UpdateCustomShowSlides(
-        int customShowIndex,
-        IEnumerable<string?> slideIds) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.UpdateCustomShowSlides(presentation, customShowIndex, slideIds));
-
-    internal SlideShowCustomShowMutationResult MoveCustomShowSlide(
-        int customShowIndex,
-        int sourceSlideIndex,
-        string? sourceSlideId,
-        int targetSlideIndex) =>
-        Editor.ApplyCustomShowMutation(presentation =>
-            SlideShowCustomShowPlanner.MoveCustomShowSlide(
-                presentation,
-                customShowIndex,
-                sourceSlideIndex,
-                sourceSlideId,
-                targetSlideIndex));
+        _customShowSession.BuildLaunchPlan();
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
     {
-        if (!TryBuildCustomSlideShowRoute(customShowName, startIndex, out var route) ||
-            route.SlideCount == 0)
+        if (!_customShowSession.TryBuildNamedPlaybackLaunch(
+                customShowName,
+                startIndex,
+                _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
+                out var launchPlan))
         {
             return false;
         }
 
-        var selectedCaption = GetSelectedCaptionPlaybackSelection();
+        var selectedCaption = launchPlan.CaptionSelection;
         var slideShow = new SlideShowWindow(
             _presentation,
-            route,
+            launchPlan.Route,
             Editor.SetSlideNotesText,
             selectedCaption?.SlideIndex,
             selectedCaption?.ShapeId,
             selectedCaption?.TrackIndex);
+        ConfigureSlideShowObserver(slideShow);
         // A named custom show is still a separate playback window. Restore the
         // editor's focus when it closes just like the normal slideshow route.
         slideShow.Closed += (_, _) => RestoreOwnerFocus();
@@ -11744,112 +7673,15 @@ public sealed partial class MainWindow : Window
     }
 
     internal void OpenCustomShowDialog() =>
-        RunGuarded(OpenCustomShowDialogAsync, "Custom Show");
+        RunGuarded(OpenCustomShowDialogAsync, UiText.Get("Shell_Command_CustomShow"));
 
-    internal Task OpenCustomShowDialogAsyncForTests() =>
-        OpenCustomShowDialogAsync();
 
     private async Task OpenCustomShowDialogAsync()
     {
-        var dialog = new CustomShowDialog(this);
+        var dialog = new CustomShowDialog(
+            _customShowSession,
+            name => TryStartCustomSlideShow(name));
         await dialog.ShowDialog(this);
     }
 
-    private sealed class TableCellRouteRibbonCommand(
-        Func<bool> execute,
-        Func<bool> canExecute) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (canExecute())
-                execute();
-        }
-
-        public RibbonCommandState GetState() => new(IsEnabled: canExecute());
-    }
-
-    private sealed class EditPointsToggleCommand(SlideCanvas canvas) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            canvas.SetEditPointsMode(
-                PresentationEditPointsModePlanner.BuildTogglePlan(canvas.EditPointsEnabled).NextIsEnabled);
-
-        public RibbonCommandState GetState() => new(
-            IsEnabled: true,
-            IsChecked: canvas.EditPointsEnabled);
-    }
-
-    private sealed class TransitionAdvanceOnClickToggleCommand(
-        EditingSession editor,
-        PresentationTransitionCommandPlan plan) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            PresentationTransitionCommandPlanner.TryApply(
-                editor,
-                plan,
-                context.SelectedValue);
-
-        public RibbonCommandState GetState() => new(
-            IsEnabled: true,
-            IsChecked: PresentationTransitionCommandPlanner.IsAdvanceOnClickChecked(
-                editor.CurrentSlideTransition));
-    }
-
-    private sealed class AnimationPaneToggleCommand : IRibbonStatefulCommand
-    {
-        private readonly EditingSession _editor;
-        private readonly PresentationAnimationCommandPlan _plan;
-        private readonly Func<bool> _isPaneVisible;
-        private readonly Action<PresentationAnimationCommandPlan> _togglePane;
-
-        public AnimationPaneToggleCommand(
-            EditingSession editor,
-            PresentationAnimationCommandPlan plan,
-            Func<bool> isPaneVisible,
-            Action<PresentationAnimationCommandPlan> togglePane)
-        {
-            _editor = editor;
-            _plan = plan;
-            _isPaneVisible = isPaneVisible;
-            _togglePane = togglePane;
-        }
-
-        public void Execute(RibbonCommandContext context) =>
-            PresentationAnimationCommandPlanner.TryApply(
-                _editor,
-                _plan,
-                context.SelectedValue,
-                _togglePane);
-
-        public RibbonCommandState GetState() => new(
-            IsEnabled: true,
-            IsChecked: _isPaneVisible());
-    }
-
-    private sealed class ViewShowToggleCommand : IRibbonStatefulCommand
-    {
-        private readonly PresentationViewShowCommandPlan _plan;
-        private readonly Func<PresentationViewShowState> _getState;
-        private readonly Action<PresentationViewShowState> _applyState;
-
-        public ViewShowToggleCommand(
-            PresentationViewShowCommandPlan plan,
-            Func<PresentationViewShowState> getState,
-            Action<PresentationViewShowState> applyState)
-        {
-            _plan = plan;
-            _getState = getState;
-            _applyState = applyState;
-        }
-
-        public void Execute(RibbonCommandContext context)
-        {
-            var result = PresentationViewShowPlanner.Toggle(_getState(), _plan);
-            _applyState(result.State);
-        }
-
-        public RibbonCommandState GetState() => new(
-            IsEnabled: true,
-            IsChecked: PresentationViewShowPlanner.IsChecked(_getState(), _plan.Kind));
-    }
 }

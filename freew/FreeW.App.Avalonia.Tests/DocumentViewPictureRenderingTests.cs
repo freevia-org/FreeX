@@ -87,7 +87,7 @@ public sealed class DocumentViewPictureRenderingTests
         var source = File.ReadAllText(FindRepositoryFile(
             "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
 
-        source.Should().Contain("foreach (var (rect, bitmap, model, reflectionPreset, _, _) in _images)");
+        source.Should().Contain("foreach (var (rect, bitmap, model, reflectionPreset, _) in _images)");
         source.Should().Contain("DrawFloatingImage(context, rect, bitmap, model, reflectionPreset);");
         source.Should().Contain("DrawFloatingImage(context, image.Rect, image.Image, image.Model, image.ReflectionPreset);");
         source.Should().Contain("DrawFloatingImage(context, rect, DecodeRenderedImage(image), image, image.ReflectionPreset);");
@@ -101,17 +101,6 @@ public sealed class DocumentViewPictureRenderingTests
         actual.Y.Should().BeApproximately(expected.Y, 0.001);
     }
 
-    private static string FindRepositoryFile(params string[] relativeSegments)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine([directory.FullName, .. relativeSegments]);
-            if (File.Exists(candidate))
-                return candidate;
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not locate {Path.Combine(relativeSegments)} from test output.");
-    }
+    private static string FindRepositoryFile(params string[] relativeSegments) =>
+        TestWorkspaceFileLocator.Find(relativeSegments);
 }

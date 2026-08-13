@@ -1,3 +1,5 @@
+using Free.Shared.IO;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -226,20 +228,10 @@ public static class PresentationPictureBulletAuthoringPlanner
         paragraph.BulletSuppressed = false;
     }
 
-    public static string InferContentType(string? fileName)
-    {
-        var extension = (Path.GetExtension(fileName) ?? string.Empty).ToLowerInvariant();
-        return extension switch
-        {
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".gif" => "image/gif",
-            ".bmp" => "image/bmp",
-            ".svg" => "image/svg+xml",
-            ".wmf" => "image/x-wmf",
-            ".emf" => "image/x-emf",
-            _ => DefaultContentType,
-        };
-    }
+    public static string InferContentType(string? fileName) =>
+        OpcMediaTypes.GetContentTypeForFileNameOrExtension(
+            fileName,
+            OpcMediaContentTypeProfile.PresentationListGalleryPicture);
 
     private static ImagePart CloneImagePart(ImagePart source) =>
         new()

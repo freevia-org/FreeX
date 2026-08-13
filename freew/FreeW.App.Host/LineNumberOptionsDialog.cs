@@ -14,6 +14,7 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class LineNumberOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly LineNumberOptionsDialogSession _session;
     private readonly TextBox _startAtBox;
     private readonly TextBox _countByBox;
     private readonly ComboBox _modeBox;
@@ -21,26 +22,32 @@ internal sealed class LineNumberOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private LineNumberOptionsDialog(Window? owner, int startAt, int countBy, LineNumberMode mode)
     {
+        var surface = LineNumberOptionsDialogPlanner.Surface;
+        _session = new LineNumberOptionsDialogSession(
+            startAt,
+            countBy,
+            mode,
+            CultureInfo.CurrentCulture);
         Owner = owner;
-        Title = "Line Numbering Options";
+        Title = surface.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var state = LineNumberOptionsDialogPlanner.BuildInitialState(
-            startAt,
-            countBy,
-            mode,
-            CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
 
         _startAtBox = new TextBox { Text = state.StartAtText, MinWidth = 80 };
         _countByBox = new TextBox { Text = state.CountByText, MinWidth = 80 };
 
         _modeBox = new ComboBox { MinWidth = 140 };
-        foreach (var label in LineNumberOptionsDialogPlanner.ModeLabels) _modeBox.Items.Add(label);
+        foreach (var label in _session.ModeLabels) _modeBox.Items.Add(label);
         _modeBox.SelectedIndex = state.ModeIndex;
+        WpfDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(_startAtBox, surface.Field(LineNumberOptionsDialogField.StartAt));
+        WpfDialogSurfaceSemantics.Apply(_countByBox, surface.Field(LineNumberOptionsDialogField.CountBy));
+        WpfDialogSurfaceSemantics.Apply(_modeBox, surface.Field(LineNumberOptionsDialogField.Numbering));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -53,9 +60,9 @@ internal sealed class LineNumberOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             Grid.SetRow(el, row); Grid.SetColumn(el, col); g.Children.Add(el);
         }
 
-        Place(grid, Lbl("Start at:"),    0, 0); Place(grid, _startAtBox, 0, 1);
-        Place(grid, Lbl("Count by:"),    1, 0); Place(grid, _countByBox, 1, 1);
-        Place(grid, Lbl("Numbering:"),   2, 0); Place(grid, _modeBox, 2, 1);
+        Place(grid, Lbl(surface.Field(LineNumberOptionsDialogField.StartAt).Label), 0, 0); Place(grid, _startAtBox, 0, 1);
+        Place(grid, Lbl(surface.Field(LineNumberOptionsDialogField.CountBy).Label), 1, 0); Place(grid, _countByBox, 1, 1);
+        Place(grid, Lbl(surface.Field(LineNumberOptionsDialogField.Numbering).Label), 2, 0); Place(grid, _modeBox, 2, 1);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Place(grid, buttons, 3, 1);
@@ -74,17 +81,14 @@ internal sealed class LineNumberOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             _countByBox.Text,
             _modeBox.SelectedIndex);
 
-        if (!LineNumberOptionsDialogPlanner.TryBuildResult(
-                input,
-                CultureInfo.CurrentCulture,
-                out var result,
-                out var errorMessage))
+        var acceptance = _session.PlanAcceptance(input);
+        if (!acceptance.IsAccepted)
         {
-            DialogMessageHelper.ShowWarning(this, errorMessage ?? LineNumberOptionsDialogPlanner.StartAtValidationMessage);
+            DialogMessageHelper.ShowWarning(this, acceptance.ValidationMessage);
             return;
         }
 
-        _result = result;
+        _result = acceptance.Result;
         Close();
     }
 

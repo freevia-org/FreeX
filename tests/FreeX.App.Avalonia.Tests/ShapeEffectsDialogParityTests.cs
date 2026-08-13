@@ -9,7 +9,7 @@ public sealed class ShapeEffectsDialogParityTests
     [Fact]
     public void Parity_fixture_seeds_the_Wpf_Shadow_state_through_the_shared_command()
     {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var source = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         source.Should().Contain("new SetDrawingShapeEffectCommand(");
         source.Should().Contain("DrawingShapeEffectPreset.Shadow));");
@@ -29,15 +29,6 @@ public sealed class ShapeEffectsDialogParityTests
             .DescriptionKey.Should().Be("ShapeEffects_ShadowDescription");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

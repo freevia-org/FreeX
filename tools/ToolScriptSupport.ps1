@@ -48,13 +48,88 @@ function Resolve-ToolRepoPath {
     return Resolve-ToolFullPath -Path $Path -BasePath $fullRepoRoot
 }
 
+function New-ToolTemporaryDirectory {
+    param([Parameter(Mandatory = $true)][string]$Prefix)
+
+    if ([string]::IsNullOrWhiteSpace($Prefix) -or
+        $Prefix.IndexOfAny([System.IO.Path]::GetInvalidFileNameChars()) -ge 0) {
+        throw "Temporary-directory prefix must be a valid file-name prefix."
+    }
+
+    $path = Join-Path ([System.IO.Path]::GetTempPath()) ($Prefix + [System.IO.Path]::GetRandomFileName())
+    New-Item -ItemType Directory -Path $path -ErrorAction Stop | Out-Null
+    return [System.IO.Path]::GetFullPath($path)
+}
+
+function Remove-ToolTemporaryDirectory {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [ValidateRange(1, 100)][int]$MaximumAttempts = 20,
+        [ValidateRange(0, 5000)][int]$RetryDelayMilliseconds = 50
+    )
+
+    $resolvedPath = Resolve-ToolFullPath -Path $Path
+    $temporaryRoot = Resolve-ToolFullPath -Path ([System.IO.Path]::GetTempPath())
+    $rootPrefix = $temporaryRoot.TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq [char]92) {
+        [System.StringComparison]::OrdinalIgnoreCase
+    }
+    else {
+        [System.StringComparison]::Ordinal
+    }
+    if (-not $resolvedPath.StartsWith($rootPrefix, $comparison)) {
+        throw "Refusing to remove a temporary directory outside '$temporaryRoot': $resolvedPath"
+    }
+
+    for ($attempt = 1; $attempt -le $MaximumAttempts; $attempt++) {
+        try {
+            if (Test-Path -LiteralPath $resolvedPath) {
+                Remove-Item -LiteralPath $resolvedPath -Recurse -Force -ErrorAction Stop
+            }
+            return
+        }
+        catch [System.IO.IOException], [System.UnauthorizedAccessException] {
+            if ($attempt -eq $MaximumAttempts) {
+                throw
+            }
+            Start-Sleep -Milliseconds $RetryDelayMilliseconds
+        }
+    }
+}
+
+function Add-ToolValidationError {
+    param(
+        [Parameter(Mandatory = $true)]$Errors,
+        [Parameter(Mandatory = $true)][string]$Message,
+        [string]$GitHubTitle,
+        [switch]$SuppressWriteError
+    )
+
+    [void]$Errors.Add($Message)
+    if ($env:GITHUB_ACTIONS -eq "true" -and -not [string]::IsNullOrWhiteSpace($GitHubTitle)) {
+        $escaped = $Message.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
+        Write-Host "::error title=${GitHubTitle}::$escaped"
+    }
+    if (-not $SuppressWriteError) {
+        Write-Error $Message -ErrorAction Continue
+    }
+}
+
 function Invoke-ToolProcess {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
         [string[]]$Arguments = @(),
-        [Parameter(Mandatory = $true)][string]$FailureMessage,
-        [string]$WorkingDirectory
+        [string]$FailureMessage,
+        [string]$WorkingDirectory,
+        [switch]$OutputToHost,
+        [string]$OutputPath
     )
+
+    if ($OutputToHost -and -not [string]::IsNullOrWhiteSpace($OutputPath)) {
+        throw "OutputToHost and OutputPath cannot be used together."
+    }
 
     $previousLocation = $null
     try {
@@ -63,7 +138,15 @@ function Invoke-ToolProcess {
             Set-Location -LiteralPath (Resolve-ToolFullPath -Path $WorkingDirectory)
         }
 
-        & $FilePath @Arguments
+        if ($OutputToHost) {
+            & $FilePath @Arguments | Out-Host
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
+            & $FilePath @Arguments 2>&1 | Tee-Object -FilePath $OutputPath
+        }
+        else {
+            & $FilePath @Arguments
+        }
         $exitCode = $LASTEXITCODE
     }
     finally {
@@ -73,6 +156,10 @@ function Invoke-ToolProcess {
     }
 
     if ($exitCode -ne 0) {
+        if ([string]::IsNullOrWhiteSpace($FailureMessage)) {
+            throw "$FilePath exited with code $exitCode."
+        }
+
         throw "$FailureMessage with exit code $exitCode"
     }
 }
@@ -107,9 +194,8 @@ function Invoke-DotNetRun([string]$ProjectPath, [string[]]$ToolArgs = @(), [stri
 
 function Invoke-ToolGeneratedProject {
     param([Parameter(Mandatory = $true)][hashtable]$Options)
-    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ($Options.Prefix + "-" + [System.Guid]::NewGuid().ToString("N"))
+    $tempRoot = New-ToolTemporaryDirectory -Prefix ($Options.Prefix + "-")
     try {
-        New-Item -ItemType Directory -Path $tempRoot | Out-Null
         $projectPath = Join-Path $tempRoot "$($Options.Name).csproj"
         $programPath = Join-Path $tempRoot "Program.cs"
         [IO.File]::WriteAllText($projectPath, @"
@@ -162,9 +248,7 @@ function Invoke-ToolGeneratedProject {
         }
         Write-Host $Options.WriteMessage
     } finally {
-        if (Test-Path -LiteralPath $tempRoot) {
-            Remove-Item -LiteralPath $tempRoot -Recurse -Force
-        }
+        Remove-ToolTemporaryDirectory -Path $tempRoot
     }
 }
 
@@ -488,7 +572,7 @@ function Test-ToolGeneratedContentMatches {
         throw "$Label is missing. Run $GeneratorScriptName to create it."
     }
 
-    $actual = Get-Content -LiteralPath $ActualPath -Raw
+    $actual = [System.IO.File]::ReadAllText($ActualPath)
     $expected = $ExpectedContent
     if ($NormalizeNewlines) {
         $expected = $expected -replace "`r`n", "`n"

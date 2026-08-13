@@ -26,7 +26,7 @@ public sealed class TableContextualTabTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { },
             Save: () => { },
@@ -121,7 +121,7 @@ public sealed class TableContextualTabTests
     [Fact]
     public void Ribbon_definition_includes_table_design_and_layout_contextual_tabs()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var contextual = definition.ContextualTabs.ToList();
 
         contextual.Any(t => t.Id == "table-design")
@@ -154,8 +154,8 @@ public sealed class TableContextualTabTests
     public void Every_contextual_table_ribbon_command_is_registered()
     {
         // Verify that the existing registry-completeness guard passes with the new contextual tabs.
-        var definition = FreeWRibbon.BuildDefinition();
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
 
         // Collect all command ids from ALL tabs (including contextual).
         var ids = definition.Tabs
@@ -175,7 +175,7 @@ public sealed class TableContextualTabTests
     public void Ribbon_definition_has_at_least_75_commands_after_table_layout_catchup()
     {
         // Was >= 54 after AV-TBLTAB; table layout catch-up adds 20 direct controls, then Sort.
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var count = definition.Tabs
             .SelectMany(t => t.Groups)
             .SelectMany(g => g.Controls)
@@ -467,7 +467,8 @@ public sealed class TableContextualTabTests
                 view.PlaceCaretInCell(idx, row: 0, col: 1, paraIdx: 0, offset: 0);
                 var callbacks = NoopCallbacks() with
                 {
-                    OpenTablePropertiesDialog = _ => view.ApplyTableProperties(TablePropertyValues())
+                    ShowTablePropertiesDialogAsync = _ =>
+                        ValueTask.FromResult<TablePropertiesValues?>(TablePropertyValues())
                 };
                 var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
 
@@ -512,8 +513,8 @@ public sealed class TableContextualTabTests
                     view,
                     NoopCallbacks() with
                     {
-                        OpenTableFormulaDialog = state =>
-                            view.InsertTableFormula(new TableFormulaField(state.FormulaText)),
+                        ShowTableFormulaDialogAsync = state =>
+                            ValueTask.FromResult<TableFormulaField?>(new(state.FormulaText)),
                     });
                 Execute(registry, "freew.table-formula");
 

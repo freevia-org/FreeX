@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 
@@ -33,10 +34,6 @@ public sealed partial class MainWindow
     private Panel? _avaloniaQuickAccessTitleBarHost;
     private Border? _avaloniaQuickAccessBelowRibbonHost;
 
-    internal StackPanel AvaloniaQuickAccessToolbarForTest => _avaloniaQuickAccessToolbar;
-    internal Panel? AvaloniaQuickAccessTitleBarHostForTest => _avaloniaQuickAccessTitleBarHost;
-    internal Border? AvaloniaQuickAccessBelowRibbonHostForTest => _avaloniaQuickAccessBelowRibbonHost;
-
     private Border CreateAvaloniaQuickAccessBelowRibbonHost()
     {
         var host = new Border
@@ -49,7 +46,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         AutomationProperties.SetAutomationId(host, "BelowRibbonQuickAccessToolbarHost");
-        AutomationProperties.SetName(host, "Quick Access Toolbar below the Ribbon");
+        AutomationProperties.SetName(host, UiText.Get("QuickAccessToolbar_BelowRibbonAutomationName"));
         return host;
     }
 
@@ -62,12 +59,12 @@ public sealed partial class MainWindow
         _avaloniaQuickAccessBelowRibbonHost = belowRibbonHost;
         titleBarHost.Children.Clear();
         AutomationProperties.SetAutomationId(_avaloniaQuickAccessToolbar, "QuickAccessToolbar");
-        AutomationProperties.SetName(_avaloniaQuickAccessToolbar, "Quick Access Toolbar");
+        AutomationProperties.SetName(_avaloniaQuickAccessToolbar, UiText.Get("Options_QuickAccessToolbar"));
         WindowDecorationProperties.SetElementRole(
             _avaloniaQuickAccessToolbar,
             WindowDecorationsElementRole.User);
 
-        _avaloniaQuickAccessOptions = AppOptionsStore.Load();
+        _avaloniaQuickAccessOptions = _optionsRuntimeSession.LiveOptions;
         RebuildAvaloniaQuickAccessToolbar();
     }
 
@@ -111,7 +108,7 @@ public sealed partial class MainWindow
         for (var index = 0; index < commands.Count; index++)
         {
             var command = commands[index];
-            var keyTip = FormatAvaloniaQuickAccessKeyTip(index + 1);
+            var keyTip = QuickAccessToolbarCatalog.FormatKeyTip(index + 1);
             var button = CreateAvaloniaQuickAccessButton(command, showBelowRibbon, keyTip);
             _avaloniaQuickAccessToolbar.Children.Add(button);
             _avaloniaQuickAccessButtons[command.Id] = button;
@@ -208,7 +205,9 @@ public sealed partial class MainWindow
         };
         WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
         AutomationProperties.SetAutomationId(button, $"{command.Id}QatHistoryButton");
-        AutomationProperties.SetName(button, $"{command.CommandName} history");
+        AutomationProperties.SetName(
+            button,
+            UiText.Format("QuickAccessToolbar_HistoryAutomationNameFormat", command.CommandName));
         var menu = AvaloniaManagedContextMenu.Attach(
             button,
             () => AvaloniaQuickAccessToolbarContextMenu.BuildHistoryItems(
@@ -229,7 +228,7 @@ public sealed partial class MainWindow
     private QuickAccessToolbarCustomizationMenuState CreateAvaloniaQuickAccessCustomizationMenuState(
         string commandId)
     {
-        _avaloniaQuickAccessOptions = AppOptionsStore.Load();
+        _avaloniaQuickAccessOptions = _optionsRuntimeSession.Reload();
         return new QuickAccessToolbarCustomizationMenuState(
             commandId,
             _avaloniaQuickAccessOptions.QuickAccessToolbarCommands);
@@ -279,25 +278,13 @@ public sealed partial class MainWindow
         if (action is null)
             return;
 
-        // Options can be changed while this window is open. Reload immediately before mutation so
-        // saving QAT customization cannot overwrite unrelated settings with the startup snapshot.
-        var latestOptions = AppOptionsStore.Load();
-        latestOptions.QuickAccessToolbarCommands =
-            QuickAccessToolbarCustomizationPlanner.Apply(
-                latestOptions.QuickAccessToolbarCommands,
+        var saveResult = _optionsRuntimeSession.MutateFresh(options =>
+            options.QuickAccessToolbarCommands =
+                QuickAccessToolbarCustomizationPlanner.Apply(
+                options.QuickAccessToolbarCommands,
                 command.CommandId,
-                action.Value).ToList();
-        AppOptionsStore.Save(latestOptions);
-        _avaloniaQuickAccessOptions = latestOptions;
-        RebuildAvaloniaQuickAccessToolbar();
-    }
-
-    internal void SetAvaloniaQuickAccessPlacementForTest(bool belowRibbon)
-    {
-        if (_avaloniaQuickAccessOptions is null)
-            return;
-
-        _avaloniaQuickAccessOptions.QuickAccessToolbarBelowRibbon = belowRibbon;
+                action.Value).ToList());
+        _avaloniaQuickAccessOptions = saveResult.Options;
         RebuildAvaloniaQuickAccessToolbar();
     }
 
@@ -346,119 +333,13 @@ public sealed partial class MainWindow
         object sender,
         RoutedEventArgs args)
     {
-        switch (command.Id)
+        if (WorkbookApplicationCommandRouter.TryRouteQuickAccess(command.Id, out var route))
         {
-            case QuickAccessToolbarCommandIds.Save:
-                await SaveCurrentWorkbookAsync();
-                return;
-            case QuickAccessToolbarCommandIds.Undo:
-                UndoLastEdit();
-                return;
-            case QuickAccessToolbarCommandIds.Redo:
-                RedoLastEdit();
-                return;
-            case QuickAccessToolbarCommandIds.New:
-                await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
-                return;
-            case QuickAccessToolbarCommandIds.Open:
-                await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);
-                return;
-            case QuickAccessToolbarCommandIds.SaveAs:
-                await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs);
-                return;
-            case QuickAccessToolbarCommandIds.Print:
-                await ShowPrintDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.ExportPdfXps:
-                await ShowBackstageExportDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.Cut:
-                await CutSelectedRangeToClipboardAsync();
-                return;
-            case QuickAccessToolbarCommandIds.Copy:
-                await CopySelectedRangeToClipboardAsync();
-                return;
-            case QuickAccessToolbarCommandIds.Paste:
-                await PasteClipboardTextAsync();
-                return;
-            case QuickAccessToolbarCommandIds.FormatPainter:
-                FormatPainterButton_Click(sender, args);
-                return;
-            case QuickAccessToolbarCommandIds.Bold:
-                ToggleSelectedRangeBold();
-                return;
-            case QuickAccessToolbarCommandIds.Italic:
-                ToggleSelectedRangeItalic();
-                return;
-            case QuickAccessToolbarCommandIds.Underline:
-                ToggleSelectedRangeUnderline();
-                return;
-            case QuickAccessToolbarCommandIds.FillColor:
-                _fillColorButton.Flyout?.ShowAt(sender as Control ?? _fillColorButton);
-                return;
-            case QuickAccessToolbarCommandIds.FontColor:
-                _fontColorButton.Flyout?.ShowAt(sender as Control ?? _fontColorButton);
-                return;
-            case QuickAccessToolbarCommandIds.FormatCells:
-                await ShowFormatCellsDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.InsertFunction:
-                InsertFunction();
-                return;
-            case QuickAccessToolbarCommandIds.AutoSum:
-                InsertAutoSumFormula("SUM");
-                return;
-            case QuickAccessToolbarCommandIds.CalculateNow:
-                CalculateNow();
-                return;
-            case QuickAccessToolbarCommandIds.CalculateSheet:
-                CalculateActiveSheet();
-                return;
-            case QuickAccessToolbarCommandIds.RefreshAll:
-                RefreshImportedData();
-                return;
-            case QuickAccessToolbarCommandIds.SortAscending:
-                SortSelectedRange(ascending: true);
-                return;
-            case QuickAccessToolbarCommandIds.SortDescending:
-                SortSelectedRange(ascending: false);
-                return;
-            case QuickAccessToolbarCommandIds.Filter:
-                ToggleAutoFilter();
-                return;
-            case QuickAccessToolbarCommandIds.DataValidation:
-                await ShowDataValidationDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.NameManager:
-                NameManager();
-                return;
-            case QuickAccessToolbarCommandIds.Spelling:
-                await ShowSpellingDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.CheckAccessibility:
-                await ShowAccessibilityCheckerDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.ShareWorkbook:
-                await ShareWorkbookAsync();
-                return;
-            case QuickAccessToolbarCommandIds.Zoom100:
-                ZoomTo100Percent();
-                return;
-            case QuickAccessToolbarCommandIds.ZoomSelection:
-                ZoomToSelection();
-                return;
-            case QuickAccessToolbarCommandIds.FreezePanes:
-                FreezePanesAtActiveCell();
-                return;
-            case QuickAccessToolbarCommandIds.InsertSheet:
-                AddNewSheet();
-                return;
-            case QuickAccessToolbarCommandIds.FindSelect:
-                await ShowFindDialogAsync();
-                return;
-            case QuickAccessToolbarCommandIds.SelectionPane:
-                await OpenSelectionPaneDialogAsync();
-                return;
+            await WorkbookApplicationCommands.TryExecuteAsync(
+                route,
+                nativeSource: sender,
+                nativeEventArgs: args);
+            return;
         }
 
         if (_ribbonControl is null)
@@ -494,51 +375,32 @@ public sealed partial class MainWindow
             badge.IsVisible = _ribbonKeyTipsVisible && button.IsEffectivelyEnabled;
     }
 
-    internal string? AvaloniaQuickAccessKeyTipForTest(string commandId) =>
-        _avaloniaQuickAccessKeyTipButtons
-            .FirstOrDefault(entry => string.Equals(entry.Value.Tag as string, commandId, StringComparison.OrdinalIgnoreCase))
-            .Key;
-
-    internal bool AvaloniaQuickAccessKeyTipVisibleForTest(string commandId) =>
-        _avaloniaQuickAccessKeyTipButtons
-            .FirstOrDefault(entry => string.Equals(entry.Value.Tag as string, commandId, StringComparison.OrdinalIgnoreCase))
-            .Value is { } button &&
-        _avaloniaQuickAccessKeyTipBadges.TryGetValue(button, out var badge) &&
-        badge.IsVisible;
-
-    private static string FormatAvaloniaQuickAccessKeyTip(int visibleIndex)
-    {
-        if (visibleIndex <= 9)
-            return visibleIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
-
-        var offset = visibleIndex - 9;
-        const string extraKeyTipCharacters = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        return offset <= extraKeyTipCharacters.Length
-            ? $"0{extraKeyTipCharacters[offset - 1]}"
-            : visibleIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    }
-
     private static bool IsAvaloniaQuickAccessHistoryCommand(string commandId) =>
         string.Equals(commandId, QuickAccessToolbarCommandIds.Undo, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(commandId, QuickAccessToolbarCommandIds.Redo, StringComparison.OrdinalIgnoreCase);
 
     private void ApplyBackstageRecentFileAction(
         Free.Shared.AppServices.RecentFileEntry entry,
+        BackstageRecentFileMenuAction action) =>
+        ApplyBackstageRecentFileAction(entry.Path, action);
+
+    private void ApplyBackstageRecentFileAction(
+        string path,
         BackstageRecentFileMenuAction action)
     {
         switch (action)
         {
             case BackstageRecentFileMenuAction.Pin:
-                _recentFiles.Pin(entry.Path);
+                _recentFiles.Pin(path);
                 break;
             case BackstageRecentFileMenuAction.Unpin:
-                _recentFiles.Unpin(entry.Path);
+                _recentFiles.Unpin(path);
                 break;
             case BackstageRecentFileMenuAction.Remove:
-                _recentFiles.Remove(entry.Path);
+                _recentFiles.Remove(path);
                 break;
         }
 
-        NavigateBackstageOverlay(FreeXBackstagePaneId.Home);
+        TryActivateBackstagePane(FreeXBackstagePaneId.Home);
     }
 }

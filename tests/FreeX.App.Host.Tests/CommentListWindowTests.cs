@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Comments;
 using FreeX.Core.Model;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -20,8 +21,8 @@ public sealed class CommentListWindowTests
         var items = CommentListWindow.CreateThreadedCommentItems(threadedComments);
 
         items.Should().ContainInOrder(
-            new CommentListWindowItem(new CellAddress(sheetId, 1, 1), "A1", "FreeX: First thread"),
-            new CommentListWindowItem(new CellAddress(sheetId, 3, 2), "B3", "Quinn: Later thread"));
+            new CommentListRowPlan(new CellAddress(sheetId, 1, 1), "A1", "FreeX: First thread"),
+            new CommentListRowPlan(new CellAddress(sheetId, 3, 2), "B3", "Quinn: Later thread"));
     }
 
     [Fact]
@@ -37,8 +38,23 @@ public sealed class CommentListWindowTests
         var items = CommentListWindow.CreateNoteItems(notes);
 
         items.Should().ContainInOrder(
-            new CommentListWindowItem(new CellAddress(sheetId, 1, 1), "A1", "First note"),
-            new CommentListWindowItem(new CellAddress(sheetId, 3, 2), "B3", "Later note"));
+            new CommentListRowPlan(new CellAddress(sheetId, 1, 1), "A1", "First note"),
+            new CommentListRowPlan(new CellAddress(sheetId, 3, 2), "B3", "Later note"));
+    }
+
+    [Fact]
+    public void RowFactories_ReturnSharedCommentListPlansDirectly()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("CommentListWindow.cs");
+
+        source.Should().Contain("CommentNavigationPlanner.CreateThreadedCommentRows(threadedComments)");
+        source.Should().Contain("CommentNavigationPlanner.CreateNoteRows(notes)");
+        source.Should().Contain("ObservableCollection<CommentListRowPlan>");
+        source.Should().NotContain("CommentListWindowItem");
+        source.Should().NotContain("private static IReadOnlyList<CommentListRowPlan> CreateItems");
+        source.Should().NotContain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(threadedComments)");
+        source.Should().NotContain("CommentNavigationPlanner.FormatThreadedComment(threadedComments[address])");
+        source.Should().NotContain("CommentNavigationPlanner.OrderedNoteAddresses(notes)");
     }
 
     [Fact]
@@ -46,7 +62,7 @@ public sealed class CommentListWindowTests
     {
         StaTestRunner.Run(() =>
         {
-            var item = new CommentListWindowItem(new CellAddress(SheetId.New(), 1, 1), "A1", "Review this");
+            var item = new CommentListRowPlan(new CellAddress(SheetId.New(), 1, 1), "A1", "Review this");
             var window = new CommentListWindow("Comments", [item], _ => { });
 
             var buttons = WpfTestTree.FindLogicalDescendants<Button>(window)

@@ -196,7 +196,7 @@ public static class AccessibleDocumentSnapshotPlanner
             var lastRow = Math.Max(0, table.Rows.Count - 1);
             var lastColumn = Math.Max(0, table.Rows.Count == 0
                 ? 0
-                : table.Rows.Max(row => row.Cells.Sum(cell => Math.Max(1, cell.GridSpan))) - 1);
+                : TableGridProjection.TableWidth(table) - 1);
             startRow = Math.Clamp(startRow, 0, lastRow);
             endRow = Math.Clamp(endRow, 0, lastRow);
             startColumn = Math.Clamp(startColumn, 0, lastColumn);
@@ -305,12 +305,11 @@ public static class AccessibleDocumentSnapshotPlanner
                         if (rowIndex > 0)
                             text.Append('\n');
                         var row = table.Rows[rowIndex];
-                        var gridColumn = 0;
-                        for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
+                        foreach (var projected in TableGridProjection.ProjectRow(row))
                         {
-                            if (cellIndex > 0)
+                            if (projected.CellIndex > 0)
                                 text.Append('\t');
-                            var cell = row.Cells[cellIndex];
+                            var cell = projected.Cell;
                             for (var paragraphIndex = 0; paragraphIndex < cell.Paragraphs.Count; paragraphIndex++)
                             {
                                 if (paragraphIndex > 0)
@@ -319,10 +318,14 @@ public static class AccessibleDocumentSnapshotPlanner
                                     text,
                                     paragraphs,
                                     locations,
-                                    new LocationKey(AccessibleDocumentRegion.TableCell, blockIndex, rowIndex, gridColumn, paragraphIndex),
+                                    new LocationKey(
+                                        AccessibleDocumentRegion.TableCell,
+                                        blockIndex,
+                                        rowIndex,
+                                        projected.StartColumn,
+                                        paragraphIndex),
                                     cell.Paragraphs[paragraphIndex].PlainText);
                             }
-                            gridColumn += Math.Max(1, cell.GridSpan);
                         }
                     }
                     break;

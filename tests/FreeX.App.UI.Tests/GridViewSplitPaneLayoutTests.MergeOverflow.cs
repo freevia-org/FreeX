@@ -71,34 +71,24 @@ public sealed partial class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
-    public void SplitPaneCellLayoutPlanner_IndexesMergeRowsBySmallerIntersectedSide()
+    public void SplitPaneCellLayoutPlanner_DelegatesMergePlanningToPortableOwner()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("SplitPaneCellLayoutPlanner.cs");
-        var addMergeRows = source[
-            source.IndexOf("private static void AddMergeRows", StringComparison.Ordinal)..
-            source.IndexOf("private static void AddMergeRow(", StringComparison.Ordinal)];
 
-        addMergeRows.Should().Contain("var intersectedRowSpan = endRow - startRow + 1;");
-        addMergeRows.Should().Contain("if (intersectedRowSpan <= queryCells.Rows.Count)");
-        addMergeRows.Should().Contain("queryCells.Rows.Contains(row)");
-        addMergeRows.Should().Contain("foreach (var row in queryCells.Rows)");
+        source.Should().Contain("ViewportGeometryPlanner.CalculateSplitPaneLayouts(");
+        source.Should().Contain("ViewportGeometryPlanner.VisitSplitPaneLayouts(");
+        source.Should().NotContain("private static void EmitMergeLayouts");
     }
 
     [Fact]
-    public void SplitPaneCellLayoutPlanner_PrunesMergedRegionsOutsideQueriedPaneColumns()
+    public void SplitPaneCellLayoutPlanner_ContainsOnlyNativeGeometryConversion()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("SplitPaneCellLayoutPlanner.cs");
-        var createIndex = source[
-            source.IndexOf("public static MergeRangeIndex Create", StringComparison.Ordinal)..
-            source.IndexOf("private static void AddMergeRows", StringComparison.Ordinal)];
 
-        createIndex.Should().Contain("var queryCells = BuildQueryCells(cells);");
-        createIndex.Should().Contain("mergedRegion.End.Row < queryCells.MinRow");
-        createIndex.Should().Contain("mergedRegion.Start.Row > queryCells.MaxRow");
-        createIndex.Should().Contain("mergedRegion.End.Col < queryCells.MinCol");
-        createIndex.Should().Contain("mergedRegion.Start.Col > queryCells.MaxCol");
-        source.Should().Contain("uint MinCol,");
-        source.Should().Contain("uint MaxCol");
+        source.Should().Contain("private static Rect ToWpf(LayoutRect rect)");
+        source.Should().Contain("WpfViewportCellLayoutConsumer");
+        source.Should().NotContain("MergeRangeIndex");
+        source.Should().NotContain("SplitPaneOccupiedCellMap");
     }
 
     [Fact]

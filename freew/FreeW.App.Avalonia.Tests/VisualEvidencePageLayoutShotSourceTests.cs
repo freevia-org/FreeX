@@ -275,35 +275,54 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     public void AvaloniaDocumentView_UsesSharedDecorativePageBorderPlanForLiveAndPdf()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+        var planner = File.ReadAllText(RepositoryFile(
+            "freew", "FreeW.App.Presentation", "DocumentView", "PageBorderArtVisualPlanner.cs"));
 
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildApplesFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildBatsFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildCandyCornFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildIceCreamConesFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildPeopleFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildVineFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildPapyrusFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(");
-        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildHandmade2Frame(");
         source.Should().Contain("TryDrawPageBorderArt(context, pb, artFrame, artInset)");
-        source.Should().Contain("BuildPdfAppleBorderOps(appleMotifs, artOriginXDip, artOriginTopDip, pageHeightPt)");
-        source.Should().Contain("BuildPdfShadowedSquareBorderOps(squareMotifs, artOriginXDip, artOriginTopDip, pageHeightPt)");
-        source.Should().Contain("BuildPdfBatBorderOps(batMotifs, artOriginXDip, artOriginTopDip, pageHeightPt)");
-        source.Should().Contain("BuildPdfFilledShapeBorderOps(eggPlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
-        source.Should().Contain("BuildPdfFilledShapeBorderOps(candyPlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
-        source.Should().Contain("BuildPdfFilledShapeBorderOps(conePlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
-        source.Should().Contain("BuildPdfFilledShapeBorderOps(peoplePlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
-        source.Should().Contain("BuildPdfFilledShapeBorderOps(vinePlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
-        source.Should().Contain("BuildPdfFilledShapeBorderOps(papyrusPlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
-        source.Should().Contain("BuildPdfFilledShapeBorderOps(ribbonPlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
+        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildFramePlan(");
+        source.Should().Contain("return BuildPdfPageBorderArtOps(artPlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
+        source.Should().Contain("foreach (var fill in plan.Fills)");
+        source.Should().Contain("foreach (var polygon in plan.Polygons)");
+        source.Should().Contain("foreach (var line in plan.Lines)");
+        source.Should().Contain("foreach (var figure in plan.CubicFigures)");
+        source.Should().Contain("figure.IsClosed");
+        source.Should().Contain("figure.StrokeWidthDip / PxPerPoint");
+        source.Should().NotContain("BuildPdfAppleBorderOps");
+        source.Should().NotContain("BuildPdfShadowedSquareBorderOps");
+        source.Should().NotContain("BuildPdfShorebirdTrackBorderOps");
+        source.Should().NotContain("BuildPdfBatBorderOps");
+        source.Should().NotContain("BuildPdfFilledShapeBorderOps");
+        source.Should().NotContain("BuildPdfDecorativeArchBorderOps");
+        foreach (var specializedPlannerCall in new[]
+                 {
+                     "TryBuildApplesFrame(",
+                     "TryBuildShadowedSquaresFrame(",
+                     "TryBuildShorebirdTracksFrame(",
+                     "TryBuildBatsFrame(",
+                     "TryBuildMapleMuffinsFrame(",
+                     "TryBuildCakeSliceFrame(",
+                     "TryBuildBirdsFlightFrame(",
+                     "TryBuildPaintedEggsFrame(",
+                     "TryBuildCandyCornFrame(",
+                     "TryBuildIceCreamConesFrame(",
+                     "TryBuildPeopleFrame(",
+                     "TryBuildFlowersRosesFrame(",
+                     "TryBuildVineFrame(",
+                     "TryBuildPapyrusFrame(",
+                     "TryBuildWeavingRibbonFrame(",
+                     "TryBuildDecorativeArchFrame(",
+                     "TryBuildHandmade2Frame(",
+                 })
+        {
+            source.Should().NotContain($"PageBorderArtVisualPlanner.{specializedPlannerCall}");
+        }
+        source.Should().Contain("BorderLineStyle.Dotted");
+        source.Should().Contain("BorderLineStyle.Dashed");
+        source.Should().Contain("BorderLineStyle.Wave");
+        source.Should().Contain("BorderLineStyle.Double");
+        source.Should().Contain("new Free.Shared.Pdf.PdfStrokeRect(x, y, width, height, color, widthPt, dash)");
+        planner.Should().Contain("bool Antialias = false");
+        planner.Should().Contain("Antialias: true");
     }
 
     [Fact]
@@ -356,7 +375,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
 
         source.Should().Contain("DrawingObjectFillKind.Solid when TryParseAvaloniaColor(fill.ColorHex, out var color)");
-        source.Should().Contain("ContrastingWordArtTextColor(wd.Fill)");
+        source.Should().Contain("WordArtForegroundPolicy.ResolveColorHex(wd.Style, wd.Fill)");
         source.Should().NotContain("effects.GlowOpacity * 0.18");
         source.Should().NotContain("DashStyle([3, 3], 0)");
         source.Should().NotContain("$\"~{wd.Warp}\"");
@@ -391,18 +410,6 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
             .Should().BeLessThan(source.IndexOf("& powershell.exe @wordExportArgs", StringComparison.Ordinal));
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var directory = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(directory))
-        {
-            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = Directory.GetParent(directory)?.FullName;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

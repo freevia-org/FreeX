@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.Core.Model;
 
@@ -33,15 +34,15 @@ internal static class TableStylesGallery
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(1),
             Cursor = System.Windows.Input.Cursors.Hand,
-            ToolTip = "Table Styles"
+            ToolTip = FreeWUiTextCatalog.TableStyles
         };
-        AutomationProperties.SetName(button, "Table Styles");
+        AutomationProperties.SetName(button, FreeWUiTextCatalog.TableStyles);
 
         var stack = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         stack.Children.Add(BuildMiniTableIcon());
         stack.Children.Add(new TextBlock
         {
-            Text = "Table\nStyles",
+            Text = FreeWUiTextCatalog.TableStylesCompact,
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
@@ -97,7 +98,7 @@ internal static class TableStylesGallery
                 Tag = style,
                 IsEnabled = planned.IsEnabled,
             };
-            AutomationProperties.SetName(item, style.Name + " table style");
+            AutomationProperties.SetName(item, FreeWUiTextCatalog.TableStyleAutomationName(style.Name));
             item.MouseEnter += (_, _) => editor.PreviewTableStyle(style);
             item.MouseLeave += (_, _) => editor.EndTableStylePreview();
             item.Click += (_, _) =>

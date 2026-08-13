@@ -2,6 +2,7 @@ using System.Reflection;
 using Avalonia.Headless;
 using Avalonia.Input;
 using FluentAssertions;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -116,10 +117,8 @@ public sealed class R53_CrossSheetFormulaPointModeTests
 
                 // This is the transient state observed after the physical Linux point click:
                 // the text still contains F5, but the tracked span has not survived focus return.
-                typeof(MainWindow).GetField("_formulaReferenceStart", BindingFlags.Instance | BindingFlags.NonPublic)!
-                    .SetValue(window, null);
-                typeof(MainWindow).GetField("_formulaReferenceLength", BindingFlags.Instance | BindingFlags.NonPublic)!
-                    .SetValue(window, null);
+                GetField<FormulaRangeEditingSession>(window, "_formulaRangeEditingSession")
+                    .ClearReferenceSpan();
 
                 Invoke<bool>(window, "TryAppendDisjointFormulaPointReference", secondArea)
                     .Should().BeTrue();

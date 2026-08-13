@@ -9,7 +9,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     [Fact]
     public void CreateCustomDictionary_LoadsPersistedWordsCaseInsensitively()
     {
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             SpellCheckCustomDictionaryWords = ["  TeH  ", "", "teh", "the the"]
         };
@@ -23,7 +23,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     [Fact]
     public void AddCustomDictionaryWord_NormalizesPersistsAndUpdatesRuntimeDictionary()
     {
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             SpellCheckCustomDictionaryWords = ["recieve"]
         };
@@ -42,7 +42,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     [Fact]
     public void AddCustomDictionaryWord_IgnoresBlankAndDuplicateWords()
     {
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             SpellCheckCustomDictionaryWords = ["TeH"]
         };
@@ -65,7 +65,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("TEH adn value"));
-        var options = new FreeXOptions
+        var options = new AppOptions
         {
             SpellCheckCustomDictionaryWords = ["teh"]
         };
@@ -82,13 +82,16 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     public void SpellCheckWorkflow_RoutesAddToDictionaryThroughPersistedCustomDictionaryScan()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
+        var controllerSource = DialogSourceTestSupport.ReadAppServicesSource("SpellCheckSessionController.cs");
 
-        source.Should().Contain("var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options.SpellCheckCustomDictionaryWords);");
-        source.Should().Contain("SpellCheckWorkflowPlanner.ScanWorksheet(");
-        source.Should().Contain("customDictionary,");
-        source.Should().Contain("dialog.Result.Action == SpellCheckDialogAction.Add");
-        source.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord(");
-        source.Should().Contain("_options.SpellCheckCustomDictionaryWords,");
-        source.Should().Contain("_options.Save();");
+        source.Should().Contain("new SpellCheckSessionController(new SpellCheckSessionAdapter(");
+        source.Should().Contain("() => _options.SpellCheckCustomDictionaryWords");
+        source.Should().Contain("() => MutateRuntimeOptions(options =>");
+        source.Should().Contain("options.SpellCheckCustomDictionaryWords =");
+        source.Should().Contain("new SpellCheckSessionController(new SpellCheckSessionAdapter(");
+        source.Should().Contain("_options.SpellCheckCustomDictionaryWords.ToList()");
+        controllerSource.Should().Contain("case SpellCheckSessionAction.AddToDictionary:");
+        controllerSource.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord(");
+        controllerSource.Should().Contain("_adapter.PersistCustomDictionary();");
     }
 }

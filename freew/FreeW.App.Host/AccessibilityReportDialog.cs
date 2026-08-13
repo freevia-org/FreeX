@@ -1,7 +1,7 @@
-using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -17,8 +17,9 @@ internal sealed class AccessibilityReportDialog : Free.Shared.Ribbon.Wpf.DialogW
 {
     public AccessibilityReportDialog(Window owner, AccessibilityReport report)
     {
+        var plan = AccessibilityReportDialogPlanner.Build(report);
         Owner = owner;
-        Title = "Accessibility Checker";
+        Title = plan.Title;
         Width = 460;
         MaxHeight = 560;
         SizeToContent = SizeToContent.Height;
@@ -31,20 +32,17 @@ internal sealed class AccessibilityReportDialog : Free.Shared.Ribbon.Wpf.DialogW
         // Summary line: counts by severity, or a clean-bill-of-health message.
         outer.Children.Add(new TextBlock
         {
-            Text = report.IsClean
-                ? "No accessibility issues found."
-                : $"{report.ErrorCount} error(s), {report.WarningCount} warning(s), {report.TipCount} tip(s).",
+            Text = plan.Summary,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 10),
             TextWrapping = TextWrapping.Wrap
         });
 
-        if (!report.IsClean)
+        if (!plan.IsClean)
         {
             var list = new StackPanel();
-            AddGroup(list, "Errors", AccessibilitySeverity.Error, report, Color.FromRgb(0xC0, 0x00, 0x00));
-            AddGroup(list, "Warnings", AccessibilitySeverity.Warning, report, Color.FromRgb(0xB8, 0x6A, 0x00));
-            AddGroup(list, "Tips", AccessibilitySeverity.Tip, report, Color.FromRgb(0x40, 0x40, 0x40));
+            foreach (var group in plan.Groups)
+                AddGroup(list, group);
 
             outer.Children.Add(new ScrollViewer
             {
@@ -61,27 +59,23 @@ internal sealed class AccessibilityReportDialog : Free.Shared.Ribbon.Wpf.DialogW
         Content = outer;
     }
 
-    // Add a severity group header plus one bullet line per issue in that group; emits nothing when empty.
-    private static void AddGroup(
-        StackPanel parent, string heading, AccessibilitySeverity severity, AccessibilityReport report, Color accent)
+    private static void AddGroup(StackPanel parent, AccessibilityDialogGroupPlan group)
     {
-        var issues = report.Issues.Where(i => i.Severity == severity).ToList();
-        if (issues.Count == 0)
-            return;
+        var accent = (Color)ColorConverter.ConvertFromString(group.AccentHex);
 
         parent.Children.Add(new TextBlock
         {
-            Text = $"{heading} ({issues.Count})",
+            Text = group.Heading,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(accent),
             Margin = new Thickness(0, 8, 0, 2)
         });
 
-        foreach (var issue in issues)
+        foreach (var issueLine in group.IssueLines)
         {
             parent.Children.Add(new TextBlock
             {
-                Text = $"•  {issue.Message}",
+                Text = issueLine,
                 Margin = new Thickness(8, 2, 0, 2),
                 TextWrapping = TextWrapping.Wrap
             });

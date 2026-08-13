@@ -5,23 +5,45 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
-using FreeW.Core.Model;
+using FreeW.App.Presentation;
+using FreeW.App.Presentation.Panes;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class NotesPane : Border
+internal sealed partial class NotesPane : Border
 {
-    private readonly DocumentView _editor;
     private readonly ListBox _list;
     private readonly TextBlock _selectedLabel;
     private readonly DocumentView _subEditor;
     private readonly Button _apply;
     private readonly Button _delete;
-    private NoteItem? _active;
+    private readonly DocumentNotesPaneSession _session;
 
     internal NotesPane(DocumentView editor)
     {
-        _editor = editor;
+        _session = new DocumentNotesPaneSession(
+            () => editor.Document,
+            new DocumentNotesPaneMutationActions(
+                (id, footnote, paragraphs) =>
+                {
+                    var exists = footnote
+                        ? editor.Document.Footnotes.ContainsKey(id)
+                        : editor.Document.Endnotes.ContainsKey(id);
+                    if (!exists)
+                        return false;
+                    editor.ReplaceNoteContent(id, footnote, paragraphs);
+                    return true;
+                },
+                (id, footnote) =>
+                {
+                    var exists = footnote
+                        ? editor.Document.Footnotes.ContainsKey(id)
+                        : editor.Document.Endnotes.ContainsKey(id);
+                    if (!exists)
+                        return false;
+                    editor.DeleteNote(id, footnote);
+                    return true;
+                }));
         Width = double.NaN;
         MinHeight = 190;
         MaxHeight = 310;
@@ -31,7 +53,7 @@ internal sealed class NotesPane : Border
         IsVisible = false;
 
         _list = new ListBox { MinHeight = 58, MaxHeight = 92, Margin = new Thickness(8, 0, 8, 4) };
-        _list.SelectionChanged += (_, _) => LoadSelection();
+        _list.SelectionChanged += OnSelectionChanged;
         _selectedLabel = new TextBlock
         {
             FontStyle = FontStyle.Italic,
@@ -40,8 +62,8 @@ internal sealed class NotesPane : Border
             IsVisible = false,
         };
         _subEditor = new DocumentView { MinHeight = 76, MaxHeight = 145, Margin = new Thickness(8, 0, 8, 4), IsVisible = false };
-        _apply = MakeButton("Apply", ApplySelected);
-        _delete = MakeButton("Delete", DeleteSelected);
+        _apply = MakeButton(FreeWUiTextCatalog.NotesApply, ApplySelected);
+        _delete = MakeButton(FreeWUiTextCatalog.NotesDelete, DeleteSelected);
         _apply.IsVisible = false;
         _delete.IsVisible = false;
 
@@ -52,7 +74,7 @@ internal sealed class NotesPane : Border
         DockPanel.SetDock(buttons, Dock.Bottom);
 
         var layout = new DockPanel { LastChildFill = true };
-        var header = new TextBlock { Text = "Notes", FontWeight = FontWeight.SemiBold, Margin = new Thickness(10, 7, 10, 4) };
+        var header = new TextBlock { Text = FreeWUiTextCatalog.NotesHeading, FontWeight = FontWeight.SemiBold, Margin = new Thickness(10, 7, 10, 4) };
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(_list, Dock.Top);
         DockPanel.SetDock(_selectedLabel, Dock.Top);
@@ -64,9 +86,6 @@ internal sealed class NotesPane : Border
         Child = layout;
     }
 
-    internal int ItemCountForTest => _list.ItemCount;
-    internal DocumentView SubEditorForTest => _subEditor;
-
     public void Toggle()
     {
         IsVisible = !IsVisible;
@@ -77,89 +96,46 @@ internal sealed class NotesPane : Border
     public void ShowAndSelect(bool footnote, int id)
     {
         IsVisible = true;
-        Refresh(new NoteKey(footnote, id));
+        Render(_session.ShowAndSelect(footnote, id));
     }
 
-    public void Refresh() => Refresh(_active is null ? null : new NoteKey(_active.IsFootnote, _active.Id));
-
-    internal void SelectForTest(bool footnote, int id) => ShowAndSelect(footnote, id);
-    internal void ApplyForTest() => ApplySelected();
-    internal void DeleteForTest() => DeleteSelected();
-
-    private void Refresh(NoteKey? requested)
+    public void Refresh()
     {
-        if (!IsVisible)
-            return;
-        var selected = requested ?? (_list.SelectedItem is NoteItem item ? new NoteKey(item.IsFootnote, item.Id) : null);
-        var items = _editor.Document.Footnotes.Values.OrderBy(note => note.Id)
-            .Select(note => new NoteItem(true, note.Id, note.PlainText))
-            .Concat(_editor.Document.Endnotes.Values.OrderBy(note => note.Id)
-                .Select(note => new NoteItem(false, note.Id, note.PlainText)))
-            .ToArray();
-        _list.ItemsSource = items;
-        var index = selected is null
-            ? (items.Length > 0 ? 0 : -1)
-            : Array.FindIndex(items, item => item.IsFootnote == selected.Value.IsFootnote && item.Id == selected.Value.Id);
-        _list.SelectedIndex = index >= 0 ? index : (items.Length > 0 ? 0 : -1);
-        if (items.Length == 0)
-            ClearSelection();
+        if (IsVisible)
+            Render(_session.Refresh());
     }
 
-    private void LoadSelection()
+    private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (_list.SelectedItem is not NoteItem item)
-        {
-            ClearSelection();
-            return;
-        }
+        Render(_session.SelectIndex(_list.SelectedIndex));
+    }
 
-        _active = item;
-        _selectedLabel.Text = item.Label;
-        _selectedLabel.IsVisible = true;
-        _subEditor.IsVisible = true;
-        _apply.IsVisible = true;
-        _delete.IsVisible = true;
+    private void Render(DocumentNotesPaneOutcome outcome)
+    {
+        var state = outcome.State;
+        _list.SelectionChanged -= OnSelectionChanged;
+        _list.ItemsSource = state.Items;
+        _list.SelectedIndex = state.SelectedIndex;
+        _list.SelectionChanged += OnSelectionChanged;
 
-        var wrapper = TextDocument.CreateEmpty();
-        wrapper.DefaultRun = _editor.Document.DefaultRun;
-        wrapper.DefaultParagraph = _editor.Document.DefaultParagraph;
-        wrapper.Blocks.Clear();
-        var content = item.IsFootnote
-            ? _editor.Document.Footnotes[item.Id].Content
-            : _editor.Document.Endnotes[item.Id].Content;
-        wrapper.Blocks.AddRange(content.Select(DocumentMerge.CloneBlock));
-        if (wrapper.Blocks.Count == 0)
-            wrapper.Blocks.Add(new Paragraph());
-        _subEditor.LoadDocument(wrapper);
+        var selected = state.SelectedNote;
+        _selectedLabel.Text = selected?.Label ?? string.Empty;
+        _selectedLabel.IsVisible = state.HasSelection;
+        _subEditor.IsVisible = state.HasSelection;
+        _apply.IsVisible = state.CanApply;
+        _delete.IsVisible = state.CanDelete;
+        if (state.EditorDocument is { } editorDocument)
+            _subEditor.LoadDocument(editorDocument);
     }
 
     private void ApplySelected()
     {
-        if (_active is not { } active)
-            return;
-        var paragraphs = _subEditor.Document.Blocks.OfType<Paragraph>()
-            .Select(paragraph => (Paragraph)DocumentMerge.CloneBlock(paragraph))
-            .ToArray();
-        _editor.ReplaceNoteContent(active.Id, active.IsFootnote, paragraphs);
-        Refresh(new NoteKey(active.IsFootnote, active.Id));
+        Render(_session.Apply(_subEditor.Document.Blocks));
     }
 
     private void DeleteSelected()
     {
-        if (_active is not { } active)
-            return;
-        _editor.DeleteNote(active.Id, active.IsFootnote);
-        _active = null;
-        Refresh();
-    }
-
-    private void ClearSelection()
-    {
-        _active = null;
-        _selectedLabel.IsVisible = false;
-        _subEditor.IsVisible = false;
-        _apply.IsVisible = false;
-        _delete.IsVisible = false;
+        Render(_session.DeleteSelected());
     }
 
     private static Button MakeButton(string text, Action click)
@@ -169,16 +145,6 @@ internal sealed class NotesPane : Border
         return button;
     }
 
-    private readonly record struct NoteKey(bool IsFootnote, int Id);
-    private sealed record NoteItem(bool IsFootnote, int Id, string Preview)
-    {
-        public string Label => $"{(IsFootnote ? "Footnote" : "Endnote")} {Id}";
-        public override string ToString()
-        {
-            var preview = Preview.Replace('\n', ' ').Trim();
-            return preview.Length == 0 ? Label : $"{Label}: {(preview.Length > 60 ? preview[..57] + "..." : preview)}";
-        }
-    }
 }
 
 internal sealed class NoteTextDialog : FreeWDialogWindow
@@ -188,7 +154,7 @@ internal sealed class NoteTextDialog : FreeWDialogWindow
 
     private NoteTextDialog(bool footnote)
     {
-        Title = footnote ? "Insert Footnote" : "Insert Endnote";
+        Title = footnote ? FreeWUiTextCatalog.InsertFootnoteTitle : FreeWUiTextCatalog.InsertEndnoteTitle;
         Width = 390;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -196,7 +162,7 @@ internal sealed class NoteTextDialog : FreeWDialogWindow
         ShowInTaskbar = false;
         _text = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 90 };
         AvaloniaCompactDialogChrome.ApplyTextBox(_text, Chrome);
-        var ok = new Button { Content = "OK", IsDefault = true };
+        var ok = new Button { Content = FreeWUiTextCatalog.NoteDialogOk, IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, Chrome, 72, true);
         ok.Click += (_, _) =>
         {
@@ -204,7 +170,7 @@ internal sealed class NoteTextDialog : FreeWDialogWindow
             if (!string.IsNullOrWhiteSpace(value))
                 Close(value);
         };
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = FreeWUiTextCatalog.NoteDialogCancel, IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, Chrome, 72);
         cancel.Click += (_, _) => Close(null);
         Content = new StackPanel
@@ -212,7 +178,7 @@ internal sealed class NoteTextDialog : FreeWDialogWindow
             Margin = new Thickness(14),
             Children =
             {
-                new TextBlock { Text = footnote ? "Footnote text:" : "Endnote text:", Margin = new Thickness(0, 0, 0, 4) },
+                new TextBlock { Text = footnote ? FreeWUiTextCatalog.FootnoteTextLabel : FreeWUiTextCatalog.EndnoteTextLabel, Margin = new Thickness(0, 0, 0, 4) },
                 _text,
                 AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)),
             },

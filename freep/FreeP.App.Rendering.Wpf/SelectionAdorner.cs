@@ -19,7 +19,7 @@ namespace FreeP.App.Rendering.Wpf;
 /// The adorner does NOT own interaction logic — that lives in <see cref="CanvasGestureHandler"/>.
 /// The adorner is invalidated and redrawn whenever the handler raises a layout change.
 /// </summary>
-public sealed class SelectionAdorner : Adorner
+public sealed partial class SelectionAdorner : Adorner
 {
     // Handle appearance
     private const double HandleSize = SelectionAdornerGeometry.HandleSize;
@@ -85,29 +85,7 @@ public sealed class SelectionAdorner : Adorner
 
     // ── State owned by CanvasGestureHandler ───────────────────────────────────────────────────
 
-    /// <summary>Current selection screen rects (updated by handler on selection change).</summary>
-    private readonly List<(uint id, Rect screenRect)> _selectionRects = new();
-
-    /// <summary>Live-preview rect (null = no preview active).</summary>
-    private Rect? _previewRect;
-
-    /// <summary>Live-preview rotation angle in degrees (only meaningful during rotate gesture).</summary>
-    private double _previewRotationDeg;
-
-    /// <summary>Per-member geometry from the shared multi-transform preview plan.</summary>
-    private IReadOnlyList<CanvasShapeTransformPreview> _transformPreview =
-        Array.Empty<CanvasShapeTransformPreview>();
-
-    /// <summary>Active marquee rect in screen coords (null = no marquee).</summary>
-    private Rect? _marqueeRect;
-
-    // Wave 12B: active snap guide lines (cleared when gesture ends).
-    private IReadOnlyList<SnapGuideLine>? _snapGuides;
-    private SlideTransform _snapTransform = SlideTransform.Identity;
-
-    /// <summary>Screen-space preset geometry handles for the active selection.</summary>
-    private readonly List<(string Name, Point Position)> _geometryHandles = new();
-    private (string Name, Point Position)? _geometryPreview;
+    private readonly SelectionAdornerState _state = new();
 
     // ── Construction ──────────────────────────────────────────────────────────────────────────
 
@@ -121,53 +99,47 @@ public sealed class SelectionAdorner : Adorner
     /// <summary>Replaces the selection rectangles and repaints.</summary>
     public void UpdateSelection(IEnumerable<(uint id, Rect screenRect)> rects)
     {
-        _selectionRects.Clear();
-        _selectionRects.AddRange(rects);
-        _previewRect = null;
-        _transformPreview = Array.Empty<CanvasShapeTransformPreview>();
+        _state.UpdateSelection(rects.Select(item => new SelectionAdornerSelectionPlan(
+            item.id,
+            ToSelectionAdornerRect(item.screenRect))));
         InvalidateVisual();
     }
 
     /// <summary>Replaces the visible preset-shape edit points.</summary>
     public void UpdateGeometryHandles(IEnumerable<(string Name, Point Position)> handles)
     {
-        _geometryHandles.Clear();
-        _geometryHandles.AddRange(handles);
-        _geometryPreview = null;
+        _state.UpdateGeometryHandles(handles.Select(handle =>
+            new SelectionAdornerGeometryHandlePlan(handle.Name, ToCanvasPoint(handle.Position))));
         InvalidateVisual();
     }
 
     /// <summary>Shows the transient position of the handle being dragged.</summary>
     public void UpdateGeometryPreview(string? name, Point? position)
     {
-        _geometryPreview = name is not null && position is { } point
-            ? (name, point)
-            : null;
+        _state.UpdateGeometryPreview(name, position is { } point ? ToCanvasPoint(point) : null);
         InvalidateVisual();
     }
 
     /// <summary>Updates the live preview rectangle during a move/resize gesture.</summary>
     public void UpdatePreview(Rect? screenRect, double rotationDeg = 0)
     {
-        _previewRect = screenRect;
-        _previewRotationDeg = rotationDeg;
-        _transformPreview = Array.Empty<CanvasShapeTransformPreview>();
+        _state.UpdatePreview(
+            screenRect is { } rect ? ToSelectionAdornerRect(rect) : null,
+            rotationDeg);
         InvalidateVisual();
     }
 
     /// <summary>Shows each member's live geometry from one shared transform plan.</summary>
     public void UpdateTransformPreview(CanvasMultiTransformPlan plan)
     {
-        _transformPreview = plan.PreviewShapes;
-        _previewRect = plan.PreviewBounds is { } bounds ? ToWpfRect(bounds) : null;
-        _previewRotationDeg = plan.PreviewRotationDeg;
+        _state.UpdateTransformPreview(plan);
         InvalidateVisual();
     }
 
     /// <summary>Updates the marquee rectangle during a marquee-selection drag.</summary>
     public void UpdateMarquee(Rect? screenRect)
     {
-        _marqueeRect = screenRect;
+        _state.UpdateMarquee(screenRect is { } rect ? ToSelectionAdornerRect(rect) : null);
         InvalidateVisual();
     }
 
@@ -176,19 +148,11 @@ public sealed class SelectionAdorner : Adorner
     /// Pass null or an empty list to clear guides.  <paramref name="transform"/> is used
     /// to convert slide-DIP guide positions to screen space.
     /// </summary>
-    public void UpdateSnapGuides(IReadOnlyList<SnapGuideLine>? guides, SlideTransform transform)
+    public void UpdateSnapGuides(IReadOnlyList<SnapGuideLine>? guides, SlideTransformCore transform)
     {
-        _snapGuides   = guides;
-        _snapTransform = transform;
+        _state.UpdateSnapGuides(guides, transform);
         InvalidateVisual();
     }
-
-    internal bool HasTransientInteractionVisualsForTests =>
-        _previewRect.HasValue ||
-        _transformPreview.Count > 0 ||
-        _marqueeRect.HasValue ||
-        _snapGuides is { Count: > 0 } ||
-        _geometryPreview.HasValue;
 
     // ── Rendering ─────────────────────────────────────────────────────────────────────────────
 
@@ -197,28 +161,27 @@ public sealed class SelectionAdorner : Adorner
         base.OnRender(dc);
 
         // Wave 12B: Draw snap guide lines (drawn first so they're behind selection rects).
-        if (_snapGuides is { Count: > 0 })
-            DrawSnapGuides(dc, _snapGuides, _snapTransform);
+        if (_state.SnapGuides is { Count: > 0 } snapGuides)
+            DrawSnapGuides(dc, snapGuides, _state.SnapTransform);
 
         // Draw marquee
-        if (_marqueeRect.HasValue)
+        if (_state.MarqueeRect is { } marqueeRect)
         {
-            var mq = _marqueeRect.Value;
             var marqueeFill = new SolidColorBrush(Color.FromArgb(0x22, 0x21, 0x96, 0xF3));
             marqueeFill.Freeze();
-            dc.DrawRectangle(marqueeFill, MarqueePen, mq);
+            dc.DrawRectangle(marqueeFill, MarqueePen, ToWpfRect(marqueeRect));
         }
 
         // Multi-selection uses one group box for handles; individual boxes remain visible
         // without handles so the selected members are still discoverable.
-        if (_selectionRects.Count == 1)
+        if (_state.Selections.Count == 1)
         {
-            DrawSelectionRect(dc, _selectionRects[0].screenRect, drawHandles: true);
+            DrawSelectionRect(dc, ToWpfRect(_state.Selections[0].ScreenRect), drawHandles: true);
         }
         else
         {
-            foreach (var (_, rect) in _selectionRects)
-                DrawSelectionRect(dc, rect, drawHandles: false);
+            foreach (var selection in _state.Selections)
+                DrawSelectionRect(dc, ToWpfRect(selection.ScreenRect), drawHandles: false);
 
             if (SelectionBounds is { } groupBounds)
                 DrawSelectionRect(dc, groupBounds, drawHandles: true);
@@ -226,13 +189,13 @@ public sealed class SelectionAdorner : Adorner
 
         DrawGeometryHandles(dc);
 
-        foreach (var preview in _transformPreview)
+        foreach (var preview in _state.TransformPreview)
             DrawPreviewRect(dc, ToWpfRect(preview.ScreenBounds), preview.RotationDeg);
 
         // Draw preview
-        if (_previewRect.HasValue)
+        if (_state.PreviewRect is { } previewRect)
         {
-            DrawPreviewRect(dc, _previewRect.Value, _previewRotationDeg);
+            DrawPreviewRect(dc, ToWpfRect(previewRect), _state.PreviewRotationDeg);
         }
     }
 
@@ -240,7 +203,7 @@ public sealed class SelectionAdorner : Adorner
     private void DrawSnapGuides(
         DrawingContext dc,
         IReadOnlyList<SnapGuideLine> guides,
-        SlideTransform xf)
+        SlideTransformCore xf)
     {
         double w = ActualWidth;
         double h = ActualHeight;
@@ -250,13 +213,13 @@ public sealed class SelectionAdorner : Adorner
             if (g.IsHorizontal)
             {
                 // Horizontal guide: a full-width line at screen-Y derived from guide DIP position.
-                double screenY = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf.Core);
+                double screenY = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf);
                 dc.DrawLine(SnapGuidePen, new Point(0, screenY), new Point(w, screenY));
             }
             else
             {
                 // Vertical guide: a full-height line at screen-X.
-                double screenX = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf.Core);
+                double screenX = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf);
                 dc.DrawLine(SnapGuidePen, new Point(screenX, 0), new Point(screenX, h));
             }
         }
@@ -287,6 +250,9 @@ public sealed class SelectionAdorner : Adorner
     private static Rect ToWpfRect(SlideScreenRect rect) =>
         new(rect.Left, rect.Top, rect.Width, rect.Height);
 
+    private static Rect ToWpfRect(SelectionAdornerRect rect) =>
+        new(rect.Left, rect.Top, rect.Width, rect.Height);
+
     private static void DrawHandles(DrawingContext dc, Rect rect)
     {
         double h = HandleSize;
@@ -314,17 +280,22 @@ public sealed class SelectionAdorner : Adorner
     private void DrawGeometryHandles(DrawingContext dc)
     {
         const double radius = 5.0;
-        foreach (var (_, point) in _geometryHandles)
+        foreach (var handle in _state.GeometryHandles)
         {
-            dc.DrawEllipse(EditPointFill, EditPointBorder, point, radius, radius);
+            dc.DrawEllipse(
+                EditPointFill,
+                EditPointBorder,
+                ToWpfPoint(handle.ScreenPosition),
+                radius,
+                radius);
         }
 
-        if (_geometryPreview is { } preview)
+        if (_state.GeometryPreview is { } preview)
         {
             dc.DrawEllipse(
                 null,
                 EditPointPreviewPen,
-                preview.Position,
+                ToWpfPoint(preview.ScreenPosition),
                 radius + 2,
                 radius + 2);
         }
@@ -365,16 +336,9 @@ public sealed class SelectionAdorner : Adorner
     /// <summary>Returns the preset edit-point name under a screen-space pointer, if any.</summary>
     public string? HitTestGeometryHandle(Point screenPt)
     {
-        const double hitRadius = 9.0;
-        foreach (var (name, position) in _geometryHandles)
-        {
-            var dx = screenPt.X - position.X;
-            var dy = screenPt.Y - position.Y;
-            if (dx * dx + dy * dy <= hitRadius * hitRadius)
-                return name;
-        }
-
-        return null;
+        return SelectionAdornerGeometry.HitTestGeometryHandle(
+            _state.GeometryHandles,
+            ToCanvasPoint(screenPt));
     }
 
     private static SelectionAdornerRect ToSelectionAdornerRect(Rect rect)
@@ -387,24 +351,15 @@ public sealed class SelectionAdorner : Adorner
         => new(point.X, point.Y);
 
     /// <summary>Selection rects accessible to the gesture handler for redraw.</summary>
-    public IReadOnlyList<(uint id, Rect screenRect)> SelectionRects => _selectionRects;
+    public IReadOnlyList<(uint id, Rect screenRect)> SelectionRects =>
+        _state.Selections
+            .Select(selection => (selection.ShapeId, ToWpfRect(selection.ScreenRect)))
+            .ToArray();
 
     /// <summary>Per-member live preview rectangles exposed for focused host tests.</summary>
-    internal IReadOnlyList<CanvasShapeTransformPreview> TransformPreview => _transformPreview;
+    internal IReadOnlyList<CanvasShapeTransformPreview> TransformPreview => _state.TransformPreview;
 
     /// <summary>Union box used for multi-selection handles and group gestures.</summary>
-    public Rect? SelectionBounds
-    {
-        get
-        {
-            if (_selectionRects.Count == 0)
-                return null;
-
-            double left = _selectionRects.Min(item => item.screenRect.Left);
-            double top = _selectionRects.Min(item => item.screenRect.Top);
-            double right = _selectionRects.Max(item => item.screenRect.Right);
-            double bottom = _selectionRects.Max(item => item.screenRect.Bottom);
-            return new Rect(left, top, right - left, bottom - top);
-        }
-    }
+    public Rect? SelectionBounds =>
+        _state.SelectionBounds is { } rect ? ToWpfRect(rect) : null;
 }

@@ -8,11 +8,11 @@ public sealed class TextToColumnsParityFixtureTests
     [Fact]
     public void DialogGeometryAndPreviewLimit_AreSharedAcrossCaptureHosts()
     {
-        TextToColumnsParityFixture.WindowWidth.Should().Be(560);
-        TextToColumnsParityFixture.WindowHeight.Should().Be(560);
-        TextToColumnsParityFixture.MinimumWindowWidth.Should().Be(520);
-        TextToColumnsParityFixture.MinimumWindowHeight.Should().Be(500);
-        TextToColumnsParityFixture.PreviewRowLimit.Should().Be(3);
+        TextToColumnsDialogMetrics.WindowWidth.Should().Be(560);
+        TextToColumnsDialogMetrics.WindowHeight.Should().Be(560);
+        TextToColumnsDialogMetrics.MinimumWindowWidth.Should().Be(520);
+        TextToColumnsDialogMetrics.MinimumWindowHeight.Should().Be(500);
+        TextToColumnsDialogMetrics.PreviewRowLimit.Should().Be(3);
     }
 
     [Fact]

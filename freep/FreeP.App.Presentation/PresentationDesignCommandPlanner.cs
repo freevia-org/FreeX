@@ -36,10 +36,41 @@ public sealed record PresentationLayoutChoiceChrome(
     double BorderThicknessDip,
     string BadgeText);
 
+public enum PresentationLayoutPlaceholderCategory
+{
+    Title,
+    Content,
+}
+
+public sealed record PresentationLayoutPlaceholderVisualSpec(
+    PresentationLayoutPlaceholderCategory Category,
+    string FillBrushHex,
+    string StrokeBrushHex,
+    double StrokeThicknessDip,
+    double CornerRadiusDip);
+
+public sealed record PresentationLayoutPickerVisualSpec(
+    string ThumbnailBackgroundBrushHex,
+    string ThumbnailBorderBrushHex,
+    double ThumbnailBorderThicknessDip,
+    string BadgeForegroundBrushHex,
+    PresentationLayoutPlaceholderVisualSpec TitlePlaceholder,
+    PresentationLayoutPlaceholderVisualSpec ContentPlaceholder)
+{
+    public PresentationLayoutPlaceholderVisualSpec ResolvePlaceholder(PlaceholderType type) =>
+        type is PlaceholderType.Title or PlaceholderType.CenteredTitle or PlaceholderType.SubTitle
+            ? TitlePlaceholder
+            : ContentPlaceholder;
+}
+
 public sealed record PresentationLayoutThumbnailPlaceholder(
     PlaceholderType PlaceholderType,
     string RoleLabel,
-    LayoutRect Bounds);
+    LayoutRect Bounds)
+{
+    public PresentationLayoutPlaceholderVisualSpec Visual =>
+        PresentationDesignCommandPlanner.LayoutPickerVisuals.ResolvePlaceholder(PlaceholderType);
+}
 
 public sealed record PresentationLayoutChoice(
     string LayoutId,
@@ -64,6 +95,20 @@ public sealed record PresentationLayoutChoice(
             "#FFFFFF",
             1,
             string.Empty);
+
+    public string AutomationId => $"layout-{LayoutId}";
+
+    public string DisplayLabel
+    {
+        get
+        {
+            var currentPrefix = IsCurrent ? "Current - " : string.Empty;
+            var placeholders = PlaceholderCount == 1
+                ? "1 placeholder"
+                : $"{PlaceholderCount} placeholders";
+            return $"{currentPrefix}{DisplayName}\n{MasterDisplayName} - {placeholders}";
+        }
+    }
 }
 
 public sealed record PresentationLayoutGroup(
@@ -89,6 +134,24 @@ public static class PresentationDesignCommandPlanner
     public const long SlideSizeStandardCyEmu = DrawingMlCoordinateUnits.EmuPerInch * 15 / 2;
     public const double LayoutThumbnailWidthDip = 96;
     public const double LayoutThumbnailHeightDip = 54;
+
+    public static readonly PresentationLayoutPickerVisualSpec LayoutPickerVisuals = new(
+        ThumbnailBackgroundBrushHex: "#FFFFFF",
+        ThumbnailBorderBrushHex: "#D9D9D9",
+        ThumbnailBorderThicknessDip: 1,
+        BadgeForegroundBrushHex: "#B7472A",
+        TitlePlaceholder: new PresentationLayoutPlaceholderVisualSpec(
+            PresentationLayoutPlaceholderCategory.Title,
+            FillBrushHex: "#F8DDD1",
+            StrokeBrushHex: "#999999",
+            StrokeThicknessDip: 1,
+            CornerRadiusDip: 1),
+        ContentPlaceholder: new PresentationLayoutPlaceholderVisualSpec(
+            PresentationLayoutPlaceholderCategory.Content,
+            FillBrushHex: "#EAF1F6",
+            StrokeBrushHex: "#999999",
+            StrokeThicknessDip: 1,
+            CornerRadiusDip: 1));
 
     public static readonly PresentationDesignCommandPlan LayoutPlan =
         new(LayoutCommandId, PresentationDesignCommandIntentKind.RequestLayoutPicker);

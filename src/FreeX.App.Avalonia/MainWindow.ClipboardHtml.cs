@@ -1,4 +1,6 @@
 using Avalonia.Input;
+using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -6,8 +8,14 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    private static readonly DataFormat<string> HtmlPlatformFormat = DataFormat.CreateStringPlatformFormat("text/html");
-    private static readonly DataFormat<string> HtmlWindowsPlatformFormat = DataFormat.CreateStringPlatformFormat("HTML Format");
+    private static readonly PlatformClipboardFormat HtmlClipboardFormat =
+        new("text/html", PlatformClipboardDataKind.Text);
+    private static readonly PlatformClipboardFormat HtmlWindowsClipboardFormat =
+        new("HTML Format", PlatformClipboardDataKind.Text);
+    private static readonly DataFormat<string> HtmlPlatformFormat =
+        AvaloniaPlatformClipboard.CreateStringFormat(HtmlClipboardFormat);
+    private static readonly DataFormat<string> HtmlWindowsPlatformFormat =
+        AvaloniaPlatformClipboard.CreateStringFormat(HtmlWindowsClipboardFormat);
 
     // R72-services-clipboard-interop-4-2: the WPF host (MainWindow.ClipboardCommands.cs) places a
     // comma-delimited "CSV" clipboard format alongside Text/HTML on every cell-range copy (R57), so a
@@ -18,25 +26,10 @@ public sealed partial class MainWindow
     private static readonly DataFormat<string> CsvPlatformFormat = DataFormat.CreateStringPlatformFormat("text/csv");
     private static readonly DataFormat<string> CsvWindowsPlatformFormat = DataFormat.CreateStringPlatformFormat("Csv");
 
-    internal static string? BuildHtmlClipboardFragmentForTest(
-        ViewportModel viewport, Sheet? sheet, GridRange range, WorkbookTheme theme) =>
-        ClipboardHtmlSerializer.Serialize(viewport, sheet, range, theme)?.Fragment;
-
-    internal static string WrapAsCfHtmlForTest(string fragment) =>
-        ClipboardHtmlSerializer.WrapAsCfHtml(fragment);
-
-    internal static DataFormat<string> CsvPlatformFormatForTest => CsvPlatformFormat;
-
-    internal static DataFormat<string> CsvWindowsPlatformFormatForTest => CsvWindowsPlatformFormat;
-
-    internal static void AddClipboardTextAndHtmlForTest(
-        DataTransfer transfer,
-        string text,
-        ViewportModel viewport,
-        Sheet? sheet,
-        GridRange range,
-        WorkbookTheme theme) =>
-        AddClipboardTextAndHtml(transfer, text, viewport, sheet, range, theme);
+    private static readonly PlatformClipboardFormat CsvClipboardFormat =
+        new("text/csv", PlatformClipboardDataKind.Text);
+    private static readonly PlatformClipboardFormat CsvWindowsClipboardFormat =
+        new("Csv", PlatformClipboardDataKind.Text);
 
     private static void AddClipboardTextAndHtml(
         DataTransfer transfer,
@@ -48,7 +41,7 @@ public sealed partial class MainWindow
     {
         transfer.Add(DataTransferItem.CreateText(text));
 
-        var csv = ClipboardSerializer.ConvertTsvToCsv(text);
+        var csv = ClipboardCsvTextRenderer.Render(text);
         if (!string.IsNullOrEmpty(csv))
         {
             transfer.Add(DataTransferItem.Create(CsvPlatformFormat, csv));
@@ -61,6 +54,31 @@ public sealed partial class MainWindow
 
         transfer.Add(DataTransferItem.Create(HtmlPlatformFormat, html.Fragment));
         transfer.Add(DataTransferItem.Create(HtmlWindowsPlatformFormat, html.CfHtml));
+    }
+
+    private static PlatformClipboardContent BuildClipboardTextAndHtmlContent(
+        string text,
+        ViewportModel viewport,
+        Sheet? sheet,
+        GridRange range,
+        WorkbookTheme theme)
+    {
+        var custom = new List<PlatformClipboardData>();
+        var csv = ClipboardCsvTextRenderer.Render(text);
+        if (!string.IsNullOrEmpty(csv))
+        {
+            custom.Add(PlatformClipboardData.FromText(CsvClipboardFormat.Name, csv));
+            custom.Add(PlatformClipboardData.FromText(CsvWindowsClipboardFormat.Name, csv));
+        }
+
+        var html = ClipboardHtmlSerializer.Serialize(viewport, sheet, range, theme);
+        if (html is not null)
+        {
+            custom.Add(PlatformClipboardData.FromText(HtmlClipboardFormat.Name, html.Fragment));
+            custom.Add(PlatformClipboardData.FromText(HtmlWindowsClipboardFormat.Name, html.CfHtml));
+        }
+
+        return new PlatformClipboardContent(Text: text, CustomData: custom);
     }
 
 }

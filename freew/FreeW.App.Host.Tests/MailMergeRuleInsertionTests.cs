@@ -1,5 +1,6 @@
 using System.IO;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Tests;
@@ -16,52 +17,47 @@ public sealed class MailMergeRuleInsertionTests
             "Ribbon",
             "FreeWRibbonCommands.cs"));
 
-        source.Should().Contain("new InsertMergeRuleFillInCommand(resolveFieldTarget)");
-        source.Should().Contain("new InsertMergeRuleAskCommand(resolveFieldTarget)");
-        source.Should().Contain("new InsertMergeRuleSetCommand(resolveFieldTarget)");
-        source.Should().Contain("new InsertMergeRuleRefCommand(resolveFieldTarget)");
-        source.Should().Contain("new InsertMergeRuleIfCommand(resolveFieldTarget, mergeSession)");
-        source.Should().Contain("new InsertMergeRuleCondCommand(resolveFieldTarget, mergeSession");
-        source.Should().NotContain("new InsertMergeRuleFillInCommand(editor)");
-        source.Should().NotContain("new InsertMergeRuleAskCommand(editor)");
-        source.Should().NotContain("new InsertMergeRuleSetCommand(editor)");
-        source.Should().NotContain("new InsertMergeRuleRefCommand(editor)");
-        source.Should().NotContain("new InsertMergeRuleIfCommand(editor, mergeSession)");
-        source.Should().NotContain("new InsertMergeRuleCondCommand(editor, mergeSession");
+        source.Should().Contain("new InsertMergeRuleCommand(resolveFieldTarget, mergeSession, kind)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.IfThenElse)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.SkipRecordIf)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.NextRecordIf)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.FillIn)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.Ask)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.Set)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.Ref)");
+        source.Should().NotContain("class InsertMergeRuleFillInCommand");
+        source.Should().NotContain("class InsertMergeRuleAskCommand");
+        source.Should().NotContain("class InsertMergeRuleCondCommand");
     }
 
     [StaFact]
     public void NativeSimpleRuleFields_InsertAsComplexFieldsWithFamiliarLabels()
     {
         AssertInsertion(
-            MergeRuleEvaluator.BuildNativeFillInInstruction("Department"),
-            MergeRuleEvaluator.BuildFillInInstruction("Department"),
+            MailMergeRuleAuthoringPlanner.CreateFillInPlan("Department"),
             "FILLIN");
         AssertInsertion(
-            MergeRuleEvaluator.BuildNativeAskInstruction("Manager", "Manager?"),
-            MergeRuleEvaluator.BuildAskInstruction("Manager", "Manager?"),
+            MailMergeRuleAuthoringPlanner.CreateAskPlan("Manager", "Manager?")!,
             "ASK");
         AssertInsertion(
-            MergeRuleEvaluator.BuildNativeSetInstruction("Unit", "Engineering"),
-            MergeRuleEvaluator.BuildSetInstruction("Unit", "Engineering"),
+            MailMergeRuleAuthoringPlanner.CreateSetPlan("Unit", "Engineering")!,
             "SET");
         AssertInsertion(
-            MergeRuleEvaluator.BuildNativeRefInstruction("Unit"),
-            MergeRuleEvaluator.BuildRefInstruction("Unit"),
+            MailMergeRuleAuthoringPlanner.CreateRefPlan("Unit")!,
             "REF");
 
-        static void AssertInsertion(string instruction, string label, string keyword)
+        static void AssertInsertion(MailMergeFieldInsertionPlan plan, string keyword)
         {
             var editor = new DocumentView();
             editor.LoadModel(TextDocument.CreateEmpty());
 
-            FreeWRibbonCommands.InsertNativeMergeRuleField(editor, instruction, label);
+            FreeWRibbonCommands.RealizeMailMergeFieldPlan(editor, plan);
             editor.CommitToModel();
 
             var run = editor.Model.Blocks.OfType<Paragraph>().SelectMany(paragraph => paragraph.Runs).Single();
             run.ComplexField!.Keyword.Should().Be(keyword);
-            run.ComplexField.Instruction.Should().Be(instruction);
-            run.Text.Should().Be($"{MailMerge.FieldOpen}{label}{MailMerge.FieldClose}");
+            run.ComplexField.Instruction.Should().Be(plan.Field.Instruction);
+            run.Text.Should().Be(plan.CachedLabel);
         }
     }
 
@@ -69,32 +65,34 @@ public sealed class MailMergeRuleInsertionTests
     public void NativeConditionalRuleFields_PreserveNestedMergeFieldOwnership()
     {
         AssertInsertion(
-            MergeRuleEvaluator.BuildNativeIfField(
+            MailMergeRuleAuthoringPlanner.CreateIfPlan(new MailMergeRuleIfDialogResult(
                 "Account Status",
                 MergeConditionOperator.Equal,
                 "Active",
                 "Approved",
-                "Review"),
+                "Review")),
             "IF");
         AssertInsertion(
-            MergeRuleEvaluator.BuildNativeSkipIfField(
+            MailMergeRuleAuthoringPlanner.CreateConditionPlan(new MailMergeRuleConditionDialogResult(
                 "Blocked",
                 MergeConditionOperator.IsNotBlank,
                 string.Empty),
+                skipRecord: true),
             "SKIPIF");
         AssertInsertion(
-            MergeRuleEvaluator.BuildNativeNextIfField(
+            MailMergeRuleAuthoringPlanner.CreateConditionPlan(new MailMergeRuleConditionDialogResult(
                 "Region",
                 MergeConditionOperator.Contains,
                 "EU"),
+                skipRecord: false),
             "NEXTIF");
 
-        static void AssertInsertion(ComplexField field, string keyword)
+        static void AssertInsertion(MailMergeFieldInsertionPlan plan, string keyword)
         {
             var editor = new DocumentView();
             editor.LoadModel(TextDocument.CreateEmpty());
 
-            FreeWRibbonCommands.InsertNativeMergeRuleField(editor, field, "rule label");
+            FreeWRibbonCommands.RealizeMailMergeFieldPlan(editor, plan);
             editor.CommitToModel();
 
             var inserted = editor.Model.Blocks.OfType<Paragraph>().SelectMany(paragraph => paragraph.Runs).Single();
@@ -102,7 +100,7 @@ public sealed class MailMergeRuleInsertionTests
             var nested = inserted.ComplexField.NestedFields.Should().ContainSingle().Subject;
             nested.Placement.Should().Be(NestedComplexFieldPlacement.Instruction);
             nested.Field.Keyword.Should().Be("MERGEFIELD");
-            inserted.Text.Should().Be("«rule label»");
+            inserted.Text.Should().Be(plan.CachedLabel);
         }
     }
 }

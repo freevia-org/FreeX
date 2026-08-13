@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using Free.Shared.Shell.Wpf;
 using FreeX.App.Presentation.SheetUI;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -44,17 +45,17 @@ public sealed class ActivateSheetDialog : DialogWindow
         _sheetList.ItemContainerStyle = CreateSheetListItemStyle();
         _sheetList.Height = 260;
         AutomationProperties.SetName(_sheetList, UiText.Get("ActivateSheet_ListAutomationName"));
-        AutomationProperties.SetAutomationId(_sheetList, "ActivateSheetList");
+        AutomationProperties.SetAutomationId(_sheetList, FreeXAutomationIdCatalog.ActivateSheetList);
         AutomationProperties.SetHelpText(_sheetList, UiText.Get("ActivateSheet_ListHelpText"));
         _sheetList.SelectionChanged += (_, _) => UpdateButtonState();
         _sheetList.MouseDoubleClick += SheetList_MouseDoubleClick;
 
         AutomationProperties.SetName(_okButton, UiText.Get("ActivateSheet_OkAutomationName"));
-        AutomationProperties.SetAutomationId(_okButton, "ActivateSheetOkButton");
+        AutomationProperties.SetAutomationId(_okButton, FreeXAutomationIdCatalog.ActivateSheetOkButton);
         AutomationProperties.SetHelpText(_okButton, UiText.Get("ActivateSheet_OkHelpText"));
         _okButton.Click += (_, _) => Accept();
         AutomationProperties.SetName(_cancelButton, UiText.Get("ActivateSheet_CancelAutomationName"));
-        AutomationProperties.SetAutomationId(_cancelButton, "ActivateSheetCancelButton");
+        AutomationProperties.SetAutomationId(_cancelButton, FreeXAutomationIdCatalog.ActivateSheetCancelButton);
         AutomationProperties.SetHelpText(_cancelButton, UiText.Get("ActivateSheet_CancelHelpText"));
 
         Content = CreateContent();

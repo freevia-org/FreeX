@@ -61,4 +61,15 @@ public sealed class QuickAnalysisTotalsPlannerTests
         edits[0].NewCell.FormulaText.Should().Be("SUM($B$2:$D$2)");
         edits[2].NewCell.FormulaText.Should().Be("SUM($B$2:$D$4)");
     }
+
+    [Fact]
+    public void BuildAggregateEdits_ReturnsNoEditsWhenAdjacentColumnIsOutsideSheet()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, CellAddress.MaxCol),
+            new CellAddress(sheetId, 4, CellAddress.MaxCol));
+
+        QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, "SUM").Should().BeEmpty();
+    }
 }

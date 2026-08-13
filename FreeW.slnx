@@ -14,6 +14,7 @@
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
     <Project Path="shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj" />
     <Project Path="shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
+    <Project Path="shared/Free.Shared.TextSearch/Free.Shared.TextSearch.csproj" />
   </Folder>
   <Folder Name="/freew/">
     <Project Path="freew/FreeW.Core.Model/FreeW.Core.Model.csproj" />
@@ -29,7 +30,9 @@
     <Project Path="freew/FreeW.App.Host/FreeW.App.Host.csproj" />
     <Project Path="freew/FreeW.App.Host.Tests/FreeW.App.Host.Tests.csproj" />
     <Project Path="freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj" />
+    <Project Path="freew/TestSupport/Validation.Avalonia/FreeW.Validation.Avalonia.csproj" />
     <Project Path="freew/FreeW.App.Avalonia.Tests/FreeW.App.Avalonia.Tests.csproj" />
+    <Project Path="freew/tests/FreeW.VisualEvidence.TestSupport/FreeW.VisualEvidence.TestSupport.csproj" />
     <Project Path="freew/tools/FreeW.FidelityRender/FreeW.FidelityRender.csproj" />
     <Project Path="freew/tools/FreeW.VisualEvidenceSummary/FreeW.VisualEvidenceSummary.csproj" />
     <Project Path="freew/tools/FreeW.DialogVisualHarness/FreeW.DialogVisualHarness.csproj" />

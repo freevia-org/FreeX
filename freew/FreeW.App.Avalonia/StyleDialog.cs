@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -11,12 +12,10 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class StyleDialog : FreeWDialogWindow
+internal sealed partial class StyleDialog : FreeWDialogWindow
 {
-    // This style owns Avalonia brush objects, so create it with each dialog on the UI thread.
-    // A static instance can be initialized by a source/metrics test thread and later fail
-    // Avalonia's thread-affinity checks when the real dialog renders.
-    private readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+    private static readonly StyleDialogSurfaceSpec Surface = StyleDialogPlanner.Surface;
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
             // These are the measured WPF metrics for this dialog. Keep the correction local;
@@ -38,79 +37,73 @@ internal sealed class StyleDialog : FreeWDialogWindow
             ButtonBorderBrush = new SolidColorBrush(Color.FromRgb(112, 112, 112)),
         };
 
-    private readonly IReadOnlyList<KeyValuePair<string, string>> _basedOnEntries;
-    private readonly IReadOnlyList<KeyValuePair<string, string>> _nextEntries;
-    private readonly TextBox _name = new() { MinWidth = 280 };
-    private readonly ComboBox _basedOn = new() { MinWidth = 280 };
-    private readonly ComboBox _nextStyle = new() { MinWidth = 280 };
-    private readonly CheckBox _bold = new() { Content = "Bold", Margin = new Thickness(0, 0, 12, 0) };
-    private readonly CheckBox _italic = new() { Content = "Italic", Margin = new Thickness(0, 0, 12, 0) };
-    private readonly CheckBox _underline = new() { Content = "Underline" };
-    private readonly ComboBox _size = new() { MinWidth = 100, HorizontalAlignment = HorizontalAlignment.Stretch };
-    private readonly ComboBox _color = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Stretch };
-    private readonly ComboBox _alignment = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Stretch };
-    private readonly RunFormatting _seedRun;
-    private readonly ParagraphFormatting _seedParagraph;
+    private readonly TextBox _name = new() { MinWidth = Surface.Field(StyleDialogFieldKind.Name).MinWidth };
+    private readonly ComboBox _basedOn = new() { MinWidth = Surface.Field(StyleDialogFieldKind.BasedOn).MinWidth };
+    private readonly ComboBox _nextStyle = new() { MinWidth = Surface.Field(StyleDialogFieldKind.NextStyle).MinWidth };
+    private readonly CheckBox _bold = Check(StyleDialogEffectKind.Bold);
+    private readonly CheckBox _italic = Check(StyleDialogEffectKind.Italic);
+    private readonly CheckBox _underline = Check(StyleDialogEffectKind.Underline);
+    private readonly ComboBox _size = new() { MinWidth = Surface.Field(StyleDialogFieldKind.FontSize).MinWidth, HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly ComboBox _color = new() { MinWidth = Surface.Field(StyleDialogFieldKind.TextColor).MinWidth, HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly ComboBox _alignment = new() { MinWidth = Surface.Field(StyleDialogFieldKind.Alignment).MinWidth, HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly StyleDialogSession _session;
 
-    internal static double ControlHeightForTests => StyleDialogMetrics.ComboBoxHeight;
-    internal static double ButtonHeightForTests => StyleDialogMetrics.ButtonHeight;
-    internal static double CheckBoxHeightForTests => StyleDialogMetrics.CheckBoxHeight;
-
-    private StyleDialog(
-        string title,
-        IReadOnlyDictionary<string, string> styleNamesById,
-        string? fixedName,
-        string? defaultBasedOnId,
-        RunFormatting seedRun,
-        ParagraphFormatting seedParagraph,
-        string? defaultNextStyleId)
+    private StyleDialog(StyleDialogSession session)
     {
-        Title = title;
+        _session = session;
+        var state = _session.InitialState;
+
+        Title = state.Title;
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _seedRun = seedRun;
-        _seedParagraph = seedParagraph;
-        _basedOnEntries = StyleDialogPlanner.BuildStyleOptions(styleNamesById, "(none)");
-        _nextEntries = StyleDialogPlanner.BuildStyleOptions(styleNamesById, "(same style)");
-
-        _name.Text = fixedName ?? string.Empty;
-        _name.IsReadOnly = fixedName is not null;
-        _basedOn.ItemsSource = _basedOnEntries.Select(e => e.Key).ToArray();
-        _basedOn.SelectedIndex = IndexOfId(_basedOnEntries, defaultBasedOnId);
-        _nextStyle.ItemsSource = _nextEntries.Select(e => e.Key).ToArray();
-        _nextStyle.SelectedIndex = IndexOfId(_nextEntries, defaultNextStyleId);
-        _bold.IsChecked = seedRun.Bold;
-        _italic.IsChecked = seedRun.Italic;
-        _underline.IsChecked = seedRun.Underline;
-        _size.ItemsSource = StyleDialogPlanner.FontSizes.Select(s => s.Label).ToArray();
-        _size.SelectedIndex = StyleDialogPlanner.IndexOfSize(seedRun.FontSizePt);
-        _color.ItemsSource = StyleDialogPlanner.Colors.Select(c => c.Label).ToArray();
-        _color.SelectedIndex = StyleDialogPlanner.IndexOfColor(seedRun.ColorHex);
+        _name.Text = state.Name;
+        _name.IsReadOnly = state.NameIsReadOnly;
+        _basedOn.ItemsSource = state.BasedOnOptions;
+        _basedOn.SelectedIndex = state.BasedOnIndex;
+        _nextStyle.ItemsSource = state.NextStyleOptions;
+        _nextStyle.SelectedIndex = state.NextStyleIndex;
+        foreach (var spec in Surface.Effects)
+        {
+            var checkBox = EffectControlFor(spec.Kind);
+            checkBox.IsChecked = state.EffectValue(spec.Kind);
+            AutomationProperties.SetAutomationId(checkBox, spec.AutomationId);
+        }
+        _size.ItemsSource = StyleDialogPlanner.FontSizes;
+        _size.SelectedIndex = state.FontSizeIndex;
+        _color.ItemsSource = StyleDialogPlanner.Colors;
+        _color.SelectedIndex = state.ColorIndex;
         _alignment.ItemsSource = StyleDialogPlanner.AlignmentLabels.ToArray();
-        _alignment.SelectedIndex = (int)seedParagraph.Alignment;
+        _alignment.SelectedIndex = state.AlignmentIndex;
         ApplyCompactChrome();
 
         var effects = new StackPanel { Orientation = Orientation.Horizontal };
-        effects.Children.Add(_bold);
-        effects.Children.Add(_italic);
-        effects.Children.Add(_underline);
+        foreach (var spec in Surface.Effects)
+            effects.Children.Add(EffectControlFor(spec.Kind));
+
+        var fields = new Dictionary<StyleDialogFieldKind, Control>
+        {
+            [StyleDialogFieldKind.Name] = _name,
+            [StyleDialogFieldKind.BasedOn] = _basedOn,
+            [StyleDialogFieldKind.NextStyle] = _nextStyle,
+            [StyleDialogFieldKind.Formatting] = effects,
+            [StyleDialogFieldKind.FontSize] = _size,
+            [StyleDialogFieldKind.TextColor] = _color,
+            [StyleDialogFieldKind.Alignment] = _alignment,
+        };
+        foreach (var spec in Surface.Fields)
+            AutomationProperties.SetAutomationId(fields[spec.Kind], spec.AutomationId);
 
         var panel = new StackPanel { Margin = new Thickness(StyleDialogMetrics.DialogMargin) };
-        AddRow(panel, "Name:", _name);
-        AddRow(panel, "Style based on:", _basedOn);
-        AddRow(panel, "Style for following paragraph:", _nextStyle);
-        AddRow(panel, "Formatting:", effects);
-        AddRow(panel, "Font size:", _size);
-        AddRow(panel, "Text colour:", _color);
-        AddRow(panel, "Alignment:", _alignment);
+        foreach (var spec in Surface.Fields)
+            AddRow(panel, spec.Label, fields[spec.Kind]);
 
         var actionRow = AvaloniaCompactDialogChrome.CreateOkCancelRow(
             () => _ = AcceptAsync(),
             () => Close(null),
-            buttonWidth: 72,
+            buttonWidth: Surface.ActionButtonWidth,
             margin: new Thickness(0, StyleDialogMetrics.ActionRowTopMargin, -1, 0),
             style: DialogChromeStyle);
         panel.Children.Add(actionRow);
@@ -128,33 +121,31 @@ internal sealed class StyleDialog : FreeWDialogWindow
         {
             ApplyCompactChrome();
             foreach (var button in actionRow.Children.OfType<Button>())
-                AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, 72, button.IsDefault);
-            if (fixedName is null)
-                _name.Focus(NavigationMethod.Tab);
-            else
+                AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, Surface.ActionButtonWidth, button.IsDefault);
+            if (state.InitialFocus == StyleDialogFocusTarget.BasedOn)
                 _basedOn.Focus(NavigationMethod.Tab);
+            else
+                _name.Focus(NavigationMethod.Tab);
         };
     }
 
     public static Task<StyleDefinitionResult?> AskNewAsync(
         Window owner,
-        IReadOnlyDictionary<string, string> styleNamesById,
+        TextDocument document,
         string? defaultBasedOnId) =>
-        new StyleDialog("New Style", styleNamesById, fixedName: null, defaultBasedOnId,
-            RunFormatting.Default, ParagraphFormatting.Default, defaultNextStyleId: null)
+        new StyleDialog(StyleDialogPlanner.CreateNewSession(document, defaultBasedOnId))
             .ShowDialog<StyleDefinitionResult?>(owner);
 
     public static Task<StyleDefinitionResult?> AskModifyAsync(
         Window owner,
-        IReadOnlyDictionary<string, string> styleNamesById,
+        TextDocument document,
         DocumentStyle existing) =>
-        new StyleDialog($"Modify Style \u2014 {existing.Name}", styleNamesById, fixedName: existing.Name,
-            existing.BasedOnStyleId, existing.Run, existing.Paragraph, existing.NextStyleId)
+        new StyleDialog(StyleDialogPlanner.CreateModifySession(document, existing))
             .ShowDialog<StyleDefinitionResult?>(owner);
 
     public static async Task ShowNewAndApplyAsync(Window owner, DocumentView editor)
     {
-        var definition = await AskNewAsync(owner, StyleNamesById(editor.Document), editor.CurrentParagraphStyleId);
+        var definition = await AskNewAsync(owner, editor.Document, editor.CurrentParagraphStyleId);
         if (definition is null)
             return;
 
@@ -167,56 +158,32 @@ internal sealed class StyleDialog : FreeWDialogWindow
         editor.Focus();
     }
 
-    internal static IReadOnlyDictionary<string, string> StyleNamesById(TextDocument document) =>
-        document.Styles.ToDictionary(kv => kv.Key, kv => kv.Value.Name, StringComparer.Ordinal);
-
     private async Task AcceptAsync()
     {
-        var input = new StyleDialogInput(
+        var acceptance = _session.PlanAcceptance(StyleDialogPlanner.CaptureControlState(
             _name.Text,
-            SelectedId(_basedOnEntries, _basedOn.SelectedIndex),
-            SelectedId(_nextEntries, _nextStyle.SelectedIndex),
-            _bold.IsChecked == true,
-            _italic.IsChecked == true,
-            _underline.IsChecked == true,
+            _basedOn.SelectedIndex,
+            _nextStyle.SelectedIndex,
             _size.SelectedIndex,
             _color.SelectedIndex,
-            _alignment.SelectedIndex);
+            _alignment.SelectedIndex,
+            kind => EffectControlFor(kind).IsChecked == true));
 
-        if (!StyleDialogPlanner.TryBuildDefinition(
-                input,
-                _seedRun,
-                _seedParagraph,
-                out var result,
-                out var validation))
+        if (!acceptance.IsAccepted)
         {
             await AvaloniaUserMessageDialog.ShowWarningAsync(
                 this,
-                StyleDialogPlanner.ValidationMessageFor(validation),
-                "New Style");
-            _name.Focus(NavigationMethod.Tab);
+                acceptance.ErrorMessage ?? string.Empty,
+                _session.ValidationTitle);
+            if (acceptance.FocusField == StyleDialogField.Name)
+                _name.Focus(NavigationMethod.Tab);
             return;
         }
 
-        Close(result);
+        Close(acceptance.Result);
     }
 
-    private static string? SelectedId(IReadOnlyList<KeyValuePair<string, string>> entries, int index) =>
-        index > 0 && index < entries.Count ? entries[index].Value : null;
-
-    private static int IndexOfId(IReadOnlyList<KeyValuePair<string, string>> entries, string? id)
-    {
-        if (string.IsNullOrEmpty(id))
-            return 0;
-        for (var i = 1; i < entries.Count; i++)
-        {
-            if (entries[i].Value == id)
-                return i;
-        }
-        return 0;
-    }
-
-    private void AddRow(Panel panel, string label, Control field)
+    private static void AddRow(Panel panel, string label, Control field)
     {
         panel.Children.Add(new TextBlock
         {
@@ -244,8 +211,9 @@ internal sealed class StyleDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyComboBox(_alignment, DialogChromeStyle);
         foreach (var comboBox in new[] { _basedOn, _nextStyle, _size, _color, _alignment })
             comboBox.Foreground = Brushes.Black;
-        foreach (var checkBox in new[] { _bold, _italic, _underline })
+        foreach (var spec in Surface.Effects)
         {
+            var checkBox = EffectControlFor(spec.Kind);
             AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, DialogChromeStyle);
             checkBox.Height = StyleDialogMetrics.CheckBoxHeight;
             checkBox.MinHeight = StyleDialogMetrics.CheckBoxHeight;
@@ -253,10 +221,25 @@ internal sealed class StyleDialog : FreeWDialogWindow
             checkBox.Foreground = Brushes.Black;
         }
     }
+
+    private static CheckBox Check(StyleDialogEffectKind kind) => new()
+    {
+        Content = Surface.Effect(kind).Label,
+        Margin = new Thickness(0, 0, kind == StyleDialogEffectKind.Underline ? 0 : 12, 0),
+    };
+
+    private CheckBox EffectControlFor(StyleDialogEffectKind kind) => kind switch
+    {
+        StyleDialogEffectKind.Bold => _bold,
+        StyleDialogEffectKind.Italic => _italic,
+        StyleDialogEffectKind.Underline => _underline,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
 }
 
 internal sealed class ManageStylesDialog : FreeWDialogWindow
 {
+    private static readonly ManageStyleSurfaceSpec Surface = StyleDialogPlanner.Surface.Manage;
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
@@ -267,33 +250,38 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
             ListBoxItemPadding = new Thickness(4, 0),
         };
 
-    private readonly TextDocument _document;
-    private readonly ListBox _styles = new() { MinHeight = 220, MinWidth = 320 };
-    private readonly ComboBox _sortOrder = new() { MinWidth = 160 };
+    private readonly ManageStylesDialogSession _session;
+    private readonly ListBox _styles = new()
+    {
+        MinHeight = Surface.Field(ManageStyleFieldKind.Styles).MinHeight,
+        MinWidth = Surface.Field(ManageStyleFieldKind.Styles).MinWidth,
+    };
+    private readonly ComboBox _sortOrder = new() { MinWidth = Surface.Field(ManageStyleFieldKind.Sort).MinWidth };
     private readonly Button _apply;
     private readonly Button _modify;
     private readonly Button _delete;
-    private readonly List<StyleDialogRow> _rows = [];
 
     private ManageStylesDialog(TextDocument document, string? preselectStyleId)
     {
-        _document = document;
-        Title = "Manage Styles";
+        _session = StyleDialogPlanner.CreateManageStylesSession(document, preselectStyleId);
+        Title = Surface.Title;
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _sortOrder.ItemsSource = new[] { "Alphabetical", "By type (built-ins first)", "By use (most-used first)" };
-        _sortOrder.SelectedIndex = 0;
-        _sortOrder.SelectionChanged += (_, _) => RebuildList(SelectedOrder(), SelectedRow()?.Id ?? preselectStyleId);
+        _sortOrder.ItemsSource = StyleDialogPlanner.ManageStyleSortLabels;
+        _sortOrder.SelectedIndex = _session.State.SortIndex;
+        AutomationProperties.SetAutomationId(_sortOrder, Surface.Field(ManageStyleFieldKind.Sort).AutomationId);
+        AutomationProperties.SetAutomationId(_styles, Surface.Field(ManageStyleFieldKind.Styles).AutomationId);
+        _sortOrder.SelectionChanged += (_, _) => RebuildList(_sortOrder.SelectedIndex);
         _styles.SelectionChanged += (_, _) => SyncButtons();
 
         _sortOrder.Margin = new Thickness(0, 0, 0, 8);
         var sortRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
         sortRow.Children.Add(new TextBlock
         {
-            Text = "Sort:",
+            Text = Surface.Field(ManageStyleFieldKind.Sort).Label,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
         });
@@ -303,24 +291,23 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
         listPane.Children.Add(sortRow);
         listPane.Children.Add(_styles);
 
-        _apply = Button("Apply", (_, _) =>
+        _apply = Button(Surface.Action(ManageStyleCommandKind.Apply), (_, _) =>
         {
-            if (SelectedRow() is { } row)
-                Close(new ManageStyleAction.Apply(row.Id));
+            if (_session.PlanAction(ManageStyleActionKind.Apply, _styles.SelectedIndex) is { } action)
+                Close(action);
         });
         _apply.IsDefault = true;
-        _modify = Button("Modify\u2026", (_, _) =>
+        _modify = Button(Surface.Action(ManageStyleCommandKind.Modify), (_, _) =>
         {
-            if (SelectedRow() is { } row)
-                Close(new ManageStyleAction.Modify(row.Id));
+            if (_session.PlanAction(ManageStyleActionKind.Modify, _styles.SelectedIndex) is { } action)
+                Close(action);
         });
-        _delete = Button("Delete", (_, _) =>
+        _delete = Button(Surface.Action(ManageStyleCommandKind.Delete), (_, _) =>
         {
-            if (SelectedRow() is { IsBuiltIn: false } row)
-                Close(new ManageStyleAction.Delete(row.Id));
+            if (_session.PlanAction(ManageStyleActionKind.Delete, _styles.SelectedIndex) is { } action)
+                Close(action);
         });
-        var close = Button("Close", (_, _) => Close(null));
-        close.IsCancel = true;
+        var close = Button(Surface.Action(ManageStyleCommandKind.Close), (_, _) => Close(null));
 
         var buttonPane = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(12, 0, 0, 0) };
         buttonPane.Children.Add(_apply);
@@ -346,11 +333,11 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
             AvaloniaCompactDialogChrome.ApplyComboBox(_sortOrder, DialogChromeStyle);
             AvaloniaCompactDialogChrome.ApplyListBox(_styles, DialogChromeStyle);
             foreach (var button in new[] { _apply, _modify, _delete, close })
-                AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, 80, button.IsDefault);
+                AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, Surface.ActionButtonWidth, button.IsDefault);
             _styles.Focus(NavigationMethod.Tab);
         };
 
-        RebuildList(StyleDialogSortOrder.Alphabetical, preselectStyleId);
+        RebuildList(_sortOrder.SelectedIndex);
     }
 
     public static async Task ShowAndApplyAsync(Window owner, DocumentView editor)
@@ -376,7 +363,7 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
                 case ManageStyleAction.Modify modify:
                     if (!editor.Document.Styles.TryGetValue(modify.StyleId, out var existing))
                         continue;
-                    var definition = await StyleDialog.AskModifyAsync(owner, StyleDialog.StyleNamesById(editor.Document), existing);
+                    var definition = await StyleDialog.AskModifyAsync(owner, editor.Document, existing);
                     if (definition is null)
                         continue;
                     editor.ModifyParagraphStyle(
@@ -393,39 +380,37 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
     internal static IReadOnlyList<StyleDialogRow> BuildRows(TextDocument document, StyleDialogSortOrder order) =>
         StyleDialogPlanner.BuildRows(document, order);
 
-    private void RebuildList(StyleDialogSortOrder order, string? selectedStyleId)
+    private void RebuildList(int sortIndex)
     {
-        _rows.Clear();
-        _rows.AddRange(BuildRows(_document, order));
-        _styles.ItemsSource = _rows.Select(row => row.Display).ToArray();
-
-        var index = _rows.FindIndex(row => row.Id == selectedStyleId);
-        _styles.SelectedIndex = index >= 0 ? index : (_rows.Count > 0 ? 0 : -1);
-        SyncButtons();
+        var state = _session.PlanSort(sortIndex);
+        _styles.ItemsSource = state.Rows.Select(row => row.Display).ToArray();
+        _styles.SelectedIndex = state.SelectedIndex;
+        ApplyButtonState(state.Buttons);
     }
-
-    private StyleDialogSortOrder SelectedOrder() => _sortOrder.SelectedIndex switch
-    {
-        1 => StyleDialogSortOrder.ByType,
-        2 => StyleDialogSortOrder.ByUse,
-        _ => StyleDialogSortOrder.Alphabetical,
-    };
-
-    private StyleDialogRow? SelectedRow() =>
-        _styles.SelectedIndex >= 0 && _styles.SelectedIndex < _rows.Count ? _rows[_styles.SelectedIndex] : null;
 
     private void SyncButtons()
     {
-        var row = SelectedRow();
-        _apply.IsEnabled = row is not null;
-        _modify.IsEnabled = row is not null;
-        _delete.IsEnabled = row is { IsBuiltIn: false };
+        ApplyButtonState(_session.SelectRow(_styles.SelectedIndex).Buttons);
     }
 
-    private static Button Button(string text, EventHandler<RoutedEventArgs> click)
+    private void ApplyButtonState(ManageStyleButtonState buttons)
     {
-        var button = new Button { Content = text, Margin = new Thickness(0, 0, 0, 8) };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80);
+        _apply.IsEnabled = buttons.ApplyEnabled;
+        _modify.IsEnabled = buttons.IsEnabled(ManageStyleCommandKind.Modify);
+        _delete.IsEnabled = buttons.IsEnabled(ManageStyleCommandKind.Delete);
+    }
+
+    private static Button Button(ManageStyleActionSpec spec, EventHandler<RoutedEventArgs> click)
+    {
+        var button = new Button
+        {
+            Content = spec.Label,
+            IsDefault = spec.IsDefault,
+            IsCancel = spec.IsCancel,
+            Margin = new Thickness(0, 0, 0, spec.Kind == ManageStyleCommandKind.Close ? 0 : 8),
+        };
+        AutomationProperties.SetAutomationId(button, spec.AutomationId);
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: Surface.ActionButtonWidth);
         button.Click += click;
         return button;
     }

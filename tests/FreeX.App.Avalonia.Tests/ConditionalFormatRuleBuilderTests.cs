@@ -1,6 +1,5 @@
 using FluentAssertions;
 
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Services;
@@ -327,7 +326,7 @@ public sealed class ConditionalFormatRuleBuilderTests
         var disjoint = RuleAt(sheet, 10, 10, 12, 12);
         var rules = new List<ConditionalFormat> { overlapping, disjoint };
 
-        var listed = ConditionalFormatManageModel.BuildList(rules, RangeAt(sheet, 1, 1, 2, 2));
+        var listed = CreateManageSession(rules, RangeAt(sheet, 1, 1, 2, 2)).BuildProjection();
 
         listed.Should().ContainSingle().Which.Id.Should().Be(overlapping.Id);
     }
@@ -338,16 +337,16 @@ public sealed class ConditionalFormatRuleBuilderTests
         var sheet = SheetId();
         var rules = new List<ConditionalFormat> { RuleAt(sheet, 0, 0, 1, 1), RuleAt(sheet, 5, 5, 6, 6) };
 
-        ConditionalFormatManageModel.BuildList(rules, selection: null).Should().HaveCount(2);
+        CreateManageSession(rules).BuildProjection().Should().HaveCount(2);
     }
 
     [Fact]
-    public void Manage_BuildDeleteCommand_UnknownId_ReturnsNull()
+    public void Manage_Delete_UnknownId_ReturnsFalse()
     {
         var sheet = SheetId();
         var rules = new List<ConditionalFormat> { RuleAt(sheet, 0, 0, 1, 1) };
 
-        ConditionalFormatManageModel.BuildDeleteCommand(sheet, rules, Guid.NewGuid()).Should().BeNull();
+        CreateManageSession(rules).Delete(Guid.NewGuid()).Should().BeFalse();
     }
 
     [Fact]
@@ -361,10 +360,9 @@ public sealed class ConditionalFormatRuleBuilderTests
         session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, keep));
         session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, drop));
 
-        var deleteCommand = ConditionalFormatManageModel.BuildDeleteCommand(
-            sheetId, session.ActiveSheet.ConditionalFormats, drop.Id);
-        deleteCommand.Should().NotBeNull();
-        session.ExecuteReviewCommand(deleteCommand!).Success.Should().BeTrue();
+        var manager = CreateManageSession(session.ActiveSheet.ConditionalFormats);
+        manager.Delete(drop.Id).Should().BeTrue();
+        session.ExecuteReviewCommand(manager.CreateApplyCommand(sheetId)).Success.Should().BeTrue();
 
         session.ActiveSheet.ConditionalFormats.Should().ContainSingle().Which.Id.Should().Be(keep.Id);
     }
@@ -381,10 +379,9 @@ public sealed class ConditionalFormatRuleBuilderTests
 
         var edited = ConditionalFormatRuleBuilder.Build(
             new CfRuleInput { RuleType = CfRuleType.CellValue, Value1 = "2" }, range, id: rule.Id);
-        var editCommand = ConditionalFormatManageModel.BuildEditCommand(
-            sheetId, session.ActiveSheet.ConditionalFormats, edited);
-        editCommand.Should().NotBeNull();
-        session.ExecuteReviewCommand(editCommand!).Success.Should().BeTrue();
+        var manager = CreateManageSession(session.ActiveSheet.ConditionalFormats);
+        manager.Replace(edited).Should().BeTrue();
+        session.ExecuteReviewCommand(manager.CreateApplyCommand(sheetId)).Success.Should().BeTrue();
 
         session.ActiveSheet.ConditionalFormats.Should().ContainSingle().Which.Value1.Should().Be("2");
     }
@@ -400,10 +397,9 @@ public sealed class ConditionalFormatRuleBuilderTests
         session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, rule));
 
         var duplicateId = Guid.NewGuid();
-        var duplicateCommand = ConditionalFormatManageModel.BuildDuplicateCommand(
-            sheetId, session.ActiveSheet.ConditionalFormats, rule.Id, duplicateId);
-        duplicateCommand.Should().NotBeNull();
-        session.ExecuteReviewCommand(duplicateCommand!).Success.Should().BeTrue();
+        var manager = CreateManageSession(session.ActiveSheet.ConditionalFormats);
+        manager.Duplicate(rule.Id, duplicateId).Should().BeTrue();
+        session.ExecuteReviewCommand(manager.CreateApplyCommand(sheetId)).Success.Should().BeTrue();
 
         session.ActiveSheet.ConditionalFormats.Should().HaveCount(2);
         var duplicate = session.ActiveSheet.ConditionalFormats.Single(r => r.Id == duplicateId);
@@ -415,19 +411,19 @@ public sealed class ConditionalFormatRuleBuilderTests
     public void Manage_Describe_SummarizesRuleTypes()
     {
         var sheet = SheetId();
-        ConditionalFormatManageModel.Describe(new ConditionalFormat
+        ManageConditionalFormatsPlanner.DescribeRule(new ConditionalFormat
         {
             AppliesTo = RangeAt(sheet, 0, 0, 1, 1),
             RuleType = CfRuleType.CellValue,
             Operator = CfOperator.GreaterThan,
             Value1 = "5",
-        }).Should().Contain("Cell Value").And.Contain("5");
+        }).ResourceKey.Should().Be("ManageConditionalFormats_RuleCellValue");
 
-        ConditionalFormatManageModel.Describe(new ConditionalFormat
+        ManageConditionalFormatsPlanner.DescribeRule(new ConditionalFormat
         {
             AppliesTo = RangeAt(sheet, 0, 0, 1, 1),
             RuleType = CfRuleType.DataBar,
-        }).Should().Be("Data Bar");
+        }).ResourceKey.Should().Be("ManageConditionalFormats_RuleDataBar");
     }
 
     [Fact]
@@ -449,25 +445,25 @@ public sealed class ConditionalFormatRuleBuilderTests
     // ── Manage: reorder + applies-to command mapping ──────────────────────────
 
     [Fact]
-    public void Manage_BuildMoveCommand_UnknownId_ReturnsNull()
+    public void Manage_Move_UnknownId_ReturnsFalse()
     {
         var sheet = SheetId();
         var rules = new List<ConditionalFormat> { RuleAt(sheet, 0, 0, 1, 1) };
 
-        ConditionalFormatManageModel.BuildMoveCommand(
-            sheet, rules, scope: null, Guid.NewGuid(), ConditionalFormatRuleMoveDirection.Up).Should().BeNull();
+        CreateManageSession(rules).Move(Guid.NewGuid(), ConditionalFormatRuleMoveDirection.Up)
+            .Should().BeFalse();
     }
 
     [Fact]
-    public void Manage_BuildMoveCommand_AtBoundary_ReturnsNull()
+    public void Manage_Move_AtBoundary_ReturnsFalse()
     {
         var sheet = SheetId();
         var first = RuleAt(sheet, 0, 0, 1, 1);
         first.Priority = 1;
         var rules = new List<ConditionalFormat> { first };
 
-        ConditionalFormatManageModel.BuildMoveCommand(
-            sheet, rules, scope: null, first.Id, ConditionalFormatRuleMoveDirection.Up).Should().BeNull();
+        CreateManageSession(rules).Move(first.Id, ConditionalFormatRuleMoveDirection.Up)
+            .Should().BeFalse();
     }
 
     [Fact]
@@ -481,10 +477,9 @@ public sealed class ConditionalFormatRuleBuilderTests
         session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, first));
         session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, second));
 
-        var moveCommand = ConditionalFormatManageModel.BuildMoveCommand(
-            sheetId, session.ActiveSheet.ConditionalFormats, scope: null, second.Id, ConditionalFormatRuleMoveDirection.Up);
-        moveCommand.Should().NotBeNull();
-        session.ExecuteReviewCommand(moveCommand!).Success.Should().BeTrue();
+        var manager = CreateManageSession(session.ActiveSheet.ConditionalFormats);
+        manager.Move(second.Id, ConditionalFormatRuleMoveDirection.Up).Should().BeTrue();
+        session.ExecuteReviewCommand(manager.CreateApplyCommand(sheetId)).Success.Should().BeTrue();
 
         session.ActiveSheet.ConditionalFormats.Single(r => r.Id == second.Id).Priority
             .Should().Be(1);
@@ -493,13 +488,14 @@ public sealed class ConditionalFormatRuleBuilderTests
     }
 
     [Fact]
-    public void Manage_BuildAppliesToCommand_UnknownId_ReturnsNull()
+    public void Manage_ApplyRange_UnknownId_ReturnsFalse()
     {
         var sheet = SheetId();
         var rules = new List<ConditionalFormat> { RuleAt(sheet, 0, 0, 1, 1) };
 
-        ConditionalFormatManageModel.BuildAppliesToCommand(
-            sheet, rules, Guid.NewGuid(), RangeAt(sheet, 2, 2, 3, 3)).Should().BeNull();
+        CreateManageSession(rules)
+            .ApplyRange(Guid.NewGuid(), RangeAt(sheet, 2, 2, 3, 3))
+            .Should().BeFalse();
     }
 
     [Fact]
@@ -512,10 +508,9 @@ public sealed class ConditionalFormatRuleBuilderTests
         session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, rule));
 
         var newRange = new GridRange(new CellAddress(sheetId, 9, 9), new CellAddress(sheetId, 12, 12));
-        var command = ConditionalFormatManageModel.BuildAppliesToCommand(
-            sheetId, session.ActiveSheet.ConditionalFormats, rule.Id, newRange);
-        command.Should().NotBeNull();
-        session.ExecuteReviewCommand(command!).Success.Should().BeTrue();
+        var manager = CreateManageSession(session.ActiveSheet.ConditionalFormats);
+        manager.ApplyRange(rule.Id, newRange).Should().BeTrue();
+        session.ExecuteReviewCommand(manager.CreateApplyCommand(sheetId)).Success.Should().BeTrue();
 
         session.ActiveSheet.ConditionalFormats.Single(r => r.Id == rule.Id).AppliesTo
             .Should().Be(newRange);
@@ -532,6 +527,11 @@ public sealed class ConditionalFormatRuleBuilderTests
 
     private static ConditionalFormat RuleAt(SheetId sheet, uint r1, uint c1, uint r2, uint c2) =>
         new() { AppliesTo = RangeAt(sheet, r1, c1, r2, c2), RuleType = CfRuleType.DataBar };
+
+    private static ManageConditionalFormatsSession CreateManageSession(
+        IReadOnlyList<ConditionalFormat> rules,
+        GridRange? scope = null) =>
+        new(rules, scope, ManageConditionalFormatsWorkingCopyPolicy.FullSheet);
 
     private static WorkbookSession CreateSession() =>
         new WorkbookSessionFactory().CreateNew(viewportHeight: 240, viewportWidth: 320);

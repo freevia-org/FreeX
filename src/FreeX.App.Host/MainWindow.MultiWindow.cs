@@ -15,8 +15,8 @@ public partial class MainWindow
 {
     // ── Multi-window registry wiring (Excel "New Window" / "Switch Windows") ──
     //
-    // Each window owns its document context (workbook ref + command bus + document state, see
-    // App.xaml.cs DI); the views of one document created via View > New Window share that
+    // Each window owns a renderer-neutral document context (see App.xaml.cs DI); the views of one
+    // document created via View > New Window share that
     // context. This partial keeps the WPF glue thin: registration, activation, refresh, and the
     // share/detach transitions; every ordering decision lives in the pure
     // WorkbookWindowOrdering / WorkbookWindowRegistry.
@@ -45,21 +45,15 @@ public partial class MainWindow
     /// <summary>
     /// Splits this window off the document context it shares with "New Window" siblings, right
     /// before it hosts a different document (File &gt; Open / File &gt; New). The siblings keep
-    /// the existing WorkbookRef / command bus / document state — and with them the current
+    /// the existing command infrastructure and document state — and with them the current
     /// workbook, its undo history, and its dirty flag — while this window continues with fresh
     /// instances, so the incoming document is fully independent (H39).
     /// </summary>
     private void DetachFromSharedDocumentContext()
     {
-        if (_commandStackChangeNotifier is not null)
-            _commandStackChangeNotifier.StackChanged -= CommandStackChangeNotifier_StackChanged;
-
-        _workbookRef = new WorkbookRef { Current = _workbook };
-        _commandBus = App.CreateWorkbookCommandBus(_workbookRef);
-        _commandStackChangeNotifier = _commandBus as ICommandStackChangeNotifier;
-        if (_commandStackChangeNotifier is not null)
-            _commandStackChangeNotifier.StackChanged += CommandStackChangeNotifier_StackChanged;
-        _documentState = new WorkbookDocumentState();
+        _documentContext.CommandStackChanged -= CommandStackChangeNotifier_StackChanged;
+        _documentContext = _documentContext.CreateDetached();
+        _documentContext.CommandStackChanged += CommandStackChangeNotifier_StackChanged;
     }
 
     private void RegisterWithWindowRegistry()
@@ -81,12 +75,12 @@ public partial class MainWindow
 
     /// <summary>
     /// Adopts the shared workbook for a secondary window without recreating it (the injected
-    /// workbook/ref/bus/state are the originating window's — passed by ViewNewWindowBtn_Click —
+    /// document context and session are the originating window's — passed by ViewNewWindowBtn_Click —
     /// so we only need to bind the UI to them).
     /// </summary>
     private void AdoptSharedWorkbook()
     {
-        _workbook = _workbookRef.Current;
+        _documentContext.SetCurrentWorkbook(_workbook);
         InvalidateToolbarVisualState();
         // Open on the same sheet as the originating window, if we can find it via
         // the registry.  Fall back to Sheets[0].
@@ -199,8 +193,7 @@ public partial class MainWindow
     /// <summary>Re-reads the shared workbook into this window's viewport/status after an edit elsewhere.</summary>
     public void RefreshFromSharedWorkbook()
     {
-        var workbook = _workbookRef.Current;
-        if (_workbook.Id != workbook.Id)
+        if (_documentContext.CurrentWorkbook.Id != _workbook.Id)
         {
             // The shared ref was repointed at a different workbook (defensive: the File > Open /
             // File > New paths now detach the opener into its own context instead, so siblings
@@ -209,7 +202,7 @@ public partial class MainWindow
             InvalidateToolbarVisualState();
             CloseFindReplaceDialogIfOpen();
         }
-        _workbook = workbook;
+        _documentContext.SetCurrentWorkbook(_workbook);
         if (_workbook.GetSheet(_currentSheetId) is null && _workbook.Sheets.Count > 0)
             _currentSheetId = _workbook.Sheets[0].Id;
 
@@ -307,18 +300,28 @@ public partial class MainWindow
             return;
         }
 
-        // Construct the new window over THIS window's document context (workbook ref, command
-        // bus, document state) so it becomes a second view of the same document — Excel "New
+        // Construct the new window over THIS window's document context so it becomes a second
+        // view of the same document — Excel "New
         // Window". Resolving a plain DI MainWindow would instead create an independent document
         // (see the MainWindow factory in App.ConfigureServices). The ctor sees a registered
         // window (this one) with the same DocumentId and flags itself secondary, so it adopts
         // the shared workbook on load instead of creating a fresh one.
-        var newWindow = ActivatorUtilities.CreateInstance<MainWindow>(
-            App.Services,
-            _commandBus,
-            _workbookRef,
-            _workbookRef.Current,
-            _documentState);
+        var siblingSession = _session.CreateSiblingView(
+            Math.Max(1, SheetGrid.ActualHeight),
+            Math.Max(1, SheetGrid.ActualWidth));
+        MainWindow newWindow;
+        try
+        {
+            newWindow = ActivatorUtilities.CreateInstance<MainWindow>(
+                App.Services,
+                _documentContext,
+                siblingSession);
+        }
+        catch
+        {
+            siblingSession.Dispose();
+            throw;
+        }
 
         // Record that THIS window invoked New Window, before the new window loads/adopts the
         // shared workbook, so ResolveAdoptedSheetId opens it on this window's current sheet —

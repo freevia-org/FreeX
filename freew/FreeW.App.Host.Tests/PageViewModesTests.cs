@@ -7,6 +7,7 @@ using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using ModelSection = FreeW.Core.Model.Section;
@@ -145,12 +146,13 @@ public sealed class PageViewModesTests
         var store = new RibbonStateStore();
 
         var registry = FreeWRibbonCommands.Build(
-            view, store, onPrintPreview: null, onToggleNavPane: null, isNavPaneVisible: null,
-            onToggleReadMode: null, isReadModeActive: null,
-            onTogglePrintLayout: null, isPrintLayoutActive: null,
-            onToggleOutlineView: null, isOutlineViewActive: null, onZoomDialog: null,
-            onToggleMultiplePages: () => { },
-            isMultiplePagesActive: () => false);
+            view,
+            store,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ToggleMultiplePages = () => { },
+                IsMultiplePagesActive = () => false,
+            });
 
         registry.TryGet("freew.zoom-multiple-pages", out _).Should().BeTrue();
     }
@@ -174,12 +176,13 @@ public sealed class PageViewModesTests
         var active = false;
 
         var registry = FreeWRibbonCommands.Build(
-            view, store, onPrintPreview: null, onToggleNavPane: null, isNavPaneVisible: null,
-            onToggleReadMode: null, isReadModeActive: null,
-            onTogglePrintLayout: null, isPrintLayoutActive: null,
-            onToggleOutlineView: null, isOutlineViewActive: null, onZoomDialog: null,
-            onToggleMultiplePages: () => active = !active,
-            isMultiplePagesActive: () => active);
+            view,
+            store,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ToggleMultiplePages = () => active = !active,
+                IsMultiplePagesActive = () => active,
+            });
 
         registry.TryGet("freew.zoom-multiple-pages", out var command).Should().BeTrue();
         var stateful = (IRibbonStatefulCommand)command!;
@@ -203,12 +206,13 @@ public sealed class PageViewModesTests
         var store = new RibbonStateStore();
 
         var registry = FreeWRibbonCommands.Build(
-            view, store, onPrintPreview: null, onToggleNavPane: null, isNavPaneVisible: null,
-            onToggleReadMode: null, isReadModeActive: null,
-            onTogglePrintLayout: null, isPrintLayoutActive: null,
-            onToggleOutlineView: null, isOutlineViewActive: null, onZoomDialog: null,
-            onToggleSideToSide: () => { },
-            isSideToSideActive: () => false);
+            view,
+            store,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ToggleSideToSide = () => { },
+                IsSideToSideActive = () => false,
+            });
 
         registry.TryGet("freew.zoom-side-to-side", out _).Should().BeTrue();
     }
@@ -232,12 +236,13 @@ public sealed class PageViewModesTests
         var active = false;
 
         var registry = FreeWRibbonCommands.Build(
-            view, store, onPrintPreview: null, onToggleNavPane: null, isNavPaneVisible: null,
-            onToggleReadMode: null, isReadModeActive: null,
-            onTogglePrintLayout: null, isPrintLayoutActive: null,
-            onToggleOutlineView: null, isOutlineViewActive: null, onZoomDialog: null,
-            onToggleSideToSide: () => active = !active,
-            isSideToSideActive: () => active);
+            view,
+            store,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ToggleSideToSide = () => active = !active,
+                IsSideToSideActive = () => active,
+            });
 
         registry.TryGet("freew.zoom-side-to-side", out var command).Should().BeTrue();
         var stateful = (IRibbonStatefulCommand)command!;
@@ -368,12 +373,13 @@ public sealed class PageViewModesTests
         var store = new RibbonStateStore();
 
         var registry = FreeWRibbonCommands.Build(
-            view, store, onPrintPreview: null, onToggleNavPane: null, isNavPaneVisible: null,
-            onToggleReadMode: null, isReadModeActive: null,
-            onTogglePrintLayout: null, isPrintLayoutActive: null,
-            onToggleOutlineView: null, isOutlineViewActive: null, onZoomDialog: null,
-            onToggleSplitWindow: () => { },
-            isSplitWindowActive: () => false);
+            view,
+            store,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ToggleSplit = () => { },
+                IsSplitActive = () => false,
+            });
 
         registry.TryGet("freew.split-window", out _).Should().BeTrue();
     }
@@ -397,12 +403,13 @@ public sealed class PageViewModesTests
         var active = false;
 
         var registry = FreeWRibbonCommands.Build(
-            view, store, onPrintPreview: null, onToggleNavPane: null, isNavPaneVisible: null,
-            onToggleReadMode: null, isReadModeActive: null,
-            onTogglePrintLayout: null, isPrintLayoutActive: null,
-            onToggleOutlineView: null, isOutlineViewActive: null, onZoomDialog: null,
-            onToggleSplitWindow: () => active = !active,
-            isSplitWindowActive: () => active);
+            view,
+            store,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ToggleSplit = () => active = !active,
+                IsSplitActive = () => active,
+            });
 
         registry.TryGet("freew.split-window", out var command).Should().BeTrue();
         var stateful = (IRibbonStatefulCommand)command!;
@@ -419,7 +426,7 @@ public sealed class PageViewModesTests
     [Fact]
     public void ViewZoom_ExposesMultiplePagesAndSideToSide()
     {
-        var zoom = FreeWRibbon.Build().FindTab("view")!.FindGroup("zoom");
+        var zoom = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).FindTab("view")!.FindGroup("zoom");
 
         zoom.Should().NotBeNull();
         zoom!.Controls.Select(c => c.CommandId.Value)
@@ -433,7 +440,7 @@ public sealed class PageViewModesTests
     [Fact]
     public void ViewWindow_ExposesSplitWindow()
     {
-        var view = FreeWRibbon.Build().FindTab("view");
+        var view = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).FindTab("view");
         var window = view!.FindGroup("window");
 
         window.Should().NotBeNull("View > Window group must exist");
@@ -445,7 +452,7 @@ public sealed class PageViewModesTests
     [Fact]
     public void ViewZoomLabels_MatchWordLabels()
     {
-        var zoom = FreeWRibbon.Build().FindTab("view")!.FindGroup("zoom");
+        var zoom = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).FindTab("view")!.FindGroup("zoom");
 
         zoom.Should().NotBeNull();
         zoom!.Controls.Select(c => c.Label)
@@ -458,7 +465,7 @@ public sealed class PageViewModesTests
     [Fact]
     public void ViewWindowLabels_ContainSplit()
     {
-        var window = FreeWRibbon.Build().FindTab("view")!.FindGroup("window");
+        var window = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).FindTab("view")!.FindGroup("window");
 
         window.Should().NotBeNull();
         window!.Controls.Select(c => c.Label)
@@ -469,24 +476,26 @@ public sealed class PageViewModesTests
     // ── Split snapshot building ──────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void WpfHost_RoutesViewDepthStateThroughSharedPlanner()
+    public void WpfHost_RoutesViewDepthStateThroughPortableSession()
     {
         var source = File.ReadAllText(FindRepoFile(
             "freew",
             "FreeW.App.Host",
             "MainWindow.cs"));
 
-        source.Should().Contain("private FreeWViewDepthPlan _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);");
-        source.Should().Contain("FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleMultiplePages)");
-        source.Should().Contain("FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSideToSide)");
-        source.Should().Contain("FreeWViewDepthPlanner.Plan(CurrentViewDepthState(), FreeWViewDepthCommand.ToggleSplit)");
+        source.Should().Contain("FreeWViewSession _viewSession");
+        source.Should().Contain("_viewSession.Execute(FreeWViewDepthCommand.ToggleMultiplePages)");
+        source.Should().Contain("_viewSession.Execute(FreeWViewDepthCommand.ToggleSideToSide)");
+        source.Should().Contain("_viewSession.Execute(FreeWViewDepthCommand.ToggleSplit)");
+        source.Should().Contain("ApplyViewDepthTransition(");
         source.Should().Contain("_editor.ApplyViewDepthLayout(plan.Layout);");
         source.Should().Contain("var pagesAcross = plan.Layout.PagesAcross > 1 ? plan.Layout.PagesAcross : 0;");
         source.Should().Contain("DocumentViewDepthLayoutPlanner.BuildDocumentViewerZoomPercent(");
         source.Should().Contain("SyncViewDepthRibbonState()");
-        source.Should().Contain("isMultiplePagesActive: () => _viewDepthPlan.IsMultiplePagesActive");
-        source.Should().Contain("isSideToSideActive: () => _viewDepthPlan.IsSideToSideActive");
-        source.Should().Contain("isSplitWindowActive: () => _viewDepthPlan.IsSplitActive");
+        source.Should().Contain("IsMultiplePagesActive = () => _viewSession.CurrentDepth.IsMultiplePagesActive");
+        source.Should().Contain("IsSideToSideActive = () => _viewSession.CurrentDepth.IsSideToSideActive");
+        source.Should().Contain("IsSplitActive = () => _viewSession.CurrentDepth.IsSplitActive");
+        source.Should().NotContain("CurrentViewDepthState");
         source.Should().NotContain("private bool _multiplePagesMode;");
         source.Should().NotContain("private bool _sideToSideMode;");
         source.Should().NotContain("private bool _splitWindowMode;");

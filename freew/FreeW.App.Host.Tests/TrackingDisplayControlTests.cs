@@ -45,6 +45,7 @@ public sealed class TrackingDisplayControlTests
     public void CurrentReviewWorkflowStatus_UsesSharedReviewPlanner()
     {
         var doc = TextDocument.CreateEmpty();
+        doc.TrackRevisions = true;
         doc.Blocks.Clear();
         doc.TrackRevisions = true;
         var para = new Paragraph();

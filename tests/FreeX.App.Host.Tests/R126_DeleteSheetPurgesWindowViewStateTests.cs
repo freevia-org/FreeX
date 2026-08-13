@@ -127,15 +127,8 @@ public sealed class R126_DeleteSheetPurgesWindowViewStateTests
 
     private static void SelectSheetTab(MainWindow window, SheetId sheetId)
     {
-        var selectSingleSheetTab = typeof(MainWindow)
-            .GetMethod("SelectSingleSheetTab", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "SelectSingleSheetTab");
-        var updateViewport = typeof(MainWindow)
-            .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
-
-        selectSingleSheetTab.Invoke(window, [sheetId]);
-        updateViewport.Invoke(window, []);
+        window.SelectSingleSheetTabForTest(sheetId);
+        window.UpdateViewportForTest();
     }
 
     private static void InvokeSheetTabContextMenuClick(MainWindow window, string methodName, SheetId clickedSheetId)
@@ -169,11 +162,6 @@ public sealed class R126_DeleteSheetPurgesWindowViewStateTests
         public MainWindow Window { get; }
         public Workbook Workbook { get; }
 
-        private readonly FieldInfo _commandBusField;
-        private readonly FieldInfo _worksheetViewStatesField;
-        private readonly FieldInfo _splitPaneViewportOffsetsField;
-        private readonly MethodInfo _syncWindowViewState;
-
         public MainWindowHarness()
         {
             var initialWorkbook = new Workbook("Book1");
@@ -194,54 +182,26 @@ public sealed class R126_DeleteSheetPurgesWindowViewStateTests
 
             Workbook = workbookRef.Current;
 
-            _commandBusField = typeof(MainWindow)
-                .GetField("_commandBus", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_commandBus");
-            _worksheetViewStatesField = typeof(MainWindow)
-                .GetField("_worksheetViewStates", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_worksheetViewStates");
-            _splitPaneViewportOffsetsField = typeof(MainWindow)
-                .GetField("_splitPaneViewportOffsets", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_splitPaneViewportOffsets");
-            _syncWindowViewState = typeof(MainWindow)
-                .GetMethod("SyncWindowViewState", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SyncWindowViewState");
         }
 
-        public CommandOutcome ExecuteCommand(IWorkbookCommand command)
+        public WorkbookCellEditResult ExecuteCommand(IWorkbookCommand command)
         {
-            var bus = (ICommandBus)(_commandBusField.GetValue(Window)
-                ?? throw new InvalidOperationException("MainWindow command bus is not initialized."));
-            var outcome = bus.Execute(Workbook.Id, command);
+            var outcome = Window.Session.ExecuteCommandPreservingSelection(command);
             PumpDispatcher();
             return outcome;
         }
 
         public void SyncWindowViewState(IReadOnlyList<SheetId> targetSheetIds) =>
-            _syncWindowViewState.Invoke(Window, [targetSheetIds]);
+            Window.SyncWindowViewStateForTest(targetSheetIds);
 
-        public IReadOnlyDictionary<SheetId, WorksheetViewStateSnapshot> GetWorksheetViewStateSnapshots()
-        {
-            var store = _worksheetViewStatesField.GetValue(Window)
-                ?? throw new InvalidOperationException("_worksheetViewStates was null.");
-            var snapshotsProperty = store.GetType().GetProperty("Snapshots")
-                ?? throw new InvalidOperationException("WorksheetViewStateStore has no Snapshots property.");
-            return (IReadOnlyDictionary<SheetId, WorksheetViewStateSnapshot>)snapshotsProperty.GetValue(store)!;
-        }
+        public IReadOnlyDictionary<SheetId, WorksheetViewStateSnapshot> GetWorksheetViewStateSnapshots() =>
+            Window.WorksheetViewStateSnapshotsForTest;
 
-        public void SeedSplitPaneViewportOffset(SheetId sheetId)
-        {
-            var dict = (Dictionary<SheetId, SplitPaneViewportOffsets>)(_splitPaneViewportOffsetsField.GetValue(Window)
-                ?? throw new InvalidOperationException("_splitPaneViewportOffsets was null."));
-            dict[sheetId] = new SplitPaneViewportOffsets(3u, null);
-        }
+        public void SeedSplitPaneViewportOffset(SheetId sheetId) =>
+            Window.SeedSplitPaneViewportOffsetForTest(sheetId);
 
-        public IEnumerable<SheetId> GetSplitPaneViewportOffsetKeys()
-        {
-            var dict = (Dictionary<SheetId, SplitPaneViewportOffsets>)(_splitPaneViewportOffsetsField.GetValue(Window)
-                ?? throw new InvalidOperationException("_splitPaneViewportOffsets was null."));
-            return dict.Keys.ToList();
-        }
+        public IEnumerable<SheetId> GetSplitPaneViewportOffsetKeys() =>
+            Window.SplitPaneViewportOffsetKeysForTest;
 
         public void Dispose()
         {

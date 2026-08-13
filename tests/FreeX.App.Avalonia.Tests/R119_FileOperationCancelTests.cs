@@ -21,16 +21,13 @@ namespace FreeX.App.Avalonia.Tests;
 /// to <c>WorkbookSaveService.SaveAsync</c>, and <c>OpenWorkbookFromTargetAsync</c> passed no token at
 /// all to <c>WorkbookOpenService.LoadAsync</c> (defaulting to <c>CancellationToken.None</c>) -- even
 /// though both service methods genuinely observe a real token at multiple points. There was also no
-/// Cancel affordance anywhere in the Avalonia shell: a grep of the whole file found zero
-/// <c>CancellationTokenSource</c> usages. The WPF host (MainWindow.Backstage.cs) has both a live
-/// <c>_fileOperationCancellation</c> token source and a status-bar Cancel button wired to it, so a
-/// user on Linux/macOS had strictly less capability than on Windows for the identical action.
+/// Cancel affordance anywhere in the Avalonia shell. The WPF host had a live cancellation source
+/// and a status-bar Cancel button wired to it, so a user on Linux/macOS had strictly less capability
+/// than on Windows for the identical action.
 ///
-/// The fix adds a real <c>CancellationTokenSource</c> (<c>_fileOperationCancellation</c>), a
-/// status-bar Cancel button (<c>_fileOperationCancelButton</c>) wired to it, and threads the token
-/// into both <c>OpenWorkbookFromTargetAsync</c> and <c>SaveWorkbookToTargetAsync</c> -- both of which
-/// are the single choke point every real open/save path (File > Open/Save, drag-drop, MRU, Save As)
-/// funnels through, so no caller needed to change.
+/// The host now acquires the token from the shared <see cref="FileOperationCancellationSession"/>,
+/// wires the status-bar Cancel button to that session, and threads the lease token into both
+/// <c>OpenWorkbookFromTargetAsync</c> and <c>SaveWorkbookToTargetAsync</c>.
 ///
 /// These tests drive the REAL production entry points directly via the internal test seams
 /// <c>OpenWorkbookFromTargetAsyncForTest</c>/<c>SaveWorkbookToTargetAsyncForTest</c> (mirroring
@@ -67,18 +64,17 @@ public sealed class R119_FileOperationCancelTests
                 window.Session.MarkDirtyForRecovery();
 
                 var saveTarget = new FileSaveTarget(path, adapter);
-                // Do not await yet: BeginFileOperationCancellation() runs synchronously before the
-                // very first await inside SaveWorkbookToTargetAsync, so by the time this call
-                // returns a Task, _fileOperationCancellation is already populated -- mirroring how
+                // Do not await yet: the shared session lease begins synchronously before the very
+                // first await inside SaveWorkbookToTargetAsync, so by the time this call returns a
+                // Task the cancellation session is already active -- mirroring how
                 // fast the real Cancel button can be clicked relative to a save that just started.
                 var saveTask = window.SaveWorkbookToTargetAsyncForTest(saveTarget);
 
                 window.FileOperationCancelButtonVisibleForTest.Should().BeTrue(
                     "the status-bar Cancel affordance must be visible for the whole duration of an " +
                     "in-flight save -- before this fix there was no such affordance at all");
-                window.FileOperationCancellationForTest.Should().NotBeNull(
-                    "a real CancellationTokenSource must back the in-flight save so Cancel has " +
-                    "something to cancel");
+                window.FileOperationCancellationActiveForTest.Should().BeTrue(
+                    "the shared cancellation session must own the in-flight save");
 
                 window.RaiseFileOperationCancelButtonClickForTest();
 
@@ -136,7 +132,7 @@ public sealed class R119_FileOperationCancelTests
                 window.FileOperationCancelButtonVisibleForTest.Should().BeTrue(
                     "the status-bar Cancel affordance must be visible for the whole duration of an " +
                     "in-flight open");
-                window.FileOperationCancellationForTest.Should().NotBeNull();
+                window.FileOperationCancellationActiveForTest.Should().BeTrue();
 
                 window.RaiseFileOperationCancelButtonClickForTest();
                 await openTask;
@@ -190,8 +186,8 @@ public sealed class R119_FileOperationCancelTests
                     "an uncanceled save must still succeed exactly as before this fix");
                 window.FileOperationCancelButtonVisibleForTest.Should().BeFalse(
                     "once the save completes, the Cancel button must hide again");
-                window.FileOperationCancellationForTest.Should().BeNull(
-                    "the token source must be cleared once its save has finished");
+                window.FileOperationCancellationActiveForTest.Should().BeFalse(
+                    "the shared session must retire the save lease once it has finished");
             }
             finally
             {

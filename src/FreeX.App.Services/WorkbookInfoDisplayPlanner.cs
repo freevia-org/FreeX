@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Localization;
 
 namespace FreeX.App.Services;
 
@@ -21,28 +22,12 @@ public sealed record WorkbookInfoDisplayPlan(
     string FormulaErrorSummary,
     string? UnsavedChangesNote);
 
-public sealed class WorkbookInfoDisplayStrings
-{
-    private readonly Func<string, string> _get;
-    private readonly Func<string, object?[], string> _format;
-
-    public WorkbookInfoDisplayStrings(Func<string, string> get, Func<string, object?[], string> format)
-    {
-        _get = get ?? throw new ArgumentNullException(nameof(get));
-        _format = format ?? throw new ArgumentNullException(nameof(format));
-    }
-
-    public string Get(string key) => _get(key);
-
-    public string Format(string key, params object?[] args) => _format(key, args);
-}
-
 public static class WorkbookInfoDisplayPlanner
 {
     public static WorkbookInfoDisplayPlan Build(
         WorkbookInfoPlan plan,
         WorkbookInfoDisplaySurface surface,
-        WorkbookInfoDisplayStrings strings,
+        ResourceKeyTextResolver strings,
         CultureInfo? culture = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
@@ -76,7 +61,7 @@ public static class WorkbookInfoDisplayPlanner
     private static string FormatFileSize(
         WorkbookInfoPlan plan,
         WorkbookInfoDisplaySurface surface,
-        WorkbookInfoDisplayStrings strings,
+        ResourceKeyTextResolver strings,
         CultureInfo culture)
     {
         if (!plan.IsSaved)
@@ -91,7 +76,7 @@ public static class WorkbookInfoDisplayPlanner
 
     private static string FormatLastModified(
         WorkbookInfoPlan plan,
-        WorkbookInfoDisplayStrings strings,
+        ResourceKeyTextResolver strings,
         CultureInfo culture)
     {
         if (!plan.IsSaved)
@@ -114,7 +99,7 @@ public static class WorkbookInfoDisplayPlanner
 
     private static string FormatProtection(
         WorkbookInfoPlan plan,
-        WorkbookInfoDisplayStrings strings,
+        ResourceKeyTextResolver strings,
         CultureInfo culture)
     {
         var protectedSheetCount = plan.ProtectedSheetCount.ToString(culture);
@@ -135,7 +120,7 @@ public static class WorkbookInfoDisplayPlanner
         };
     }
 
-    private static string FormatByteSizeWithRawBytes(long bytes, WorkbookInfoDisplayStrings strings, CultureInfo culture)
+    private static string FormatByteSizeWithRawBytes(long bytes, ResourceKeyTextResolver strings, CultureInfo culture)
     {
         bytes = Math.Max(0, bytes);
         var bytesText = bytes.ToString("N0", culture);

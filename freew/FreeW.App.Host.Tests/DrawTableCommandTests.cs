@@ -28,7 +28,7 @@ public sealed class DrawTableCommandTests
     [Fact]
     public void TableDesignTab_DrawBordersGroup_ContainsDrawTableAndEraser()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var tableDesign = definition.FindTab("table-design");
         tableDesign.Should().NotBeNull();
 

@@ -93,7 +93,8 @@ public sealed partial class SelectionPanePlannerTests
             "DrawingUI",
             "SelectionPanePlanner.cs");
 
-        hostSource.Should().Contain("SelectionPanePlanner.PlanDragReorder(");
+        hostSource.Should().Contain("_session.Drop(");
+        hostSource.Should().NotContain("SelectionPanePlanner.PlanDragReorder(");
         presentationSource.Should().Contain("private static (int DraggedIndex, int TargetIndex) FindDragIndexes");
         presentationSource.Should().Contain("var dragPlan = CreateDragMovePlan(items, draggedId, targetId, placement);");
         presentationSource.Should().NotContain("items.Select(item => (item.Kind, item.Id)).ToList()");

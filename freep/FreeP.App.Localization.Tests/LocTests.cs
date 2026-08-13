@@ -40,6 +40,16 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void BackstageOptionsEditText_IsOwnedByNeutralAndFrenchResources()
+    {
+        const string key = "FreeP_Backstage_Options_EditText";
+
+        Loc.GetNeutralResourceKeys().Should().Contain(key);
+        WithUiCulture("en-US", () => Loc.Get(key)).Should().Be("Edit options…");
+        WithUiCulture("fr-FR", () => Loc.Get(key)).Should().Be("Modifier les options…");
+    }
+
+    [Fact]
     public void Get_PseudoCulture_ExpandsNeutralText()
     {
         var pseudo = WithUiCulture(Loc.PseudoLocalizationCultureName, () => Loc.Get("Common_Cancel"));
@@ -52,6 +62,10 @@ public sealed class LocTests
     public void SharedCatalog_FallsBackAcrossCulturesAndPreservesFormattingContracts()
     {
         WithUiCulture("en-US", () => Loc.Get("Ribbon_Command_Bold_Label")).Should().Be("Bold");
+        WithUiCulture("en-US", () => Loc.Get("Options_AppLanguageSystemDefault"))
+            .Should().Be("Use system default");
+        WithUiCulture("fr-FR", () => Loc.Get("Options_AppLanguageSystemDefault"))
+            .Should().Be("Utiliser la langue du systeme");
         WithUiCulture("en-US", () => Loc.Format("File_CommandFailedFormat", "Open", "Denied"))
             .Should().Be("Open failed: Denied");
         WithUiCulture("fr-FR", () => Loc.Get("Common_ConfirmTitle")).Should().Be("Confirmation");
@@ -72,6 +86,39 @@ public sealed class LocTests
 
         pseudo.Should().Contain("Roadmap.pptx");
         pseudo.Should().StartWith("[[").And.EndWith("]]");
+    }
+
+    [Fact]
+    public void ShellStatusAndPrintTail_PreservesNeutralFallbackAndFormatting()
+    {
+        WithUiCulture("en-US", () => Loc.Get("Shell_Status_SlideSizeDialog"))
+            .Should().Be("Slide Size");
+        WithUiCulture("fr-FR", () => Loc.Get("Print_Status_NotesPagePdfPlanned"))
+            .Should().Be("Notes page PDF planned");
+        WithUiCulture("en-US", () => Loc.Format("Print_Status_PrinterSelected", "Office Printer"))
+            .Should().Be("Printer selected: Office Printer");
+
+        WithUiCulture(
+                Loc.PseudoLocalizationCultureName,
+                () => Loc.Format("Print_Status_PrinterSelected", "Office Printer"))
+            .Should().Contain("Office Printer");
+    }
+
+    [Fact]
+    public void OptionsAndShellCommandTail_IsLocalizedForBothRenderers()
+    {
+        WithUiCulture("en-US", () => Loc.Get("Options_Title")).Should().Be("FreeP Options");
+        WithUiCulture("fr-FR", () => Loc.Get("Options_Title")).Should().Be("Options FreeP");
+        WithUiCulture("fr-FR", () => Loc.Get("Options_RecentFilesLabel"))
+            .Should().Be("Pr\u00e9sentations r\u00e9centes \u00e0 conserver :");
+        WithUiCulture(
+                "fr-FR",
+                () => Loc.Format("Options_UiLanguageCurrentHint", "fr-FR"))
+            .Should().Contain("fr-FR");
+        WithUiCulture("fr-FR", () => Loc.Get("Shell_Command_SlidePane"))
+            .Should().Be("Volet des diapositives");
+        WithUiCulture("fr-FR", () => Loc.Get("Shell_Command_CustomShow"))
+            .Should().Be("Diaporama personnalis\u00e9");
     }
 
     [Fact]
@@ -104,7 +151,7 @@ public sealed class LocTests
             "Ribbon_Tab_Home_KeyTip",
             "Ribbon_Group_File_Label",
             "Ribbon_Group_File_KeyTip",
-            "Ribbon_Command_FileNew_Label",
+            "Common_New",
             "Ribbon_Command_FileNew_KeyTip",
             "Ribbon_Command_FileOpen_Label",
             "Ribbon_Command_FileOpen_KeyTip",
@@ -183,7 +230,7 @@ public sealed class LocTests
     public void GetNeutralResourceKeys_CoversRibbonInsertFoundation()
     {
         Loc.GetNeutralResourceKeys().Should().Contain([
-            "Ribbon_Tab_Insert_Label",
+            "Common_Insert",
             "Ribbon_Tab_Insert_KeyTip",
             "Ribbon_Group_Text_Label",
             "Ribbon_Group_Text_KeyTip",
@@ -434,7 +481,7 @@ public sealed class LocTests
             "Ribbon_Command_ArrangeDistributeVertical_KeyTip",
             "Ribbon_Tab_Design_Label",
             "Ribbon_Tab_Design_KeyTip",
-            "Ribbon_Group_Themes_Label",
+            "Common_Themes",
             "Ribbon_Group_Themes_KeyTip",
             "Ribbon_Command_ThemeOffice_Label",
             "Ribbon_Command_ThemeOffice_KeyTip",

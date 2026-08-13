@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using Free.Shared.Localization;
 
 namespace FreeX.App.Presentation.Filtering;
 
@@ -37,6 +38,16 @@ public enum AdvancedFilterErrorFocusTarget
     CriteriaRange,
     CopyTo
 }
+
+public enum AdvancedFilterErrorPresentationKind
+{
+    WarningDialog,
+    InlineValidation
+}
+
+public sealed record AdvancedFilterErrorDescriptor(
+    LocalizedTextDescriptor Message,
+    AdvancedFilterErrorFocusTarget FocusTarget);
 
 public sealed record AdvancedFilterPlan(
     GridRange ListRange,
@@ -336,6 +347,65 @@ public static class AdvancedFilterPlanner
 
             _ => AdvancedFilterErrorFocusTarget.ListRange
         };
+
+    public static AdvancedFilterErrorDescriptor DescribeError(
+        AdvancedFilterPlanResult result,
+        AdvancedFilterErrorPresentationKind presentationKind = AdvancedFilterErrorPresentationKind.WarningDialog)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var message = presentationKind == AdvancedFilterErrorPresentationKind.InlineValidation
+            ? DescribeInlineError(result)
+            : DescribeWarningError(result.Error);
+
+        return new AdvancedFilterErrorDescriptor(message, FocusTargetForPlanError(result.Error));
+    }
+
+    private static LocalizedTextDescriptor DescribeWarningError(AdvancedFilterPlanError error) =>
+        error switch
+        {
+            AdvancedFilterPlanError.InvalidListRange =>
+                LocalizedTextDescriptor.Resource("AdvancedFilter_EnterValidListRange"),
+            AdvancedFilterPlanError.ListRangeRequiresDataRows =>
+                LocalizedTextDescriptor.Resource("AdvancedFilter_ListRangeMustIncludeHeaders"),
+            AdvancedFilterPlanError.ListRangeTooLarge =>
+                LocalizedTextDescriptor.Literal(AdvancedFilterCommand.ListRangeTooLargeMessage),
+            AdvancedFilterPlanError.InvalidCriteriaRange =>
+                LocalizedTextDescriptor.Resource("AdvancedFilter_EnterValidCriteriaRange"),
+            AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows =>
+                LocalizedTextDescriptor.Resource("AdvancedFilter_CriteriaRangeMustIncludeHeaders"),
+            AdvancedFilterPlanError.CriteriaRangeTooLarge =>
+                LocalizedTextDescriptor.Literal(AdvancedFilterCommand.CriteriaRangeTooLargeMessage),
+            AdvancedFilterPlanError.CopyDestinationRequired or
+            AdvancedFilterPlanError.InvalidCopyDestinationRange or
+            AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet =>
+                LocalizedTextDescriptor.Resource("AdvancedFilter_EnterValidCopyToRange"),
+            AdvancedFilterPlanError.CopyDestinationRangeTooLarge =>
+                LocalizedTextDescriptor.Literal(AdvancedFilterCommand.CopyOutputTooLargeMessage),
+            _ => LocalizedTextDescriptor.Resource("AdvancedFilter_EnterValidFilterRanges")
+        };
+
+    private static LocalizedTextDescriptor DescribeInlineError(AdvancedFilterPlanResult result)
+    {
+        var message = result.Error switch
+        {
+            AdvancedFilterPlanError.None => "Ready to run Advanced Filter.",
+            AdvancedFilterPlanError.InvalidListRange => "Enter a valid list range.",
+            AdvancedFilterPlanError.ListRangeRequiresDataRows => "List range must include headers and at least one data row.",
+            AdvancedFilterPlanError.ListRangeTooLarge => AdvancedFilterCommand.ListRangeTooLargeMessage,
+            AdvancedFilterPlanError.InvalidCriteriaRange => "Enter a valid criteria range.",
+            AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows => "Criteria range must include headers and at least one criteria row.",
+            AdvancedFilterPlanError.CriteriaRangeTooLarge => AdvancedFilterCommand.CriteriaRangeTooLargeMessage,
+            AdvancedFilterPlanError.CopyDestinationRequired => "Enter a copy-to range.",
+            AdvancedFilterPlanError.InvalidCopyDestinationRange => "Enter a valid one-row copy-to range on the active sheet.",
+            AdvancedFilterPlanError.CopyDestinationRangeTooLarge => AdvancedFilterCommand.CopyOutputTooLargeMessage,
+            AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => "Copy-to range must be on the list sheet.",
+            _ => "Advanced Filter request is invalid."
+        };
+
+        return LocalizedTextDescriptor.Literal(string.IsNullOrWhiteSpace(result.InvalidText)
+            ? message
+            : $"{message} ({result.InvalidText})");
+    }
 
     private static string NormalizeInput(string? input) => input?.Trim() ?? "";
 }

@@ -5,18 +5,13 @@ using FreeX.App.Presentation.CustomViews;
 
 namespace FreeX.App.Host;
 
-public sealed record CustomViewNameDialogResult(
-    string ViewName,
-    bool IncludePrintSettings = true,
-    bool IncludeHiddenRowsColumnsAndFilterSettings = true);
-
 public sealed class CustomViewNameDialog : Window
 {
     private readonly TextBox _nameBox = new();
     private readonly CheckBox _printSettingsBox = new() { Content = UiText.Get("CustomViewName_PrintSettingsCheckBox"), IsChecked = true };
     private readonly CheckBox _hiddenFilterSettingsBox = new() { Content = UiText.Get("CustomViewName_HiddenFilterSettingsCheckBox"), IsChecked = true };
 
-    public CustomViewNameDialogResult Result { get; private set; }
+    public CustomViewsPlanner.NameSubmission Result { get; private set; }
 
     public CustomViewNameDialog(string defaultValue)
     {
@@ -74,21 +69,14 @@ public sealed class CustomViewNameDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static CustomViewNameDialogResult CreateResult(
+    public static CustomViewsPlanner.NameSubmission CreateResult(
         string viewName,
         bool includePrintSettings = true,
-        bool includeHiddenRowsColumnsAndFilterSettings = true)
-    {
-        var submission = CustomViewsPlanner.CreateNameSubmission(
+        bool includeHiddenRowsColumnsAndFilterSettings = true) =>
+        CustomViewsPlanner.CreateNameSubmission(
             viewName,
             includePrintSettings,
             includeHiddenRowsColumnsAndFilterSettings);
-
-        return new(
-            submission.ViewName,
-            submission.IncludePrintSettings,
-            submission.IncludeHiddenRowsColumnsAndFilterSettings);
-    }
 
     private void Accept()
     {

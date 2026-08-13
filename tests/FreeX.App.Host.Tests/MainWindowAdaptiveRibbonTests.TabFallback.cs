@@ -179,6 +179,31 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Theory]
+    [InlineData(760)]
+    [InlineData(761)]
+    [InlineData(1000)]
+    [InlineData(1300)]
+    [InlineData(1301)]
+    public void DataRibbon_SharedAdaptivePolicyRemainsUsable(double width)
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Data", width);
+            if (!harness.CanUseRequestedRibbonWidth(width))
+                return;
+
+            harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                0.5,
+                $"the shared Data adaptive policy must keep the WPF ribbon inside its measured surface at {width}px; {harness.DebugActiveRibbonChildren}");
+            harness.CollapsedActiveRibbonGroupsWithoutOverflowMenu.Should().BeEmpty(
+                $"every Data group collapsed by shared policy must remain usable through the WPF overflow renderer at {width}px; {harness.DebugActiveRibbonChildren}");
+
+        });
+    }
+
+    [Theory]
     [InlineData(900)]
     [InlineData(1100)]
     public void DataRibbon_DataToolsCommandLabelsDoNotClipAtNormalNarrowWidths(double width)

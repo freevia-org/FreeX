@@ -13,7 +13,7 @@ namespace FreeX.App.Services.Tests;
 /// payload as a bare embedded newline, which the tab/newline splitter misreads as a row break, shifting
 /// every subsequent pasted row down by one. When an HTML payload with an actual &lt;table&gt; is
 /// supplied, the real &lt;tr&gt;/&lt;td&gt; row/column structure must be preferred instead, matching the
-/// WPF host's <c>MainWindow.ClipboardCommands.TryParseHtmlClipboardTableRows</c> behavior.
+/// WPF host's shared <c>HtmlClipboardTableParser</c> behavior.
 /// </summary>
 public sealed class R57_ClipboardHtmlTablePasteTests
 {

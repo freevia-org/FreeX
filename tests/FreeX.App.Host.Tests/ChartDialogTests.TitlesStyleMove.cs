@@ -5,6 +5,8 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FluentAssertions;
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -13,12 +15,12 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class ChartDialogTests
 {
     [Fact]
-    public void ChartTitlesDialogResult_MapsTitleTextToLayoutOptions()
+    public void ChartTitlesDialog_UsesSharedInputAndPlanner()
     {
-        var result = ChartTitlesDialog.CreateResult(" Revenue ", " Quarter ", " Amount ");
+        var result = ChartTitlesPlanner.Normalize(new ChartTitlesInput(" Revenue ", " Quarter ", " Amount "));
 
-        result.Should().Be(new ChartTitlesDialogResult("Revenue", "Quarter", "Amount"));
-        result.ToOptions().Should().Be(new ChartLayoutOptions(
+        result.Should().Be(new ChartTitlesInput("Revenue", "Quarter", "Amount"));
+        ChartTitlesPlanner.Plan(ChartType.Column, result).Should().Be(new ChartLayoutOptions(
             Title: "Revenue",
             XAxisTitle: "Quarter",
             YAxisTitle: "Amount"));
@@ -41,7 +43,7 @@ public sealed partial class ChartDialogTests
         var source = ReadChartDialogSource();
         var dialogSource = source[
             source.IndexOf("public sealed class ChartTitlesDialog", StringComparison.Ordinal)..
-            source.IndexOf("public sealed record ChartStyleDialogResult", StringComparison.Ordinal)];
+            source.IndexOf("public sealed class ChartStyleDialog", StringComparison.Ordinal)];
 
         dialogSource.Should().Contain("AutomationProperties.SetName(_chartTitleBox, UiText.Get(\"ChartTitles_ChartTitleAutomationName\"));");
         dialogSource.Should().Contain("AutomationProperties.SetName(_xAxisTitleBox, UiText.Get(\"ChartTitles_XAxisTitleAutomationName\"));");
@@ -54,7 +56,7 @@ public sealed partial class ChartDialogTests
         var source = ReadChartDialogSource();
         var dialogSource = source[
             source.IndexOf("public sealed class ChartTitlesDialog", StringComparison.Ordinal)..
-            source.IndexOf("public sealed record ChartStyleDialogResult", StringComparison.Ordinal)];
+            source.IndexOf("public sealed class ChartStyleDialog", StringComparison.Ordinal)];
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -75,7 +77,8 @@ public sealed partial class ChartDialogTests
 
         var source = ReadChartDialogSource();
         source.Should().Contain("ChartStylePlanner.GetStyleOptions()");
-        source.Should().Contain("ChartStylePlanner.CreateResult(chartStyleId)");
+        source.Should().Contain("public ChartStyleInput Result { get; private set; }");
+        source.Should().Contain("ChartStylePlanner.CreateResult(option.StyleId)");
         source.Should().NotContain("Enumerable.Range(1, 48).Select");
         source.Should().NotContain("Math.Clamp(value.Value, 1, 48)");
     }
@@ -97,9 +100,9 @@ public sealed partial class ChartDialogTests
     {
         var chart = new ChartModel { ChartStyleId = 99 };
 
-        ChartStyleDialog.FromChart(chart).Should().Be(new ChartStyleDialogResult(48));
-        ChartStyleDialog.CreateResult(0).Should().Be(new ChartStyleDialogResult(1));
-        ChartStyleDialog.CreateResult(null).Should().Be(new ChartStyleDialogResult(null));
+        ChartStylePlanner.Read(chart).Should().Be(new ChartStyleInput(48));
+        ChartStylePlanner.CreateResult(0).Should().Be(new ChartStyleInput(1));
+        ChartStylePlanner.CreateResult(null).Should().Be(new ChartStyleInput(null));
     }
 
     [Fact]
@@ -108,7 +111,7 @@ public sealed partial class ChartDialogTests
         var source = ReadChartDialogSource();
         var dialogSource = source[
             source.IndexOf("public sealed class ChartStyleDialog", StringComparison.Ordinal)..
-            source.IndexOf("public sealed record MoveChartDialogResult", StringComparison.Ordinal)];
+            source.IndexOf("public sealed record ChartStyleOption", StringComparison.Ordinal)];
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -120,9 +123,9 @@ public sealed partial class ChartDialogTests
     public void MoveChartDialog_CreatesObjectAndNewSheetResults()
     {
         MoveChartDialog.CreateObjectResult("Sheet2").Should().Be(
-            new MoveChartDialogResult(MoveChartTargetKind.ObjectInSheet, "Sheet2"));
+            new ChartMoveInput(ChartMoveTargetKind.ObjectInSheet, "Sheet2"));
         MoveChartDialog.CreateNewSheetResult("Revenue Chart").Should().Be(
-            new MoveChartDialogResult(MoveChartTargetKind.NewChartSheet, "Revenue Chart"));
+            new ChartMoveInput(ChartMoveTargetKind.NewSheet, "Revenue Chart"));
     }
 
     [Fact]
@@ -131,7 +134,7 @@ public sealed partial class ChartDialogTests
         var source = ReadChartDialogSource();
         var dialogSource = source[
             source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
-            source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
+            source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)];
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -156,7 +159,7 @@ public sealed partial class ChartDialogTests
         var source = ReadChartDialogSource();
         var dialogSource = source[
             source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
-            source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
+            source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)];
 
         dialogSource.Should().Contain("catch (ArgumentException ex)");
         dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, ex.Message, Title);");
@@ -172,7 +175,7 @@ public sealed partial class ChartDialogTests
         var source = ReadChartDialogSource();
         var dialogSource = source[
             source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
-            source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
+            source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)];
 
         dialogSource.Should().Contain("var targetField = ChartMovePlanner.GetTargetNameField();");
         dialogSource.Should().Contain("new Label { Content = UiText.Get(targetField.LabelResourceKey), Target = _targetBox");
@@ -192,6 +195,10 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("FieldLabel(SelectDataSourcePlanner.GetSwitchRowColumnField())");
         source.Should().Contain("FieldLabel(rangeField)");
         source.Should().Contain("UiText.Get(action.LabelResourceKey)");
+        source.Should().NotContain("ChartTitlesDialogResult");
+        source.Should().NotContain("ChartStyleDialogResult");
+        source.Should().NotContain("MoveChartDialogResult");
+        source.Should().NotContain("public enum MoveChartTargetKind");
     }
 
 }

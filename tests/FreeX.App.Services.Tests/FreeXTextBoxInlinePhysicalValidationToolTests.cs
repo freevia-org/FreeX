@@ -10,11 +10,13 @@ public sealed class FreeXTextBoxInlinePhysicalValidationToolTests
     public void RunnerStartsFreeXWithScopedEvidenceAndStopsOnlyItsOwnContainer()
     {
         var runner = ReadRepoFile("tools", "Run-FreeXTextBoxInlineEditPhysicalLinuxValidation.ps1");
+        var interactiveRunner = ReadRepoFile("tools", "Run-LinuxInteractiveDocker.ps1");
         var dockerfile = ReadRepoFile("tools", "LinuxInteractiveDocker", "Dockerfile");
         var validator = ReadRepoFile(
             "tools", "LinuxInteractiveDocker", "validate-freex-textbox-inline-edit-physical.py");
 
         runner.Should().Contain("Run-LinuxInteractiveDocker.ps1");
+        runner.Should().Contain("Host = \"Validation\"");
         runner.Should().Contain("FREEX_TEXTBOX_INLINE_PHYSICAL_RESULT=/work/freex-textbox-inline-physical.json");
         runner.Should().Contain("docker cp $probePath");
         runner.Should().Contain("docker cp $schemaPath \"${container}:/work/freex-textbox-inline-edit-physical.schema.json\"");
@@ -28,8 +30,14 @@ public sealed class FreeXTextBoxInlinePhysicalValidationToolTests
         runner.Should().Contain("/work/freex-textbox-inline-edit-physical/results.json");
         runner.Should().NotContain("python3 -c");
         runner.Should().NotContain("$schemaValidationCode");
-        runner.Should().Contain("$runnerPath -Action Stop -App FreeX -Port $Port");
+        runner.Should().Contain("$runnerPath -Action Stop -App FreeX -Host Validation -Port $Port");
         runner.Should().NotContain("build-server shutdown");
+        interactiveRunner.Should().Contain(
+            "Project = \"tools/FreeX.ParityCapture.Avalonia/FreeX.ParityCapture.Avalonia.csproj\"");
+        interactiveRunner.Should().Contain("Executable = \"FreeX.ParityCapture.Avalonia\"");
+        interactiveRunner.Should().Contain("[Alias(\"Host\")]");
+        interactiveRunner.Should().Contain("[string]$HostMode = \"Application\"");
+        interactiveRunner.Should().NotContain("[string]$Host =");
         dockerfile.Should().Contain("python3-jsonschema");
         validator.Should().Contain("from jsonschema import validate");
         validator.Should().Contain("schema = load_json(Path(arguments[1]))");
@@ -139,7 +147,7 @@ public sealed class FreeXTextBoxInlinePhysicalValidationToolTests
     public void AvaloniaPhysicalObserverIsOptInAndDoesNotOwnEditorInput()
     {
         var observer = ReadRepoFile(
-            "src", "FreeX.App.Avalonia", "MainWindow.TextBoxInlinePhysicalEvidence.cs");
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.TextBoxInlinePhysicalEvidence.cs");
         var editor = ReadRepoFile(
             "src", "FreeX.App.Avalonia", "MainWindow.TextBoxInlineEditing.cs");
 
@@ -150,11 +158,11 @@ public sealed class FreeXTextBoxInlinePhysicalValidationToolTests
         observer.Should().Contain("_textBoxInlinePhysicalLayoutObservationPending = false;");
         observer.Should().Contain("editor.Bounds.Width <= 0 || editor.Bounds.Height <= 0");
         observer.Should().Contain("File.Move(temporaryPath, path, overwrite: true)");
-        editor.Should().Contain("RequestTextBoxInlinePhysicalLayoutObservation();");
-        editor.Should().Contain("_textBoxInlineEditor.LayoutUpdated += TextBoxInlineEditor_LayoutUpdated;");
-        editor.Should().Contain("RecordTextBoxInlinePhysicalEvidence(\"committed\"");
-        editor.Should().Contain("RecordTextBoxInlinePhysicalEvidence(\"canceled\"");
-        editor.Should().NotContain("RecordTextBoxInlinePhysicalEvidence(\"editing\", activeTextBoxId)");
+        editor.Should().Contain("RequestOptionalTextBoxInlineLayoutObservation();");
+        editor.Should().Contain("AttachOptionalTextBoxInlineObservation();");
+        editor.Should().Contain("RecordOptionalTextBoxInlineObservation(\"committed\"");
+        editor.Should().Contain("RecordOptionalTextBoxInlineObservation(\"canceled\"");
+        editor.Should().NotContain("RecordTextBoxInlinePhysicalEvidence");
         editor.Should().NotContain("Environment.GetEnvironmentVariable(\"FREEX_TEXTBOX_INLINE_PHYSICAL_RESULT\")");
     }
 

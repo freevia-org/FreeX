@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Interop;
+using Free.Shared.Shell.Wpf;
 using FreeX.App.Presentation.PageLayout;
 using Forms = System.Windows.Forms;
 
@@ -38,7 +39,9 @@ internal static class NativePrintDialogService
         // the WPF dispatcher unhandled.
         try
         {
-            var selectedQueue = ResolvePrintQueue(dialog.PrinterSettings.PrinterName) ?? printQueue;
+            var selectedQueue = WpfPrintQueueCatalog.Resolve(
+                dialog.PrinterSettings.PrinterName,
+                WpfPrintQueueResolutionFallback.CreateNamedQueue) ?? printQueue;
             var documentPrinter = new PrintDialog();
             if (selectedQueue is not null)
                 documentPrinter.PrintQueue = selectedQueue;
@@ -62,12 +65,15 @@ internal static class NativePrintDialogService
 
     private static void ShowPrintFailedMessage(Exception ex, Window? owner)
     {
-        var message = UiText.Format("MainWindowMessage_PrintFailed", ex.Message);
-        var title = UiText.Get("MainWindowMessage_PrintFailedTitle");
-        if (owner is not null)
-            MessageBox.Show(owner, message, title, MessageBoxButton.OK, MessageBoxImage.Error);
-        else
-            MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
+        var presentation = PageLayoutMessagePresentationCatalog
+            .DescribeNativePrintFailure(ex.Message)
+            .Resolve(UiText.Get, UiText.Format);
+        DialogMessageHelper.ShowMessage(
+            owner,
+            presentation.Message,
+            presentation.Title,
+            presentation.Buttons,
+            presentation.Kind);
     }
 
     private static PrintDocument CreatePrinterSelectionDocument(
@@ -181,29 +187,6 @@ internal static class NativePrintDialogService
             ShowNetwork = true,
             UseEXDialog = false
         };
-    }
-
-    private static PrintQueue? ResolvePrintQueue(string? printerName)
-    {
-        if (string.IsNullOrWhiteSpace(printerName))
-            return null;
-
-        try
-        {
-            using var server = new LocalPrintServer();
-            foreach (var queue in server.GetPrintQueues())
-            {
-                if (string.Equals(queue.FullName, printerName, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(queue.Name, printerName, StringComparison.OrdinalIgnoreCase))
-                    return queue;
-            }
-
-            return new PrintQueue(server, printerName);
-        }
-        catch (PrintSystemException)
-        {
-            return null;
-        }
     }
 
     private static Duplex ToPrinterSettingsDuplex(PrintPreviewSidesMode mode) =>

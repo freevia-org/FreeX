@@ -19,7 +19,7 @@ public sealed class SentryCrashAnalyticsSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
 
         source.Should().Contain("AppCrashAnalyticsOptions.CreateDefault(options.CrashAnalyticsEnabled)");
-        source.Should().Contain("PromptForCrashAnalyticsConsentIfNeeded(options, crashAnalyticsOptions)");
+        source.Should().Contain("PromptForCrashAnalyticsConsentIfNeeded(optionsRuntimeSession, crashAnalyticsOptions)");
         source.Should().Contain("UiText.Get(\"Startup_CrashReportsConsentPrompt\")");
         UiText.Get("Startup_CrashReportsConsentPrompt").Should().Contain("exception message, and stack trace");
         UiText.Get("Startup_CrashReportsConsentPrompt").Should().Contain("exception details can occasionally include sensitive values");

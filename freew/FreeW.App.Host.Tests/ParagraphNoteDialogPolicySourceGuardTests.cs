@@ -5,9 +5,8 @@ namespace FreeW.App.Host.Tests;
 public sealed class ParagraphNoteDialogPolicySourceGuardTests
 {
     [Theory]
-    [InlineData("FootnoteEndnoteOptionsDialog.cs", "FootnoteEndnoteOptionsDialogPlanner.BuildInitialState(", "new FootnoteEndnoteOptionsDialogInput(", "FootnoteEndnoteOptionsDialogPlanner.TryBuildResult(")]
     [InlineData("ParagraphIndentDialog.cs", "ParagraphIndentDialogPlanner.BuildInitialState(", "new ParagraphIndentDialogInput(", "ParagraphIndentDialogPlanner.TryBuildResult(")]
-    [InlineData("CustomParagraphSpacingDialog.cs", "CustomParagraphSpacingDialogPlanner.BuildInitialState(", "new CustomParagraphSpacingDialogInput(", "CustomParagraphSpacingDialogPlanner.TryBuildResult(")]
+    [InlineData("CustomParagraphSpacingDialog.cs", "_session.InitialState", "new CustomParagraphSpacingDialogInput(", "_session.PlanAcceptance(")]
     [InlineData("ParagraphBreaksDialog.cs", "ParagraphBreaksDialogPlanner.BuildInitialState(", "new ParagraphBreaksDialogInput(", "ParagraphBreaksDialogPlanner.TryBuildResult(")]
     public void Dialogs_DelegateStateValidationAndResultPolicyToPresentationPlanner(
         string fileName,
@@ -48,15 +47,15 @@ public sealed class ParagraphNoteDialogPolicySourceGuardTests
     {
         var source = ReadHostSource("FootnoteEndnoteOptionsDialog.cs");
 
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.FormatItems");
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.FootnoteRestartItems");
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.EndnoteRestartItems");
-        source.Should().Contain("Title = FootnoteEndnoteOptionsDialogPlanner.Title;");
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.FootnotesSectionLabel");
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.EndnotesSectionLabel");
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.NumberFormatLabel");
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.StartAtLabel");
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.NumberingLabel");
+        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.CreateSession(");
+        source.Should().Contain("_session.FormatItems");
+        source.Should().Contain("_session.RestartItems(section.Kind)");
+        source.Should().Contain("_session.PlanAcceptance()");
+        source.Should().Contain("var surface = FootnoteEndnoteOptionsDialogPlanner.Surface;");
+        source.Should().Contain("surface.Sections.ToDictionary(section => section.Kind, CreateControls)");
+        source.Should().Contain("foreach (var section in surface.Sections)");
+        source.Should().Contain("_session.UpdateIndex(");
+        source.Should().Contain("AutomationProperties.SetAutomationId(");
         source.Should().NotContain("Title = \"Footnote and Endnote\"");
         source.Should().NotContain("SectionHeader(\"Footnotes\")");
         source.Should().NotContain("SectionHeader(\"Endnotes\")");
@@ -65,6 +64,11 @@ public sealed class ParagraphNoteDialogPolicySourceGuardTests
         source.Should().NotContain("NoteNumberFormat.LowerRoman");
         source.Should().NotContain("NoteNumberRestart.EachPage");
         source.Should().NotContain("NoteNumberRestart.EachSection");
+        source.Should().NotContain("new FootnoteEndnoteOptionsDialogInput(");
+        source.Should().NotContain("FootnoteEndnoteOptionsDialogPlanner.TryBuildResult(");
+        source.Should().Contain("private FootnoteEndnoteOptionsDialogResult? _result;");
+        source.Should().Contain("_result = acceptance.Result;");
+        source.Should().NotContain("internal sealed record Result(");
     }
 
     [Fact]

@@ -26,4 +26,9 @@
     <ProjectReference Include="..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\..\tests\SharedTestInfrastructure\Ribbon\RibbonDefinitionValidator.cs"
+             Link="TestSupport\RibbonDefinitionValidator.cs" />
+  </ItemGroup>
+
 </Project>

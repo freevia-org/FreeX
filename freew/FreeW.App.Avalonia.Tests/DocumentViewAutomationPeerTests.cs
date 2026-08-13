@@ -229,6 +229,43 @@ public sealed class DocumentViewAutomationPeerTests
     }
 
     [Fact]
+    public async Task Selecting_a_table_range_raises_an_automation_selection_changed_notification()
+    {
+        var itemStatusChanged = 0;
+        string? status = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var table = new Table();
+            table.Rows.Add(Row("North", "120"));
+            table.Rows.Add(Row("South", "98"));
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(table);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 1200));
+
+            var peer = view.CreateAutomationPeerForTests();
+            peer.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == AutomationElementIdentifiers.ItemStatusProperty)
+                    itemStatusChanged++;
+            };
+
+            view.SetCellBlockSelection(0, 0, 0, 1, 1);
+            status = view.AutomationSelectionStatus();
+        });
+
+        if (!ran)
+            return;
+
+        itemStatusChanged.Should().BeGreaterThan(0);
+        status.Should().Be("Table 1; selected cell range from row 1, column 1 through row 2, column 2; 2 rows by 2 columns");
+    }
+
+    [Fact]
     public async Task Editing_shape_text_reports_the_shape_caret_and_selection_instead_of_only_object_selection()
     {
         AccessibleDocumentSnapshot? snapshot = null;

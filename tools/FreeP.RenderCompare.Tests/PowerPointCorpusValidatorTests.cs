@@ -137,7 +137,7 @@ public sealed class PowerPointCorpusValidatorTests
 
     private sealed class CorpusFixture : IDisposable
     {
-        private readonly string _root = Path.Combine(Path.GetTempPath(), "freep-corpus-validator-" + Guid.NewGuid().ToString("N"));
+        private readonly TestTemporaryDirectory _temporaryDirectory = new("freep-corpus-validator-");
 
         internal string CorpusDirectory { get; }
         internal string OutputDirectory { get; }
@@ -145,9 +145,9 @@ public sealed class PowerPointCorpusValidatorTests
 
         internal CorpusFixture()
         {
-            CorpusDirectory = Path.Combine(_root, "corpus");
-            OutputDirectory = Path.Combine(_root, "output");
-            ReferenceDirectory = Path.Combine(_root, "refs");
+            CorpusDirectory = Path.Combine(_temporaryDirectory.Path, "corpus");
+            OutputDirectory = Path.Combine(_temporaryDirectory.Path, "output");
+            ReferenceDirectory = Path.Combine(_temporaryDirectory.Path, "refs");
             Directory.CreateDirectory(CorpusDirectory);
             Directory.CreateDirectory(OutputDirectory);
             Directory.CreateDirectory(ReferenceDirectory);
@@ -162,10 +162,6 @@ public sealed class PowerPointCorpusValidatorTests
             File.WriteAllText(Path.Combine(directory, fileName), contents);
         }
 
-        public void Dispose()
-        {
-            if (Directory.Exists(_root))
-                Directory.Delete(_root, recursive: true);
-        }
+        public void Dispose() => _temporaryDirectory.Dispose();
     }
 }

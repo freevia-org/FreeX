@@ -3225,9 +3225,6 @@
   <data name="MainWindow_Content_AllowUsersToEditRangesCompact" xml:space="preserve">
     <value>Ranges</value>
   </data>
-  <data name="MainWindow_Content_AltText" xml:space="preserve">
-    <value>Alt Text</value>
-  </data>
   <data name="MainWindow_Content_Apply" xml:space="preserve">
     <value>Apply</value>
   </data>
@@ -3518,9 +3515,6 @@
   </data>
   <data name="MainWindow_Content_InkToShape" xml:space="preserve">
     <value>Ink to Shape</value>
-  </data>
-  <data name="MainWindow_Content_Insert" xml:space="preserve">
-    <value>Insert</value>
   </data>
   <data name="MainWindow_Content_InsertFunction" xml:space="preserve">
     <value>Insert Function</value>
@@ -3881,9 +3875,6 @@
   </data>
   <data name="MainWindow_Content_TextBox" xml:space="preserve">
     <value>Text Box</value>
-  </data>
-  <data name="MainWindow_Content_Themes" xml:space="preserve">
-    <value>Themes</value>
   </data>
   <data name="MainWindow_Content_Timeline" xml:space="preserve">
     <value>Timeline</value>
@@ -5001,9 +4992,6 @@
   </data>
   <data name="MainWindow_Text_Name" xml:space="preserve">
     <value>Name</value>
-  </data>
-  <data name="MainWindow_Text_New" xml:space="preserve">
-    <value>New</value>
   </data>
   <data name="MainWindow_Text_Notes" xml:space="preserve">
     <value>Notes</value>
@@ -9011,9 +8999,6 @@
     <value>Select the display language FreeX uses for menus, dialogs, and messages.</value>
   </data>
 
-<data name="Options_AppLanguageSystemDefault" xml:space="preserve">
-    <value>Use system default</value>
-  </data>
 
 <data name="Options_AppLanguageRestartNotice" xml:space="preserve">
     <value>Some open windows may keep their current language until you restart FreeX.</value>
@@ -13703,7 +13688,7 @@ Changing cell value: {2}</value>
   <data name="Sort_SortOnCellValues" xml:space="preserve">
     <value>Cell Values</value>
   </data>
-  <data name="Sort_SortOnFontColor" xml:space="preserve">
+  <data name="Common_FontColor" xml:space="preserve">
     <value>Font Colour</value>
   </data>
   <data name="SortOptions_FirstKeyJanToDecShort" xml:space="preserve">
@@ -15732,9 +15717,6 @@ and {0} more.</value>
   <data name="StatusBar_ViewShortcuts" xml:space="preserve">
     <value>View Shortcuts</value>
   </data>
-  <data name="StatusBar_Zoom" xml:space="preserve">
-    <value>Zoom</value>
-  </data>
   <data name="StatusBar_ZoomSlider" xml:space="preserve">
     <value>Zoom Slider</value>
   </data>
@@ -15847,18 +15829,6 @@ and {0} more.</value>
   </data>
   <data name="Startup_RecoveryTitle" xml:space="preserve">
     <value>Recover Unsaved Work</value>
-  </data>
-  <data name="Startup_RecoveryPrompt" xml:space="preserve">
-    <value>FreeX found autosaved recovery files from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook?</value>
-  </data>
-  <data name="Startup_RecoveryPromptNamed" xml:space="preserve">
-    <value>FreeX found an autosaved recovery file for "{0}" from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook?</value>
-  </data>
-  <data name="Startup_RecoveryPromptMultiple" xml:space="preserve">
-    <value>FreeX found autosaved recovery files from a previous session that ended unexpectedly. There are {0} workbook(s) remaining to review. Would you like to restore this workbook?</value>
-  </data>
-  <data name="Startup_RecoveryPromptNamedMultiple" xml:space="preserve">
-    <value>FreeX found an autosaved recovery file for "{0}" from a previous session that ended unexpectedly. There are {1} workbook(s) remaining to review. Would you like to restore this workbook?</value>
   </data>
   <data name="MainWindowMessage_XlsxSaveWarningsBodyFormat" xml:space="preserve">
     <value>Some features could not be saved to the file and may be missing:

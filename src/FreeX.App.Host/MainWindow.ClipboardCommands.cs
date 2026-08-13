@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows;
+using Free.Shared.AppServices;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -14,41 +14,14 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private const string InternalClipboardFormat = "FreeX.InternalClipboard";
-
-    // SourceAreas records every area of a Ctrl+click multi-area selection that was actually copied
-    // (R49-render-multiarea-selection-3-1); null means "just SourceRange", so existing call sites
-    // that never touch this field (e.g. MainWindow.ScreenshotTour.cs's seeded clipboard) keep their
-    // original single-area behavior unchanged.
-    private record InternalClipboard(
-        GridRange SourceRange,
-        List<(CellAddress Source, Cell Cell)> Cells,
-        List<(CellAddress Source, PictureCellSnapshot Snapshot)> PictureCells,
-        string Text,
-        bool IsCut = false,
-        IReadOnlyList<GridRange>? SourceAreas = null,
-        string? Token = null);
-    private InternalClipboard? _internalClipboard;
-
-    // R91-io-clipboard-image-formats-5-1: a selected chart/shape (SheetGrid.SelectedObjectKind/
-    // SelectedObjectId, set by SelectInsertedChart/SelectInsertedDrawingObject in
-    // MainWindow.ChartCommands.cs/MainWindow.Drawing.cs) leaves SheetGrid.SelectedRange as whatever
-    // single-cell range sits under/near the object's anchor -- ExecuteCopy used to only ever look at
-    // SelectedRange, so Ctrl+C on a selected chart/shape silently copied that underlying CELL and
-    // Ctrl+V never duplicated the object at all. This tracks a pending object copy or cut separately from
-    // the cell-range clipboard above.
-    private sealed record InternalObjectClipboard(
-        SheetId SourceSheetId,
-        SelectionPaneObjectKind Kind,
-        Guid ObjectId,
-        bool IsCut = false);
-    private InternalObjectClipboard? _internalObjectClipboard;
+    private readonly WorkbookClipboardSession _workbookClipboardSession = new();
+    private readonly DrawingObjectClipboardSession _drawingObjectClipboard = new();
 
     private void CancelCopyAndTransientModes()
     {
         ClearClipboardVisualState();
-        _internalClipboard = null;
-        _internalObjectClipboard = null;
+        _workbookClipboardSession.Clear();
+        _drawingObjectClipboard.Clear();
         CancelFormatPainter();
         _borderDrawMode = BorderDrawMode.None;
         SetSelectionMode(ExcelSelectionMode.Normal);
@@ -95,7 +68,7 @@ public partial class MainWindow
     {
         // Route a selected drawing object through its own clipboard instead of falling into the
         // cell-range path. Object Cut stays pending until Paste executes the shared move command.
-        _internalObjectClipboard = null;
+        _drawingObjectClipboard.Clear();
         if (TryCopySelectedDrawingObject(isCut))
             return;
 
@@ -124,7 +97,9 @@ public partial class MainWindow
         if (areas.Count > 1 && (isCut || !MultiRangeCopyPlanner.TryPlan(areas, out _)))
         {
             ShowCommandError(
-                new CommandOutcome(false, CreateMultiRangeClipboardError(isCut ? "Cut" : "Copy")),
+                new CommandOutcome(
+                    false,
+                    ClipboardFeedbackPlanner.MultiRangeSelectionUnsupported(isCut).Resolve(UiText.Get)),
                 isCut ? "Cut" : "Copy");
             return;
         }
@@ -157,26 +132,26 @@ public partial class MainWindow
         var fullRangeViewport = BuildFullRangeViewportForClipboard(copyRange) ?? viewport;
 
         var text = ClipboardSerializer.Serialize(fullRangeViewport, copyRange);
-        var clipboardToken = Guid.NewGuid().ToString("N");
+        var clipboardMarker = WorkbookClipboardSession.CreateMarker();
         // Place plain text AND an HTML table fragment (CF_HTML) on the OS clipboard together,
         // matching real Excel: destination apps that understand HTML (Word, Outlook, browsers,
         // LibreOffice Calc) pick the richer format and preserve bold/fill/merges/number-format
         // display text, while anything HTML-unaware still gets the existing plain TSV text (M7).
-        var data = new DataObject();
-        data.SetText(text);
-        data.SetData(InternalClipboardFormat, clipboardToken);
+        var customData = new List<PlatformClipboardData>();
         var html = BuildHtmlClipboardFragment(fullRangeViewport, sheet, copyRange, _workbook.Theme);
         if (!string.IsNullOrEmpty(html))
-            data.SetData(System.Windows.DataFormats.Html, html);
+            customData.Add(PlatformClipboardData.FromText(System.Windows.DataFormats.Html, html));
 
         // R57-services-clipboard-formats-5-3: real Excel places a comma-delimited "CSV" clipboard
         // format alongside Text/Unicode Text/HTML on every cell-range copy, so a destination that
         // specifically enumerates for CSV (skipping plain Text) still gets a payload. Re-parse the
         // already-built TSV/newline `text` (same field values/escaping semantics as ClipboardSerializer
         // production, just re-delimited) and re-emit it RFC4180-quoted with commas.
-        var csv = ClipboardSerializer.ConvertTsvToCsv(text);
+        var csv = ClipboardCsvTextRenderer.Render(text);
         if (!string.IsNullOrEmpty(csv))
-            data.SetData(System.Windows.DataFormats.CommaSeparatedValue, csv);
+            customData.Add(PlatformClipboardData.FromText(
+                System.Windows.DataFormats.CommaSeparatedValue,
+                csv));
 
         // R91-io-clipboard-image-formats-5-3: real Excel places a rendered picture (CF_ENHMETAFILE /
         // CF_BITMAP) on the clipboard alongside Text/HTML/CSV on EVERY plain range copy, so a
@@ -188,10 +163,21 @@ public partial class MainWindow
         // copied cells' own display text and places it under DataFormats.Bitmap, so the "at minimum
         // offer a picture flavour" bar is met for every copy without depending on the shared
         // print/grid rendering pipeline other in-flight work is currently touching.
+        PlatformClipboardImage? clipboardImage = null;
         if (TryRenderClipboardRangeBitmap(ClipboardSerializer.Deserialize(text)) is { } clipboardBitmap)
-            data.SetImage(clipboardBitmap);
+        {
+            clipboardImage = new PlatformClipboardImage(
+                EncodeBitmapSourceToPng(clipboardBitmap),
+                clipboardBitmap.PixelWidth,
+                clipboardBitmap.PixelHeight);
+        }
 
-        SetClipboardDataWithRetry(data, text);
+        SetClipboardDataWithRetry(WorkbookClipboardSession.AttachMarker(
+            new PlatformClipboardContent(
+                Text: text,
+                Image: clipboardImage,
+                CustomData: customData),
+            clipboardMarker));
 
         // Show marching ants around the copied range(s). ClipboardRange stays the bounding box (used
         // as the sheet-affinity check and by the internal-paste "preserve visual" path), while
@@ -237,20 +223,20 @@ public partial class MainWindow
             }
         }
         var pictureCells = CapturePictureCells(fullRangeViewport, sheet, copyRange);
-        _internalClipboard = new InternalClipboard(
+        _workbookClipboardSession.Capture(new WorkbookClipboardSnapshot(
             copyRange,
             clipCells,
             pictureCells,
             text,
             isCut,
             areas.Count > 1 ? areas : null,
-            clipboardToken);
+            clipboardMarker));
     }
 
     /// <summary>
     /// R91-io-clipboard-image-formats-5-1 (Chart/Shape), completed for Picture/TextBox by
     /// R92-consumer-wiring-sweep-2: captures a selected chart/shape/picture/text box into
-    /// <see cref="_internalObjectClipboard"/> instead of the cell-range clipboard, when
+    /// <see cref="_drawingObjectClipboard"/> instead of the cell-range clipboard, when
     /// SheetGrid currently has an object (not a plain cell) selected. Returns false (leaving both
     /// clipboards untouched) for any other selection kind, which keeps falling through to the
     /// pre-existing cell-range copy behavior unchanged.
@@ -265,16 +251,15 @@ public partial class MainWindow
             FreeX.App.UI.ObjectKind.TextBox => SelectionPaneObjectKind.TextBox,
             _ => null
         };
-        if (kind is null || SheetGrid.SelectedObjectId == Guid.Empty)
+        if (!_drawingObjectClipboard.TryCapture(
+                _currentSheetId,
+                kind,
+                SheetGrid.SelectedObjectId,
+                isCut))
             return false;
 
-        _internalClipboard = null;
+        _workbookClipboardSession.Clear();
         ClearClipboardVisualState();
-        _internalObjectClipboard = new InternalObjectClipboard(
-            _currentSheetId,
-            kind.Value,
-            SheetGrid.SelectedObjectId,
-            isCut);
         return true;
     }
 
@@ -285,57 +270,44 @@ public partial class MainWindow
     /// via <see cref="DuplicateDrawingObjectCommand"/>, then selects the new object exactly like
     /// freshly inserting one does (SelectInsertedChart/SelectInsertedDrawingObject).
     /// </summary>
-    private void PasteClipboardObject(InternalObjectClipboard objectClip)
+    private void PasteClipboardObject(DrawingObjectClipboardSnapshot objectClip)
     {
         var destinationSheetId = _currentSheetId;
         DuplicateDrawingObjectCommand? command = null;
         IWorkbookCommand CreateCommand()
         {
-            command = new DuplicateDrawingObjectCommand(
-                objectClip.SourceSheetId,
-                destinationSheetId,
-                objectClip.Kind,
-                objectClip.ObjectId,
-                removeSource: objectClip.IsCut);
+            command = DrawingObjectClipboardSession.CreatePasteCommand(objectClip, destinationSheetId);
             return command;
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Paste");
+        if (!TryExecuteRepeatableCommand(CreateCommand, "Paste", out _))
             return;
-        }
 
         if (objectClip.IsCut)
-            _internalObjectClipboard = null;
+            _drawingObjectClipboard.CompletePaste(objectClip);
 
         if (command?.NewObjectId is { } newObjectId)
         {
-            if (objectClip.Kind == SelectionPaneObjectKind.Chart)
+            var selection = DrawingObjectClipboardSession.CreatePasteSelectionPlan(
+                _workbook.GetSheet(destinationSheetId),
+                destinationSheetId,
+                objectClip.Kind,
+                newObjectId);
+            if (selection.Kind == SelectionPaneObjectKind.Chart)
             {
-                SelectInsertedChart(newObjectId);
+                SelectInsertedChart(selection.ObjectId);
             }
-            else if (objectClip.Kind == SelectionPaneObjectKind.Shape)
+            else
             {
-                var newAnchor = _workbook.GetSheet(destinationSheetId)?.DrawingShapes
-                    .Find(shape => shape.Id == newObjectId)?.Anchor
-                    ?? new CellAddress(destinationSheetId, 1, 1);
-                SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.Shape, newAnchor);
-            }
-            else if (objectClip.Kind == SelectionPaneObjectKind.Picture)
-            {
-                var newAnchor = _workbook.GetSheet(destinationSheetId)?.Pictures
-                    .Find(picture => picture.Id == newObjectId)?.Anchor
-                    ?? new CellAddress(destinationSheetId, 1, 1);
-                SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.Picture, newAnchor);
-            }
-            else if (objectClip.Kind == SelectionPaneObjectKind.TextBox)
-            {
-                var newAnchor = _workbook.GetSheet(destinationSheetId)?.TextBoxes
-                    .Find(textBox => textBox.Id == newObjectId)?.Anchor
-                    ?? new CellAddress(destinationSheetId, 1, 1);
-                SelectInsertedDrawingObject(newObjectId, FreeX.App.UI.ObjectKind.TextBox, newAnchor);
+                var nativeKind = selection.Kind switch
+                {
+                    SelectionPaneObjectKind.Shape => FreeX.App.UI.ObjectKind.Shape,
+                    SelectionPaneObjectKind.Picture => FreeX.App.UI.ObjectKind.Picture,
+                    SelectionPaneObjectKind.TextBox => FreeX.App.UI.ObjectKind.TextBox,
+                    _ => FreeX.App.UI.ObjectKind.None,
+                };
+                if (nativeKind != FreeX.App.UI.ObjectKind.None)
+                    SelectInsertedDrawingObject(selection.ObjectId, nativeKind, selection.Anchor);
             }
         }
 
@@ -343,32 +315,28 @@ public partial class MainWindow
         RefreshToolbar();
     }
 
-    /// <summary>Matches the phrasing of WorkbookSession's (Avalonia-facing) identical
-    /// CreateMultiRangeClipboardError helper, kept as a separate literal here rather than shared
-    /// since that helper is a private instance member of WorkbookSession.</summary>
-    private static string CreateMultiRangeClipboardError(string operation) =>
-        operation + " does not support multiple selected ranges yet.";
-
     /// <summary>
     /// R82-commands-cutcopy-clipboard-5-3: real Excel invalidates the OS clipboard once a
     /// Cut-then-Paste move completes -- the marching ants disappear and any further Ctrl+V is a
     /// no-op. Without this, the TSV/HTML payload <see cref="SetClipboardDataWithRetry"/> placed on
     /// the real OS clipboard during the original Ctrl+X stays there untouched even after
-    /// <c>_internalClipboard</c> is cleared below, so <c>ExecutePaste</c>'s external-clipboard
+    /// the workbook clipboard session is cleared below, so <c>ExecutePaste</c>'s external-clipboard
     /// fallback (<see cref="TryGetClipboardText"/>/<see cref="TryGetClipboardHtml"/>) would happily
     /// paste that same cut content a second time. Best-effort: a transiently locked clipboard just
     /// leaves the stale cut text in place, matching how the other clipboard helpers in this file
     /// already treat OS-clipboard access as fallible.
     /// </summary>
-    private static void InvalidateOsClipboardAfterCutMove()
+    private void InvalidateOsClipboardAfterCutMove()
     {
         const int attempts = 20;
         for (var attempt = 1; attempt <= attempts; attempt++)
         {
             try
             {
-                System.Windows.Clipboard.Clear();
-                return;
+                var result = _platformClipboard.ClearAsync().AsTask().GetAwaiter().GetResult();
+                if (result.IsSuccess)
+                    return;
+                throw new ExternalException(result.ErrorMessage);
             }
             catch (ExternalException) when (attempt < attempts)
             {
@@ -381,53 +349,9 @@ public partial class MainWindow
         }
     }
 
-    private static void SetClipboardDataWithRetry(DataObject data, string text)
+    private void SetClipboardDataWithRetry(PlatformClipboardContent content)
     {
-        const int attempts = 20;
-        var requiresImage = data.GetDataPresent(System.Windows.DataFormats.Bitmap);
-        for (var attempt = 1; attempt <= attempts; attempt++)
-        {
-            try
-            {
-                System.Windows.Clipboard.SetDataObject(data, copy: true);
-                System.Windows.Clipboard.Flush();
-                if (System.Windows.Clipboard.GetText() == text
-                    && (!requiresImage || System.Windows.Clipboard.GetImage() is not null))
-                    return;
-            }
-            catch (ExternalException) when (attempt < attempts)
-            {
-            }
-            catch
-            {
-                break;
-            }
-
-            if (attempt < attempts)
-                Thread.Sleep(50);
-        }
-
-        // Some clipboard providers reject richer formats even after the lock clears.
-        for (var attempt = 1; attempt <= attempts; attempt++)
-        {
-            try
-            {
-                System.Windows.Clipboard.SetText(text);
-                System.Windows.Clipboard.Flush();
-                if (System.Windows.Clipboard.GetText() == text)
-                    return;
-            }
-            catch (ExternalException) when (attempt < attempts)
-            {
-            }
-            catch
-            {
-                return;
-            }
-
-            if (attempt < attempts)
-                Thread.Sleep(50);
-        }
+        _ = _platformClipboard.WriteAsync(content).AsTask().GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -595,7 +519,7 @@ public partial class MainWindow
         // R91-io-clipboard-image-formats-5-1: the Ctrl+V side of a chart/shape Ctrl+C (see
         // TryCopySelectedDrawingObject) -- duplicate the copied object instead of falling through to
         // the cell-range paste logic below, which has no concept of an object clipboard at all.
-        if (_internalObjectClipboard is { } objectClip)
+        if (_drawingObjectClipboard.Content is { } objectClip)
         {
             PasteClipboardObject(objectClip);
             return;
@@ -613,44 +537,29 @@ public partial class MainWindow
         // internal-clipboard branch below wins (its text-equality check can't tell "explicitly asked
         // for text" from "clipboard unchanged") and silently performs a full formatted internal
         // paste instead (review P44).
-        if (!externalTextAsText && _internalClipboard is { } clip)
+        if (!externalTextAsText && _workbookClipboardSession.HasContent)
         {
-            var internalClipboardMarkerMatches = clip.Token is not null &&
-                string.Equals(TryGetClipboardInternalMarker(), clip.Token, StringComparison.Ordinal);
-            var clipboardReadFailed = false;
-            ClipboardPastePlan pastePlan;
-            if (internalClipboardMarkerMatches)
-            {
-                // WPF can transiently serve an older/empty text projection while a flushed
-                // DataObject is being published. The private marker is the authoritative
-                // ownership signal for a same-app copy, so do not misclassify that copy as
-                // external based on a racy plain-text read.
-                currentClipboardText = clip.Text;
-                currentClipboardTextRead = true;
-                pastePlan = ClipboardPastePlan.UseInternalClipboard;
-            }
-            else
-            {
-                currentClipboardText = TryGetClipboardText(out clipboardReadFailed);
-                currentClipboardTextRead = true;
-                pastePlan = ClipboardPastePlanner.PlanPaste(clip.Text, currentClipboardText, clipboardReadFailed);
-            }
-            if (pastePlan == ClipboardPastePlan.ReadFailed)
+            var observation = ReadWorkbookClipboardForPastePlanning();
+            currentClipboardText = observation.Text;
+            currentClipboardTextRead = true;
+            var resolution = _workbookClipboardSession.ResolvePaste(observation);
+            if (resolution.Plan == ClipboardPastePlan.ReadFailed)
             {
                 // A transient OS-clipboard read failure must not silently fall back to a stale
                 // internal paste of the wrong content — skip the paste and tell the user.
                 ShowCommandError(
-                    new CommandOutcome(false, "The clipboard is busy. Try pasting again."),
+                    new CommandOutcome(
+                        false,
+                        ClipboardFeedbackPlanner.ReadFailed.Resolve(UiText.Get)),
                     "Paste");
                 return;
             }
 
-            if (pastePlan == ClipboardPastePlan.UseExternalClipboardText)
+            if (resolution.Plan == ClipboardPastePlan.UseExternalClipboardText)
             {
-                _internalClipboard = null;
                 ClearClipboardVisualState();
             }
-            else
+            else if (resolution.Snapshot is { } clip)
             {
                 var expandPasteToSelectedRange = ClipboardPastePlanner.ShouldFillSelectedDestinationRange(clip.IsCut, options);
                 IWorkbookCommand CreatePasteCommand()
@@ -744,12 +653,8 @@ public partial class MainWindow
                     ? "Paste"
                     : "Paste Special";
 
-                var pasteOutcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreatePasteCommand);
-                if (!pasteOutcome.Success)
-                {
-                    ShowCommandError(pasteOutcome, title);
+                if (!TryExecuteRepeatableCommand(CreatePasteCommand, title, out _))
                     return;
-                }
 
                 var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
                 _repeatPostAction = _ =>
@@ -761,16 +666,10 @@ public partial class MainWindow
                         expandToSelectedRange: expandPasteToSelectedRange);
                     if (clip.IsCut)
                     {
-                        _internalClipboard = null;
+                        _workbookClipboardSession.CompletePaste(clip);
                         InvalidateOsClipboardAfterCutMove();
                     }
                 };
-                if (mode != PasteMode.Formats)
-                {
-                    RecalculateIfAutomatic(pasteOutcome.AffectedCells ?? []);
-                    InvalidateNavigationCachesIfManual();
-                }
-
                 CompletePasteSelection(
                     clip.SourceRange,
                     options,
@@ -778,7 +677,7 @@ public partial class MainWindow
                     expandToSelectedRange: expandPasteToSelectedRange);
                 if (clip.IsCut)
                 {
-                    _internalClipboard = null;
+                    _workbookClipboardSession.CompletePaste(clip);
                     InvalidateOsClipboardAfterCutMove();
                 }
                 UpdateViewport();
@@ -808,7 +707,7 @@ public partial class MainWindow
         // lines (e.g. a wrapped address, or an explicit <br>) as a row break, shifting every
         // subsequent row by one (R39-io-external-clipboard-2-3).
         var htmlRows = TryGetClipboardHtml() is { } htmlPayload
-            ? TryParseHtmlClipboardTableRows(htmlPayload)
+            ? HtmlClipboardTableParser.Parse(htmlPayload)
             : null;
         var capturedRows = htmlRows is { Count: > 0 } htmlRowList
             ? htmlRowList
@@ -826,34 +725,42 @@ public partial class MainWindow
                 options);
         }
 
-        var fallbackOutcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateExternalPasteCommand);
-        if (!fallbackOutcome.Success)
-        {
-            ShowCommandError(fallbackOutcome, "Paste");
+        if (!TryExecuteRepeatableCommand(CreateExternalPasteCommand, "Paste", out _))
             return;
-        }
 
         _repeatPostAction = _ => CompleteExternalPasteSelection(capturedRows, expandToSelectedRange: true);
-        RecalculateIfAutomatic(fallbackOutcome.AffectedCells ?? []);
-        InvalidateNavigationCachesIfManual();
 
         CompleteExternalPasteSelection(capturedRows, expandToSelectedRange: true);
         UpdateViewport();
         RefreshToolbar();
     }
 
-    private static string? TryGetClipboardText() => TryGetClipboardText(out _);
+    private string? TryGetClipboardText() => TryGetClipboardText(out _);
 
-    private static string? TryGetClipboardInternalMarker()
+    private WorkbookClipboardReadObservation ReadWorkbookClipboardForPastePlanning()
     {
-        try
+        const int attempts = 20;
+        for (var attempt = 1; attempt <= attempts; attempt++)
         {
-            return System.Windows.Clipboard.GetData(InternalClipboardFormat) as string;
+            var result = _platformClipboard.ReadAsync(WorkbookClipboardSession.PasteReadRequest)
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+            var observation = WorkbookClipboardSession.Observe(result);
+            if (observation.Available && !observation.ReadFailed)
+                return observation;
+            if (result.Status is PlatformClipboardReadStatus.Unavailable
+                or PlatformClipboardReadStatus.Unsupported)
+                break;
+            if (attempt < attempts)
+                Thread.Sleep(50);
         }
-        catch
-        {
-            return null;
-        }
+
+        return new WorkbookClipboardReadObservation(
+            Available: true,
+            Text: null,
+            Marker: null,
+            ReadFailed: true);
     }
 
     /// <summary>
@@ -861,34 +768,37 @@ public partial class MainWindow
     /// process) from "read succeeded but empty/non-text" — the paste planner must skip the paste
     /// on failure instead of falling back to a stale internal-clipboard paste (review P1).
     /// </summary>
-    private static string? TryGetClipboardText(out bool readFailed)
+    private string? TryGetClipboardText(out bool readFailed)
     {
         const int attempts = 20;
         for (var attempt = 1; attempt <= attempts; attempt++)
         {
-            try
+            var result = _platformClipboard.ReadTextAsync().AsTask().GetAwaiter().GetResult();
+            if (result.Status == PlatformClipboardReadStatus.Success)
             {
                 readFailed = false;
-                return System.Windows.Clipboard.GetText();
+                return result.Value;
             }
-            catch (ExternalException) when (attempt < attempts)
+            if (result.Status == PlatformClipboardReadStatus.Empty)
             {
-                Thread.Sleep(50);
+                readFailed = false;
+                return null;
             }
-            catch
-            {
+            if (result.Status is PlatformClipboardReadStatus.Unavailable
+                or PlatformClipboardReadStatus.Unsupported)
                 break;
-            }
+            if (attempt < attempts)
+                Thread.Sleep(50);
         }
 
         readFailed = true;
         return null;
     }
 
-    private static bool TryClipboardContainsImage()
+    private bool TryClipboardContainsImage()
     {
-        try { return System.Windows.Clipboard.ContainsImage(); }
-        catch { return false; }
+        var result = _platformClipboard.ReadImageAsync().AsTask().GetAwaiter().GetResult();
+        return result.Status == PlatformClipboardReadStatus.Success && result.Value is not null;
     }
 
     /// <summary>
@@ -898,44 +808,22 @@ public partial class MainWindow
     /// transparent-background image; returns the raw PNG bytes (with alpha intact) when found, or
     /// null when no such format is present/readable so the caller falls back to the flattened image.
     /// </summary>
-    private static byte[]? TryGetClipboardPngFormatBytes()
+    private byte[]? TryGetClipboardPngFormatBytes()
     {
-        try
+        var request = new PlatformClipboardReadRequest(
+            CustomFormats: PngClipboardFormatNames
+                .Select(static name => new PlatformClipboardFormat(
+                    name,
+                    PlatformClipboardDataKind.Bytes))
+                .ToArray());
+        var result = _platformClipboard.ReadAsync(request).AsTask().GetAwaiter().GetResult();
+        if (result.Status != PlatformClipboardReadStatus.Success || result.Value is null)
+            return null;
+        foreach (var formatName in PngClipboardFormatNames)
         {
-            var dataObject = System.Windows.Clipboard.GetDataObject();
-            if (dataObject is null)
-                return null;
-
-            foreach (var formatName in PngClipboardFormatNames)
-            {
-                if (!dataObject.GetDataPresent(formatName))
-                    continue;
-
-                var raw = dataObject.GetData(formatName);
-                switch (raw)
-                {
-                    case byte[] bytes when bytes.Length > 0:
-                        return bytes;
-                    case System.IO.MemoryStream memoryStream:
-                        return memoryStream.ToArray();
-                    case System.IO.Stream stream:
-                        using (stream)
-                        {
-                            using var buffer = new System.IO.MemoryStream();
-                            stream.CopyTo(buffer);
-                            if (buffer.Length > 0)
-                                return buffer.ToArray();
-                        }
-                        break;
-                }
-            }
+            if (result.Value.GetBytes(formatName) is { Length: > 0 } bytes)
+                return bytes;
         }
-        catch
-        {
-            // Fall back to the flattened DIB/Bitmap path below -- a transient clipboard-provider
-            // failure on the richer format must not fail the whole paste.
-        }
-
         return null;
     }
 
@@ -991,14 +879,20 @@ public partial class MainWindow
             return false;
         }
 
+        imageBytes = EncodeBitmapSourceToPng(image);
+        pixelWidth = image.PixelWidth;
+        pixelHeight = image.PixelHeight;
+        return true;
+    }
+
+    private static byte[] EncodeBitmapSourceToPng(
+        System.Windows.Media.Imaging.BitmapSource image)
+    {
         var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
         encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
         using var stream = new System.IO.MemoryStream();
         encoder.Save(stream);
-        imageBytes = stream.ToArray();
-        pixelWidth = image.PixelWidth;
-        pixelHeight = image.PixelHeight;
-        return true;
+        return stream.ToArray();
     }
 
     /// <summary>
@@ -1027,431 +921,22 @@ public partial class MainWindow
     }
 
     /// <summary>Reads the CF_HTML clipboard payload (header + fragment), or null when absent/unreadable.</summary>
-    private static string? TryGetClipboardHtml()
+    private string? TryGetClipboardHtml()
     {
-        try
-        {
-            return System.Windows.Clipboard.GetData(System.Windows.DataFormats.Html) as string;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Parses a CF_HTML clipboard payload's first &lt;table&gt; into rows of plain cell text (no
-    /// per-cell styling), or null if no table markup is found. This only recovers the actual
-    /// &lt;tr&gt;/&lt;td&gt;/&lt;th&gt; row/column boundaries -- fuller style reconstruction mirrors
-    /// FreeX.Core.IO.HtmlTableReader (used for whole-file HTML import) and is a larger follow-up
-    /// out of scope here; this is enough to stop a multi-line source cell's embedded line break
-    /// from being misread as a row boundary the way the plain-text tab/newline splitter does
-    /// (R39-io-external-clipboard-2-3).
-    /// </summary>
-    private static List<IReadOnlyList<string>>? TryParseHtmlClipboardTableRows(string htmlPayload)
-    {
-        var fragment = ExtractHtmlClipboardFragment(htmlPayload);
-        var tableInner = ExtractFirstHtmlTableInner(fragment);
-        if (tableInner is null)
-            return null;
-
-        // R57-services-clipboard-formats-5-2: track column occupancy from an active rowspan the same
-        // way FreeX.Core.IO.HtmlTableReader does for whole-file HTML import, so a merged header cell
-        // (colspan) or a rowspan-ed cell keeps every column after it lined up with the right data
-        // column instead of shifting left. Keyed by 1-based column -> the last (0-based) row index it
-        // remains occupied through.
-        var rowSpanRemaining = new Dictionary<int, int>();
-        var rows = new List<List<string>>();
-        var rowIndex = -1;
-
-        foreach (var rowInner in EnumerateHtmlElements(tableInner, "tr"))
-        {
-            rowIndex++;
-            var cells = new List<string>();
-            var col = 0;
-
-            foreach (var cellInfo in EnumerateHtmlCells(rowInner))
-            {
-                col++;
-                while (rowSpanRemaining.TryGetValue(col, out var occupiedThroughRow) && occupiedThroughRow >= rowIndex)
-                {
-                    EnsureHtmlPasteColumn(cells, col);
-                    col++;
-                }
-
-                var text = DecodeHtmlCellText(cellInfo.InnerHtml);
-
-                // R78-services-clipboard-formats-5-1: a <td> carrying the "mso-number-format:'\@'"
-                // marker (written by ClipboardHtmlSerializer.RequiresTextFormatMarker for a Text-typed
-                // source cell, and by real Excel for the same reason) must round-trip through this
-                // HTML-preferred paste path with the identical leading-apostrophe escape the plain-text
-                // clipboard sibling already carries -- otherwise a Text-formatted "00501" silently
-                // becomes the number 501 whenever CF_HTML is present (the common case, since ExecuteCopy
-                // always places CF_HTML alongside plain text).
-                if (cellInfo.IsTextFormat)
-                    text = ClipboardSerializer.EscapeTextCellForPaste(text);
-
-                var colSpan = Math.Max(1, cellInfo.ColSpan);
-                var rowSpan = Math.Max(1, cellInfo.RowSpan);
-                var endCol = col + colSpan - 1;
-
-                // The pasted grid has no merged-cell concept (unlike HtmlTableReader's AddMergedRegion),
-                // so repeat the spanned cell's text across every column it covers -- this matches what a
-                // merged header cell visually represents, and keeps every subsequent column's data under
-                // its own header instead of shifting left by one per colspan.
-                for (var c = col; c <= endCol; c++)
-                {
-                    EnsureHtmlPasteColumn(cells, c);
-                    cells[c - 1] = text;
-                }
-
-                if (rowSpan > 1)
-                {
-                    for (var c = col; c <= endCol; c++)
-                        rowSpanRemaining[c] = rowIndex + rowSpan - 1;
-                }
-
-                col = endCol;
-            }
-
-            if (cells.Count > 0)
-                rows.Add(cells);
-        }
-
-        return rows.Count > 0 ? rows.Cast<IReadOnlyList<string>>().ToList() : null;
-    }
-
-    private static void EnsureHtmlPasteColumn(List<string> row, int col)
-    {
-        while (row.Count < col)
-            row.Add(string.Empty);
-    }
-
-    /// <summary>CF_HTML wraps the real markup between StartFragment/EndFragment comments after a
-    /// small header (see BuildHtmlClipboardFragment for the write side using the same convention);
-    /// falls back to the whole payload if the markers are absent (some non-Excel producers omit them).</summary>
-    private static string ExtractHtmlClipboardFragment(string html)
-    {
-        const string startMarker = "<!--StartFragment-->";
-        const string endMarker = "<!--EndFragment-->";
-        var start = html.IndexOf(startMarker, StringComparison.OrdinalIgnoreCase);
-        var end = html.IndexOf(endMarker, StringComparison.OrdinalIgnoreCase);
-        return start >= 0 && end > start
-            ? html[(start + startMarker.Length)..end]
-            : html;
-    }
-
-    private static string? ExtractFirstHtmlTableInner(string html)
-    {
-        int i = 0;
-        while (i < html.Length)
-        {
-            int lt = html.IndexOf('<', i);
-            if (lt < 0)
-                return null;
-            if (string.Equals(HtmlTagNameAt(html, lt), "table", StringComparison.OrdinalIgnoreCase))
-            {
-                int tagEnd = html.IndexOf('>', lt);
-                if (tagEnd < 0)
-                    return null;
-                int closeStart = FindMatchingHtmlClose(html, tagEnd + 1, "table");
-                return closeStart < 0 ? html[(tagEnd + 1)..] : html[(tagEnd + 1)..closeStart];
-            }
-            i = lt + 1;
-        }
-        return null;
-    }
-
-    private static IEnumerable<string> EnumerateHtmlElements(string html, string tag)
-    {
-        int i = 0;
-        while (i < html.Length)
-        {
-            int lt = html.IndexOf('<', i);
-            if (lt < 0)
-                break;
-            if (string.Equals(HtmlTagNameAt(html, lt), tag, StringComparison.OrdinalIgnoreCase))
-            {
-                int tagEnd = html.IndexOf('>', lt);
-                if (tagEnd < 0)
-                    break;
-                int closeStart = FindMatchingHtmlClose(html, tagEnd + 1, tag);
-                string inner = closeStart < 0 ? html[(tagEnd + 1)..] : html[(tagEnd + 1)..closeStart];
-                yield return inner;
-                i = closeStart < 0 ? html.Length : SkipHtmlClosingTag(html, closeStart);
-            }
-            else
-            {
-                i = lt + 1;
-            }
-        }
-    }
-
-    /// <summary>One &lt;td&gt;/&lt;th&gt; cell's inner HTML plus its colspan/rowspan (each defaulted to 1
-    /// when absent or non-positive), used by <see cref="TryParseHtmlClipboardTableRows"/> to keep
-    /// merged-header columns aligned with their data (R57-services-clipboard-formats-5-2), plus
-    /// whether the cell's own style carries the "mso-number-format:'\@'" Text marker
-    /// (R78-services-clipboard-formats-5-1).</summary>
-    private readonly record struct HtmlCellSpan(string InnerHtml, int ColSpan, int RowSpan, bool IsTextFormat);
-
-    /// <summary>Matches the "mso-number-format" Text (@) marker ClipboardHtmlSerializer writes for a
-    /// Text-typed source cell -- and that real Excel writes for the same reason -- regardless of
-    /// which quote style wraps the style attribute itself (single vs. double) or the format code
-    /// inside it (Excel emits <c>mso-number-format:"\@"</c>; FreeX's own writer emits
-    /// <c>mso-number-format:'\@'</c>). Searched directly against the tag's raw attribute text rather
-    /// than against an extracted "style" attribute value, since a simple quote-delimited attribute
-    /// extractor cannot reliably handle one quote style nested inside the other.</summary>
-    private static readonly System.Text.RegularExpressions.Regex MsoTextNumberFormatRegex = new(
-        @"mso-number-format\s*:\s*[""']\\?@[""']",
-        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
-    private static IEnumerable<HtmlCellSpan> EnumerateHtmlCells(string rowInner)
-    {
-        int i = 0;
-        while (i < rowInner.Length)
-        {
-            int lt = rowInner.IndexOf('<', i);
-            if (lt < 0)
-                break;
-            var name = HtmlTagNameAt(rowInner, lt);
-            if (name is "td" or "th")
-            {
-                int tagEnd = rowInner.IndexOf('>', lt);
-                if (tagEnd < 0)
-                    break;
-                var tagContent = rowInner[(lt + 1)..tagEnd];
-                var colSpan = ParseHtmlSpanAttribute(tagContent, "colspan");
-                var rowSpan = ParseHtmlSpanAttribute(tagContent, "rowspan");
-                var isTextFormat = MsoTextNumberFormatRegex.IsMatch(tagContent);
-                int closeStart = FindMatchingHtmlClose(rowInner, tagEnd + 1, name);
-                string inner = closeStart < 0 ? rowInner[(tagEnd + 1)..] : rowInner[(tagEnd + 1)..closeStart];
-                yield return new HtmlCellSpan(inner, colSpan, rowSpan, isTextFormat);
-                i = closeStart < 0 ? rowInner.Length : SkipHtmlClosingTag(rowInner, closeStart);
-            }
-            else
-            {
-                i = lt + 1;
-            }
-        }
-    }
-
-    /// <summary>Reads a numeric attribute (e.g. <c>colspan="2"</c>, <c>colspan=2</c>, or unquoted/single
-    /// quoted) from a tag's raw attribute text. Returns 1 (the "no span" default) if absent, malformed,
-    /// or non-positive.</summary>
-    /// <summary>
-    /// Upper bound for a single HTML <c>colspan</c>/<c>rowspan</c> when pasting. A span wider than the
-    /// sheet itself cannot produce anything pasteable, so this caps the expansion work instead.
-    /// </summary>
-    private const int MaxHtmlPasteSpan = (int)CellAddress.MaxCol;
-
-    private static int ParseHtmlSpanAttribute(string tagContent, string attributeName)
-    {
-        var searchFrom = 0;
-        while (searchFrom < tagContent.Length)
-        {
-            var idx = tagContent.IndexOf(attributeName, searchFrom, StringComparison.OrdinalIgnoreCase);
-            if (idx < 0)
-                return 1;
-
-            var afterIdx = idx + attributeName.Length;
-            var boundaryOk = idx == 0 || char.IsWhiteSpace(tagContent[idx - 1]);
-            if (!boundaryOk)
-            {
-                searchFrom = afterIdx;
-                continue;
-            }
-
-            var p = afterIdx;
-            while (p < tagContent.Length && char.IsWhiteSpace(tagContent[p]))
-                p++;
-            if (p >= tagContent.Length || tagContent[p] != '=')
-            {
-                searchFrom = afterIdx;
-                continue;
-            }
-
-            p++;
-            while (p < tagContent.Length && char.IsWhiteSpace(tagContent[p]))
-                p++;
-            if (p < tagContent.Length && (tagContent[p] == '"' || tagContent[p] == '\''))
-                p++;
-
-            var digitsStart = p;
-            while (p < tagContent.Length && char.IsDigit(tagContent[p]))
-                p++;
-
-            // Clamp, don't just reject non-positive values. The caller expands a span into that many
-            // columns/rows, so an arbitrarily large colspan/rowspan ("<td colspan='500000000'>" from a
-            // hostile or merely buggy page — a page's copy handler can put any HTML on the clipboard)
-            // turned Ctrl+V into hundreds of millions of list operations on the UI thread, hanging and
-            // then killing the app with OutOfMemoryException. Nothing beyond the sheet's own limits can
-            // be pasted anyway, so cap the span there.
-            return int.TryParse(
-                tagContent[digitsStart..p],
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out var value) && value > 0
-                ? Math.Min(value, MaxHtmlPasteSpan)
-                : 1;
-        }
-
-        return 1;
-    }
-
-    private static string? HtmlTagNameAt(string s, int ltIndex)
-    {
-        int i = ltIndex + 1;
-        if (i < s.Length && s[i] == '/')
-            i++;
-        int start = i;
-        while (i < s.Length && char.IsLetterOrDigit(s[i]))
-            i++;
-        return i > start ? s[start..i].ToLowerInvariant() : null;
-    }
-
-    /// <summary>Finds the index of the matching &lt;/tag&gt;, honoring nesting. -1 if none.</summary>
-    private static int FindMatchingHtmlClose(string s, int from, string tag)
-    {
-        int depth = 0;
-        int i = from;
-        while (i < s.Length)
-        {
-            int lt = s.IndexOf('<', i);
-            if (lt < 0)
-                return -1;
-            bool isClose = lt + 1 < s.Length && s[lt + 1] == '/';
-            var name = HtmlTagNameAt(s, lt);
-            if (string.Equals(name, tag, StringComparison.OrdinalIgnoreCase))
-            {
-                if (isClose)
-                {
-                    if (depth == 0)
-                        return lt;
-                    depth--;
-                }
-                else if (!IsHtmlSelfClosing(s, lt))
-                {
-                    depth++;
-                }
-            }
-            i = lt + 1;
-        }
-        return -1;
-    }
-
-    private static bool IsHtmlSelfClosing(string s, int lt)
-    {
-        int gt = s.IndexOf('>', lt);
-        return gt > lt && s[gt - 1] == '/';
-    }
-
-    private static int SkipHtmlClosingTag(string s, int closeStart)
-    {
-        int gt = s.IndexOf('>', closeStart);
-        return gt < 0 ? s.Length : gt + 1;
-    }
-
-    /// <summary>Strips tags from a cell's inner HTML -- turning &lt;br&gt; into a literal newline
-    /// kept WITHIN the cell's own text (never a row separator), and an &lt;img&gt; into its alt text
-    /// when present (R78-services-clipboard-formats-5-3, see below) -- decodes entities, and
-    /// trims.</summary>
-    private static string DecodeHtmlCellText(string innerHtml)
-    {
-        var sb = new StringBuilder(innerHtml.Length);
-        int i = 0;
-        while (i < innerHtml.Length)
-        {
-            char c = innerHtml[i];
-            if (c == '<')
-            {
-                var name = HtmlTagNameAt(innerHtml, i);
-                int gt = innerHtml.IndexOf('>', i);
-                if (gt < 0)
-                    break;
-                if (name is "br")
-                {
-                    sb.Append('\n');
-                }
-                else if (name is "img")
-                {
-                    // Full picture-paste (fetching/decoding the src and creating a floating Picture
-                    // object the way TryPasteClipboardImage does for a pure CF_Bitmap payload) is a
-                    // larger follow-up out of scope here. But silently emptying the cell would lose
-                    // the only content the source page associated with it (e.g. a product thumbnail
-                    // next to its price) with no way to recover it from the paste and no user-visible
-                    // sign anything was dropped. Falling back to the img's alt text -- the HTML
-                    // author's own stand-in for the image's content -- keeps that content in the
-                    // pasted cell instead of a blank, unexplained gap.
-                    var alt = ExtractHtmlAttributeValue(innerHtml[(i + 1)..gt], "alt");
-                    if (!string.IsNullOrEmpty(alt))
-                        sb.Append(alt);
-                }
-                i = gt + 1;
-            }
-            else
-            {
-                sb.Append(c);
-                i++;
-            }
-        }
-
-        return System.Net.WebUtility.HtmlDecode(sb.ToString()).Trim();
-    }
-
-    /// <summary>Reads a quoted string attribute's value (e.g. <c>alt="Widget"</c>) from a tag's raw
-    /// attribute text. Returns null if absent or malformed (unquoted/unterminated). Mirrors
-    /// <see cref="ParseHtmlSpanAttribute"/>'s boundary-checked forward search but reads an arbitrary
-    /// quoted value instead of a trailing digit run.</summary>
-    private static string? ExtractHtmlAttributeValue(string tagContent, string attributeName)
-    {
-        var searchFrom = 0;
-        while (searchFrom < tagContent.Length)
-        {
-            var idx = tagContent.IndexOf(attributeName, searchFrom, StringComparison.OrdinalIgnoreCase);
-            if (idx < 0)
-                return null;
-
-            var afterIdx = idx + attributeName.Length;
-            var boundaryOk = idx == 0 || char.IsWhiteSpace(tagContent[idx - 1]);
-            if (!boundaryOk)
-            {
-                searchFrom = afterIdx;
-                continue;
-            }
-
-            var p = afterIdx;
-            while (p < tagContent.Length && char.IsWhiteSpace(tagContent[p]))
-                p++;
-            if (p >= tagContent.Length || tagContent[p] != '=')
-            {
-                searchFrom = afterIdx;
-                continue;
-            }
-
-            p++;
-            while (p < tagContent.Length && char.IsWhiteSpace(tagContent[p]))
-                p++;
-            if (p >= tagContent.Length || (tagContent[p] != '"' && tagContent[p] != '\''))
-            {
-                searchFrom = afterIdx;
-                continue;
-            }
-
-            var quote = tagContent[p];
-            var valueStart = p + 1;
-            var valueEnd = tagContent.IndexOf(quote, valueStart);
-            if (valueEnd < 0)
-                return null;
-
-            return tagContent[valueStart..valueEnd];
-        }
-
-        return null;
+        var result = _platformClipboard.ReadCustomAsync(new PlatformClipboardFormat(
+                System.Windows.DataFormats.Html,
+                PlatformClipboardDataKind.Text))
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+        return result.Status == PlatformClipboardReadStatus.Success
+            ? result.Value?.Text
+            : null;
     }
 
     private void ExecuteInsertCopiedCells()
     {
-        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+        if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
         if (!TryShowCellShiftDialog(CellShiftDialogMode.Insert, out var choice))
@@ -1477,21 +962,15 @@ public partial class MainWindow
                 sourceAreas: clip.SourceAreas);
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Insert Copied Cells");
+        if (!TryExecuteRepeatableCommand(CreateCommand, "Insert Copied Cells", out _))
             return;
-        }
 
         var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
         _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, default, preserveClipboardVisual);
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
-        InvalidateNavigationCachesIfManual();
         CompletePasteSelection(clip.SourceRange, default, preserveClipboardVisual);
         if (clip.IsCut)
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clip);
             InvalidateOsClipboardAfterCutMove();
         }
         UpdateViewport();
@@ -1540,7 +1019,7 @@ public partial class MainWindow
     }
 
     private bool TryCreateCutMoveCommand(
-        InternalClipboard clip,
+        WorkbookClipboardSnapshot clip,
         PasteMode mode,
         PasteSpecialOptions options,
         bool keepColumnWidths,
@@ -1622,16 +1101,22 @@ public partial class MainWindow
         int pixelHeight;
         try
         {
-            if (!TryResolveClipboardImageBytes(
-                    TryGetClipboardPngFormatBytes(),
-                    System.Windows.Clipboard.ContainsImage,
-                    System.Windows.Clipboard.GetImage,
-                    out var resolvedBytes,
-                    out pixelWidth,
-                    out pixelHeight))
-                return false;
-
-            imageBytes = resolvedBytes!;
+            var pngFormatBytes = TryGetClipboardPngFormatBytes();
+            if (pngFormatBytes is not null
+                && TryDecodePngFormatBytes(pngFormatBytes, out pixelWidth, out pixelHeight))
+            {
+                imageBytes = pngFormatBytes;
+            }
+            else
+            {
+                var imageRead = _platformClipboard.ReadImageAsync().AsTask().GetAwaiter().GetResult();
+                if (imageRead.Status != PlatformClipboardReadStatus.Success
+                    || imageRead.Value is not { PngBytes.Length: > 0 } image)
+                    return false;
+                imageBytes = image.PngBytes;
+                pixelWidth = image.PixelWidth ?? 0;
+                pixelHeight = image.PixelHeight ?? 0;
+            }
         }
         catch (Exception ex)
         {
@@ -1681,13 +1166,12 @@ public partial class MainWindow
         // R54-render-copy-cut-marquee-4-1: Delete/Clear Contents on a still-active Copy/Cut
         // marquee must cancel it, matching Excel -- otherwise a later Paste would silently
         // move/copy the source range using its now-cleared (not the originally copied) contents.
-        if (_internalClipboard is not null || SheetGrid.ClipboardRange is not null)
+        if (_workbookClipboardSession.HasContent || SheetGrid.ClipboardRange is not null)
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             ClearClipboardVisualState();
         }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         if (SheetGrid.SelectedRange is { } selectedRange)
         {
@@ -1731,13 +1215,12 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        if (_internalClipboard is not null || SheetGrid.ClipboardRange is not null)
+        if (_workbookClipboardSession.HasContent || SheetGrid.ClipboardRange is not null)
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             ClearClipboardVisualState();
         }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         if (SheetGrid.SelectedRange is { } selectedRange)
         {
@@ -1750,24 +1233,17 @@ public partial class MainWindow
 
     private void PasteSpecialBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (_internalClipboard is null)
+        if (!_workbookClipboardSession.HasContent)
         {
             string text;
-            try { text = System.Windows.Clipboard.GetText(); }
-            catch { return; }
+            text = TryGetClipboardText() ?? string.Empty;
             if (string.IsNullOrEmpty(text)) return;
         }
 
         var dlg = new PasteSpecialDialog { Owner = this };
         if (dlg.ShowDialog() != true) return;
 
-        var plan = PasteSpecialPlanner.CreatePlan(new PasteSpecialDialogSelection(
-            dlg.Mode,
-            dlg.Operation,
-            dlg.SkipBlanks,
-            dlg.Transpose,
-            dlg.KeepColumnWidths,
-            dlg.PasteLink));
+        var plan = PasteSpecialPlanner.CreatePlan(dlg.Selection);
         switch (plan.Action)
         {
             case PasteSpecialAction.ColumnWidths:
@@ -1799,7 +1275,7 @@ public partial class MainWindow
 
     private void ExecutePasteColumnWidthsOnly()
     {
-        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+        if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -1822,14 +1298,14 @@ public partial class MainWindow
             clip.SourceRange,
             ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut));
         if (clip.IsCut)
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clip);
         UpdateViewport();
         RefreshToolbar();
     }
 
     private void ExecutePasteComments(bool transpose)
     {
-        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+        if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
         // R64-commands-paste-special-6-1: pass the full selected destination range (remapped per
@@ -1866,14 +1342,14 @@ public partial class MainWindow
             ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut),
             expandToSelectedRange: true);
         if (clip.IsCut)
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clip);
         UpdateViewport();
         RefreshToolbar();
     }
 
     private void ExecutePasteValidation(bool transpose)
     {
-        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+        if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
         // R64-commands-paste-special-6-1: same destination-range tiling fix as
@@ -1907,14 +1383,14 @@ public partial class MainWindow
             ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut),
             expandToSelectedRange: true);
         if (clip.IsCut)
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clip);
         UpdateViewport();
         RefreshToolbar();
     }
 
     private void ExecutePasteAsPicture(bool isLinkedPicture)
     {
-        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+        if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
         var sourceSheet = isLinkedPicture
@@ -1948,14 +1424,14 @@ public partial class MainWindow
         _repeatPostAction = _ => ApplyClipboardVisualStateAfterInternalPaste(clip.SourceRange, preserveClipboardVisual);
         ApplyClipboardVisualStateAfterInternalPaste(clip.SourceRange, preserveClipboardVisual);
         if (clip.IsCut)
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clip);
         UpdateViewport();
         RefreshToolbar();
     }
 
     private void ExecutePasteLink(bool transpose, bool keepColumnWidths = false)
     {
-        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+        if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
         var sourceSheet = _workbook.GetSheet(clip.SourceRange.Start.Sheet);
@@ -1995,20 +1471,14 @@ public partial class MainWindow
                 : linkCommand;
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreatePasteLinkCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Paste Link");
+        if (!TryExecuteRepeatableCommand(CreatePasteLinkCommand, "Paste Link", out _))
             return;
-        }
 
         var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
         _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose), preserveClipboardVisual);
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
-        InvalidateNavigationCachesIfManual();
         CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose), preserveClipboardVisual);
         if (clip.IsCut)
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clip);
         UpdateViewport();
         RefreshToolbar();
     }
@@ -2020,7 +1490,7 @@ public partial class MainWindow
     /// grid right away, only formula recalculation is deferred by Manual mode. But
     /// <see cref="RecalculateIfAutomatic"/> is a no-op outside Automatic/AutomaticExceptDataTables
     /// mode, so without this it never bumps <c>_navigationCacheRevision</c>, and
-    /// SparklineValueCache/StatusBarStatsCache (both keyed on that revision) keep returning their
+    /// SparklineValueCache/WorkbookSelectionStatsCache (both keyed on that revision) keep returning their
     /// pre-paste cached result until an unrelated command happens to bump the revision. Mirrors
     /// the Goal Seek fix in MainWindow.DataCommands.cs.
     /// </summary>
@@ -2043,7 +1513,7 @@ public partial class MainWindow
     // own HTML importer — or re-exporting to .html — sees consistent styling either way.
     //
     // Read-side: ExecutePaste's external-clipboard fallback (TryGetClipboardHtml +
-    // TryParseHtmlClipboardTableRows below) recovers the pasted table's actual <tr>/<td> row/column
+    // HtmlClipboardTableParser) recovers the pasted table's actual <tr>/<td> row/column
     // structure from a foreign app's CF_HTML payload when present, so a source cell whose text spans
     // multiple lines doesn't get misread as a row break by the plain-text splitter
     // (R39-io-external-clipboard-2-3). Full per-cell STYLE reconstruction (fonts/fills/borders/merges

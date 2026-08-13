@@ -67,8 +67,8 @@ public sealed record SisterAppLaunchSmokeReport(bool IsPassed, string Text);
 
 public static class SisterAppLaunchSmokeCoordinator
 {
-    private const int DefaultMaxAttempts = 60;
-    private const int DefaultPollMilliseconds = 200;
+    public const int DefaultMaxAttempts = 60;
+    public const int DefaultPollMilliseconds = 200;
 
     public static void Start<TWindow>(
         TWindow window,
@@ -82,7 +82,35 @@ public static class SisterAppLaunchSmokeCoordinator
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(capture);
 
-        window.Opened += (_, _) =>
+        Start(
+            startWhenOpened: start => window.Opened += (_, _) => start(),
+            options,
+            capture: () => capture(window),
+            shutdown: exitCode =>
+            {
+                if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                    desktop.Shutdown(exitCode);
+                else
+                    Environment.Exit(exitCode);
+            },
+            maxAttempts,
+            pollMilliseconds);
+    }
+
+    public static void Start(
+        Action<Action> startWhenOpened,
+        SisterAppLaunchSmokeOptions options,
+        Func<SisterAppLaunchSmokeReport> capture,
+        Action<int> shutdown,
+        int maxAttempts = DefaultMaxAttempts,
+        int pollMilliseconds = DefaultPollMilliseconds)
+    {
+        ArgumentNullException.ThrowIfNull(startWhenOpened);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(capture);
+        ArgumentNullException.ThrowIfNull(shutdown);
+
+        startWhenOpened(() =>
         {
             var attempts = 0;
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(pollMilliseconds) };
@@ -96,24 +124,27 @@ public static class SisterAppLaunchSmokeCoordinator
                 // throw again on every subsequent tick.
                 try
                 {
-                    var report = capture(window);
+                    var report = capture();
                     if (report.IsPassed || attempts >= maxAttempts)
                     {
                         timer.Stop();
-                        Finish(report, options);
+                        Finish(report, options, shutdown);
                     }
                 }
                 catch (Exception ex)
                 {
                     timer.Stop();
-                    Finish(new SisterAppLaunchSmokeReport(false, ex.ToString()), options);
+                    Finish(new SisterAppLaunchSmokeReport(false, ex.ToString()), options, shutdown);
                 }
             };
             timer.Start();
-        };
+        });
     }
 
-    private static void Finish(SisterAppLaunchSmokeReport report, SisterAppLaunchSmokeOptions options)
+    private static void Finish(
+        SisterAppLaunchSmokeReport report,
+        SisterAppLaunchSmokeOptions options,
+        Action<int> shutdown)
     {
         try
         {
@@ -130,10 +161,6 @@ public static class SisterAppLaunchSmokeCoordinator
         Console.Out.Write(report.Text);
         Console.Out.Flush();
 
-        var exitCode = report.IsPassed ? 0 : 1;
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.Shutdown(exitCode);
-        else
-            Environment.Exit(exitCode);
+        shutdown(report.IsPassed ? 0 : 1);
     }
 }

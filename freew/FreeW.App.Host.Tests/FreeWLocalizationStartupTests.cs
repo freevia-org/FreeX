@@ -2,6 +2,8 @@ using System.Globalization;
 using System.IO;
 using Free.Shared.Shell;
 using FreeW.App.Localization;
+using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Host.Tests;
 
@@ -69,6 +71,22 @@ public sealed class FreeWLocalizationStartupTests : IDisposable
     }
 
     [Fact]
+    public void FreeWDialogMetadata_UsesFrenchResources()
+    {
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("fr-FR");
+
+        var draw = DrawTableCommandPlanner.BuildDialog(
+            DrawTableDimensionDialogKind.DrawTable,
+            UiText.Get);
+        var proofing = ProofingLanguageDialogPlanner.Build(null, UiText.Get);
+        var altText = AltTextDialogPlanner.ResolveText(UiText.Get);
+
+        draw.Title.Should().Be("Dessiner un tableau");
+        proofing.Text.Title.Should().Be("Définir la langue de vérification");
+        altText.Title.Should().Be("Texte de remplacement");
+    }
+
+    [Fact]
     public void Program_InstallsResourceBackedSeamsInsteadOfNeutralDefaults()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Program.cs"));
@@ -80,18 +98,6 @@ public sealed class FreeWLocalizationStartupTests : IDisposable
         source.Should().NotContain("DefaultBackstageStrings.Instance");
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var directory = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(directory))
-        {
-            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = Directory.GetParent(directory)?.FullName;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(parts);
 }

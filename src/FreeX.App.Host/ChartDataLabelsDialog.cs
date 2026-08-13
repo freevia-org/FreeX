@@ -2,52 +2,11 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.Charts.Editing;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
-
-public sealed record ChartDataLabelsDialogResult(
-    bool ShowDataLabels,
-    ChartDataLabelPosition Position,
-    bool ShowValue,
-    bool ShowLegendKey,
-    bool ShowCategoryName,
-    bool ShowSeriesName,
-    bool ShowPercentage,
-    ChartDataLabelSeparator Separator,
-    ChartDataLabelNumberFormat NumberFormat,
-    bool ShowCallouts,
-    CellColor? FillColor,
-    CellColor? BorderColor,
-    CellColor? TextColor,
-    double BorderThickness,
-    double FontSize,
-    double Angle)
-{
-    public ChartDataLabelsInput ToInput() =>
-        new(
-            ShowDataLabels,
-            Position,
-            ShowValue,
-            ShowCategoryName,
-            ShowSeriesName,
-            ShowPercentage,
-            ShowLegendKey,
-            Separator,
-            NumberFormat,
-            ShowCallouts,
-            FillColor,
-            BorderColor,
-            TextColor,
-            BorderThickness,
-            FontSize,
-            Angle);
-
-    public ChartLayoutOptions ToOptions() => ChartDataLabelsPlanner.Plan(ToInput());
-}
 
 public sealed class ChartDataLabelsDialog : Window
 {
@@ -68,11 +27,11 @@ public sealed class ChartDataLabelsDialog : Window
     private readonly TextBox _fontSizeBox = new();
     private readonly TextBox _angleBox = new();
 
-    public ChartDataLabelsDialogResult Result { get; private set; }
+    public ChartDataLabelsInput Result { get; private set; }
 
     public ChartDataLabelsDialog(ChartModel chart)
     {
-        Result = FromChart(chart);
+        Result = ChartDataLabelsPlanner.Read(chart);
         Title = UiText.Get("ChartDataLabels_Title");
         Width = 420;
         Height = 560;
@@ -83,82 +42,6 @@ public sealed class ChartDataLabelsDialog : Window
         Content = CreateContent();
         Load(Result);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
-    }
-
-    public static ChartDataLabelsDialogResult FromChart(ChartModel chart)
-    {
-        var input = ChartDataLabelsPlanner.Read(chart);
-        return CreateResult(
-            input.ShowDataLabels,
-            input.Position,
-            input.ShowValue,
-            input.ShowLegendKey,
-            input.ShowCategoryName,
-            input.ShowSeriesName,
-            input.ShowPercentage,
-            input.Separator ?? ChartDataLabelSeparator.Comma,
-            input.NumberFormat ?? ChartDataLabelNumberFormat.General,
-            input.ShowCallouts ?? false,
-            input.FillColor,
-            input.BorderColor,
-            input.TextColor,
-            input.BorderThickness ?? 0,
-            input.FontSize ?? 11,
-            input.Angle ?? 0);
-    }
-
-    public static ChartDataLabelsDialogResult CreateResult(
-        bool showDataLabels,
-        ChartDataLabelPosition position,
-        bool showValue,
-        bool showLegendKey,
-        bool showCategoryName,
-        bool showSeriesName,
-        bool showPercentage,
-        ChartDataLabelSeparator separator,
-        ChartDataLabelNumberFormat numberFormat,
-        bool showCallouts,
-        CellColor? fillColor,
-        CellColor? borderColor,
-        CellColor? textColor,
-        double borderThickness,
-        double fontSize,
-        double angle)
-    {
-        var input = ChartDataLabelsPlanner.Normalize(new ChartDataLabelsInput(
-            showDataLabels,
-            position,
-            showValue,
-            showCategoryName,
-            showSeriesName,
-            showPercentage,
-            showLegendKey,
-            separator,
-            numberFormat,
-            showCallouts,
-            fillColor,
-            borderColor,
-            textColor,
-            borderThickness,
-            fontSize,
-            angle));
-        return new(
-            input.ShowDataLabels,
-            input.Position,
-            input.ShowValue,
-            input.ShowLegendKey,
-            input.ShowCategoryName,
-            input.ShowSeriesName,
-            input.ShowPercentage,
-            input.Separator ?? ChartDataLabelSeparator.Comma,
-            input.NumberFormat ?? ChartDataLabelNumberFormat.General,
-            input.ShowCallouts ?? false,
-            input.FillColor,
-            input.BorderColor,
-            input.TextColor,
-            input.BorderThickness ?? 0,
-            input.FontSize ?? 11,
-            input.Angle ?? 0);
     }
 
     private StackPanel CreateContent()
@@ -194,7 +77,7 @@ public sealed class ChartDataLabelsDialog : Window
         return root;
     }
 
-    private void Load(ChartDataLabelsDialogResult result)
+    private void Load(ChartDataLabelsInput result)
     {
         _showBox.IsChecked = result.ShowDataLabels;
         _positionBox.SelectedItem = result.Position;
@@ -203,15 +86,15 @@ public sealed class ChartDataLabelsDialog : Window
         _categoryBox.IsChecked = result.ShowCategoryName;
         _seriesBox.IsChecked = result.ShowSeriesName;
         _percentageBox.IsChecked = result.ShowPercentage;
-        _separatorBox.SelectedItem = result.Separator;
-        _numberFormatBox.SelectedItem = result.NumberFormat;
-        _calloutsBox.IsChecked = result.ShowCallouts;
+        _separatorBox.SelectedItem = result.Separator ?? ChartDataLabelSeparator.Comma;
+        _numberFormatBox.SelectedItem = result.NumberFormat ?? ChartDataLabelNumberFormat.General;
+        _calloutsBox.IsChecked = result.ShowCallouts ?? false;
         _fillBox.Text = ChartDialogHelpers.FormatColor(result.FillColor);
         _borderBox.Text = ChartDialogHelpers.FormatColor(result.BorderColor);
         _textBox.Text = ChartDialogHelpers.FormatColor(result.TextColor);
-        _borderThicknessBox.Text = result.BorderThickness.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        _fontSizeBox.Text = result.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        _angleBox.Text = result.Angle.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _borderThicknessBox.Text = (result.BorderThickness ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _fontSizeBox.Text = (result.FontSize ?? 11).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _angleBox.Text = (result.Angle ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private void Accept()
@@ -240,23 +123,7 @@ public sealed class ChartDataLabelsDialog : Window
             return;
         }
 
-        Result = CreateResult(
-            input.ShowDataLabels,
-            input.Position,
-            input.ShowValue,
-            input.ShowLegendKey,
-            input.ShowCategoryName,
-            input.ShowSeriesName,
-            input.ShowPercentage,
-            input.Separator ?? ChartDataLabelSeparator.Comma,
-            input.NumberFormat ?? ChartDataLabelNumberFormat.General,
-            input.ShowCallouts ?? false,
-            input.FillColor,
-            input.BorderColor,
-            input.TextColor,
-            input.BorderThickness ?? 0,
-            input.FontSize ?? 11,
-            input.Angle ?? 0);
+        Result = input;
         DialogResult = true;
     }
 
@@ -271,16 +138,17 @@ public sealed class ChartDataLabelsDialog : Window
 
     private void ShowPlannerParseWarning(ChartDataLabelsParseIssue issue)
     {
-        var (message, target) = issue switch
+        var presentation = ChartValidationPresentationPlanner.Describe(issue);
+        var target = presentation.FocusTarget switch
         {
-            ChartDataLabelsParseIssue.BorderColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _borderBox),
-            ChartDataLabelsParseIssue.TextColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _textBox),
-            ChartDataLabelsParseIssue.BorderThickness => (UiText.Get("ChartDataLabels_InvalidBorderThicknessMessage"), _borderThicknessBox),
-            ChartDataLabelsParseIssue.FontSize => (UiText.Get("ChartDataLabels_InvalidFontSizeMessage"), _fontSizeBox),
-            ChartDataLabelsParseIssue.Angle => (UiText.Get("ChartDataLabels_InvalidAngleMessage"), _angleBox),
-            _ => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox),
+            ChartDataLabelsDialogFieldId.BorderColor => _borderBox,
+            ChartDataLabelsDialogFieldId.TextColor => _textBox,
+            ChartDataLabelsDialogFieldId.BorderThickness => _borderThicknessBox,
+            ChartDataLabelsDialogFieldId.FontSize => _fontSizeBox,
+            ChartDataLabelsDialogFieldId.TextAngle => _angleBox,
+            _ => _fillBox,
         };
-        ShowInvalidInputWarning(message, target);
+        ShowInvalidInputWarning(presentation.Message.Resolve(UiText.Get, UiText.Format), target);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

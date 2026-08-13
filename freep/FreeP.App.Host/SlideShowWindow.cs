@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Globalization;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -12,7 +11,6 @@ using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
 using FreeP.App.Recording.Windows;
-using FreeP.App.Host.Recording;
 using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 
@@ -53,22 +51,18 @@ namespace FreeP.App.Host;
 /// (white-flash). Window uses a centered aperture. Morph uses matched object
 /// overlays and falls back to Fade only when no object correspondence exists.
 /// </summary>
-public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRenderer
+public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlaybackRenderer, ISlideShowDisplayRenderer
 {
     // ── State ─────────────────────────────────────────────────────────────────────
 
     private readonly Presentation    _presentation;
-    private readonly SlideShowPlaybackRoute _playbackRoute;
-    private readonly SlideShowController _controller;
-    private readonly SlideShowSessionController _session;
+    private readonly SlideShowRuntimeApplication _runtime;
     private readonly Action<int, string?>? _setSlideNotesText;
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private readonly DispatcherTimer  _kioskRestartTimer;
+    private long _autoAdvanceDisplayVersion;
     private PresenterViewWindow? _presenterViewWindow;
     private bool _zoomShowBackgroundForTransition = true;
-    private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
-    private IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> _lastAnimationStepFrameEvidence = Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>();
-    private SlideShowAnimationStepPlaybackReadinessPlan? _lastAnimationStepPlaybackReadinessPlan;
 
     // ── Visual tree ───────────────────────────────────────────────────────────────
 
@@ -89,39 +83,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private readonly Canvas _inkOverlay;
     private readonly Rectangle _transitionFlashOverlay;
     private readonly Rectangle _screenModeOverlay;
-    private SlideShowScreenMode _screenMode;
-    private string _slideNumberBuffer = string.Empty;
-    private Slide? _revealedHiddenSlide;
-    private int _revealedHiddenSlideSourceIndex = -1;
 
     // Manages MediaElement lifecycle for the current slide's media shapes.
     private readonly SlideShowMediaController _mediaController;
 
-    // Per-shape animation state for the current slide.
-    // Maps shapeId → the Image element in _animOverlay that represents that shape.
-    private readonly Dictionary<uint, FrameworkElement> _animElements = new();
-    private readonly Dictionary<uint, FrameworkElement> _animFillElements = new();
-    private readonly Dictionary<uint, FrameworkElement> _animLineElements = new();
-    private readonly Dictionary<uint, FrameworkElement> _animFontStyleElements = new();
-    private readonly Dictionary<uint, FrameworkElement> _animFontSizeElements = new();
-    private readonly Dictionary<uint, IReadOnlyList<FrameworkElement>> _paragraphAnimElements = new();
-
-    // Per-animation overlay for entrance/emphasis/exit builds that target an explicit authored
-    // paragraph range (p:tgtEl/p:spTgt/p:txEl/p:pRg — e.g. PowerPoint's "By 1st Level Paragraphs"
-    // entrance, which authors one p:par per paragraph). Keyed by the ShapeAnimation instance
-    // (not ShapeId) because several such entries can target the same shape, each its own range.
-    private readonly Dictionary<ShapeAnimation, FrameworkElement> _paragraphRangeAnimElements = new();
-
-    // Track which shapes have been revealed so the live canvas can hide/show correctly.
-    private readonly HashSet<uint> _revealedShapes = new();
-    private List<uint> _entranceShapeIds = new(); // shapes with Entrance animations on current slide
+    // Native controls keyed by the renderer-neutral animation target registry.
+    private readonly SlideShowAnimationTargetRegistry<FrameworkElement> _animationTargets = new();
 
     // Current slide dimensions in DIP (computed once when the slide is displayed).
     private double _slideDipW;
     private double _slideDipH;
-    private readonly int? _preferredCaptionSlideIndex;
-    private readonly uint? _preferredCaptionShapeId;
-    private readonly int? _preferredCaptionTrackIndex;
 
     // ── Construction ─────────────────────────────────────────────────────────────
 
@@ -181,37 +152,31 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         int? preferredCaptionTrackIndex = null)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
-        _playbackRoute = playbackRoute ?? throw new ArgumentNullException(nameof(playbackRoute));
+        ArgumentNullException.ThrowIfNull(playbackRoute);
         _setSlideNotesText = setSlideNotesText;
-        _preferredCaptionSlideIndex = preferredCaptionSlideIndex;
-        _preferredCaptionShapeId = preferredCaptionShapeId;
-        _preferredCaptionTrackIndex = preferredCaptionTrackIndex;
-        _controller = new SlideShowController(
-            _playbackRoute.Slides,
-            _playbackRoute.StartIndex,
-            _playbackRoute.AnimationStartIndex,
-            showWithAnimation: _presentation.ShowWithAnimation,
-            loopUntilStopped: _presentation.LoopUntilStopped);
-        _session = new SlideShowSessionController(
+        _runtime = new SlideShowRuntimeApplication(
             _presentation,
-            _playbackRoute,
+            playbackRoute,
             DateTimeOffset.UtcNow,
-            captureBackend ?? CreateDefaultRecordingCaptureBackend());
+            captureBackend ?? CreateDefaultRecordingCaptureBackend(),
+            new SlideShowRuntimeCaptionPreference(
+                preferredCaptionSlideIndex,
+                preferredCaptionShapeId,
+                preferredCaptionTrackIndex));
 
         // Pre-compute slide DIP dimensions so HitTestHyperlink works even before the first
         // DisplayCurrentSlide call (e.g. in unit tests that construct but don't show the window).
-        var metrics = SlideShowHostPlanner.BuildSlideMetrics(
-            presentation.SlideSizeCxEmu,
-            presentation.SlideSizeCyEmu);
+        var metrics = _runtime.InitialSlideMetrics;
         _slideDipW = metrics.WidthDip;
         _slideDipH = metrics.HeightDip;
 
         // PowerPoint's speaker and kiosk modes use a borderless presentation window;
         // individual browsing remains a normal, resizable window for document-style review.
-        var isBrowseWindow = _presentation.ShowType == PresentationShowType.BrowsedByIndividual;
-        WindowStyle  = isBrowseWindow ? WindowStyle.SingleBorderWindow : WindowStyle.None;
+        var windowPlan = _runtime.WindowPlan;
+        var isBrowseWindow = windowPlan.IsBrowseWindow;
+        WindowStyle  = windowPlan.IsBorderless ? WindowStyle.None : WindowStyle.SingleBorderWindow;
         WindowState  = isBrowseWindow ? WindowState.Normal : WindowState.Maximized;
-        Topmost      = !isBrowseWindow;
+        Topmost      = windowPlan.IsTopmost;
         if (isBrowseWindow)
         {
             Width = Math.Min(1024, SystemParameters.WorkArea.Width * 0.85);
@@ -220,7 +185,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         }
         Background   = Brushes.Black;
         Focusable    = true;
-        ResizeMode   = isBrowseWindow ? ResizeMode.CanResize : ResizeMode.NoResize;
+        ResizeMode   = windowPlan.AllowsResize ? ResizeMode.CanResize : ResizeMode.NoResize;
 
         // ── Visual tree ────────────────────────────────────────────────────────
 
@@ -306,10 +271,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             var browser = new ScrollViewer
             {
                 Background = Brushes.Black,
-                HorizontalScrollBarVisibility = _presentation.ShowBrowseScrollbar
+                HorizontalScrollBarVisibility = windowPlan.ShowBrowseScrollbars
                     ? ScrollBarVisibility.Auto
                     : ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = _presentation.ShowBrowseScrollbar
+                VerticalScrollBarVisibility = windowPlan.ShowBrowseScrollbars
                     ? ScrollBarVisibility.Auto
                     : ScrollBarVisibility.Disabled,
                 HorizontalContentAlignment = HorizontalAlignment.Center,
@@ -330,13 +295,32 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             IsEnabled = false
         };
-        _autoAdvanceTimer.Tick += (_, _) => DoAdvance();
+        _autoAdvanceTimer.Tick += (_, _) =>
+            _runtime.HandleAutoAdvanceElapsed(_autoAdvanceDisplayVersion);
 
         _kioskRestartTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             IsEnabled = false,
         };
-        _kioskRestartTimer.Tick += (_, _) => RestartKioskShow();
+        _kioskRestartTimer.Tick += (_, _) =>
+            _runtime.HandleKioskRestartElapsed();
+
+        _runtime.BindRenderer(new SlideShowRuntimeRendererCallbacks(
+            _autoAdvanceTimer.Stop,
+            CloseSlideShow,
+            PlayAnimationStep,
+            navigation => DisplayCurrentSlide(
+                navigation.AnimateSlide,
+                navigation.TransitionDurationMs,
+                navigation.UseDestinationBackground),
+            TogglePresenterView,
+            () => DisplayCurrentSlide(animated: false),
+            RenderScreenMode,
+            hyperlink => OpenExternalUrl(hyperlink.Url!),
+            RefreshInkOverlay,
+            StopTransitionAudio: StopTransitionSound,
+            TeardownMedia: _mediaController.Teardown),
+            this);
 
         // ── Event wiring ───────────────────────────────────────────────────────
         KeyDown              += OnKeyDown;
@@ -348,7 +332,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             Focus();
             DisplayCurrentSlide(animated: false);
-            StartKioskRestartTimer();
+            _runtime.StartRendererSession();
         };
         Closed               += (_, _) => Teardown();
     }
@@ -359,163 +343,102 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     /// Execute a single logical advance step and return what happened.
     /// Drives the state machine and applies visual effects if the window is loaded.
     /// </summary>
-    public AdvanceResult ExecuteAdvance(DateTimeOffset? nowUtc = null)
-    {
-        var command = SlideShowHostPlanner.PlanAdvance(_controller);
-        ApplyHostCommand(command, nowUtc);
-        return command.AdvanceResult!;
-    }
+    public AdvanceResult ExecuteAdvance(DateTimeOffset? nowUtc = null) =>
+        _runtime.ExecuteAdvance(nowUtc);
 
     /// <summary>Execute a logical back step and return what happened.</summary>
-    public BackResult ExecuteBack(DateTimeOffset? nowUtc = null)
-    {
-        var command = SlideShowHostPlanner.PlanBack(_controller);
-        ApplyHostCommand(command, nowUtc);
-        return command.BackResult!;
-    }
+    public BackResult ExecuteBack(DateTimeOffset? nowUtc = null) =>
+        _runtime.ExecuteBack(nowUtc);
 
     /// <summary>Jump to a one-based slide number without playing its entrance transition.</summary>
-    public void ExecuteSlideNumberJump(int oneBasedSlideNumber)
-    {
-        _slideNumberBuffer = string.Empty;
-        ApplyHostCommand(SlideShowHostPlanner.PlanSlideNumberJump(
-            _controller,
-            _playbackRoute.Slides,
-            oneBasedSlideNumber,
-            _playbackRoute.SourceSlideIndices));
-    }
+    public void ExecuteSlideNumberJump(int oneBasedSlideNumber) =>
+        _runtime.ExecuteSlideNumberJump(oneBasedSlideNumber);
 
-    public Slide? ExecuteHiddenSlideReveal()
-    {
-        if (_controller.CurrentSlideIndex < 0 ||
-            _controller.CurrentSlideIndex >= _playbackRoute.SourceSlideIndices.Count)
-        {
-            return null;
-        }
-
-        var currentSourceIndex = _revealedHiddenSlideSourceIndex >= 0
-            ? _revealedHiddenSlideSourceIndex
-            : _playbackRoute.SourceSlideIndices[_controller.CurrentSlideIndex];
-        var target = SlideShowHostPlanner.FindNextHiddenSlide(
-            _presentation,
-            _playbackRoute,
-            currentSourceIndex);
-        if (target is null)
-            return null;
-
-        _revealedHiddenSlide = target.Slide;
-        _revealedHiddenSlideSourceIndex = target.SourceSlideIndex;
-        DisplayCurrentSlide(animated: false);
-        return _revealedHiddenSlide;
-    }
+    public Slide? ExecuteHiddenSlideReveal() => _runtime.ExecuteHiddenSlideReveal();
 
     /// <summary>The underlying state machine (for test assertions).</summary>
-    public SlideShowController Controller => _controller;
+    public SlideShowController Controller => _runtime.Controller;
 
     /// <summary>The presenter blank-screen mode currently covering the slide.</summary>
-    public SlideShowScreenMode ScreenMode => _screenMode;
+    public SlideShowScreenMode ScreenMode => _runtime.ScreenMode;
 
     /// <summary>Show the slide, a black screen, or a white screen during presentation.</summary>
-    public void SetScreenMode(SlideShowScreenMode mode)
+    public void SetScreenMode(SlideShowScreenMode mode) => _runtime.SetScreenMode(mode);
+
+    private void RenderScreenMode(SlideShowRuntimeScreenModePlan plan)
     {
-        _screenMode = mode;
-        _screenModeOverlay.Fill = mode == SlideShowScreenMode.White ? Brushes.White : Brushes.Black;
-        _screenModeOverlay.Visibility = SlideShowScreenModePlanner.IsBlank(mode)
+        _screenModeOverlay.Fill = plan.UseWhiteSurface ? Brushes.White : Brushes.Black;
+        _screenModeOverlay.Visibility = plan.IsBlank
             ? Visibility.Visible
             : Visibility.Collapsed;
     }
 
-    public DateTimeOffset PresenterStartedAtUtc => _session.StartedAtUtc;
+    public DateTimeOffset PresenterStartedAtUtc => _runtime.StartedAtUtc;
 
-    public SlideShowPresenterToolPlan PresenterToolPlan => _session.ToolPlan;
+    public SlideShowPresenterToolPlan PresenterToolPlan => _runtime.ToolPlan;
 
     public IReadOnlyList<SlideShowPresenterWorkflowAction> PresenterWorkflowActions =>
-        _session.ToolPlan.WorkflowActions;
+        _runtime.ToolPlan.WorkflowActions;
 
     public IReadOnlyList<SlideShowPresenterCommandState> PresenterCommandStates =>
-        _session.ToolPlan.CommandStates;
+        _runtime.ToolPlan.CommandStates;
 
-    public SlideShowTimingRecorderState TimingRecorderState => _session.TimingRecorderState;
+    public SlideShowTimingRecorderState TimingRecorderState => _runtime.TimingRecorderState;
 
-    public SlideShowRecordingExecutionState RecordingExecutionState => _session.RecordingExecutionState;
+    public SlideShowRecordingExecutionState RecordingExecutionState => _runtime.RecordingExecutionState;
 
     public SlideShowRecordingCaptureAdapterReadiness RecordingCaptureAdapterReadiness =>
-        _session.RecordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness;
+        _runtime.RecordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness;
 
     public IReadOnlyList<SlideShowRecordingExecutionAction> RecordingExecutionActions =>
-        _session.RecordingExecutionState.LastActions;
+        _runtime.RecordingExecutionState.LastActions;
 
-    public bool IsPresenterSessionClosed => _session.IsClosed;
+    public bool IsPresenterSessionClosed => _runtime.IsClosed;
 
-    public SlideShowInkExecutionState InkExecutionState => _session.InkExecutionState;
+    public SlideShowInkExecutionState InkExecutionState => _runtime.InkExecutionState;
     public SlideShowPresenterSessionSummary PresenterSessionSummary =>
-        SlideShowPresenterSessionSummaryPlanner.BuildSummary(
-            _session.RecordingExecutionState,
-            _session.InkExecutionState,
-            _presentation,
-            _playbackRoute.GetSourceSlideIndex);
+        _runtime.PresenterSummary;
 
     public SlideShowRecordingReviewPlan RecordingReviewPlan =>
-        _session.RecordingReviewPlan;
+        _runtime.RecordingReviewPlan;
 
     public SlideShowRecordingReviewApplyResult ApplyRecordingReview() =>
-        _session.ApplyRecordingReview();
-
-    internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
-    internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest => _lastAnimationFramePlan;
-    internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest => _lastAnimationStepFrameEvidence;
-    internal SlideShowAnimationStepPlaybackReadinessPlan? LastAnimationStepPlaybackReadinessPlanForTest => _lastAnimationStepPlaybackReadinessPlan;
-    internal SlideShowPlaybackRoute PlaybackRoute => _playbackRoute;
-    internal int CurrentPresentationSlideIndex => _session.CurrentPresentationSlideIndex;
-    internal Slide? RevealedHiddenSlideForTest => _revealedHiddenSlide;
+        _runtime.ApplyRecordingReview();
 
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
         SlideShowPresenterDisplayIntent? displayIntent = null) =>
-        SlideShowHostPlanner.BuildPresenterState(
-            _presentation,
-            _controller,
-            _playbackRoute.Slides,
-            _session.StartedAtUtc,
-            nowUtc,
-            displayIntent,
-            _session.ToolPlan);
+        _runtime.CreatePresenterState(nowUtc, displayIntent);
 
     /// <summary>Whether the synchronized presenter dashboard is currently open.</summary>
-    public bool IsPresenterViewOpen => _presenterViewWindow?.IsVisible == true;
+    public bool IsPresenterViewOpen => _runtime.IsPresenterViewOpen;
 
     /// <summary>Opens or closes the presenter dashboard without changing audience playback.</summary>
     public void TogglePresenterView()
-    {
-        if (_presenterViewWindow is { IsVisible: true })
-        {
-            _presenterViewWindow.Close();
-            return;
-        }
+        => _runtime.TogglePresenterView();
 
+    void ISlideShowDisplayRenderer.OpenPresenterView()
+    {
         var window = new PresenterViewWindow(
             _presentation,
-            () => CreatePresenterState(DateTimeOffset.UtcNow),
-            () => ExecuteBack(),
-            () => ExecuteAdvance(),
-            SetScreenMode,
-            mode => SetPresenterPointerMode(mode),
-            () => ClearPresenterInkStrokes(),
-            timing => SetPresenterTimingIntent(timing),
-            media => SetPresenterMediaIntent(media),
-            () => RecordingReviewPlan,
-            () => ApplyRecordingReview(),
-            slideNumber => ExecuteSlideNumberJump(slideNumber),
-            (slideIndex, text) => _setSlideNotesText?.Invoke(slideIndex, text));
+            _runtime.CreatePresenterViewOperations(_setSlideNotesText));
         _presenterViewWindow = window;
         window.Owner = this;
         window.Closed += (_, _) =>
         {
             if (ReferenceEquals(_presenterViewWindow, window))
+            {
                 _presenterViewWindow = null;
+                _runtime.NotifyPresenterViewClosed();
+            }
         };
         window.Show();
     }
+
+    void ISlideShowDisplayRenderer.ClosePresenterView() => _presenterViewWindow?.Close();
+
+    void ISlideShowDisplayRenderer.RefreshPresenterView() =>
+        _presenterViewWindow?.RefreshFromState();
 
     public SlideShowPresenterToolPlan ApplyPresenterToolIntent(
         SlideShowTimingIntent timingIntent = SlideShowTimingIntent.None,
@@ -525,81 +448,44 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double inkThicknessDip = 0,
         SlideShowInkRetentionDecision inkRetentionDecision = SlideShowInkRetentionDecision.KeepInk,
         DateTimeOffset? nowUtc = null)
-    {
-        var now = nowUtc ?? DateTimeOffset.UtcNow;
-        var plan = _session.ApplyPresenterToolIntent(
+        => _runtime.ApplyPresenterToolIntent(
             timingIntent,
             mediaIntent,
             pointerMode,
             inkColorHex,
             inkThicknessDip,
             inkRetentionDecision,
-            _controller.CurrentSlideIndex,
-            now);
-
-        RefreshInkOverlay();
-        return plan;
-    }
+            nowUtc);
 
     public SlideShowPresenterToolPlan SetPresenterPointerMode(
         SlideShowPresenterPointerMode pointerMode,
         DateTimeOffset? nowUtc = null)
-    {
-        var current = _session.ToolPlan;
-        return ApplyPresenterToolIntent(
-            current.Recording.TimingIntent,
-            current.Recording.MediaIntent,
-            pointerMode,
-            current.PointerInk.InkState.ColorHex,
-            current.PointerInk.InkState.ThicknessDip,
-            current.PointerInk.InkRetentionDecision,
-            nowUtc);
-    }
+        => _runtime.SetPointerMode(pointerMode, nowUtc);
 
     public SlideShowPresenterToolPlan SetPresenterTimingIntent(
         SlideShowTimingIntent timingIntent,
         DateTimeOffset? nowUtc = null)
-    {
-        var current = _session.ToolPlan;
-        return ApplyPresenterToolIntent(
-            timingIntent,
-            current.Recording.MediaIntent,
-            current.PointerInk.PointerMode,
-            current.PointerInk.InkState.ColorHex,
-            current.PointerInk.InkState.ThicknessDip,
-            current.PointerInk.InkRetentionDecision,
-            nowUtc);
-    }
+        => _runtime.SetTimingIntent(timingIntent, nowUtc);
 
     public SlideShowPresenterToolPlan SetPresenterMediaIntent(
         SlideShowRecordingMediaIntent mediaIntent,
         DateTimeOffset? nowUtc = null)
-    {
-        var current = _session.ToolPlan;
-        return ApplyPresenterToolIntent(
-            current.Recording.TimingIntent,
-            mediaIntent,
-            current.PointerInk.PointerMode,
-            current.PointerInk.InkState.ColorHex,
-            current.PointerInk.InkState.ThicknessDip,
-            current.PointerInk.InkRetentionDecision,
-            nowUtc);
-    }
+        => _runtime.SetMediaIntent(mediaIntent, nowUtc);
 
     public SlideShowInkExecutionResult BeginPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(_session.BeginInkStroke(MapPresenterInkPoint(canvasX, canvasY)));
+        _runtime.BeginPointerInk(CreateCanvasPointer(canvasX, canvasY));
 
     public SlideShowInkExecutionResult AppendPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(_session.AppendInkStroke(MapPresenterInkPoint(canvasX, canvasY)));
+        _runtime.AppendPointerInk(CreateCanvasPointer(canvasX, canvasY));
 
     public SlideShowInkExecutionResult EndPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(_session.EndInkStroke(MapPresenterInkPoint(canvasX, canvasY)));
+        _runtime.EndPointerInk(CreateCanvasPointer(canvasX, canvasY));
 
     public SlideShowInkExecutionResult ClearPresenterInkStrokes() =>
-        ApplyInkExecution(_session.ClearInkStrokes());
+        _runtime.ClearInkStrokes();
 
     public SlideShowInkExecutionResult UndoLastPresenterInkStroke() =>
-        ApplyInkExecution(_session.UndoLastInkStroke());
+        _runtime.UndoLastInkStroke();
 
     private static ISlideShowRecordingCaptureBackend CreateDefaultRecordingCaptureBackend() =>
         new WindowsRecordingCaptureBackend(
@@ -608,116 +494,22 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 "WPF Windows recording capture adapter",
                 "ppt/media/freep-recordings/wpf"),
             new WindowsNativeRecordingDeviceCatalog(),
-            new WindowsHostRecordingCaptureEngine("WPF Windows recording capture adapter"));
+            new WindowsNativeRecordingCaptureEngine("WPF Windows recording capture adapter"));
 
     // ── Keyboard navigation ───────────────────────────────────────────────────────
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.P &&
-            (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
-        {
-            TogglePresenterView();
-            e.Handled = true;
-            return;
-        }
-
-        // While the audience screen is blanked (B/W), only the keys that legitimately
-        // affect the blank state itself may act: toggling B/W again, and Escape to end
-        // the show. Every other key — advance, back, slide-number jump, H reveal — must
-        // NOT silently move the deck or fire an animation underneath the blank screen.
-        if (SlideShowScreenModePlanner.IsBlank(_screenMode))
-        {
-            if (SlideShowScreenModePlanner.TryPlanKey(e.Key.ToString(), _screenMode, out var blankScreenMode))
-            {
-                SetScreenMode(blankScreenMode);
-                e.Handled = true;
-                return;
-            }
-
-            if (SlideShowHostPlanner.IntentFromKeyName(e.Key.ToString()) == SlideShowHostIntent.Close)
-            {
-                ApplyHostCommand(SlideShowHostCommand.Close(stopAutoAdvance: true));
-                e.Handled = true;
-                return;
-            }
-
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.H)
-        {
-            ExecuteHiddenSlideReveal();
-            e.Handled = true;
-            return;
-        }
-
-        if (TryHandleSlideNumberKey(e.Key.ToString()))
-        {
-            e.Handled = true;
-            return;
-        }
-
-        _slideNumberBuffer = string.Empty;
-
-        if (SlideShowScreenModePlanner.TryPlanKey(e.Key.ToString(), _screenMode, out var screenMode))
-        {
-            SetScreenMode(screenMode);
-            e.Handled = true;
-            return;
-        }
-
-        var command = SlideShowHostPlanner.PlanKey(e.Key.ToString(), _controller, _playbackRoute.Slides);
-        ApplyHostCommand(command);
-        e.Handled = command.IsHandled;
-    }
-
-    private bool TryHandleSlideNumberKey(string keyName)
-    {
-        if (SlideShowSlideNumberPlanner.TryGetDigit(keyName, out var digit))
-        {
-            _slideNumberBuffer = SlideShowSlideNumberPlanner.AppendDigit(_slideNumberBuffer, digit);
-            return true;
-        }
-
-        if (keyName is "Escape" && _slideNumberBuffer.Length > 0)
-        {
-            _slideNumberBuffer = string.Empty;
-            return true;
-        }
-
-        if (keyName is not ("Enter" or "Return") || _slideNumberBuffer.Length == 0)
-            return false;
-
-        var buffer = _slideNumberBuffer;
-        _slideNumberBuffer = string.Empty;
-        if (SlideShowSlideNumberPlanner.TryParseSlideNumber(buffer, out var slideNumber))
-        {
-            ApplyHostCommand(SlideShowHostPlanner.PlanSlideNumberJump(
-                _controller,
-                _playbackRoute.Slides,
-                slideNumber,
-                _playbackRoute.SourceSlideIndices));
-        }
-
-        return true;
+        e.Handled = _runtime.HandleKeyboardInput(
+            e.Key.ToString(),
+            controlPressed: (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control);
     }
 
     // ── Navigation helpers ────────────────────────────────────────────────────────
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        // The audience sees a blank (black/white) screen; a stray click underneath it
-        // must not ink, trigger an animation, follow a hyperlink, or advance the deck.
-        // Only the B/W/Escape keyboard shortcuts may change the blank state.
-        if (SlideShowScreenModePlanner.IsBlank(_screenMode))
-        {
-            e.Handled = true;
-            return;
-        }
-
-        var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
+        var slide = _runtime.DisplaySlide;
         var clickPt = e.GetPosition(_slideCanvas);
         var inkResult = BeginPresenterInkStroke(clickPt.X, clickPt.Y);
         if (inkResult.IsHandled)
@@ -728,7 +520,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         // Check if the click lands on a media shape — toggle play/pause and consume the click
         // so it does NOT also advance the slideshow.
-        if (slide is not null && ShapeTreeLookup.Enumerate(slide).Any(s => s.Kind == SlideShapeKind.Media))
+        if (slide is not null && SlideShapeTraversal.EnumerateDepthFirst(slide).Any(s => s.Kind == SlideShapeKind.Media))
         {
             double cw = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
             double ch = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
@@ -739,38 +531,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             }
         }
 
-        var pointerIntent = SlideShowHostPlanner.PlanPointerClick(
-            slide,
-            SlideShowHostPlanner.MapCanvasPointToSlide(
-                clickPt.X,
-                clickPt.Y,
-                _slideCanvas.ActualWidth,
-                _slideCanvas.ActualHeight,
-                CurrentSlideMetrics()),
-            _presentation);
-        switch (pointerIntent.Kind)
-        {
-            case SlideShowPointerClickIntentKind.Trigger when pointerIntent.TriggerShapeId is uint triggerShapeId:
-                PlayTriggerGroup(triggerShapeId);
-                break;
-            case SlideShowPointerClickIntentKind.Zoom when pointerIntent.TargetSlideIndex is int targetSlideIndex:
-                ApplyHostCommand(SlideShowHostPlanner.PlanZoomNavigation(
-                    _controller,
-                    _presentation.Slides,
-                    targetSlideIndex,
-                    pointerIntent.ReturnToParent,
-                    pointerIntent.TransitionDurationMs,
-                    pointerIntent.ShowBackground));
-                break;
-            case SlideShowPointerClickIntentKind.Hyperlink when pointerIntent.Hyperlink is not null:
-                ActivateHyperlink(pointerIntent.Hyperlink);
-                break;
-            case SlideShowPointerClickIntentKind.Advance:
-                DoAdvance();
-                break;
-        }
-
-        e.Handled = pointerIntent.IsHandled;
+        e.Handled = _runtime.HandlePointerInput(CreateCanvasPointer(clickPt.X, clickPt.Y));
     }
 
     private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -782,7 +543,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
-        var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
+        var slide = _runtime.DisplaySlide;
         if (slide is null) { Cursor = Cursors.Arrow; return; }
         var pt = e.GetPosition(_slideCanvas);
         if (e.LeftButton == MouseButtonState.Pressed)
@@ -809,52 +570,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     /// Recurses into group children (BB2 fix) so hyperlinks on grouped shapes are reachable.
     /// </summary>
     internal Hyperlink? HitTestHyperlink(Slide slide, double canvasX, double canvasY)
-    {
-        var slidePoint = SlideShowHostPlanner.MapCanvasPointToSlide(
-            canvasX,
-            canvasY,
-            _slideCanvas.ActualWidth,
-            _slideCanvas.ActualHeight,
-            CurrentSlideMetrics());
-        return SlideShowHostPlanner.HitTestHyperlink(slide, slidePoint);
-    }
+        => _runtime.HitTestHyperlink(slide, CreateCanvasPointer(canvasX, canvasY));
 
     /// <summary>
     /// Activates a hyperlink: external → open URL or local file;
     /// internal → navigate the controller to the target slide.
     /// </summary>
     internal void ActivateHyperlink(Hyperlink hlink)
-    {
-        if (hlink.IsExternal)
-        {
-            OpenExternalUrl(hlink.Url!);
-        }
-        else if (hlink.TargetSlideId is not null)
-        {
-            var command = SlideShowHostPlanner.PlanInternalSlideJump(
-                _controller,
-                _playbackRoute.Slides,
-                hlink.TargetSlideId);
-            if (command.Kind == SlideShowHostCommandKind.NavigateToSlide)
-            {
-                ApplyHostCommand(command);
-                return;
-            }
-
-            // The target isn't in the playback route — normal advance skips hidden
-            // slides, but PowerPoint still honours an explicit hyperlink to one.
-            // Reveal it the same way the H key does, without moving the controller's
-            // own slide index, so a later Advance resumes where the presenter left off.
-            var hiddenTarget = SlideShowHostPlanner.FindHiddenSlideById(_presentation, hlink.TargetSlideId);
-            if (hiddenTarget is not null)
-            {
-                _autoAdvanceTimer.Stop();
-                _revealedHiddenSlide = hiddenTarget.Slide;
-                _revealedHiddenSlideSourceIndex = hiddenTarget.SourceSlideIndex;
-                DisplayCurrentSlide(animated: false);
-            }
-        }
-    }
+        => _runtime.ActivateHyperlink(hlink);
 
     /// <summary>
     /// Opens an external URL in the default browser through the shared URI allowlist.
@@ -862,45 +585,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     /// </summary>
     internal static void OpenExternalUrl(string url)
     {
-        ExternalUriLauncher.Open(
-            url,
-            uri => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri)
-            {
-                UseShellExecute = true
-            }));
+        DesktopExternalUriLauncher.Open(url);
     }
 
-    /// <summary>
-    /// Hit-tests the click point (in slide-canvas DIP coords) against trigger shapes on the slide.
-    /// Returns the TriggerShapeId if a trigger shape was hit, null otherwise.
-    /// </summary>
-    private uint? HitTestTriggerShape(Slide slide, double canvasX, double canvasY)
-    {
-        var slidePoint = SlideShowHostPlanner.MapCanvasPointToSlide(
+    private SlideShowCanvasPointer CreateCanvasPointer(double canvasX, double canvasY) =>
+        new(
             canvasX,
             canvasY,
             _slideCanvas.ActualWidth,
             _slideCanvas.ActualHeight,
             CurrentSlideMetrics());
-        return SlideShowHostPlanner.HitTestTriggerShape(slide, slidePoint);
-    }
-
-    private SlideShowInkPoint MapPresenterInkPoint(double canvasX, double canvasY)
-    {
-        var point = SlideShowHostPlanner.MapCanvasPointToSlide(
-            canvasX,
-            canvasY,
-            _slideCanvas.ActualWidth,
-            _slideCanvas.ActualHeight,
-            CurrentSlideMetrics());
-        return new SlideShowInkPoint(point.X, point.Y);
-    }
-
-    private SlideShowInkExecutionResult ApplyInkExecution(SlideShowInkExecutionResult result)
-    {
-        RefreshInkOverlay();
-        return result;
-    }
 
     private void RefreshInkOverlay()
     {
@@ -909,7 +603,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         var canvasWidth = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : _slideDipW;
         var canvasHeight = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
         var plan = SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(
-            _session.InkExecutionState,
+            _runtime.InkExecutionState,
             canvasWidth,
             canvasHeight,
             CurrentSlideMetrics());
@@ -1006,82 +700,17 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     }
 
     private Cursor CursorForPresenterInk() =>
-        _session.InkExecutionState.ActivePointerMode switch
+        _runtime.InkExecutionState.ActivePointerMode switch
         {
             SlideShowPresenterPointerMode.Pen or SlideShowPresenterPointerMode.Highlighter => Cursors.Pen,
             SlideShowPresenterPointerMode.Eraser => Cursors.Cross,
             _ => Cursors.Arrow
         };
 
-    /// <summary>
-    /// Advances the interactive sequence for <paramref name="triggerShapeId"/> by ONE step,
-    /// mirroring how the main sequence advances one click-step at a time.
-    /// Subsequent clicks on the same trigger shape advance further through its step list.
-    /// </summary>
-    private void PlayTriggerGroup(uint triggerShapeId)
-    {
-        ApplyHostCommand(SlideShowHostPlanner.PlanTrigger(_controller, triggerShapeId));
-    }
-
-    private void DoAdvance()
-    {
-        ApplyHostCommand(SlideShowHostPlanner.PlanAdvance(_controller, stopAutoAdvance: true));
-    }
-
-    private void DoBack()
-    {
-        ApplyHostCommand(SlideShowHostPlanner.PlanBack(_controller, stopAutoAdvance: true));
-    }
-
     private void CloseSlideShow(DateTimeOffset nowUtc)
     {
         Teardown(nowUtc);
         Close();
-    }
-
-    private void NavigateToSlide(
-        Slide slide,
-        int index,
-        bool animated,
-        int? zoomTransitionDurationMs = null,
-        bool zoomShowBackground = true)
-    {
-        _ = slide;  // passed for callers that need it; we use _controller.CurrentSlide
-        _ = index;
-        DisplayCurrentSlide(animated, zoomTransitionDurationMs, zoomShowBackground);
-    }
-
-    private void ApplyHostCommand(SlideShowHostCommand command, DateTimeOffset? nowUtc = null)
-    {
-        _revealedHiddenSlide = null;
-        _revealedHiddenSlideSourceIndex = -1;
-        var now = nowUtc ?? DateTimeOffset.UtcNow;
-        if (command.StopAutoAdvance)
-            _autoAdvanceTimer.Stop();
-
-        switch (command.Kind)
-        {
-            case SlideShowHostCommandKind.Close:
-                CloseSlideShow(now);
-                break;
-            case SlideShowHostCommandKind.PlayAnimationStep when command.Step is not null:
-                PlayAnimationStep(command.Step);
-                break;
-            case SlideShowHostCommandKind.NavigateToSlide when command.Slide is not null:
-                MovePresenterTimingToSlide(command.SlideIndex, now);
-                NavigateToSlide(
-                    command.Slide,
-                    command.SlideIndex,
-                    command.AnimateSlide,
-                    command.TransitionDurationMs,
-                    command.UseDestinationBackground);
-                break;
-        }
-    }
-
-    private void MovePresenterTimingToSlide(int slideIndex, DateTimeOffset nowUtc)
-    {
-        _session.MoveToSlide(slideIndex, nowUtc);
     }
 
     // ── Slide display + transitions ───────────────────────────────────────────────
@@ -1094,100 +723,87 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         bool animated,
         int? zoomTransitionDurationMs = null,
         bool zoomShowBackground = true)
-    {
-        var plan = SlideShowHostPlanner.BuildDisplayPlan(
-            _presentation,
-            _controller,
+        => _runtime.DisplayCurrentSlide(
             animated,
             zoomTransitionDurationMs,
             zoomShowBackground);
-        if (_revealedHiddenSlide is not null)
-            plan = plan with { Transition = null, AutoAdvanceAfterMs = null };
+
+    void ISlideShowDisplayRenderer.ApplyDisplayState(SlideShowRuntimeDisplayPlan plan)
+    {
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
         _zoomShowBackgroundForTransition = plan.UseDestinationBackground;
         _slideCanvas.RenderSlideBackground = true;
-        // Ink state follows the route through the shared session controller.
-        RefreshInkOverlay();
+    }
 
-        var slide = _revealedHiddenSlide ?? plan.Slide;
-        if (slide is null) return;
-
-        var captionSlideIndex = _revealedHiddenSlideSourceIndex >= 0
-            ? _revealedHiddenSlideSourceIndex
-            : CurrentPresentationSlideIndex;
-
-        // Prepare animation overlay for the new slide.
-        PrepareAnimationOverlay(slide);
-
-        // Set up media playback for any media shapes on the new slide.
-        // Use actual canvas dimensions when available; fall back to slide DIP size.
+    void ISlideShowDisplayRenderer.EnterMediaSlide(SlideShowRuntimeDisplayPlan plan)
+    {
         double mediaCanvasW = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
         double mediaCanvasH = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
-        var captionTracks = PresentationMediaTranscriptPlanner
-            .BuildTranscriptPlan(_presentation)
-            .Tracks
-            .Where(track => track.SlideIndex == captionSlideIndex)
-            .ToArray();
         _mediaController.EnterSlide(
-            slide,
+            plan.Slide!,
             _slideDipW,
             _slideDipH,
             mediaCanvasW,
             mediaCanvasH,
-            captionTracks,
-            preferredCaptionShapeId: _preferredCaptionSlideIndex == captionSlideIndex ? _preferredCaptionShapeId : null,
-            preferredCaptionTrackIndex: _preferredCaptionTrackIndex,
-            captionSlideIndex: captionSlideIndex,
-            preferredCaptionSlideIndex: _preferredCaptionSlideIndex,
-            showMediaControls: _presentation.ShowMediaControls,
-            showNarration: _presentation.ShowWithNarration,
-            presentationSlideIndex: captionSlideIndex);
-
-        // Apply transition if requested.
-        if (plan.Transition is { } t)
-            PlayTransition(slide, t);
-        else
-            ShowSlideInstant(slide);
-
-        // Wire auto-advance timer.
-        _autoAdvanceTimer.Stop();
-        if (plan.AutoAdvanceAfterMs is int advMs)
-        {
-            _autoAdvanceTimer.Interval = TimeSpan.FromMilliseconds(advMs);
-            _autoAdvanceTimer.Start();
-        }
+            plan.CaptionTracks,
+            preferredCaptionShapeId: plan.PreferredCaptionShapeId,
+            preferredCaptionTrackIndex: plan.PreferredCaptionTrackIndex,
+            captionSlideIndex: plan.CaptionSlideIndex,
+            preferredCaptionSlideIndex: plan.PreferredCaptionSlideIndex,
+            showMediaControls: plan.ShowMediaControls,
+            showNarration: plan.ShowNarration,
+            presentationSlideIndex: plan.CaptionSlideIndex);
     }
 
-    private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
+    void ISlideShowDisplayRenderer.StopAutoAdvanceTimer() => _autoAdvanceTimer.Stop();
 
-    private void StartKioskRestartTimer()
+    void ISlideShowDisplayRenderer.StartAutoAdvanceTimer(
+        TimeSpan interval,
+        long displayVersion)
     {
-        _kioskRestartTimer.Stop();
-        if (!SlideShowKioskRestartPlanner.TryGetInterval(
-                _presentation,
-                out var interval))
-            return;
+        _autoAdvanceDisplayVersion = displayVersion;
+        _autoAdvanceTimer.Interval = interval;
+        _autoAdvanceTimer.Start();
+    }
 
+    void ISlideShowDisplayRenderer.StopKioskRestartTimer() => _kioskRestartTimer.Stop();
+
+    void ISlideShowDisplayRenderer.StartKioskRestartTimer(TimeSpan interval)
+    {
         _kioskRestartTimer.Interval = interval;
         _kioskRestartTimer.Start();
     }
 
-    private void RestartKioskShow()
-    {
-        if (_session.IsClosed)
-            return;
+    void ISlideShowDisplayRenderer.RequestAutoAdvance() =>
+        _runtime.ExecuteAdvance(stopAutoAdvance: true);
 
-        ApplyHostCommand(SlideShowHostPlanner.PlanIntent(
-            SlideShowHostIntent.FirstSlide,
-            _controller,
-            _playbackRoute.Slides,
-            stopAutoAdvance: true));
+    void ISlideShowDisplayRenderer.RequestKioskRestart() => _runtime.RestartKioskShow();
+
+    void ISlideShowDisplayRenderer.CancelVisualOperations()
+    {
+        foreach (var storyboard in _pendingStoryboards)
+        {
+            try { storyboard.Stop(); } catch { /* ignore */ }
+        }
+        _pendingStoryboards.Clear();
     }
+
+    void ISlideShowDisplayRenderer.RefreshInkOverlay() => RefreshInkOverlay();
+
+    void ISlideShowDisplayRenderer.PrepareAnimationOverlay(Slide slide) =>
+        PrepareAnimationOverlay(slide);
+
+    void ISlideShowDisplayRenderer.PlayTransition(Slide slide, SlideTransition transition) =>
+        PlayTransition(slide, transition);
+
+    void ISlideShowDisplayRenderer.ShowSlideInstant(Slide slide) => ShowSlideInstant(slide);
+
+    private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
 
     private void SyncMediaOverlayLayout()
     {
-        var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
+        var slide = _runtime.DisplaySlide;
         if (slide is null)
             return;
 
@@ -1276,39 +892,29 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     void ISlideShowTransitionPlaybackRenderer.PlayRandomBars(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayRandomBarsTransition(slide, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayStrips(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayStripsTransition(slide, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayWheel(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayWheelTransition(slide, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayZoom(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayZoomTransition(slide, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayPan(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPanTransition(slide, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayGallery(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayGalleryTransition(slide, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayConveyor(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayConveyorTransition(slide, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayWindow(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayWindowTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayZoom(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => PlayZoomTransition(slide, plan, transformPlan);
+    void ISlideShowTransitionPlaybackRenderer.PlayPan(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => PlayPanTransition(slide, plan, transformPlan);
+    void ISlideShowTransitionPlaybackRenderer.PlayGallery(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => PlayGalleryTransition(slide, plan, transformPlan);
+    void ISlideShowTransitionPlaybackRenderer.PlayConveyor(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => PlayConveyorTransition(slide, plan, transformPlan);
+    void ISlideShowTransitionPlaybackRenderer.PlayWindow(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => PlayWindowTransition(slide, plan, transformPlan);
     void ISlideShowTransitionPlaybackRenderer.PlayMorph(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayMorphTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayFlip(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFlipTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayCube(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayCubeTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayRotate(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayRotateTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayHoneycomb(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayHoneycombTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlaySwitch(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlaySwitchTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayOrbit(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayOrbitTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayFerris(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFerrisTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayFlythrough(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFlythroughTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayGlitter(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayGlitterTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayRipple(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayRippleTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayWind(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayWindTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayCurtains(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayCurtainsTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayShred(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayShredTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayDrape(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayDrapeTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayFracture(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFractureTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayCrush(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayCrushTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayPrism(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPrismTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayPrestige(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPrestigeTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayWarp(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayWarpTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayVortex(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayVortexTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayPerspective(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowPerspectiveTransitionPlan perspectivePlan) =>
+        PlayPerspectiveTransition(slide, plan, perspectivePlan);
+    void ISlideShowTransitionPlaybackRenderer.PlayPolygonClip(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowPolygonClipTransitionPlan polygonPlan) =>
+        PlayPolygonClipTransition(slide, plan, polygonPlan);
     void ISlideShowTransitionPlaybackRenderer.PlayPageCurl(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPageCurlTransition(slide, plan.EffectiveTransition, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayPush(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPushTransition(slide, plan);
 
     // ── Transition sound playback ─────────────────────────────────────────────────
 
     private System.Windows.Media.MediaPlayer? _transitionSoundPlayer;
-    private string? _transitionSoundTempPath;
+    private TemporaryFileLease? _transitionSoundTempFile;
 
     private void StopTransitionSound()
     {
@@ -1316,10 +922,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _transitionSoundPlayer = null;
         try { player?.Stop(); player?.Close(); } catch { /* ignore */ }
 
-        var path = _transitionSoundTempPath;
-        _transitionSoundTempPath = null;
-        if (path is not null)
-            TransitionSoundTempFile.Delete(path);
+        var temporaryFile = _transitionSoundTempFile;
+        _transitionSoundTempFile = null;
+        temporaryFile?.Dispose();
     }
 
     /// <summary>
@@ -1337,8 +942,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
             // Write audio to a temp file (MediaPlayer requires a URI/file path).
             var sound = t.Sound;
-            var tmpPath = TransitionSoundTempFile.Write(sound.AudioBytes, sound.ContentType);
-            _transitionSoundTempPath = tmpPath;
+            var temporaryFile = TransitionSoundTempFile.Write(sound.AudioBytes, sound.ContentType);
+            var tmpPath = temporaryFile.Path;
+            _transitionSoundTempFile = temporaryFile;
 
             var player = new System.Windows.Media.MediaPlayer();
             _transitionSoundPlayer = player;
@@ -1359,10 +965,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 if (ReferenceEquals(_transitionSoundPlayer, player))
                 {
                     _transitionSoundPlayer = null;
-                    if (_transitionSoundTempPath == tmpPath)
-                        _transitionSoundTempPath = null;
+                    if (ReferenceEquals(_transitionSoundTempFile, temporaryFile))
+                        _transitionSoundTempFile = null;
                 }
-                TransitionSoundTempFile.Delete(tmpPath);
+                temporaryFile.Dispose();
             };
         }
         catch
@@ -1617,20 +1223,19 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         return geometry;
     }
 
-    private void PlayHoneycombTransition(
+    private void PlayPolygonClipTransition(
         Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
+        SlideShowTransitionPlaybackPlan playback,
+        SlideShowPolygonClipTransitionPlan polygonPlan)
     {
         var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var honeycomb = SlideShowHoneycombTransitionPlanner.Plan(transition);
+        var width = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var height = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
 
         _slideCanvas.Slide = slide;
         _slideCanvas.Opacity = 1;
         _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildHoneycombTransitionGeometry(w, h, 0, honeycomb);
+        _slideCanvas.Clip = BuildPolygonClipGeometry(width, height, 0, polygonPlan);
         _slideCanvas.Refresh();
 
         if (snapshot is not null)
@@ -1641,15 +1246,18 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         var animation = new ObjectAnimationUsingKeyFrames
         {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+            Duration = new Duration(TimeSpan.FromMilliseconds(playback.DurationMs))
         };
-        const int frameCount = 30;
+        var frameCount = SlideShowPolygonClipTransitionPlanner.StoryboardFrameCount;
         for (var frame = 0; frame <= frameCount; frame++)
         {
-            var progress = frame / (double)frameCount;
+            var timelineProgress = frame / (double)frameCount;
+            var geometryProgress =
+                SlideShowPolygonClipTransitionPlanner.ResolveFrameProgress(frame, frameCount);
             animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildHoneycombTransitionGeometry(w, h, progress, honeycomb),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+                BuildPolygonClipGeometry(width, height, geometryProgress, polygonPlan),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(
+                    playback.DurationMs * timelineProgress))));
         }
 
         animation.Completed += (_, _) =>
@@ -1665,841 +1273,33 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         storyboard.Begin(this, true);
     }
 
-    private void PlayGlitterTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var glitter = SlideShowGlitterTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildGlitterTransitionGeometry(w, h, 0, glitter);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.Visibility = Visibility.Visible;
-        }
-
-        var animation = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        const int frameCount = 30;
-        for (var frame = 0; frame <= frameCount; frame++)
-        {
-            var progress = frame / (double)frameCount;
-            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildGlitterTransitionGeometry(w, h, progress, glitter),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
-        }
-
-        animation.Completed += (_, _) =>
-        {
-            _slideCanvas.Clip = null;
-            _transitionBackImage.Visibility = Visibility.Collapsed;
-        };
-        Storyboard.SetTarget(animation, _slideCanvas);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        _pendingStoryboards.Add(storyboard);
-        storyboard.Begin(this, true);
-    }
-
-    private void PlayRippleTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var ripple = SlideShowRippleTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildRippleTransitionGeometry(w, h, 0, ripple);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.Visibility = Visibility.Visible;
-        }
-
-        var animation = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        const int frameCount = 30;
-        for (var frame = 0; frame <= frameCount; frame++)
-        {
-            var progress = frame / (double)frameCount;
-            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildRippleTransitionGeometry(w, h, progress, ripple),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
-        }
-
-        animation.Completed += (_, _) =>
-        {
-            _slideCanvas.Clip = null;
-            _transitionBackImage.Visibility = Visibility.Collapsed;
-        };
-        Storyboard.SetTarget(animation, _slideCanvas);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        _pendingStoryboards.Add(storyboard);
-        storyboard.Begin(this, true);
-    }
-
-    private void PlayWindTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var wind = SlideShowWindTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildWindTransitionGeometry(w, h, 0, wind);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.Visibility = Visibility.Visible;
-        }
-
-        var animation = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        const int frameCount = 30;
-        for (var frame = 0; frame <= frameCount; frame++)
-        {
-            var progress = frame / (double)frameCount;
-            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildWindTransitionGeometry(w, h, progress, wind),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
-        }
-
-        animation.Completed += (_, _) =>
-        {
-            _slideCanvas.Clip = null;
-            _transitionBackImage.Visibility = Visibility.Collapsed;
-        };
-        Storyboard.SetTarget(animation, _slideCanvas);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        _pendingStoryboards.Add(storyboard);
-        storyboard.Begin(this, true);
-    }
-
-    private void PlayCurtainsTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var curtains = SlideShowCurtainsTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildCurtainsTransitionGeometry(w, h, 0, curtains);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.Visibility = Visibility.Visible;
-        }
-
-        var animation = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        const int frameCount = 30;
-        for (var frame = 0; frame <= frameCount; frame++)
-        {
-            var progress = frame / (double)frameCount;
-            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildCurtainsTransitionGeometry(w, h, progress, curtains),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
-        }
-
-        animation.Completed += (_, _) =>
-        {
-            _slideCanvas.Clip = null;
-            _transitionBackImage.Visibility = Visibility.Collapsed;
-        };
-        Storyboard.SetTarget(animation, _slideCanvas);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        _pendingStoryboards.Add(storyboard);
-        storyboard.Begin(this, true);
-    }
-
-    private void PlayShredTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var shred = SlideShowShredTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildShredTransitionGeometry(w, h, 0, shred);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.Visibility = Visibility.Visible;
-        }
-
-        var animation = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        const int frameCount = 30;
-        for (var frame = 0; frame <= frameCount; frame++)
-        {
-            var progress = frame / (double)frameCount;
-            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildShredTransitionGeometry(w, h, progress, shred),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
-        }
-
-        animation.Completed += (_, _) =>
-        {
-            _slideCanvas.Clip = null;
-            _transitionBackImage.Visibility = Visibility.Collapsed;
-        };
-        Storyboard.SetTarget(animation, _slideCanvas);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        _pendingStoryboards.Add(storyboard);
-        storyboard.Begin(this, true);
-    }
-
-    private void PlayDrapeTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var drape = SlideShowDrapeTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildDrapeTransitionGeometry(w, h, 0, drape);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.Visibility = Visibility.Visible;
-        }
-
-        var animation = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        const int frameCount = 30;
-        for (var frame = 0; frame <= frameCount; frame++)
-        {
-            var progress = frame / (double)frameCount;
-            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildDrapeTransitionGeometry(w, h, progress, drape),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
-        }
-
-        animation.Completed += (_, _) =>
-        {
-            _slideCanvas.Clip = null;
-            _transitionBackImage.Visibility = Visibility.Collapsed;
-        };
-        Storyboard.SetTarget(animation, _slideCanvas);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        _pendingStoryboards.Add(storyboard);
-        storyboard.Begin(this, true);
-    }
-
-    private void PlayVortexTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var vortex = SlideShowVortexTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildVortexTransitionGeometry(w, h, 0, vortex);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.Visibility = Visibility.Visible;
-        }
-
-        var animation = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        const int frameCount = 30;
-        for (var frame = 0; frame <= frameCount; frame++)
-        {
-            var progress = frame / (double)frameCount;
-            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildVortexTransitionGeometry(w, h, progress, vortex),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
-        }
-
-        animation.Completed += (_, _) =>
-        {
-            _slideCanvas.Clip = null;
-            _transitionBackImage.Visibility = Visibility.Collapsed;
-        };
-        Storyboard.SetTarget(animation, _slideCanvas);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        _pendingStoryboards.Add(storyboard);
-        storyboard.Begin(this, true);
-    }
-
-    private void PlayWarpTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var warp = SlideShowWarpTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildWarpTransitionGeometry(w, h, 0, warp);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.Visibility = Visibility.Visible;
-        }
-
-        var animation = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        const int frameCount = 30;
-        for (var frame = 0; frame <= frameCount; frame++)
-        {
-            var progress = frame / (double)frameCount;
-            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildWarpTransitionGeometry(w, h, progress, warp),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
-        }
-
-        animation.Completed += (_, _) =>
-        {
-            _slideCanvas.Clip = null;
-            _transitionBackImage.Visibility = Visibility.Collapsed;
-        };
-        Storyboard.SetTarget(animation, _slideCanvas);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        _pendingStoryboards.Add(storyboard);
-        storyboard.Begin(this, true);
-    }
-
-    private void PlayFractureTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var fracture = SlideShowFractureTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildFractureTransitionGeometry(w, h, 0, fracture);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.Visibility = Visibility.Visible;
-        }
-
-        var animation = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        const int frameCount = 30;
-        for (var frame = 0; frame <= frameCount; frame++)
-        {
-            var progress = frame / (double)frameCount;
-            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildFractureTransitionGeometry(w, h, progress, fracture),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
-        }
-
-        animation.Completed += (_, _) =>
-        {
-            _slideCanvas.Clip = null;
-            _transitionBackImage.Visibility = Visibility.Collapsed;
-        };
-        Storyboard.SetTarget(animation, _slideCanvas);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        _pendingStoryboards.Add(storyboard);
-        storyboard.Begin(this, true);
-    }
-
-    private void PlayCrushTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var crush = SlideShowCrushTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildCrushTransitionGeometry(w, h, 0, crush);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.Visibility = Visibility.Visible;
-        }
-
-        var animation = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        const int frameCount = 30;
-        for (var frame = 0; frame <= frameCount; frame++)
-        {
-            var progress = frame / (double)frameCount;
-            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildCrushTransitionGeometry(w, h, progress, crush),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
-        }
-
-        animation.Completed += (_, _) =>
-        {
-            _slideCanvas.Clip = null;
-            _transitionBackImage.Visibility = Visibility.Collapsed;
-        };
-        Storyboard.SetTarget(animation, _slideCanvas);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        _pendingStoryboards.Add(storyboard);
-        storyboard.Begin(this, true);
-    }
-
-    private void PlayPrismTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var prism = SlideShowPrismTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildPrismTransitionGeometry(w, h, 0, prism);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.Visibility = Visibility.Visible;
-        }
-
-        var animation = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        const int frameCount = 30;
-        for (var frame = 0; frame <= frameCount; frame++)
-        {
-            var progress = frame / (double)frameCount;
-            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildPrismTransitionGeometry(w, h, progress, prism),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
-        }
-
-        animation.Completed += (_, _) =>
-        {
-            _slideCanvas.Clip = null;
-            _transitionBackImage.Visibility = Visibility.Collapsed;
-        };
-        Storyboard.SetTarget(animation, _slideCanvas);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        _pendingStoryboards.Add(storyboard);
-        storyboard.Begin(this, true);
-    }
-
-    private void PlayPrestigeTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var prestige = SlideShowPrestigeTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = Transform.Identity;
-        _slideCanvas.Clip = BuildPrestigeTransitionGeometry(w, h, 0, prestige);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.Visibility = Visibility.Visible;
-        }
-
-        var animation = new ObjectAnimationUsingKeyFrames
-        {
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        const int frameCount = 30;
-        for (var frame = 0; frame <= frameCount; frame++)
-        {
-            var progress = frame / (double)frameCount;
-            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildPrestigeTransitionGeometry(w, h, progress, prestige),
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
-        }
-
-        animation.Completed += (_, _) =>
-        {
-            _slideCanvas.Clip = null;
-            _transitionBackImage.Visibility = Visibility.Collapsed;
-        };
-        Storyboard.SetTarget(animation, _slideCanvas);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        _pendingStoryboards.Add(storyboard);
-        storyboard.Begin(this, true);
-    }
-
-    private static Geometry BuildHoneycombTransitionGeometry(
+    private static Geometry BuildPolygonClipGeometry(
         double width,
         double height,
         double progress,
-        SlideShowHoneycombTransitionPlan plan)
+        SlideShowPolygonClipTransitionPlan plan)
     {
         var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowHoneycombTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
+        foreach (var polygon in plan.BuildPolygons(width, height, progress))
         {
             var points = polygon.Points.Select(ToPoint).ToArray();
             if (points.Length == 0)
                 continue;
 
-            var cell = new StreamGeometry();
-            using (var context = cell.Open())
+            var figure = new PathFigure
             {
-                context.BeginFigure(points[0], isFilled: true, isClosed: true);
-                for (var index = 1; index < points.Length; index++)
-                    context.LineTo(points[index], isStroked: true, isSmoothJoin: false);
-            }
+                StartPoint = points[0],
+                IsClosed = true,
+                IsFilled = true
+            };
+            for (var index = 1; index < points.Length; index++)
+                figure.Segments.Add(new LineSegment(points[index], true));
 
-            geometry.Children.Add(cell);
+            var path = new PathGeometry();
+            path.Figures.Add(figure);
+            geometry.Children.Add(path);
         }
 
-        return geometry;
-    }
-
-    private static Geometry BuildGlitterTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowGlitterTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowGlitterTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildGlitterPolygon(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static PathGeometry BuildGlitterPolygon(
-        IReadOnlyList<SlideShowMaskPoint> maskPoints)
-    {
-        var points = maskPoints.Select(ToPoint).ToArray();
-        if (points.Length == 0)
-            return new PathGeometry();
-
-        var figure = new PathFigure
-        {
-            StartPoint = points[0],
-            IsClosed = true,
-            IsFilled = true
-        };
-        for (var index = 1; index < points.Length; index++)
-            figure.Segments.Add(new LineSegment(points[index], true));
-
-        var geometry = new PathGeometry();
-        geometry.Figures.Add(figure);
-        return geometry;
-    }
-
-    private static Geometry BuildRippleTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowRippleTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowRippleTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildRipplePolygon(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildWindTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowWindTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowWindTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildCurtainsTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowCurtainsTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowCurtainsTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildShredTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowShredTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowShredTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildDrapeTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowDrapeTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowDrapeTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildVortexTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowVortexTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowVortexTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildWarpTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowWarpTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowWarpTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildFractureTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowFractureTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowFractureTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildCrushTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowCrushTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowCrushTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildPrismTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowPrismTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowPrismTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildPrestigeTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowPrestigeTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-        foreach (var polygon in SlideShowPrestigeTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static PathGeometry BuildRipplePolygon(
-        IReadOnlyList<SlideShowMaskPoint> maskPoints)
-    {
-        var points = maskPoints.Select(ToPoint).ToArray();
-        if (points.Length == 0)
-            return new PathGeometry();
-
-        var figure = new PathFigure
-        {
-            StartPoint = points[0],
-            IsClosed = true,
-            IsFilled = true
-        };
-        for (var index = 1; index < points.Length; index++)
-            figure.Segments.Add(new LineSegment(points[index], true));
-
-        var geometry = new PathGeometry();
-        geometry.Figures.Add(figure);
         return geometry;
     }
 
@@ -3038,14 +1838,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         bool reverse) =>
         BuildWheelGeometry(width, height, progress, spokeCount, reverse);
 
-    private void PlayZoomTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayZoomTransition(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowTransformTransitionPlan transformPlan)
     {
         var snapshot = CaptureCurrentSlide();
         var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
         var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var startScale = plan.ZoomIn
-            ? SlideShowPlaybackPlanner.ZoomInStartScale
-            : SlideShowPlaybackPlanner.ZoomOutStartScale;
+        var incomingStart = transformPlan.ResolveIncoming(0, w, h);
+        var startScale = incomingStart.Scale;
 
         // Capture the outgoing slide with its own background, then apply showBg to the
         // incoming destination surface only.
@@ -3082,20 +1884,22 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         transform.BeginAnimation(ScaleTransform.ScaleYProperty, animationY);
     }
 
-    private void PlayPanTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayPanTransition(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowTransformTransitionPlan transformPlan)
     {
         var snapshot = CaptureCurrentSlide();
         var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
         var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var dx = plan.IncomingOffsetX * w;
-        var dy = plan.IncomingOffsetY * h;
+        var incomingStart = transformPlan.ResolveIncoming(0, w, h);
 
         var scale = new ScaleTransform(
-            SlideShowPlaybackPlanner.PanStartScale,
-            SlideShowPlaybackPlanner.PanStartScale,
+            incomingStart.Scale,
+            incomingStart.Scale,
             w / 2,
             h / 2);
-        var translate = new TranslateTransform(dx, dy);
+        var translate = new TranslateTransform(incomingStart.TranslateX, incomingStart.TranslateY);
         var transform = new TransformGroup();
         transform.Children.Add(scale);
         transform.Children.Add(translate);
@@ -3114,10 +1918,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
         var scaleX = new DoubleAnimation(
-            SlideShowPlaybackPlanner.PanStartScale, 1, duration) { EasingFunction = ease };
+            incomingStart.Scale, 1, duration) { EasingFunction = ease };
         var scaleY = scaleX.Clone();
-        var translateX = new DoubleAnimation(dx, 0, duration) { EasingFunction = ease };
-        var translateY = new DoubleAnimation(dy, 0, duration) { EasingFunction = ease };
+        var translateX = new DoubleAnimation(incomingStart.TranslateX, 0, duration) { EasingFunction = ease };
+        var translateY = new DoubleAnimation(incomingStart.TranslateY, 0, duration) { EasingFunction = ease };
         scaleX.Completed += (_, _) =>
         {
             _slideCanvas.RenderTransform = Transform.Identity;
@@ -3145,20 +1949,25 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         storyboard.Begin(this, true);
     }
 
-    private void PlayGalleryTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayGalleryTransition(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowTransformTransitionPlan transformPlan)
     {
         var snapshot = CaptureCurrentSlide();
         var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
         var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var travelX = plan.IncomingOffsetX * w * SlideShowPlaybackPlanner.GalleryTravelFactor;
-        var travelY = plan.IncomingOffsetY * h * SlideShowPlaybackPlanner.GalleryTravelFactor;
+        var incomingStart = transformPlan.ResolveIncoming(0, w, h);
+        var outgoingEnd = transformPlan.ResolveOutgoing(1, w, h);
 
         var incomingScale = new ScaleTransform(
-            SlideShowPlaybackPlanner.GalleryStartScale,
-            SlideShowPlaybackPlanner.GalleryStartScale,
+            incomingStart.Scale,
+            incomingStart.Scale,
             w / 2,
             h / 2);
-        var incomingTranslate = new TranslateTransform(travelX, travelY);
+        var incomingTranslate = new TranslateTransform(
+            incomingStart.TranslateX,
+            incomingStart.TranslateY);
         var incomingTransform = new TransformGroup();
         incomingTransform.Children.Add(incomingScale);
         incomingTransform.Children.Add(incomingTranslate);
@@ -3186,10 +1995,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
         var incomingScaleX = new DoubleAnimation(
-            SlideShowPlaybackPlanner.GalleryStartScale, 1, duration) { EasingFunction = ease };
+            incomingStart.Scale, 1, duration) { EasingFunction = ease };
         var incomingScaleY = incomingScaleX.Clone();
-        var incomingX = new DoubleAnimation(travelX, 0, duration) { EasingFunction = ease };
-        var incomingY = new DoubleAnimation(travelY, 0, duration) { EasingFunction = ease };
+        var incomingX = new DoubleAnimation(incomingStart.TranslateX, 0, duration) { EasingFunction = ease };
+        var incomingY = new DoubleAnimation(incomingStart.TranslateY, 0, duration) { EasingFunction = ease };
 
         var storyboard = new Storyboard();
         Storyboard.SetTarget(incomingScaleX, _slideCanvas);
@@ -3212,10 +2021,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         if (outgoingTransform is not null)
         {
             var outgoingScaleX = new DoubleAnimation(
-                1, SlideShowPlaybackPlanner.GalleryOutgoingEndScale, duration) { EasingFunction = ease };
+                1, outgoingEnd.Scale, duration) { EasingFunction = ease };
             var outgoingScaleY = outgoingScaleX.Clone();
-            var outgoingX = new DoubleAnimation(0, travelX, duration) { EasingFunction = ease };
-            var outgoingY = new DoubleAnimation(0, travelY, duration) { EasingFunction = ease };
+            var outgoingX = new DoubleAnimation(0, outgoingEnd.TranslateX, duration) { EasingFunction = ease };
+            var outgoingY = new DoubleAnimation(0, outgoingEnd.TranslateY, duration) { EasingFunction = ease };
             Storyboard.SetTarget(outgoingScaleX, _transitionBackImage);
             Storyboard.SetTarget(outgoingScaleY, _transitionBackImage);
             Storyboard.SetTarget(outgoingX, _transitionBackImage);
@@ -3247,32 +2056,26 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         storyboard.Begin(this, true);
     }
 
-    private void PlayConveyorTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayConveyorTransition(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowTransformTransitionPlan transformPlan)
     {
         var snapshot = CaptureCurrentSlide();
         var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
         var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var horizontal = Math.Abs(plan.IncomingOffsetX) > 0;
-        var travelX = plan.IncomingOffsetX * w * SlideShowPlaybackPlanner.ConveyorTravelFactor;
-        var travelY = plan.IncomingOffsetY * h * SlideShowPlaybackPlanner.ConveyorTravelFactor;
-        var crossX = horizontal
-            ? 0
-            : Math.Sign(plan.IncomingOffsetY) * w * SlideShowPlaybackPlanner.ConveyorCrossAxisFactor;
-        var crossY = horizontal
-            ? -Math.Sign(plan.IncomingOffsetX) * h * SlideShowPlaybackPlanner.ConveyorCrossAxisFactor
-            : 0;
-        var endX = travelX + crossX;
-        var endY = travelY + crossY;
-        var tilt = (horizontal ? -Math.Sign(plan.IncomingOffsetX) : Math.Sign(plan.IncomingOffsetY))
-            * SlideShowPlaybackPlanner.ConveyorTiltDegrees;
+        var incomingStart = transformPlan.ResolveIncoming(0, w, h);
+        var outgoingEnd = transformPlan.ResolveOutgoing(1, w, h);
 
         var incomingScale = new ScaleTransform(
-            SlideShowPlaybackPlanner.ConveyorStartScale,
-            SlideShowPlaybackPlanner.ConveyorStartScale,
+            incomingStart.Scale,
+            incomingStart.Scale,
             w / 2,
             h / 2);
-        var incomingRotate = new RotateTransform(tilt, w / 2, h / 2);
-        var incomingTranslate = new TranslateTransform(endX, endY);
+        var incomingRotate = new RotateTransform(incomingStart.RotationDegrees, w / 2, h / 2);
+        var incomingTranslate = new TranslateTransform(
+            incomingStart.TranslateX,
+            incomingStart.TranslateY);
         var incomingTransform = new TransformGroup();
         incomingTransform.Children.Add(incomingScale);
         incomingTransform.Children.Add(incomingRotate);
@@ -3303,11 +2106,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
         var incomingScaleX = new DoubleAnimation(
-            SlideShowPlaybackPlanner.ConveyorStartScale, 1, duration) { EasingFunction = ease };
+            incomingStart.Scale, 1, duration) { EasingFunction = ease };
         var incomingScaleY = incomingScaleX.Clone();
-        var incomingAngle = new DoubleAnimation(tilt, 0, duration) { EasingFunction = ease };
-        var incomingX = new DoubleAnimation(endX, 0, duration) { EasingFunction = ease };
-        var incomingY = new DoubleAnimation(endY, 0, duration) { EasingFunction = ease };
+        var incomingAngle = new DoubleAnimation(incomingStart.RotationDegrees, 0, duration) { EasingFunction = ease };
+        var incomingX = new DoubleAnimation(incomingStart.TranslateX, 0, duration) { EasingFunction = ease };
+        var incomingY = new DoubleAnimation(incomingStart.TranslateY, 0, duration) { EasingFunction = ease };
 
         var storyboard = new Storyboard();
         Storyboard.SetTarget(incomingScaleX, _slideCanvas);
@@ -3334,11 +2137,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         if (outgoingTransform is not null)
         {
             var outgoingScaleX = new DoubleAnimation(
-                1, SlideShowPlaybackPlanner.ConveyorOutgoingEndScale, duration) { EasingFunction = ease };
+                1, outgoingEnd.Scale, duration) { EasingFunction = ease };
             var outgoingScaleY = outgoingScaleX.Clone();
-            var outgoingAngle = new DoubleAnimation(0, -tilt, duration) { EasingFunction = ease };
-            var outgoingX = new DoubleAnimation(0, endX, duration) { EasingFunction = ease };
-            var outgoingY = new DoubleAnimation(0, endY, duration) { EasingFunction = ease };
+            var outgoingAngle = new DoubleAnimation(0, outgoingEnd.RotationDegrees, duration) { EasingFunction = ease };
+            var outgoingX = new DoubleAnimation(0, outgoingEnd.TranslateX, duration) { EasingFunction = ease };
+            var outgoingY = new DoubleAnimation(0, outgoingEnd.TranslateY, duration) { EasingFunction = ease };
             Storyboard.SetTarget(outgoingScaleX, _transitionBackImage);
             Storyboard.SetTarget(outgoingScaleY, _transitionBackImage);
             Storyboard.SetTarget(outgoingAngle, _transitionBackImage);
@@ -3374,21 +2177,28 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         storyboard.Begin(this, true);
     }
 
-    private void PlayWindowTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayWindowTransition(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowTransformTransitionPlan transformPlan)
     {
         var snapshot = CaptureCurrentSlide();
         var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
         var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        var incomingStart = transformPlan.ResolveIncoming(0, w, h);
 
         var scale = new ScaleTransform(
-            SlideShowPlaybackPlanner.WindowStartScale,
-            SlideShowPlaybackPlanner.WindowStartScale,
+            incomingStart.Scale,
+            incomingStart.Scale,
             w / 2,
             h / 2);
         _slideCanvas.Slide = slide;
         _slideCanvas.Opacity = 1;
         _slideCanvas.RenderTransform = scale;
-        _slideCanvas.Clip = BuildWindowTransitionGeometry(w, h, 0);
+        _slideCanvas.Clip = BuildWindowTransitionGeometry(
+            w,
+            h,
+            incomingStart.ClipOpening ?? 1);
         Grid.SetZIndex(_slideCanvas, 1);
         _slideCanvas.Refresh();
 
@@ -3401,7 +2211,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var scaleX = new DoubleAnimation(
-            SlideShowPlaybackPlanner.WindowStartScale, 1, duration)
+            incomingStart.Scale, 1, duration)
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
         };
@@ -3411,8 +2221,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         for (var frame = 0; frame <= frameCount; frame++)
         {
             var progress = frame / (double)frameCount;
+            var state = transformPlan.ResolveIncoming(progress, w, h);
             clip.KeyFrames.Add(new DiscreteObjectKeyFrame(
-                BuildWindowTransitionGeometry(w, h, progress),
+                BuildWindowTransitionGeometry(w, h, state.ClipOpening ?? 1),
                 KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
         }
 
@@ -3441,12 +2252,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         storyboard.Begin(this, true);
     }
 
-    private static Geometry BuildWindowTransitionGeometry(double width, double height, double progress)
-    {
-        var opening = SlideShowPlaybackPlanner.WindowInitialOpenFactor
-            + (1 - SlideShowPlaybackPlanner.WindowInitialOpenFactor) * Math.Clamp(progress, 0, 1);
-        return BuildBoxTransitionGeometry(width, height, opening, expandsFromCenter: true);
-    }
+    private static Geometry BuildWindowTransitionGeometry(
+        double width,
+        double height,
+        double opening) =>
+        BuildBoxTransitionGeometry(width, height, opening, expandsFromCenter: true);
 
     /// <summary>
     /// Plays a shape-aware Morph exchange. Matched incoming objects are rendered
@@ -3459,39 +2269,40 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         SlideShowTransitionPlaybackPlan plan)
     {
         var source = _slideCanvas.Slide;
-        if (source is null)
-        {
-            PlayFadeTransition(slide, plan.DurationMs);
-            return;
-        }
-
-        var morphPlan = SlideShowMorphPlanner.Plan(transition, source, slide);
-        if (!morphPlan.HasObjectMatches)
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        var rendererPlan = SlideShowMorphPlanner.BuildRendererPlan(
+            transition,
+            source,
+            slide,
+            w,
+            h,
+            _slideDipW,
+            _slideDipH);
+        if (!rendererPlan.CanRender)
         {
             PlayFadeTransition(slide, plan.DurationMs);
             return;
         }
 
         var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        var transform = SlideTransform.Compute(w, h, _slideDipW, _slideDipH);
         var prepared = new List<(Image Image, ScaleTransform Scale, TranslateTransform Translate, uint ShapeId)>();
 
-        void AddMorphOverlay(BitmapSource? bitmap, Rect sourceRect, Rect targetRect, uint shapeId)
+        void AddMorphOverlay(
+            BitmapSource? bitmap,
+            SlideShowMorphOverlayRendererPlan overlay)
         {
-            if (bitmap is null || sourceRect.Width < 0.5 || sourceRect.Height < 0.5
-                || targetRect.Width < 0.5 || targetRect.Height < 0.5)
+            if (bitmap is null)
                 return;
 
             var scale = new ScaleTransform(
-                sourceRect.Width / targetRect.Width,
-                sourceRect.Height / targetRect.Height,
-                targetRect.Left + targetRect.Width / 2,
-                targetRect.Top + targetRect.Height / 2);
+                overlay.InitialScaleX,
+                overlay.InitialScaleY,
+                overlay.TargetBounds.CenterX,
+                overlay.TargetBounds.CenterY);
             var translate = new TranslateTransform(
-                sourceRect.Left + sourceRect.Width / 2 - (targetRect.Left + targetRect.Width / 2),
-                sourceRect.Top + sourceRect.Height / 2 - (targetRect.Top + targetRect.Height / 2));
+                overlay.InitialTranslateX,
+                overlay.InitialTranslateY);
             var image = new Image
             {
                 Source = bitmap,
@@ -3505,52 +2316,19 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             Canvas.SetLeft(image, 0);
             Canvas.SetTop(image, 0);
             _animOverlay.Children.Add(image);
-            _slideCanvas.SuppressedShapeIds.Add(shapeId);
-            prepared.Add((image, scale, translate, shapeId));
+            _slideCanvas.SuppressedShapeIds.Add(overlay.ShapeId);
+            prepared.Add((image, scale, translate, overlay.ShapeId));
         }
 
-        foreach (var match in morphPlan.Matches)
+        foreach (var overlay in rendererPlan.Overlays)
         {
-            if (match.Source.ExtentCxEmu <= 0 || match.Source.ExtentCyEmu <= 0
-                || match.Target.ExtentCxEmu <= 0 || match.Target.ExtentCyEmu <= 0)
-                continue;
-
-            var sourceRect = MorphShapeScreenRect(match.Source, transform);
-            var targetRect = MorphShapeScreenRect(match.Target, transform);
-            bool tokenMorph = morphPlan.Option is "byWord" or "byChar" &&
-                match.Tokens.Count > 0 &&
-                !string.IsNullOrWhiteSpace(match.Source.PlainText) &&
-                !string.IsNullOrWhiteSpace(match.Target.PlainText);
-            if (!tokenMorph)
-            {
-                AddMorphOverlay(RenderShapeToOverlayBitmap(slide, match.Target, w, h), sourceRect, targetRect, match.Target.Id);
-                continue;
-            }
-
-            var background = SlideCloner.CloneShape(match.Target);
-            background.TextBody = null;
-            AddMorphOverlay(RenderShapeToOverlayBitmap(slide, background, w, h), sourceRect, targetRect, match.Target.Id);
-            foreach (var token in match.Tokens)
-            {
-                var tokenShape = SlideShowMorphPlanner.CreateTokenShape(
-                    match.Target,
-                    token.TargetStart,
-                    token.TargetLength);
-                AddMorphOverlay(
-                    RenderShapeToOverlayBitmap(slide, tokenShape, w, h),
-                    MorphTokenScreenRect(match.Source, token, source: true, transform),
-                    MorphTokenScreenRect(match.Target, token, source: false, transform),
-                    match.Target.Id);
-            }
+            AddMorphOverlay(
+                RenderShapeToOverlayBitmap(slide, overlay.RenderShape, w, h),
+                overlay);
         }
 
         if (prepared.Count == 0)
         {
-            foreach (var item in prepared)
-            {
-                _animOverlay.Children.Remove(item.Image);
-                _slideCanvas.SuppressedShapeIds.Remove(item.ShapeId);
-            }
             PlayFadeTransition(slide, plan.DurationMs);
             return;
         }
@@ -3629,98 +2407,17 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         storyboard.Begin(this, true);
     }
 
-    private static Rect MorphShapeScreenRect(SlideShape shape, SlideTransform transform)
-    {
-        var topLeft = transform.SlideToScreen(
-            SlideTransform.EmuToDip(shape.OffsetXEmu),
-            SlideTransform.EmuToDip(shape.OffsetYEmu));
-        return new Rect(
-            topLeft.X,
-            topLeft.Y,
-            transform.ScaleDipToScreen(SlideTransform.EmuToDip(shape.ExtentCxEmu)),
-            transform.ScaleDipToScreen(SlideTransform.EmuToDip(shape.ExtentCyEmu)));
-    }
-
-    private static Rect MorphTokenScreenRect(
-        SlideShape shape,
-        SlideShowMorphTokenMatch token,
-        bool source,
-        SlideTransform transform)
-    {
-        string text = shape.PlainText;
-        int start = source ? token.SourceStart : token.TargetStart;
-        int length = source ? token.SourceLength : token.TargetLength;
-        int lineStart = text.LastIndexOf('\n', Math.Clamp(start - 1, 0, text.Length - 1)) + 1;
-        int lineEnd = text.IndexOf('\n', start);
-        if (lineEnd < 0) lineEnd = text.Length;
-        int lineLength = Math.Max(1, lineEnd - lineStart);
-        int lineIndex = text[..Math.Clamp(start, 0, text.Length)].Count(ch => ch == '\n');
-        int lineCount = Math.Max(1, text.Count(ch => ch == '\n') + 1);
-        var shapeRect = MorphShapeScreenRect(shape, transform);
-        const double horizontalInset = 0.06;
-        double textWidth = shapeRect.Width * (1 - horizontalInset * 2);
-        double x = shapeRect.Left + shapeRect.Width * horizontalInset +
-            textWidth * (start - lineStart) / lineLength;
-        double y = shapeRect.Top + shapeRect.Height * lineIndex / lineCount;
-        double width = Math.Max(1, textWidth * Math.Max(1, length) / lineLength);
-        double height = Math.Max(1, shapeRect.Height / lineCount);
-        return new Rect(x, y, width, height);
-    }
-
-    private void PlayFlipTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
-    private void PlayCubeTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
-    private void PlayRotateTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
-    private void PlaySwitchTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
-    private void PlayOrbitTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
-    private void PlayFerrisTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
-    private void PlayFlythroughTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
     /// <summary>
-    /// Projects Flip, Cube, and Rotate into a shared two-surface perspective
+    /// Projects perspective transitions into a shared two-surface perspective
     /// exchange. The scale collapse preserves the card/cube silhouette while
     /// the host remains framework-neutral and does not pretend to have a 3-D
     /// camera or face-lighting model.
     /// </summary>
     private void PlayPerspectiveTransition(
         Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowPerspectiveTransitionPlan perspective)
     {
-        var perspective = SlideShowPerspectiveTransitionPlanner.Plan(transition);
         var snapshot = CaptureCurrentSlide();
         var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
         var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
@@ -3852,42 +2549,12 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void PrepareAnimationOverlay(Slide slide)
     {
-        // Clear previous overlay.
-        foreach (var sb in _pendingStoryboards) sb.Stop();
-        _pendingStoryboards.Clear();
-
         _animOverlay.Children.Clear();
-        _animElements.Clear();
-        _animFillElements.Clear();
-        _animLineElements.Clear();
-        _animFontStyleElements.Clear();
-        _animFontSizeElements.Clear();
-        _paragraphAnimElements.Clear();
-        _paragraphRangeAnimElements.Clear();
-        _revealedShapes.Clear();
+        _animationTargets.Clear();
         _slideCanvas.SuppressedShapeIds.Clear();
 
-        // Only hide shapes whose ONLY animations are non-trigger (main-sequence) entrances/motions.
-        // A shape whose sole animation is an interactive trigger should be visible at slide entry;
-        // the trigger animation plays on the already-visible shape when the user clicks the trigger.
-        _entranceShapeIds = slide.Animations
-            .Where(a => (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
-                        && a.TriggerShapeId == null)
-            .Select(a => a.ShapeId)
-            .Distinct()
-            .ToList();
-
-        var animatedShapeIds = slide.Animations
-            .Where(a => a.Kind == AnimationKind.Emphasis
-                        || a.Kind == AnimationKind.Exit
-                        || (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion))
-            .Select(a => a.ShapeId)
-            .Distinct()
-            .ToList();
-
-        // Emphasis overlays stay visible over the base canvas; non-trigger entrance/motion
-        // overlays start hidden, while trigger-bound ones remain visible until clicked.
-        if (animatedShapeIds.Count == 0) return;
+        var overlayPlan = _runtime.AnimationRendererSession.PlanOverlay(slide);
+        if (overlayPlan.Shapes.Count == 0) return;
 
         // Render the whole slide to get per-shape bitmaps via a temporary canvas.
         // We create one overlay Image per entrance-animated shape.
@@ -3899,310 +2566,53 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _animOverlay.Width  = w;
         _animOverlay.Height = h;
 
-        foreach (var shapeId in animatedShapeIds)
-        {
-            var shape = ShapeTreeLookup.Find(slide, shapeId);
-            if (shape is null) continue;
-
-            // PowerPoint's "By 1st Level Paragraphs" build (and similar) authors one animation
-            // per paragraph, each targeting p:tgtEl/p:spTgt/p:txEl/p:pRg instead of the whole
-            // shape. This explicit per-paragraph timing is richer than the bldLst marker
-            // checked below (it carries the real reveal order/effect per paragraph), so it
-            // takes precedence whenever it is present and covers every paragraph. Only take
-            // this path when every paragraph is covered by some ranged animation — a partial
-            // authoring falls back to the bldLst-driven split (or whole-shape overlay) below
-            // so no text is silently hidden forever.
-            var rangedAnims = slide.Animations
-                .Where(a => a.ShapeId == shapeId && a.ParagraphRangeStart.HasValue)
-                .ToList();
-            if (rangedAnims.Count > 0
-                && SlideShowAnimationBuildPlanner.ParagraphRangesCoverWholeShape(shape, rangedAnims))
+        SlideShowAnimationOverlayMaterializer.Materialize<FrameworkElement, BitmapSource>(
+            overlayPlan,
+            shape => RenderShapeToOverlayBitmap(slide, shape, w, h),
+            (bitmap, elementPlan) => CreateAnimationOverlayElement(bitmap, w, h, elementPlan),
+            element =>
             {
-                var rangeBackground = SlideCloner.CloneShape(shape);
-                rangeBackground.TextBody = null;
-                var rangeBackgroundBitmap = RenderShapeToOverlayBitmap(slide, rangeBackground, w, h);
-                if (rangeBackgroundBitmap is not null)
-                {
-                    _animOverlay.Children.Add(new Image
-                    {
-                        Source = rangeBackgroundBitmap,
-                        Width = w,
-                        Height = h,
-                        Stretch = Stretch.None,
-                        Opacity = 1,
-                        IsHitTestVisible = false,
-                    });
-                }
-
-                var anyRangeRendered = false;
-                foreach (var rangedAnim in rangedAnims)
-                {
-                    var rangeShape = SlideShowAnimationBuildPlanner.CreateParagraphRangeShape(
-                        shape,
-                        rangedAnim.ParagraphRangeStart!.Value,
-                        rangedAnim.ParagraphRangeEnd ?? rangedAnim.ParagraphRangeStart!.Value);
-                    if (rangeShape is null) continue;
-
-                    var rangeBitmap = RenderShapeToOverlayBitmap(slide, rangeShape, w, h);
-                    if (rangeBitmap is null) continue;
-
-                    var rangeImage = new Image
-                    {
-                        Source = rangeBitmap,
-                        Width = w,
-                        Height = h,
-                        Stretch = Stretch.None,
-                        Opacity = rangedAnim.Kind is AnimationKind.Entrance or AnimationKind.Motion
-                            && _entranceShapeIds.Contains(shapeId) ? 0 : 1,
-                        IsHitTestVisible = false,
-                    };
-                    Canvas.SetLeft(rangeImage, 0);
-                    Canvas.SetTop(rangeImage, 0);
-                    _animOverlay.Children.Add(rangeImage);
-                    _paragraphRangeAnimElements[rangedAnim] = rangeImage;
-                    anyRangeRendered = true;
-                }
-
-                if (anyRangeRendered)
-                {
-                    _slideCanvas.SuppressedShapeIds.Add(shapeId);
-                    continue;
-                }
-            }
-
-            // Fallback: some "By 1st Level Paragraphs" builds emit only the
-            // bldLst/bldP[@build='p'] marker without explicit per-paragraph timing
-            // (p:txEl/p:pRg) nodes. When there was no usable ranged timing above, split the
-            // shape into one overlay per paragraph using that marker alone.
-            if (SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, shapeId))
-            {
-                var paragraphShapes = SlideShowAnimationBuildPlanner.CreateParagraphShapes(shape);
-                if (paragraphShapes.Count > 0)
-                {
-                    var background = SlideCloner.CloneShape(shape);
-                    background.TextBody = null;
-                    var backgroundBitmap = RenderShapeToOverlayBitmap(slide, background, w, h);
-                    if (backgroundBitmap is not null)
-                    {
-                        _animOverlay.Children.Add(new Image
-                        {
-                            Source = backgroundBitmap,
-                            Width = w,
-                            Height = h,
-                            Stretch = Stretch.None,
-                            Opacity = 1,
-                            IsHitTestVisible = false,
-                        });
-                    }
-
-                    var paragraphElements = new List<FrameworkElement>(paragraphShapes.Count);
-                    foreach (var paragraphShape in paragraphShapes)
-                    {
-                        var paragraphBitmap = RenderShapeToOverlayBitmap(slide, paragraphShape, w, h);
-                        if (paragraphBitmap is null) continue;
-
-                        var paragraphImage = new Image
-                        {
-                            Source = paragraphBitmap,
-                            Width = w,
-                            Height = h,
-                            Stretch = Stretch.None,
-                            Opacity = _entranceShapeIds.Contains(shapeId) ? 0 : 1,
-                            IsHitTestVisible = false,
-                        };
-                        Canvas.SetLeft(paragraphImage, 0);
-                        Canvas.SetTop(paragraphImage, 0);
-                        _animOverlay.Children.Add(paragraphImage);
-                        paragraphElements.Add(paragraphImage);
-                    }
-
-                    if (paragraphElements.Count > 0)
-                    {
-                        _paragraphAnimElements[shapeId] = paragraphElements;
-                        _slideCanvas.SuppressedShapeIds.Add(shapeId);
-                        continue;
-                    }
-                }
-            }
-
-            // Render the shape by rendering the whole slide and cropping to the shape bounds.
-            var shapeBitmap = RenderShapeToOverlayBitmap(slide, shape, w, h);
-            if (shapeBitmap is null) continue;
-
-            var img = new Image
-            {
-                Source = shapeBitmap,
-                Width  = w,
-                Height = h,
-                Stretch = Stretch.None,
-                Opacity = _entranceShapeIds.Contains(shapeId) ? 0 : 1,
-                IsHitTestVisible = false,
-                Tag = shapeId,
-            };
-
-            Canvas.SetLeft(img, 0);
-            Canvas.SetTop(img, 0);
-
-            _animOverlay.Children.Add(img);
-            _animElements[shapeId] = img;
-
-            if (slide.Animations.Any(a => a.ShapeId == shapeId
-                                          && a.Preset == AnimationPreset.ChangeFillColor)
-                && shape.Fill is not ShapeFill.None)
-            {
-                var fillMaskShape = SlideCloner.CloneShape(shape);
-                fillMaskShape.TextBody = null;
-                fillMaskShape.Outline = null;
-                var fillBitmap = RenderShapeToOverlayBitmap(slide, fillMaskShape, w, h);
-                if (fillBitmap is not null)
-                {
-                    var fillTint = new Rectangle
-                    {
-                        Width = w,
-                        Height = h,
-                        Fill = new SolidColorBrush(Colors.Transparent),
-                        Opacity = 0,
-                        OpacityMask = new ImageBrush(fillBitmap) { Stretch = Stretch.None },
-                        IsHitTestVisible = false,
-                    };
-                    Canvas.SetLeft(fillTint, 0);
-                    Canvas.SetTop(fillTint, 0);
-                    _animOverlay.Children.Add(fillTint);
-                    _animFillElements[shapeId] = fillTint;
-                }
-            }
-
-            var lineAnimation = slide.Animations.FirstOrDefault(a =>
-                a.ShapeId == shapeId && a.Preset == AnimationPreset.ChangeLineColor);
-            if (lineAnimation is not null
-                && shape.TextBody is null
-                && shape.Outline is ShapeOutline.Visible outline
-                && SlideShowPlaybackPlanner.PlanShapeAnimation(
-                    lineAnimation,
-                    startDelayMs: 0,
-                    presentation: _presentation,
-                    effectiveClrMap: slide.ColorMapOverride).ColorToHex is { } lineColor
-                && TryParseAnimationColorHex(lineColor, out var lineRgb))
-            {
-                var lineShape = SlideCloner.CloneShape(shape);
-                lineShape.Outline = new ShapeOutline.Visible(
-                    lineRgb,
-                    outline.WidthPt,
-                    outline.Dash,
-                    outline.BeginLineEnd,
-                    outline.EndLineEnd);
-                var lineBitmap = RenderShapeToOverlayBitmap(slide, lineShape, w, h);
-                if (lineBitmap is not null)
-                {
-                    var lineElement = new Image
-                    {
-                        Source = lineBitmap,
-                        Width = w,
-                        Height = h,
-                        Stretch = Stretch.None,
-                        Opacity = 0,
-                        IsHitTestVisible = false,
-                    };
-                    Canvas.SetLeft(lineElement, 0);
-                    Canvas.SetTop(lineElement, 0);
-                    _animOverlay.Children.Add(lineElement);
-                    _animLineElements[shapeId] = lineElement;
-                }
-            }
-
-            var fontStyleAnimation = slide.Animations.FirstOrDefault(a =>
-                a.ShapeId == shapeId
-                && a.Preset is (AnimationPreset.ChangeFontStyle
-                    or AnimationPreset.Bold
-                    or AnimationPreset.Underline));
-            var fontStylePlan = fontStyleAnimation is null
-                ? null
-                : SlideShowPlaybackPlanner.ResolveFontStyleBehavior(fontStyleAnimation);
-            if (fontStyleAnimation is not null
-                && shape.TextBody is not null
-                && shape.TextBody.Paragraphs.SelectMany(paragraph => paragraph.Runs).Any()
-                && fontStylePlan is { } targetStyle
-                && (targetStyle.Italic is not null
-                    || targetStyle.Bold is not null
-                    || targetStyle.Underline is not null))
-            {
-                var fontStyleShape = SlideCloner.CloneShape(shape);
-                foreach (var run in fontStyleShape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs))
-                {
-                    if (targetStyle.Italic is bool italic)
-                        run.Italic = italic;
-                    if (targetStyle.Bold is bool bold)
-                        run.Bold = bold;
-                    if (targetStyle.Underline is bool underline)
-                        run.Underline = underline;
-                }
-
-                var fontStyleBitmap = RenderShapeToOverlayBitmap(slide, fontStyleShape, w, h);
-                if (fontStyleBitmap is not null)
-                {
-                    var fontStyleElement = new Image
-                    {
-                        Source = fontStyleBitmap,
-                        Width = w,
-                        Height = h,
-                        Stretch = Stretch.None,
-                        Opacity = 0,
-                        IsHitTestVisible = false,
-                    };
-                    Canvas.SetLeft(fontStyleElement, 0);
-                    Canvas.SetTop(fontStyleElement, 0);
-                    _animOverlay.Children.Add(fontStyleElement);
-                    _animFontStyleElements[shapeId] = fontStyleElement;
-                }
-            }
-
-            var fontSizeAnimation = slide.Animations.FirstOrDefault(a =>
-                a.ShapeId == shapeId
-                && a.Preset is (AnimationPreset.Grow or AnimationPreset.Shrink)
-                && SlideShowPlaybackPlanner.ResolveFontSizeBehavior(a) is not null);
-            var fontSizePlan = fontSizeAnimation is null
-                ? null
-                : SlideShowPlaybackPlanner.ResolveFontSizeBehavior(fontSizeAnimation);
-            var explicitRuns = shape.TextBody?.Paragraphs
-                .SelectMany(paragraph => paragraph.Runs)
-                .ToList();
-            if (fontSizeAnimation is not null
-                && explicitRuns is { Count: > 0 }
-                && explicitRuns.All(run => run.FontSizePt is > 0)
-                && fontSizePlan is { } targetSize)
-            {
-                var fontSizeShape = SlideCloner.CloneShape(shape);
-                foreach (var run in fontSizeShape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs))
-                    run.FontSizePt = run.FontSizePt!.Value * targetSize.Multiplier;
-
-                var fontSizeBitmap = RenderShapeToOverlayBitmap(slide, fontSizeShape, w, h);
-                if (fontSizeBitmap is not null)
-                {
-                    var fontSizeElement = new Image
-                    {
-                        Source = fontSizeBitmap,
-                        Width = w,
-                        Height = h,
-                        Stretch = Stretch.None,
-                        Opacity = 0,
-                        IsHitTestVisible = false,
-                    };
-                    Canvas.SetLeft(fontSizeElement, 0);
-                    Canvas.SetTop(fontSizeElement, 0);
-                    _animOverlay.Children.Add(fontSizeElement);
-                    _animFontSizeElements[shapeId] = fontSizeElement;
-                }
-            }
-
-            if (slide.Animations.Any(a => a.ShapeId == shapeId
-                                          && (a.Kind == AnimationKind.Entrance
-                                              || a.Kind == AnimationKind.Motion)))
-            {
-                _slideCanvas.SuppressedShapeIds.Add(shapeId);
-            }
-        }
+                Canvas.SetLeft(element, 0);
+                Canvas.SetTop(element, 0);
+                _animOverlay.Children.Add(element);
+            },
+            _animationTargets,
+            _slideCanvas.SuppressedShapeIds);
 
         _slideCanvas.Refresh();
+    }
+
+    private static FrameworkElement CreateAnimationOverlayElement(
+        BitmapSource bitmap,
+        double width,
+        double height,
+        SlideShowAnimationOverlayElementPlan plan)
+    {
+        if (plan.UsesOpacityMask)
+        {
+            return new Rectangle
+            {
+                Width = width,
+                Height = height,
+                Fill = new SolidColorBrush(Colors.Transparent),
+                Opacity = plan.InitialOpacity,
+                OpacityMask = new ImageBrush(bitmap) { Stretch = Stretch.None },
+                IsHitTestVisible = false,
+            };
+        }
+
+        return new Image
+        {
+            Source = bitmap,
+            Width = width,
+            Height = height,
+            Stretch = Stretch.None,
+            Opacity = plan.InitialOpacity,
+            IsHitTestVisible = false,
+            Tag = plan.TargetKind == SlideShowAnimationPlaybackTargetKind.Primary
+                ? plan.ShapeId
+                : null,
+        };
     }
 
     private readonly List<Storyboard> _pendingStoryboards = new();
@@ -4242,9 +2652,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void RevealShape(uint shapeId)
     {
-        if (_paragraphAnimElements.ContainsKey(shapeId))
-            return;
-        if (_paragraphRangeAnimElements.Keys.Any(a => a.ShapeId == shapeId))
+        if (!_animationTargets.CanRevealBase(shapeId))
             return;
 
         if (_slideCanvas.SuppressedShapeIds.Remove(shapeId))
@@ -4255,291 +2663,139 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void PlayAnimationStep(AnimationStep step)
     {
-        _lastAnimationStepFrameEvidence = SlideShowPlaybackFramePlanner.PlanAnimationStepCheckpoints(step, _slideDipW, _slideDipH);
-        _lastAnimationStepPlaybackReadinessPlan =
-            SlideShowPlaybackFramePlanner.BuildAnimationStepPlaybackReadinessPlan(
-                step,
-                CurrentPresentationSlideIndex,
-                stepIndex: 0,
-                slideWidthDip: _slideDipW,
-                slideHeightDip: _slideDipH);
-
-        var effectiveColorMap = (_revealedHiddenSlide ?? _controller.CurrentSlide)?.ColorMapOverride;
-        foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step, _presentation, effectiveColorMap))
-        {
-            var anim = plan.Animation;
-            if (anim.ParagraphRangeStart.HasValue
-                && _paragraphRangeAnimElements.TryGetValue(anim, out var rangedElement))
-            {
-                PlayShapeAnimation(rangedElement, plan);
-                _revealedShapes.Add(anim.ShapeId);
-                continue;
-            }
-
-            if (_paragraphAnimElements.TryGetValue(anim.ShapeId, out var paragraphElements))
-            {
-                for (var index = 0; index < paragraphElements.Count; index++)
-                {
-                    var paragraphPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
-                        anim,
-                        plan.DelayMs + index * plan.DurationMs,
-                        _presentation,
-                        effectiveColorMap);
-                    PlayShapeAnimation(paragraphElements[index], paragraphPlan);
-                }
-
-                _revealedShapes.Add(anim.ShapeId);
-                continue;
-            }
-
-            if (!_animElements.TryGetValue(anim.ShapeId, out var element))
-            {
-                // Keep the logical visibility transition even when a shape cannot be
-                // rasterized into an overlay.  This is deliberately geometry-neutral: the
-                // shape is shown/hidden at the authored timing without inventing a motion
-                // path or clip for a visual we could not render safely.
-                PlayFallbackAnimation(anim, plan.DelayMs, plan.DurationMs);
-                continue;
-            }
-
-            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeFillColor
-                && _animFillElements.TryGetValue(anim.ShapeId, out var fillElement))
-            {
-                PlayShapeAnimation(fillElement, plan);
-                _revealedShapes.Add(anim.ShapeId);
-                continue;
-            }
-
-            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeLineColor
-                && _animLineElements.TryGetValue(anim.ShapeId, out var lineElement))
-            {
-                PlayShapeAnimation(lineElement, plan);
-                _revealedShapes.Add(anim.ShapeId);
-                continue;
-            }
-
-            if (plan.EffectKind is (SlideShowShapeAnimationEffectKind.ChangeFontStyle
-                    or SlideShowShapeAnimationEffectKind.Bold
-                    or SlideShowShapeAnimationEffectKind.Underline)
-                && _animFontStyleElements.TryGetValue(anim.ShapeId, out var fontStyleElement))
-            {
-                PlayShapeAnimation(fontStyleElement, plan);
-                _revealedShapes.Add(anim.ShapeId);
-                continue;
-            }
-
-            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeFontSize)
-            {
-                if (_animFontSizeElements.TryGetValue(anim.ShapeId, out var fontSizeElement))
-                    PlayShapeAnimation(fontSizeElement, plan);
-                else
-                    PlayShapeAnimation(element, plan with { EffectKind = SlideShowShapeAnimationEffectKind.GrowShrink });
-                _revealedShapes.Add(anim.ShapeId);
-                continue;
-            }
-
-            if (anim.Kind is AnimationKind.Entrance or AnimationKind.Motion or AnimationKind.Exit)
+        var rendererPlan = _runtime.AnimationRendererSession.PlanStep(
+            step,
+            _runtime.CurrentPresentationSlideIndex,
+            _slideDipW,
+            _slideDipH,
+            BuildAnimationTargetAvailability(),
+            _runtime.DisplaySlide?.ColorMapOverride);
+        _runtime.AnimationRendererSession.ExecuteStep(
+            rendererPlan,
+            ResolveAnimationTarget,
+            PlayFallbackAnimation,
+            (element, operation) =>
             {
                 element.Opacity = 1;
-                _slideCanvas.SuppressedShapeIds.Add(anim.ShapeId);
+                _slideCanvas.SuppressedShapeIds.Add(operation.ShapeId);
                 _slideCanvas.Refresh();
-            }
-
-            PlayShapeAnimation(element, plan);
-            _revealedShapes.Add(anim.ShapeId);
-        }
+            },
+            PlayShapeAnimation);
     }
 
-    private void PlayShapeAnimation(FrameworkElement element, SlideShowShapeAnimationPlaybackPlan plan)
+    private SlideShowAnimationPlaybackTargetAvailability BuildAnimationTargetAvailability() =>
+        _animationTargets.BuildAvailability();
+
+    private FrameworkElement? ResolveAnimationTarget(SlideShowAnimationPlaybackOperation operation) =>
+        _animationTargets.Resolve(operation);
+
+    private void PlayShapeAnimation(
+        FrameworkElement element,
+        SlideShowAnimationPlaybackOperation operation)
     {
-        _lastAnimationFramePlan = SlideShowPlaybackFramePlanner.PlanFrame(plan, 0, _slideDipW, _slideDipH);
+        var plan = operation.Playback;
+        _runtime.AnimationRendererSession.PlanFrame(plan, 0, _slideDipW, _slideDipH);
+        var route = SlideShowAnimationRendererRoutePlanner.Build(plan);
 
         var sb = new Storyboard();
 
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.MotionPath)
+        if (route.Kind == SlideShowAnimationRendererRouteKind.MotionPath)
         {
             MotionPathEffect(sb, element, plan);
             ApplyRepeatTiming(sb, plan);
-            AttachEntranceCompletion(sb, plan);
+            AttachReveal(sb, operation, route);
             _pendingStoryboards.Add(sb);
             sb.Begin(element, isControllable: true);
             return;
         }
 
-        switch (plan.EffectKind)
+        switch (route.Kind)
         {
-            case SlideShowShapeAnimationEffectKind.Appear:
-                if (plan.Animation.Kind == AnimationKind.Exit)
+            case SlideShowAnimationRendererRouteKind.Instant:
+                if (route.InstantVisibility == SlideShowAnimationInstantVisibilityKind.Hide)
                     DisappearEffect(sb, element, plan.DelayMs);
                 else
                     AppearEffect(sb, element, plan.DelayMs);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Fade:
+            case SlideShowAnimationRendererRouteKind.Opacity:
                 FadeEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.FlyIn:
+            case SlideShowAnimationRendererRouteKind.Fly:
                 FlyInEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Wipe:
+            case SlideShowAnimationRendererRouteKind.WipeMask:
                 WipeEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Split:
+            case SlideShowAnimationRendererRouteKind.SplitMask:
                 SplitEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.RandomBars:
+            case SlideShowAnimationRendererRouteKind.RandomBarsMask:
                 RandomBarsEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Blinds:
+            case SlideShowAnimationRendererRouteKind.BlindsMask:
                 BlindsEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Box:
+            case SlideShowAnimationRendererRouteKind.BoxMask:
                 BoxEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Checkerboard:
+            case SlideShowAnimationRendererRouteKind.CheckerboardMask:
                 CheckerboardEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Circle:
+            case SlideShowAnimationRendererRouteKind.GeometricMask:
                 GeometricMaskEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Diamond:
-                GeometricMaskEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Plus:
-                GeometricMaskEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Strips:
-                GeometricMaskEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Wedge:
-                GeometricMaskEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Wheel:
-                GeometricMaskEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Dissolve:
+            case SlideShowAnimationRendererRouteKind.DissolveMask:
                 DissolveEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Flash:
+            case SlideShowAnimationRendererRouteKind.Flash:
                 FlashEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Spiral:
-                SpiralEffect(sb, element, plan);
+            case SlideShowAnimationRendererRouteKind.ScalarTrack:
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Swivel:
-                SwivelEffect(sb, element, plan);
+            case SlideShowAnimationRendererRouteKind.Trajectory:
+                TrajectoryEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Bounce:
-                BounceEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Float:
-                FloatEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Swoop:
-                SwoopEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Boomerang:
-                BoomerangEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Peek:
+            case SlideShowAnimationRendererRouteKind.Peek:
                 PeekEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Crawl:
+            case SlideShowAnimationRendererRouteKind.Crawl:
                 CrawlEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Zoom:
+            case SlideShowAnimationRendererRouteKind.Zoom:
                 ZoomEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Pulse:
-                PulseEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.GrowShrink:
-                GrowShrinkEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Spin:
-                SpinEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Teeter:
-                TeeterEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Blink:
-                BlinkEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.FlashBulb:
-                FlashBulbEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Flicker:
-                FlickerEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Wave:
-                WaveEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.ColorPulse:
-            case SlideShowShapeAnimationEffectKind.ChangeColor:
-                EmphasisPulseEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.ChangeFontStyle:
+            case SlideShowAnimationRendererRouteKind.TextStyle:
                 FontStyleEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.ChangeFontSize:
+            case SlideShowAnimationRendererRouteKind.FontSize:
                 FontSizeEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.ColorWave:
-                ColorWaveEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.ChangeLineColor:
+            case SlideShowAnimationRendererRouteKind.LineColor:
                 LineColorEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.ChangeFillColor:
+            case SlideShowAnimationRendererRouteKind.FillColor:
                 FillColorEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.GrowWithColor:
-            case SlideShowShapeAnimationEffectKind.Shimmer:
-                EmphasisPulseEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Bold:
-            case SlideShowShapeAnimationEffectKind.Underline:
-                FontStyleEffect(sb, element, plan);
                 break;
 
             default:
@@ -4553,7 +2809,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         // timelines that do not receive the curve at construction time.
         ApplyHostTimingEasing(sb, plan);
         ApplyRepeatTiming(sb, plan);
-        AttachEntranceCompletion(sb, plan);
+        AttachReveal(sb, operation, route);
         _pendingStoryboards.Add(sb);
         sb.Begin(element, isControllable: true);
     }
@@ -4593,29 +2849,36 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         Storyboard storyboard,
         SlideShowShapeAnimationPlaybackPlan plan)
     {
-        if (plan.RepeatIndefinitely || plan.RepeatCount is > 1)
+        var repeat = SlideShowAnimationStepRendererPlanner.BuildRepeatPlan(plan);
+        if (repeat.HasMultiplePasses)
         {
-            var repeatBehavior = plan.RepeatIndefinitely
+            var repeatBehavior = repeat.RepeatIndefinitely
                 ? RepeatBehavior.Forever
-                : new RepeatBehavior(plan.RepeatCount!.Value);
+                : new RepeatBehavior(repeat.PassCount!.Value);
 
             foreach (var timeline in storyboard.Children)
                 timeline.RepeatBehavior = repeatBehavior;
         }
 
-        if (plan.AutoReverse)
+        if (repeat.AutoReverse)
         {
             foreach (var timeline in storyboard.Children)
                 timeline.AutoReverse = true;
         }
     }
 
-    private void AttachEntranceCompletion(
+    private void AttachReveal(
         Storyboard storyboard,
-        SlideShowShapeAnimationPlaybackPlan plan)
+        SlideShowAnimationPlaybackOperation operation,
+        SlideShowAnimationRendererRoutePlan route)
     {
-        if (plan.Animation.Kind is AnimationKind.Entrance or AnimationKind.Motion)
-            storyboard.Completed += (_, _) => RevealShape(plan.Animation.ShapeId);
+        if (!operation.RevealBaseUsingPlaybackTiming)
+            return;
+
+        if (route.RevealTiming == SlideShowAnimationRevealTiming.AtStart)
+            RevealShape(operation.ShapeId);
+        else
+            storyboard.Completed += (_, _) => RevealShape(operation.ShapeId);
     }
 
     private static void AppearEffect(Storyboard sb, FrameworkElement el, int delayMs)
@@ -4683,65 +2946,62 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         sb.Children.Add(animOp);
     }
 
-    private void FloatEffect(Storyboard sb, FrameworkElement el,
-        SlideShowShapeAnimationPlaybackPlan plan)
+    private void TrajectoryEffect(
+        Storyboard storyboard,
+        FrameworkElement element,
+        SlideShowShapeAnimationPlaybackPlan playback)
     {
         double width = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
         double height = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        double directionX = plan.OffsetXFactor * width;
-        double directionY = plan.OffsetYFactor * height;
-        var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        double startX = isExit ? 0 : directionX;
-        double startY = isExit ? 0 : directionY;
-        double endX = isExit ? directionX : 0;
-        double endY = isExit ? directionY : 0;
-        double arcX = Math.Abs(plan.OffsetYFactor) > 0.01
-            ? -Math.Sign(plan.OffsetYFactor) * width * 0.06
-            : 0;
-        double arcY = Math.Abs(plan.OffsetXFactor) > 0.01
-            ? Math.Sign(plan.OffsetXFactor) * height * 0.06
-            : 0;
-        double midX = (startX + endX) / 2 + arcX;
-        double midY = (startY + endY) / 2 + arcY;
+        var trajectory = SlideShowAnimationEffectFramePlanner.Build(
+            playback.EffectKind,
+            playback.Animation.Kind,
+            playback.OffsetXFactor,
+            playback.OffsetYFactor);
+        element.RenderTransform = new TranslateTransform(
+            trajectory.Start.NormalizedX * width,
+            trajectory.Start.NormalizedY * height);
 
-        var translate = new TranslateTransform(startX, startY);
-        el.RenderTransform = translate;
-        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        AddFloatAxisAnimation(
-            sb,
-            el,
-            startX,
-            midX,
-            endX,
+        var duration = new Duration(TimeSpan.FromMilliseconds(playback.DurationMs));
+        AddTrajectoryAxisAnimation(
+            storyboard,
+            element,
+            trajectory,
+            width,
             duration,
-            plan.DelayMs,
+            playback.DelayMs,
+            useX: true,
             "(UIElement.RenderTransform).(TranslateTransform.X)");
-        AddFloatAxisAnimation(
-            sb,
-            el,
-            startY,
-            midY,
-            endY,
+        AddTrajectoryAxisAnimation(
+            storyboard,
+            element,
+            trajectory,
+            height,
             duration,
-            plan.DelayMs,
+            playback.DelayMs,
+            useX: false,
             "(UIElement.RenderTransform).(TranslateTransform.Y)");
-        var opacity = new DoubleAnimation(plan.FromOpacity, plan.ToOpacity, duration)
+
+        var opacity = new DoubleAnimation(playback.FromOpacity, playback.ToOpacity, duration)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+            BeginTime = TimeSpan.FromMilliseconds(playback.DelayMs),
+            EasingFunction = playback.EffectKind == SlideShowShapeAnimationEffectKind.Bounce
+                ? CreateAnimationEasing(playback)
+                : null
         };
-        Storyboard.SetTarget(opacity, el);
+        Storyboard.SetTarget(opacity, element);
         Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
-        sb.Children.Add(opacity);
+        storyboard.Children.Add(opacity);
     }
 
-    private static void AddFloatAxisAnimation(
-        Storyboard sb,
-        FrameworkElement el,
-        double start,
-        double middle,
-        double end,
+    private static void AddTrajectoryAxisAnimation(
+        Storyboard storyboard,
+        FrameworkElement element,
+        SlideShowAnimationEffectFramePlan trajectory,
+        double scale,
         Duration duration,
         int delayMs,
+        bool useX,
         string propertyPath)
     {
         var animation = new DoubleAnimationUsingKeyFrames
@@ -4749,264 +3009,34 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             BeginTime = TimeSpan.FromMilliseconds(delayMs),
             Duration = duration
         };
-        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(start, KeyTime.FromPercent(0)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            middle,
-            KeyTime.FromPercent(0.72),
-            new KeySpline(0.2, 0, 0.4, 1)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            end,
-            KeyTime.FromPercent(1),
-            new KeySpline(0.2, 0, 0.2, 1)));
-        Storyboard.SetTarget(animation, el);
+        foreach (var frame in trajectory.Frames)
+        {
+            var value = (useX ? frame.NormalizedX : frame.NormalizedY) * scale;
+            var keyTime = KeyTime.FromPercent(frame.Progress);
+            DoubleKeyFrame keyFrame = frame.StoryboardInterpolation switch
+            {
+                SlideShowAnimationEffectFrameInterpolation.Discrete =>
+                    new DiscreteDoubleKeyFrame(value, keyTime),
+                SlideShowAnimationEffectFrameInterpolation.Linear =>
+                    new LinearDoubleKeyFrame(value, keyTime),
+                SlideShowAnimationEffectFrameInterpolation.Spline when frame.StoryboardSpline is { } spline =>
+                    new SplineDoubleKeyFrame(
+                        value,
+                        keyTime,
+                        new KeySpline(
+                            spline.ControlPoint1X,
+                            spline.ControlPoint1Y,
+                            spline.ControlPoint2X,
+                            spline.ControlPoint2Y)),
+                _ => new LinearDoubleKeyFrame(value, keyTime)
+            };
+            animation.KeyFrames.Add(keyFrame);
+        }
+
+        Storyboard.SetTarget(animation, element);
         Storyboard.SetTargetProperty(animation, new PropertyPath(propertyPath));
-        sb.Children.Add(animation);
+        storyboard.Children.Add(animation);
     }
-
-    private void SwoopEffect(Storyboard sb, FrameworkElement el,
-        SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        double width = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        double height = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        double directionX = plan.OffsetXFactor * width;
-        double directionY = plan.OffsetYFactor * height;
-        var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        double startX = isExit ? 0 : directionX;
-        double startY = isExit ? 0 : directionY;
-        double endX = isExit ? directionX : 0;
-        double endY = isExit ? directionY : 0;
-        double arcX = Math.Abs(plan.OffsetYFactor) > 0.01
-            ? -Math.Sign(plan.OffsetYFactor) * width * 0.14
-            : 0;
-        double arcY = Math.Abs(plan.OffsetXFactor) > 0.01
-            ? Math.Sign(plan.OffsetXFactor) * height * 0.14
-            : 0;
-        double midX = (startX + endX) / 2 + arcX;
-        double midY = (startY + endY) / 2 + arcY;
-
-        var translate = new TranslateTransform(startX, startY);
-        el.RenderTransform = translate;
-        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        AddSwoopAxisAnimation(
-            sb,
-            el,
-            startX,
-            midX,
-            endX,
-            duration,
-            plan.DelayMs,
-            "(UIElement.RenderTransform).(TranslateTransform.X)");
-        AddSwoopAxisAnimation(
-            sb,
-            el,
-            startY,
-            midY,
-            endY,
-            duration,
-            plan.DelayMs,
-            "(UIElement.RenderTransform).(TranslateTransform.Y)");
-        var opacity = new DoubleAnimation(plan.FromOpacity, plan.ToOpacity, duration)
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        Storyboard.SetTarget(opacity, el);
-        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
-        sb.Children.Add(opacity);
-    }
-
-    private static void AddSwoopAxisAnimation(
-        Storyboard sb,
-        FrameworkElement el,
-        double start,
-        double middle,
-        double end,
-        Duration duration,
-        int delayMs,
-        string propertyPath)
-    {
-        var animation = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(delayMs),
-            Duration = duration
-        };
-        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(start, KeyTime.FromPercent(0)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            middle,
-            KeyTime.FromPercent(0.55),
-            new KeySpline(0.1, 0, 0.25, 1)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            end,
-            KeyTime.FromPercent(1),
-            new KeySpline(0.25, 0, 0.2, 1)));
-        Storyboard.SetTarget(animation, el);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(propertyPath));
-        sb.Children.Add(animation);
-    }
-
-    private void BoomerangEffect(Storyboard sb, FrameworkElement el,
-        SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        double width = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        double height = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        double directionX = plan.OffsetXFactor * width;
-        double directionY = plan.OffsetYFactor * height;
-        var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        double startX = isExit ? 0 : directionX;
-        double startY = isExit ? 0 : directionY;
-        double endX = isExit ? directionX : 0;
-        double endY = isExit ? directionY : 0;
-        double overshootX = isExit
-            ? endX + directionX * 0.08
-            : endX - directionX * 0.08;
-        double overshootY = isExit
-            ? endY + directionY * 0.08
-            : endY - directionY * 0.08;
-
-        var translate = new TranslateTransform(startX, startY);
-        el.RenderTransform = translate;
-        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        AddBoomerangAxisAnimation(
-            sb,
-            el,
-            startX,
-            overshootX,
-            endX,
-            duration,
-            plan.DelayMs,
-            "(UIElement.RenderTransform).(TranslateTransform.X)");
-        AddBoomerangAxisAnimation(
-            sb,
-            el,
-            startY,
-            overshootY,
-            endY,
-            duration,
-            plan.DelayMs,
-            "(UIElement.RenderTransform).(TranslateTransform.Y)");
-        var opacity = new DoubleAnimation(plan.FromOpacity, plan.ToOpacity, duration)
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        Storyboard.SetTarget(opacity, el);
-        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
-        sb.Children.Add(opacity);
-    }
-
-    private static void AddBoomerangAxisAnimation(
-        Storyboard sb,
-        FrameworkElement el,
-        double start,
-        double overshoot,
-        double end,
-        Duration duration,
-        int delayMs,
-        string propertyPath)
-    {
-        var animation = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(delayMs),
-            Duration = duration
-        };
-        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(start, KeyTime.FromPercent(0)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            overshoot,
-            KeyTime.FromPercent(0.78),
-            new KeySpline(0.2, 0, 0.3, 1)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            end,
-            KeyTime.FromPercent(1),
-            new KeySpline(0.2, 0, 0.2, 1)));
-        Storyboard.SetTarget(animation, el);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(propertyPath));
-        sb.Children.Add(animation);
-    }
-
-    private void BounceEffect(Storyboard sb, FrameworkElement el,
-        SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        double width = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
-        double height = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
-        double directionX = plan.OffsetXFactor * width;
-        double directionY = plan.OffsetYFactor * height;
-        var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        double startX = isExit ? 0 : directionX;
-        double startY = isExit ? 0 : directionY;
-        double endX = isExit ? directionX : 0;
-        double endY = isExit ? directionY : 0;
-        double overshootX = isExit ? endX + directionX * 0.08 : -directionX * 0.08;
-        double overshootY = isExit ? endY + directionY * 0.08 : -directionY * 0.08;
-        double reboundX = isExit ? endX - directionX * 0.04 : directionX * 0.04;
-        double reboundY = isExit ? endY - directionY * 0.04 : directionY * 0.04;
-
-        var translate = new TranslateTransform(startX, startY);
-        el.RenderTransform = translate;
-        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        AddBounceAxisAnimation(
-            sb,
-            el,
-            startX,
-            endX,
-            overshootX,
-            reboundX,
-            duration,
-            plan.DelayMs,
-            "(UIElement.RenderTransform).(TranslateTransform.X)");
-        AddBounceAxisAnimation(
-            sb,
-            el,
-            startY,
-            endY,
-            overshootY,
-            reboundY,
-            duration,
-            plan.DelayMs,
-            "(UIElement.RenderTransform).(TranslateTransform.Y)");
-
-        var opacity = new DoubleAnimation(plan.FromOpacity, plan.ToOpacity, duration)
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            EasingFunction = CreateAnimationEasing(plan)
-        };
-        Storyboard.SetTarget(opacity, el);
-        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
-        sb.Children.Add(opacity);
-    }
-
-    private static void AddBounceAxisAnimation(
-        Storyboard sb,
-        FrameworkElement el,
-        double start,
-        double end,
-        double overshoot,
-        double rebound,
-        Duration duration,
-        int delayMs,
-        string propertyPath)
-    {
-        var animation = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(delayMs),
-            Duration = duration
-        };
-        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(start, KeyTime.FromPercent(0)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            end,
-            KeyTime.FromPercent(0.55),
-            new KeySpline(0.2, 0, 0.4, 1)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            overshoot,
-            KeyTime.FromPercent(0.72),
-            new KeySpline(0.2, 0, 0.4, 1)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            rebound,
-            KeyTime.FromPercent(0.86),
-            new KeySpline(0.2, 0, 0.4, 1)));
-        animation.KeyFrames.Add(new LinearDoubleKeyFrame(end, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(animation, el);
-        Storyboard.SetTargetProperty(animation, new PropertyPath(propertyPath));
-        sb.Children.Add(animation);
-    }
-
     private void PeekEffect(Storyboard sb, FrameworkElement el,
         SlideShowShapeAnimationPlaybackPlan plan)
     {
@@ -5141,29 +3171,23 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         var bars = new GeometryGroup();
         el.Clip = bars;
-        var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        el.Opacity = isExit ? plan.FromOpacity : 0;
-
         var ease = CreateAnimationEasing(plan);
-        var randomBars = SlideShowMaskGeometryPlanner.BuildRandomBars(
-            w,
-            h,
-            SlideShowPlaybackPlanner.RandomBarsBandCount,
-            plan.WipeHorizontal);
-        var barStaggerMs = plan.DurationMs / Math.Max(1, randomBars.Count + 1);
+        var rendererPlan = SlideShowMaskTimelinePlanner.BuildRandomBarsRendererPlan(plan, w, h);
+        el.Opacity = rendererPlan.InitialOpacity;
 
-        foreach (var randomBar in randomBars)
+        foreach (var elementPlan in rendererPlan.Elements)
         {
-            var closed = ToRect(randomBar.Geometry.Closed);
-            var open = ToRect(randomBar.Geometry.Open);
-            var from = isExit ? open : closed;
-            var to = isExit ? closed : open;
+            var from = ToRect(elementPlan.From);
+            var to = ToRect(elementPlan.To);
             var bar = new RectangleGeometry(from);
             bars.Children.Add(bar);
-            var barDurationMs = Math.Max(1, plan.DurationMs - randomBar.Order * barStaggerMs);
-            var barAnimation = new RectAnimation(from, to, new Duration(TimeSpan.FromMilliseconds(barDurationMs)))
+            var barAnimation = new RectAnimation(
+                from,
+                to,
+                new Duration(TimeSpan.FromMilliseconds(elementPlan.DurationMs)))
             {
-                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs + randomBar.Order * barStaggerMs),
+                BeginTime = TimeSpan.FromMilliseconds(
+                    rendererPlan.DelayMs + elementPlan.StartOffsetMs),
                 EasingFunction = ease
             };
             Storyboard.SetTarget(barAnimation, bar);
@@ -5173,21 +3197,17 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         var opacityAnim = new DoubleAnimationUsingKeyFrames
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+            BeginTime = TimeSpan.FromMilliseconds(rendererPlan.DelayMs),
+            Duration = new Duration(TimeSpan.FromMilliseconds(rendererPlan.DurationMs))
         };
-        if (isExit)
+        foreach (var keyFrame in rendererPlan.OpacityTrack!.KeyFrames)
         {
-            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(plan.FromOpacity, KeyTime.FromPercent(0)));
-            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.7, KeyTime.FromPercent(0.2)));
-            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.35, KeyTime.FromPercent(0.55)));
+            DoubleKeyFrame nativeKeyFrame = keyFrame.InterpolationKind ==
+                SlideShowAnimationScalarInterpolationKind.Discrete
+                    ? new DiscreteDoubleKeyFrame(keyFrame.Value, KeyTime.FromPercent(keyFrame.Progress))
+                    : new LinearDoubleKeyFrame(keyFrame.Value, KeyTime.FromPercent(keyFrame.Progress));
+            opacityAnim.KeyFrames.Add(nativeKeyFrame);
         }
-        else
-        {
-            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromPercent(0)));
-            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.35, KeyTime.FromPercent(0.2)));
-            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.7, KeyTime.FromPercent(0.55)));
-        }
-        opacityAnim.KeyFrames.Add(new LinearDoubleKeyFrame(plan.ToOpacity, KeyTime.FromPercent(1)));
         Storyboard.SetTarget(opacityAnim, el);
         Storyboard.SetTargetProperty(opacityAnim, new PropertyPath(OpacityProperty));
         sb.Children.Add(opacityAnim);
@@ -5198,30 +3218,26 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     {
         double w = el.Width  > 0 ? el.Width  : 960;
         double h = el.Height > 0 ? el.Height : 540;
-        var opens = plan.ToOpacity >= plan.FromOpacity;
-        var bandCount = Math.Max(1, plan.BlindsBandCount);
+        var rendererPlan = SlideShowMaskTimelinePlanner.BuildBlindsRendererPlan(plan, w, h);
         var bands = new GeometryGroup();
 
         el.Clip = bands;
-        el.Opacity = 1;
+        el.Opacity = rendererPlan.InitialOpacity;
 
-        var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var dur = new Duration(TimeSpan.FromMilliseconds(rendererPlan.DurationMs));
         var ease = CreateAnimationEasing(plan);
 
-        for (var i = 0; i < bandCount; i++)
+        foreach (var elementPlan in rendererPlan.Elements)
         {
-            var bandPlan = SlideShowMaskGeometryPlanner.BuildBlindsBand(
-                w, h, bandCount, i, plan.BlindsHorizontal);
-            var closed = ToRect(bandPlan.Closed);
-            var open = ToRect(bandPlan.Open);
-            var from = opens ? closed : open;
-            var to = opens ? open : closed;
+            var from = ToRect(elementPlan.From);
+            var to = ToRect(elementPlan.To);
             var band = new RectangleGeometry(from);
             bands.Children.Add(band);
 
             var anim = new RectAnimation(from, to, dur)
             {
-                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+                BeginTime = TimeSpan.FromMilliseconds(
+                    rendererPlan.DelayMs + elementPlan.StartOffsetMs),
                 EasingFunction = ease
             };
             Storyboard.SetTarget(anim, band);
@@ -5235,48 +3251,33 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     {
         double w = el.Width  > 0 ? el.Width  : 960;
         double h = el.Height > 0 ? el.Height : 540;
-        var opens = plan.ToOpacity >= plan.FromOpacity;
-        var rowCount = Math.Max(1, plan.CheckerboardRowCount);
-        var columnCount = Math.Max(1, plan.CheckerboardColumnCount);
+        var rendererPlan = SlideShowMaskTimelinePlanner.BuildCheckerboardRendererPlan(plan, w, h);
         var cells = new GeometryGroup();
-        var phaseDelayMs = Math.Max(0, plan.DurationMs / 3);
-        var cellDurationMs = Math.Max(1, plan.DurationMs - phaseDelayMs);
 
         el.Clip = cells;
-        el.Opacity = 1;
+        el.Opacity = rendererPlan.InitialOpacity;
 
-        var dur = new Duration(TimeSpan.FromMilliseconds(cellDurationMs));
         var ease = CreateAnimationEasing(plan);
 
-        for (var row = 0; row < rowCount; row++)
+        foreach (var elementPlan in rendererPlan.Elements)
         {
-            for (var column = 0; column < columnCount; column++)
-            {
-                var cellPlan = SlideShowMaskGeometryPlanner.BuildCheckerboardCell(
-                    w,
-                    h,
-                    rowCount,
-                    columnCount,
-                    row,
-                    column,
-                    plan.CheckerboardHorizontal);
-                var closed = ToRect(cellPlan.Closed);
-                var open = ToRect(cellPlan.Open);
-                var from = opens ? closed : open;
-                var to = opens ? open : closed;
-                var cell = new RectangleGeometry(from);
-                cells.Children.Add(cell);
+            var from = ToRect(elementPlan.From);
+            var to = ToRect(elementPlan.To);
+            var cell = new RectangleGeometry(from);
+            cells.Children.Add(cell);
 
-                var anim = new RectAnimation(from, to, dur)
-                {
-                    BeginTime = TimeSpan.FromMilliseconds(
-                        plan.DelayMs + (SlideShowMaskGeometryPlanner.IsSecondCheckerboardPhase(row, column) ? phaseDelayMs : 0)),
-                    EasingFunction = ease
-                };
-                Storyboard.SetTarget(anim, cell);
-                Storyboard.SetTargetProperty(anim, new PropertyPath(RectangleGeometry.RectProperty));
-                sb.Children.Add(anim);
-            }
+            var anim = new RectAnimation(
+                from,
+                to,
+                new Duration(TimeSpan.FromMilliseconds(elementPlan.DurationMs)))
+            {
+                BeginTime = TimeSpan.FromMilliseconds(
+                    rendererPlan.DelayMs + elementPlan.StartOffsetMs),
+                EasingFunction = ease
+            };
+            Storyboard.SetTarget(anim, cell);
+            Storyboard.SetTargetProperty(anim, new PropertyPath(RectangleGeometry.RectProperty));
+            sb.Children.Add(anim);
         }
     }
 
@@ -5840,182 +3841,88 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         sb.Children.Add(animOp);
     }
 
-    private static void PulseEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    private void ScalarTrackEffect(
+        Storyboard storyboard,
+        FrameworkElement element,
+        SlideShowShapeAnimationPlaybackPlan playback)
     {
-        // Ensure visible
-        el.Opacity = 1;
+        var plan = _runtime.AnimationRendererSession.PlanEffectTracks(playback);
+        element.Opacity = 1;
 
-        double cx = el.Width  / 2;
-        double cy = el.Height / 2;
-        var scale = new ScaleTransform(1, 1, cx, cy);
-        el.RenderTransform = scale;
+        var rotation = plan.FindTrack(SlideShowAnimationScalarPropertyKind.RotationDegrees);
+        var horizontalScale = plan.FindTrack(SlideShowAnimationScalarPropertyKind.HorizontalScale);
+        var scaleX = plan.FindTrack(SlideShowAnimationScalarPropertyKind.ScaleX);
+        var scaleY = plan.FindTrack(SlideShowAnimationScalarPropertyKind.ScaleY);
+        var translateX = plan.FindTrack(SlideShowAnimationScalarPropertyKind.TranslateXFactor);
+        var centerX = (element.Width > 0 ? element.Width : Math.Max(0, element.ActualWidth)) / 2;
+        var centerY = (element.Height > 0 ? element.Height : Math.Max(0, element.ActualHeight)) / 2;
 
-        var halfDur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs / 2));
-
-        var animSXUp = new DoubleAnimation(1, plan.PeakScale, halfDur)
-            { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), AutoReverse = true };
-
-        Storyboard.SetTarget(animSXUp, el);
-        Storyboard.SetTargetProperty(animSXUp,
-            new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"));
-
-        var animSYUp = animSXUp.Clone();
-        Storyboard.SetTarget(animSYUp, el);
-        Storyboard.SetTargetProperty(animSYUp,
-            new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"));
-
-        sb.Children.Add(animSXUp);
-        sb.Children.Add(animSYUp);
-    }
-
-    private static void GrowShrinkEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-
-        double cx = el.Width  / 2;
-        double cy = el.Height / 2;
-        var scale = new ScaleTransform(plan.FromScaleX, plan.FromScaleY, cx, cy);
-        el.RenderTransform = scale;
-
-        var animSX = BuildGrowShrinkScaleAnimation(plan, plan.FromScaleX, plan.PeakScaleX, plan.ToScaleX);
-        Storyboard.SetTarget(animSX, el);
-        Storyboard.SetTargetProperty(animSX,
-            new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"));
-
-        var animSY = BuildGrowShrinkScaleAnimation(plan, plan.FromScaleY, plan.PeakScaleY, plan.ToScaleY);
-        Storyboard.SetTarget(animSY, el);
-        Storyboard.SetTargetProperty(animSY,
-            new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"));
-
-        sb.Children.Add(animSX);
-        sb.Children.Add(animSY);
-    }
-
-    private static DoubleAnimationUsingKeyFrames BuildGrowShrinkScaleAnimation(
-        SlideShowShapeAnimationPlaybackPlan plan,
-        double fromScale,
-        double peakScale,
-        double toScale)
-    {
-        var anim = new DoubleAnimationUsingKeyFrames
+        if (rotation is not null && horizontalScale is not null)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(fromScale, KeyTime.FromPercent(0)));
-        anim.KeyFrames.Add(new SplineDoubleKeyFrame(
-            peakScale,
-            KeyTime.FromPercent(0.5),
-            new KeySpline(0.2, 0, 0.2, 1)));
-        anim.KeyFrames.Add(new SplineDoubleKeyFrame(
-            toScale,
-            KeyTime.FromPercent(1),
-            new KeySpline(0.4, 0, 0.2, 1)));
-        return anim;
-    }
-
-    private static void SpinEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-
-        double cx = el.Width  / 2;
-        double cy = el.Height / 2;
-        var rotate = new RotateTransform(0, cx, cy);
-        el.RenderTransform = rotate;
-
-        var anim = new DoubleAnimation(0, plan.RotationDegrees, new Duration(TimeSpan.FromMilliseconds(plan.DurationMs)))
+            var transforms = new TransformGroup();
+            transforms.Children.Add(new ScaleTransform(horizontalScale.KeyFrames[0].Value, 1, centerX, centerY));
+            transforms.Children.Add(new RotateTransform(rotation.KeyFrames[0].Value, centerX, centerY));
+            element.RenderTransform = transforms;
+        }
+        else if (rotation is not null)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            EasingFunction = CreateAnimationEasing(plan)
-        };
-
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim,
-            new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
-        sb.Children.Add(anim);
-    }
-
-    private static void SpiralEffect(Storyboard sb, FrameworkElement el,
-        SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-
-        double cx = el.Width / 2;
-        double cy = el.Height / 2;
-        var rotate = new RotateTransform(0, cx, cy);
-        el.RenderTransform = rotate;
-        var animation = new DoubleAnimationUsingKeyFrames
+            element.RenderTransform = new RotateTransform(rotation.KeyFrames[0].Value, centerX, centerY);
+        }
+        else if (scaleX is not null && scaleY is not null)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromPercent(0)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            plan.RotationDegrees * 0.82,
-            KeyTime.FromPercent(0.7),
-            new KeySpline(0.15, 0, 0.35, 1)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            plan.RotationDegrees,
-            KeyTime.FromPercent(1),
-            new KeySpline(0.25, 0, 0.2, 1)));
-        Storyboard.SetTarget(animation, el);
-        Storyboard.SetTargetProperty(animation,
-            new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
-        sb.Children.Add(animation);
-    }
-
-    private static void SwivelEffect(Storyboard sb, FrameworkElement el,
-        SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-
-        double cx = el.Width / 2;
-        double cy = el.Height / 2;
-        var scale = new ScaleTransform(1, 1, cx, cy);
-        var rotate = new RotateTransform(0, cx, cy);
-        var transform = new TransformGroup();
-        transform.Children.Add(scale);
-        transform.Children.Add(rotate);
-        el.RenderTransform = transform;
-
-        var rotation = new DoubleAnimationUsingKeyFrames
+            element.RenderTransform = new ScaleTransform(
+                scaleX.KeyFrames[0].Value,
+                scaleY.KeyFrames[0].Value,
+                centerX,
+                centerY);
+        }
+        else if (translateX is not null)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
-        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(
-            plan.RotationDegrees * 0.25, KeyTime.FromPercent(0.25)));
-        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(
-            plan.RotationDegrees * 0.5, KeyTime.FromPercent(0.5)));
-        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(
-            plan.RotationDegrees * 0.75, KeyTime.FromPercent(0.75)));
-        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(
-            plan.RotationDegrees, KeyTime.FromPercent(1)));
+            element.RenderTransform = new TranslateTransform();
+        }
 
-        var horizontalScale = new DoubleAnimationUsingKeyFrames
+        foreach (var track in plan.Tracks)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
-            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(0), KeyTime.FromPercent(0)));
-        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
-            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(0.25), KeyTime.FromPercent(0.25)));
-        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
-            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(0.5), KeyTime.FromPercent(0.5)));
-        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
-            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(0.75), KeyTime.FromPercent(0.75)));
-        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
-            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(1), KeyTime.FromPercent(1)));
+            var animation = new DoubleAnimationUsingKeyFrames
+            {
+                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+                Duration = TimeSpan.FromMilliseconds(plan.DurationMs)
+            };
+            foreach (var keyFrame in track.KeyFrames)
+            {
+                var value = track.PropertyKind == SlideShowAnimationScalarPropertyKind.TranslateXFactor
+                    ? keyFrame.Value * (_slideDipW > 0 ? _slideDipW : 960)
+                    : keyFrame.Value;
+                animation.KeyFrames.Add(
+                    keyFrame.InterpolationKind == SlideShowAnimationScalarInterpolationKind.Discrete
+                        ? new DiscreteDoubleKeyFrame(value, KeyTime.FromPercent(keyFrame.Progress))
+                        : new LinearDoubleKeyFrame(value, KeyTime.FromPercent(keyFrame.Progress)));
+            }
 
-        Storyboard.SetTarget(rotation, el);
-        Storyboard.SetTarget(horizontalScale, el);
-        Storyboard.SetTargetProperty(rotation,
-            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(RotateTransform.Angle)"));
-        Storyboard.SetTargetProperty(horizontalScale,
-            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"));
-        sb.Children.Add(rotation);
-        sb.Children.Add(horizontalScale);
+            Storyboard.SetTarget(animation, element);
+            Storyboard.SetTargetProperty(animation, track.PropertyKind switch
+            {
+                SlideShowAnimationScalarPropertyKind.Opacity => new PropertyPath(OpacityProperty),
+                SlideShowAnimationScalarPropertyKind.ScaleX =>
+                    new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"),
+                SlideShowAnimationScalarPropertyKind.ScaleY =>
+                    new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"),
+                SlideShowAnimationScalarPropertyKind.RotationDegrees when horizontalScale is not null =>
+                    new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(RotateTransform.Angle)"),
+                SlideShowAnimationScalarPropertyKind.RotationDegrees =>
+                    new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"),
+                SlideShowAnimationScalarPropertyKind.HorizontalScale =>
+                    new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"),
+                SlideShowAnimationScalarPropertyKind.TranslateXFactor =>
+                    new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"),
+                _ => throw new InvalidOperationException(
+                    $"Unsupported scalar animation property {track.PropertyKind}.")
+            });
+            storyboard.Children.Add(animation);
+        }
+
+        if (plan.AddAuthoredColorOverlay)
+            AddAuthoredColorOverlay(storyboard, element, playback);
     }
 
     private static void FlashEffect(Storyboard sb, FrameworkElement el,
@@ -6113,187 +4020,45 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         sb.Children.Add(anim);
     }
 
-    private static void TeeterEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var rotate = new RotateTransform(0, el.Width / 2, el.Height / 2);
-        el.RenderTransform = rotate;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-10, KeyTime.FromPercent(0.2)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(10, KeyTime.FromPercent(0.4)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-10, KeyTime.FromPercent(0.6)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim,
-            new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
-        sb.Children.Add(anim);
-    }
-
-    private static void BlinkEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.15, KeyTime.FromPercent(0.25)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0.5)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.15, KeyTime.FromPercent(0.75)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
-        sb.Children.Add(anim);
-    }
-
-    private static void FlashBulbEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.05, KeyTime.FromPercent(0.08)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0.16)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.70, KeyTime.FromPercent(0.30)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
-        sb.Children.Add(anim);
-    }
-
-    private static void FlickerEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.20, KeyTime.FromPercent(0.20)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.80, KeyTime.FromPercent(0.35)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.15, KeyTime.FromPercent(0.50)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.65, KeyTime.FromPercent(0.65)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.25, KeyTime.FromPercent(0.80)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
-        sb.Children.Add(anim);
-    }
-
-    private static void WaveEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var translate = new TranslateTransform();
-        el.RenderTransform = translate;
-        var amplitude = (el.Width > 0 ? el.Width : 960) * 0.00625;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-amplitude, KeyTime.FromPercent(0.2)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(amplitude, KeyTime.FromPercent(0.4)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-amplitude, KeyTime.FromPercent(0.6)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim,
-            new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
-        sb.Children.Add(anim);
-    }
-
-    private static void EmphasisPulseEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.5)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
-        sb.Children.Add(anim);
-
-        AddAuthoredColorOverlay(sb, el, plan);
-
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.GrowWithColor)
-        {
-            var scale = new ScaleTransform(1, 1, el.Width / 2, el.Height / 2);
-            el.RenderTransform = scale;
-            var scaleX = new DoubleAnimationUsingKeyFrames
-            {
-                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-            };
-            scaleX.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0)));
-            scaleX.KeyFrames.Add(new LinearDoubleKeyFrame(plan.PeakScale, KeyTime.FromPercent(0.5)));
-            scaleX.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(1)));
-            var scaleY = scaleX.Clone();
-            Storyboard.SetTarget(scaleX, el);
-            Storyboard.SetTarget(scaleY, el);
-            Storyboard.SetTargetProperty(scaleX,
-                new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"));
-            Storyboard.SetTargetProperty(scaleY,
-                new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"));
-            sb.Children.Add(scaleX);
-            sb.Children.Add(scaleY);
-        }
-    }
-
-    private static void ColorWaveEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.25)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.50)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.75)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
-        sb.Children.Add(anim);
-        AddAuthoredColorOverlay(sb, el, plan);
-    }
-
     private static void FillColorEffect(
         Storyboard storyboard,
         FrameworkElement element,
         SlideShowShapeAnimationPlaybackPlan plan)
     {
+        var track = SlideShowAnimationColorTrackPlanner.BuildFillColor(plan);
         if (element is not Rectangle rectangle
             || rectangle.Fill is not SolidColorBrush brush
-            || plan.ColorFromHex is null
-            || plan.ColorToHex is null
-            || !TryParseAnimationColor(plan.ColorFromHex, out var from)
-            || !TryParseAnimationColor(plan.ColorToHex, out var to))
+            || track is null)
         {
             return;
         }
 
         var color = new ColorAnimationUsingKeyFrames
         {
-            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
+            Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs))
         };
-        color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
-        color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(1)));
+        foreach (var keyFrame in track.Colors)
+        {
+            color.KeyFrames.Add(new LinearColorKeyFrame(
+                ToAnimationColor(keyFrame.Value),
+                KeyTime.FromPercent(keyFrame.Progress)));
+        }
         Storyboard.SetTarget(color, brush);
         Storyboard.SetTargetProperty(color, new PropertyPath(SolidColorBrush.ColorProperty));
         storyboard.Children.Add(color);
 
-        var opacity = new DoubleAnimation
+        var opacity = new DoubleAnimationUsingKeyFrames
         {
-            From = 0,
-            To = 1,
             BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
-            Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs)),
+            Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs))
         };
+        foreach (var keyFrame in track.Opacities)
+        {
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(
+                keyFrame.Value,
+                KeyTime.FromPercent(keyFrame.Progress)));
+        }
         Storyboard.SetTarget(opacity, rectangle);
         Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
         storyboard.Children.Add(opacity);
@@ -6355,18 +4120,17 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         FrameworkElement element,
         SlideShowShapeAnimationPlaybackPlan plan)
     {
-        if (plan.ColorFromHex is null
-            || plan.ColorToHex is null
-            || element is not Image image
+        var track = SlideShowAnimationColorTrackPlanner.BuildAuthoredColorOverlay(plan);
+        if (element is not Image image
             || image.Source is not ImageSource source
             || element.Parent is not Panel parent
-            || !TryParseAnimationColor(plan.ColorFromHex, out var from)
-            || !TryParseAnimationColor(plan.ColorToHex, out var to))
+            || track is null
+            || track.Colors.Count == 0)
         {
             return;
         }
 
-        var brush = new SolidColorBrush(from);
+        var brush = new SolidColorBrush(ToAnimationColor(track.Colors[0].Value));
         var tint = new Rectangle
         {
             Width = element.Width,
@@ -6384,23 +4148,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         var color = new ColorAnimationUsingKeyFrames
         {
-            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
+            Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs))
         };
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ColorWave)
+        foreach (var keyFrame in track.Colors)
         {
-            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
-            color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.25)));
-            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0.50)));
-            color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.75)));
-            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(1)));
-        }
-        else
-        {
-            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
-            color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.5)));
             color.KeyFrames.Add(new LinearColorKeyFrame(
-                plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? to : from,
-                KeyTime.FromPercent(1)));
+                ToAnimationColor(keyFrame.Value),
+                KeyTime.FromPercent(keyFrame.Progress)));
         }
         Storyboard.SetTarget(color, brush);
         Storyboard.SetTargetProperty(color, new PropertyPath(SolidColorBrush.ColorProperty));
@@ -6408,55 +4163,22 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         var opacity = new DoubleAnimationUsingKeyFrames
         {
-            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
+            Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs))
         };
-        opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ColorWave)
+        foreach (var keyFrame in track.Opacities)
         {
-            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.25)));
-            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0.50)));
-            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.75)));
-            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
-        }
-        else
-        {
-            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.5)));
             opacity.KeyFrames.Add(new LinearDoubleKeyFrame(
-                plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? 0.65 : 0,
-                KeyTime.FromPercent(1)));
+                keyFrame.Value,
+                KeyTime.FromPercent(keyFrame.Progress)));
         }
         Storyboard.SetTarget(opacity, tint);
         Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
         storyboard.Children.Add(opacity);
     }
 
-    private static bool TryParseAnimationColor(string value, out Color color)
-    {
-        color = default;
-        if (value.Length != 6
-            || !byte.TryParse(value[..2], System.Globalization.NumberStyles.HexNumber, null, out var r)
-            || !byte.TryParse(value[2..4], System.Globalization.NumberStyles.HexNumber, null, out var g)
-            || !byte.TryParse(value[4..], System.Globalization.NumberStyles.HexNumber, null, out var b))
-        {
-            return false;
-        }
-
-        color = Color.FromRgb(r, g, b);
-        return true;
-    }
-
-    private static bool TryParseAnimationColorHex(string value, out SrgbColor color)
-    {
-        if (value is { Length: 6 }
-            && int.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
-        {
-            color = SrgbColor.FromRgb(rgb);
-            return true;
-        }
-
-        color = SrgbColor.Black;
-        return false;
-    }
+    private static Color ToAnimationColor(SrgbColor color) =>
+        Color.FromRgb(color.R, color.G, color.B);
 
     /// <summary>
     /// Motion-path animation: translates the shape along the normalized path in DIP space.
@@ -6510,9 +4232,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     /// completion.  Emphasis retains the existing slide-wide flash because there is no
     /// shape surface on which to paint the effect.
     /// </summary>
-    private void PlayFallbackAnimation(ShapeAnimation animation, int delayMs, int durationMs)
+    private void PlayFallbackAnimation(SlideShowAnimationPlaybackOperation operation)
     {
-        var visibilityPlan = SlideShowPlaybackPlanner.PlanFallbackVisibility(animation);
+        var animation = operation.Playback.Animation;
+        var visibilityPlan = operation.FallbackVisibility ??
+            throw new InvalidOperationException("Fallback playback requires a visibility plan.");
         if (visibilityPlan.SuppressAtStart || visibilityPlan.SuppressAtCompletion)
         {
             if (visibilityPlan.SuppressAtStart)
@@ -6525,9 +4249,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             var hold = new DoubleAnimation(
                 1,
                 1,
-                new Duration(TimeSpan.FromMilliseconds(Math.Max(0, durationMs))))
+                new Duration(TimeSpan.FromMilliseconds(operation.Playback.DurationMs)))
             {
-                BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, delayMs))
+                BeginTime = TimeSpan.FromMilliseconds(operation.Playback.DelayMs)
             };
             Storyboard.SetTarget(hold, _slideCanvas);
             Storyboard.SetTargetProperty(hold, new PropertyPath(OpacityProperty));
@@ -6545,8 +4269,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             return;
         }
 
-        PlayFallbackAnimation(
-            SlideShowPlaybackPlanner.PlanFallbackAnimation(animation, delayMs));
+        PlayFallbackAnimation(operation.FallbackAnimation);
     }
 
     private void PlayFallbackAnimation(SlideShowFallbackAnimationPlaybackPlan? plan)
@@ -6573,26 +4296,5 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     // ── Teardown ──────────────────────────────────────────────────────────────────
 
     private void Teardown(DateTimeOffset? nowUtc = null)
-    {
-        _presenterViewWindow?.Close();
-        _presenterViewWindow = null;
-        StopTransitionSound();
-        if (_session.IsClosed)
-        {
-            return;
-        }
-
-        var now = nowUtc ?? DateTimeOffset.UtcNow;
-        _session.Close(now);
-        _autoAdvanceTimer.Stop();
-        _kioskRestartTimer.Stop();
-        foreach (var sb in _pendingStoryboards)
-        {
-            try { sb.Stop(); } catch { /* ignore */ }
-        }
-        _pendingStoryboards.Clear();
-
-        // Stop all media players and delete temp files.
-        _mediaController.Teardown();
-    }
+        => _runtime.CloseRendererSession(nowUtc);
 }

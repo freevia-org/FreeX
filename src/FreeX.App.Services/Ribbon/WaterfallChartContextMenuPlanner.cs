@@ -1,3 +1,4 @@
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Ribbon;
@@ -29,6 +30,21 @@ public static class WaterfallChartContextMenuPlanner
             return pointIndex == pointCount - 1;
 
         return totals.Contains(pointIndex);
+    }
+
+    public static SetWaterfallTotalPointCommand? CreateToggleCommand(
+        SheetId sheetId,
+        ChartModel chart,
+        int pointIndex)
+    {
+        if (!IsValidWaterfallPoint(chart, pointIndex))
+            return null;
+
+        return new SetWaterfallTotalPointCommand(
+            sheetId,
+            chart.Id,
+            pointIndex,
+            setAsTotal: !IsPointTotal(chart, pointIndex));
     }
 
     private static bool IsValidWaterfallPoint(ChartModel chart, int pointIndex) =>

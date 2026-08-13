@@ -9,13 +9,10 @@ namespace FreeX.App.Avalonia;
 
 internal static class QuickAnalysisPreviewIconFactory
 {
-    public static Control Create(QuickAnalysisPreviewVisual visual)
-    {
-        var renderer = new QuickAnalysisPreviewIconRenderAdapter<Canvas, Control>(
+    public static Control Create(QuickAnalysisPreviewIconPlan plan) =>
+        QuickAnalysisPreviewIconRenderAdapter<Canvas, Control>.Render(
+            plan,
             new AvaloniaQuickAnalysisPreviewIconRenderPrimitives());
-        QuickAnalysisPreviewIconRenderPlanner.Render(visual, renderer);
-        return renderer.Root;
-    }
 
     private sealed class AvaloniaQuickAnalysisPreviewIconRenderPrimitives
         : IQuickAnalysisPreviewIconRenderPrimitives<Canvas, Control>

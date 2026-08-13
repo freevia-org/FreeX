@@ -291,6 +291,9 @@ public sealed class RibbonWpfSplitButtonTests
                 child.MinHeight.Should().Be(RibbonVisualMetrics.PopupChrome.Submenu.ItemMinHeight);
 
                 menu.IsOpen = true;
+                window.Dispatcher.Invoke(
+                    static () => { },
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                 parent.Focus();
                 RaiseKey(parent, Key.Right, PresentationSource.FromVisual(window));
                 parent.IsSubmenuOpen.Should().BeTrue();
@@ -301,12 +304,19 @@ public sealed class RibbonWpfSplitButtonTests
                 child.Focus();
                 RaiseKey(child, Key.Left, PresentationSource.FromVisual(window));
                 parent.IsSubmenuOpen.Should().BeFalse();
-                parent.IsKeyboardFocusWithin.Should().BeTrue();
+                menu.IsOpen.Should().BeTrue();
+                window.Dispatcher.Invoke(
+                    static () => { },
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                FocusManager.GetFocusedElement(menu).Should().BeSameAs(parent);
                 parent.IsSubmenuOpen = true;
                 child.Focus();
                 RaiseKey(child, Key.Escape, PresentationSource.FromVisual(window));
                 parent.IsSubmenuOpen.Should().BeFalse();
-                parent.IsKeyboardFocusWithin.Should().BeTrue();
+                window.Dispatcher.Invoke(
+                    static () => { },
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                FocusManager.GetFocusedElement(menu).Should().BeSameAs(parent);
                 menu.IsOpen = false;
             }
             finally
@@ -467,6 +477,51 @@ public sealed class RibbonWpfSplitButtonTests
         });
     }
 
+    [Fact]
+    public void TypedCombo_DisplaysLabels_DispatchesValues_AndMatchesStateByValueWithoutExecuting()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var command = new RecordingValueCommand();
+            var registry = new RibbonCommandRegistry();
+            registry.Register("theme", command);
+            var stateStore = new RibbonStateStore();
+            stateStore.SetValue("theme", "theme.slate");
+            var root = RibbonWpfRenderer.BuildTabContent(
+                new RibbonDefinitionBuilder()
+                    .Tab("design", "Design", "D", tab => tab
+                        .Group("themes", "Themes", "T", 1, group => group
+                            .ComboBox("theme", "Theme", combo => combo with
+                            {
+                                Choices =
+                                [
+                                    new RibbonComboBoxChoice("theme.office", "Office"),
+                                    new RibbonComboBoxChoice("theme.slate", "Slate"),
+                                ],
+                            })))
+                    .Build()
+                    .FindTab("design")!,
+                new Border(),
+                registry,
+                stateStore);
+            Layout(root, 420, 130);
+
+            var combo = Descendants(root).OfType<ComboBox>().Single();
+            combo.DisplayMemberPath.Should().Be(nameof(RibbonComboBoxChoice.Label));
+            combo.SelectedIndex.Should().Be(1);
+            combo.Text.Should().Be("Slate");
+
+            combo.SelectedIndex = 0;
+            command.Values.Should().Equal("theme.office");
+
+            stateStore.SetValue("theme", "theme.office");
+            stateStore.SetValue("theme", "theme.slate");
+            combo.SelectedIndex.Should().Be(1);
+            combo.Text.Should().Be("Slate");
+            command.Values.Should().Equal("theme.office");
+        });
+    }
+
     private static FrameworkElement BuildRibbon(
         IRibbonCommandRegistry registry,
         RibbonMenu? menu = null,
@@ -555,6 +610,12 @@ public sealed class RibbonWpfSplitButtonTests
     {
         public int Invocations { get; private set; }
         public void Execute(RibbonCommandContext context) => Invocations++;
+    }
+
+    private sealed class RecordingValueCommand : IRibbonCommand
+    {
+        public List<string?> Values { get; } = new();
+        public void Execute(RibbonCommandContext context) => Values.Add(context.SelectedValue);
     }
 
     private static class StaTestRunner

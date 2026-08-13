@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 using Xunit;
@@ -30,9 +31,12 @@ public sealed class ZoomDialogCommandTests
         var opened = 0;
 
         var registry = FreeWRibbonCommands.Build(
-            view, store, onPrintPreview: null, onToggleNavPane: null, isNavPaneVisible: null,
-            onToggleReadMode: null, isReadModeActive: null, onTogglePrintLayout: null, isPrintLayoutActive: null,
-            onToggleOutlineView: null, isOutlineViewActive: null, onZoomDialog: () => opened++);
+            view,
+            store,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                OpenZoomDialog = () => opened++,
+            });
 
         registry.TryGet("freew.zoom-dialog", out var command).Should().BeTrue();
 
@@ -52,10 +56,14 @@ public sealed class ZoomDialogCommandTests
         var pageWidth = 0;
 
         var registry = FreeWRibbonCommands.Build(
-            view, store, onPrintPreview: null, onToggleNavPane: null, isNavPaneVisible: null,
-            onToggleReadMode: null, isReadModeActive: null, onTogglePrintLayout: null, isPrintLayoutActive: null,
-            onToggleOutlineView: null, isOutlineViewActive: null, onZoomDialog: null,
-            onZoom100: () => zoom100++, onZoomOnePage: () => onePage++, onZoomPageWidth: () => pageWidth++);
+            view,
+            store,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ApplyZoom = (_, _) => zoom100++,
+                ZoomOnePage = () => onePage++,
+                ZoomPageWidth = () => pageWidth++,
+            });
 
         registry.TryGet("freew.zoom-100", out var zoom100Command).Should().BeTrue();
         registry.TryGet("freew.zoom-one-page", out var onePageCommand).Should().BeTrue();

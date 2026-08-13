@@ -30,8 +30,8 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("optionsHeader.Width = FindReplaceDialogPlanner.OptionsHeaderMinimumWidth;");
         source.Should().Contain("optionsHeader.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left;");
         source.Should().Contain("optionsHeader.Background = Brushes.White;");
-        source.Should().Contain("? Fr(\"FindReplace_OptionsExpanded\", \"Options <<\")");
-        source.Should().Contain(": Fr(\"FindReplace_Options\", \"Options >>\")");
+        source.Should().Contain("? Fr(FindReplaceDialogText.OptionsExpanded)");
+        source.Should().Contain(": Fr(FindReplaceDialogText.Options)");
         source.Should().Contain("AutomationProperties.SetName(optionsHeader, optionsHeaderText.Text);");
         source.Should().Contain("dialog.Opened += (_, _) => resultsList.Background = Brush(242, 242, 242);");
     }
@@ -121,16 +121,16 @@ public sealed class DialogVisualParitySourceTests
     public void SortOptionsDialog_UsesSharedLocalizationAndReferenceCaptureState()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
-        source.Should().Contain("Title = UiText.Get(\"SortOptions_SortOptions\")");
-        source.Should().Contain("Content = UiText.Get(\"SortOptions_CaseSensitive\")");
-        source.Should().Contain("UiText.Get(\"SortOptions_FirstKeySortOrderLabel\")");
-        source.Should().Contain("UiText.Get(\"SortOptions_FirstKeyJanToDecShort\")");
-        source.Should().Contain("Content = UiText.Get(\"SortOptions_SortTopToBottom\")");
-        source.Should().Contain("Content = UiText.Get(\"SortOptions_SortLeftToRight\")");
-        source.Should().Contain("Header = StripDisplayMnemonic(UiText.Get(\"SortOptions_Orientation\"))");
-        source.Should().Contain("FirstKeySortOrder: firstKeyBox.SelectedItem is SortDialogComboItem<string> choice");
+        source.Should().Contain("SortOptionsDialogCatalog.Create(UiText.Get)");
+        source.Should().Contain("Title = presentation.Title");
+        source.Should().Contain("Content = presentation.CaseSensitive");
+        source.Should().Contain("ItemsSource = presentation.FirstKeySortOrders");
+        source.Should().Contain("Content = presentation.SortTopToBottom");
+        source.Should().Contain("Content = presentation.SortLeftToRight");
+        source.Should().Contain("Header = StripDisplayMnemonic(presentation.Orientation)");
+        source.Should().Contain("SortOptionsPolicy.CreateResult(");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SortOptionsDialog\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(firstKeyBox, \"SortOptionsFirstKeySortOrderBox\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(leftToRightButton, \"SortOptionsLeftToRightRadio\")");
@@ -172,7 +172,7 @@ public sealed class DialogVisualParitySourceTests
     public void InsertHyperlinkParityCapture_UsesFixtureWithoutChangingProductionPrefill()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         source.Should().Contain("var prefill = _session.GetSelectedRangeHyperlinkDialogPrefill();");
         captureSource.Should().Contain("HyperlinkDialogParityFixture.Seed(_session.ActiveSheet, address);");
@@ -183,9 +183,10 @@ public sealed class DialogVisualParitySourceTests
     public void SubtotalDialog_UsesSharedFixtureStateAndLocalizedAccessKeyControls()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
-        source.Should().Contain("parityFixture?.SummaryBelowData ?? _session.ActiveSheet.OutlineSummaryBelow ?? true");
+        source.Should().Contain("initialPlan?.SummaryBelowData ?? _session.ActiveSheet.OutlineSummaryBelow ?? true");
+        source.Should().NotContain("SubtotalDialogCaptureState");
         source.Should().Contain("CreateSubtotalAccessText(label)");
         source.Should().Contain("Content = UiText.Get(\"Subtotal_ReplaceCurrentSubtotals\")");
         source.Should().Contain("Content = UiText.Get(\"Subtotal_PageBreakBetweenGroups\")");
@@ -197,18 +198,9 @@ public sealed class DialogVisualParitySourceTests
 
         captureSource.Should().Contain("var fixture = SubtotalParityFixture.CreateState(_session.ActiveSheet);");
         captureSource.Should().Contain("SubtotalParityFixture.ApplySheetState(_session.ActiveSheet);");
-        captureSource.Should().Contain("ShowSubtotalInputDialogAsync(fixture)");
+        captureSource.Should().Contain("fixture.CreatePlan()");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

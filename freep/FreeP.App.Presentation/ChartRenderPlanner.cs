@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -411,7 +412,37 @@ public readonly record struct ChartClassicThreeDDepthPlan(
     double OffsetX,
     double OffsetY,
     byte StrokeAlpha,
-    byte FillAlpha);
+    byte FillAlpha)
+{
+    public ChartPlanPoint Offset(ChartPlanPoint point) =>
+        new(point.X + OffsetX, point.Y + OffsetY);
+
+    public ChartLinePathFigurePrimitive Offset(ChartLinePathFigurePrimitive figure) =>
+        Offset(figure, OffsetX, OffsetY, StrokeAlpha);
+
+    private static ChartLinePathFigurePrimitive Offset(
+        ChartLinePathFigurePrimitive figure,
+        double offsetX,
+        double offsetY,
+        byte strokeAlpha) =>
+        figure with
+        {
+            Start = new ChartPlanPoint(figure.Start.X + offsetX, figure.Start.Y + offsetY),
+            Segments = figure.Segments
+                .Select(segment => segment with
+                {
+                    End = new ChartPlanPoint(segment.End.X + offsetX, segment.End.Y + offsetY),
+                    Control1 = new ChartPlanPoint(
+                        segment.Control1.X + offsetX,
+                        segment.Control1.Y + offsetY),
+                    Control2 = new ChartPlanPoint(
+                        segment.Control2.X + offsetX,
+                        segment.Control2.Y + offsetY),
+                })
+                .ToArray(),
+            Stroke = figure.Stroke with { Alpha = strokeAlpha },
+        };
+}
 
 public readonly record struct ChartScatterSeriesPrimitive(
     int SeriesIndex,
@@ -3005,11 +3036,6 @@ public static partial class ChartRenderPlanner
             or ChartType.Area
             or ChartType.AreaStacked;
 
-    public static IReadOnlyList<ChartGridLinePlan> BuildMajorGridLinePlans(
-        ChartShape chart,
-        ChartFramePlan frame) =>
-        BuildMajorGridLinePrimitivePlan(chart, frame).GridLines;
-
     public static ChartMajorGridLinePrimitivePlan BuildMajorGridLinePrimitivePlan(
         ChartShape chart,
         ChartFramePlan frame)
@@ -3920,24 +3946,6 @@ public static partial class ChartRenderPlanner
             ResolveDataTableBorderStroke(settings));
     }
 
-    public static IReadOnlyList<ChartTextPlan> BuildSecondaryValueAxisLabelPlans(
-        ChartShape chart,
-        ChartPlanRect plot,
-        double boundsRight)
-    {
-        var frame = new ChartFramePlan(
-            new ChartPlanRect(0, 0, boundsRight + AxisLabelWidth + Margin, plot.Bottom + Margin),
-            plot,
-            TitleBounds: null,
-            HasLegend: false,
-            LegendRight: false,
-            LegendAreaWidth: 0,
-            LegendAreaHeight: 0,
-            ChartRenderFamily.Cartesian);
-
-        return BuildSecondaryValueAxisPrimitivePlan(chart, frame).Labels;
-    }
-
     public static ChartSecondaryValueAxisPrimitivePlan BuildSecondaryValueAxisPrimitivePlan(
         ChartShape chart,
         ChartFramePlan frame)
@@ -4300,7 +4308,10 @@ public static partial class ChartRenderPlanner
         var values = Enumerable.Range(0, categoryCount)
             .Select(index => index < series.Values.Count ? series.Values[index] ?? 0 : 0)
             .ToArray();
-        var waterfallBars = WaterfallBarPlanner.Compute(values, chart.WaterfallTotalPointIndices);
+        var waterfallBars = WaterfallBarPlanner.Compute(
+            values,
+            chart.WaterfallTotalPointIndices,
+            WaterfallNullTotalsPolicy.NoTotals);
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
         {
             int renderCategoryIndex = ResolveCategoryRenderIndex(chart.CategoryAxis, categoryIndex, categoryCount);
@@ -4362,7 +4373,10 @@ public static partial class ChartRenderPlanner
         var values = Enumerable.Range(0, categoryCount)
             .Select(index => index < chart.Series[0].Values.Count ? chart.Series[0].Values[index] ?? 0 : 0)
             .ToArray();
-        var waterfallBars = WaterfallBarPlanner.Compute(values, chart.WaterfallTotalPointIndices);
+        var waterfallBars = WaterfallBarPlanner.Compute(
+            values,
+            chart.WaterfallTotalPointIndices,
+            WaterfallNullTotalsPolicy.NoTotals);
         ChartPlanPoint? previousEnd = null;
 
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
@@ -7851,7 +7865,10 @@ public static partial class ChartRenderPlanner
             return;
 
         var values = series.Values.Select(value => value ?? 0).ToArray();
-        foreach (var bar in WaterfallBarPlanner.Compute(values, chart.WaterfallTotalPointIndices))
+        foreach (var bar in WaterfallBarPlanner.Compute(
+                     values,
+                     chart.WaterfallTotalPointIndices,
+                     WaterfallNullTotalsPolicy.NoTotals))
         {
             dataMin = Math.Min(dataMin, Math.Min(bar.Bottom, bar.Top));
             dataMax = Math.Max(dataMax, Math.Max(bar.Bottom, bar.Top));

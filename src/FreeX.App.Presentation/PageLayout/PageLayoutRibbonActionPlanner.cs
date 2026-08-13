@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Presentation.PageLayout;
 
@@ -46,74 +47,75 @@ public static class PageLayoutRibbonActionPlanner
     public const string PrintAreaCommandLabel = "Print Area";
     public const string PageBreaksCommandLabel = "Page Breaks";
     public const string ScaleToFitCommandLabel = "Scale To Fit";
+    public const string BackgroundCommandLabel = "Sheet Background";
+    public const string ClearBackgroundCommandLabel = "Clear Sheet Background";
+    public const string HeaderFooterCommandLabel = "Header & Footer";
     public const string PrintGridlinesCommandLabel = "Print Gridlines";
     public const string PrintHeadingsCommandLabel = "Print Headings";
 
     public static IReadOnlyList<PageLayoutRibbonActionDescriptor> RibbonActionDescriptors { get; } =
     [
-        new("pageLayout.gridlines", PageLayoutRibbonActionKind.ShowGridlinesSheetOptions),
-        new("pageLayout.headings", PageLayoutRibbonActionKind.ShowHeadingsSheetOptions),
+        new("View Gridlines", PageLayoutRibbonActionKind.ShowGridlinesSheetOptions),
+        new("View Headings", PageLayoutRibbonActionKind.ShowHeadingsSheetOptions),
 
-        new("pageLayout.margins", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new("Margins", PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.CustomMargins),
-        new("pageLayout.orientation", PageLayoutRibbonActionKind.OpenPageSetupDialog),
-        new("pageLayout.size", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new("Page Orientation", PageLayoutRibbonActionKind.OpenPageSetupDialog),
+        new("Paper Size", PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ExtendedPaperSize),
-        new("pageLayout.printArea", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new("Print Area", PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.PrintArea),
-        new("pageLayout.printTitles", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new("Print Titles", PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.PrintTitles),
-        new("pageLayout.breaks", PageLayoutRibbonActionKind.ShowPageBreaksMenu),
-        new("pageLayout.background", PageLayoutRibbonActionKind.ChooseBackground),
-        new("pageLayout.scale", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new("Breaks", PageLayoutRibbonActionKind.ShowPageBreaksMenu),
+        new("Background", PageLayoutRibbonActionKind.ChooseBackground),
+        new("Scale Percent", PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ScaleToFit),
-        new("pageLayout.width", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new("Scale Width", PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ScaleToFit),
-        new("pageLayout.height", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new("Scale Height", PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ScaleToFit),
 
-        new("Choose Background", PageLayoutRibbonActionKind.ChooseBackground),
-        new("Delete Background", PageLayoutRibbonActionKind.DeleteBackground),
+        new(FreeXRibbonCommandIds.PageLayoutBackgroundChoose, PageLayoutRibbonActionKind.ChooseBackground),
+        new(FreeXRibbonCommandIds.PageLayoutBackgroundDelete, PageLayoutRibbonActionKind.DeleteBackground),
 
-        new("Normal", PageLayoutRibbonActionKind.ApplyMarginsPreset,
-            MarginPreset: PageLayoutMarginPreset.Normal),
-        new("Wide", PageLayoutRibbonActionKind.ApplyMarginsPreset,
+        new(FreeXRibbonCommandIds.PageLayoutMarginsWide, PageLayoutRibbonActionKind.ApplyMarginsPreset,
             MarginPreset: PageLayoutMarginPreset.Wide),
-        new("Narrow", PageLayoutRibbonActionKind.ApplyMarginsPreset,
+        new(FreeXRibbonCommandIds.PageLayoutMarginsNarrow, PageLayoutRibbonActionKind.ApplyMarginsPreset,
             MarginPreset: PageLayoutMarginPreset.Narrow),
-        new("Normal#MarginNormalMenuItem_Click", PageLayoutRibbonActionKind.ApplyMarginsPreset,
+        new(FreeXRibbonCommandIds.PageLayoutMarginsNormal, PageLayoutRibbonActionKind.ApplyMarginsPreset,
             MarginPreset: PageLayoutMarginPreset.Normal),
-        new("Custom Margins", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new(FreeXRibbonCommandIds.PageLayoutMarginsCustom, PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.CustomMargins),
 
-        new("Portrait", PageLayoutRibbonActionKind.ApplyOrientationPreset,
+        new(FreeXRibbonCommandIds.PageLayoutOrientationPortrait, PageLayoutRibbonActionKind.ApplyOrientationPreset,
             OrientationPreset: PageLayoutOrientationPreset.Portrait),
-        new("Landscape", PageLayoutRibbonActionKind.ApplyOrientationPreset,
+        new(FreeXRibbonCommandIds.PageLayoutOrientationLandscape, PageLayoutRibbonActionKind.ApplyOrientationPreset,
             OrientationPreset: PageLayoutOrientationPreset.Landscape),
 
-        new("Letter", PageLayoutRibbonActionKind.ApplyPaperSizePreset,
+        new(FreeXRibbonCommandIds.PageLayoutPaperSizeLetter, PageLayoutRibbonActionKind.ApplyPaperSizePreset,
             PaperSizePreset: PageLayoutPaperSizePreset.Letter),
-        new("Legal", PageLayoutRibbonActionKind.ApplyPaperSizePreset,
+        new(FreeXRibbonCommandIds.PageLayoutPaperSizeLegal, PageLayoutRibbonActionKind.ApplyPaperSizePreset,
             PaperSizePreset: PageLayoutPaperSizePreset.Legal),
-        new("A4", PageLayoutRibbonActionKind.ApplyPaperSizePreset,
+        new(FreeXRibbonCommandIds.PageLayoutPaperSizeA4, PageLayoutRibbonActionKind.ApplyPaperSizePreset,
             PaperSizePreset: PageLayoutPaperSizePreset.A4),
-        new("A3", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new(FreeXRibbonCommandIds.PageLayoutPaperSizeA3, PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ExtendedPaperSize),
-        new("A5", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new(FreeXRibbonCommandIds.PageLayoutPaperSizeA5, PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ExtendedPaperSize),
-        new("Executive", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new(FreeXRibbonCommandIds.PageLayoutPaperSizeExecutive, PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ExtendedPaperSize),
-        new("Statement", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new(FreeXRibbonCommandIds.PageLayoutPaperSizeStatement, PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ExtendedPaperSize),
-        new("Tabloid", PageLayoutRibbonActionKind.OpenPageSetupDialog,
+        new(FreeXRibbonCommandIds.PageLayoutPaperSizeTabloid, PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ExtendedPaperSize),
-        new("B4 (JIS)", PageLayoutRibbonActionKind.ApplyPaperSizePreset,
+        new(FreeXRibbonCommandIds.PageLayoutPaperSizeB4Jis, PageLayoutRibbonActionKind.ApplyPaperSizePreset,
             PaperSizePreset: PageLayoutPaperSizePreset.B4),
-        new("B5 (JIS)", PageLayoutRibbonActionKind.ApplyPaperSizePreset,
+        new(FreeXRibbonCommandIds.PageLayoutPaperSizeB5Jis, PageLayoutRibbonActionKind.ApplyPaperSizePreset,
             PaperSizePreset: PageLayoutPaperSizePreset.B5),
 
-        new("Set Print Area", PageLayoutRibbonActionKind.SetPrintArea),
-        new("Clear Print Area", PageLayoutRibbonActionKind.ClearPrintArea),
+        new(FreeXRibbonCommandIds.PageLayoutPrintAreaSet, PageLayoutRibbonActionKind.SetPrintArea),
+        new(FreeXRibbonCommandIds.PageLayoutPrintAreaClear, PageLayoutRibbonActionKind.ClearPrintArea),
 
         new("Page Setup", PageLayoutRibbonActionKind.OpenPageSetupDialog),
         new("Page Setup dialog", PageLayoutRibbonActionKind.OpenPageSetupDialog),
@@ -121,11 +123,11 @@ public static class PageLayoutRibbonActionPlanner
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ScaleToFit),
         new("Print Gridlines", PageLayoutRibbonActionKind.ShowGridlinesSheetOptions),
         new("Print Headings", PageLayoutRibbonActionKind.ShowHeadingsSheetOptions),
-        new("Insert Page Break", PageLayoutRibbonActionKind.ApplyPageBreakAction,
+        new(FreeXRibbonCommandIds.PageLayoutBreakInsert, PageLayoutRibbonActionKind.ApplyPageBreakAction,
             PageBreakAction: PageBreakMenuAction.Insert),
-        new("Remove Page Break", PageLayoutRibbonActionKind.ApplyPageBreakAction,
+        new(FreeXRibbonCommandIds.PageLayoutBreakRemove, PageLayoutRibbonActionKind.ApplyPageBreakAction,
             PageBreakAction: PageBreakMenuAction.Remove),
-        new("Reset All Page Breaks", PageLayoutRibbonActionKind.ApplyPageBreakAction,
+        new(FreeXRibbonCommandIds.PageLayoutBreakResetAll, PageLayoutRibbonActionKind.ApplyPageBreakAction,
             PageBreakAction: PageBreakMenuAction.ResetAll),
     ];
 

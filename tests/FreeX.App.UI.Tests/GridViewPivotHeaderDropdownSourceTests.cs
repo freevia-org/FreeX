@@ -11,13 +11,15 @@ public sealed class GridViewPivotHeaderDropdownSourceTests
     [Fact]
     public void GridView_ExposesAndRendersPivotHeaderDropdownButtons()
     {
-        var properties = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var propertiesPath = WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Properties.cs");
+        var uiDirectory = Path.GetDirectoryName(propertiesPath)!;
+        var properties = File.ReadAllText(propertiesPath);
         var eventsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Events.cs"));
         var renderDispatch = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
         var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.AutoFilter.cs"));
 
         properties.Should().Contain("public static readonly DependencyProperty PivotHeaderDropdownsProperty");
-        properties.Should().Contain("public IReadOnlyList<PivotHeaderDropdownButton>? PivotHeaderDropdowns");
+        properties.Should().Contain("public IReadOnlyList<PivotHeaderDropdownTarget>? PivotHeaderDropdowns");
         properties.Should().Contain("public static readonly DependencyProperty PivotRowLabelAdornmentsProperty");
         properties.Should().Contain("public IReadOnlyList<PivotRowLabelAdornment>? PivotRowLabelAdornments");
         eventsSource.Should().Contain("public event Action<CellAddress, System.Windows.Point>? PivotHeaderDropdownRequested;");
@@ -30,6 +32,11 @@ public sealed class GridViewPivotHeaderDropdownSourceTests
         rendering.Should().Contain("private void RenderPivotRowLabelAdornments(DrawingContext dc)");
         rendering.Should().Contain("DrawPivotExpandCollapseButton(dc, rect, adornment.IsExpanded);");
         rendering.Should().Contain("private bool TryHitTestPivotHeaderDropdownButton(Point pos, out CellAddress headerCell)");
+
+        File.Exists(Path.Combine(uiDirectory, "PivotHeaderDropdownButton.cs"))
+            .Should().BeFalse("the WPF renderer should consume the presentation-owned header record");
+        File.Exists(Path.Combine(uiDirectory, "PivotRowLabelAdornment.cs"))
+            .Should().BeFalse("the WPF renderer should consume the presentation-owned row adornment record");
     }
 
     [Fact]

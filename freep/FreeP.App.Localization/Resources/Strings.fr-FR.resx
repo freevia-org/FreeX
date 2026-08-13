@@ -58,7 +58,182 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
-    <value>Utiliser la langue du systeme</value>
+  <data name="Pane_Comments_EmptyMessage" xml:space="preserve">
+    <value>Aucun commentaire sur cette diapositive.</value>
   </data>
+  <data name="Pane_SmartArt_AssistantRow" xml:space="preserve">
+    <value>Ligne d'assistant</value>
+  </data>
+  <data name="Pane_SmartArt_RootRow" xml:space="preserve">
+    <value>Ligne racine</value>
+  </data>
+  <data name="Pane_SmartArt_LevelRowFormat" xml:space="preserve">
+    <value>Ligne de niveau {0}</value>
+  </data>
+  <data name="Pane_SlideSection_AddPromptTitle" xml:space="preserve">
+    <value>Ajouter une section</value>
+  </data>
+  <data name="Pane_SlideSection_RenamePromptTitle" xml:space="preserve">
+    <value>Renommer la section</value>
+  </data>
+  <data name="Pane_SlideSection_NamePromptLabel" xml:space="preserve">
+    <value>Nom de la section :</value>
+  </data>
+  <data name="Pane_SlideSection_NamePromptAccept" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Pane_SlideSection_NamePromptCancel" xml:space="preserve">
+    <value>Annuler</value>
+  </data>
+  <data name="FreeP_Backstage_Options_EditText" xml:space="preserve">
+    <value>Modifier les options…</value>
+  </data>
+  <data name="File_Error_OpenPresentation" xml:space="preserve">
+    <value>Impossible d'ouvrir la présentation</value>
+  </data>
+  <data name="File_Error_SavePresentation" xml:space="preserve">
+    <value>Impossible d'enregistrer la présentation</value>
+  </data>
+  <data name="File_Error_ExportPdf" xml:space="preserve">
+    <value>Impossible d'exporter la présentation au format PDF</value>
+  </data>
+  <data name="File_Error_ExportNotesPagePdf" xml:space="preserve">
+    <value>Impossible d'exporter les pages de notes de la présentation au format PDF</value>
+  </data>
+  <data name="File_Error_ExportImages" xml:space="preserve">
+    <value>Impossible d'exporter les diapositives de la présentation sous forme d'images</value>
+  </data>
+  <data name="File_Error_PrintPresentation" xml:space="preserve">
+    <value>Impossible d'imprimer la présentation</value>
+  </data>
+  <data name="File_Error_ExportVideo" xml:space="preserve">
+    <value>Impossible d'exporter la vidéo de la présentation</value>
+  </data>
+  <data name="File_Error_PresentationCommand" xml:space="preserve">
+    <value>Impossible d'exécuter la commande de fichier de présentation</value>
+  </data>
+  <data name="File_Error_NativePickerUnavailable" xml:space="preserve">
+    <value>Le sélecteur de fichiers natif n'est pas disponible.</value>
+  </data>
+  <data name="File_Error_NonLocalSelection" xml:space="preserve">
+    <value>L'élément sélectionné n'a pas de chemin local.</value>
+  </data>
+  <data name="Edit_Command_Copy" xml:space="preserve">
+    <value>Copier</value>
+  </data>
+  <data name="Edit_Command_Cut" xml:space="preserve">
+    <value>Couper</value>
+  </data>
+  <data name="Edit_Command_Paste" xml:space="preserve">
+    <value>Coller</value>
+  </data>
+  <data name="Edit_Command_SelectAll" xml:space="preserve">
+    <value>Tout sélectionner</value>
+  </data>
+  <data name="Export_Status_Completed" xml:space="preserve">
+    <value>Exportation termin&#233;e</value>
+  </data>
+  <data name="Export_Status_VideoCancelled" xml:space="preserve">
+    <value>Exportation vid&#233;o annul&#233;e</value>
+  </data>
+  <data name="Export_Status_VideoFailed" xml:space="preserve">
+    <value>&#201;chec de l'exportation vid&#233;o</value>
+  </data>
+  <data name="Export_Status_VideoCompletedVideoOnly" xml:space="preserve">
+    <value>Exportation vid&#233;o termin&#233;e (vid&#233;o uniquement)</value>
+  </data>
+  <data name="Export_Status_VideoCompletedWithTracks" xml:space="preserve">
+    <value>Exportation vid&#233;o termin&#233;e avec {0} piste(s) de narration, {1} piste(s) de cam&#233;ra et {2} piste(s) de sous-titres</value>
+  </data>
+  <data name="Export_VideoHost_Wpf" xml:space="preserve">
+    <value>H&#244;te d'exportation vid&#233;o WPF</value>
+  </data>
+  <data name="Export_VideoHost_WpfWindows" xml:space="preserve">
+    <value>H&#244;te d'exportation vid&#233;o WPF Windows</value>
+  </data>
+  <data name="Export_VideoHost_AvaloniaLinux" xml:space="preserve">
+    <value>H&#244;te d'exportation vid&#233;o Avalonia Linux</value>
+  </data>
+  <data name="Export_VideoHost_AvaloniaWindows" xml:space="preserve">
+    <value>H&#244;te d'exportation vid&#233;o Avalonia Windows</value>
+  </data>
+  <data name="Export_VideoHost_FfmpegNarrationAvailable" xml:space="preserve">
+    <value>L'exportation vid&#233;o ffmpeg, le multiplexage de la narration et l'incrustation de la cam&#233;ra sont disponibles.</value>
+  </data>
+  <data name="Export_VideoHost_FfmpegVideoOnlyAvailable" xml:space="preserve">
+    <value>L'exportation ffmpeg vid&#233;o uniquement est disponible ; la narration et l'incrustation de la cam&#233;ra ne sont pas disponibles.</value>
+  </data>
+  <data name="Print_Surface_SettingsHeading" xml:space="preserve"><value>Param&#232;tres</value></data>
+  <data name="Print_Surface_CustomRangeHeading" xml:space="preserve"><value>Plage personnalis&#233;e</value></data>
+  <data name="Print_Surface_CustomRangeDescription" xml:space="preserve"><value>Entrez les num&#233;ros et plages de diapositives, par exemple 2,4-6.</value></data>
+  <data name="Print_Surface_CustomRangePlaceholder" xml:space="preserve"><value>p. ex. 2,4-6</value></data>
+  <data name="Print_Surface_CustomRangeApplyLabel" xml:space="preserve"><value>Appliquer la plage</value></data>
+  <data name="Print_Surface_PrintHeading" xml:space="preserve"><value>Imprimer</value></data>
+  <data name="Print_Surface_LayoutField" xml:space="preserve"><value>Disposition</value></data>
+  <data name="Print_Surface_SlidesField" xml:space="preserve"><value>Diapositives</value></data>
+  <data name="Print_Surface_PagesField" xml:space="preserve"><value>Pages</value></data>
+  <data name="Print_Surface_PreviewField" xml:space="preserve"><value>Aper&#231;u</value></data>
+  <data name="Print_Surface_HiddenSlidesField" xml:space="preserve"><value>Diapositives masqu&#233;es</value></data>
+  <data name="Print_Surface_OptionsField" xml:space="preserve"><value>Options</value></data>
+  <data name="Print_Surface_NativePrinterHandoffField" xml:space="preserve"><value>Transfert vers l'imprimante native</value></data>
+  <data name="Print_Surface_IncludedValue" xml:space="preserve"><value>Incluses</value></data>
+  <data name="Print_Surface_NotIncludedValue" xml:space="preserve"><value>Non incluses</value></data>
+  <data name="Print_Surface_OutputOptionsGroup" xml:space="preserve"><value>Options de sortie</value></data>
+  <data name="Print_Surface_PreviewGroup" xml:space="preserve"><value>Aper&#231;u</value></data>
+  <data name="Print_Surface_LayoutsGroup" xml:space="preserve"><value>Dispositions</value></data>
+  <data name="Print_Surface_SlideRangeGroup" xml:space="preserve"><value>Plage de diapositives</value></data>
+  <data name="Print_Surface_GroupChoiceFormat" xml:space="preserve"><value>{0} : {1}</value></data>
+  <data name="Print_Surface_SelectedChoiceFormat" xml:space="preserve"><value>S&#233;lection : {0}</value></data>
+  <data name="Print_Surface_UnavailableChoiceFormat" xml:space="preserve"><value>{0} (indisponible)</value></data>
+  <data name="Print_Surface_ActionFormat" xml:space="preserve"><value>Imprimer {0}</value></data>
+  <data name="Print_Dialog_Title" xml:space="preserve"><value>Imprimer</value></data>
+  <data name="Print_Dialog_PrinterLabel" xml:space="preserve"><value>Imprimante :</value></data>
+  <data name="Print_Dialog_CopiesLabel" xml:space="preserve"><value>Copies :</value></data>
+  <data name="Print_Dialog_PagesLabel" xml:space="preserve"><value>Pages :</value></data>
+  <data name="Print_Dialog_FirstPageLabel" xml:space="preserve"><value>Premi&#232;re :</value></data>
+  <data name="Print_Dialog_LastPageLabel" xml:space="preserve"><value>Derni&#232;re :</value></data>
+  <data name="Print_Dialog_OrientationLabel" xml:space="preserve"><value>Orientation :</value></data>
+  <data name="Print_Dialog_LayoutLabel" xml:space="preserve"><value>Disposition :</value></data>
+  <data name="Print_Dialog_AllPages" xml:space="preserve"><value>Toutes les pages</value></data>
+  <data name="Print_Dialog_SinglePage" xml:space="preserve"><value>Une page</value></data>
+  <data name="Print_Dialog_PageRange" xml:space="preserve"><value>Plage de pages</value></data>
+  <data name="Print_Dialog_DocumentOrientation" xml:space="preserve"><value>Document</value></data>
+  <data name="Print_Dialog_PortraitOrientation" xml:space="preserve"><value>Portrait</value></data>
+  <data name="Print_Dialog_LandscapeOrientation" xml:space="preserve"><value>Paysage</value></data>
+  <data name="Print_Dialog_CollateCopies" xml:space="preserve"><value>Assembler les copies</value></data>
+  <data name="Print_Dialog_Submit" xml:space="preserve"><value>Imprimer</value></data>
+  <data name="Print_Dialog_Cancel" xml:space="preserve"><value>Annuler</value></data>
+  <data name="Print_Dialog_ReadyStatus" xml:space="preserve"><value>Choisissez l'imprimante et les param&#232;tres d'impression.</value></data>
+  <data name="Print_Dialog_UnavailableStatus" xml:space="preserve"><value>L'impression n'est pas disponible sur cet h&#244;te.</value></data>
+  <data name="Print_Dialog_CopiesOutOfRange" xml:space="preserve"><value>Le nombre de copies doit &#234;tre compris entre 1 et 999.</value></data>
+  <data name="Print_Dialog_FirstPageInvalid" xml:space="preserve"><value>Entrez un num&#233;ro de premi&#232;re page positif.</value></data>
+  <data name="Print_Dialog_LastPageBeforeFirstPage" xml:space="preserve"><value>La derni&#232;re page doit &#234;tre au moins &#233;gale &#224; la premi&#232;re.</value></data>
+  <data name="Pane_Common_CloseCommand" xml:space="preserve"><value>Fermer</value></data>
+  <data name="Pane_Notes_Placeholder" xml:space="preserve"><value>Cliquez pour ajouter des notes</value></data>
+  <data name="Options_Title" xml:space="preserve"><value>Options FreeP</value></data>
+  <data name="Options_RecentFilesLabel" xml:space="preserve"><value>Pr&#233;sentations r&#233;centes &#224; conserver :</value></data>
+  <data name="Options_DefaultSaveFormatLabel" xml:space="preserve"><value>Format d'enregistrement par d&#233;faut :</value></data>
+  <data name="Options_UiLanguageLabel" xml:space="preserve"><value>Langue de l'interface :</value></data>
+  <data name="Options_UiLanguageSystemHint" xml:space="preserve"><value>Laisser vide pour utiliser la langue du syst&#232;me.</value></data>
+  <data name="Options_UiLanguageCurrentHint" xml:space="preserve"><value>Laisser vide pour utiliser la langue du syst&#232;me (actuellement {0}).</value></data>
+  <data name="Options_PresentationFormat" xml:space="preserve"><value>Pr&#233;sentation (*.fxp)</value></data>
+  <data name="Options_RecentFilesCapValidation" xml:space="preserve"><value>Entrez un nombre entier compris entre {0} et {1}.</value></data>
+  <data name="Shell_Command_SlideZoom" xml:space="preserve"><value>Zoom de diapositive</value></data>
+  <data name="Shell_Command_SectionZoom" xml:space="preserve"><value>Zoom de section</value></data>
+  <data name="Shell_Command_SummaryZoom" xml:space="preserve"><value>Zoom de synth&#232;se</value></data>
+  <data name="Shell_Command_ZoomTarget" xml:space="preserve"><value>Cible du zoom</value></data>
+  <data name="Shell_Command_SummaryZoomTargets" xml:space="preserve"><value>Cibles du zoom de synth&#232;se</value></data>
+  <data name="Shell_Command_SlidePane" xml:space="preserve"><value>Volet des diapositives</value></data>
+  <data name="Shell_Command_CustomShow" xml:space="preserve"><value>Diaporama personnalis&#233;</value></data>
+  <data name="File_Error_PlatformPickerUnavailableFormat" xml:space="preserve"><value>{0} n'est pas disponible, car cette plateforme ne peut pas ouvrir de fichiers.</value></data>
+  <data name="File_Error_InvalidAvaloniaAssetSelection" xml:space="preserve"><value>La ressource de pr&#233;sentation s&#233;lectionn&#233;e n'est pas un fichier de stockage Avalonia.</value></data>
+  <data name="Print_Status_BackstageNotRun" xml:space="preserve"><value>Aucune action d'impression Backstage n'a &#233;t&#233; ex&#233;cut&#233;e.</value></data>
+  <data name="Print_Status_NativeDetectionPending" xml:space="preserve"><value>La d&#233;tection des fonctions de sortie natives est en attente.</value></data>
+  <data name="Print_Status_WindowsQueueUnavailableFormat" xml:space="preserve"><value>La file d'impression Windows '{0}' n'est plus disponible.</value></data>
+  <data name="Print_Host_Wpf" xml:space="preserve"><value>H&#244;te d'impression WPF</value></data>
+  <data name="Print_Host_AvaloniaWindows" xml:space="preserve"><value>H&#244;te d'impression Avalonia Windows</value></data>
+  <data name="Print_Host_AvaloniaLinux" xml:space="preserve"><value>H&#244;te d'impression Avalonia Linux</value></data>
+  <data name="Print_Host_UnavailableFormat" xml:space="preserve"><value>{0} n'est pas disponible sur cette plateforme.</value></data>
+  <data name="Print_Host_WpfWindowsOnly" xml:space="preserve"><value>L'impression WPF native est disponible uniquement sous Windows.</value></data>
+  <data name="Renderer_InlineOleObjectFallback" xml:space="preserve"><value>Objet OLE</value></data>
 </root>

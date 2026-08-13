@@ -1,5 +1,6 @@
 using System.Reflection;
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -154,7 +155,7 @@ public sealed class R65_AppHostWrapTextAutoGrowTests
                     "ApplyFormatCellsDialogResult",
                     selectionRange,
                     new StyleDiff(WrapText: true),
-                    FormatCellsBorderSelection.None,
+                    FormatCellsDialogBorderSelection.None,
                     null,
                     MergeCellContentResolution.KeepFirstCell);
 
@@ -194,7 +195,7 @@ public sealed class R65_AppHostWrapTextAutoGrowTests
                     "ApplyFormatCellsDialogResult",
                     selectionRange,
                     new StyleDiff(WrapText: true),
-                    new FormatCellsBorderSelection(Clear: true, Outline: null, Inside: null),
+                    new FormatCellsDialogBorderSelection(Clear: true, Outline: null, Inside: null),
                     null,
                     MergeCellContentResolution.KeepFirstCell);
 

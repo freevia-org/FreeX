@@ -1,5 +1,6 @@
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
+using FreeP.App.Compositor;
 
 namespace FreeP.App.Host;
 
@@ -18,33 +19,23 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        if (WpfWholeWindowVisualEvidenceCapture.TryRun(args, out var wholeWindowCaptureExitCode))
-            return wholeWindowCaptureExitCode;
-
-        if (WpfDialogPaneVisualEvidenceCapture.TryRun(args, out var captureExitCode))
-            return captureExitCode;
-
         // TODO(velopack): if/when a shared Velopack bootstrap helper lands, call it here before the WPF
         // Application is created. The scaffold ships without self-update.
 
         WpfApplicationStartupRunner.Run(new WpfApplicationStartupSpec<FreePOptions>(
-            new AppProductIdentity("FreeP", "FREEP_DIAGNOSTICS", "FreeP"),
+            FreePApplicationStartupDescriptor.ProductIdentity,
             (options, optionsStore, startupFilePaths) =>
                 new MainWindow(options, optionsStore, startupFilePaths: startupFilePaths))
         {
             InstallSharedSeams = AppComposition.InstallSharedSeams,
             Theme = new WpfApplicationThemeStartupSpec<Theme>(
-                EnvironmentVariableName: "FREEP_THEME",
-                AlternateThemeValue: "midnight",
-                DefaultTheme: BrandThemes.FreeP,
-                AlternateTheme: BrandThemes.FreeXMidnight,
-                ResourceKeyPrefix: "FreeP",
+                Plan: FreePApplicationStartupDescriptor.Theme,
                 ApplyTheme: WpfThemeApplier.Apply)
             {
                 SetActiveTheme = theme => ActiveTheme = theme
             },
             Localization = new WpfApplicationLocalizationStartupSpec<FreePOptions>(
-                SelectUiLanguage: options => options.UiLanguage,
+                SelectUiLanguage: FreePOptionsPolicy.SelectUiLanguage,
                 ApplyUiLanguage: AppLocalization.Bootstrap.ApplyAppLanguage,
                 ApplyCurrentCultureToWpf: AppLocalization.Bootstrap.ApplyCurrentCultureToWpf)
         }, args);

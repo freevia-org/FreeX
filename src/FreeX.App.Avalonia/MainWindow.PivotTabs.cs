@@ -1,5 +1,4 @@
-using FreeX.App.Avalonia.Pivot;
-using FreeX.Core.Commands;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -9,15 +8,14 @@ namespace FreeX.App.Avalonia;
 /// Every command here operates on the active PivotTable resolved through
 /// <see cref="PivotSourceContext.FindActivePivot"/> (falling back to <see cref="ResolveInsertControlPivot"/>
 /// when the selection has drifted off the report, matching the Insert ▸ Slicer/Timeline behavior). Commands
-/// that Core genuinely supports are wired end-to-end through the shared review-command path
-/// (<see cref="WorkbookSession.ExecuteReviewCommand"/>): Refresh (<see cref="RefreshPivotTableCommand"/>),
+/// that Core genuinely supports are wired end-to-end through the shared pivot application session:
+/// Refresh,
 /// Insert Slicer / Insert Timeline (reusing the existing <see cref="ShowInsertSlicerDialogAsync"/> /
 /// <see cref="ShowInsertTimelineDialogAsync"/> pickers), the Design layout commands (Grand Totals, Subtotals,
 /// Report Layout, Blank Rows) and the Design style-option toggles (Banded Rows/Columns, Row/Column Headers,
-/// Field Headers) — all of which round-trip through <see cref="ConfigurePivotTableOptionsCommand"/>. The
-/// Field List button toggles the shell's pivot field pane. Commands Core does not yet model (PivotTable
-/// Name/Options dialog, Field Settings, Group/Ungroup field, Change Data Source, calculated field/item,
-/// PivotChart, etc.) report an honest "not yet available" status rather than no-op.
+/// Field Headers) — all of which round-trip through renderer-neutral command plans. The
+/// Field List button toggles the shell's pivot field pane. Native dialogs collect user input while the
+/// shared session owns command construction, execution outcomes, and refresh policy.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -46,19 +44,12 @@ public sealed partial class MainWindow
     /// <summary>Refresh PivotTable — re-materializes the active pivot from its cache via the Core command.</summary>
     private void RefreshActivePivotTable()
     {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
+        if (!TryResolvePivotApplicationTarget(
+                out var target,
+                missingMessage: UiText.Get("PivotLoc_SelectCellToRefresh")))
             return;
 
-        var pivot = ResolveInsertControlPivot();
-        if (pivot is null)
-        {
-            RefreshShell(UiText.Get("PivotLoc_SelectCellToRefresh"));
-            return;
-        }
-
-        ExecutePivotTabCommand(
-            new RefreshPivotTableCommand(_session.ActiveSheet.Id, pivot.Name),
-            UiText.Format("PivotLoc_RefreshedPivot", pivot.Name));
+        ApplyPivotApplicationPlan(PivotApplication.PlanRefresh(target));
     }
 
     // ── Analyze ▸ Filter (reuse the existing Insert Slicer/Timeline pickers) ─────
@@ -132,10 +123,10 @@ public sealed partial class MainWindow
             _ => PivotReportLayout.Compact,
         };
 
-        var options = CapturePivotOptions(pivot) with { ReportLayout = next };
-        ExecutePivotTabCommand(
-            BuildPivotOptionsCommand(pivot, options),
-            UiText.Format("PivotLoc_ReportLayoutStatus", FormatReportLayout(next)));
+        var options = PivotOptionsPlanner.CaptureDesignValues(pivot) with { ReportLayout = next };
+        ApplyPivotApplicationPlan(
+            PlanPivotDesignOptions(pivot, options),
+            UiText.Format("PivotLoc_ReportLayoutStatus", PivotOptionsPlanner.GetReportLayoutLabel(next)));
     }
 
     // ── Design ▸ Style Options ──────────────────────────────────────────────────
@@ -173,19 +164,19 @@ public sealed partial class MainWindow
     /// <summary>
     /// Toggles a single boolean PivotTable option: computes the new value via <paramref name="nextValue"/>,
     /// applies it onto a captured snapshot via <paramref name="mutate"/>, then runs the resulting
-    /// <see cref="ConfigurePivotTableOptionsCommand"/> and reports the outcome via <paramref name="status"/>.
+    /// shared option plan and reports the outcome via <paramref name="status"/>.
     /// </summary>
     private void ApplyPivotOption(
         Func<PivotTableModel, bool> nextValue,
-        Func<PivotOptionValues, bool, PivotOptionValues> mutate,
+        Func<PivotDesignOptionsValues, bool, PivotDesignOptionsValues> mutate,
         Func<bool, string> status)
     {
         if (!TryBeginPivotOption(out var pivot))
             return;
 
         var value = nextValue(pivot!);
-        var options = mutate(CapturePivotOptions(pivot!), value);
-        ExecutePivotTabCommand(BuildPivotOptionsCommand(pivot!, options), status(value));
+        var options = mutate(PivotOptionsPlanner.CaptureDesignValues(pivot!), value);
+        ApplyPivotApplicationPlan(PlanPivotDesignOptions(pivot!, options), status(value));
     }
 
     /// <summary>
@@ -208,90 +199,17 @@ public sealed partial class MainWindow
         return true;
     }
 
-    /// <summary>Snapshots the current option flags so a single toggle preserves everything else verbatim.</summary>
-    private static PivotOptionValues CapturePivotOptions(PivotTableModel pivot) => new(
-        ShowRowGrandTotals: pivot.ShowRowGrandTotals,
-        ShowColumnGrandTotals: pivot.ShowColumnGrandTotals,
-        ShowSubtotals: pivot.ShowSubtotals,
-        SubtotalPlacement: pivot.SubtotalPlacement,
-        RepeatItemLabels: pivot.RepeatItemLabels,
-        BlankLineAfterItems: pivot.BlankLineAfterItems,
-        StyleName: pivot.StyleName,
-        ReportLayout: pivot.ReportLayout,
-        ShowRowHeaders: pivot.ShowRowHeaders,
-        ShowColumnHeaders: pivot.ShowColumnHeaders,
-        ShowRowStripes: pivot.ShowRowStripes,
-        ShowColumnStripes: pivot.ShowColumnStripes,
-        ShowFieldHeaders: pivot.ShowFieldHeaders);
-
-    /// <summary>
-    /// Builds a <see cref="ConfigurePivotTableOptionsCommand"/> for the active pivot from a (possibly mutated)
-    /// snapshot. Only the layout/style flags this tab exposes are carried; the command leaves all other
-    /// (cache/print/alt-text/tooltip) options untouched by passing their "no update" defaults.
-    /// </summary>
-    private ConfigurePivotTableOptionsCommand BuildPivotOptionsCommand(
+    private PivotApplicationPlan PlanPivotDesignOptions(
         PivotTableModel pivot,
-        PivotOptionValues o,
+        PivotDesignOptionsValues values,
         bool? showExpandCollapseButtons = null)
-        => new(
-            _session.ActiveSheet.Id,
-            pivot.Name,
-            showRowGrandTotals: o.ShowRowGrandTotals,
-            showColumnGrandTotals: o.ShowColumnGrandTotals,
-            showSubtotals: o.ShowSubtotals,
-            subtotalPlacement: o.SubtotalPlacement,
-            repeatItemLabels: o.RepeatItemLabels,
-            blankLineAfterItems: o.BlankLineAfterItems,
-            styleName: o.StyleName,
-            showRowHeaders: o.ShowRowHeaders,
-            showColumnHeaders: o.ShowColumnHeaders,
-            showRowStripes: o.ShowRowStripes,
-            showColumnStripes: o.ShowColumnStripes,
-            reportLayout: o.ReportLayout,
-            showFieldHeaders: o.ShowFieldHeaders,
-            showExpandCollapseButtons: showExpandCollapseButtons);
-
-    /// <summary>
-    /// Runs a pivot command through the shared review path, surfacing failures on the status bar and forcing
-    /// a field-pane rebuild on success (the layout/identity signature may not move for a pure option change).
-    /// </summary>
-    private void ExecutePivotTabCommand(IWorkbookCommand command, string successStatus)
-    {
-        var result = _session.ExecuteReviewCommand(command);
-        if (!result.Success)
-        {
-            RefreshShell(result.ErrorMessage ?? UiText.Get("PivotLoc_UpdateFailed"));
-            return;
-        }
-
-        _pivotPaneSignature = null;
-        RefreshShell(successStatus);
-    }
+        => PivotApplication.PlanDesignOptions(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot),
+            values,
+            showExpandCollapseButtons);
 
     /// <summary>Reports that a PivotTable contextual command is not yet backed by Core.</summary>
     private void ReportPivotNotYetAvailable(string commandLabel)
         => RefreshShell(UiText.Format("PivotLoc_NotYetAvailable", commandLabel));
 
-    private static string FormatReportLayout(PivotReportLayout layout) => layout switch
-    {
-        PivotReportLayout.Compact => "Compact",
-        PivotReportLayout.Outline => "Outline",
-        _ => "Tabular",
-    };
-
-    /// <summary>Carrier for the layout/style flags this contextual tab can mutate (so one toggle keeps the rest).</summary>
-    private readonly record struct PivotOptionValues(
-        bool ShowRowGrandTotals,
-        bool ShowColumnGrandTotals,
-        bool ShowSubtotals,
-        PivotSubtotalPlacement SubtotalPlacement,
-        bool RepeatItemLabels,
-        bool BlankLineAfterItems,
-        string StyleName,
-        PivotReportLayout ReportLayout,
-        bool ShowRowHeaders,
-        bool ShowColumnHeaders,
-        bool ShowRowStripes,
-        bool ShowColumnStripes,
-        bool ShowFieldHeaders);
 }

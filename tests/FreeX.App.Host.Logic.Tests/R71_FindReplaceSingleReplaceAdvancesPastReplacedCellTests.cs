@@ -38,7 +38,7 @@ public sealed class R71_FindReplaceSingleReplaceAdvancesPastReplacedCellTests
             var navigated = new List<CellAddress>();
             var dialog = new FindReplaceDialog(
                 () => workbook,
-                commandBus,
+                command => commandBus.Execute(workbook.Id, command),
                 navigated.Add,
                 replaceMode: true,
                 getCurrentSheetId: () => sheet.Id);
@@ -100,7 +100,7 @@ public sealed class R71_FindReplaceSingleReplaceAdvancesPastReplacedCellTests
             var refreshCount = 0;
             var dialog = new FindReplaceDialog(
                 () => workbook,
-                commandBus,
+                command => commandBus.Execute(workbook.Id, command),
                 navigated.Add,
                 replaceMode: true,
                 getCurrentSheetId: () => sheet.Id,
@@ -146,7 +146,7 @@ public sealed class R71_FindReplaceSingleReplaceAdvancesPastReplacedCellTests
             var navigated = new List<CellAddress>();
             var dialog = new FindReplaceDialog(
                 () => workbook,
-                commandBus,
+                command => commandBus.Execute(workbook.Id, command),
                 navigated.Add,
                 replaceMode: true,
                 getCurrentSheetId: () => sheet.Id);

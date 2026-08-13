@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows.Threading;
 using Free.Shared.AppServices;
+using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -142,7 +143,7 @@ public sealed class R69_LossyFormatSaveFeatureLossTests
     private sealed class LossySaveHarness : IDisposable
     {
         private readonly MethodInfo _saveMethod;
-        private readonly FieldInfo _workbookField;
+        private readonly MethodInfo _replaceWorkbookSession;
 
         private LossySaveHarness(MainWindow window, RecordingUserMessageService messageService)
         {
@@ -151,15 +152,23 @@ public sealed class R69_LossyFormatSaveFeatureLossTests
             _saveMethod = typeof(MainWindow).GetMethod(
                 "SaveWorkbookToTargetAsync", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SaveWorkbookToTargetAsync");
-            _workbookField = typeof(MainWindow).GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
+            _replaceWorkbookSession = typeof(MainWindow).GetMethod(
+                "ReplaceWorkbookSession", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ReplaceWorkbookSession");
         }
 
         public MainWindow Window { get; }
 
         public RecordingUserMessageService MessageService { get; }
 
-        public void SetWorkbook(Workbook workbook) => _workbookField.SetValue(Window, workbook);
+        public void SetWorkbook(Workbook workbook) =>
+            _replaceWorkbookSession.Invoke(
+                Window,
+                [new StartupWorkbookLoadResult(
+                    workbook,
+                    "Book.fxl",
+                    "Opened .fxl.",
+                    IsFallback: false)]);
 
         public bool RunSave(FileSaveTarget target)
         {

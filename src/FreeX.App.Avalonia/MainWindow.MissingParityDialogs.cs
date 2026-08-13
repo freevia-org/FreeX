@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Shell;
@@ -36,7 +37,10 @@ public sealed partial class MainWindow
             return;
 
         var result = _session.ExecuteReviewCommand(
-            new SetChartStyleCommand(_session.ActiveSheet.Id, chart.Id, submission.StyleId));
+            ChartCommandWorkflowPlanner.BuildStyleCommand(
+                _session.ActiveSheet.Id,
+                chart,
+                submission.StyleId));
         RefreshShell(result.Success
             ? submission.StyleId is { } styleId
                 ? UiText.Format("ChartLoc_AppliedChartStyle", styleId)
@@ -436,40 +440,6 @@ public sealed partial class MainWindow
         dialog.Opened += (_, _) => list.Focus();
 
         return await dialog.ShowDialog<Window?>(this);
-    }
-
-    private async Task ShowHeaderFooterPictureFormatParityDialogAsync()
-    {
-        var picture = new WorksheetHeaderFooterPicture(
-            [],
-            "image/png",
-            "QuarterlyHeader.png",
-            Width: 160,
-            Height: 80);
-        await ShowHeaderFooterPictureFormatDialogAsync(picture);
-    }
-
-    private async Task ShowUnhideWindowParityDialogAsync()
-    {
-        var hidden = new Window
-        {
-            Title = "Parity Demo:2",
-            Width = 320,
-            Height = 200,
-            ShowInTaskbar = false,
-        };
-        hidden.Show();
-        hidden.Hide();
-        HiddenWindows.Add(hidden);
-        try
-        {
-            await ShowUnhideWindowDialogAsync();
-        }
-        finally
-        {
-            HiddenWindows.Remove(hidden);
-            hidden.Close();
-        }
     }
 
     private static HeaderFooterEditorSection ResolveHeaderFooterPictureSection(

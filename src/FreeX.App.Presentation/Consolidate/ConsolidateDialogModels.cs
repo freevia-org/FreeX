@@ -47,6 +47,24 @@ public readonly record struct ConsolidateDialogIssue(
     public bool HasIssue => Kind != ConsolidateDialogIssueKind.None;
 }
 
+public enum ConsolidateDialogMessageContext
+{
+    AddReference,
+    FinalValidation
+}
+
+public enum ConsolidateDialogTextProfile
+{
+    Wpf,
+    Avalonia
+}
+
+public enum ConsolidateDialogFocusTarget
+{
+    Reference,
+    Destination
+}
+
 public sealed record ConsolidateApplyPlan(
     IReadOnlyList<GridRange> SourceRanges,
     CellAddress DestinationCell,
@@ -54,3 +72,36 @@ public sealed record ConsolidateApplyPlan(
     ConsolidateResult Result,
     IReadOnlyList<(CellAddress Address, Cell NewCell)> Edits,
     IReadOnlyList<CellAddress> OverwriteTargets);
+
+public enum ConsolidateApplicationDisposition
+{
+    Invalid,
+    ConfirmOverwrite,
+    Ready
+}
+
+public sealed record ConsolidateApplicationPlan(
+    ConsolidateApplicationDisposition Disposition,
+    ConsolidateDialogResult Request,
+    ConsolidateApplyPlan? ApplyPlan,
+    ConsolidateDialogIssue Issue)
+{
+    public bool CanExecute => Disposition == ConsolidateApplicationDisposition.Ready && ApplyPlan is not null;
+}
+
+public sealed record ConsolidateCommandAdapterResult(bool Success, string? ErrorMessage = null);
+
+public enum ConsolidateExecutionStatus
+{
+    NotReady,
+    Applied,
+    Failed
+}
+
+public sealed record ConsolidateExecutionOutcome(
+    ConsolidateExecutionStatus Status,
+    CellAddress DestinationCell,
+    string? ErrorMessage)
+{
+    public bool Success => Status == ConsolidateExecutionStatus.Applied;
+}

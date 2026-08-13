@@ -772,6 +772,114 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void MorphRendererPlan_OwnsObjectGeometryAndInitialTransform()
+    {
+        const long emuPerDip = DrawingMlCoordinateUnits.EmuPerPixel;
+        var source = new Slide();
+        source.Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            OffsetXEmu = 100 * emuPerDip,
+            OffsetYEmu = 50 * emuPerDip,
+            ExtentCxEmu = 200 * emuPerDip,
+            ExtentCyEmu = 100 * emuPerDip
+        });
+        var target = new Slide();
+        target.Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            OffsetXEmu = 200 * emuPerDip,
+            OffsetYEmu = 100 * emuPerDip,
+            ExtentCxEmu = 100 * emuPerDip,
+            ExtentCyEmu = 50 * emuPerDip
+        });
+
+        var plan = SlideShowMorphPlanner.BuildRendererPlan(
+            new SlideTransition { Kind = TransitionKind.Morph },
+            source,
+            target,
+            renderWidth: 960,
+            renderHeight: 540,
+            slideWidthDip: 960,
+            slideHeightDip: 540);
+
+        plan.CanRender.Should().BeTrue();
+        plan.FallbackReason.Should().Be(SlideShowMorphFallbackReason.None);
+        var overlay = plan.Overlays.Should().ContainSingle().Subject;
+        overlay.Kind.Should().Be(SlideShowMorphOverlayKind.Shape);
+        overlay.RenderShape.Should().BeSameAs(target.Shapes[0]);
+        overlay.SourceBounds.Should().Be(new SlideShowMorphRect(100, 50, 200, 100));
+        overlay.TargetBounds.Should().Be(new SlideShowMorphRect(200, 100, 100, 50));
+        overlay.InitialScaleX.Should().Be(2);
+        overlay.InitialScaleY.Should().Be(2);
+        overlay.InitialTranslateX.Should().Be(-50);
+        overlay.InitialTranslateY.Should().Be(-25);
+    }
+
+    [Fact]
+    public void MorphRendererPlan_OwnsMultilineTokenGeometryAndRenderShapes()
+    {
+        const long emuPerDip = DrawingMlCoordinateUnits.EmuPerPixel;
+        var source = new Slide();
+        source.Shapes.Add(new SlideShape
+        {
+            Id = 8,
+            Text = "One\nTwo",
+            ExtentCxEmu = 100 * emuPerDip,
+            ExtentCyEmu = 100 * emuPerDip
+        });
+        var target = new Slide();
+        target.Shapes.Add(new SlideShape
+        {
+            Id = 8,
+            Text = "One\nTwo",
+            ExtentCxEmu = 100 * emuPerDip,
+            ExtentCyEmu = 100 * emuPerDip
+        });
+
+        var plan = SlideShowMorphPlanner.BuildRendererPlan(
+            new SlideTransition { Kind = TransitionKind.Morph, MorphOption = "byWord" },
+            source,
+            target,
+            960,
+            540,
+            960,
+            540);
+
+        plan.Overlays.Select(overlay => overlay.Kind).Should().Equal(
+            SlideShowMorphOverlayKind.TextBackground,
+            SlideShowMorphOverlayKind.TextToken,
+            SlideShowMorphOverlayKind.TextToken);
+        plan.Overlays[0].RenderShape.TextBody.Should().BeNull();
+        plan.Overlays.Skip(1).Select(overlay => overlay.RenderShape.PlainText)
+            .Should().Equal("One", "Two");
+        plan.Overlays[1].SourceBounds.Should().Be(new SlideShowMorphRect(6, 0, 88, 50));
+        plan.Overlays[2].SourceBounds.Should().Be(new SlideShowMorphRect(6, 50, 88, 50));
+    }
+
+    [Fact]
+    public void MorphRendererPlan_OwnsFallbackReasons()
+    {
+        var transition = new SlideTransition { Kind = TransitionKind.Morph };
+        var target = new Slide();
+        target.Shapes.Add(new SlideShape { Id = 1, ExtentCxEmu = 1, ExtentCyEmu = 1 });
+
+        SlideShowMorphPlanner.BuildRendererPlan(
+                transition, null, target, 960, 540, 960, 540)
+            .FallbackReason.Should().Be(SlideShowMorphFallbackReason.MissingSourceSlide);
+
+        SlideShowMorphPlanner.BuildRendererPlan(
+                transition, new Slide(), target, 960, 540, 960, 540)
+            .FallbackReason.Should().Be(SlideShowMorphFallbackReason.NoObjectMatches);
+
+        var zeroExtentSource = new Slide();
+        zeroExtentSource.Shapes.Add(new SlideShape { Id = 1 });
+        SlideShowMorphPlanner.BuildRendererPlan(
+                transition, zeroExtentSource, target, 960, 540, 960, 540)
+            .FallbackReason.Should().Be(SlideShowMorphFallbackReason.NoRenderableGeometry);
+    }
+
+    [Fact]
     public void MorphPlanner_ByCharLeavesTiedTextCandidatesUnmatched()
     {
         var source = new Slide();

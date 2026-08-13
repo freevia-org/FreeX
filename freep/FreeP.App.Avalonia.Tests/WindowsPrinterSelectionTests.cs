@@ -1,41 +1,53 @@
-using FreeP.App.Recording.Windows;
-
 namespace FreeP.App.Avalonia.Tests;
 
 public sealed class WindowsPrinterSelectionTests
 {
     [Fact]
-    public void AvaloniaPrintPaneExposesWindowsPrinterSelector()
+    public void AvaloniaPrintPaneExposesWindowsPrinterSelectorBackedBySharedDiscovery()
     {
-        var repo = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
-        var source = File.ReadAllText(Path.Combine(repo, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var source = Read("freep", "FreeP.App.Avalonia", "MainWindow.cs");
+        var presentation = Read(
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationPrintOutputPackageExecutor.cs");
 
-        source.Should().Contain("FreePWindowsPrinterPicker");
-        source.Should().Contain("FreePWindowsPrinterDialog");
-        source.Should().Contain("WindowsNativePrintOutput.GetPrinters()");
-        source.Should().Contain("WindowsNativePrintOutput.ForPrinter(printerName)");
-        source.Should().Contain("WindowsNativePrintOutput.TryShowPrinterSelectionDialog");
+        source.Should().Contain("surface.PrinterPickerAutomationId")
+            .And.Contain("surface.NativeDialogAutomationId")
+            .And.NotContain("\"FreePWindowsPrinterPicker\"")
+            .And.NotContain("\"FreePWindowsPrinterDialog\"")
+            .And.Contain("_printService.DiscoverAsync()")
+            .And.Contain("_latestPrinterDiscovery.Printers")
+            .And.Contain("WindowsNativePrintOutput.TryShowPrinterSelectionDialog");
+        presentation.Should().Contain("PrinterPickerAutomationId: \"FreePWindowsPrinterPicker\"")
+            .And.Contain("NativeDialogAutomationId: \"FreePWindowsPrinterDialog\"");
     }
 
     [Fact]
-    public void UnknownPrinterIsNotMarkedPrintable()
+    public void UnknownPrinterIsRejectedAgainstTheSharedDiscoverySnapshot()
     {
-        var capability = WindowsNativePrintOutput.ForPrinter("printer-that-does-not-exist");
+        var source = Read("freep", "FreeP.App.Avalonia", "MainWindow.cs");
 
-        capability.CanPrint.Should().BeFalse();
-        capability.Reason.Should().NotBeNullOrWhiteSpace();
+        source.Should().Contain("_latestPrinterDiscovery?.Printers.FirstOrDefault")
+            .And.Contain("PresentationShellTextCatalog.WindowsPrinterQueueUnavailableStatus(normalized)")
+            .And.NotContain("Windows printer queue '{normalized}' is no longer available.")
+            .And.NotContain("WindowsNativePrintOutput.ForPrinter(");
     }
 
     [Fact]
-    public void PortablePrintWorkflowUsesSharedPlatformServiceWithoutReplacingWindowsNativeSelection()
+    public void SharedPlatformServiceOwnsDiscoveryAndSubmissionOnEveryPlatform()
     {
-        var repo = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
-        var source = File.ReadAllText(Path.Combine(repo, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var source = Read("freep", "FreeP.App.Avalonia", "MainWindow.cs");
 
-        source.Should().Contain("IPlatformPrintService");
-        source.Should().Contain("CupsPrintDialog.ShowAsync");
-        source.Should().Contain("!_portablePrintWorkflowEnabled || OperatingSystem.IsWindows()");
-        source.Should().Contain("WindowsNativePrintOutput.TryShowPrinterSelectionDialog");
-        source.Should().Contain("WindowsNativePrintOutput.CreateAdapter(capability)");
+        source.Should().Contain("IPlatformPrintService")
+            .And.Contain("new CupsPrintService()")
+            .And.Contain("new WindowsPrintService(")
+            .And.Contain("CupsPrintDialog.ShowAsync")
+            .And.Contain("WindowsNativePrintOutput.TryShowPrinterSelectionDialog")
+            .And.NotContain("_portablePrintWorkflowEnabled")
+            .And.NotContain("CreateNativePrintAdapter")
+            .And.NotContain("ILinuxNativePrintHandoffAdapter");
     }
+
+    private static string Read(params string[] pathParts) =>
+        TestWorkspaceFileLocator.ReadAllText(pathParts);
 }

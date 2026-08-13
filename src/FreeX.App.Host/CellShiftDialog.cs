@@ -16,9 +16,8 @@ public sealed class CellShiftDialog : Window
     public CellShiftDialog(CellShiftDialogMode mode)
     {
         _mode = mode;
-        Title = mode == CellShiftDialogMode.Insert
-            ? UiText.Get("CellShift_InsertTitle")
-            : UiText.Get("CellShift_DeleteTitle");
+        var surface = CellShiftDialogPlanner.GetSurface(mode);
+        Title = UiText.Get(surface.TitleKey);
         Width = 310;
         Height = 245;
         ResizeMode = ResizeMode.NoResize;
@@ -30,25 +29,21 @@ public sealed class CellShiftDialog : Window
         DockPanel.SetDock(optionPanel, Dock.Top);
         root.Children.Add(new TextBlock
         {
-            Text = mode == CellShiftDialogMode.Insert
-                ? UiText.Get("CellShift_InsertPrompt")
-                : UiText.Get("CellShift_DeletePrompt"),
+            Text = UiText.Get(surface.PromptKey),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 6)
         });
 
         var group = new GroupBox
         {
-            Header = mode == CellShiftDialogMode.Insert
-                ? UiText.Get("CellShift_InsertGroupHeader")
-                : UiText.Get("CellShift_DeleteGroupHeader"),
+            Header = UiText.Get(surface.GroupHeaderKey),
             Margin = new Thickness(0, 0, 0, 10),
             Content = optionPanel
         };
         DockPanel.SetDock(group, Dock.Top);
         root.Children.Add(group);
 
-        foreach (var option in GetAvailableChoices(mode))
+        foreach (var option in surface.Options)
         {
             var button = new RadioButton
             {
@@ -56,9 +51,9 @@ public sealed class CellShiftDialog : Window
                 Tag = option.Choice,
                 Margin = new Thickness(0, 0, 0, 6)
             };
-            AutomationProperties.SetName(button, GetChoiceAutomationName(option.Choice));
-            AutomationProperties.SetAutomationId(button, $"CellShift{option.Choice}Option");
-            AutomationProperties.SetHelpText(button, GetChoiceHelpText(option.Choice));
+            AutomationProperties.SetName(button, option.AutomationName);
+            AutomationProperties.SetAutomationId(button, option.AutomationId);
+            AutomationProperties.SetHelpText(button, option.HelpText);
             _buttons.Add(button);
             optionPanel.Children.Add(button);
         }
@@ -74,12 +69,6 @@ public sealed class CellShiftDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static IReadOnlyList<CellShiftDialogOption> GetAvailableChoices(CellShiftDialogMode mode) =>
-        CellShiftDialogPlanner.GetAvailableChoices(mode);
-
-    public static KeyboardInsertDeleteDialogChoice ToKeyboardChoice(CellShiftDialogMode mode, CellShiftDialogChoice choice) =>
-        CellShiftDialogPlanner.ToKeyboardChoice(mode, choice);
-
     private void FocusInitialKeyboardTarget()
     {
         var firstButton = FindFirstButton();
@@ -93,7 +82,7 @@ public sealed class CellShiftDialog : Window
         var selected = FindSelectedButton();
         SelectedChoice = selected?.Tag is CellShiftDialogChoice choice
             ? choice
-            : GetAvailableChoices(_mode)[0].Choice;
+            : CellShiftDialogPlanner.GetAvailableChoices(_mode)[0].Choice;
         DialogResult = true;
     }
 
@@ -109,25 +98,4 @@ public sealed class CellShiftDialog : Window
         return null;
     }
 
-    private static string GetChoiceAutomationName(CellShiftDialogChoice choice) =>
-        choice switch
-        {
-            CellShiftDialogChoice.ShiftCellsRight => "Shift cells right",
-            CellShiftDialogChoice.ShiftCellsDown => "Shift cells down",
-            CellShiftDialogChoice.ShiftCellsLeft => "Shift cells left",
-            CellShiftDialogChoice.ShiftCellsUp => "Shift cells up",
-            CellShiftDialogChoice.EntireRow => "Entire row",
-            _ => "Entire column"
-        };
-
-    private static string GetChoiceHelpText(CellShiftDialogChoice choice) =>
-        choice switch
-        {
-            CellShiftDialogChoice.ShiftCellsRight => "Insert cells and shift existing cells to the right.",
-            CellShiftDialogChoice.ShiftCellsDown => "Insert cells and shift existing cells down.",
-            CellShiftDialogChoice.ShiftCellsLeft => "Delete cells and shift remaining cells left.",
-            CellShiftDialogChoice.ShiftCellsUp => "Delete cells and shift remaining cells up.",
-            CellShiftDialogChoice.EntireRow => "Apply the operation to the entire selected row.",
-            _ => "Apply the operation to the entire selected column."
-        };
 }

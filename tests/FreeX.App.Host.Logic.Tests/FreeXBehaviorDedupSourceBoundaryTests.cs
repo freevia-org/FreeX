@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -19,15 +20,15 @@ public sealed class FreeXBehaviorDedupSourceBoundaryTests
     }
 
     [Fact]
-    public void FormControlHostDispatch_UsesSharedRequestWhileKeepingNativeGestureTranslation()
+    public void FormControlHostDispatch_UsesSharedPortableGesturePlan()
     {
         var host = ReadHost("MainWindow.FormControls.cs");
         var avalonia = ReadAvalonia("MainWindow.FormControls.cs");
 
-        host.Should().Contain("new FormControlInteractionRequest(e.Control, gesture, e.ListItemIndex)");
-        avalonia.Should().Contain("new FormControlInteractionRequest(control, gesture, listItemIndex)");
-        host.Should().Contain("FormControlClickRegion.StepUp => FormControlGesture.StepUp");
-        avalonia.Should().Contain("FormControlClickKind.StepUp => FormControlGesture.StepUp");
+        host.Should().Contain("new FormControlInteractionRequest(e.Control, e.Gesture, e.ListItemIndex)");
+        avalonia.Should().Contain("new FormControlInteractionRequest(control, interaction.Gesture, interaction.ListItemIndex)");
+        host.Should().NotContain("FormControlClickRegion");
+        avalonia.Should().NotContain("FormControlClickKind");
         host.Should().Contain("FormControlInteractionService.CreateCommand(");
         avalonia.Should().Contain("FormControlInteractionService.CreateCommand(");
         host.Should().NotContain("CreateToggleCheckBoxCommand(");
@@ -95,19 +96,23 @@ public sealed class FreeXBehaviorDedupSourceBoundaryTests
         var hostOutline = ReadHost("MainWindow.OutlineCommands.cs");
         var avaloniaOutline = ReadAvalonia("MainWindow.Outline.cs");
         var hostDiagnostics = ReadHost("AppDiagnostics.cs");
-        var avaloniaDiagnostics = ReadAvalonia("AvaloniaAppDiagnostics.cs");
+        var avaloniaProgram = ReadAvalonia("Program.cs");
+        var avaloniaApp = ReadAvalonia("App.cs");
 
-        hostOutline.Should().Contain("OutlineGroupingPlanner.GetUngroupedOutlineLevel");
-        avaloniaOutline.Should().Contain("OutlineGroupingPlanner.GetUngroupedOutlineLevel");
+        hostOutline.Should().Contain("_session.UngroupSelectedOutline");
+        avaloniaOutline.Should().Contain("_session.UngroupSelectedOutline");
         hostOutline.Should().NotContain("private static int GetUngroupedOutlineLevel");
         avaloniaOutline.Should().NotContain("private static int GetUngroupedOutlineLevel");
         hostDiagnostics.Should().Contain("LocalAppDiagnostics");
-        avaloniaDiagnostics.Should().Contain("LocalAppDiagnostics");
-        avaloniaDiagnostics.Should().NotContain("AppDiagnosticsFileStore");
-        avaloniaDiagnostics.Should().NotContain("_local");
-        avaloniaDiagnostics.Should().NotContain("new bool IsEnabled");
-        avaloniaDiagnostics.Should().NotContain("new void RecordEvent");
-        avaloniaDiagnostics.Should().NotContain("new string RecordCrash");
+        avaloniaProgram.Should().Contain("LocalAppDiagnostics.Create(");
+        avaloniaProgram.Should().Contain("() => diagnostics.RegisterCrashHandlers()");
+        avaloniaApp.Should().Contain("LocalAppDiagnostics? Diagnostics");
+        File.Exists(Path.Combine(
+                WorkspaceFileLocator.FindWorkspaceRoot(),
+                "src",
+                "FreeX.App.Avalonia",
+                "AvaloniaAppDiagnostics.cs"))
+            .Should().BeFalse();
     }
 
     private static string ReadHost(string fileName) =>

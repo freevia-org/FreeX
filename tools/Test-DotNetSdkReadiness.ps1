@@ -9,22 +9,6 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-function Test-IsIgnoredProjectPath {
-    param([Parameter(Mandatory = $true)][System.IO.FileInfo]$ProjectFile)
-
-    if ($ProjectFile.Name -like "*_wpftmp.csproj") {
-        return $true
-    }
-
-    $relativePath = Get-ToolRelativePath -RootPath $resolvedProjectRoot -Path $ProjectFile.FullName
-    $segments = $relativePath -split "/"
-    return $segments -contains "bin" -or
-        $segments -contains "obj" -or
-        $segments -contains ".git" -or
-        $segments -contains ".worktrees" -or
-        $segments -contains ".claude"
-}
-
 $resolvedProjectRoot = Resolve-ToolRepoPath -Path $ProjectRoot -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $resolvedProjectRoot -PathType Container)) {
     throw "Project root was not found: $resolvedProjectRoot"

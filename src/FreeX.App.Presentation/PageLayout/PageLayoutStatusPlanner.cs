@@ -25,6 +25,10 @@ public static class PageLayoutStatusPlanner
     public const string PrintAreaSetFailedResourceKey = "RibbonWire_PrintAreaSetFailed";
     public const string PrintAreaClearedResourceKey = "RibbonWire_PrintAreaCleared";
     public const string PrintAreaClearFailedResourceKey = "RibbonWire_PrintAreaClearFailed";
+    public const string BackgroundSetResourceKey = "RibbonWire_BackgroundSet";
+    public const string BackgroundClearedResourceKey = "RibbonWire_BackgroundDeleted";
+    public const string PageBreakFailedResourceKey = "PageBreak_Failed";
+    public const string PrintOptionsFailedResourceKey = "ShellLoc_CouldNotUpdatePrintOptions";
 
     public static PageLayoutCommandStatusPlan PageSetupSubmission { get; } =
         new(PageSetupUpdatedResourceKey, PageSetupFailedResourceKey);
@@ -34,6 +38,18 @@ public static class PageLayoutStatusPlanner
 
     public static PageLayoutCommandStatusPlan PrintAreaClear { get; } =
         new(PrintAreaClearedResourceKey, PrintAreaClearFailedResourceKey);
+
+    public static PageLayoutCommandStatusPlan BackgroundSet { get; } =
+        new(BackgroundSetResourceKey, BackgroundSetResourceKey);
+
+    public static PageLayoutCommandStatusPlan BackgroundClear { get; } =
+        new(BackgroundClearedResourceKey, BackgroundClearedResourceKey);
+
+    public static PageLayoutCommandStatusPlan PageBreaks { get; } =
+        new(PageBreakFailedResourceKey, PageBreakFailedResourceKey);
+
+    public static PageLayoutCommandStatusPlan PrintOptions { get; } =
+        new(PrintOptionsFailedResourceKey, PrintOptionsFailedResourceKey);
 
     public static PageLayoutCommandStatusPlan ForPreset<T>(PageLayoutPresetCommandPlan<T> plan)
     {
@@ -70,6 +86,35 @@ public static class PageLayoutStatusPlanner
         return string.IsNullOrWhiteSpace(errorMessage)
             ? textResolver(plan.FailureResourceKey)
             : errorMessage!;
+    }
+
+    public static string ResolveCommandStatus(
+        PageLayoutCommandExecutionPlan plan,
+        bool success,
+        string? errorMessage,
+        Func<string, string> textResolver)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(textResolver);
+
+        if (success)
+        {
+            if (!string.IsNullOrWhiteSpace(plan.SuccessStatusText))
+                return plan.SuccessStatusText!;
+
+            return plan.Status is not null
+                ? textResolver(plan.Status.SuccessResourceKey)
+                : string.Empty;
+        }
+
+        if (!string.IsNullOrWhiteSpace(errorMessage))
+            return errorMessage!;
+        if (!string.IsNullOrWhiteSpace(plan.FailureStatusText))
+            return plan.FailureStatusText!;
+
+        return plan.Status is not null
+            ? textResolver(plan.Status.FailureResourceKey)
+            : string.Empty;
     }
 
     public static string ResolvePageSetupValidationIssue(

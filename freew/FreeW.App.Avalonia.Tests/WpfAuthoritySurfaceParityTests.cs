@@ -8,12 +8,14 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.Ribbon;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Avalonia.Tests.TestSupport;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using Free.Shared.Shell;
+using FreeW.App.Presentation;
 using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -99,7 +101,7 @@ public sealed class WpfAuthoritySurfaceParityTests
     {
         await Session.Dispatch(() =>
         {
-            var documents = FreeWLegalNoticeProvider.GetDocuments();
+            var documents = FreeWLegalNoticeProvider.GetDocuments(typeof(LegalNoticesDialog).Assembly);
             documents.Select(document => document.Title).Should().Equal(
                 "Project License",
                 "Legal Notices",
@@ -230,7 +232,7 @@ public sealed class WpfAuthoritySurfaceParityTests
             var cell = row.Cells[0];
             var dialog = new TablePropertiesDialog(
                 new ModelTableContext(table, row, cell),
-                TablePropertiesDialogTab.Cell);
+                TablePropertiesDialogTabKind.Cell);
 
             dialog.TabsForTest.Items.Count.Should().Be(4);
             dialog.TabsForTest.SelectedIndex.Should().Be(3);
@@ -336,7 +338,7 @@ public sealed class WpfAuthoritySurfaceParityTests
             var (_, table) = CreateTableEditor();
             var dialog = new TablePropertiesDialog(
                 new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]),
-                TablePropertiesDialogTab.Cell);
+                TablePropertiesDialogTabKind.Cell);
 
             var cellTab = dialog.TabsForTest.Items.OfType<TabItem>().Single(tab =>
                 AutomationProperties.GetAutomationId(tab) == "TablePropertiesCellTab");
@@ -381,7 +383,7 @@ public sealed class WpfAuthoritySurfaceParityTests
             var (_, table) = CreateTableEditor();
             var dialog = new TablePropertiesDialog(
                 new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]),
-                TablePropertiesDialogTab.Cell);
+                TablePropertiesDialogTabKind.Cell);
             try
             {
                 dialog.Width = 560;
@@ -462,8 +464,14 @@ public sealed class WpfAuthoritySurfaceParityTests
         ScreenClipPlanner.BuildPhysicalSelection(
                 10, 10, 10, 15, 0, 0, renderScale: 1)
             .Should().BeNull();
-        ScreenClipPlanner.BuildDisplaySize(1600, 900)
-            .Should().Be(new ScreenClipDisplaySize(400, 225, 1600, 900));
+        ScreenClipPlanner.BuildPhysicalSelectionFromMappedEndpoints(
+                140.4, 250.4, 100.4, 200.4)
+            .Should().Be(new ScreenPixelRect(100, 200, 40, 50));
+        ScreenClipPlanner.BuildPhysicalSelectionFromMappedEndpoints(
+                10.1, 20, 10.4, 30)
+            .Should().BeNull();
+        ScreenClipPlanner.BuildImageInsertionPlan(1600, 900)
+            .Should().Be(new ScreenClipImageInsertionPlan(ImageFormat.Png, 400, 225, 1600, 900));
 
         await Session.Dispatch(() =>
         {
@@ -483,6 +491,8 @@ public sealed class WpfAuthoritySurfaceParityTests
             MainWindow.ApplyScreenClipCapture(editor, capture);
             var image = ((Paragraph)editor.Document.Blocks[0]).Runs
                 .Single(run => run.Image is not null).Image!;
+            image.Bytes.Should().Equal(capture.PngBytes);
+            image.Format.Should().Be(ImageFormat.Png);
             image.WidthPt.Should().Be(400);
             image.HeightPt.Should().Be(225);
             image.OriginalPixelWidth.Should().Be(1600);
@@ -508,7 +518,7 @@ public sealed class WpfAuthoritySurfaceParityTests
                 OpenLegalNotices = () => legal++,
                 CompareDocuments = () => compare++,
             };
-            var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+            var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
             Execute(registry, "freew.symbol");
             Execute(registry, "freew.screenshot");
@@ -518,7 +528,7 @@ public sealed class WpfAuthoritySurfaceParityTests
             Execute(registry, "freew.compare");
             (symbol, clips, about, legal, compare).Should().Be((1, 2, 1, 1, 1));
 
-            var unavailable = FreeWRibbon.BuildRegistry(new DocumentView(), Callbacks());
+            var unavailable = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), Callbacks());
             foreach (var id in new[]
                      {
                          "freew.symbol", "freew.screenshot", "freew.screen-clipping",
@@ -530,8 +540,10 @@ public sealed class WpfAuthoritySurfaceParityTests
                 command.Should().BeAssignableTo<IRibbonStatefulCommand>();
                 ((IRibbonStatefulCommand)command!).GetState().IsEnabled.Should().BeFalse();
                 var action = () => command.Execute(RibbonCommandContext.Empty);
-                action.Should().Throw<InvalidOperationException>();
+                action.Should().NotThrow("disabled shared commands are inert when invoked programmatically");
             }
+
+            (symbol, clips, about, legal, compare).Should().Be((1, 2, 1, 1, 1));
         }, CancellationToken.None);
     }
 
@@ -579,7 +591,7 @@ public sealed class WpfAuthoritySurfaceParityTests
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
 
-    private static RibbonHostCallbacks Callbacks() => new(
+    private static FreeWRibbonHostExecutionPorts Callbacks() => new(
         Open: () => { },
         Save: () => { },
         Cut: () => { },

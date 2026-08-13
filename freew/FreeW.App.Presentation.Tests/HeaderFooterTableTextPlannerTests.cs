@@ -12,13 +12,13 @@ public sealed class HeaderFooterTableTextPlannerTests
             ["Center"],
             ["Right"]);
 
-        HeaderFooterTableTextPlanner.TryResolveAddress(story, 1, out var leftSecond).Should().BeTrue();
+        HeaderFooterTableParagraphMap.TryResolveAddress(story, 1, out var leftSecond).Should().BeTrue();
         leftSecond.Should().Be(new HeaderFooterTableParagraphAddress(0, 0, 1));
-        HeaderFooterTableTextPlanner.ResolveParagraphIndex(story, leftSecond).Should().Be(1);
+        HeaderFooterTableParagraphMap.ResolveParagraphIndex(story, leftSecond).Should().Be(1);
 
-        HeaderFooterTableTextPlanner.TryResolveAddress(story, 2, out var center).Should().BeTrue();
+        HeaderFooterTableParagraphMap.TryResolveAddress(story, 2, out var center).Should().BeTrue();
         center.Should().Be(new HeaderFooterTableParagraphAddress(0, 1, 0));
-        HeaderFooterTableTextPlanner.ResolveParagraphIndex(story, center).Should().Be(2);
+        HeaderFooterTableParagraphMap.ResolveParagraphIndex(story, center).Should().Be(2);
     }
 
     [Fact]
@@ -29,11 +29,11 @@ public sealed class HeaderFooterTableTextPlannerTests
             ["Center"],
             ["Right"]);
 
-        HeaderFooterTableTextPlanner.CanSplice(story, 0, 1).Should().BeTrue();
-        HeaderFooterTableTextPlanner.CanSplice(story, 0, 2).Should().BeTrue();
-        HeaderFooterTableTextPlanner.CanSplice(story, 1, 2).Should().BeFalse();
-        HeaderFooterTableTextPlanner.AreInSameCell(story, 0, 1).Should().BeTrue();
-        HeaderFooterTableTextPlanner.AreInSameCell(story, 1, 2).Should().BeFalse();
+        HeaderFooterTableParagraphMap.CanSplice(story, 0, 1).Should().BeTrue();
+        HeaderFooterTableParagraphMap.CanSplice(story, 0, 2).Should().BeTrue();
+        HeaderFooterTableParagraphMap.CanSplice(story, 1, 2).Should().BeFalse();
+        HeaderFooterTableParagraphMap.AreInSameCell(story, 0, 1).Should().BeTrue();
+        HeaderFooterTableParagraphMap.AreInSameCell(story, 1, 2).Should().BeFalse();
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public sealed class HeaderFooterTableTextPlannerTests
         var context = new CommandContext(document);
         var first = new Paragraph("First split");
         var second = new Paragraph("Second split");
-        var command = new SpliceHeaderFooterParagraphsCommand(
+        var command = new FreeW.App.Presentation.DocumentView.SpliceHeaderFooterParagraphsCommand(
             sectionIndex: 0,
             useFinalSectionStore: true,
             slot: 0,
@@ -81,7 +81,7 @@ public sealed class HeaderFooterTableTextPlannerTests
         var story = LayoutStory(["Left"], ["Center"], ["Right"]);
         document.FinalSectionHeadersFooters.Header = story;
         var context = new CommandContext(document);
-        var command = new SpliceHeaderFooterParagraphsCommand(
+        var command = new FreeW.App.Presentation.DocumentView.SpliceHeaderFooterParagraphsCommand(
             sectionIndex: 0,
             useFinalSectionStore: true,
             slot: 0,
@@ -118,7 +118,7 @@ public sealed class HeaderFooterTableTextPlannerTests
         bus.BeginUndoGroup();
         foreach (var cellPlan in plan.CellPlans.Reverse())
         {
-            bus.Execute(new SpliceHeaderFooterParagraphsCommand(
+            bus.Execute(new FreeW.App.Presentation.DocumentView.SpliceHeaderFooterParagraphsCommand(
                 sectionIndex: 0,
                 useFinalSectionStore: true,
                 slot: 0,

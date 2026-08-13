@@ -124,9 +124,13 @@ jobs:
           evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
           smoke_log="$artifact_root/freex-$runtime-macos-packaging-smoke.log"
           launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
+          packaged_product_launch_report="$RUNNER_TEMP/freex-$runtime-packaged-product-launch.txt"
+          packaged_product_launch_log="$RUNNER_TEMP/freex-$runtime-packaged-product-launch.log"
+          packaged_product_probe_home="$RUNNER_TEMP/freex-$runtime-packaged-product-home"
           open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
           default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
           app_diagnostics_dir="$artifact_root/freex-$runtime-macos-app-diagnostics"
+          validation_published="$RUNNER_TEMP/freex-$runtime-validation-publish"
           notary_log="$artifact_root/freex-$runtime-macos-notarization.log"
           tester_instructions_path="$artifact_root/freex-$runtime-macos-tester-instructions.md"
           distribution_candidate="$FREEX_DISTRIBUTION_CANDIDATE"
@@ -218,6 +222,18 @@ jobs:
             -p:PublishReadyToRun=false \
             -p:PublishSingleFile=false \
             --output "$app/Contents/MacOS"
+
+          dotnet publish tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj \
+            --configuration Release \
+            --framework net10.0 \
+            --runtime "$runtime" \
+            --self-contained true \
+            -p:UseAppHost=true \
+            -p:PublishReadyToRun=false \
+            -p:PublishSingleFile=false \
+            --output "$validation_published"
+          validation_host="$validation_published/FreeX.Validation.Avalonia"
+          test -x "$validation_host"
 
           cp src/FreeX.App.Avalonia/Packaging/macos/Info.plist "$app/Contents/Info.plist"
           cp src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns "$app/Contents/Resources/FreeX.icns"
@@ -436,7 +452,7 @@ jobs:
             echo "zip_sha256=$zip_sha256"
           } >> "$evidence_path"
           if [[ ("$runtime" == "osx-arm64" && "$host_arch" == "arm64") || ("$runtime" == "osx-x64" && "$host_arch" == "x86_64") ]]; then
-            "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke | tee "$smoke_log"
+            "$validation_host" --packaging-smoke | tee "$smoke_log"
             grep -q "Packaging smoke opened" "$smoke_log"
             grep -q "macOS Preview Workbook" "$smoke_log"
             grep -q "drawing_object_previews=3" "$smoke_log"
@@ -446,7 +462,7 @@ jobs:
 
             smoke_file="$RUNNER_TEMP/freex-$runtime-smoke.csv"
             printf 'Name,Amount\nFreeX,42\n' > "$smoke_file"
-            "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke "$smoke_file" | tee -a "$smoke_log"
+            "$validation_host" --packaging-smoke "$smoke_file" | tee -a "$smoke_log"
             grep -q "Packaging smoke opened" "$smoke_log"
             grep -q "edited, saved, and reopened" "$smoke_log"
             format_cells_style_roundtrip_count="$(grep -c "format_cells_style_roundtrip=true" "$smoke_log")"
@@ -455,6 +471,20 @@ jobs:
               echo "format_cells_style_roundtrip=true"
               echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"
             } >> "$evidence_path"
+
+            # Bounded probe against the executable inside the extracted app bundle. The
+            # validation host continues to own the fixture-heavy packaging and UI checks.
+            rm -rf "$packaged_product_probe_home"
+            HOME="$packaged_product_probe_home" \
+              bash tools/Run-PackagedProductLaunchProbe.sh \
+                --executable "$unzip_root/FreeX.app/Contents/MacOS/FreeX" \
+                --readiness-root "$packaged_product_probe_home" \
+                --report "$packaged_product_launch_report" \
+                --log "$packaged_product_launch_log" \
+                -- "$smoke_file"
+            grep -Fqx "packaged_product_launch_status=passed" "$packaged_product_launch_report"
+            grep -Fqx "packaged_product_executable=$unzip_root/FreeX.app/Contents/MacOS/FreeX" "$packaged_product_launch_report"
+            cat "$packaged_product_launch_report" >> "$evidence_path"
             echo "smoke_status=passed" >> "$evidence_path"
 
             launchservices_smoke_timeout_seconds=60
@@ -582,12 +612,29 @@ jobs:
                 return "$cleanup_status"
               fi
             }
+            run_launchservices_with_validation() {
+              local report_path="$1"
+              local source_path="$2"
+              shift 2
+              "$@" &
+              local open_pid=$!
+              sleep 3
+              local validation_status=0
+              "$validation_host" \
+                --macos-launch-smoke "$report_path" \
+                --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir" \
+                "$source_path" || validation_status=$?
+              quit_launchservices_app
+              wait "$open_pid" || true
+              return "$validation_status"
+            }
 
             launch_smoke_file="$RUNNER_TEMP/freex-$runtime-launch.csv"
             printf 'Name,Amount\nFreeX Launch,84\n' > "$launch_smoke_file"
             /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
             run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report" \
-              open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+              run_launchservices_with_validation "$launch_smoke_report" "$launch_smoke_file" \
+                open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file"
             grep -q "macos_launch_smoke=passed" "$launch_smoke_report"
             grep -q "app_diagnostics_directory_configured=true" "$launch_smoke_report"
             grep -q "window_shown=true" "$launch_smoke_report"
@@ -875,7 +922,8 @@ jobs:
             open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"
             printf 'Name,Amount\nFreeX Open With,126\n' > "$open_with_smoke_file"
             run_bounded_launchservices_smoke "open_with" "$open_with_report" \
-              open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+              run_launchservices_with_validation "$open_with_report" "$open_with_smoke_file" \
+                open -W -n -a "$app_path" "$open_with_smoke_file"
             grep -q "macos_launch_smoke=passed" "$open_with_report"
             grep -q "app_diagnostics_directory_configured=true" "$open_with_report"
             grep -q "window_shown=true" "$open_with_report"
@@ -899,7 +947,8 @@ jobs:
               '  ]' \
               '}' > "$default_open_smoke_file"
             run_bounded_launchservices_smoke "default_open" "$default_open_report" \
-              open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+              run_launchservices_with_validation "$default_open_report" "$default_open_smoke_file" \
+                open -W -n "$default_open_smoke_file"
             grep -q "macos_launch_smoke=passed" "$default_open_report"
             grep -q "app_diagnostics_directory_configured=true" "$default_open_report"
             grep -q "window_shown=true" "$default_open_report"

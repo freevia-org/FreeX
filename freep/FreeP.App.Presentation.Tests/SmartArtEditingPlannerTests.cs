@@ -669,7 +669,7 @@ public sealed class SmartArtEditingPlannerTests
             Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
         };
 
-        var result = SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, SmartArtQuickStylePreset.Intense);
+        var result = SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, SmartArtQuickStylePreset.IntenseEffect);
 
         result.Applied.Should().BeTrue();
         result.PartPath.Should().NotBeNull();

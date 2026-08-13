@@ -10,7 +10,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class MultilevelListDialog : FreeWDialogWindow
+internal sealed partial class MultilevelListDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(AvaloniaCompactDialogChrome.WindowsUiFontFamily)
     {
@@ -30,6 +30,7 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
         },
     };
     private static readonly IBrush ComboBorderBrush = new SolidColorBrush(Color.FromRgb(172, 172, 172));
+    private readonly MultilevelListDialogSession _session;
     private readonly ComboBox _levels;
     private readonly TextBox _level0Start;
     private readonly TextBox _level1Start;
@@ -39,45 +40,52 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
 
     internal MultilevelListDialog(IReadOnlyList<ListNumberFormat> currentFormats)
     {
-        var state = MultilevelListDialogPlanner.BuildInitialState(currentFormats, CultureInfo.CurrentCulture);
+        _session = MultilevelListDialogPlanner.CreateSession(currentFormats, CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
         Title = MultilevelListDialogPlanner.Title;
         // Match the WPF prompt's outer width. The visual harness subtracts the native
         // frame when arranging Avalonia, so this remains the same content contract in
         // both the desktop app and paired evidence captures.
-        Width = 380;
+        Width = MultilevelListDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _levels = Combo(Enumerable.Range(1, 9).Select(value => value.ToString(CultureInfo.CurrentCulture)), state.LevelsIndex, 80);
-        _level0Start = TextBox(state.Level0StartAtText, 60);
-        _level1Start = TextBox(state.Level1StartAtText, 60);
-        var labels = MultilevelListDialogPlanner.NumberFormatChoices.Select(choice => choice.Label).ToArray();
-        _level0Format = Combo(labels, state.Level0FormatIndex, 130);
-        _level1Format = Combo(labels, state.Level1FormatIndex, 130);
-        _level2Format = Combo(labels, state.Level2FormatIndex, 130);
+        _levels = Combo(_session.LevelChoices, state.LevelsIndex, MultilevelListDialogPlanner.LevelsMinWidth);
+        _level0Start = TextBox(state.Level0StartAtText, MultilevelListDialogPlanner.StartAtMinWidth);
+        _level1Start = TextBox(state.Level1StartAtText, MultilevelListDialogPlanner.StartAtMinWidth);
+        var labels = _session.NumberFormatChoices.Select(choice => choice.Label).ToArray();
+        _level0Format = Combo(labels, state.Level0FormatIndex, MultilevelListDialogPlanner.NumberFormatMinWidth);
+        _level1Format = Combo(labels, state.Level1FormatIndex, MultilevelListDialogPlanner.NumberFormatMinWidth);
+        _level2Format = Combo(labels, state.Level2FormatIndex, MultilevelListDialogPlanner.NumberFormatMinWidth);
+        _levels.SelectionChanged += (_, _) => _session.UpdateLevels(_levels.SelectedIndex);
+        _level0Start.TextChanged += (_, _) => _session.UpdateLevel0StartAt(_level0Start.Text);
+        _level1Start.TextChanged += (_, _) => _session.UpdateLevel1StartAt(_level1Start.Text);
+        _level0Format.SelectionChanged += (_, _) => _session.UpdateLevel0Format(_level0Format.SelectedIndex);
+        _level1Format.SelectionChanged += (_, _) => _session.UpdateLevel1Format(_level1Format.SelectedIndex);
+        _level2Format.SelectionChanged += (_, _) => _session.UpdateLevel2Format(_level2Format.SelectedIndex);
 
-        var panel = new StackPanel { Margin = new Thickness(14) };
+        var panel = new StackPanel { Margin = new Thickness(MultilevelListDialogPlanner.OuterMargin) };
         panel.Children.Add(new TextBlock
         {
-            Text = "Configure multilevel list levels.",
+            Text = MultilevelListDialogPlanner.Description,
             Foreground = Brushes.Black,
             FontFamily = Chrome.FontFamily,
             FontSize = Chrome.FontSize,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10),
         });
-        AddField(panel, "Number of levels (1-9):", _levels);
-        AddField(panel, "Level 1 start at:", _level0Start);
-        AddField(panel, "Level 2 start at:", _level1Start);
-        AddField(panel, "Level 1 number style:", _level0Format);
-        AddField(panel, "Level 2 number style:", _level1Format);
-        AddField(panel, "Level 3 number style:", _level2Format);
+        AddField(panel, MultilevelListDialogPlanner.LevelsLabel, _levels);
+        AddField(panel, MultilevelListDialogPlanner.Level0StartAtLabel, _level0Start);
+        AddField(panel, MultilevelListDialogPlanner.Level1StartAtLabel, _level1Start);
+        AddField(panel, MultilevelListDialogPlanner.Level0NumberStyleLabel, _level0Format);
+        AddField(panel, MultilevelListDialogPlanner.Level1NumberStyleLabel, _level1Format);
+        AddField(panel, MultilevelListDialogPlanner.Level2NumberStyleLabel, _level2Format);
         var actionRow = AvaloniaCompactDialogChrome.CreateOkCancelRow(
             Accept,
             () => Close(null),
-            buttonWidth: 72,
+            buttonWidth: MultilevelListDialogPlanner.ButtonWidth,
             margin: new Thickness(0, 11, 0, 0),
             style: Chrome);
         panel.Children.Add(actionRow);
@@ -113,36 +121,28 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
 
     private async void Accept()
     {
-        if (TryBuildResult(out var result, out var validation))
+        SynchronizeSession();
+        var acceptance = _session.PlanAcceptance();
+        if (acceptance.IsAccepted)
         {
-            Close(result);
+            Close(acceptance.Definition);
             return;
         }
         await AvaloniaUserMessageDialog.ShowWarningAsync(
             this,
-            validation?.Message ?? MultilevelListDialogPlanner.PositiveStartAtMessage);
-        FocusValidationTarget(validation);
+            acceptance.Validation?.Message ?? MultilevelListDialogPlanner.PositiveStartAtMessage);
+        FocusValidationTarget(acceptance.Validation);
     }
 
-    // The visual harness and headless tests need the WPF validation state without opening a
-    // nested modal warning window that would block their dispatcher.
-    internal void ValidateForTest()
+    private void SynchronizeSession()
     {
-        if (TryBuildResult(out _, out var validation))
-            return;
-        FocusValidationTarget(validation);
+        _session.UpdateLevels(_levels.SelectedIndex);
+        _session.UpdateLevel0StartAt(_level0Start.Text);
+        _session.UpdateLevel1StartAt(_level1Start.Text);
+        _session.UpdateLevel0Format(_level0Format.SelectedIndex);
+        _session.UpdateLevel1Format(_level1Format.SelectedIndex);
+        _session.UpdateLevel2Format(_level2Format.SelectedIndex);
     }
-
-    private bool TryBuildResult(
-        out MultilevelListDefinition? result,
-        out MultilevelListDialogValidation? validation) =>
-        MultilevelListDialogPlanner.TryBuildResult(
-            new MultilevelListDialogInput(
-                _levels.SelectedIndex, _level0Start.Text, _level1Start.Text,
-                _level0Format.SelectedIndex, _level1Format.SelectedIndex, _level2Format.SelectedIndex),
-            CultureInfo.CurrentCulture,
-            out result,
-            out validation);
 
     private void FocusValidationTarget(MultilevelListDialogValidation? validation)
     {

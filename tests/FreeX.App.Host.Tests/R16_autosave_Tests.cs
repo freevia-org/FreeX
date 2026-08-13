@@ -29,39 +29,26 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class R16_autosave_Tests
 {
-    /// <summary>Self-contained temp directory helper (avoids relying on another test project's internal type).</summary>
-    private sealed class RecoveryTempDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
-
-        public RecoveryTempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
-
     private static MainWindow CreateWindow(
         WorkbookRef workbookRef,
         WorkbookWindowRegistry registry,
-        WorkbookDocumentState documentState)
+        WorkbookDocumentState documentState,
+        ICommandBus commandBus,
+        RecalcEngine recalcEngine,
+        WorkbookSession? workbookSession = null)
     {
-        var graph = new DependencyGraph();
-        var evaluator = new FormulaEvaluator();
-        var commandBus = new CommandBus(_ => new TestCommandContext(workbookRef.Current));
         var window = new MainWindow(
             NullLogger<MainWindow>.Instance,
             new ViewportService(),
             commandBus,
-            new RecalcEngine(graph, evaluator),
+            recalcEngine,
             [],
             workbookRef,
             workbookRef.Current,
             NullUserMessageService.Instance,
             documentState,
-            windowRegistry: registry)
+            windowRegistry: registry,
+            workbookSession: workbookSession)
         {
             WindowState = WindowState.Normal,
             Width = 1280,
@@ -88,7 +75,7 @@ public sealed class R16_autosave_Tests
     [Fact]
     public void NotifyAutosaveSaved_InvalidatesSiblingWindowsSnapshotsForSameDocument()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R16.Recovery-");
         // MainWindow construction requires an STA thread (WPF), so run the whole scenario on the
         // shared STA harness the other WPF-host window tests use.
         StaTestRunner.Run(() =>
@@ -100,8 +87,10 @@ public sealed class R16_autosave_Tests
             var workbookRef = new WorkbookRef { Current = workbook };
             var registry = new WorkbookWindowRegistry();
             var documentState = new WorkbookDocumentState();
+            var commandBus = new CommandBus(_ => new TestCommandContext(workbookRef.Current));
+            var recalcEngine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
 
-            var primary = CreateWindow(workbookRef, registry, documentState);
+            var primary = CreateWindow(workbookRef, registry, documentState, commandBus, recalcEngine);
             primary.AttachAutosaveService(new AutosaveService(store), store);
             primary.Show();
             primary.Activate();
@@ -109,7 +98,13 @@ public sealed class R16_autosave_Tests
 
             // A "New Window" sibling over the same shared document — gets its own independent
             // autosave snapshot (per J25), just like MultiWindowAutosaveOwnershipTests exercises.
-            var secondary = CreateWindow(workbookRef, registry, documentState);
+            var secondary = CreateWindow(
+                workbookRef,
+                registry,
+                documentState,
+                commandBus,
+                recalcEngine,
+                primary.Session.CreateSiblingView(1, 1));
             secondary.AttachAutosaveService(new AutosaveService(store), store);
             secondary.Show();
             secondary.Activate();
@@ -176,20 +171,13 @@ public sealed class R16_autosave_Tests
     }
 
     private static IReadOnlyList<AutosaveRecoveryCandidate> InvokeDeduplicate(
-        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
-    {
-        var method = typeof(App).GetMethod(
-            "DeduplicateCandidatesByDocument",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        method.Should().NotBeNull();
-
-        return (IReadOnlyList<AutosaveRecoveryCandidate>)method!.Invoke(null, [candidates])!;
-    }
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates) =>
+        AutosaveRecoveryCandidateProcessor.DeduplicateByDocument(candidates);
 
     [Fact]
     public void Deduplicate_SamePathFromDifferentLaunchScopes_KeepsBothInsteadOfDeletingOlder()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R16.Recovery-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -218,7 +206,7 @@ public sealed class R16_autosave_Tests
     [Fact]
     public void Deduplicate_SamePathFromSameLaunchScope_SameDocumentId_StillCollapsesToNewest()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R16.Recovery-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -254,7 +242,7 @@ public sealed class R16_autosave_Tests
         // silently deleted the older window's snapshot — permanently destroying its unsaved edits
         // with zero content comparison. They must now be kept as distinct candidates and both
         // offered, exactly like the different-launch-scope case above.
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R16.Recovery-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -283,7 +271,7 @@ public sealed class R16_autosave_Tests
         // (or any other source that never populates it) must never be treated as provably the same
         // document as another candidate purely on launch scope + path — GetDocumentIdentityComponent
         // falls back to the (unique) snapshot path in that case, so these are kept distinct too.
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R16.Recovery-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 

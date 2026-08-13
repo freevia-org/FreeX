@@ -301,7 +301,11 @@ public static class PresentationTransitionCommandPlanner
                 return true;
 
             case PresentationTransitionCommandIntentKind.SetDuration:
-                if (!TryParseSeconds(selectedValue, allowZero: false, out int durationMs))
+                if (!FreePRibbonChoiceCatalog.TryResolve(
+                        selectedValue,
+                        FreePRibbonChoiceCatalog.TransitionDurationChoices,
+                        out int durationMs) &&
+                    !TryParseSeconds(selectedValue, allowZero: false, out durationMs))
                 {
                     return false;
                 }
@@ -314,7 +318,11 @@ public static class PresentationTransitionCommandPlanner
                 return true;
 
             case PresentationTransitionCommandIntentKind.SetAdvanceAfter:
-                if (!TryParseAdvanceAfterValue(selectedValue, out int advanceAfterMs))
+                if (!FreePRibbonChoiceCatalog.TryResolve(
+                        selectedValue,
+                        FreePRibbonChoiceCatalog.TransitionAdvanceAfterChoices,
+                        out int advanceAfterMs) &&
+                    !TryParseAdvanceAfterValue(selectedValue, out advanceAfterMs))
                 {
                     return false;
                 }

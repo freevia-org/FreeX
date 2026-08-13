@@ -2,6 +2,8 @@
   <ItemGroup>
     <!-- Portable comparison/report core only — no WPF/Docker orchestration, so this
          test project is gate-able under FreeX.DefaultTests.slnx. -->
+    <ProjectReference Include="..\..\tools\Free.ToolsShared\Free.ToolsShared.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
     <ProjectReference Include="..\..\tools\FreeX.ParityCompare.Core\FreeX.ParityCompare.Core.csproj" />
   </ItemGroup>
 

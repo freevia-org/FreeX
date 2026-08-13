@@ -168,6 +168,13 @@ public static class SubtotalDialogPlanner
         ];
     }
 
+    public static SubtotalDialogFunctionChoice? FindFunctionChoice(
+        int functionNumber,
+        SubtotalDialogPlannerText? text = null) =>
+        CreateFunctionChoices(text).FirstOrDefault(choice =>
+            SubtotalFunctionService.TryParse(choice.FunctionText, out var number) &&
+            number == functionNumber);
+
     public static bool TryCreateResult(
         uint groupColumnOffset,
         IEnumerable<uint> subtotalColumnOffsets,

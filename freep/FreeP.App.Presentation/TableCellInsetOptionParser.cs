@@ -3,20 +3,31 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
-/// <summary>Parses the shared ribbon's active-cell inset selection.</summary>
+/// <summary>Resolves stable inset choices and compatible external labels.</summary>
 public static class TableCellInsetOptionParser
 {
     public static bool TryParse(
-        string? value,
+        object? value,
         out TableCellInsetSide side,
         out double? insetPt)
     {
         side = default;
         insetPt = null;
-        if (string.IsNullOrWhiteSpace(value))
+        if (FreePRibbonChoiceCatalog.TryResolve(
+                value,
+                FreePRibbonChoiceCatalog.TableCellInsetChoices,
+                out FreePRibbonTableCellInsetChoiceDescriptor descriptor) &&
+            IsValidInset(descriptor.InsetPt))
+        {
+            side = descriptor.Side;
+            insetPt = descriptor.InsetPt;
+            return true;
+        }
+
+        if (value is not string text || string.IsNullOrWhiteSpace(text))
             return false;
 
-        var parts = value.Split(':', 2, StringSplitOptions.TrimEntries);
+        var parts = text.Split(':', 2, StringSplitOptions.TrimEntries);
         if (parts.Length != 2 || !TryParseSide(parts[0], out side))
             return false;
 
@@ -36,6 +47,9 @@ public static class TableCellInsetOptionParser
         insetPt = parsed;
         return true;
     }
+
+    private static bool IsValidInset(double? insetPt) =>
+        insetPt is null || double.IsFinite(insetPt.Value) && insetPt.Value is >= 0 and <= 72;
 
     private static bool TryParseSide(string value, out TableCellInsetSide side)
     {

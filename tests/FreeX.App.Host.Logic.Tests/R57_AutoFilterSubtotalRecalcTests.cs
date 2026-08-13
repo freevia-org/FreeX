@@ -1,6 +1,6 @@
 using System.Reflection;
 using FluentAssertions;
-using FreeX.Core.Commands;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -50,14 +50,19 @@ public sealed class R57_AutoFilterSubtotalRecalcTests
 
                 var filterRange = new GridRange(
                     new CellAddress(sheetId, 2, 1), new CellAddress(sheetId, 6, 1)); // A2:A6
-
-                Func<GridRange, IWorkbookCommand> createCommand =
-                    r => new FilterCommand(sheetId, r, filterColOffset: 0, allowedValues: ["10", "20", "30"]);
-
-                var filterMethod = typeof(MainWindow).GetMethod(
-                    "TryExecuteRememberedAutoFilterCommand", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?? throw new MissingMethodException(nameof(MainWindow), "TryExecuteRememberedAutoFilterCommand");
-                var success = (bool)filterMethod.Invoke(window, ["Filter", filterRange, createCommand])!;
+                window.SheetGrid.SelectedRange = filterRange;
+                var result = new AutoFilterDialogResult(
+                    AutoFilterSortDirection.None,
+                    ["10", "20", "30"],
+                    SearchText: "",
+                    CriteriaText: "");
+                var success = (bool)R49MainWindowTestHarness.Invoke(
+                    window,
+                    "ApplyAutoFilterDialogResult",
+                    filterRange,
+                    (uint)0,
+                    result,
+                    "Filter")!;
                 success.Should().BeTrue();
 
                 // Rows for 40 and 50 (A5/A6) are now hidden by the value-list filter.

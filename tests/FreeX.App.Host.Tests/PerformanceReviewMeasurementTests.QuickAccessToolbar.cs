@@ -134,7 +134,7 @@ public sealed partial class PerformanceReviewMeasurementTests
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();
-            var options = new FreeXOptions
+            var options = new AppOptions
             {
                 QuickAccessToolbarCommands = QuickAccessToolbarCatalog.Commands
                     .Select(command => command.Id)

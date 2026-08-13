@@ -6,8 +6,12 @@ using FreeW.App.Presentation.DocumentView;
 
 namespace FreeW.App.Presentation.Tests;
 
-public sealed class VisualEvidencePlannerTests
+public sealed class VisualEvidencePlannerTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeWVisualEvidence-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
     [Fact]
     public void ScenarioCatalog_IncludesF2PageCompositionContracts()
     {
@@ -1688,7 +1692,6 @@ public sealed class VisualEvidencePlannerTests
     public void WordBaselineGenerationPlan_CoversBoundedGeneratedCorpus()
     {
         var root = CreateTempRoot();
-        try
         {
             var plan = FreeWWordBaselineEvidencePlanner.BuildGenerationPlan(
                 Path.Combine(root, "fixtures"),
@@ -1753,17 +1756,12 @@ public sealed class VisualEvidencePlannerTests
             plan.Fixtures.Single(f => f.ScenarioId == "object-format-position-size-style")
                 .ExpectedBaselinePaths.Should().Contain("object-format-position-size-style/object-format-position-size-style_p1.png");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void WordBaselineScope_LimitsComparisonsToGeneratedCorpusScenarios()
     {
         var root = CreateTempRoot();
-        try
         {
             var generatedCorpusRow = BuildFileBackedRow(
                 root,
@@ -1818,10 +1816,6 @@ public sealed class VisualEvidencePlannerTests
                 FreeWWordBaselineEvidencePlanner.BaselineScopeGeneratedCorpus).Should().BeFalse();
             rows.Should().OnlyContain(row =>
                 FreeWWordBaselineEvidencePlanner.ShouldCompareToWordBaseline(row, FreeWWordBaselineEvidencePlanner.BaselineScopeAll));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
         }
     }
 
@@ -2481,7 +2475,6 @@ public sealed class VisualEvidencePlannerTests
     public void ReadManifest_DeserializesSmartArtLayoutPolygonGeometry()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var document = TextDocument.CreateEmpty();
@@ -2517,10 +2510,6 @@ public sealed class VisualEvidencePlannerTests
                 (163.5, 6),
                 (186, 39),
                 (114, 39));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
         }
     }
 
@@ -2936,7 +2925,6 @@ public sealed class VisualEvidencePlannerTests
     public void BuildNormalizedSummaryFromFiles_RelativizesOutputsAndComputesHashes()
     {
         var root = CreateTempRoot();
-        try
         {
             var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
             var rows = expected
@@ -3005,17 +2993,12 @@ public sealed class VisualEvidencePlannerTests
                 row.SemanticEvidence.Contains("Avalonia 6 object(s)", StringComparison.Ordinal) &&
                 row.Trust.Passed);
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingRenderedGroupedChildEffectEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3079,17 +3062,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("WPF 'GroupChild1:Shape:glow/GroupChild3:WordArt:glow'", StringComparison.Ordinal)
                 && f.Contains("Avalonia 'GroupChild1:Shape:shadow'", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingGroupedMixedChildVisualEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3154,17 +3132,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("grouped child visual signatures differ", StringComparison.Ordinal)
                 && f.Contains("Group0Child4:SmartArt", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_AllowsUniformFloatingObjectRendererOriginOffset()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3212,17 +3185,12 @@ public sealed class VisualEvidencePlannerTests
 
             summary.Trust.Passed.Should().BeTrue(string.Join(Environment.NewLine, summary.Trust.Failures));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsRelativeFloatingObjectHorizontalDrift()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3273,17 +3241,12 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("origin-normalized floating object signatures differ", StringComparison.Ordinal) &&
                 f.Contains("xRel=", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresGroupedChildVisualSemanticsBeyondCounts()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3340,17 +3303,12 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("Group0Child2:Chart", StringComparison.Ordinal) &&
                 f.Contains("Group0Child3:WordArt", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresRenderedGroupedChildWordArtEffectEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3400,17 +3358,12 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("drawing-object evidence expects rendered grouped child WordArt effects but the object plan records none", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingObjectFormatAltTextEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3470,17 +3423,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("alt text summaries differ", StringComparison.Ordinal)
                 && f.Contains("stale object-format alt text", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingChartSmartArtPlanEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3554,17 +3502,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("#1F3864", StringComparison.Ordinal)
                 && f.Contains("#101010", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingChartDataEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3639,17 +3582,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("chart data signatures differ", StringComparison.Ordinal)
                 && f.Contains("seriesData=0:Revenue=9.9,1.8,1.6,2.2", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_AllowsStyleDerivedHeaderShadingVarianceInTablePlanEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3731,17 +3669,12 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("table plan signatures differ", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresPlannedStyleDerivedHeaderFillEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3822,17 +3755,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("shading color differs", StringComparison.Ordinal)
                 && f.Contains("#4472C4", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_AllowsStyleDerivedBandedRowVarianceInTablePlanEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3908,17 +3836,12 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("table renderer pair 'table-layout-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("table plan signatures differ", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingExplicitHeaderTableShadingEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -3989,17 +3912,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("shading color differs", StringComparison.Ordinal)
                 && f.Contains("#C00000", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingExplicitBodyTableShadingEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -4082,17 +4000,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("shading color differs", StringComparison.Ordinal)
                 && f.Contains("#ABCDEF", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingFieldPlanEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -4169,17 +4082,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("resolved header/footer field signatures differ", StringComparison.Ordinal)
                 && f.Contains("1-99", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresChapterPrefixInResolvedPageText()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -4227,17 +4135,12 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("field evidence expects chapter-prefixed PAGE display text but records none", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingEquationGeometryEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -4310,17 +4213,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("spacing geometry signatures differ", StringComparison.Ordinal)
                 && f.Contains("spacing=radical", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingHeaderFooterImageEvidence()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -4384,17 +4282,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("header/footer image signatures differ", StringComparison.Ordinal)
                 && f.Contains("image=missing", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsHeaderFooterImageScenarioWithoutImages()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -4446,17 +4339,12 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("scenario expects header/footer image evidence", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresReferencesHeavyToaPageReferenceSignatures()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -4534,17 +4422,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("field renderer pair", StringComparison.Ordinal)
                 && f.Contains("missing WPF page", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresMatchingReferencesHeavyToaSignatures()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -4613,17 +4496,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("generated TOA page-reference signatures differ", StringComparison.Ordinal)
                 && f.Contains("Unexpected v. Drift", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_ReportsMissingExpectedScenario()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var row = BuildFileBackedRow(
@@ -4659,17 +4537,12 @@ public sealed class VisualEvidencePlannerTests
             Action act = () => FreeWVisualEvidenceManifestNormalizer.EnsureSummaryTrusted(summary);
             act.Should().Throw<InvalidOperationException>().WithMessage("*f2-comments*");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_DoesNotInferCoverageFromMissingCaptureFiles()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var row = BuildFileBackedRow(
@@ -4704,17 +4577,12 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("expected at least 1 trusted output", StringComparison.Ordinal)
                 && f.Contains("found 0", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_ReportsMissingBackstageRendererPair()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var row = BuildFileBackedRow(
@@ -4755,17 +4623,12 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("backstage renderer pair 'backstage-print-preview-fidelity'", StringComparison.Ordinal)
                 && f.Contains("missing Avalonia page(s): p1, p2", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsBackstagePlaceholderFallbackRows()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -4844,17 +4707,12 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("backstage renderer pair 'backstage-pdf-export-fidelity'", StringComparison.Ordinal)
                 && f.Contains("missing Avalonia page(s): p1", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsBackstageRowsWithoutRealCaptureSource()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var row = BuildFileBackedRow(
@@ -4894,17 +4752,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("expected at least 1 trusted output", StringComparison.Ordinal)
                 && f.Contains("found 0", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresBackstageWorkflowMetadata()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var row = BuildFileBackedRow(
@@ -4941,17 +4794,12 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("must declare backstageWorkflow 'print-preview'", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsBackstageSoftwareRendererRows()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var row = BuildFileBackedRow(
@@ -5001,17 +4849,12 @@ public sealed class VisualEvidencePlannerTests
                 blocker.Status == "missing-real-captures" &&
                 blocker.SemanticEvidence.Contains("wpf-fidelity-render/p1=failed"));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_AllowsBackstageSoftwareRendererRowsForNoWordFallback()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -5111,17 +4954,12 @@ public sealed class VisualEvidencePlannerTests
             withBaseline.RemainingEvidenceBlockers.Should().NotContain(blocker =>
                 blocker.Status == "missing-real-captures");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_MakesDefaultWpfFloatingWrapOptionalForNoWordFallback()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var unrelatedRow = BuildFileBackedRow(
@@ -5155,17 +4993,12 @@ public sealed class VisualEvidencePlannerTests
                 scenario.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId
                 && scenario.ScenarioId == FreeWVisualEvidenceManifestNormalizer.FloatingWrappingWpfScenarioId);
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresBackstageArtifactMetadata()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var row = BuildFileBackedRow(
@@ -5205,17 +5038,12 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("must declare backstagePipeline 'print-preview-fixed-layout-artifact'", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsGenericBackstageArtifactMetadata()
     {
         var root = CreateTempRoot();
-        try
         {
             var avaloniaDir = Path.Combine(root, "avalonia");
             var row = BuildFileBackedRow(
@@ -5257,17 +5085,12 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("cannot use generic or fallback backstagePipeline 'generic-page-screenshot'", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsGenericBackstageCaptureRouteMetadata()
     {
         var root = CreateTempRoot();
-        try
         {
             var avaloniaDir = Path.Combine(root, "avalonia");
             var row = BuildFileBackedRow(
@@ -5314,17 +5137,12 @@ public sealed class VisualEvidencePlannerTests
                 row.Status == "failed" &&
                 row.Notes.Contains("backstageCaptureRoute", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsCrossWiredBackstageWorkflowMetadata()
     {
         var root = CreateTempRoot();
-        try
         {
             var avaloniaDir = Path.Combine(root, "avalonia");
             var row = BuildFileBackedRow(
@@ -5362,17 +5180,12 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("must use backstageWorkflow 'pdf-export', found 'print-preview'", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsCrossWiredBackstageArtifactMetadata()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var row = BuildFileBackedRow(
@@ -5414,17 +5227,12 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("must use backstagePipeline 'print-preview-fixed-layout-artifact', found 'pdf-export-rasterized-artifact'", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_ReportsMissingRequiredBackstageRendererPages()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -5487,17 +5295,12 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().NotContain(f =>
                 f.Contains("missing WPF page(s): p3", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void ToMarkdown_IncludesDeterministicBackstagePrintEvidenceReadiness()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -5598,17 +5401,12 @@ public sealed class VisualEvidencePlannerTests
                 row.GetProperty("requiresWordBaseline").GetBoolean() == false &&
                 row.GetProperty("trust").GetProperty("passed").GetBoolean() == false);
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_ReportsMissingRequiredReviewRendererPages()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -5657,17 +5455,12 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("review renderer pair 'f2-comments'", StringComparison.Ordinal)
                 && f.Contains("missing Avalonia page(s): p1", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_ValidatesReviewProofingDiagnosticSignatures()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -5743,17 +5536,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("4 proofing visual adornment(s)");
             markdown.Should().Contain("grammar-squiggle wavy #2B579A");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void ReviewProofingNoWordSummary_ReportsBaselineReadinessAndUnavailableBlockers()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -5856,17 +5644,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("review-proofing-visual-depth-word-baseline-fidelity");
             markdown.Should().Contain("Word COM or baseline generation unavailable; paired WPF/Avalonia proofing adornment evidence is retained without authoritative Word parity");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsReviewProofingMissingVisualAdornments()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             const string scenarioId = "review-proofing-visual-depth";
@@ -5916,17 +5699,12 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("grammar visual adornment count must match", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_ValidatesReviewProtectionCommandMatrix()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -6002,17 +5780,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("protection CommentsOnly");
             markdown.Should().Contain("Mark as Final checked");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsCrossHostReviewProofingDiagnosticDrift()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -6085,17 +5858,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("proofing visual adornment signatures differ", StringComparison.Ordinal)
                 && f.Contains("grammar-squiggle", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsCrossHostReviewProtectionCommandDrift()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -6159,17 +5927,12 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("protection command signatures differ", StringComparison.Ordinal)
                 && f.Contains("operation=ProofingReplacement", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void ReviewMarkupNoWordSummary_ReportsBaselineReadinessAndUnavailableBlockers()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -6278,17 +6041,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("f2-comments-word-baseline-fidelity");
             markdown.Should().Contain("Word COM or baseline generation unavailable; paired WPF/Avalonia review markup evidence is retained without authoritative Word parity");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_ValidatesReviewCompareCombineProofReadiness()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -6403,17 +6161,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("review-compare-visual-proof");
             markdown.Should().Contain("review-combine-visual-proof");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_ValidatesPairedSectionGeometryMetadata()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -6486,17 +6239,12 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("section-geometry renderer pair 'f2-section-landscape' page 2", StringComparison.Ordinal)
                 && f.Contains("section ordinals differ", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void SectionGeometryNoWordSummary_ReportsBaselineReadinessAndUnavailableBlocker()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -6594,17 +6342,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("f2-section-landscape");
             markdown.Should().Contain("word-baseline-unavailable");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_AllowsPairedWordArtWatermarkMetadata()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -6651,17 +6394,12 @@ public sealed class VisualEvidencePlannerTests
 
             summary.Trust.Passed.Should().BeTrue();
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsCrossHostWordArtWatermarkMetadataDrift()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -6723,17 +6461,12 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("WordArt watermark renderer pair 'wordart-picture-watermark-layout' page 1", StringComparison.Ordinal)
                 && f.Contains("page feature signatures differ", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_AllowsBackstageRendererExtraPagesAndDifferentCaptureDimensions()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -6808,17 +6541,12 @@ public sealed class VisualEvidencePlannerTests
                 e.PageNumber == 1)
                 .PixelWidth.Should().Be(24);
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_FiltersIncludedScenariosBeforeValidation()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -6882,10 +6610,6 @@ public sealed class VisualEvidencePlannerTests
                 .Should().HaveCount(4)
                 .And.OnlyContain(row => row.Status == "trusted");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
@@ -6939,7 +6663,6 @@ public sealed class VisualEvidencePlannerTests
     public void BuildMissingBaselineComparison_FailsSummaryTrustTruthfully()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var row = BuildFileBackedRow(
@@ -6985,17 +6708,12 @@ public sealed class VisualEvidencePlannerTests
             Action act = () => FreeWVisualEvidenceManifestNormalizer.EnsureSummaryTrusted(withBaseline);
             act.Should().Throw<InvalidOperationException>().WithMessage("*missing Word baseline PNG*");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildUnavailableBaselineComparison_KeepsNoWordSummaryTrusted()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var row = BuildFileBackedRow(
@@ -7078,17 +6796,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
             markdown.Should().Contain("f2-hf-basic/f2-hf-basic_p1.png");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void BuildNormalizedSummaryFromFiles_TrustsLegalReferenceSectionPageNumberSignatures()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -7199,17 +6912,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("word-baseline-unavailable=2");
             markdown.Should().Contain("legal-reference-section-page-number-fidelity");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void ReferencesHeavyNoWordSummary_ReportsToaPageNumberEvidenceBlocker()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -7328,17 +7036,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("yes");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void EquationStructuresNoWordSummary_ReportsEquationWordBaselineEvidenceBlocker()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -7467,17 +7170,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("spacing=equationarray");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void WithBaselineComparisons_SurfacesDrawingObjectVisualProofReadiness()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -7632,17 +7330,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("chart-smartart-complex-word-baseline-fidelity");
             markdown.Should().Contain("paired WPF/Avalonia evidence is retained without authoritative Word parity");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void SmartArtPolygonNoWordSummary_ReportsFocusedProofReadinessWithoutAuthoritativeWordParity()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -7734,17 +7427,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("SmartArt polygon nodes=4");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void DrawingObjectNoWordSummary_ReportsPairedProofReadinessWithoutAuthoritativeWordParity()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -7856,17 +7544,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("word-baseline-unavailable=2");
             markdown.Should().Contain("Word COM or baseline generation unavailable; paired WPF/Avalonia evidence is retained without authoritative Word parity");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void GroupedDrawingObjectNoWordSummary_ReportsFocusedGroupedChildProofWithoutUnrelatedRows()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -7961,17 +7644,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("Grouped drawing/object visual fidelity");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void ObjectFormatNoWordSummary_ReportsFocusedPositionSizeStyleProofWithoutAuthoritativeWordParity()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -8070,17 +7748,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().NotContain("chart-smartart-complex");
             markdown.Should().NotContain("table-pagination-repeat-header");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void HeaderFooterImageNoWordSummary_ReportsFocusedProofReadinessWithoutAuthoritativeWordParity()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -8178,17 +7851,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("Header/footer image visual fidelity");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void NotePlacementNoWordSummary_ReportsFocusedProofReadinessWithoutAuthoritativeWordParity()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -8318,17 +7986,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("f2-endnotes-word-baseline-fidelity");
             markdown.Should().Contain("Word COM or baseline generation unavailable; paired WPF/Avalonia note placement evidence is retained without authoritative Word parity");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void TablePaginationNoWordSummary_ReportsFocusedProofReadinessWithoutAuthoritativeWordParity()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -8449,17 +8112,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("paginationSig=");
             markdown.Should().Contain("without authoritative Word table parity");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void FloatingWrappingNoWordSummary_ReportsPairedProofReadinessWithoutAuthoritativeWordParity()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -8541,17 +8199,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("| floating-wrapping-visual-proof | 1 | paired-renderer-proof-ready |");
             markdown.Should().Contain("Word COM or baseline generation unavailable; paired WPF/Avalonia floating evidence is retained without authoritative Word wrap parity");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void FloatingWrappingNoWordSummary_FailsReadinessWhenTightWrapEvidenceIsMissing()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -8625,17 +8278,12 @@ public sealed class VisualEvidencePlannerTests
             readiness.Trust.Passed.Should().BeFalse();
             readiness.Trust.Failures.Should().Contain("floating/wrapping proof is missing WPF tight-wrap evidence");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void FloatingWrappingReadiness_FailsWhenRealWordPngComparisonDrifts()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -8719,17 +8367,12 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("wpf-fidelity-render/f2-01-float-wrap_p1.png", StringComparison.Ordinal) &&
                 f.Contains("changed pixel ratio", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void WordBaselineTriage_SurfacesFailedMissingAndDecodeRowsAheadOfSkippedRows()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -8870,17 +8513,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("Skipped rows hidden from triage table: 1.");
             markdown.Should().NotContain("| avalonia-page-layout-shot | page-composition-web-layout | p1/freew_web_layout.png | not-in-scope | skipped |");
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void WordBaselineTriage_SortsComparedRowsByChangedPixelRatioAcrossWpfAndAvalonia()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var avaloniaDir = Path.Combine(root, "avalonia");
@@ -8995,17 +8633,12 @@ public sealed class VisualEvidencePlannerTests
             markdown.IndexOf("## Word Baseline Triage", StringComparison.Ordinal)
                 .Should().BeLessThan(markdown.IndexOf("## Word Baseline Comparison", StringComparison.Ordinal));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     [Fact]
     public void WithBaselineComparisons_SerializesJsonAndMarkdownSummary()
     {
         var root = CreateTempRoot();
-        try
         {
             var wpfDir = Path.Combine(root, "wpf");
             var row = BuildFileBackedRow(
@@ -9113,10 +8746,6 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("pixel delta > 8");
             markdown.Should().Contain("0/4 (0.000 %)");
             markdown.Should().Contain("0.000 %");
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
         }
     }
 
@@ -9462,27 +9091,10 @@ public sealed class VisualEvidencePlannerTests
         return pixels;
     }
 
-    private static string CreateTempRoot()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "FreeWVisualEvidence-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        return root;
-    }
+    private string CreateTempRoot() => _temporaryDirectory.Path;
 
-    private static string FindRepoFile(params string[] segments)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(segments).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not find repo file: " + string.Join(Path.DirectorySeparatorChar, segments));
-    }
+    private static string FindRepoFile(params string[] segments) =>
+        TestWorkspaceFileLocator.Find(segments);
 
     private static string ComputeSha256(string path)
     {

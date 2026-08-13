@@ -7,7 +7,7 @@ public sealed class RibbonKeyTipParityTests
     [Fact]
     public void WpfProductionRibbonKeepsAmbiguousAnimationKeyTipsForNativeRouting()
     {
-        var animations = FreePRibbon.Build().Tabs.Single(tab => tab.Id == "animations");
+        var animations = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf).Tabs.Single(tab => tab.Id == "animations");
         var effects = animations.Groups.Single(group => group.Id == "animation-effects");
 
         effects.Controls.Single(control => control.CommandId.Value == "freep.anim.emphasis.blink")
@@ -19,7 +19,7 @@ public sealed class RibbonKeyTipParityTests
     [Fact]
     public void WpfProductionRibbonKeepsNestedMenuKeyTipsAndDisabledStateAuthority()
     {
-        var animations = FreePRibbon.Build().Tabs.Single(tab => tab.Id == "animations");
+        var animations = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf).Tabs.Single(tab => tab.Id == "animations");
         var blinds = animations.Groups
             .Single(group => group.Id == "animation-effects")
             .Controls.Single(control => control.CommandId.Value == "freep.anim.entrance.blinds");

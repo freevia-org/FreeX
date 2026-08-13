@@ -13,10 +13,10 @@ public sealed record TextToColumnsRangeSelectionRequest(
 
 public sealed partial class TextToColumnsDialog : Window
 {
-    private const double DialogDefaultWidth = TextToColumnsParityFixture.WindowWidth;
-    private const double DialogDefaultHeight = TextToColumnsParityFixture.WindowHeight;
-    private const double DialogMinimumWidth = TextToColumnsParityFixture.MinimumWindowWidth;
-    private const double DialogMinimumHeight = TextToColumnsParityFixture.MinimumWindowHeight;
+    private const double DialogDefaultWidth = TextToColumnsDialogMetrics.WindowWidth;
+    private const double DialogDefaultHeight = TextToColumnsDialogMetrics.WindowHeight;
+    private const double DialogMinimumWidth = TextToColumnsDialogMetrics.MinimumWindowWidth;
+    private const double DialogMinimumHeight = TextToColumnsDialogMetrics.MinimumWindowHeight;
 
     private static readonly string[] DateColumnFormatLabels = ["MDY", "DMY", "YMD", "MYD", "DYM", "YDM"];
 
@@ -208,39 +208,39 @@ public sealed partial class TextToColumnsDialog : Window
         {
             if (!TryParseDestination(_destinationBox.Text, _defaultDestination, out var destination))
             {
-                FocusInvalidDestinationInput();
-                throw new ArgumentException(UiText.Get("TextToColumns_EnterASingleDestinationCellSuchAsF2"));
+                ShowValidation(TextToColumnsDialogValidationIssue.InvalidDestination);
+                return;
             }
 
             if (_fixedWidthButton.IsChecked == true &&
                 !TryParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text, FixedWidthMaxLength(), out _))
             {
-                FocusInvalidFixedWidthBreaksInput();
-                throw new ArgumentException(UiText.Get("TextToColumns_EnterAtLeastOneFixedWidthBreakPosition"));
+                ShowValidation(TextToColumnsDialogValidationIssue.MissingFixedWidthBreaks);
+                return;
             }
 
             if (_fixedWidthButton.IsChecked != true && SelectedDelimiterKinds().Count == 0)
             {
-                FocusInvalidDelimiterSelectionInput();
-                throw new ArgumentException(UiText.Get("TextToColumns_SelectAtLeastOneDelimiter"));
+                ShowValidation(TextToColumnsDialogValidationIssue.MissingDelimiter);
+                return;
             }
 
             if (_fixedWidthButton.IsChecked != true && _otherBox.IsChecked == true && string.IsNullOrEmpty(_customBox.Text))
             {
-                FocusInvalidCustomDelimiterInput();
-                throw new ArgumentException(UiText.Get("TextToColumns_CustomDelimiterIsRequired"));
+                ShowValidation(TextToColumnsDialogValidationIssue.MissingCustomDelimiter);
+                return;
             }
 
             if (!TryParseAdvancedSeparator(_decimalSeparatorBox.Text, out _))
             {
-                FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);
-                throw new ArgumentException(UiText.Get("TextToColumns_EnterASingleDecimalSeparator"));
+                ShowValidation(TextToColumnsDialogValidationIssue.InvalidDecimalSeparator);
+                return;
             }
 
             if (!TryParseAdvancedSeparator(_thousandsSeparatorBox.Text, out _))
             {
-                FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);
-                throw new ArgumentException(UiText.Get("TextToColumns_EnterASingleThousandsSeparator"));
+                ShowValidation(TextToColumnsDialogValidationIssue.InvalidThousandsSeparator);
+                return;
             }
 
             Result = _fixedWidthButton.IsChecked == true
@@ -258,35 +258,36 @@ public sealed partial class TextToColumnsDialog : Window
         catch (Exception ex)
         {
             DialogMessageHelper.ShowWarning(this, ex.Message, Title);
-            RefocusInvalidInputAfterWarning(ex.Message);
         }
     }
 
-    private void RefocusInvalidInputAfterWarning(string message)
+    private void ShowValidation(TextToColumnsDialogValidationIssue issue)
     {
-        if (string.Equals(message, UiText.Get("TextToColumns_EnterASingleDestinationCellSuchAsF2"), StringComparison.Ordinal))
+        var presentation = TextToColumnsDialogPlanner.DescribeValidationIssue(issue);
+        DialogMessageHelper.ShowWarning(
+            this,
+            presentation.Message.Resolve(UiText.Get, UiText.Format),
+            Title);
+        switch (presentation.FocusTarget)
         {
-            FocusInvalidDestinationInput();
-        }
-        else if (string.Equals(message, UiText.Get("TextToColumns_EnterAtLeastOneFixedWidthBreakPosition"), StringComparison.Ordinal))
-        {
-            FocusInvalidFixedWidthBreaksInput();
-        }
-        else if (string.Equals(message, UiText.Get("TextToColumns_SelectAtLeastOneDelimiter"), StringComparison.Ordinal))
-        {
-            FocusInvalidDelimiterSelectionInput();
-        }
-        else if (string.Equals(message, UiText.Get("TextToColumns_CustomDelimiterIsRequired"), StringComparison.Ordinal))
-        {
-            FocusInvalidCustomDelimiterInput();
-        }
-        else if (string.Equals(message, UiText.Get("TextToColumns_EnterASingleDecimalSeparator"), StringComparison.Ordinal))
-        {
-            FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);
-        }
-        else if (string.Equals(message, UiText.Get("TextToColumns_EnterASingleThousandsSeparator"), StringComparison.Ordinal))
-        {
-            FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);
+            case TextToColumnsDialogFocusTarget.FixedWidthBreaks:
+                FocusInvalidFixedWidthBreaksInput();
+                break;
+            case TextToColumnsDialogFocusTarget.DelimiterSelection:
+                FocusInvalidDelimiterSelectionInput();
+                break;
+            case TextToColumnsDialogFocusTarget.CustomDelimiter:
+                FocusInvalidCustomDelimiterInput();
+                break;
+            case TextToColumnsDialogFocusTarget.DecimalSeparator:
+                FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);
+                break;
+            case TextToColumnsDialogFocusTarget.ThousandsSeparator:
+                FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);
+                break;
+            default:
+                FocusInvalidDestinationInput();
+                break;
         }
     }
 

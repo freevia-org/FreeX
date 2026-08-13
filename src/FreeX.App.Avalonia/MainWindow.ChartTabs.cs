@@ -78,14 +78,18 @@ public sealed partial class MainWindow
 
     private void ApplyChartLayout(string commandLabel, ChartModel chart, ChartLayoutOptions options)
     {
-        var result = _session.ExecuteReviewCommand(new SetChartLayoutCommand(_session.ActiveSheet.Id, chart.Id, options));
-        RefreshShell(result.Success
-            ? UiText.Format(ChartWorkflowCommandCatalog.CommandAppliedStatusResourceKey, commandLabel)
-            : result.ErrorMessage ?? UiText.Format(ChartWorkflowCommandCatalog.CommandFailedStatusResourceKey, commandLabel));
+        var result = _session.ExecuteReviewCommand(
+            ChartCommandWorkflowPlanner.BuildLayoutCommand(_session.ActiveSheet.Id, chart, options));
+        RefreshShell(ChartWorkflowCommandCatalog
+            .DescribeCommandResult(result.Success, commandLabel, result.ErrorMessage)
+            .Resolve(UiText.Get, UiText.Format));
     }
 
     private static string ChartWorkflowCaption(ChartWorkflowCommandDescriptor command) =>
         command.TitleResourceKey is { } resourceKey ? UiText.Get(resourceKey) : command.Label;
+
+    private static string ChartWorkflowCaption(ChartAxisWorkflowCommandDescriptor command) =>
+        UiText.Get(command.TitleResourceKey);
 
     private static string ChartWorkflowUnsupportedStatus(ChartWorkflowCommandDescriptor command) =>
         command.UnsupportedStatusResourceKey is { } resourceKey
@@ -123,7 +127,11 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart(command, out chart))
             return;
 
-        var result = _session.ExecuteReviewCommand(new ChangeChartTypeCommand(_session.ActiveSheet.Id, chart.Id, plan.AppliedType!.Value));
+        var result = _session.ExecuteReviewCommand(
+            ChartCommandWorkflowPlanner.BuildChangeTypeCommand(
+                _session.ActiveSheet.Id,
+                chart,
+                plan.AppliedType!.Value));
         RefreshShell(result.Success
             ? UiText.Format("ChartLoc_ChangedChartTypeTo", ChartTypeChangePlanner.DisplayName(plan.AppliedType!.Value))
             : result.ErrorMessage ?? UiText.Get("ChartLoc_ChangeChartTypeFailed"));
@@ -397,13 +405,13 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart(command, out chart))
             return;
 
-        var commandResult = _session.ExecuteReviewCommand(new ChangeChartSourceCommand(
-            _session.ActiveSheet.Id,
-            chart.Id,
-            dataRange,
-            firstRowIsHeader: chart.FirstRowIsHeader,
-            firstColIsCategories: choice.FirstColumnIsCategories,
-            seriesInRows: choice.SwitchRowColumn));
+        var commandResult = _session.ExecuteReviewCommand(
+            ChartCommandWorkflowPlanner.BuildChangeSourceCommand(
+                _session.ActiveSheet.Id,
+                chart,
+                dataRange,
+                choice.FirstColumnIsCategories,
+                choice.SwitchRowColumn));
         RefreshShell(commandResult.Success
             ? UiText.Format("ChartLoc_ChartDataSourceSetTo", FormatRangeReference(dataRange))
             : commandResult.ErrorMessage ?? UiText.Get("ChartLoc_SelectDataFailed"));
@@ -708,15 +716,6 @@ public sealed partial class MainWindow
         return await dialog.ShowDialog<SelectDataSourceResult?>(this);
     }
 
-    /// <summary>
-    /// Parity-capture entry point for the Select Data Source dialog.  Replaced by the full series
-    /// management dialog so the captured surface now shows the complete WPF-parity UI.
-    /// </summary>
-    private Task<SelectDataSourceResult?> ShowSelectDataDialogAsync(
-        string initialRange,
-        bool firstColumnIsCategories) =>
-        ShowSelectDataSourceDialogAsync(initialRange, firstColumnIsCategories);
-
     // ---- Chart Design: layout toggles (real, SetChartLayoutCommand) -----------------------------------
 
     private async Task ShowChartTitlesDialog()
@@ -796,7 +795,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Legend", out var chart))
+        var commandLabel = UiText.Get("ChartLoc_LegendTitle");
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         var current = ChartLegendPlanner.Read(chart);
@@ -804,10 +804,10 @@ public sealed partial class MainWindow
         if (result is not { } edited)
             return;
 
-        if (!TryGetSelectedChart("Legend", out chart))
+        if (!TryGetSelectedChart(commandLabel, out chart))
             return;
 
-        ApplyChartLayout("Legend", chart, ChartLegendPlanner.Plan(edited));
+        ApplyChartLayout(commandLabel, chart, ChartLegendPlanner.Plan(edited));
     }
 
     private async Task<ChartLegendInput?> ShowChartLegendDialogAsync(bool showLegend, ChartLegendPosition position)
@@ -818,7 +818,9 @@ public sealed partial class MainWindow
         var positionChoices = ChartLegendPlanner.GetPositionChoices();
         var positionCombo = CreateChartComboBox(260, positionChoices);
         positionCombo.DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartLegendPositionChoice.DisplayName));
-        AutomationProperties.SetName(positionCombo, "Legend position");
+        AutomationProperties.SetName(
+            positionCombo,
+            UiText.CreateAutomationName(UiText.Get("ChartLoc_LegendPositionLabel")));
         AutomationProperties.SetAutomationId(positionCombo, "ChartLegendPositionCombo");
         positionCombo.SelectedItem =
             positionChoices.FirstOrDefault(c => c.Position == position)
@@ -857,10 +859,11 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Data Label Position", out var chart))
+        var commandLabel = UiText.Get("MainWindow_TooltipTitle_DataLabelPosition");
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
-        ApplyChartLayout("Data Label Position", chart, new ChartLayoutOptions(
+        ApplyChartLayout(commandLabel, chart, new ChartLayoutOptions(
             ShowDataLabels: true,
             DataLabelPosition: ChartQuickFormatCycler.NextDataLabelPosition(chart.DataLabelPosition)));
     }
@@ -893,29 +896,31 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Chart Shape Fill", out var chart))
+        var commandLabel = UiText.Get("ChartLoc_ChartAreaFill");
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         var color = await ShowMoreColorsDialogAsync(
             UiText.Get("ChartLoc_ChartAreaFill"),
             chart.ChartAreaFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-        if (color is { } chosen && TryGetSelectedChart("Chart Area Fill", out chart))
-            ApplyChartLayout("Chart Area Fill", chart, new ChartLayoutOptions(ChartAreaFillColor: chosen));
+        if (color is { } chosen && TryGetSelectedChart(commandLabel, out chart))
+            ApplyChartLayout(commandLabel, chart, new ChartLayoutOptions(ChartAreaFillColor: chosen));
     }
 
     private async Task ShowChartShapeOutlineDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Chart Shape Outline", out var chart))
+        var commandLabel = UiText.Get("ChartLoc_PlotAreaBorder");
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         var color = await ShowMoreColorsDialogAsync(
             UiText.Get("ChartLoc_PlotAreaBorder"),
             chart.PlotAreaBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-        if (color is { } chosen && TryGetSelectedChart("Plot Area Border", out chart))
+        if (color is { } chosen && TryGetSelectedChart(commandLabel, out chart))
         {
-            ApplyChartLayout("Plot Area Border", chart, new ChartLayoutOptions(
+            ApplyChartLayout(commandLabel, chart, new ChartLayoutOptions(
                 PlotAreaBorderColor: chosen,
                 PlotAreaBorderThickness: ChartQuickFormatCycler.NextPlotAreaBorderThickness(chart.PlotAreaBorderThickness)));
         }
@@ -925,14 +930,15 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Plot Area Fill", out var chart))
+        var commandLabel = UiText.Get("ChartLoc_PlotAreaFill");
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         var color = await ShowMoreColorsDialogAsync(
             UiText.Get("ChartLoc_PlotAreaFill"),
             chart.PlotAreaFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-        if (color is { } chosen && TryGetSelectedChart("Plot Area Fill", out chart))
-            ApplyChartLayout("Plot Area Fill", chart, new ChartLayoutOptions(PlotAreaFillColor: chosen));
+        if (color is { } chosen && TryGetSelectedChart(commandLabel, out chart))
+            ApplyChartLayout(commandLabel, chart, new ChartLayoutOptions(PlotAreaFillColor: chosen));
     }
 
     private void CycleChartXAxisGridlines()
@@ -959,7 +965,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart(command.Label, out var chart))
+        var commandLabel = ChartWorkflowCaption(command);
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         if (!ChartAxisPlanner.SupportsAxes(chart.Type))
@@ -971,7 +978,7 @@ public sealed partial class MainWindow
         if (command.QuickCommand is not { } quickCommand)
             return;
 
-        ApplyChartLayout(command.Label, chart, ChartAxisPlanner.PlanQuickCommand(chart, command.UseXAxis, quickCommand));
+        ApplyChartLayout(commandLabel, chart, ChartAxisPlanner.PlanQuickCommand(chart, command.UseXAxis, quickCommand));
     }
 
     private void ExecuteChartAxisPlannedCommand(
@@ -980,25 +987,20 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart(command.Label, out var chart))
+        var commandLabel = ChartWorkflowCaption(command);
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         var plan = planner(_session.ActiveSheet, chart, command.UseXAxis);
         if (plan.Options is not { } options)
         {
-            RefreshShell(plan.Issue switch
-            {
-                ChartAxisCommandIssue.UnsupportedLogScale => UiText.Get(command.UseXAxis
-                    ? "MainWindowMessage_ChartXAxisLogScaleSupportedTypes"
-                    : "MainWindowMessage_ChartYAxisLogScaleSupportedTypes"),
-                ChartAxisCommandIssue.UnsupportedBounds => UiText.Get("MainWindowMessage_ChartAxisBoundsSupportedTypes"),
-                ChartAxisCommandIssue.NumericBoundsRequired => UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresNumericData"),
-                _ => UiText.Get("MainWindowMessage_ChartAxisOptionsRequiresChart"),
-            });
+            RefreshShell(ChartValidationPresentationPlanner
+                .DescribeAxisCommandIssue(plan.Issue, command.UseXAxis)
+                .Resolve(UiText.Get, UiText.Format));
             return;
         }
 
-        ApplyChartLayout(command.Label, chart, options);
+        ApplyChartLayout(commandLabel, chart, options);
     }
 
     /// <summary>Reports that a Chart-tab command has no Core support yet (no silent no-op, no invented behavior).</summary>

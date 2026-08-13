@@ -2,6 +2,11 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PivotUI;
 
+public sealed record PivotAvailableFieldItemModel(
+    int SourceFieldIndex,
+    string Caption,
+    bool IsChecked);
+
 /// <summary>
 /// A single field as shown in the field-list pane. For a field placed in <see cref="PivotFieldBucket.Values"/>
 /// the <see cref="Caption"/> is the data field's display name (e.g. "Sum of Amount") and

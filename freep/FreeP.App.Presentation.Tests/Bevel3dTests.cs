@@ -12,29 +12,8 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class Bevel3dTests
 {
     // ─────────────────────────────────────────────────────────────────────────
-    // Model: new properties exist and HasBevel helper works
+    // Model: bevel properties retain their defaults
     // ─────────────────────────────────────────────────────────────────────────
-
-    [Fact]
-    public void ShapeEffects_HasBevel_FalseWhenNoBevsels()
-    {
-        var fx = new ShapeEffects();
-        fx.HasBevel.Should().BeFalse();
-    }
-
-    [Fact]
-    public void ShapeEffects_HasBevel_TrueWhenBevelTopSet()
-    {
-        var fx = new ShapeEffects { BevelTop = new BevelInfo { WidthEmu = 76200, HeightEmu = 76200 } };
-        fx.HasBevel.Should().BeTrue();
-    }
-
-    [Fact]
-    public void ShapeEffects_HasBevel_TrueWhenBevelBottomSet()
-    {
-        var fx = new ShapeEffects { BevelBottom = new BevelInfo { WidthEmu = 114300 } };
-        fx.HasBevel.Should().BeTrue();
-    }
 
     [Fact]
     public void BevelInfo_DefaultValues_AreCorrect()

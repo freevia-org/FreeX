@@ -35,8 +35,8 @@ public static class ThesaurusActionRowExtensions
 
 public static class ThesaurusPresentationPlanner
 {
-    public const string EmptyWordStatus = "Position the cursor on a word and press Shift+F7.";
-    public const string NoSynonymsStatus = "No synonyms found for this word.";
+    public static string EmptyWordStatus => FreeWUiTextCatalog.ThesaurusEmptyWordStatus;
+    public static string NoSynonymsStatus => FreeWUiTextCatalog.ThesaurusNoSynonymsStatus;
 
     public static ThesaurusDisplayPlan Lookup(string? word) =>
         Build(word, ThesaurusLookup.Instance.Lookup(word));
@@ -77,22 +77,12 @@ public static class ThesaurusPresentationPlanner
             sourceWord,
             synonym,
             display,
-            $"Insert \"{display}\" in place of \"{sourceWord}\"",
-            $"Copy \"{display}\" to clipboard");
+            FreeWUiTextCatalog.ThesaurusInsertToolTip(display, sourceWord),
+            FreeWUiTextCatalog.ThesaurusCopyToolTip(display));
     }
 
     public static string FormatSynonym(string synonym) =>
         synonym.Replace('_', ' ').Trim();
 
-    public static string FormatSenseLabel(string label) =>
-        label.Trim() switch
-        {
-            "adj" => "adjective",
-            "adv" => "adverb",
-            "noun" => "noun",
-            "verb" => "verb",
-            "prep" => "preposition",
-            "pron" => "pronoun",
-            var value => value.Replace('_', ' ')
-        };
+    public static string FormatSenseLabel(string label) => FreeWUiTextCatalog.ThesaurusSenseLabel(label);
 }

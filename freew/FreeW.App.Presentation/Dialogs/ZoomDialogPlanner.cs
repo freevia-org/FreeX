@@ -39,6 +39,16 @@ public sealed record ZoomDialogSelectionRequest(
     int? PresetPercent,
     string? CustomPercentText);
 
+public sealed record ZoomDialogTextSpec(
+    string Title,
+    string GroupLabel,
+    string PageWidthLabel,
+    string TextWidthLabel,
+    string WholePageLabel,
+    string PercentLabel,
+    string CustomPercentAutomationName,
+    string PercentSuffix);
+
 public static class ZoomDialogPlanner
 {
     private static readonly int[] PresetValues = [200, 100, 75];
@@ -47,26 +57,19 @@ public static class ZoomDialogPlanner
         ZoomLevels.Default * 100d,
         ZoomLevels.Max * 100d);
 
+    public static ZoomDialogTextSpec Text { get; } = new(
+        "Zoom",
+        "Zoom to",
+        "Page width",
+        "Text width",
+        "Whole page",
+        "Percent:",
+        "Custom zoom percent",
+        "%");
+
     public static IReadOnlyList<int> Presets => PresetValues;
 
-    /// <summary>
-    /// Computes the three page-relative zoom choices from model page geometry and the renderer's live
-    /// viewport. Hosts only supply the available size; the fit policy remains shared.
-    /// </summary>
-    public static ZoomDialogFitFactors BuildFitFactors(
-        PageSettings page,
-        double viewportWidthDip,
-        double viewportHeightDip)
-    {
-        ArgumentNullException.ThrowIfNull(page);
-
-        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(page);
-        var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
-        return new ZoomDialogFitFactors(
-            ZoomFit.PageWidth(pageWidthDip, viewportWidthDip),
-            ZoomFit.TextWidth(contentWidthDip, viewportWidthDip),
-            ZoomFit.WholePage(pageWidthDip, pageHeightDip, viewportWidthDip, viewportHeightDip));
-    }
+    public static string FormatPresetLabel(int percent) => $"{percent}%";
 
     public static ZoomDialogPlan Build(double currentFactor)
     {
@@ -84,6 +87,22 @@ public static class ZoomDialogPlanner
 
     public static bool IsPreset(int percent) =>
         PercentPolicy.IsPresetPercent(percent, PresetValues);
+
+    public static ZoomDialogFitFactors BuildFitFactors(
+        PageSettings page,
+        double viewportWidthDip,
+        double viewportHeightDip)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(page);
+        var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
+        var viewportWidth = Math.Max(0, viewportWidthDip);
+        var viewportHeight = Math.Max(0, viewportHeightDip);
+        return new ZoomDialogFitFactors(
+            ZoomFit.PageWidth(pageWidthDip, viewportWidth),
+            ZoomFit.TextWidth(contentWidthDip, viewportWidth),
+            ZoomFit.WholePage(pageWidthDip, pageHeightDip, viewportWidth, viewportHeight));
+    }
 
     public static bool TryCreateResult(
         ZoomDialogSelectionRequest request,

@@ -77,22 +77,21 @@ public sealed partial class XlsxFileAdapter
         XlsxPackageMetadataMerger.NormalizeCustomXmlPackageGraph(generatedArchive);
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorkbookMetadataPreserver.Preserve(
-            sourceArchive,
-            generatedArchive,
+            context,
             workbook,
             sourcePackage.SourceSheetIdsByLocalId ?? []);
         XlsxStylesheetMetadataPreserver.Preserve(sourceArchive, generatedArchive);
         if (sourceParts.HasPivotPackageParts)
-            XlsxPivotXmlReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
+            XlsxPivotXmlReferencePreserver.Preserve(context);
         if (sourceParts.HasStructuredTables)
-            XlsxStructuredTableReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
+            XlsxStructuredTableReferencePreserver.Preserve(context);
         if (sourceParts.HasQueryTables)
         {
             PreserveRenumberedWorksheetQueryTableRelationships(sourceArchive, generatedArchive, context);
             CloneQueryTablesForDuplicatedSheets(sourceArchive, generatedArchive, context, workbook);
         }
         if (sourceParts.HasExternalLinks)
-            XlsxExternalLinkReferencePreserver.Preserve(sourceArchive, generatedArchive);
+            XlsxExternalLinkReferencePreserver.Preserve(context);
         // R96-io-external-link-writer-1: runs unconditionally (not gated on HasExternalLinks) since
         // this is about a freshly TYPED bracketed external-workbook reference the loaded source
         // package never carried at all -- the exact "workbook that had none" case the preserver
@@ -101,31 +100,29 @@ public sealed partial class XlsxFileAdapter
         // just carried forward and never double-backs the same book.
         XlsxExternalLinkAuthoringWriter.Save(generatedArchive, workbook);
         if (sourceParts.HasUnsupportedSheetParts)
-            XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive, context, workbook);
+            XlsxUnsupportedSheetReferencePreserver.Preserve(context, workbook);
         if (sourceParts.HasDrawings)
         {
             var drawingPaths = XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths(sourceArchive, generatedArchive, context, workbook);
-            XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, generatedArchive, context, drawingPaths);
+            XlsxWorksheetDrawingReferencePreserver.Preserve(context, drawingPaths);
         }
         if (sourcePackage.WorksheetsWithPreservableSourceMetadata?.Count != 0)
         {
             XlsxWorksheetMetadataPreserver.Preserve(
-                sourceArchive,
-                generatedArchive,
                 workbook,
                 context,
                 sourcePackage.WorksheetsWithPreservableSourceMetadata);
         }
-        XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
+        XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(context);
         if (sourceParts.HasDrawings)
-            XlsxWorksheetVmlReferencePreserver.Preserve(sourceArchive, generatedArchive, context, workbook);
+            XlsxWorksheetVmlReferencePreserver.Preserve(context, workbook);
         if (sourceParts.HasFormControls)
         {
-            XlsxWorksheetFormControlPreserver.Preserve(sourceArchive, generatedArchive, context, workbook);
-            CloneFormControlsForDuplicatedSheets(sourceArchive, generatedArchive, context, workbook);
+            XlsxWorksheetFormControlPreserver.Preserve(context, workbook);
+            CloneFormControlsForDuplicatedSheets(context, workbook);
         }
         if (sourceParts.HasLegacyComments)
-            XlsxLegacyCommentPreserver.Preserve(sourceArchive, generatedArchive, workbook);
+            XlsxLegacyCommentPreserver.Preserve(workbook, context);
         if (sourceParts.HasFormControls && sourceParts.HasLegacyComments)
         {
             // R112-io-formcontrol-vml-anchor-comment-reorder-1: XlsxLegacyCommentPreserver.Preserve
@@ -134,7 +131,7 @@ public sealed partial class XlsxFileAdapter
             // Form Control anchor sync XlsxWorksheetFormControlPreserver.Preserve wrote into the
             // target moments earlier. Re-apply the anchor sync now, last, so it always wins.
             XlsxWorksheetFormControlPreserver.ReapplyVmlAnchorsAfterCommentReconciliation(
-                sourceArchive, generatedArchive, context, workbook);
+                context, workbook);
         }
         if (sourceParts.HasSharedStrings)
             XlsxSharedStringMetadataPreserver.PreserveRichTextAndPhonetics(sourceArchive, generatedArchive);
@@ -664,8 +661,6 @@ public sealed partial class XlsxFileAdapter
     // sheet was duplicated from that one") and delegate the actual part/relationship cloning to
     // XlsxWorksheetFormControlPreserver.CloneOntoDuplicatedSheet.
     private static void CloneFormControlsForDuplicatedSheets(
-        ZipArchive sourceArchive,
-        ZipArchive generatedArchive,
         XlsxSourcePackagePreservationContext? context,
         Workbook workbook)
     {
@@ -700,8 +695,6 @@ public sealed partial class XlsxFileAdapter
                     continue;
 
                 XlsxWorksheetFormControlPreserver.CloneOntoDuplicatedSheet(
-                    sourceArchive,
-                    generatedArchive,
                     context,
                     candidateSourcePath,
                     newWorksheetPath,

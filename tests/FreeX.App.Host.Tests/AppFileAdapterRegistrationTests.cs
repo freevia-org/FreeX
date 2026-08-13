@@ -1,4 +1,3 @@
-using System.Reflection;
 using FluentAssertions;
 using FreeX.Core.IO;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,8 +36,8 @@ public sealed class AppFileAdapterRegistrationTests
         using var provider = BuildAppServices();
         var adapters = provider.GetServices<IFileAdapter>().ToList();
 
-        var openFilter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
-        var saveFilter = FileDialogFilterBuilder.BuildSaveFilter(adapters);
+        var openFilter = BuildOpenFilter(adapters);
+        var saveFilter = BuildSaveFilter(adapters);
 
         openFilter.Should().Contain("XML Spreadsheet 2003 (*.xml)|*.xml");
         saveFilter.Should().Contain("XML Spreadsheet 2003 (*.xml)|*.xml");
@@ -50,10 +49,10 @@ public sealed class AppFileAdapterRegistrationTests
         using var provider = BuildAppServices();
         var adapters = provider.GetServices<IFileAdapter>().ToList();
 
-        var saveFilterParts = FileDialogFilterBuilder.BuildSaveFilter(adapters).Split('|');
-        var nativeFilterIndex = FileDialogFilterBuilder.FindSaveFilterIndex(
+        var saveFilterParts = BuildSaveFilter(adapters).Split('|');
+        var nativeFilterIndex = FindSaveFilterIndex(
             adapters,
-            FreeXOptions.FreeXWorkbookDefaultFormat);
+            AppOptions.FreeXWorkbookDefaultFormat);
 
         saveFilterParts.Should().Contain("FreeX Workbook (*.fxl)");
         saveFilterParts.Should().Contain("*.fxl");
@@ -69,8 +68,8 @@ public sealed class AppFileAdapterRegistrationTests
         using var provider = BuildAppServices();
         var adapters = provider.GetServices<IFileAdapter>().ToList();
 
-        var openAdapter = FileDialogFilterBuilder.FindOpenAdapter(adapters, ".xml", out var openFormat);
-        var saveAdapter = FileDialogFilterBuilder.FindSaveAdapter(adapters, ".xml", out var saveFormat);
+        var openAdapter = FileFormatResolver.FindOpenAdapter(adapters, ".xml", out var openFormat);
+        var saveAdapter = FileFormatResolver.FindSaveAdapter(adapters, ".xml", out var saveFormat);
 
         openAdapter.Should().BeOfType<SpreadsheetXmlFileAdapter>();
         openFormat.Should().NotBeNull();
@@ -86,10 +85,25 @@ public sealed class AppFileAdapterRegistrationTests
     private static ServiceProvider BuildAppServices()
     {
         var services = new ServiceCollection();
-        var configureServices = typeof(App).GetMethod("ConfigureServices", BindingFlags.NonPublic | BindingFlags.Static);
-        configureServices.Should().NotBeNull();
-
-        configureServices!.Invoke(null, [services]);
+        App.ConfigureServicesForTest(
+            services,
+            new FreeXOptionsRuntimeSession(new AppOptions()));
         return services.BuildServiceProvider();
     }
+
+    private static string BuildOpenFilter(IEnumerable<IFileAdapter> adapters) =>
+        Free.Shared.IO.FileDialogFilterBuilder.BuildOpenFilter(
+            Free.Shared.IO.FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(
+                adapters.SelectMany(adapter => adapter.Formats)));
+
+    private static string BuildSaveFilter(IEnumerable<IFileAdapter> adapters) =>
+        Free.Shared.IO.FileDialogFilterBuilder.BuildSaveFilter(
+            Free.Shared.IO.FileFormatDialogDescriptorAdapter.ToSaveDialogDescriptors(
+                adapters.SelectMany(adapter => adapter.Formats)));
+
+    private static int FindSaveFilterIndex(IEnumerable<IFileAdapter> adapters, string extension) =>
+        Free.Shared.IO.FileDialogFilterBuilder.FindSaveFilterIndex(
+            Free.Shared.IO.FileFormatDialogDescriptorAdapter.ToSaveDialogDescriptors(
+                adapters.SelectMany(adapter => adapter.Formats)),
+            extension);
 }

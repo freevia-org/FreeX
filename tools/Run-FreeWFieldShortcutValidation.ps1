@@ -25,6 +25,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
     [IO.Path]::GetFullPath($OutputDir)
 } else {
@@ -40,47 +41,19 @@ $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/field-shortcut-val
 $manifestEvidenceHelper = Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1"
 $null = . $manifestEvidenceHelper
 
-function Invoke-External {
-    param(
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [string]$WorkingDirectory = $repoRoot,
-        [string]$OutputPath = ""
-    )
-    Push-Location $WorkingDirectory
-    try {
-        if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-            & $FilePath @Arguments
-        } else {
-            & $FilePath @Arguments 2>&1 | Tee-Object -FilePath $OutputPath
-        }
-        if ($LASTEXITCODE -ne 0) {
-            throw "$FilePath exited with code $LASTEXITCODE."
-        }
-    } finally {
-        Pop-Location
-    }
-}
-
 function Assert-ManifestContract {
     param(
         [Parameter(Mandatory = $true)][string]$ManifestPath,
         [Parameter(Mandatory = $true)][string]$EvidenceDirectory
     )
-    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
-    if ($schema.'$schema' -notmatch "json-schema.org") {
-        throw "Field shortcut schema is not a JSON Schema document."
-    }
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-    if ($manifest.schemaVersion -ne 1 -or
-        $manifest.suite -ne "freew-linux-field-shortcut-physical" -or
-        $manifest.platform -ne "linux" -or
-        $manifest.shell -ne "avalonia" -or
-        $manifest.app -ne "FreeW" -or
-        $manifest.baseline -ne $false -or
-        $manifest.coverage.exhaustive -ne $false -or
+    $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath `
+        -InvalidSchemaMessage "Field shortcut schema is not a JSON Schema document."
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "freew-linux-field-shortcut-physical"; platform = "linux"
+        shell = "avalonia"; app = "FreeW"; baseline = $false; appSurface = "document-editor-field-shortcuts"
+    }) -FailureMessage "Field shortcut manifest header does not satisfy its dedicated contract."
+    if ($manifest.coverage.exhaustive -ne $false -or
         $manifest.coverage.scope -ne "physical Alt+F9/F9 field shortcut lane" -or
-        $manifest.appSurface -ne "document-editor-field-shortcuts" -or
         $manifest.window.pattern -ne $fixtureFileName -or
         ([string]$manifest.window.title).IndexOf($fixtureFileName, [StringComparison]::Ordinal) -lt 0 -or
         $manifest.window.visible -ne $true) {
@@ -94,59 +67,25 @@ function Assert-ManifestContract {
         "field-update-shortcut-persist"
     )
     $results = @($manifest.results)
-    $ids = @($results | ForEach-Object { [string]$_.id })
-    if ($results.Count -ne 4 -or $ids.Count -ne ($ids | Select-Object -Unique).Count) {
-        throw "Field shortcut manifest must contain exactly four unique result rows."
-    }
-    foreach ($requiredId in $requiredIds) {
-        if ($ids -notcontains $requiredId) {
-            throw "Field shortcut manifest is missing required result '$requiredId'."
-        }
-    }
-    $passed = @($results | Where-Object { $_.status -eq "passed" }).Count
-    $failed = @($results | Where-Object { $_.status -eq "failed" }).Count
-    if ($manifest.summary.total -ne 4 -or $manifest.summary.passed -ne $passed -or $manifest.summary.failed -ne $failed) {
-        throw "Field shortcut manifest summary does not match its result rows."
-    }
+    Assert-ManifestResultIds -Results $results -ExpectedIds $requiredIds -AllowAnyOrder `
+        -FailureMessage "Field shortcut manifest must contain exactly four unique result rows."
+    Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 4 `
+        -FailureMessage "Field shortcut manifest summary does not match its result rows."
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
-    foreach ($result in $results) {
-        if ($result.category -ne "physical-x11-field-shortcut" -or
-            $result.evidenceLevel -ne "physical-x11-input" -or
-            @($result.evidence).Count -lt 1) {
-            throw "Result '$($result.id)' is missing physical evidence metadata."
-        }
-        foreach ($evidence in @($result.evidence)) {
-            $name = [string]$evidence
-            if ([IO.Path]::IsPathRooted($name) -or $name.Contains("/") -or $name.Contains("\")) {
-                throw "Result '$($result.id)' uses a non-basename evidence path '$name'."
-            }
-            if (-not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) {
-                throw "Result '$($result.id)' references missing or empty evidence '$name'."
-            }
-        }
-    }
-    foreach ($screenshot in @($manifest.screenshots)) {
-        $name = [string]$screenshot.name
-        if ([IO.Path]::IsPathRooted($name) -or $name.Contains("/") -or $name.Contains("\") -or
-            -not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) {
-            throw "Manifest references missing, empty, or non-basename screenshot '$name'."
-        }
-    }
-    $manifest | Add-Member -NotePropertyName contractValidation -NotePropertyValue ([pscustomobject]@{
-            status = "passed"
-            validator = "tools/Run-FreeWFieldShortcutValidation.ps1"
-            contractReference = "tools/LinuxInteractiveDocker/field-shortcut-validation.schema.json"
-        }) -Force
-    $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
-    return $manifest
+    Assert-ManifestResultEvidence -Results $results -FileMap $fileMap `
+        -Category "physical-x11-field-shortcut" -EvidenceLevel "physical-x11-input"
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $fileMap
+    return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
+        -Validator "tools/Run-FreeWFieldShortcutValidation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/field-shortcut-validation.schema.json"
 }
 
 New-Item -ItemType Directory -Path (Split-Path -Parent $fixturePath) -Force | Out-Null
-Invoke-External -FilePath "dotnet" -Arguments @(
+Invoke-ToolProcess -FilePath "dotnet" -Arguments @(
     "run", "--project", $fixtureProject, "--configuration", "Release", "--",
     "generate", $fixturePath
-)
+) -WorkingDirectory $repoRoot
 
 $started = $false
 $sessionDirectory = $null
@@ -164,7 +103,7 @@ try {
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
-    Invoke-External -FilePath "powershell.exe" -Arguments $startArguments
+    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
     $started = $true
 
     $sessionMetadataPath = Join-Path $resolvedOutputRoot "freew/current-session.json"
@@ -200,7 +139,7 @@ try {
     )
     $inspectionExitCode = 0
     try {
-        Invoke-External -FilePath "dotnet" -Arguments $inspectionArguments -OutputPath $inspectionPath
+        Invoke-ToolProcess -FilePath "dotnet" -Arguments $inspectionArguments -WorkingDirectory $repoRoot -OutputPath $inspectionPath
     } catch {
         $inspectionExitCode = 1
         $_ | Out-String | Add-Content -LiteralPath $inspectionPath
@@ -234,10 +173,10 @@ try {
 } finally {
     if ($started -and -not $KeepContainer) {
         try {
-            Invoke-External -FilePath "powershell.exe" -Arguments @(
+            Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", "FreeW", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot
-            )
+            ) -WorkingDirectory $repoRoot
         } catch { Write-Warning "Could not stop harness-owned FreeW container: $($_.Exception.Message)" }
     } elseif ($started) {
         Write-Host "Container retained by request on port $Port."

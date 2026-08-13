@@ -27,6 +27,13 @@ public sealed record FreeXBackstageFrameEntryPlan(
     FreeXBackstageCommandWorkflowPlan? CommandWorkflow)
 {
     public FreeXBackstageNavigationEntryKind Kind => Navigation.Kind;
+
+    public string? StableId =>
+        PaneFlow is { } paneFlow
+            ? FreeXBackstageFramePlanner.GetPaneStableId(paneFlow.Pane)
+            : CommandWorkflow is { } commandWorkflow
+                ? FreeXBackstageFramePlanner.GetCommandStableId(commandWorkflow.Command)
+                : null;
 }
 
 /// <summary>
@@ -35,6 +42,30 @@ public sealed record FreeXBackstageFrameEntryPlan(
 /// </summary>
 public static class FreeXBackstageFramePlanner
 {
+    public static string GetPaneStableId(FreeXBackstagePaneId pane) =>
+        pane switch
+        {
+            FreeXBackstagePaneId.Home => "freex.backstage.pane.home",
+            FreeXBackstagePaneId.Info => "freex.backstage.pane.info",
+            FreeXBackstagePaneId.Print => "freex.backstage.pane.print",
+            _ => throw new ArgumentOutOfRangeException(nameof(pane), pane, null),
+        };
+
+    public static string GetCommandStableId(FreeXBackstageCommandId command) =>
+        command switch
+        {
+            FreeXBackstageCommandId.New => "freex.backstage.command.new",
+            FreeXBackstageCommandId.Open => "freex.backstage.command.open",
+            FreeXBackstageCommandId.Share => "freex.backstage.command.share",
+            FreeXBackstageCommandId.Save => "freex.backstage.command.save",
+            FreeXBackstageCommandId.SaveAs => "freex.backstage.command.saveas",
+            FreeXBackstageCommandId.Export => "freex.backstage.command.export",
+            FreeXBackstageCommandId.Close => "freex.backstage.command.close",
+            FreeXBackstageCommandId.Account => "freex.backstage.command.account",
+            FreeXBackstageCommandId.Options => "freex.backstage.command.options",
+            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
+        };
+
     public static FreeXBackstageFramePlan Build()
     {
         var entries = FreeXBackstageNavigationPlanner.Build()

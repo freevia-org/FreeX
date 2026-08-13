@@ -53,7 +53,8 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("public sealed class UnhideWindowDialog : DialogWindow");
         source.Should().Contain("public sealed class AddWatchDialog : DialogWindow");
         source.Should().Contain("DialogButtonRowFactory.Create(_okButton, _cancelButton)");
-        source.Should().Contain("DialogButtonRowFactory.Create(add, cancel, new Thickness(0, 12, 0, 0));");
+        source.Should().Contain("var buttons = DialogButtonRowFactory.Create(");
+        source.Should().Contain("new Thickness(0, AddWatchDialogPlanner.ActionRowTopMargin, 0, 0));");
         source.Should().Contain("DialogFocus.Focus(_sheetList);");
         source.Should().Contain("DialogFocus.Focus(_sheetBox);");
         source.Should().Contain("DialogFocus.Focus(_windowBox);");

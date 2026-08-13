@@ -33,9 +33,9 @@ public sealed record DocumentParagraphSpacingSet(
 
         doc.DefaultParagraph = ApplySpacing(doc.DefaultParagraph, spacingSet);
 
-        foreach (var styleId in new[] { "Normal", "Title", "Subtitle", "Heading1", "Heading2", "Heading3", "Quote" })
+        foreach (var descriptor in BuiltInStyles.RoleCatalog)
         {
-            if (doc.Styles.TryGetValue(styleId, out var style))
+            if (doc.Styles.TryGetValue(descriptor.Id, out var style))
                 style.Paragraph = ApplySpacing(style.Paragraph, spacingSet);
         }
     }

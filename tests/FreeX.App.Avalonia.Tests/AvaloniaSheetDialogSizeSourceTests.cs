@@ -38,48 +38,49 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
     }
 
     [Fact]
-    public void RemainingDataDialogs_UseWpfLogicalCaptureSizes()
+    public void RemainingDataDialogs_UseStableLiveRendererSizes()
     {
-        var paritySource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
-        paritySource.Should().Contain("private const int ForecastSheetParityDialogWidth = 320;");
-        paritySource.Should().Contain("private const int ForecastSheetParityDialogHeight = 150;");
-        paritySource.Should().Contain("private const int SubtotalParityDialogWidth = 380;");
-        paritySource.Should().Contain("private const int SubtotalParityDialogHeight = 390;");
-        paritySource.Should().Contain(
-            "private const int TextToColumnsParityDialogWidth = (int)TextToColumnsParityFixture.WindowWidth;");
-        paritySource.Should().Contain(
-            "private const int TextToColumnsParityDialogHeight = (int)TextToColumnsParityFixture.WindowHeight;");
+        var rendererSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.RendererAccess.cs"));
+        rendererSource.Should().Contain("private const int ForecastSheetDialogWidth = 320;");
+        rendererSource.Should().Contain("private const int ForecastSheetDialogHeight = 150;");
+        rendererSource.Should().Contain("private const int SubtotalDialogWidth = 380;");
+        rendererSource.Should().Contain("private const int SubtotalDialogHeight = 390;");
+        rendererSource.Should().Contain(
+            "private const int TextToColumnsDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth;");
+        rendererSource.Should().Contain(
+            "private const int TextToColumnsDialogHeight = (int)TextToColumnsDialogMetrics.WindowHeight;");
+        rendererSource.Should().NotContain("ParityDialogWidth");
 
         var mainWindowSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var forecastDialog = ExtractMethodSource(
             mainWindowSource,
             "private async Task<ForecastSheetPlan?> ShowForecastSheetInputDialogAsync()",
             "private static string FormatForecastSheetPlanError(ForecastSheetPlan plan)");
-        forecastDialog.Should().Contain("Width = ForecastSheetParityDialogWidth,");
-        forecastDialog.Should().Contain("Height = ForecastSheetParityDialogHeight,");
-        forecastDialog.Should().Contain("MinWidth = ForecastSheetParityDialogWidth,");
-        forecastDialog.Should().Contain("MinHeight = ForecastSheetParityDialogHeight,");
-        forecastDialog.Should().Contain("MaxWidth = ForecastSheetParityDialogWidth,");
-        forecastDialog.Should().Contain("MaxHeight = ForecastSheetParityDialogHeight,");
+        forecastDialog.Should().Contain("Width = ForecastSheetDialogWidth,");
+        forecastDialog.Should().Contain("Height = ForecastSheetDialogHeight,");
+        forecastDialog.Should().Contain("MinWidth = ForecastSheetDialogWidth,");
+        forecastDialog.Should().Contain("MinHeight = ForecastSheetDialogHeight,");
+        forecastDialog.Should().Contain("MaxWidth = ForecastSheetDialogWidth,");
+        forecastDialog.Should().Contain("MaxHeight = ForecastSheetDialogHeight,");
 
         var subtotalDialog = ExtractMethodSource(
             mainWindowSource,
-            "private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(",
+            "private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(",
             "private static StackPanel CreateSubtotalField(string label, Control control, double topMargin = 0)");
-        subtotalDialog.Should().Contain("Width = SubtotalParityDialogWidth,");
-        subtotalDialog.Should().Contain("Height = SubtotalParityDialogHeight,");
-        subtotalDialog.Should().Contain("MinWidth = SubtotalParityDialogWidth,");
-        subtotalDialog.Should().Contain("MinHeight = SubtotalParityDialogHeight,");
+        subtotalDialog.Should().Contain("Width = SubtotalDialogWidth,");
+        subtotalDialog.Should().Contain("Height = SubtotalDialogHeight,");
+        subtotalDialog.Should().Contain("MinWidth = SubtotalDialogWidth,");
+        subtotalDialog.Should().Contain("MinHeight = SubtotalDialogHeight,");
 
         var textToColumnsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TextToColumns.cs"));
         var textToColumnsDialog = ExtractMethodSource(
             textToColumnsSource,
             "private async Task ShowTextToColumnsDialogAsync()",
             "private static IReadOnlyList<string> ReadTextToColumnsSources(Sheet sheet, GridRange range)");
-        textToColumnsDialog.Should().Contain("Width = TextToColumnsParityDialogWidth,");
-        textToColumnsDialog.Should().Contain("Height = TextToColumnsParityDialogHeight,");
-        textToColumnsDialog.Should().Contain("MinWidth = TextToColumnsParityFixture.MinimumWindowWidth,");
-        textToColumnsDialog.Should().Contain("MinHeight = TextToColumnsParityFixture.MinimumWindowHeight,");
+        textToColumnsDialog.Should().Contain("Width = TextToColumnsDialogWidth,");
+        textToColumnsDialog.Should().Contain("Height = TextToColumnsDialogHeight,");
+        textToColumnsDialog.Should().Contain("MinWidth = TextToColumnsDialogMetrics.MinimumWindowWidth,");
+        textToColumnsDialog.Should().Contain("MinHeight = TextToColumnsDialogMetrics.MinimumWindowHeight,");
     }
 
     [Fact]
@@ -88,7 +89,7 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var subtotalDialog = ExtractMethodSource(
             source,
-            "private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(",
+            "private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(",
             "private static StackPanel CreateSubtotalField(string label, Control control, double topMargin = 0)");
 
         subtotalDialog.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, SubtotalDialogChromeStyle);");
@@ -114,17 +115,6 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
         return source[start..end];
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.FindFileFromBaseDirectory(parts);
 }

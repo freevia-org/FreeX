@@ -9,7 +9,7 @@ public sealed class RibbonDefinitionBuilder
         => AddTab(id, header, keyTip, context: null, configure);
 
     public RibbonDefinitionBuilder ContextualTab(string id, string header, RibbonTabContext context, Action<RibbonTabBuilder> configure)
-        => AddTab(id, header, keyTip: null, context, configure);
+        => AddTab(id, header, context.KeyTip, context, configure);
 
     private RibbonDefinitionBuilder AddTab(string id, string header, string? keyTip, RibbonTabContext? context, Action<RibbonTabBuilder> configure)
     {
@@ -188,8 +188,40 @@ public sealed class RibbonMenuBuilder
         return this;
     }
 
+    public RibbonMenuBuilder Item(
+        string commandId,
+        string header,
+        RibbonCommandIconKind icon,
+        string? keyTip = null,
+        string? gesture = null,
+        RibbonCommandIconAccent accent = RibbonCommandIconAccent.None)
+    {
+        _items.Add(new RibbonMenuItem(
+            header,
+            new RibbonCommandId(commandId),
+            keyTip,
+            gesture,
+            Icon: new RibbonCommandIcon(icon, accent)));
+        return this;
+    }
+
     /// <summary>Adds a submenu: a header item whose children are built by <paramref name="build"/>.</summary>
     public RibbonMenuBuilder Submenu(string header, string? keyTip, Action<RibbonMenuBuilder> build)
+        => Submenu(header, keyTip, icon: null, build);
+
+    public RibbonMenuBuilder Submenu(
+        string header,
+        string? keyTip,
+        RibbonCommandIconKind icon,
+        Action<RibbonMenuBuilder> build,
+        RibbonCommandIconAccent accent = RibbonCommandIconAccent.None)
+        => Submenu(header, keyTip, new RibbonCommandIcon(icon, accent), build);
+
+    private RibbonMenuBuilder Submenu(
+        string header,
+        string? keyTip,
+        RibbonCommandIcon? icon,
+        Action<RibbonMenuBuilder> build)
     {
         var child = new RibbonMenuBuilder();
         build(child);
@@ -197,7 +229,8 @@ public sealed class RibbonMenuBuilder
             header,
             CommandId: null,
             KeyTip: keyTip,
-            Children: child._items.ToArray()));
+            Children: child._items.ToArray(),
+            Icon: icon));
         return this;
     }
 

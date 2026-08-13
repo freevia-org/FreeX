@@ -34,6 +34,21 @@ public sealed class QuickAnalysisShellRequestPlannerTests
     }
 
     [Fact]
+    public void Build_WholeColumnSelectionReturnsUnsupportedSelection()
+    {
+        var sheet = CreateSheet();
+
+        var plan = QuickAnalysisShellRequestPlanner.Build(
+            sheet,
+            Range(sheet, 1, 1, CellAddress.MaxRow, 1),
+            QuickAnalysisShellCapabilities.DialogBacked);
+
+        plan.Status.Should().Be(QuickAnalysisShellRequestStatus.UnsupportedSelection);
+        plan.SelectionDescription.Should().BeNull();
+        plan.CanOpen.Should().BeFalse();
+    }
+
+    [Fact]
     public void Build_NumericSelectionReturnsSharedShellPlan()
     {
         var sheet = CreateSheet();

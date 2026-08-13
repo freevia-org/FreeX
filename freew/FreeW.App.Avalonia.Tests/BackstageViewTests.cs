@@ -32,8 +32,13 @@ namespace FreeW.App.Avalonia.Tests;
 /// (b) each pane's portable planner produces non-empty groups/rows (pure, no UI thread needed),
 /// (c) the pane <see cref="BackstagePane"/> enum covers all expected entry points.
 /// </summary>
-public class BackstageViewTests
+public class BackstageViewTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.Avalonia.BackstageTests-");
+
+    private string TempDirectory => _temporaryDirectory.Path;
+
+    public void Dispose() => _temporaryDirectory.Dispose();
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
@@ -482,7 +487,7 @@ public class BackstageViewTests
             var buttons = view.GetLogicalDescendants()
                 .OfType<Button>()
                 .Where(button => (AutomationProperties.GetAutomationId(button) ?? string.Empty)
-                    .StartsWith("BackstageAction_", StringComparison.Ordinal))
+                    .StartsWith("InfoAction_", StringComparison.Ordinal))
                 .ToArray();
             buttons.Select(AutomationProperties.GetName).Should().Equal(
                 "Mark as Final",
@@ -510,42 +515,51 @@ public class BackstageViewTests
             "shared",
             "Free.Shared.Shell.Avalonia",
             "AvaloniaBackstageChrome.cs"));
+        var sharedPaneSource = File.ReadAllText(FindRepoFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaBackstagePaneComposer.cs"));
 
         project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
-        source.Should().Contain("BackstagePaneSurfacePlanner.BuildHomePane(");
+        source.Should().Contain("new FreeWBackstageSession(");
+        source.Should().Contain("BackstageActionBinder.DismissBefore(Dismiss)");
+        source.Should().Contain("_session.BuildHomePane(");
         source.Should().Contain("surface.VisualMetrics");
         source.Should().Contain("AutomationProperties.SetName(button, action.Label)");
-        source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenPane(");
-        source.Should().Contain("BackstagePaneSurfacePlanner.BuildSaveAsPane(");
-        source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");
-        source.Should().Contain("BackstagePaneSurfacePlanner.BuildExportPane(");
-        source.Should().Contain("BackstagePaneSurfacePlanner.BuildPrintPane(");
-        source.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
-        source.Should().Contain("BackstageInfoPaneSpec plan");
-        source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
-        source.Should().Contain("ApplicationOptionsSummaryPlanner.Build(");
-        source.Should().Contain("var document = _callbacks.GetDocument()");
-        source.Should().Contain("DismissThen(_callbacks.MarkAsFinal)");
-        source.Should().Contain("DismissThen(_callbacks.RestrictEditing)");
-        source.Should().Contain("DismissThen(_callbacks.InspectDocument)");
-        source.Should().Contain("DismissThen(_callbacks.CheckAccessibility)");
-        source.Should().Contain("DismissThen(_callbacks.OpenOptions)");
+        source.Should().Contain("_session.BuildOpenPane(");
+        source.Should().Contain("_session.BuildSaveAsPane(");
+        source.Should().Contain("_session.BuildSharePane(");
+        source.Should().Contain("_session.BuildExportPane(");
+        source.Should().Contain("_session.BuildPrintPane(");
+        source.Should().Contain("_session.BuildInfoPane(");
+        source.Should().Contain("Panes.BuildInfoPane(_session.BuildInfoPane())");
+        source.Should().Contain("Panes.BuildActionPane(surface.ToPaneSpec()");
+        source.Should().Contain("Panes.BuildAccountPane(surface.ToPaneSpec()");
+        source.Should().NotContain("BackstageInfoPaneSpec plan");
+        source.Should().Contain("_session.BuildAccountPane(");
+        source.Should().Contain("SisterBackstagePaneSpecPlanner");
+        source.Should().Contain("_session.BuildNewPaneSpec(PaneSpecs)");
+        source.Should().Contain("_session.BuildOptionsPaneSpec(PaneSpecs)");
+        source.Should().NotContain("ApplicationOptionsSummaryPlanner.Build(");
+        source.Should().NotContain("new SisterBackstageAccountPaneContext(");
+        source.Should().NotContain("SafeEnvironment(");
         source.Should().Contain("BuildOpenSurface(");
         source.Should().Contain("surface.Search.AutomationName");
         source.Should().Contain("surface.Tabs.DocumentsTabLabel");
         source.Should().Contain("ApplyClassicTabChrome(");
-        source.Should().Contain("_callbacks.OpenFolder(folder)");
         source.Should().Contain("BuildActionGroupContent(surface)");
         source.Should().Contain("BuildSurfaceActionRow(action)");
         source.Should().Contain("BuildPrintEvidenceSection(surface.Evidence)");
+        source.Should().Contain("BackstagePrintEvidenceTextFormatter.Format(row)");
         source.Should().Contain("PrintEvidence_");
         source.Should().Contain("BackstageViewTextResources.EvidenceSection");
-        source.Should().Contain("BackstageViewTextResources.EvidenceRequirementsLabel");
-        source.Should().Contain("FormatPrintEvidenceRequirement");
-        source.Should().Contain("var printCapability = _callbacks.DirectPrintCapability");
-        source.Should().Contain("print: printCapability.IsAvailable && _callbacks.Print");
-        source.Should().Contain("directPrintCapability: printCapability");
+        source.Should().NotContain("PrintEvidenceKindLabel(");
+        source.Should().NotContain("PrintEvidenceStatusLabel(");
+        source.Should().NotContain("FormatPrintEvidenceRequirement(");
+        source.Should().NotContain("BackstagePaneSurfacePlanner.Build");
+        source.Should().NotContain("SisterBackstageInfoPanePlanner.Build(");
+        source.Should().NotContain("BackstageInfoSafetyPanePlanner.Build(");
         source.Should().Contain("AvaloniaBackstageChromeStyle BackstageChromeStyle");
         source.Should().Contain("new AvaloniaBackstageFrame(");
         source.Should().Contain("SisterBackstageEntryPlanner.Build(");
@@ -566,7 +580,6 @@ public class BackstageViewTests
         source.Should().NotContain("ColumnDefinitions = new ColumnDefinitions(\"Auto,*\")");
         source.Should().NotContain("BackstagePaneSurfacePlanner.BuildOpenActionPane(");
         source.Should().NotContain("BackstagePrintPanePlanner.Build(");
-        source.Should().Contain("BackstageInfoSafetyPanePlanner.Build(document)");
         source.Should().NotContain("SisterBackstageAccountPanePlanner.Build(");
         source.Should().NotContain("markAsFinal: null");
         source.Should().NotContain("restrictEditing: null");
@@ -578,6 +591,9 @@ public class BackstageViewTests
         sharedSource.Should().Contain("public static class AvaloniaBackstageChrome");
         sharedSource.Should().Contain("public static Border CreateContentArea(");
         sharedSource.Should().Contain("public static Button CreateStackedActionButton(");
+        sharedPaneSource.Should().Contain("public Control BuildInfoPane(BackstageInfoPaneSpec spec)");
+        sharedPaneSource.Should().Contain("public Control BuildActionPane(BackstageActionPaneSpec spec");
+        sharedPaneSource.Should().Contain("public Control BuildAccountPane(");
     }
 
     [Fact]
@@ -725,7 +741,10 @@ public class BackstageViewTests
 
             view.TryActivateEntry("Export").Should().BeTrue();
 
-            var pdf = FindControl<Button>(view, "BackstageAction_Create_PDF_or_XPS");
+            var pdf = view.GetLogicalDescendants().OfType<Button>()
+                .Single(button => AutomationProperties.GetName(button) == "Create PDF or XPS");
+            AutomationProperties.GetAutomationId(pdf).Should().Be(
+                "BackstageAction_" + AutomationIdToken.KeepLettersAndDigits("Create PDF or XPS"));
             pdf.Content.Should().BeOfType<TextBlock>();
             ((TextBlock)pdf.Content!).Text.Should().Be("Create PDF or XPS");
             pdf.FontSize.Should().Be(14);
@@ -733,7 +752,10 @@ public class BackstageViewTests
             ((StackPanel)pdf.Parent!).Children.OfType<TextBlock>()
                 .Single(block => (block.Text ?? string.Empty).Contains("Export-only fixed-layout PDF copy", StringComparison.Ordinal));
 
-            var xps = FindControl<Button>(view, "BackstageAction_Export_to_XPS");
+            var xps = view.GetLogicalDescendants().OfType<Button>()
+                .Single(button => AutomationProperties.GetName(button) == "Export to XPS");
+            AutomationProperties.GetAutomationId(xps).Should().Be(
+                "BackstageAction_" + AutomationIdToken.KeepLettersAndDigits("Export to XPS"));
             xps.Content.Should().BeOfType<TextBlock>();
             ((TextBlock)xps.Content!).Text.Should().Be("Export to XPS");
             xps.Parent.Should().BeOfType<StackPanel>();
@@ -939,14 +961,11 @@ public class BackstageViewTests
     [Fact]
     public async Task MainWindow_SaveCopy_writes_document_without_changing_path_or_dirty_state()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.BackstageSaveCopyTests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
-        var copyPath = Path.Combine(directory, "Copy.docx");
-        try
+        var copyPath = Path.Combine(TempDirectory, "Copy.docx");
         {
             await Session.Dispatch(() =>
             {
-                var optionsPath = Path.Combine(directory, "settings.json");
+                var optionsPath = Path.Combine(TempDirectory, "settings.json");
                 var window = new MainWindow(
                     [],
                     new FreeWOptions(),
@@ -961,10 +980,6 @@ public class BackstageViewTests
                 after.GetIsDirty().Should().BeTrue();
                 DocxReader.Read(copyPath).PlainText.Should().Contain("draft copy text");
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try { Directory.Delete(directory, recursive: true); } catch { }
         }
     }
 
@@ -1033,7 +1048,7 @@ public class BackstageViewTests
     [Fact]
     public async Task MainWindow_BackstageCallbacks_wire_mark_final_to_document_model()
     {
-        var path = Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.OptionsTests", Guid.NewGuid().ToString("N"), "settings.json");
+        var path = Path.Combine(TempDirectory, "settings.json");
         var marked = false;
 
         await Session.Dispatch(() =>
@@ -1055,8 +1070,7 @@ public class BackstageViewTests
     [Fact]
     public async Task MainWindow_LoadsFreeWOptionsFromSharedStoreForBackstageAndRecentCap()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.OptionsTests", Guid.NewGuid().ToString("N"));
-        var path = Path.Combine(directory, "settings.json");
+        var path = Path.Combine(TempDirectory, "settings.json");
         var store = ApplicationOptionsStore<FreeWOptions>.ForPath(path);
         store.Save(new FreeWOptions { RecentFilesCap = 3 }).Should().BeTrue();
         int cap = -1;
@@ -1092,10 +1106,13 @@ public class BackstageViewTests
             "FreeW.App.Avalonia",
             "SafetyDialogs.cs"));
         safetySource.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        safetySource.Should().Contain("RestrictEditingDialogPlanner.BuildPlan(current)");
+        safetySource.Should().Contain("new RestrictEditingDialogSession(current)");
+        safetySource.Should().Contain("_session.InitialPlan");
         safetySource.Should().Contain("RestrictEditingDialogPlanner.ModeOptions");
-        safetySource.Should().Contain("RestrictEditingDialogPlanner.TryCreateStartSettings(");
-        safetySource.Should().Contain("RestrictEditingDialogPlanner.TryCreateStopSettings(");
+        safetySource.Should().Contain("_session.Start(");
+        safetySource.Should().Contain("_session.StopAsync(");
+        safetySource.Should().NotContain("RestrictEditingDialogPlanner.TryCreateStartSettings(");
+        safetySource.Should().NotContain("RestrictEditingDialogPlanner.TryCreateStopSettings(");
         safetySource.Should().Contain("RestrictEditingDialogPlanner.StartButtonText");
         safetySource.Should().Contain("RestrictEditingDialogPlanner.StopButtonText");
     }

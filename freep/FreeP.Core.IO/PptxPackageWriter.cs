@@ -260,7 +260,9 @@ public static class PptxPackageWriter
             if (slide.Transition?.Sound?.AudioBytes is { Length: > 0 })
             {
                 var sndCt  = slide.Transition.Sound.ContentType ?? "audio/mpeg";
-                var sndExt = OpcMediaTypes.GetAudioVideoExtension(sndCt);
+                var sndExt = OpcMediaTypes.GetMediaFileExtension(
+                    sndCt,
+                    OpcMediaExtensionProfile.PackageTransitionSound);
                 mediaExtensions.Add(sndExt);
             }
 
@@ -292,7 +294,9 @@ public static class PptxPackageWriter
                 // II1: register audio/video file extensions for Media shapes
                 if (shape.Kind == SlideShapeKind.Media && shape.Media?.Bytes is { Length: > 0 } && shape.Media.ContentType is not null)
                 {
-                    var mediaExt = OpcMediaTypes.GetAudioVideoExtension(shape.Media.ContentType);
+                    var mediaExt = OpcMediaTypes.GetMediaFileExtension(
+                        shape.Media.ContentType,
+                        OpcMediaExtensionProfile.PresentationPackageMediaPart);
                     mediaExtensions.Add(mediaExt);
                 }
 
@@ -305,7 +309,11 @@ public static class PptxPackageWriter
                             continue;
 
                         if (TryGetCaptionTrackBytes(track, packageSnapshot, out _))
-                            mediaExtensions.Add(GetCaptionTrackExtension(track));
+                        {
+                            mediaExtensions.Add(OpcMediaTypes.GetCaptionTrackExtension(
+                                track.ContentType,
+                                track.Source));
+                        }
                     }
                 }
 
@@ -1160,16 +1168,16 @@ public static class PptxPackageWriter
     {
         var slideWidthEmu = p.SlideSizeCxEmu > 0
             ? p.SlideSizeCxEmu
-            : DrawingMlUnits.EmuPerInch * 40 / 3;
+            : DrawingMlCoordinateUnits.EmuPerInch * 40 / 3;
         var slideHeightEmu = p.SlideSizeCyEmu > 0
             ? p.SlideSizeCyEmu
-            : DrawingMlUnits.EmuPerInch * 15 / 2;
+            : DrawingMlCoordinateUnits.EmuPerInch * 15 / 2;
         var notesPageWidthEmu = p.NotesPageSizeCxEmu > 0
             ? p.NotesPageSizeCxEmu
-            : DrawingMlUnits.EmuPerInch * 15 / 2;
+            : DrawingMlCoordinateUnits.EmuPerInch * 15 / 2;
         var notesPageHeightEmu = p.NotesPageSizeCyEmu > 0
             ? p.NotesPageSizeCyEmu
-            : DrawingMlUnits.EmuPerInch * 10;
+            : DrawingMlCoordinateUnits.EmuPerInch * 10;
 
         var presEl = new XElement(P + "presentation",
             NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
@@ -2158,15 +2166,9 @@ public static class PptxPackageWriter
 
         // Determine extension from content-type.
         var ct = sound.ContentType ?? "audio/mpeg";
-        var ext = ct switch
-        {
-            "audio/mpeg" or "audio/mp3"  => "mp3",
-            "audio/wav"                  => "wav",
-            "audio/ogg"                  => "ogg",
-            "audio/aac"                  => "aac",
-            "audio/x-ms-wma"             => "wma",
-            _                            => "mp3"
-        };
+        var ext = OpcMediaTypes.GetMediaFileExtension(
+            ct,
+            OpcMediaExtensionProfile.PackageTransitionSound);
 
         var partPath = $"ppt/media/transitionSnd{slideIndex}.{ext}";
         var relId    = $"rIdSnd{slideIndex}";
@@ -3186,7 +3188,7 @@ public static class PptxPackageWriter
         new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr")));
 
     private static XElement LnStyle(double widthPt) =>
-        new XElement(A + "ln", new XAttribute("w", DrawingMlUnits.PointsToEmu(widthPt)),
+        new XElement(A + "ln", new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(widthPt)),
             new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
             new XElement(A + "prstDash", new XAttribute("val", "solid")));
 
@@ -4157,10 +4159,10 @@ public static class PptxPackageWriter
 
         // tcPr
         var tcPr = new XElement(A + "tcPr");
-        if (cell.InsetLeftPt.HasValue)   tcPr.Add(new XAttribute("marL", DrawingMlUnits.PointsToEmu(cell.InsetLeftPt.Value)));
-        if (cell.InsetRightPt.HasValue)  tcPr.Add(new XAttribute("marR", DrawingMlUnits.PointsToEmu(cell.InsetRightPt.Value)));
-        if (cell.InsetTopPt.HasValue)    tcPr.Add(new XAttribute("marT", DrawingMlUnits.PointsToEmu(cell.InsetTopPt.Value)));
-        if (cell.InsetBottomPt.HasValue) tcPr.Add(new XAttribute("marB", DrawingMlUnits.PointsToEmu(cell.InsetBottomPt.Value)));
+        if (cell.InsetLeftPt.HasValue)   tcPr.Add(new XAttribute("marL", DrawingMlCoordinateUnits.PointsToEmu(cell.InsetLeftPt.Value)));
+        if (cell.InsetRightPt.HasValue)  tcPr.Add(new XAttribute("marR", DrawingMlCoordinateUnits.PointsToEmu(cell.InsetRightPt.Value)));
+        if (cell.InsetTopPt.HasValue)    tcPr.Add(new XAttribute("marT", DrawingMlCoordinateUnits.PointsToEmu(cell.InsetTopPt.Value)));
+        if (cell.InsetBottomPt.HasValue) tcPr.Add(new XAttribute("marB", DrawingMlCoordinateUnits.PointsToEmu(cell.InsetBottomPt.Value)));
         if (cell.Anchor.HasValue)
             tcPr.Add(new XAttribute("anchor", cell.Anchor.Value switch
             {
@@ -4208,7 +4210,7 @@ public static class PptxPackageWriter
         {
             var children = new List<object>
             {
-                new XAttribute("w", DrawingMlUnits.PointsToEmu(v.WidthPt)),
+                new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(v.WidthPt)),
                 new XElement(A + "solidFill", BuildColorEl(v.Color))
             };
             if (v.Dash != OutlineDash.Solid)
@@ -4221,7 +4223,7 @@ public static class PptxPackageWriter
         {
             var children = new List<object>
             {
-                new XAttribute("w", DrawingMlUnits.PointsToEmu(gv.WidthPt)),
+                new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(gv.WidthPt)),
                 BuildGradFillEl(gv.Gradient)
             };
             if (gv.Dash != OutlineDash.Solid)
@@ -4374,7 +4376,7 @@ public static class PptxPackageWriter
     {
         var children = new List<object?>
         {
-            new XAttribute("w", DrawingMlUnits.PointsToEmu(outline.WidthPt)),
+            new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(outline.WidthPt)),
             new XElement(A + "solidFill", BuildColorEl(outline.Color)),
             outline.Dash != OutlineDash.Solid
                 ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(outline.Dash)))
@@ -4388,7 +4390,7 @@ public static class PptxPackageWriter
     {
         var children = new List<object?>
         {
-            new XAttribute("w", DrawingMlUnits.PointsToEmu(outline.WidthPt)),
+            new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(outline.WidthPt)),
             BuildGradFillEl(outline.Gradient),
             outline.Dash != OutlineDash.Solid
                 ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(outline.Dash)))
@@ -4495,10 +4497,10 @@ public static class PptxPackageWriter
         }
 
         if (!body.Wrap) bodyPr.Add(new XAttribute("wrap", "none"));
-        if (body.InsetLeftPt.HasValue) bodyPr.Add(new XAttribute("lIns", DrawingMlUnits.PointsToEmu(body.InsetLeftPt.Value)));
-        if (body.InsetRightPt.HasValue) bodyPr.Add(new XAttribute("rIns", DrawingMlUnits.PointsToEmu(body.InsetRightPt.Value)));
-        if (body.InsetTopPt.HasValue) bodyPr.Add(new XAttribute("tIns", DrawingMlUnits.PointsToEmu(body.InsetTopPt.Value)));
-        if (body.InsetBottomPt.HasValue) bodyPr.Add(new XAttribute("bIns", DrawingMlUnits.PointsToEmu(body.InsetBottomPt.Value)));
+        if (body.InsetLeftPt.HasValue) bodyPr.Add(new XAttribute("lIns", DrawingMlCoordinateUnits.PointsToEmu(body.InsetLeftPt.Value)));
+        if (body.InsetRightPt.HasValue) bodyPr.Add(new XAttribute("rIns", DrawingMlCoordinateUnits.PointsToEmu(body.InsetRightPt.Value)));
+        if (body.InsetTopPt.HasValue) bodyPr.Add(new XAttribute("tIns", DrawingMlCoordinateUnits.PointsToEmu(body.InsetTopPt.Value)));
+        if (body.InsetBottomPt.HasValue) bodyPr.Add(new XAttribute("bIns", DrawingMlCoordinateUnits.PointsToEmu(body.InsetBottomPt.Value)));
         // Wave 19A / LA1: re-emit the ORIGINAL autofit element kind so an spAutoFit shape
         // round-trips as spAutoFit (never rewritten as normAutofit) and vice versa.
         switch (body.AutoFitKind)
@@ -4839,7 +4841,7 @@ public static class PptxPackageWriter
                 glowColorEl.Add(new XElement(A + "alpha",
                     new XAttribute("val", (long)Math.Round(glow.Alpha / 255.0 * 100000))));
                 effectLst.Add(new XElement(A + "glow",
-                    new XAttribute("rad", DrawingMlUnits.PointsToEmu(glow.RadiusPt)),
+                    new XAttribute("rad", DrawingMlCoordinateUnits.PointsToEmu(glow.RadiusPt)),
                     glowColorEl));
             }
 
@@ -4853,8 +4855,8 @@ public static class PptxPackageWriter
                     shdwColorEl.Add(new XElement(A + "alpha",
                         new XAttribute("val", (long)Math.Round(ts.Alpha / 255.0 * 100000))));
                 effectLst.Add(new XElement(A + "outerShdw",
-                    new XAttribute("blurRad", DrawingMlUnits.PointsToEmu(ts.BlurPt)),
-                    new XAttribute("dist",    DrawingMlUnits.PointsToEmu(ts.DistPt)),
+                    new XAttribute("blurRad", DrawingMlCoordinateUnits.PointsToEmu(ts.BlurPt)),
+                    new XAttribute("dist",    DrawingMlCoordinateUnits.PointsToEmu(ts.DistPt)),
                     new XAttribute("dir",     (long)Math.Round(ts.DirDeg * 60000)),
                     shdwColorEl));
             }
@@ -4863,9 +4865,9 @@ public static class PptxPackageWriter
             {
                 var reflection = run.TextReflection;
                 effectLst.Add(new XElement(A + "reflection",
-                    new XAttribute("blurRad", DrawingMlUnits.PointsToEmu(reflection.BlurPt)),
+                    new XAttribute("blurRad", DrawingMlCoordinateUnits.PointsToEmu(reflection.BlurPt)),
                     new XAttribute("stA", (long)Math.Round(reflection.Alpha / 255.0 * 100000)),
-                    new XAttribute("dist", DrawingMlUnits.PointsToEmu(reflection.DistPt)),
+                    new XAttribute("dist", DrawingMlCoordinateUnits.PointsToEmu(reflection.DistPt)),
                     new XAttribute("dir", (long)Math.Round(reflection.DirDeg * 60000)),
                     new XAttribute("sy", (long)Math.Round(reflection.ScaleY * 100000)),
                     new XAttribute("endPos", (long)Math.Round(Math.Clamp(reflection.EndPos, 0.0, 1.0) * 100000))));
@@ -4874,7 +4876,7 @@ public static class PptxPackageWriter
             if (run.TextSoftEdge is not null)
             {
                 effectLst.Add(new XElement(A + "softEdge",
-                    new XAttribute("rad", DrawingMlUnits.PointsToEmu(run.TextSoftEdge.RadiusPt))));
+                    new XAttribute("rad", DrawingMlCoordinateUnits.PointsToEmu(run.TextSoftEdge.RadiusPt))));
             }
 
             rPr.Add(effectLst);
@@ -5190,18 +5192,9 @@ public static class PptxPackageWriter
                 continue; // no file to write either way
             }
 
-            var ext = media.ContentType switch
-            {
-                "video/mp4"       => "mp4",
-                "video/quicktime" => "mov",
-                "video/x-msvideo" => "avi",
-                "video/x-ms-wmv"  => "wmv",
-                "audio/mpeg"      => "mp3",
-                "audio/mp4"       => "m4a",
-                "audio/wav"       => "wav",
-                "audio/x-ms-wma"  => "wma",
-                _                 => "mp4"
-            };
+            var ext = OpcMediaTypes.GetMediaFileExtension(
+                media.ContentType,
+                OpcMediaExtensionProfile.PresentationPackageMediaPart);
             var mediaPath = TryGetPreservedMediaPackagePath(media, packageSnapshot, writtenMediaPaths, out var preservedPath)
                 ? preservedPath
                 : $"ppt/media/slide{slideIndex}_video{n}.{ext}";
@@ -5312,7 +5305,9 @@ public static class PptxPackageWriter
                 if (!TryGetCaptionTrackBytes(track, packageSnapshot, out var bytes))
                     continue;
 
-                var extension = GetCaptionTrackExtension(track);
+                var extension = OpcMediaTypes.GetCaptionTrackExtension(
+                    track.ContentType,
+                    track.Source);
                 var relId = ReserveCaptionRelationshipId(track, usedRelIds, captionIndex);
                 var captionPath = TryGetPreservedCaptionPackagePath(track, packageSnapshot, bytes, writtenCaptionPaths, out var preservedPath)
                     ? preservedPath
@@ -5405,7 +5400,7 @@ public static class PptxPackageWriter
             return captionPath;
         }
 
-        var extension = GetCaptionTrackExtension(captionPath);
+        var extension = OpcMediaTypes.GetSourceExtension(captionPath);
         var directory = GetDirectoryName(captionPath);
         var fileName = Path.GetFileNameWithoutExtension(captionPath);
         var suffix = 1;
@@ -5429,7 +5424,7 @@ public static class PptxPackageWriter
         if (string.IsNullOrWhiteSpace(normalized)
             || normalized.Split('/').Any(part => part is "." or "..")
             || !normalized.StartsWith("ppt/media/", StringComparison.OrdinalIgnoreCase)
-            || GetCaptionTrackExtension(normalized) is not ("vtt" or "ttml" or "dfxp" or "srt"))
+            || OpcMediaTypes.GetSourceExtension(normalized) is not ("vtt" or "ttml" or "dfxp" or "srt"))
         {
             return false;
         }
@@ -5448,7 +5443,7 @@ public static class PptxPackageWriter
         if (string.IsNullOrWhiteSpace(normalized)
             || normalized.Split('/').Any(part => part is "." or "..")
             || !normalized.StartsWith("ppt/media/", StringComparison.OrdinalIgnoreCase)
-            || GetAudioVideoExtension(normalized) is not ("mp4" or "mov" or "avi" or "wmv" or "mp3" or "m4a" or "wav" or "wma"))
+            || OpcMediaTypes.GetSourceExtension(normalized) is not ("mp4" or "mov" or "avi" or "wmv" or "mp3" or "m4a" or "wav" or "wma"))
         {
             return false;
         }
@@ -5489,70 +5484,14 @@ public static class PptxPackageWriter
             && Uri.TryCreate(source, UriKind.Absolute, out var uri)
             && !string.IsNullOrWhiteSpace(uri.Scheme);
 
-    private static string GetCaptionTrackExtension(MediaCaptionTrackInfo track)
-    {
-        var contentType = track.ContentType.Trim().ToLowerInvariant();
-        if (contentType is "text/vtt")
-            return "vtt";
-        if (contentType is "application/ttml+xml" or "application/ttaf+xml")
-            return "ttml";
-        if (contentType is "application/x-subrip" or "text/srt")
-            return "srt";
-
-        var extension = GetCaptionTrackExtension(track.Source);
-        return extension is "vtt" or "ttml" or "dfxp" or "srt"
-            ? extension
-            : "vtt";
-    }
-
-    private static string GetCaptionTrackExtension(string source)
-    {
-        if (string.IsNullOrWhiteSpace(source))
-            return string.Empty;
-
-        var end = source.AsSpan();
-        var queryIndex = source.IndexOfAny(['?', '#']);
-        if (queryIndex >= 0)
-            end = source.AsSpan(0, queryIndex);
-
-        var slashIndex = end.LastIndexOf('/');
-        var fileName = slashIndex >= 0 ? end[(slashIndex + 1)..] : end;
-        var dotIndex = fileName.LastIndexOf('.');
-        return dotIndex >= 0 && dotIndex < fileName.Length - 1
-            ? fileName[(dotIndex + 1)..].ToString().ToLowerInvariant()
-            : string.Empty;
-    }
-
-    private static string GetAudioVideoExtension(string source)
-    {
-        if (string.IsNullOrWhiteSpace(source))
-            return string.Empty;
-
-        var end = source.AsSpan();
-        var queryIndex = source.IndexOfAny(['?', '#']);
-        if (queryIndex >= 0)
-            end = source.AsSpan(0, queryIndex);
-
-        var slashIndex = end.LastIndexOf('/');
-        var fileName = slashIndex >= 0 ? end[(slashIndex + 1)..] : end;
-        var dotIndex = fileName.LastIndexOf('.');
-        return dotIndex >= 0 && dotIndex < fileName.Length - 1
-            ? fileName[(dotIndex + 1)..].ToString().ToLowerInvariant()
-            : string.Empty;
-    }
-
     private static bool TryGetPackageDefaultContentType(string extension, out string contentType)
     {
         if (OpcMediaTypes.TryGetDefaultContentType(extension, out contentType!))
             return true;
 
-        contentType = extension.TrimStart('.').ToLowerInvariant() switch
-        {
-            "vtt" => "text/vtt",
-            "ttml" or "dfxp" => "application/ttml+xml",
-            "srt" => "application/x-subrip",
-            _ => string.Empty
-        };
+        contentType = OpcMediaTypes.GetContentTypeForFileNameOrExtension(
+            extension,
+            OpcMediaContentTypeProfile.PresentationCaptionTrack);
 
         return contentType.Length > 0;
     }
@@ -6719,13 +6658,6 @@ public static class PptxPackageWriter
     private static XAttribute NsAttr(string prefix, XNamespace ns) =>
         new XAttribute(XNamespace.Xmlns + prefix, ns.NamespaceName);
 
-    private static XElement CnvPr(SlideShape shape)
-    {
-        var el = CnvPrBase(shape);
-        AddDecorativeExtList(el, shape);
-        return el;
-    }
-
     private static XElement CnvPrBase(SlideShape shape)
     {
         var el = new XElement(P + "cNvPr", new XAttribute("id", shape.Id), new XAttribute("name", shape.Name));
@@ -6835,8 +6767,6 @@ public static class PptxPackageWriter
     }
 
     private static string FmtColor(SrgbColor c) => new DrawingMlRgbColor(c.R, c.G, c.B).ToHexRgb();
-
-    private static string GetShapeId(SlideShape s) => s.Id.ToString(CultureInfo.InvariantCulture);
 
     private static string ToLayoutTypeStr(SlideLayoutType type) =>
         type switch

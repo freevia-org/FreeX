@@ -9,9 +9,13 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.FormulaBar;
+using FreeX.App.Presentation.Ribbon;
+using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.Sparklines;
 using FreeX.App.Services;
 using FreeX.App.UI;
 using Free.Shared.Theme.Wpf;
+using Free.Shared.Shell.Wpf;
 
 namespace FreeX.App.Host;
 
@@ -33,30 +37,23 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
 
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
-    // ── Per-window document context: _workbookRef + _commandBus + _documentState ──
-    // Each window owns its document's ref/bus/state. Windows opened via View > New Window
-    // share the originating window's instances (several views of one document); File > Open
-    // or File > New in such a view swaps in fresh instances (DetachFromSharedDocumentContext)
-    // so the new document is independent of the siblings (H39). Not readonly for that reason.
-    private ICommandBus _commandBus;
-    private ICommandStackChangeNotifier? _commandStackChangeNotifier;
+    private WorkbookDocumentContext _documentContext;
     private readonly IUserMessageService _messageService;
     private readonly RecalcEngine _recalcEngine;
     private readonly IEnumerable<IFileAdapter> _fileAdapters;
     private readonly IAppDiagnostics? _diagnostics;
     private readonly AppDiagnosticsMetadata _diagnosticsMetadata;
     private readonly AppDiagnosticsOptions _diagnosticsOptions;
-    private readonly RibbonKeyTipMode _ribbonKeyTipMode = new();
+    private readonly FreeXRibbonKeyTipInputSession _ribbonKeyTipSession = new();
     private readonly KeyboardCommandDispatcher _keyboardCommandDispatcher = new();
+    private readonly WorkbookSessionFactory _sessionFactory = new();
+    private WorkbookSession _session;
+    private bool _workbookSessionDisposed;
     private readonly StandaloneAltKeyTipTracker _standaloneAltKeyTipTracker = new();
-    private RibbonKeyTipScope _ribbonKeyTipScope = RibbonKeyTipScope.None;
-    private string _ribbonKeyTipSequence = "";
-    private bool _legacyDataKeyTipSequence;
-    private bool _legacyEditKeyTipSequence;
     private ContextMenu? _activeRibbonKeyTipMenu;
     private ItemsControl? _activeRibbonKeyTipItemsControl;
-    private WorkbookRef _workbookRef;
-    private Workbook _workbook;
+    // Preserve the established partial-class name while keeping WorkbookSession authoritative.
+    private Workbook _workbook => _session.Workbook;
     private SheetId _currentSheetId;
     private readonly System.Collections.ObjectModel.ObservableCollection<SheetTabViewModel> _sheetTabs = [];
     private readonly HashSet<SheetId> _groupedSheetIds = [];
@@ -70,7 +67,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private ToolbarVisualState? _lastToolbarVisualState;
     private QuickAccessCommandState? _lastQuickAccessCommandState;
     private WorkbookId? _lastQuickAccessCommandStateWorkbookId;
-    private readonly StatusBarStatsCache _statusBarStatsCache = new();
+    private readonly WorkbookSelectionStatsCache _statusBarStatsCache = new();
     private readonly StatusBarViewModelCache _statusBarDisplayStateCache =
         new(new ResourceKeyStatusBarTextProvider(UiText.Get));
     private Free.Shared.AppServices.StatusBarViewModel? _lastStatusBarDisplayState;
@@ -86,33 +83,32 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private bool _isExportingFile;
     // File name shown in the footer operation-progress message during an open/save (null when idle).
     private string? _operationProgressFileName;
-    private CancellationTokenSource? _fileOperationCancellation;
+    private readonly FileOperationCancellationSession _fileOperationCancellationSession = new();
+    private readonly WorkbookReadOnlySession _workbookReadOnlySession = new();
     private Dictionary<UIElement, bool>? _fileOperationInputEnabledSnapshot;
     // Reentrant hold count backing the save-input gate (see AdjustSaveGate in
     // MainWindow.Backstage.cs): incremented both when THIS window starts its own save and when a
     // "New Window" sibling's save broadcasts the gate into this window, so the input surface is
     // only re-enabled once every hold on it has released (R115-app-host-save-race).
     private int _saveGateHoldCount;
-    // ── Dirty / save-state cluster: canonical state lives in _documentState ──
-    // These private properties delegate to the injected WorkbookDocumentState service.
+    // Dirty/save state is owned by WorkbookSession. These private properties preserve the names
+    // used across the WPF partial-class surface while that renderer is migrated incrementally.
     // They preserve the same names used across the 50-file partial-class surface so
     // all callers continue to compile without mass edits.
     //
-    // Mutations go through the MarkWorkbookDirty / MarkWorkbookSaved methods in
-    // MainWindow.WorkbookLifecycle.cs, which call _documentState directly.  The
-    // read-only getters here allow all the partial files to read the same state.
-    private bool _workbookDirty => _documentState.IsDirty;
+    // Mutations go through MainWindow.WorkbookLifecycle.cs and delegate to the session.
+    private bool _workbookDirty => _session.IsDirty;
     private bool _suppressClosePrompt
     {
-        get => _documentState.SuppressClosePrompt;
-        set => _documentState.SuppressClosePrompt = value;
+        get => _session.SuppressClosePrompt;
+        set => _session.SuppressClosePrompt = value;
     }
     private string? _currentFilePath
     {
-        get => _documentState.CurrentFilePath;
-        set => _documentState.SetCurrentFilePath(value);
+        get => _session.CurrentFilePath;
+        set => _session.SetCurrentFilePathFromHost(value);
     }
-    private int _workbookDirtyGeneration => _documentState.DirtyGeneration;
+    private int _workbookDirtyGeneration => _session.DirtyGeneration;
     private bool _closeAfterSaveInProgress;
     private CellAddress? _selectionAnchorField;
     // The true active/anchor cell of the current selection (e.g. where a Shift+arrow
@@ -157,83 +153,26 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
     private readonly List<FormulaTraceArrow> _formulaTraceArrows = [];
     private readonly RecentFilesStore _recentFiles;
+    private readonly WorkbookFileWorkflow _fileWorkflow;
     private readonly IWorkbookShareService _shareService = new WindowsWorkbookShareService();
     private List<RecentFileViewModel> _allRecentItems = [];
-    private FreeXOptions _options;
+    private readonly FreeXOptionsRuntimeSession _optionsRuntimeSession;
+    private AppOptions _options;
     // _currentFilePath is declared as a delegating property in the dirty/save-state cluster above.
     private XlsxFeatureReport? _currentXlsxFeatureReport;
     // Snapshot of _currentFilePath's on-disk write time taken at open (OpenWorkbookResult.
-    // SourceLastWriteTimeUtc), threaded into SaveWorkbookWriter.SaveAsync's expectedLastWriteTimeUtc
+    // SourceLastWriteTimeUtc), threaded into WorkbookSaveService.SaveAsync's expectedLastWriteTimeUtc
     // so a save detects the file having been changed externally since open and warns instead of
     // silently overwriting (WorkbookExternallyModifiedException). Null disables the guard (new/
     // recovery-opened workbooks that have no meaningful "loaded from disk at time T" to compare).
     private DateTime? _currentFileSourceLastWriteTimeUtc;
-    // Set after OpenFileAsync prompts on a workbook.FileSharing.ReadOnlyRecommended/ReservationPassword
-    // file and the user accepts opening it read-only (see ApplyReadOnlyRecommendedPromptIfNeeded in
-    // MainWindow.Backstage.cs). ResolveExistingSaveTarget (MainWindow.WorkbookLifecycle.cs) reads this
-    // flag on every Save to force Save-over-original through the Save-As dialog instead of a silent
-    // overwrite (R83-services-doc-recovery-props-5-1). Individual edit commands are not yet blocked --
-    // that remains out of scope.
-    private bool _isWorkbookReadOnly;
     private double _zoomLevel = 1.0;
     private bool _snapInProgress;
     private bool _suppressZoomSync;
     private bool _formulaBarExpanded;
-    private bool _ribbonCompact;
     private bool _normalizingRibbonSurface;
     private readonly HashSet<TabItem> _normalizedRibbonStaticTabs = [];
-    private string? _ribbonAdaptiveMeasurementCacheKey;
-    private IReadOnlyList<RibbonAdaptiveGroup>? _ribbonAdaptiveGroupCache;
-    private IReadOnlyList<string>? _ribbonAdaptiveGroupProfileKeyCache;
-    private double _ribbonAdaptiveFixedChromeWidthCache;
-    private string? _ribbonResizeThresholdCacheKey;
-    private IReadOnlyList<double> _ribbonResizeThresholds = [];
-    private double _lastRibbonResizeWidth = double.NaN;
-    private bool _ribbonResizeNormalizationRequired = true;
-    private RibbonAppliedStateKey? _lastRibbonAdaptiveAppliedStateKey;
-    private string? _ribbonAdaptiveControlCacheKey;
-    private readonly Dictionary<TabItem, RibbonActivePanelCacheEntry> _ribbonAdaptiveActivePanelCacheByTab = [];
-    private StackPanel? _ribbonAdaptiveControlCachePanel;
-    private TabItem? _ribbonAdaptiveControlCacheTab;
-    private ScrollViewer? _ribbonAdaptiveScrollViewerCache;
-    private IReadOnlyList<FrameworkElement>? _ribbonAdaptiveGroupControlCache;
-    private IReadOnlyList<Button>? _ribbonAdaptiveCollapsedButtonCache;
-    private string? _ribbonCompactSnapshotCacheKey;
-    private IReadOnlyList<RibbonCompactGroupSnapshot>? _ribbonCompactGroupSnapshotCache;
-    private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;
-    private RibbonCollapsedGroupFootprintMode? _lastRibbonCollapsedFootprintMode;
-    private string? _ribbonAdaptiveLayoutPlanCacheKey;
-    private readonly Dictionary<RibbonAdaptiveLayoutPlanCacheEntryKey, RibbonAdaptiveLayoutResult> _ribbonAdaptiveLayoutPlanCache = [];
-    private readonly Dictionary<RibbonCorrectionCacheKey, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
-    private readonly Dictionary<RibbonMeasuredOverflowCacheKey, bool> _ribbonMeasuredOverflowCache = [];
-    private bool _ribbonAdaptiveStateDiffInvalidated;
-    private int _ribbonAdaptiveMeasurementInvalidationCount;
-    private int _ribbonAdaptiveGroupMeasurementCount;
-    private int _ribbonCompactSnapshotCaptureCount;
-    private int _ribbonResizeThresholdRebuildCount;
-    private int _ribbonAdaptiveLayoutPlanComputeCount;
-    private int _ribbonAdaptiveLayoutPlanCacheHitCount;
-    private int _ribbonMeasuredOverflowMeasurementCount;
-    private int _ribbonCorrectedStateCacheHitCount;
-    private int _ribbonAppliedStateSkipCount;
-    private int _ribbonAdaptiveStateApplyCount;
-    private int _ribbonAdaptiveStateChangedGroupCount;
-    private int _ribbonCollapsedFootprintApplyCount;
-    private bool _ribbonFallbackPending;
-    private RibbonFallbackWork _ribbonFallbackWork;
-    private int _ribbonFallbackRequestCount;
-    private int _ribbonFallbackPostedCount;
-    private int _ribbonFallbackExecutedCount;
-    private int _ribbonFallbackForcedNormalizeCount;
-    private int _ribbonFallbackForcedCompactCount;
-    private int _ribbonFallbackSkippedCompactLayoutCount;
-    private int _ribbonFirstFrameLayoutUpdateCount;
-    private RibbonFallbackWork _lastRibbonFallbackRequestedWork;
-    private RibbonFallbackWork _lastRibbonFallbackMergedWork;
-    private RibbonFallbackWork _lastRibbonFallbackExecutedWork;
-    private RibbonAppliedStateKey? _queuedRibbonCompactFallbackStateKey;
     private bool _suppressRibbonSelectionChangedNormalization;
-    private bool _ribbonResizeCompactionPendingOnExit;
     private bool _resizeViewportRefreshPending;
     private bool _isInWindowResizeMoveLoop;
     private int _resizeViewportRefreshGeneration;
@@ -269,8 +208,6 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private System.Windows.Controls.TextBlock? _inlineFormulaReferenceOverlay;
     private System.Windows.Controls.TextBox? _textBoxInlineEditor;
     private System.Windows.Controls.Border? _textBoxInlineEditorChrome;
-    private Guid? _textBoxInlineEditingId;
-    private string? _textBoxInlineOriginalText;
     private bool _syncingFormulaEditorText;
     private bool _isApplyingFormulaEditorText;
     private System.Windows.Controls.ComboBox? _validationDropdown;
@@ -280,12 +217,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private AutoFilterDialog? _autoFilterDropdown;
     private SheetId _autoFilterDropdownSheetId;
     private CellAddress? _formulaEditCell;
-    private CellAddress? _formulaRangeSelectionAnchor;
-    private FormulaSheetSpanEntryState _formulaSheetSpanEntryState = FormulaSheetSpanEntryState.Empty;
-    private int? _formulaReferenceStart;
-    private int? _formulaReferenceLength;
-    private bool _formulaRangeEntryMode;
-    private ExcelSelectionMode _formulaRangeEntrySelectionMode = ExcelSelectionMode.Normal;
+    private readonly FormulaRangeEditingSession _formulaRangeEditingSession = new();
     // R78-render-inplace-editor-5-1: whether the current inline-edit session was opened via F2 /
     // double-click (Excel's "Edit" mode -- caret lands in existing content, arrows reposition it)
     // vs. by typing a fresh character over the selection (Excel's "Enter" mode -- arrows commit the
@@ -304,17 +236,15 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     // _formulaReferenceGridOverlayPool in RefreshFormulaReferenceGridOverlays.
     private readonly List<System.Windows.Shapes.Rectangle> _formulaReferenceGridOverlayGripPool = [];
     private readonly List<FormulaReferenceHighlight?> _formulaReferenceGridOverlayHighlights = [];
-    private FormulaReferenceHighlight? _formulaReferenceDragHighlight;
     private System.Windows.Controls.TextBox? _formulaReferenceDragEditor;
-    private bool _formulaReferenceDragActive;
     private WatchWindowDialog? _watchWindowDialog;
     private bool _suppressValidationDropdownCommit;
     private GridResizePreviewSnapshot? _columnResizeSnapshot;
     private GridResizePreviewSnapshot? _rowResizeSnapshot;
     private Action<CommandOutcome>? _repeatPostAction;
     private string? _pivotFieldMenuContextCaption;
-    private PivotFieldDropZone? _pivotFieldMenuContextZone;
-    private PivotFieldDropZone? _pivotFieldDragSourceZone;
+    private PivotFieldBucket? _pivotFieldMenuContextZone;
+    private PivotFieldBucket? _pivotFieldDragSourceZone;
     private bool _pivotFieldDragRemoveCueActive;
     private IReadOnlyDictionary<(uint Row, uint Col), PivotHeaderDropdownTarget> _pivotHeaderDropdownTargets =
         new Dictionary<(uint Row, uint Col), PivotHeaderDropdownTarget>();
@@ -323,9 +253,9 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private string _windowTitleSuffix = string.Empty;
     private bool _adoptSharedWorkbookOnLoad;
     private bool _suppressScrollBroadcast;
+    private readonly IPlatformClipboard _platformClipboard;
 
     // ── Per-document save/dirty state service (shared by the views of one document) ──
-    private WorkbookDocumentState _documentState;
     private readonly NewWorkbookNameSequence _newWorkbookNameSequence;
 
     public MainWindow(
@@ -341,36 +271,106 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         IAppDiagnostics? diagnostics = null,
         AppDiagnosticsMetadata? diagnosticsMetadata = null,
         AppDiagnosticsOptions? diagnosticsOptions = null,
-        FreeXOptions? options = null,
+        AppOptions? options = null,
         WorkbookWindowRegistry? windowRegistry = null,
-        NewWorkbookNameSequence? newWorkbookNameSequence = null)
+        NewWorkbookNameSequence? newWorkbookNameSequence = null,
+        WorkbookSession? workbookSession = null,
+        IPlatformClipboard? platformClipboard = null,
+        FreeXOptionsRuntimeSession? optionsRuntimeSession = null)
+        : this(
+            logger,
+            viewportService,
+            recalcEngine,
+            fileAdapters,
+            WorkbookDocumentContext.Attach(workbookRef, commandBus, workbook),
+            messageService,
+            documentState,
+            diagnostics,
+            diagnosticsMetadata,
+            diagnosticsOptions,
+            options,
+            windowRegistry,
+            newWorkbookNameSequence,
+            workbookSession,
+            platformClipboard,
+            optionsRuntimeSession)
     {
-        // The MainWindow DI factory supplies a fresh per-document WorkbookDocumentState (View >
-        // New Window passes the originating window's instead); tests that omit it get a default.
-        _documentState = documentState ?? new WorkbookDocumentState();
+    }
+
+    public MainWindow(
+        ILogger<MainWindow> logger,
+        IViewportService viewportService,
+        RecalcEngine recalcEngine,
+        IEnumerable<IFileAdapter> fileAdapters,
+        WorkbookDocumentContext documentContext,
+        IUserMessageService messageService,
+        WorkbookDocumentState? documentState = null,
+        IAppDiagnostics? diagnostics = null,
+        AppDiagnosticsMetadata? diagnosticsMetadata = null,
+        AppDiagnosticsOptions? diagnosticsOptions = null,
+        AppOptions? options = null,
+        WorkbookWindowRegistry? windowRegistry = null,
+        NewWorkbookNameSequence? newWorkbookNameSequence = null,
+        WorkbookSession? workbookSession = null,
+        IPlatformClipboard? platformClipboard = null,
+        FreeXOptionsRuntimeSession? optionsRuntimeSession = null)
+    {
+        // The MainWindow DI factory supplies a fresh per-document WorkbookDocumentState. Sibling
+        // windows receive a WorkbookSession that already shares the originating document state.
         _newWorkbookNameSequence = newWorkbookNameSequence ?? new NewWorkbookNameSequence();
         _logger = logger;
         _viewportService = viewportService;
-        _commandBus = commandBus;
-        _commandStackChangeNotifier = commandBus as ICommandStackChangeNotifier;
+        _documentContext = documentContext ?? throw new ArgumentNullException(nameof(documentContext));
         _messageService = messageService;
+        _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(
+            Dispatcher,
+            new WpfPlatformClipboardOptions(
+                MaxWriteAttempts: 20,
+                WriteRetryDelay: TimeSpan.FromMilliseconds(50),
+                FlushAfterWrite: true,
+                VerifyTextAfterWrite: true,
+                VerifyImageAfterWrite: true,
+                FallBackToText: true));
         _recalcEngine = recalcEngine;
         _fileAdapters = fileAdapters;
         _diagnostics = diagnostics;
         _diagnosticsMetadata = diagnosticsMetadata ?? AppDiagnosticsMetadata.Create(AppInfo.VersionText);
         _diagnosticsOptions = diagnosticsOptions ?? AppDiagnosticsOptions.CreateDefault();
-        _workbookRef = workbookRef;
-        _workbook = workbook;
-        _currentSheetId = _workbook.Sheets[0].Id;
-        _options = options ?? FreeXOptions.Load();
+        _session = workbookSession ?? _documentContext.CreateHostOwnedSession(
+            _sessionFactory,
+            new StartupWorkbookLoadResult(
+                _documentContext.CurrentWorkbook,
+                _documentContext.CurrentWorkbook.Name,
+                "Initialized workbook.",
+                IsFallback: false,
+                SourcePath: documentState?.CurrentFilePath),
+            recalcEngine,
+            viewportService,
+            fileAdapters,
+            documentState ?? new WorkbookDocumentState(),
+            viewportHeight: 1,
+            viewportWidth: 1,
+            includeObjects: true);
+        if (!ReferenceEquals(_session.Workbook, _documentContext.CurrentWorkbook))
+        {
+            throw new ArgumentException(
+                "The supplied workbook session must own the document context's workbook.",
+                nameof(workbookSession));
+        }
+        _currentSheetId = _session.ActiveSheet.Id;
+        ConfigureWorkbookSessionRendererAdapters();
+        _optionsRuntimeSession = optionsRuntimeSession ?? new FreeXOptionsRuntimeSession(options);
+        _options = _optionsRuntimeSession.LiveOptions;
         _windowRegistry = windowRegistry;
         // A window handed a workbook that a registered window already views is a secondary view
         // of that document (View > New Window passed the originating window's context); it must
         // adopt the shared workbook on load instead of creating a fresh one. A window built with
         // its own fresh context (app startup, startup recovery, command-line file arguments)
         // never matches a registered window's document and initializes its own workbook (H39).
-        _adoptSharedWorkbookOnLoad = windowRegistry?.HasWindowForDocument(workbook.Id) == true;
+        _adoptSharedWorkbookOnLoad = windowRegistry?.HasWindowForDocument(
+            _documentContext.CurrentWorkbook.Id) == true;
         _recentFiles = RecentFilesStore.Load();
+        _fileWorkflow = CreateWorkbookFileWorkflow();
 
         InitializeComponent();
         ApplySisterAppClientFrameContractRows();
@@ -383,8 +383,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         if (App.TryGetServices(out _))
             WpfThemeApplier.Apply(Resources, App.ActiveTheme, "FreeX");
         InitializeInsertShapeGalleryContextMenu();
-        if (_commandStackChangeNotifier is not null)
-            _commandStackChangeNotifier.StackChanged += CommandStackChangeNotifier_StackChanged;
+        _documentContext.CommandStackChanged += CommandStackChangeNotifier_StackChanged;
 
         RibbonMenuIconSeeder.Register();
         RebuildQuickAccessToolbar();
@@ -494,9 +493,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
             // would fight over the selected suggestion tail.
             if (_inlineEditor?.IsVisible != true)
             {
-                var suppressed = _suppressNextCellValueAutoCompleteSuggestion;
-                _suppressNextCellValueAutoCompleteSuggestion = false;
-                if (!suppressed)
+                if (!_formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression())
                     ApplyCellValueAutoCompleteSuggestion(FormulaBar);
 
                 // R91-formula-editing-assist-5-1/5-2: same function-name AutoComplete popup and
@@ -520,6 +517,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         _logger.LogInformation("MainWindow initialized with Workbook {WorkbookId}", _workbook.Id);
     }
 
+    internal WorkbookSession Session => _session;
+
     private void RecordDiagnosticEvent(string eventName, IReadOnlyDictionary<string, string?>? properties = null) =>
         _diagnostics?.RecordEvent(eventName, properties);
 
@@ -536,7 +535,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
             return;
 
-        var adjacentLastRow = ResolveAdjacentColumnLastPopulatedRow(sheet, source);
+        var adjacentLastRow = GridAutofillPlanner.ResolveAdjacentColumnLastPopulatedRow(sheet, source);
         var fillRange = GridAutofillPlanner.CalculateDoubleClickFillRange(source, adjacentLastRow);
         if (fillRange is null)
             return;
@@ -546,39 +545,6 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         // Excel's double-click fill always behaves like a plain (non-Ctrl) drag, so pass false
         // explicitly rather than reading the possibly-stale field.
         ExecuteAutofill(source, fillRange.Value, ctrlHeld: false);
-    }
-
-    /// <summary>
-    /// Finds the last populated row of the contiguous data run in the column immediately to the
-    /// left of <paramref name="source"/> (checked first) or immediately to the right, starting
-    /// from the row below the source's seed row and stopping at the first blank cell. Returns null
-    /// when neither neighbor has any data immediately below the seed row.
-    /// </summary>
-    private static uint? ResolveAdjacentColumnLastPopulatedRow(Sheet sheet, GridRange source)
-    {
-        var seedRow = source.Start.Row;
-        if (source.Start.Col > 1 &&
-            ResolveColumnLastPopulatedRow(sheet, source.Start.Col - 1, seedRow) is { } leftRow)
-        {
-            return leftRow;
-        }
-
-        return ResolveColumnLastPopulatedRow(sheet, source.End.Col + 1, seedRow);
-    }
-
-    private static uint? ResolveColumnLastPopulatedRow(Sheet sheet, uint column, uint seedRow)
-    {
-        if (column > CellAddress.MaxCol || seedRow >= CellAddress.MaxRow)
-            return null;
-
-        if (sheet.GetValue(seedRow + 1, column) is BlankValue)
-            return null;
-
-        var lastRow = seedRow + 1;
-        while (lastRow < CellAddress.MaxRow && sheet.GetValue(lastRow + 1, column) is not BlankValue)
-            lastRow++;
-
-        return lastRow;
     }
 
     private void CommandStackChangeNotifier_StackChanged(object? sender, CommandStackChangedEventArgs e)
@@ -597,8 +563,10 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
 
     private void MainWindow_Closed(object? sender, EventArgs e)
     {
-        if (_commandStackChangeNotifier is not null)
-            _commandStackChangeNotifier.StackChanged -= CommandStackChangeNotifier_StackChanged;
+        _documentContext.CommandStackChanged -= CommandStackChangeNotifier_StackChanged;
+        _fileOperationCancellationSession.Dispose();
+        _workbookSessionDisposed = true;
+        _session.Dispose();
     }
 
     private void UpdateMaxRestoreButtonState()

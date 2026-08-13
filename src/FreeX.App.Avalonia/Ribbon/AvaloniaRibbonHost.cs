@@ -1,10 +1,13 @@
 using Avalonia.Controls;
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Charts;
+using FreeX.App.Localization;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Charts.Editing;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.Core.Model;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Theme;
@@ -12,215 +15,19 @@ using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Ribbon;
 
-internal enum AvaloniaRibbonKeyTipRouteKind
-{
-    RibbonTab,
-    Backstage,
-    BackstagePane,
-    BackstageCommand,
-    QuickAccessToolbar,
-    RibbonCommand,
-    Scope,
-}
-
-internal sealed record AvaloniaRibbonKeyTipRoute(
-    string Input,
-    string RouteName,
-    AvaloniaRibbonKeyTipRouteKind Kind,
-    string? TabKeyTip = null,
-    RibbonCommandId? CommandId = null,
-    FreeXBackstagePaneId? BackstagePane = null,
-    FreeXBackstageCommandId? BackstageCommand = null,
-    int QuickAccessIndex = -1);
-
-internal readonly record struct AvaloniaRibbonKeyTipMatch(
-    AvaloniaRibbonKeyTipRoute? ExactRoute,
-    bool HasLongerRoute)
-{
-    public bool IsMatch => ExactRoute is not null || HasLongerRoute;
-}
-
 /// <summary>
-/// Runtime keytip paths derived from the same ribbon and Backstage definitions used to render the shell.
-/// Input is character-by-character (for example H, B, S, D), while definition keytips may span more
-/// than one character. Keeping the flattened path here lets the window retain one state machine across
-/// tabs, split-button menus, nested menu scopes, contextual tabs, and the Quick Access Toolbar.
+/// Provides the canonical renderer-neutral key-tip catalog to the Avalonia shell. Input remains
+/// character-by-character while the window retains its native state machine and control activation.
 /// </summary>
 internal static class AvaloniaRibbonKeyTipRoutes
 {
-    private static readonly IReadOnlyDictionary<string, string> ContextualTabInputs =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["PivotTableAnalyzeTab"] = "JA",
-            ["PivotTableDesignTab"] = "JD",
-            ["ChartDesignTab"] = "JC",
-            ["ChartFormatTab"] = "JF",
-            ["ShapeFormatTab"] = "JS",
-            ["PictureFormatTab"] = "JP",
-            ["TableDesignTab"] = "JT",
-        };
+    private static readonly Lazy<FreeXRibbonKeyTipRouteCatalog> Routes =
+        new(() => FreeXRibbonKeyTipRoutePlanner.Build(AvaloniaRibbonComposition.BuildDefinition()));
 
-    private static readonly Lazy<IReadOnlyList<AvaloniaRibbonKeyTipRoute>> Routes =
-        new(BuildRoutes);
+    internal static FreeXRibbonKeyTipMatch Match(string input) => Routes.Value.Match(input);
 
-    internal static AvaloniaRibbonKeyTipMatch Match(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-            return default;
-
-        var normalized = input.Trim().ToUpperInvariant();
-        AvaloniaRibbonKeyTipRoute? exact = null;
-        var hasLonger = false;
-        foreach (var route in Routes.Value)
-        {
-            if (string.Equals(route.Input, normalized, StringComparison.OrdinalIgnoreCase))
-                exact ??= route;
-            else if (route.Input.Length > normalized.Length &&
-                     route.Input.StartsWith(normalized, StringComparison.OrdinalIgnoreCase))
-                hasLonger = true;
-        }
-
-        return new AvaloniaRibbonKeyTipMatch(exact, hasLonger);
-    }
-
-    internal static bool TryResolveExact(string input, out AvaloniaRibbonKeyTipRoute route)
-    {
-        route = Match(input).ExactRoute!;
-        return route is not null;
-    }
-
-    private static IReadOnlyList<AvaloniaRibbonKeyTipRoute> BuildRoutes()
-    {
-        var routes = new Dictionary<string, AvaloniaRibbonKeyTipRoute>(StringComparer.OrdinalIgnoreCase);
-
-        void Add(AvaloniaRibbonKeyTipRoute route) => routes.TryAdd(route.Input, route);
-
-        Add(new("F", "backstage", AvaloniaRibbonKeyTipRouteKind.Backstage));
-        foreach (var entry in FreeXBackstageNavigationPlanner.Build())
-        {
-            if (string.IsNullOrWhiteSpace(entry.KeyTip))
-                continue;
-
-            var input = "F" + Normalize(entry.KeyTip);
-            if (entry.Pane is { } pane)
-            {
-                Add(new(
-                    input,
-                    $"backstage:{entry.KeyTip}",
-                    AvaloniaRibbonKeyTipRouteKind.BackstagePane,
-                    BackstagePane: pane));
-            }
-            else if (entry.Command is { } command)
-            {
-                Add(new(
-                    input,
-                    $"backstage:{entry.KeyTip}",
-                    AvaloniaRibbonKeyTipRouteKind.BackstageCommand,
-                    BackstageCommand: command));
-            }
-        }
-
-        // Keep only the legacy File-surface alias that is not represented by the current rail.
-        foreach (var keyTip in new[] { "Z" })
-            Add(new("F" + keyTip, $"backstage:{keyTip}", AvaloniaRibbonKeyTipRouteKind.Scope));
-
-        for (var index = 0; index < 3; index++)
-        {
-            var keyTip = (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
-            Add(new(
-                keyTip,
-                $"qat:{keyTip}",
-                AvaloniaRibbonKeyTipRouteKind.QuickAccessToolbar,
-                QuickAccessIndex: index));
-        }
-
-        var definition = AvaloniaRibbonComposition.BuildDefinition();
-        foreach (var tab in definition.Tabs)
-        {
-            var tabInput = tab.IsContextual
-                ? ContextualTabInputs.GetValueOrDefault(tab.Id)
-                : string.IsNullOrWhiteSpace(tab.KeyTip) ? null : Normalize(tab.KeyTip);
-            if (string.IsNullOrWhiteSpace(tabInput))
-                continue;
-
-            Add(new(
-                tabInput,
-                $"tab:{tab.Id}",
-                AvaloniaRibbonKeyTipRouteKind.RibbonTab,
-                TabKeyTip: tab.IsContextual ? tabInput : tab.KeyTip));
-
-            foreach (var control in tab.Groups.SelectMany(group => group.Controls))
-            {
-                if (string.IsNullOrWhiteSpace(control.KeyTip))
-                    continue;
-
-                var controlInput = tabInput + Normalize(control.KeyTip);
-                var menu = control switch
-                {
-                    RibbonSplitButton split => split.Menu,
-                    RibbonDropdown dropdown => dropdown.Menu,
-                    _ => null,
-                };
-                Add(new(
-                    controlInput,
-                    menu is null ? $"command:{control.CommandId.Value}" : $"scope:{control.CommandId.Value}",
-                    menu is null ? AvaloniaRibbonKeyTipRouteKind.RibbonCommand : AvaloniaRibbonKeyTipRouteKind.Scope,
-                    CommandId: menu is null ? control.CommandId : (RibbonCommandId?)null));
-
-                if (menu is not null)
-                    AddMenuRoutes(routes, controlInput, menu.Items);
-            }
-        }
-
-        // The Insert Charts collapsed group is a valid terminal keytip scope even though it is not
-        // represented as a command in the declarative control list.
-        Add(new("NCH", "group:InsertChartsGroup", AvaloniaRibbonKeyTipRouteKind.Scope));
-        Add(new(
-            "NSHR",
-            "dynamic-menu:shape.rectangle",
-            AvaloniaRibbonKeyTipRouteKind.RibbonCommand,
-            CommandId: new RibbonCommandId(AvaloniaRibbonComposition.GetShapeCommandId(DrawingShapeKind.Rectangle))));
-        return routes.Values.OrderBy(route => route.Input, StringComparer.Ordinal).ToArray();
-    }
-
-    private static void AddMenuRoutes(
-        IDictionary<string, AvaloniaRibbonKeyTipRoute> routes,
-        string parentInput,
-        IReadOnlyList<RibbonMenuItem> items)
-    {
-        foreach (var item in items)
-        {
-            if (string.IsNullOrWhiteSpace(item.KeyTip))
-                continue;
-
-            var input = parentInput + Normalize(item.KeyTip);
-            if (item.Children.Count > 0)
-            {
-                routes.TryAdd(input, new(
-                    input,
-                    $"scope:{item.Header}",
-                    AvaloniaRibbonKeyTipRouteKind.Scope));
-                AddMenuRoutes(routes, input, item.Children);
-            }
-            else if (item.CommandId is { } commandId)
-            {
-                routes.TryAdd(input, new(
-                    input,
-                    $"menu:{commandId.Value}",
-                    AvaloniaRibbonKeyTipRouteKind.RibbonCommand,
-                    CommandId: commandId));
-            }
-            else
-            {
-                routes.TryAdd(input, new(
-                    input,
-                    $"scope:{item.Header}",
-                    AvaloniaRibbonKeyTipRouteKind.Scope));
-            }
-        }
-    }
-
-    private static string Normalize(string value) => value.Trim().ToUpperInvariant();
+    internal static bool TryResolveExact(string input, out FreeXRibbonKeyTipRoute route) =>
+        Routes.Value.TryResolveExact(input, out route);
 }
 
 /// <summary>
@@ -229,9 +36,8 @@ internal static class AvaloniaRibbonKeyTipRoutes
 /// via <see cref="AvaloniaRibbonRenderer"/>. There is no longer a separate Avalonia ribbon definition: one
 /// declarative definition drives both apps.
 ///
-/// The shell still registers its command handlers under the dotted ids it has always used; each registration
-/// is translated through <see cref="AvaloniaCommandIdAdapter.ToCanonical"/> to the canonical id the shared
-/// definition emits, so the renderer (which queries the registry by canonical id) finds the handler. Bold /
+/// The shell registers endpoint delegates against canonical ids obtained from the shared definition, so the
+/// renderer and host cannot drift into separate command inventories. Bold /
 /// Italic / Underline bind to the shared, platform-neutral <see cref="WorkbookFormatRibbonCommands"/> — the
 /// same command logic the WPF host uses — so clicking them formats the live selection. Every canonical id in
 /// the shared definition resolves in the registry to either a real handler or the honest NoOp stub.
@@ -329,9 +135,6 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Home ▸ Conditional — open the conditional-format New Rule editor.</summary>
     public Action? ConditionalFormatting { get; init; }
 
-    /// <summary>Data ▸ Quick Analysis — open the Quick Analysis popup for the selection.</summary>
-    public Action? QuickAnalysis { get; init; }
-
     /// <summary>Insert ▸ PivotTable — open the Insert PivotTable dialog for the selection.</summary>
     public Action? InsertPivotTable { get; init; }
 
@@ -414,7 +217,7 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// Additional command-id → action bindings for parameterized menu items the named callbacks do not
     /// cover (e.g. the Number Format dropdown's General/Number/Currency/Date/Percent items, or the Fill
     /// Color dropdown's swatch items). Applied after the named callbacks; each id overrides its no-op.
-    /// Keys are the Avalonia dotted ids; the registry re-keys them to canonical ids via the adapter.
+    /// Keys are canonical ids emitted by the shared definition.
     /// </summary>
     public IReadOnlyDictionary<string, Action>? ExtraCommands { get; init; }
 
@@ -475,7 +278,7 @@ internal sealed class DisabledNoOpRibbonCommand : IRibbonStatefulCommand
 /// <summary>
 /// Inserts a chart of a fixed <see cref="ChartType"/> over the live session's selection by running the
 /// shared Core <see cref="FreeX.Core.Commands.AddChartCommand"/> (built by
-/// <see cref="InsertChartCommandFactory"/>). On success the host refresh hook redraws the grid so the new
+/// <see cref="ChartCommandWorkflowPlanner"/>). On success the host refresh hook redraws the grid so the new
 /// chart paints in the drawing-object overlay; on failure the Core guard message is surfaced on the
 /// status bar. The session is read each time (it may be replaced on open/new).
 /// </summary>
@@ -497,11 +300,14 @@ internal sealed class InsertChartRibbonCommand : IRibbonCommand
         if (_session() is not { } session)
             return;
 
-        var command = InsertChartCommandFactory.Build(session.ActiveSheet, session.SelectedRange, _chartType);
+        var command = ChartCommandWorkflowPlanner.BuildEmbeddedChartCommand(
+            session.ActiveSheet,
+            session.SelectedRange,
+            _chartType);
         var result = session.ExecuteReviewCommand(command);
         _setStatus(result.Success
-            ? $"Inserted {_chartType} chart"
-            : result.ErrorMessage ?? "Insert Chart failed.");
+            ? UiText.Format("ChartLoc_InsertedChartStatusFormat", _chartType)
+            : result.ErrorMessage ?? UiText.Get("ChartLoc_InsertChartFailed"));
     }
 }
 
@@ -509,8 +315,7 @@ internal sealed class InsertChartRibbonCommand : IRibbonCommand
 /// Composes the Avalonia ribbon from the canonical shared definition and seeds the command registry. The
 /// definition is <see cref="FreeXRibbon.Build"/> verbatim — the single source of truth shared with WPF — so
 /// the Avalonia and Windows ribbons render from identical declarations. All command resolution is keyed to
-/// the canonical ids the definition emits; shell handlers (registered under their historical dotted ids) are
-/// translated to canonical ids via <see cref="AvaloniaCommandIdAdapter"/>.
+/// the canonical ids the definition emits; shell handlers retain only endpoint delegates and state mappings.
 /// </summary>
 internal static class AvaloniaRibbonComposition
 {
@@ -531,21 +336,13 @@ internal static class AvaloniaRibbonComposition
     /// <summary>The canonical, single-source ribbon definition shared with the WPF app.</summary>
     public static RibbonDefinition BuildDefinition()
     {
-        var definition = FreeXRibbon.Build();
-        var numberFormatCommandId = AvaloniaCommandIdAdapter.ToCanonical("home.numberFormat");
-        var numberFormatLabels = HomeNumberFormatDropdownPlanner.Options
-            .Select(option => option.Label)
-            .ToArray();
+        var definition = FreeXRibbonCompositionPlanner.Compose(FreeXRibbon.Build(), UiText.Get);
         var tabs = definition.Tabs.Select(tab => tab with
         {
             Groups = tab.Groups.Select(group => group with
             {
                 Controls = group.Controls.Select(control =>
                 {
-                    if (control is RibbonComboBox combo &&
-                        string.Equals(combo.CommandId.Value, numberFormatCommandId, StringComparison.Ordinal))
-                        return combo with { Items = numberFormatLabels };
-
                     return string.Equals(control.CommandId.Value, "Shapes", StringComparison.Ordinal)
                         ? CreateShapeGallerySplitButton(control)
                         : control;
@@ -572,15 +369,14 @@ internal static class AvaloniaRibbonComposition
         // definition's richer surface (Draw/Help tabs, deeper menus) renders enabled without a crash even
         // before any real handler is wired. Real handlers below override the relevant ids.
         var definition = BuildDefinition();
-        foreach (var id in EnumerateCommandIds(definition))
+        foreach (var id in FreeXRibbonCommandCatalog.Enumerate(definition))
             registry.Register(id, EmptyRibbonCommand.Instance);
 
         // Override the representative formatting toggles with the shared, platform-neutral commands so the
-        // Avalonia ribbon performs real edits (the same WorkbookSession logic the WPF host runs). Keys are
-        // translated to the canonical ids the shared definition emits.
-        Register(registry, "home.bold", WorkbookFormatRibbonCommands.Bold(session, ApplyStatus(setStatus, "Bold")));
-        Register(registry, "home.italic", WorkbookFormatRibbonCommands.Italic(session, ApplyStatus(setStatus, "Italic")));
-        Register(registry, "home.underline", WorkbookFormatRibbonCommands.Underline(session, ApplyStatus(setStatus, "Underline")));
+        // Avalonia ribbon performs real edits (the same WorkbookSession logic the WPF host runs).
+        Register(registry, "Bold", WorkbookFormatRibbonCommands.Bold(session, ApplyStatus(setStatus, "Bold")));
+        Register(registry, "Italic", WorkbookFormatRibbonCommands.Italic(session, ApplyStatus(setStatus, "Italic")));
+        Register(registry, "Underline", WorkbookFormatRibbonCommands.Underline(session, ApplyStatus(setStatus, "Underline")));
 
         // Override the Insert ▸ Charts controls with a real insert action: each canonical id the factory maps
         // to a ChartType gets an InsertChartRibbonCommand; unmapped ids keep their NoOp registration.
@@ -592,9 +388,8 @@ internal static class AvaloniaRibbonComposition
         return registry;
     }
 
-    /// <summary>Registers <paramref name="command"/> under the canonical id for the Avalonia <paramref name="avaloniaId"/>.</summary>
-    private static void Register(IRibbonCommandRegistry registry, string avaloniaId, IRibbonCommand command)
-        => registry.Register(new RibbonCommandId(AvaloniaCommandIdAdapter.ToCanonical(avaloniaId)), command);
+    private static void Register(IRibbonCommandRegistry registry, string canonicalId, IRibbonCommand command) =>
+        registry.Register(FreeXRibbonCommandCatalog.GetRequired(canonicalId), command);
 
     /// <summary>
     /// Binds each non-null host callback to its canonical command id(s) via an <see cref="ActionRibbonCommand"/>,
@@ -602,17 +397,15 @@ internal static class AvaloniaRibbonComposition
     /// </summary>
     private static void ApplyHostCallbacks(IRibbonCommandRegistry registry, AvaloniaRibbonHostCallbacks callbacks)
     {
-        void Bind(string avaloniaId, Action? action)
+        void Bind(string canonicalId, Action? action)
         {
             if (action is not null)
-                Register(registry, avaloniaId, CreateRelayCommand(avaloniaId, action));
+                Register(registry, canonicalId, CreateRelayCommand(canonicalId, action));
         }
 
-        IRibbonCommand CreateRelayCommand(string avaloniaId, Action action)
+        IRibbonCommand CreateRelayCommand(string canonicalId, Action action)
         {
-            var canonicalId = AvaloniaCommandIdAdapter.ToCanonical(avaloniaId);
-            if (callbacks.ExtraCommandStates?.TryGetValue(avaloniaId, out var state) == true ||
-                callbacks.ExtraCommandStates?.TryGetValue(canonicalId, out state) == true)
+            if (callbacks.ExtraCommandStates?.TryGetValue(canonicalId, out var state) == true)
             {
                 return new StatefulRelayRibbonCommand(action, state);
             }
@@ -620,17 +413,16 @@ internal static class AvaloniaRibbonComposition
             return new ActionRibbonCommand(action);
         }
 
-        Bind("data.textToColumns", callbacks.OpenTextToColumns);
-        Bind("data.consolidate", callbacks.OpenConsolidate);
-        Bind("insert.table", callbacks.InsertTable);
-        Bind("home.formatAsTable", callbacks.InsertTable);
-        Bind("home.conditional", callbacks.ConditionalFormatting);
-        Bind("data.quickAnalysis", callbacks.QuickAnalysis);
-        Bind("insert.pivotTable", callbacks.InsertPivotTable);
-        Bind("insert.picture", callbacks.InsertPicture);
+        Bind("Text to Columns", callbacks.OpenTextToColumns);
+        Bind("Consolidate", callbacks.OpenConsolidate);
+        Bind("Table", callbacks.InsertTable);
+        Bind("Format as Table", callbacks.InsertTable);
+        Bind("Conditional Formatting", callbacks.ConditionalFormatting);
+        Bind("PivotTable", callbacks.InsertPivotTable);
+        Bind("Pictures", callbacks.InsertPicture);
         if (callbacks.InsertShape is { } insertShape)
         {
-            Bind("insert.shapes", () => insertShape(DrawingInsertionPlanner.DefaultShape));
+            Bind("Shapes", () => insertShape(DrawingInsertionPlanner.DefaultShape));
             foreach (var item in DrawingInsertionPlanner.ShapeItems)
             {
                 var kind = item.Kind;
@@ -639,33 +431,31 @@ internal static class AvaloniaRibbonComposition
                     new ActionRibbonCommand(() => insertShape(kind)));
             }
         }
-        Bind("insert.textBox", callbacks.InsertTextBox);
-        Bind("home.formatPainter", callbacks.FormatPainter);
+        Bind("Text Box", callbacks.InsertTextBox);
+        Bind("Format Painter", callbacks.FormatPainter);
 
         if (callbacks.SetFontSize is { } setFontSize)
-            Register(registry, "home.fontSize", new ValueRibbonCommand(setFontSize));
+            Register(registry, "Font Size", new ValueRibbonCommand(setFontSize));
         if (callbacks.SetFontName is { } setFontName)
-            Register(registry, "home.fontName", new ValueRibbonCommand(setFontName));
-        Bind("data.sortAsc", callbacks.SortAscending);
-        Bind("data.sortDesc", callbacks.SortDescending);
-        Bind("data.filter", callbacks.ToggleFilter);
-        Bind("data.validation", callbacks.DataValidation);
-        Bind("data.validationDialog", callbacks.DataValidation);
+            Register(registry, "Font", new ValueRibbonCommand(setFontName));
+        Bind(FreeXRibbonCommandIds.DataSortAscending, callbacks.SortAscending);
+        Bind(FreeXRibbonCommandIds.DataSortDescending, callbacks.SortDescending);
+        Bind(FreeXRibbonCommandIds.DataFilter, callbacks.ToggleFilter);
+        Bind(FreeXRibbonCommandIds.DataValidation, callbacks.DataValidation);
 
-        Bind("home.cut", callbacks.Cut);
-        Bind("home.copy", callbacks.Copy);
-        Bind("home.paste", callbacks.Paste);
-        Bind("home.alignLeft", callbacks.AlignLeft);
-        Bind("home.alignCenter", callbacks.AlignCenter);
-        Bind("home.alignRight", callbacks.AlignRight);
-        Bind("home.wrapText", callbacks.WrapText);
-        Bind("home.merge", callbacks.MergeAndCenter);
-        Bind("home.mergeCenter", callbacks.MergeAndCenter);
-        Bind("home.currency", callbacks.CurrencyFormat);
-        Bind("home.percent", callbacks.PercentFormat);
-        Bind("home.comma", callbacks.CommaStyle);
+        Bind("Cut", callbacks.Cut);
+        Bind("Copy", callbacks.Copy);
+        Bind("Paste", callbacks.Paste);
+        Bind("Align Left", callbacks.AlignLeft);
+        Bind("Center", callbacks.AlignCenter);
+        Bind("Align Right", callbacks.AlignRight);
+        Bind("Wrap Text", callbacks.WrapText);
+        Bind("Merge & Center", callbacks.MergeAndCenter);
+        Bind("Accounting Number Format", callbacks.CurrencyFormat);
+        Bind("Percent Style", callbacks.PercentFormat);
+        Bind("Comma Style", callbacks.CommaStyle);
         if (callbacks.SetNumberFormat is { } setNumberFormat)
-            Register(registry, "home.numberFormat", new ValueRibbonCommand(setNumberFormat));
+            Register(registry, "Number Format", new ValueRibbonCommand(setNumberFormat));
 
         if (callbacks.ExtraCommands is { } extra)
             foreach (var (id, action) in extra)
@@ -674,17 +464,15 @@ internal static class AvaloniaRibbonComposition
         // Page Layout scale controls carry a selected value. Register these after the generic action map
         // so the value-aware route wins over the Page Setup dialog fallback for the same command ids.
         if (callbacks.SetPageLayoutScaleWidth is { } setScaleWidth)
-            Register(registry, "pageLayout.width", CreateStatefulValueRelayCommand("pageLayout.width", setScaleWidth));
+            Register(registry, "Scale Width", CreateStatefulValueRelayCommand("Scale Width", setScaleWidth));
         if (callbacks.SetPageLayoutScaleHeight is { } setScaleHeight)
-            Register(registry, "pageLayout.height", CreateStatefulValueRelayCommand("pageLayout.height", setScaleHeight));
+            Register(registry, "Scale Height", CreateStatefulValueRelayCommand("Scale Height", setScaleHeight));
         if (callbacks.SetPageLayoutScalePercent is { } setScalePercent)
-            Register(registry, "pageLayout.scale", CreateStatefulValueRelayCommand("pageLayout.scale", setScalePercent));
+            Register(registry, "Scale Percent", CreateStatefulValueRelayCommand("Scale Percent", setScalePercent));
 
-        IRibbonCommand CreateStatefulValueRelayCommand(string avaloniaId, Action<string?> action)
+        IRibbonCommand CreateStatefulValueRelayCommand(string canonicalId, Action<string?> action)
         {
-            var canonicalId = AvaloniaCommandIdAdapter.ToCanonical(avaloniaId);
-            if (callbacks.ExtraCommandStates?.TryGetValue(avaloniaId, out var state) == true ||
-                callbacks.ExtraCommandStates?.TryGetValue(canonicalId, out state) == true)
+            if (callbacks.ExtraCommandStates?.TryGetValue(canonicalId, out var state) == true)
             {
                 return new StatefulValueRibbonCommand(action, state);
             }
@@ -693,7 +481,8 @@ internal static class AvaloniaRibbonComposition
         }
     }
 
-    internal static string GetShapeCommandId(DrawingShapeKind kind) => $"insert.shape.{kind}";
+    internal static string GetShapeCommandId(DrawingShapeKind kind) =>
+        DrawingInsertionPlanner.GetRibbonCommandId(kind);
 
     private static RibbonControl CreateShapeGallerySplitButton(RibbonControl source) =>
         new RibbonSplitButton(source.CommandId, source.Label, new RibbonMenu(
@@ -715,7 +504,7 @@ internal static class AvaloniaRibbonComposition
 
     /// <summary>
     /// Wires the Insert chart-type buttons and their chart-type menu items to
-    /// <see cref="InsertChartCommandFactory"/>. Any canonical command id the factory maps to a
+    /// <see cref="ChartCommandWorkflowPlanner"/>. Any canonical command id the workflow maps to a
     /// <see cref="ChartType"/> gets an <see cref="InsertChartRibbonCommand"/>; unmapped ids keep their
     /// no-op registration. The factory recognizes the shared definition's descriptive chart labels
     /// (e.g. <c>Column Chart</c>, <c>Line Chart</c>) directly.
@@ -725,9 +514,9 @@ internal static class AvaloniaRibbonComposition
         Func<WorkbookSession?> session,
         Action<string> setStatus)
     {
-        foreach (var id in EnumerateCommandIds(BuildDefinition()))
+        foreach (var id in FreeXRibbonCommandCatalog.Enumerate(BuildDefinition()))
         {
-            if (InsertChartCommandFactory.ChartTypeForRibbonCommand(id.Value) is not { } chartType)
+            if (ChartCommandWorkflowPlanner.ChartTypeForRibbonCommand(id.Value) is not { } chartType)
                 continue;
             registry.Register(id, new InsertChartRibbonCommand(session, chartType, setStatus));
         }
@@ -738,14 +527,6 @@ internal static class AvaloniaRibbonComposition
         (result, on) => setStatus(result.Success
             ? $"{label} {(on ? "on" : "off")}"
             : result.ErrorMessage ?? $"{label} failed.");
-
-    /// <summary>Enumerates every control + menu command id in a definition (the registry's seeding set).</summary>
-    public static IEnumerable<RibbonCommandId> EnumerateCommandIds(RibbonDefinition definition)
-    {
-        foreach (var tab in definition.Tabs)
-        foreach (var id in EnumerateCommandIds(tab))
-            yield return id;
-    }
 
     /// <summary>
     /// Enumerates every visible command placement, preserving duplicate command ids and nested menu paths.
@@ -843,42 +624,4 @@ internal static class AvaloniaRibbonComposition
         }
     }
 
-    private static IEnumerable<RibbonCommandId> EnumerateCommandIds(RibbonTab tab)
-    {
-        foreach (var group in tab.Groups)
-        foreach (var control in group.Controls)
-        {
-            if (!string.IsNullOrEmpty(control.CommandId.Value))
-                yield return control.CommandId;
-
-            foreach (var menuId in EnumerateMenuIds(control))
-                yield return menuId;
-        }
-    }
-
-    private static IEnumerable<RibbonCommandId> EnumerateMenuIds(RibbonControl control)
-    {
-        var menu = control switch
-        {
-            RibbonSplitButton split => split.Menu,
-            RibbonDropdown dropdown => dropdown.Menu,
-            _ => null,
-        };
-        if (menu is null)
-            yield break;
-
-        foreach (var id in EnumerateMenuIds(menu.Items))
-            yield return id;
-    }
-
-    private static IEnumerable<RibbonCommandId> EnumerateMenuIds(IReadOnlyList<RibbonMenuItem> items)
-    {
-        foreach (var item in items)
-        {
-            if (item.CommandId is { } id && !string.IsNullOrEmpty(id.Value))
-                yield return id;
-            foreach (var childId in EnumerateMenuIds(item.Children))
-                yield return childId;
-        }
-    }
 }

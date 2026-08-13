@@ -33,15 +33,17 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var source = _session.SelectedRange;
-        if (!PivotCreatePlanner.IsValidSource(source))
+        var createModel = PivotApplication.PrepareCreate(
+            _session.ActiveSheet.Id,
+            _session.SelectedRange);
+        if (!createModel.CanShow || createModel.SourceRange is not { } source)
         {
-            ShowEditIssue(UiText.Get("PivotLoc_SelectRangeForPivot"));
+            ShowPivotApplicationIssue(createModel.Message);
             return;
         }
 
-        var fields = PivotCreatePlanner.ReadFields(_session.ActiveSheet, source);
-        var defaults = PivotCreatePlanner.DefaultRoles(fields);
+        var fields = createModel.Fields;
+        var defaults = createModel.DefaultRoles;
 
         var dialog = new Window
         {
@@ -57,7 +59,7 @@ public sealed partial class MainWindow
 
         var sourceBox = new TextBox
         {
-            Text = FormatRangeReference(source),
+            Text = createModel.SourceRangeText,
             MinWidth = 300,
         };
         ApplyDataOpsTextBoxChrome(sourceBox);
@@ -71,7 +73,7 @@ public sealed partial class MainWindow
 
         var destinationBox = new TextBox
         {
-            Text = FormatCellReference(new CellAddress(_session.ActiveSheet.Id, source.End.Row + 2, source.Start.Col)),
+            Text = createModel.DestinationRangeText,
             MinWidth = 300,
             IsEnabled = false,
         };
@@ -165,65 +167,49 @@ public sealed partial class MainWindow
 
         okButton.Click += (_, _) =>
         {
-            if (!_session.TryResolveReferenceRange(sourceBox.Text, out var selectedSource)
-                || selectedSource.Start.Sheet != _session.ActiveSheet.Id
-                || !PivotCreatePlanner.IsValidSource(selectedSource))
-            {
-                errorText.Text = UiText.Get("PivotLoc_SelectRangeForPivot");
-                errorText.IsVisible = true;
-                sourceBox.Focus();
-                sourceBox.SelectAll();
-                return;
-            }
-            source = selectedSource;
-
             var roles = new Dictionary<int, PivotCreatePlanner.FieldRole>();
             foreach (var (index, box) in roleBoxes)
                 roles[index] = PivotFieldRoleChoices[Math.Max(0, box.SelectedIndex)].Role;
 
-            var rowIndexes = PivotCreatePlanner.RowIndexes(roles);
-            var dataIndexes = PivotCreatePlanner.ValueIndexes(roles);
-            if (dataIndexes.Count == 0)
+            var plan = PivotApplication.PlanCreate(
+                _session.ActiveSheet.Id,
+                new PivotCreateSubmission(
+                    sourceBox.Text,
+                    newSheetBox.IsChecked == true
+                        ? PivotDestinationKind.NewWorksheet
+                        : PivotDestinationKind.ExistingWorksheet,
+                    destinationBox.Text,
+                    OpenFieldList: true,
+                    roles));
+            if (!plan.CanApply)
             {
-                errorText.Text = UiText.Get("PivotLoc_AssignAtLeastOneValue");
+                errorText.Text = plan.Message?.Issue is
+                    PivotApplicationIssue.InvalidDestinationReference or
+                    PivotApplicationIssue.DestinationMustBeOnCurrentSheet
+                        ? UiText.Get("PivotTable_EnterDestinationCellOnActiveWorksheet")
+                        : plan.Message is { } issue
+                            ? PivotApplicationIssueText(issue)
+                            : UiText.Get("PivotLoc_InsertPivotTableFailed");
                 errorText.IsVisible = true;
+                var invalidDestination = plan.Message?.Issue is
+                    PivotApplicationIssue.InvalidDestinationReference or
+                    PivotApplicationIssue.DestinationMustBeOnCurrentSheet;
+                var targetBox = invalidDestination ? destinationBox : sourceBox;
+                targetBox.Focus();
+                targetBox.SelectAll();
                 return;
             }
 
-            CellAddress? target = null;
-            if (newSheetBox.IsChecked != true)
+            var outcome = PivotApplication.Execute(plan);
+            if (!outcome.Success)
             {
-                if (!_session.TryResolveReferenceRange(destinationBox.Text, out var destination)
-                    || destination.Start.Sheet != _session.ActiveSheet.Id)
-                {
-                    errorText.Text = UiText.Get("PivotTable_EnterDestinationCellOnActiveWorksheet");
-                    errorText.IsVisible = true;
-                    destinationBox.Focus();
-                    destinationBox.SelectAll();
-                    return;
-                }
-
-                target = destination.Start;
-            }
-
-            var command = PivotCreatePlanner.BuildCommand(
-                source,
-                PivotCreatePlanner.SuggestName(_session.Workbook),
-                rowIndexes,
-                dataIndexes,
-                _session.ActiveSheet.Id,
-                target);
-
-            var result = _session.ExecuteReviewCommand(command);
-            if (!result.Success)
-            {
-                errorText.Text = result.ErrorMessage ?? UiText.Get("PivotLoc_InsertPivotTableFailed");
+                errorText.Text = outcome.Message?.Detail ?? UiText.Get("PivotLoc_InsertPivotTableFailed");
                 errorText.IsVisible = true;
                 return;
             }
 
             dialog.Close();
-            RefreshShell(UiText.Format("PivotLoc_InsertedPivotTableFrom", FormatRangeReference(source)));
+            ApplyPivotApplicationOutcome(outcome);
         };
         cancelButton.Click += (_, _) => dialog.Close();
 

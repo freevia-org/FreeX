@@ -1,6 +1,4 @@
-using System.Reflection;
 using System.Threading;
-using System.Threading.Tasks;
 
 using Avalonia.Headless;
 
@@ -52,7 +50,7 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
             var row5 = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 5, CellAddress.MaxCol));
             window.Session.SelectRanges(row5, [row2, row5]);
 
-            InvokePrivate(window, "InsertSheetRows");
+            window.InsertSheetRowsForTest();
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "a Ribbon multi-area Insert Sheet Rows must retire the pending Copy marquee overlay the " +
@@ -77,7 +75,7 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
                 new CellAddress(sheet.Id, 1, 4),
                 new CellAddress(sheet.Id, CellAddress.MaxRow, 4)));
 
-            InvokePrivate(window, "InsertSheetColumns");
+            window.InsertSheetColumnsForTest();
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "Insert Sheet Columns must retire the pending Cut marquee overlay");
@@ -102,7 +100,7 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
                 new CellAddress(sheet.Id, 3, 1),
                 new CellAddress(sheet.Id, 3, CellAddress.MaxCol)));
 
-            InvokePrivate(window, "DeleteSheetRows");
+            window.DeleteSheetRowsForTest();
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "Delete Sheet Rows must retire the pending Copy marquee overlay");
@@ -126,7 +124,7 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
                 new CellAddress(sheet.Id, 1, 3),
                 new CellAddress(sheet.Id, CellAddress.MaxRow, 3)));
 
-            InvokePrivate(window, "DeleteSheetColumns");
+            window.DeleteSheetColumnsForTest();
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "Delete Sheet Columns must retire the pending Copy marquee overlay");
@@ -157,7 +155,7 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
             var row5 = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 5, CellAddress.MaxCol));
             window.Session.SelectRanges(row5, [row2, row5]);
 
-            InvokePrivate(window, "InsertSheetRows");
+            window.InsertSheetRowsForTest();
 
             // Both disjoint areas must have been acted on -- proves no early-gate no-op crept in.
             MarkerAt(sheet, 3, 1).Should().Be("R2", "row 2's insert must still run even though the active area is row 5");
@@ -182,7 +180,7 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
             window.SetClipboardMarqueeForTest(copiedRange, isCut: false);
             window.ClipboardMarqueeRangeForTest.Should().NotBeNull("sanity");
 
-            InvokePrivate(window, "UndoLastEdit");
+            window.UndoLastEditForTest();
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "Undo must retire the pending Copy marquee overlay (session-level clipboard is already " +
@@ -207,7 +205,7 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
             var copiedRange = new GridRange(new CellAddress(sheet.Id, 4, 4), new CellAddress(sheet.Id, 4, 4));
             window.SetClipboardMarqueeForTest(copiedRange, isCut: true);
 
-            InvokePrivate(window, "RedoLastEdit");
+            window.RedoLastEditForTest();
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull("Redo must retire the pending Cut marquee overlay");
 
@@ -229,7 +227,7 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
             var copiedRange = new GridRange(new CellAddress(sheet.Id, 4, 4), new CellAddress(sheet.Id, 4, 4));
             window.SetClipboardMarqueeForTest(copiedRange, isCut: false);
 
-            InvokePrivate(window, "ClearSelectedRangeContents");
+            window.ClearSelectedRangeContentsForTest();
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "Delete key / ribbon Clear Contents must retire the pending Copy marquee overlay");
@@ -252,7 +250,7 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
             var copiedRange = new GridRange(new CellAddress(sheet.Id, 4, 4), new CellAddress(sheet.Id, 4, 4));
             window.SetClipboardMarqueeForTest(copiedRange, isCut: false);
 
-            InvokePrivate(window, "ClearSelectionAndEdit");
+            window.ClearSelectionAndEditForTest();
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "Backspace's ordinary-edit path must retire the pending Copy marquee overlay");
@@ -281,7 +279,7 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
             var copiedRange = new GridRange(new CellAddress(sheet.Id, 4, 4), new CellAddress(sheet.Id, 4, 4));
             window.SetClipboardMarqueeForTest(copiedRange, isCut: false);
 
-            InvokePrivate(window, "ClearSelectionAndEdit");
+            window.ClearSelectionAndEditForTest();
 
             window.ClipboardMarqueeRangeForTest.Should().NotBeNull(
                 "Backspace must be a total no-op while a drawing object is selected, so an unrelated " +
@@ -298,11 +296,4 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
         return (cell?.Value as TextValue)?.Value;
     }
 
-    private static void InvokePrivate(MainWindow window, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new MissingMethodException(nameof(MainWindow), methodName);
-        method.Invoke(window, null);
-    }
 }

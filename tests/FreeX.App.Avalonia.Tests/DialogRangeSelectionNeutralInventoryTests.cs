@@ -26,8 +26,8 @@ public sealed class DialogRangeSelectionNeutralInventoryTests
         ("MainWindow.DefinedNames.cs", "range.named-ranges.definition-refers-to", "DefineNameRefersToPickerButton", "DefineNameRefersToBox"),
         ("MainWindow.PivotCreate.cs", "range.pivot-create.source", "InsertPivotTableSourceRangePickerButton", "InsertPivotTableSourceRangeBox"),
         ("MainWindow.PivotCreate.cs", "range.pivot-create.destination", "InsertPivotTableDestinationRangePickerButton", "InsertPivotTableDestinationRangeBox"),
-        ("MainWindow.ScenarioManagerRangePickers.cs", "range.scenario-manager.changing-cells", "ScenarioManagerChangingCellsPickerButton", "ScenarioManagerChangingCellsBox"),
-        ("MainWindow.ScenarioManagerRangePickers.cs", "range.scenario-manager.result-cells", "ScenarioManagerResultCellsPickerButton", "ScenarioManagerResultCellsBox"),
+        ("MainWindow.ScenarioManagerRangePickers.cs", "range.scenario-manager.changing-cells", "FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsPickerButton", "FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsBox"),
+        ("MainWindow.ScenarioManagerRangePickers.cs", "range.scenario-manager.result-cells", "FreeXAutomationIdCatalog.ScenarioManager.ResultCellsPickerButton", "FreeXAutomationIdCatalog.ScenarioManager.ResultCellsBox"),
         ("MainWindow.InsertFunction.cs", "range.function-argument.reference", "FunctionArgumentReferencePicker", "FunctionArgumentBox"),
         ("MainWindow.ConditionalFormat.cs", "range.conditional-format.applies-to", "ManageConditionalFormatsAppliesToPickerButton", "ManageConditionalFormatsAppliesToBox"),
         ("MainWindow.PivotMove.cs", "range.move-pivot.destination", "MovePivotDestinationPickerButton", "MovePivotDestinationBox"),
@@ -60,17 +60,6 @@ public sealed class DialogRangeSelectionNeutralInventoryTests
     private static string ReadSource(string fileName) =>
         File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", fileName));
 
-    private static string RepoFile(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.FindFileFromBaseDirectory(parts);
 }

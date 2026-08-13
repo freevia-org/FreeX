@@ -10,6 +10,9 @@ public sealed class CommentNavigationPlannerSourceGuardTests
         var directory = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation", "Comments");
         var source = File.ReadAllText(Path.Combine(directory, "CommentNavigationPlanner.cs"));
 
+        source.Should().Contain("public sealed record CommentListRowPlan");
+        source.Should().Contain("public static IReadOnlyList<CommentListRowPlan> CreateThreadedCommentRows");
+        source.Should().Contain("public static IReadOnlyList<CommentListRowPlan> CreateNoteRows");
         source.Should().Contain("public static List<CellAddress> OrderedThreadedCommentAddresses");
         source.Should().Contain("public static string FormatThreadedComment");
         source.Should().Contain("public static string? FormatCellCommentPreview");

@@ -4,7 +4,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FreeX.App.Presentation.QuickAnalysis;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FreeX.App.UI;
 
@@ -13,17 +12,16 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     private ContextMenu? _quickAnalysisMenu;
-    private bool _suppressNextQuickAnalysisClosedStatusReset;
-    private bool _preserveQuickAnalysisUnsupportedStatus;
+    private readonly QuickAnalysisShellSession _quickAnalysisSession = new();
 
     private void ShowQuickAnalysisMenu()
     {
+        CloseQuickAnalysisMenu();
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var request = QuickAnalysisShellRequestPlanner.Build(
+        var openPlan = _quickAnalysisSession.PlanOpen(
             sheet,
             SheetGrid.SelectedRange,
             QuickAnalysisShellCapabilities.DialogBacked);
-        var openPlan = QuickAnalysisShellOpenPlanner.Plan(request);
         if (!openPlan.CanOpen || openPlan.Selection is not { } range)
         {
             ShowQuickAnalysisUnavailableStatus(openPlan);
@@ -31,8 +29,6 @@ public partial class MainWindow
         }
 
         var shellPlan = openPlan.ShellPlan;
-        _preserveQuickAnalysisUnsupportedStatus = false;
-        CloseQuickAnalysisMenu();
         var menu = new ContextMenu
         {
             PlacementTarget = SheetGrid,
@@ -55,8 +51,7 @@ public partial class MainWindow
         {
             if (ReferenceEquals(_quickAnalysisMenu, menu))
                 _quickAnalysisMenu = null;
-            ClearQuickAnalysisPreview(resetStatus: !_suppressNextQuickAnalysisClosedStatusReset);
-            _suppressNextQuickAnalysisClosedStatusReset = false;
+            ClearQuickAnalysisPreview();
         };
 
         foreach (var group in shellPlan.Groups)
@@ -77,7 +72,8 @@ public partial class MainWindow
                     Header = item.Label,
                     Tag = item,
                     ToolTip = item.ToolTip,
-                    Icon = QuickAnalysisPreviewIconFactory.Create(item.PreviewVisual)
+                    IsEnabled = item.IsEnabled,
+                    Icon = QuickAnalysisPreviewIconFactory.Create(item.PreviewIcon)
                 };
                 menuItem.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
                 menuItem.MouseLeave += QuickAnalysisMenuItem_MouseLeave;
@@ -101,9 +97,6 @@ public partial class MainWindow
 
     private void ShowQuickAnalysisUnavailableStatus(QuickAnalysisShellOpenPlan openPlan)
     {
-        _preserveQuickAnalysisUnsupportedStatus = true;
-        _suppressNextQuickAnalysisClosedStatusReset = true;
-        CloseQuickAnalysisMenu();
         ClearQuickAnalysisPreview(resetStatus: false);
         StatusReadyText.Text = QuickAnalysisShellOpenPlanner.FormatIssueText(
             openPlan,
@@ -135,73 +128,71 @@ public partial class MainWindow
         Keyboard.Focus(firstEnabledItem);
     }
 
-    private void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e)
+    private async void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item })
             return;
 
-        var operation = QuickAnalysisHostOperationPlanner.Plan(item);
-        switch (operation.Kind)
-        {
-            case QuickAnalysisHostOperationKind.OpenConditionalFormatDialog
-                when operation.ConditionalFormatDialogTitle is { } title:
-                ShowCfDialog(title);
-                break;
-            case QuickAnalysisHostOperationKind.ClearConditionalFormatting:
-                CfClearRulesMenuItem_Click(sender, e);
-                break;
-            case QuickAnalysisHostOperationKind.InsertChart when operation.ChartType is { } chartType:
-                InsertChartOfType(chartType);
-                break;
-            case QuickAnalysisHostOperationKind.OpenChartPicker:
-                InsertChartPickerBtn_Click(sender, e);
-                break;
-            case QuickAnalysisHostOperationKind.InsertAggregateTotalFormula:
-            case QuickAnalysisHostOperationKind.InsertPercentTotalFormula:
-            case QuickAnalysisHostOperationKind.InsertRunningTotalFormula:
-                InsertQuickAnalysisTotalFormulas(operation);
-                break;
-            case QuickAnalysisHostOperationKind.CreateTable:
-                TableBtn_Click(sender, e);
-                break;
-            case QuickAnalysisHostOperationKind.CreatePivotTable:
-                PivotTableBtn_Click(sender, e);
-                break;
-            case QuickAnalysisHostOperationKind.InsertSparkline when operation.SparklineDialogKind is { } sparklineDialogKind:
-                InsertQuickAnalysisSparkline(sparklineDialogKind);
-                break;
-            case QuickAnalysisHostOperationKind.Deferred when operation.DeferredNote is { } note:
-                StatusReadyText.Text = note;
-                break;
-        }
+        await _quickAnalysisSession.ExecuteSelectionAsync(
+            item,
+            CreateQuickAnalysisOperationHandlers(sender, e));
     }
 
-    private void InsertQuickAnalysisSparkline(string dialogKind)
+    private QuickAnalysisOperationHandlers CreateQuickAnalysisOperationHandlers(
+        object sender,
+        RoutedEventArgs eventArgs) =>
+        new(
+            OpenConditionalFormatDialogAsync: dialogPlan =>
+                ExecuteQuickAnalysisAction(() => ShowCfDialog(dialogPlan.Title)),
+            ApplyConditionalFormatAsync: null,
+            ClearConditionalFormattingAsync: () =>
+                ExecuteQuickAnalysisAction(() => CfClearRulesMenuItem_Click(sender, eventArgs)),
+            InsertChartAsync: chartType =>
+                ExecuteQuickAnalysisAction(() => InsertChartOfType(chartType)),
+            OpenChartPickerAsync: () =>
+                ExecuteQuickAnalysisAction(() => InsertChartPickerBtn_Click(sender, eventArgs)),
+            ExecuteTotalAsync: ExecuteQuickAnalysisTotalAsync,
+            CreateTableAsync: () =>
+                ExecuteQuickAnalysisAction(() => TableBtn_Click(sender, eventArgs)),
+            CreatePivotTableAsync: () =>
+                ExecuteQuickAnalysisAction(() => PivotTableBtn_Click(sender, eventArgs)),
+            InsertSparklineAsync: operation =>
+                string.IsNullOrWhiteSpace(operation.SparklineDialogKind)
+                    ? Task.CompletedTask
+                    : ExecuteQuickAnalysisAction(() => InsertSparkline(operation.SparklineDialogKind)),
+            ShowDeferredAsync: note =>
+                ExecuteQuickAnalysisAction(() => StatusReadyText.Text = note));
+
+    private static Task ExecuteQuickAnalysisAction(Action action)
     {
-        InsertSparkline(dialogKind);
+        action();
+        return Task.CompletedTask;
     }
 
-    private void InsertQuickAnalysisTotalFormulas(QuickAnalysisHostOperation operation)
+    private Task ExecuteQuickAnalysisTotalAsync(QuickAnalysisHostOperation operation)
     {
-        if (SheetGrid.SelectedRange is not { } range)
-            return;
-
-        if (!QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(operation, range, out var edits))
-            return;
-
-        var title = operation.TotalCommandTitle ?? "Quick Analysis Total";
-        var outcome = _commandBus.ExecuteRepeatable(
-            _workbook.Id,
-            () => new EditCellsCommand(_currentSheetId, edits));
-        if (!outcome.Success)
+        SynchronizeWorkbookSessionSelection();
+        var result = _session.ExecuteQuickAnalysisTotal(operation);
+        RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
         {
-            ShowCommandError(outcome, title);
-            return;
+            ["command"] = result.CommandTitle,
+            ["status"] = result.Success ? "succeeded" : "failed"
+        });
+        if (!result.Success)
+        {
+            ShowCommandError(ToCommandOutcome(result.EditResult), result.CommandTitle);
+            return Task.CompletedTask;
         }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? edits.Select(edit => edit.Address).ToList());
-        SetActiveCell(edits[^1].Address);
+        if (result.IsNoOp)
+            return Task.CompletedTask;
+
+        InvalidateNavigationCaches();
+        ApplyWorkbookSessionSelectionToRenderer();
+        SyncWindowViewState([_currentSheetId]);
+        NotifyOtherWindowsOfWorkbookChange();
         UpdateViewport();
+        return Task.CompletedTask;
     }
 
     private void QuickAnalysisMenuItem_MouseEnter(object sender, MouseEventArgs e)
@@ -226,24 +217,22 @@ public partial class MainWindow
 
     private void ShowQuickAnalysisPreview(object sender)
     {
-        if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item } ||
-            SheetGrid.SelectedRange is null)
-        {
+        if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item })
             return;
-        }
 
-        var preview = item.HoverPreview;
-        _preserveQuickAnalysisUnsupportedStatus = false;
+        var preview = _quickAnalysisSession.PlanPreview(item);
         ApplyQuickAnalysisPreview(
             preview.Range,
-            preview.PreviewVisual.Kind);
-        StatusReadyText.Text = preview.StatusText;
+            preview.Visual);
+        if (preview.StatusText is { } statusText)
+            StatusReadyText.Text = statusText;
     }
 
     private void ClearQuickAnalysisPreview(bool resetStatus = true)
     {
-        ApplyQuickAnalysisPreview(null, QuickAnalysisPreviewVisualKind.None);
-        if (resetStatus && !_preserveQuickAnalysisUnsupportedStatus)
+        var preview = _quickAnalysisSession.PlanPreviewClear(resetStatus);
+        ApplyQuickAnalysisPreview(preview.Range, preview.Visual);
+        if (preview.ShouldResetStatus)
             StatusReadyText.Text = UiText.Get("MainWindow_Text_Ready");
     }
 

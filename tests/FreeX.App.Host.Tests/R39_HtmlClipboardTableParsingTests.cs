@@ -1,6 +1,6 @@
 using System.Collections.Generic;
-using System.Reflection;
 using FluentAssertions;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
@@ -10,19 +10,13 @@ namespace FreeX.App.Host.Tests;
 /// line break (e.g. a two-line address, or a &lt;br&gt;) got misread by the plain-text
 /// tab/newline splitter as a ROW boundary, shifting every subsequent row by one.
 ///
-/// <see cref="MainWindow.TryParseHtmlClipboardTableRows"/> is a private static helper (no
-/// clipboard/UI access required -- pure string parsing), so it's exercised directly via
-/// reflection rather than driving the real OS clipboard.
+/// The parser is renderer-neutral, so this historical host regression exercises the canonical
+/// service owner without driving the real OS clipboard.
 /// </summary>
 public sealed class R39_HtmlClipboardTableParsingTests
 {
-    private static List<IReadOnlyList<string>>? ParseHtmlClipboardTableRows(string htmlPayload)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            "TryParseHtmlClipboardTableRows", BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull("MainWindow should expose the HTML clipboard table-row parser");
-        return (List<IReadOnlyList<string>>?)method!.Invoke(null, [htmlPayload]);
-    }
+    private static IReadOnlyList<IReadOnlyList<string>>? ParseHtmlClipboardTableRows(string htmlPayload) =>
+        HtmlClipboardTableParser.Parse(htmlPayload);
 
     [Fact]
     public void EmbeddedLineBreakInACellStaysWithinThatCellInsteadOfSplittingIntoANewRow()

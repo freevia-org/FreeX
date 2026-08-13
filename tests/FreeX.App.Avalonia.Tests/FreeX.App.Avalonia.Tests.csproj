@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj" />
+    <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
+    <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Avalonia\FreeX.ParityCapture.Avalonia.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj" Aliases="ProductionAvalonia" />
+    <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
     <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
@@ -25,6 +28,11 @@
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
     <Using Include="Free.Shared.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\CommandTestInfrastructure\TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <Compile Include="..\SharedTestInfrastructure\FreeX\RibbonRuntimeCatalogPlanner.cs" Link="TestSupport\RibbonRuntimeCatalogPlanner.cs" />
   </ItemGroup>
 
   <PropertyGroup>

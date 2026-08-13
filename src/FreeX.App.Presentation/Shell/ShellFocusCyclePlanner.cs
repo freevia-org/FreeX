@@ -37,6 +37,25 @@ public static class ShellFocusCyclePlanner
 
         return ShellFocusTarget.Worksheet;
     }
+
+    public static bool TryFocusNextAvailable(
+        ShellFocusTarget current,
+        bool reverse,
+        Predicate<ShellFocusTarget> isAvailable,
+        Predicate<ShellFocusTarget> tryFocus)
+    {
+        ArgumentNullException.ThrowIfNull(isAvailable);
+        ArgumentNullException.ThrowIfNull(tryFocus);
+
+        for (var attempt = 0; attempt < Cycle.Length; attempt++)
+        {
+            current = GetNextAvailable(current, reverse, isAvailable);
+            if (tryFocus(current))
+                return true;
+        }
+
+        return false;
+    }
 }
 
 public enum ShellFocusTarget

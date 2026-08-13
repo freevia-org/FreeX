@@ -1,4 +1,5 @@
 using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.KeyTips;
 using FreeP.App.Compositor;
 
 namespace FreeP.Ribbon.Definitions;
@@ -29,92 +30,7 @@ public static class FreePRibbon
                 AddViewGroups)
             .Build();
 
-        return EnsureUnambiguousKeyTips(definition);
-    }
-
-    private static RibbonDefinition EnsureUnambiguousKeyTips(RibbonDefinition definition)
-    {
-        var tabKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var tabs = definition.Tabs.Select(tab =>
-        {
-            var tabKeyTip = MakeUniqueKeyTip(tab.KeyTip, tabKeyTips);
-            var groupKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            // Control keytips are resolved per-TAB at runtime (a control's keytip can be
-            // reached directly after the tab keytip, without first entering its group -
-            // see FreeP.App.Avalonia MainWindow.TryHandleNestedRibbonKeyTip's "directControls"
-            // fallback, which flattens every group's controls for the active tab). The
-            // de-duplication scope must therefore span the whole tab, not reset per group,
-            // or two controls in different groups of the same tab can end up sharing a
-            // keytip badge with only the first ever reachable.
-            var controlKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var groups = tab.Groups.Select(group =>
-            {
-                var groupKeyTip = MakeUniqueKeyTip(group.KeyTip, groupKeyTips);
-                var controls = group.Controls.Select(control =>
-                {
-                    var normalized = control switch
-                    {
-                        RibbonSplitButton split => split with { Menu = NormalizeMenuKeyTips(split.Menu) },
-                        RibbonDropdown dropdown => dropdown with { Menu = NormalizeMenuKeyTips(dropdown.Menu) },
-                        _ => control,
-                    };
-                    return normalized with
-                    {
-                        KeyTip = MakeUniqueKeyTip(normalized.KeyTip, controlKeyTips),
-                    };
-                }).ToArray();
-
-                return group with { KeyTip = groupKeyTip, Controls = controls };
-            }).ToArray();
-
-            return tab with { KeyTip = tabKeyTip, Groups = groups };
-        }).ToArray();
-
-        return definition with { Tabs = tabs };
-    }
-
-    private static RibbonMenu NormalizeMenuKeyTips(RibbonMenu menu)
-    {
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var items = menu.Items.Select(item => item with
-        {
-            KeyTip = MakeUniqueKeyTip(item.KeyTip, used),
-            Children = NormalizeMenuItems(item.Children),
-        }).ToArray();
-        return menu with { Items = items };
-    }
-
-    private static IReadOnlyList<RibbonMenuItem> NormalizeMenuItems(
-        IReadOnlyList<RibbonMenuItem> source)
-    {
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        return source.Select(item => item with
-        {
-            KeyTip = MakeUniqueKeyTip(item.KeyTip, used),
-            Children = NormalizeMenuItems(item.Children),
-        }).ToArray();
-    }
-
-    private static string? MakeUniqueKeyTip(string? keyTip, HashSet<string> used)
-    {
-        if (string.IsNullOrWhiteSpace(keyTip))
-            return keyTip;
-
-        var normalized = keyTip.Trim().ToUpperInvariant();
-        if (used.Add(normalized))
-            return normalized;
-
-        for (var suffix = 2; ; suffix++)
-        {
-            var candidate = $"{normalized}{suffix}";
-            if (normalized.StartsWith("[[", StringComparison.Ordinal) &&
-                normalized.EndsWith("]]", StringComparison.Ordinal))
-            {
-                candidate = $"{normalized[..^2]}{suffix}]]";
-            }
-            if (used.Add(candidate))
-                return candidate;
-        }
+        return RibbonDefinitionKeyTipUniquifier.Normalize(definition);
     }
 
     private static void AddHomeGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
@@ -200,70 +116,70 @@ public static class FreePRibbon
         });
         group.ComboBox("freep.font-color", FreePRibbonText.FontColorLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.FontColors,
+            Choices = FreePRibbonDefinitionData.FontColorChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.FontColor, RibbonCommandIconAccent.Color),
             KeyTip = FreePRibbonText.FontColorKeyTip,
             Width = 96
         });
         group.ComboBox("freep.text-autofit", FreePRibbonText.TextAutoFitLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TextAutoFitOptions,
+            Choices = FreePRibbonDefinitionData.TextAutoFitChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextBox),
             KeyTip = FreePRibbonText.TextAutoFitKeyTip,
             Width = 160
         });
         group.ComboBox("freep.text-direction", FreePRibbonText.TextDirectionLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TextVerticalTypeOptions,
+            Choices = FreePRibbonDefinitionData.TextVerticalTypeChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextBox),
             KeyTip = FreePRibbonText.TextDirectionKeyTip,
             Width = 160
         });
         group.ComboBox("freep.text-columns", FreePRibbonText.TextColumnsLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TextColumnCountOptions,
+            Choices = FreePRibbonDefinitionData.TextColumnCountChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextColumns),
             KeyTip = FreePRibbonText.TextColumnsKeyTip,
             Width = 96
         });
         group.ComboBox("freep.text-column-spacing", FreePRibbonText.TextColumnSpacingLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TextColumnSpacingOptions,
+            Choices = FreePRibbonDefinitionData.TextColumnSpacingChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextColumns),
             KeyTip = FreePRibbonText.TextColumnSpacingKeyTip,
             Width = 112
         });
         group.ComboBox("freep.table-cell-fill", FreePRibbonText.TableCellFillLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TableCellFillColors,
+            Choices = FreePRibbonDefinitionData.TableCellFillChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Color),
             KeyTip = FreePRibbonText.TableCellFillKeyTip,
             Width = 96
         });
         group.ComboBox("freep.table-cell-anchor", FreePRibbonText.TableCellAnchorLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TableCellAnchorOptions,
+            Choices = FreePRibbonDefinitionData.TableCellAnchorChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align),
             KeyTip = FreePRibbonText.TableCellAnchorKeyTip,
             Width = 100
         });
         group.ComboBox("freep.table-cell-border", FreePRibbonText.TableCellBorderLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TableCellBorderOptions,
+            Choices = FreePRibbonDefinitionData.TableCellBorderChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border),
             KeyTip = FreePRibbonText.TableCellBorderKeyTip,
             Width = 132
         });
         group.ComboBox("freep.table-cell-inset", FreePRibbonText.TableCellInsetLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TableCellInsetOptions,
+            Choices = FreePRibbonDefinitionData.TableCellInsetChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Margins),
             KeyTip = FreePRibbonText.TableCellInsetKeyTip,
             Width = 132
         });
         group.ComboBox("freep.table-row-height", FreePRibbonText.TableRowHeightLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TableRowHeightOptions,
+            Choices = FreePRibbonDefinitionData.TableRowHeightChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Size),
             KeyTip = FreePRibbonText.TableRowHeightKeyTip,
             Width = 100
@@ -1230,7 +1146,7 @@ public static class FreePRibbon
         {
             group.ComboBox("freep.transition.duration", FreePRibbonText.TransitionDurationCommand.Label, control => control with
             {
-                Items = FreePRibbonDefinitionData.TransitionDurations,
+                Choices = FreePRibbonDefinitionData.TransitionDurationChoices,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.History),
                 KeyTip = FreePRibbonText.TransitionDurationCommand.KeyTip,
                 Width = 90
@@ -1239,7 +1155,7 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Next, FreePRibbonText.TransitionAdvanceOnClickCommand.KeyTip);
             group.ComboBox("freep.transition.advance-after", FreePRibbonText.TransitionAdvanceAfterCommand.Label, control => control with
             {
-                Items = FreePRibbonDefinitionData.TransitionAdvanceAfterOptions,
+                Choices = FreePRibbonDefinitionData.TransitionAdvanceAfterChoices,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.History),
                 KeyTip = FreePRibbonText.TransitionAdvanceAfterCommand.KeyTip,
                 Width = 90
@@ -1320,21 +1236,21 @@ public static class FreePRibbon
         {
             group.ComboBox("freep.anim.trigger", FreePRibbonText.AnimationTriggerCommand.Label, control => control with
             {
-                Items = FreePRibbonDefinitionData.AnimationTriggers,
+                Choices = FreePRibbonDefinitionData.AnimationTriggerChoices,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.Next),
                 KeyTip = FreePRibbonText.AnimationTriggerCommand.KeyTip,
                 Width = profile.AnimationTriggerWidth
             });
             group.ComboBox("freep.anim.duration", FreePRibbonText.AnimationDurationCommand.Label, control => control with
             {
-                Items = FreePRibbonDefinitionData.AnimationDurations,
+                Choices = FreePRibbonDefinitionData.AnimationDurationChoices,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.History),
                 KeyTip = FreePRibbonText.AnimationDurationCommand.KeyTip,
                 Width = 90
             });
             group.ComboBox("freep.anim.delay", FreePRibbonText.AnimationDelayCommand.Label, control => control with
             {
-                Items = FreePRibbonDefinitionData.AnimationDelays,
+                Choices = FreePRibbonDefinitionData.AnimationDelayChoices,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.History),
                 KeyTip = FreePRibbonText.AnimationDelayCommand.KeyTip,
                 Width = 90
@@ -1430,9 +1346,9 @@ public static class FreePRibbon
         menu.Item("freep.anim.entrance.wedge", FreePRibbonText.AnimationEntranceWedgeCommand.Label, FreePRibbonText.AnimationEntranceWedgeCommand.KeyTip);
         menu.Item("freep.anim.entrance.wheel", FreePRibbonText.AnimationEntranceWheelCommand.Label, FreePRibbonText.AnimationEntranceWheelCommand.KeyTip);
         menu.Item("freep.anim.entrance.random-bars", FreePRibbonText.AnimationEntranceRandomBarsCommand.Label, FreePRibbonText.AnimationEntranceRandomBarsCommand.KeyTip);
-        menu.Item("freep.anim.entrance.dissolve", FreePRibbonText.AnimationEntranceDissolveCommand.Label, FreePRibbonText.AnimationEntranceDissolveCommand.KeyTip);
-        menu.Item("freep.anim.entrance.flash", FreePRibbonText.AnimationEntranceFlashCommand.Label, FreePRibbonText.AnimationEntranceFlashCommand.KeyTip);
-        menu.Item("freep.anim.entrance.crawl", FreePRibbonText.AnimationEntranceCrawlCommand.Label, FreePRibbonText.AnimationEntranceCrawlCommand.KeyTip);
+        menu.Item("freep.anim.entrance.dissolve", FreePRibbonText.AnimationEntranceDissolveCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationEntranceDissolveCommand.KeyTip);
+        menu.Item("freep.anim.entrance.flash", FreePRibbonText.AnimationEntranceFlashCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationEntranceFlashCommand.KeyTip);
+        menu.Item("freep.anim.entrance.crawl", FreePRibbonText.AnimationEntranceCrawlCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.AnimationEntranceCrawlCommand.KeyTip);
         menu.Item("freep.anim.entrance.peek", FreePRibbonText.AnimationEntrancePeekCommand.Label, FreePRibbonText.AnimationEntrancePeekCommand.KeyTip);
         menu.Item("freep.anim.entrance.spiral", FreePRibbonText.AnimationEntranceSpiralCommand.Label, FreePRibbonText.AnimationEntranceSpiralCommand.KeyTip);
         menu.Item("freep.anim.entrance.swivel", FreePRibbonText.AnimationEntranceSwivelCommand.Label, FreePRibbonText.AnimationEntranceSwivelCommand.KeyTip);
@@ -1453,9 +1369,9 @@ public static class FreePRibbon
         menu.Item("freep.anim.exit.wedge", FreePRibbonText.AnimationExitWedgeCommand.Label, FreePRibbonText.AnimationExitWedgeCommand.KeyTip);
         menu.Item("freep.anim.exit.wheel", FreePRibbonText.AnimationExitWheelCommand.Label, FreePRibbonText.AnimationExitWheelCommand.KeyTip);
         menu.Item("freep.anim.exit.random-bars", FreePRibbonText.AnimationExitRandomBarsCommand.Label, FreePRibbonText.AnimationExitRandomBarsCommand.KeyTip);
-        menu.Item("freep.anim.exit.dissolve-out", FreePRibbonText.AnimationExitDissolveCommand.Label, FreePRibbonText.AnimationExitDissolveCommand.KeyTip);
-        menu.Item("freep.anim.exit.flash-out", FreePRibbonText.AnimationExitFlashCommand.Label, FreePRibbonText.AnimationExitFlashCommand.KeyTip);
-        menu.Item("freep.anim.exit.crawl-out", FreePRibbonText.AnimationExitCrawlCommand.Label, FreePRibbonText.AnimationExitCrawlCommand.KeyTip);
+        menu.Item("freep.anim.exit.dissolve-out", FreePRibbonText.AnimationExitDissolveCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationExitDissolveCommand.KeyTip);
+        menu.Item("freep.anim.exit.flash-out", FreePRibbonText.AnimationExitFlashCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationExitFlashCommand.KeyTip);
+        menu.Item("freep.anim.exit.crawl-out", FreePRibbonText.AnimationExitCrawlCommand.Label, RibbonCommandIconKind.ArrowLeft, FreePRibbonText.AnimationExitCrawlCommand.KeyTip);
         menu.Item("freep.anim.exit.peek-out", FreePRibbonText.AnimationExitPeekCommand.Label, FreePRibbonText.AnimationExitPeekCommand.KeyTip);
         menu.Item("freep.anim.exit.spiral-out", FreePRibbonText.AnimationExitSpiralCommand.Label, FreePRibbonText.AnimationExitSpiralCommand.KeyTip);
         menu.Item("freep.anim.exit.swivel-out", FreePRibbonText.AnimationExitSwivelCommand.Label, FreePRibbonText.AnimationExitSwivelCommand.KeyTip);

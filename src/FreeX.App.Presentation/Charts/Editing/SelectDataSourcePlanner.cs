@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Charts.Editing;
@@ -23,7 +24,10 @@ public readonly record struct SelectDataSourcePreview(
 public readonly record struct SelectDataSourceResult(
     string SourceRangeText,
     bool FirstColumnIsCategories,
-    bool SwitchRowColumn = false);
+    bool SwitchRowColumn = false,
+    IReadOnlyList<int>? PendingSeriesRemovals = null,
+    ChartBlankDisplayMode BlankDisplayMode = ChartBlankDisplayMode.Gap,
+    bool ShowDataInHiddenRowsAndColumns = false);
 
 /// <summary>A shell request to pick a replacement chart data range.</summary>
 public readonly record struct SelectDataSourceRangeSelectionRequest(string CurrentText, bool CollapseDialog = true);
@@ -46,17 +50,77 @@ public enum SelectDataSourceDialogActionId
     HiddenEmptyCells,
 }
 
-public sealed record SelectDataSourceDialogFieldDescriptor(
-    SelectDataSourceDialogFieldId Id,
-    string LabelResourceKey,
-    string AutomationId,
-    string? AutomationNameResourceKey = null,
-    string? HelpResourceKey = null);
+public sealed record SelectDataSourceDialogFieldDescriptor : DialogFieldPlan<SelectDataSourceDialogFieldId>
+{
+    public SelectDataSourceDialogFieldDescriptor(
+        SelectDataSourceDialogFieldId Id,
+        string LabelResourceKey,
+        string AutomationId,
+        string? AutomationNameResourceKey = null,
+        string? HelpResourceKey = null)
+        : base(
+            Id,
+            ControlKindFor(Id),
+            LabelResourceKey,
+            AutomationNameResourceKey,
+            AutomationId,
+            HelpResourceKey)
+    {
+    }
 
-public sealed record SelectDataSourceDialogActionDescriptor(
-    SelectDataSourceDialogActionId Id,
-    string LabelResourceKey,
-    string AutomationId);
+    public string LabelResourceKey => Label;
+
+    public string? AutomationNameResourceKey => AccessibleName;
+
+    public string? HelpResourceKey => HelpText;
+
+    public void Deconstruct(
+        out SelectDataSourceDialogFieldId Id,
+        out string LabelResourceKey,
+        out string AutomationId,
+        out string? AutomationNameResourceKey,
+        out string? HelpResourceKey)
+    {
+        Id = this.Id;
+        LabelResourceKey = this.LabelResourceKey;
+        AutomationId = this.AutomationId;
+        AutomationNameResourceKey = this.AutomationNameResourceKey;
+        HelpResourceKey = this.HelpResourceKey;
+    }
+
+    private static DialogControlKind ControlKindFor(SelectDataSourceDialogFieldId id) => id switch
+    {
+        SelectDataSourceDialogFieldId.ChartDataRange => DialogControlKind.Text,
+        SelectDataSourceDialogFieldId.SwitchRowColumn => DialogControlKind.Toggle,
+        SelectDataSourceDialogFieldId.SeriesList => DialogControlKind.List,
+        SelectDataSourceDialogFieldId.AxisLabelsList => DialogControlKind.List,
+        SelectDataSourceDialogFieldId.FirstColumnCategories => DialogControlKind.Toggle,
+        _ => throw new ArgumentOutOfRangeException(nameof(id), id, null),
+    };
+}
+
+public sealed record SelectDataSourceDialogActionDescriptor : DialogSurfaceActionPlan<SelectDataSourceDialogActionId>
+{
+    public SelectDataSourceDialogActionDescriptor(
+        SelectDataSourceDialogActionId Id,
+        string LabelResourceKey,
+        string AutomationId)
+        : base(Id, LabelResourceKey, null, AutomationId)
+    {
+    }
+
+    public string LabelResourceKey => Label;
+
+    public void Deconstruct(
+        out SelectDataSourceDialogActionId Id,
+        out string LabelResourceKey,
+        out string AutomationId)
+    {
+        Id = this.Id;
+        LabelResourceKey = this.LabelResourceKey;
+        AutomationId = this.AutomationId;
+    }
+}
 
 public sealed record SelectDataSourceListPanelDescriptor(
     SelectDataSourceDialogFieldDescriptor ListField,

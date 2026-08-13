@@ -37,11 +37,12 @@ public sealed class CommonMessageTextTests
 
         source.Should().Contain("ResolveDefaultAcceptContent(acceptContent)");
         source.Should().Contain("? ShellStrings.Current.Ok");
-        source.Should().Contain("var cancelContent = ShellStrings.Current.Cancel;");
+        source.Should().Contain("var resolvedCancelContent = ResolveCancelContent(cancelContent);");
         source.Should().Contain("ShellStrings.Current.CreateAutomationName(resolvedAcceptContent)");
         source.Should().Contain("SetAcceleratorKey(ok, resolvedAcceptContent);");
-        source.Should().Contain("ShellStrings.Current.CreateAutomationName(cancelContent)");
-        source.Should().Contain("SetAcceleratorKey(cancel, cancelContent);");
+        source.Should().Contain("? ShellStrings.Current.Cancel");
+        source.Should().Contain("ShellStrings.Current.CreateAutomationName(resolvedCancelContent)");
+        source.Should().Contain("SetAcceleratorKey(cancel, resolvedCancelContent);");
     }
 
     [Fact]
@@ -65,7 +66,7 @@ public sealed class CommonMessageTextTests
         var serviceSource = DialogSourceTestSupport.ReadShellSources("WpfUserMessageService.cs");
         var source = DialogSourceTestSupport.ReadShellSources("WpfMessageBoxRealizer.cs");
 
-        serviceSource.Should().Contain("WpfMessageBoxRealizer.Show(");
+        serviceSource.Should().Contain("DialogMessageHelper.ShowMessage(");
         serviceSource.Should().Contain("Application.Current?.MainWindow");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultErrorTitle, ShellStrings.Current.ErrorTitle)");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultWarningTitle, ShellStrings.Current.WarningTitle)");
@@ -77,18 +78,14 @@ public sealed class CommonMessageTextTests
     public void SharedWpfMessageHelpers_CentralizeRawMessageBoxRendering()
     {
         var realizerSource = DialogSourceTestSupport.ReadShellSources("WpfMessageBoxRealizer.cs");
+        var dialogSource = DialogSourceTestSupport.ReadShellSources("DialogMessageHelper.cs");
+        var serviceSource = DialogSourceTestSupport.ReadShellSources("WpfUserMessageService.cs");
 
         realizerSource.Should().Contain("MessageBox.Show(");
-        foreach (var sourceFile in new[]
-        {
-            "DialogMessageHelper.cs",
-            "WpfUserMessageService.cs"
-        })
-        {
-            var source = DialogSourceTestSupport.ReadShellSources(sourceFile);
-            source.Should().Contain("WpfMessageBoxRealizer.Show(");
-            source.Should().NotContain("MessageBox.Show(");
-        }
+        dialogSource.Should().Contain("WpfMessageBoxRealizer.Show(");
+        dialogSource.Should().NotContain("MessageBox.Show(");
+        serviceSource.Should().Contain("DialogMessageHelper.ShowMessage(");
+        serviceSource.Should().NotContain("MessageBox.Show(");
     }
 
     [Fact]
@@ -99,18 +96,6 @@ public sealed class CommonMessageTextTests
         source.Should().Contain("new WpfUserMessageService()");
         source.Should().Contain("StartupMessageService.ShowMessage(");
         source.Should().Contain("UserMessageButtons.YesNo");
-        source.Should().NotContain("MessageBox.Show(");
-    }
-
-    [Fact]
-    public void SharedFileCommandMessageBox_IsServiceBacked()
-    {
-        var source = DialogSourceTestSupport.ReadShellSources("FileCommandMessageBox.cs");
-
-        source.Should().Contain("IUserMessageService messageService");
-        source.Should().Contain("messageService.PromptSaveChanges(");
-        source.Should().Contain("messageService.ShowFileCommandError(");
-        source.Should().NotContain("WpfMessageBoxRealizer.Show(");
         source.Should().NotContain("MessageBox.Show(");
     }
 

@@ -91,7 +91,7 @@ internal static class XlsxWorkbookLeafElementSchemas
     public static readonly IReadOnlyList<XlsxWorkbookLeafElementSchema> All =
     [
         // ── fileVersion ────────────────────────────────────────────────────────────────────
-        // Migrated from XlsxWorkbookFileVersionNormalizer.
+        // fileVersion schema.
         // Pass-through text only: all 5 attributes are kept verbatim if present; no value rules.
         new()
         {
@@ -103,7 +103,7 @@ internal static class XlsxWorkbookLeafElementSchemas
         },
 
         // ── fileRecoveryPr ─────────────────────────────────────────────────────────────────
-        // Migrated from XlsxWorkbookFileRecoveryPropertyNormalizer.
+        // fileRecoveryPr schema.
         // All four attributes are boolean-valued; unknown attrs and child nodes are removed.
         new()
         {
@@ -122,7 +122,7 @@ internal static class XlsxWorkbookLeafElementSchemas
         },
 
         // ── fileSharing ────────────────────────────────────────────────────────────────────
-        // Migrated from XlsxWorkbookFileSharingNormalizer.
+        // fileSharing schema.
         new()
         {
             LocalName = "fileSharing",
@@ -142,7 +142,7 @@ internal static class XlsxWorkbookLeafElementSchemas
         },
 
         // ── workbookProtection ─────────────────────────────────────────────────────────────
-        // Migrated from XlsxWorkbookProtectionNormalizer.
+        // workbookProtection schema.
         new()
         {
             LocalName = "workbookProtection",
@@ -170,7 +170,7 @@ internal static class XlsxWorkbookLeafElementSchemas
         },
 
         // ── workbookPr ─────────────────────────────────────────────────────────────────────
-        // Migrated from XlsxWorkbookPropertiesNormalizer.
+        // workbookPr schema.
         new()
         {
             LocalName = "workbookPr",
@@ -206,7 +206,7 @@ internal static class XlsxWorkbookLeafElementSchemas
         },
 
         // ── calcPr ─────────────────────────────────────────────────────────────────────────
-        // Migrated from XlsxWorkbookCalculationPropertyNormalizer.
+        // calcPr schema.
         new()
         {
             LocalName = "calcPr",

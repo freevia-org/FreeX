@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Services;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia;
 
@@ -23,60 +24,60 @@ public sealed partial class MainWindow
         var dict = new Dictionary<string, Action>(StringComparer.Ordinal)
         {
             // --- Help tab (always visible). ---
-            ["help.about"] = () => RunGuarded(ShowAboutDialogAsync),
-            ["help.helpOnline"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online")),
-            ["help.feedback"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback")),
-            ["help.checkUpdates"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates")),
-            ["help.copyDiagnostics"] = () => RunGuarded(CopyDiagnosticsToClipboardAsync),
-            ["help.legalNotices"] = () => RunGuarded(ShowLegalNoticesDialogAsync),
+            [FreeXRibbonCommandIds.HelpAbout] = () => RunGuarded(ShowAboutDialogAsync),
+            [FreeXRibbonCommandIds.HelpOnline] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"))),
+            [FreeXRibbonCommandIds.HelpFeedback] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"))),
+            [FreeXRibbonCommandIds.HelpCheckForUpdates] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"))),
+            [FreeXRibbonCommandIds.HelpCopyDiagnostics] = () => RunGuarded(CopyDiagnosticsToClipboardAsync),
+            [FreeXRibbonCommandIds.HelpLegalNotices] = () => RunGuarded(ShowLegalNoticesDialogAsync),
 
             // --- Chart Design (chart.selected) — real handlers via SetChartLayoutCommand /
             // ChangeChartTypeCommand / ChangeChartSourceCommand / SetChartStyleCommand (MainWindow.ChartTabs). ---
-            ["chartDesign.titles"] = () => RunGuarded(ShowChartTitlesDialog),
+            ["Chart Titles"] = () => RunGuarded(ShowChartTitlesDialog),
             // The Data Labels button opens the full show/hide + position + which-values dialog
             // (ChartDataLabelsPlanner); Data Label Position keeps its quick cycle.
-            ["chartDesign.dataLabels"] = () => RunGuarded(ShowChartDataLabelsDialog),
-            ["chartDesign.dataLabelPosition"] = CycleChartDataLabelPosition,
+            ["Data Labels"] = () => RunGuarded(ShowChartDataLabelsDialog),
+            ["Data Label Position"] = CycleChartDataLabelPosition,
             // The Trendline button opens the type/period/order + equation/R-squared dialog
             // (ChartTrendlinePlanner).
-            ["chartDesign.trendline"] = () => RunGuarded(ShowChartTrendlineDialog),
+            ["Trendline"] = () => RunGuarded(ShowChartTrendlineDialog),
             // The Error Bars button opens the show/kind/direction + amount/end-caps dialog
             // (ChartErrorBarsPlanner).
-            ["chartDesign.errorBars"] = () => RunGuarded(ShowChartErrorBarsDialog),
-            ["chartDesign.secondaryAxis"] = CycleChartSecondaryAxis,
-            ["chartDesign.secondaryAxisSeries"] = CycleChartSecondaryAxisSeries,
-            ["chartDesign.chartStyles"] = CycleChartStyle,
-            ["chartDesign.selectData"] = () => RunGuarded(ShowSelectChartDataDialog),
-            ["chartDesign.changeType"] = () => RunGuarded(ShowChangeChartTypeDialog),
+            ["Error Bars"] = () => RunGuarded(ShowChartErrorBarsDialog),
+            ["Secondary Axis"] = CycleChartSecondaryAxis,
+            ["Secondary Axis Series"] = CycleChartSecondaryAxisSeries,
+            ["Chart Styles"] = CycleChartStyle,
+            ["Select Data Source"] = () => RunGuarded(ShowSelectChartDataDialog),
+            [FreeXRibbonCommandIds.ChartChangeType] = () => RunGuarded(ShowChangeChartTypeDialog),
             // WPF's Combo Chart button is an immediate shared ComboToggle mutation. Keep the full
             // per-series planner dialog available to parity capture, but route the ribbon command
             // through the same quick-command path as WPF so existing combo charts can be toggled off
             // even when the dialog support gate cannot reopen them.
-            ["chartDesign.comboChart"] = CycleChartCombo,
+            ["Combo Chart"] = CycleChartCombo,
             // Combo Chart Series is the quick per-click per-series toggle, matching WPF.
-            ["chartDesign.comboChartSeries"] = CycleChartComboSeries,
-            ["chartDesign.moveChart"] = () => RunGuarded(ShowMoveChartDialog),
+            ["Combo Chart Series"] = CycleChartComboSeries,
+            ["Move Chart"] = () => RunGuarded(ShowMoveChartDialog),
 
             // --- Chart Format (chart.selected) — real handlers via SetChartLayoutCommand. ---
-            ["chartFormat.chartAreaFill"] = () => RunGuarded(ShowChartShapeFillDialog),
-            ["chartFormat.plotAreaFill"] = () => RunGuarded(ShowChartPlotAreaFillDialog),
-            ["chartFormat.plotAreaBorder"] = () => RunGuarded(ShowChartShapeOutlineDialog),
+            ["Chart Area Fill"] = () => RunGuarded(ShowChartShapeFillDialog),
+            ["Plot Area Fill"] = () => RunGuarded(ShowChartPlotAreaFillDialog),
+            ["Plot Area Border"] = () => RunGuarded(ShowChartShapeOutlineDialog),
             // WPF routes both Series Color and Series Marker through the full per-series
             // fill/line/marker dialog. Keep the Avalonia route on the same shared planner-backed
             // dialog so Series Color can also edit the selected series, dash, marker, and size.
-            ["chartFormat.seriesColor"] = () => RunGuarded(ShowChartSeriesFormatDialog),
+            ["Series Color"] = () => RunGuarded(ShowChartSeriesFormatDialog),
             // The Series Width button also opens the full per-series fill/line/marker dialog.
-            ["chartFormat.seriesWidth"] = () => RunGuarded(ShowChartSeriesFormatDialog),
+            ["Series Width"] = () => RunGuarded(ShowChartSeriesFormatDialog),
             // The Legend button opens the show/hide + position options dialog (ChartLegendPlanner).
-            ["chartFormat.legendText"] = () => RunGuarded(ShowChartLegendDialog),
+            ["Legend Text"] = () => RunGuarded(ShowChartLegendDialog),
             // The Axis Bounds buttons open the per-axis min/max/format/gridlines dialog (ChartAxisPlanner);
             // the Gridlines buttons keep their quick cycle.
-            ["chartFormat.xAxisBounds"] = () => RunGuarded(ShowChartXAxisFormatDialog),
-            ["chartFormat.yAxisBounds"] = () => RunGuarded(ShowChartYAxisFormatDialog),
-            ["chartFormat.xGridlines"] = CycleChartXAxisGridlines,
-            ["chartFormat.yGridlines"] = CycleChartYAxisGridlines,
-            ["chartFormat.xLabels"] = ToggleChartXAxisLabels,
-            ["chartFormat.yLabels"] = ToggleChartYAxisLabels,
+            ["X Axis Bounds"] = () => RunGuarded(ShowChartXAxisFormatDialog),
+            ["Y Axis Bounds"] = () => RunGuarded(ShowChartYAxisFormatDialog),
+            ["X Axis Gridlines"] = CycleChartXAxisGridlines,
+            ["Y Axis Gridlines"] = CycleChartYAxisGridlines,
+            ["X Axis Labels"] = ToggleChartXAxisLabels,
+            ["Y Axis Labels"] = ToggleChartYAxisLabels,
             // Legacy WPF axis quick commands are surfaced by the host-specific axis group as well as
             // the shared bounds dialog. They all use the shared planner and SetChartLayoutCommand path.
             ["X Axis Ticks"] = () => ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.TickMarks(true), "ChartLoc_NoAxes"),
@@ -95,111 +96,111 @@ public sealed partial class MainWindow
             ["Y Log Scale"] = () => ExecuteChartAxisPlannedCommand(ChartAxisWorkflowCommandCatalog.LogScale(false), ChartAxisPlanner.PlanLogScaleToggle),
             // The Format Chart Area button opens the chart-area / plot-area fill + border dialog
             // (ChartAreaFormatPlanner -> SetChartLayoutCommand).
-            ["chartFormat.formatChartArea"] = () => RunGuarded(ShowFormatChartAreaDialog),
+            ["Format Chart Area"] = () => RunGuarded(ShowFormatChartAreaDialog),
             // Current Selection ▸ Format: the type-specific format dialogs (each guarded to its chart family).
-            ["chartFormat.formatBarColumn"] = () => RunGuarded(ShowChartBarFormatDialog),
-            ["chartFormat.formatPieDoughnut"] = () => RunGuarded(ShowChartPieFormatDialog),
-            ["chartFormat.formatBubble"] = () => RunGuarded(ShowChartBubbleFormatDialog),
-            ["chartFormat.formatStock"] = () => RunGuarded(ShowChartStockFormatDialog),
+            ["Format Bar/Column"] = () => RunGuarded(ShowChartBarFormatDialog),
+            ["Format Pie/Doughnut"] = () => RunGuarded(ShowChartPieFormatDialog),
+            ["Format Bubble Chart"] = () => RunGuarded(ShowChartBubbleFormatDialog),
+            ["Format Stock Chart"] = () => RunGuarded(ShowChartStockFormatDialog),
             // Shape Styles ▸ Series Dash / Marker Size quick cycles; Series Marker opens the full series dialog
             // (same ChartSeriesFormatPlanner dialog as Series Width).
-            ["chartFormat.seriesDash"] = CycleChartSeriesDash,
-            ["chartFormat.seriesMarker"] = () => RunGuarded(ShowChartSeriesFormatDialog),
-            ["chartFormat.markerSize"] = CycleChartMarkerSize,
+            ["Series Dash"] = CycleChartSeriesDash,
+            ["Series Marker"] = () => RunGuarded(ShowChartSeriesFormatDialog),
+            ["Marker Size"] = CycleChartMarkerSize,
             // Text group quick cycles: title/axis-title color & size, legend font size, data-label text/fill/border.
-            ["chartFormat.chartTitleColor"] = CycleChartTitleColor,
-            ["chartFormat.chartTitleSize"] = CycleChartTitleSize,
-            ["chartFormat.axisTitleColor"] = CycleChartAxisTitleColor,
-            ["chartFormat.axisTitleSize"] = CycleChartAxisTitleSize,
-            ["chartFormat.legendFontSize"] = CycleChartLegendFontSize,
-            ["chartFormat.dataLabelText"] = CycleChartDataLabelText,
-            ["chartFormat.dataLabelFill"] = CycleChartDataLabelFill,
-            ["chartFormat.dataLabelBorder"] = CycleChartDataLabelBorder,
+            ["Chart Title Color"] = CycleChartTitleColor,
+            ["Chart Title Size"] = CycleChartTitleSize,
+            ["Axis Title Color"] = CycleChartAxisTitleColor,
+            ["Axis Title Size"] = CycleChartAxisTitleSize,
+            ["Legend Font Size"] = CycleChartLegendFontSize,
+            ["Data Label Text"] = CycleChartDataLabelText,
+            ["Data Label Fill"] = CycleChartDataLabelFill,
+            ["Data Label Border"] = CycleChartDataLabelBorder,
 
             // --- Table Design (table.active) — real handlers via the structured-table Core commands
             // (MainWindow.TableDesignTab). ---
-            ["tableDesign.totalRow"] = ToggleActiveTableTotalRow,
-            ["tableDesign.firstColumn"] = ToggleActiveTableFirstColumn,
-            ["tableDesign.lastColumn"] = ToggleActiveTableLastColumn,
-            ["tableDesign.bandedRows"] = ToggleActiveTableBandedRows,
-            ["tableDesign.bandedColumns"] = ToggleActiveTableBandedColumns,
-            ["tableDesign.filterButton"] = ToggleActiveTableFilterButton,
-            ["tableDesign.convertToRange"] = ConvertActiveTableToRange,
-            ["tableDesign.removeDuplicates"] = () => RunGuarded(ShowRemoveDuplicatesDialogAsync),
+            ["Total Row"] = ToggleActiveTableTotalRow,
+            ["First Column"] = ToggleActiveTableFirstColumn,
+            ["Last Column"] = ToggleActiveTableLastColumn,
+            [FreeXRibbonCommandIds.TableBandedRows] = ToggleActiveTableBandedRows,
+            [FreeXRibbonCommandIds.TableBandedColumns] = ToggleActiveTableBandedColumns,
+            ["Filter Button"] = ToggleActiveTableFilterButton,
+            ["Convert to Range"] = ConvertActiveTableToRange,
+            [FreeXRibbonCommandIds.TableRemoveDuplicates] = () => RunGuarded(ShowRemoveDuplicatesDialogAsync),
             // Table Name dialog — validates/renames the active table via TableNamePlanner +
             // RenameStructuredTableCommand (MainWindow.TableName).
-            ["tableDesign.tableName"] = OpenTableName,
+            ["Table Name"] = OpenTableName,
             // Resize Table dialog — validates/resolves a new data range via TableResizePlanner and applies it
             // through ResizeStructuredTableCommand (+ style reapply) (MainWindow.TableResize).
-            ["tableDesign.resize"] = OpenTableResize,
+            ["Resize Table"] = OpenTableResize,
             // Table Styles gallery — picks a built-in style via TableStyleGalleryPlanner and applies it through
             // ApplyStructuredTableStyleCommand (MainWindow.TableStyleGallery).
-            ["tableDesign.tableStyles"] = OpenTableStyleGallery,
+            ["Table Styles"] = OpenTableStyleGallery,
             // Summarize with PivotTable — opens the Insert PivotTable dialog seeded from the active table's range
             // (MainWindow.TableSummarizeWithPivot), reusing the existing PivotCreatePlanner path.
-            ["tableDesign.summarizeWithPivot"] = SummarizeActiveTableWithPivot,
+            ["Summarize with PivotTable"] = SummarizeActiveTableWithPivot,
 
             // --- PivotTable Analyze / Design (pivot.active) — real handlers via
             // ConfigurePivotTableOptionsCommand / RefreshPivotTableCommand (MainWindow.PivotTabs). ---
-            ["pivotAnalyze.refresh"] = RefreshActivePivotTable,
-            ["pivotAnalyze.insertSlicer"] = InsertSlicerForActivePivot,
-            ["pivotAnalyze.insertTimeline"] = InsertTimelineForActivePivot,
-            ["pivotAnalyze.fieldList"] = TogglePivotFieldList,
-            ["pivotAnalyze.fieldHeaders"] = TogglePivotFieldHeaders,
-            ["pivotDesign.grandTotals"] = TogglePivotGrandTotals,
-            ["pivotDesign.subtotals"] = TogglePivotSubtotals,
-            ["pivotDesign.reportLayout"] = CyclePivotReportLayout,
-            ["pivotDesign.blankRows"] = TogglePivotBlankRows,
-            ["pivotDesign.bandedRows"] = TogglePivotBandedRows,
-            ["pivotDesign.bandedColumns"] = TogglePivotBandedColumns,
-            ["pivotDesign.rowHeaders"] = TogglePivotRowHeaders,
-            ["pivotDesign.columnHeaders"] = TogglePivotColumnHeaders,
+            ["Refresh"] = RefreshActivePivotTable,
+            ["Insert Slicer"] = InsertSlicerForActivePivot,
+            ["Insert Timeline"] = InsertTimelineForActivePivot,
+            ["Field List"] = TogglePivotFieldList,
+            ["Field Headers"] = TogglePivotFieldHeaders,
+            ["Grand Totals"] = TogglePivotGrandTotals,
+            ["Subtotals"] = TogglePivotSubtotals,
+            ["Report Layout"] = CyclePivotReportLayout,
+            ["Blank Rows"] = TogglePivotBlankRows,
+            [FreeXRibbonCommandIds.PivotBandedRows] = TogglePivotBandedRows,
+            [FreeXRibbonCommandIds.PivotBandedColumns] = TogglePivotBandedColumns,
+            ["Row Headers"] = TogglePivotRowHeaders,
+            ["Column Headers"] = TogglePivotColumnHeaders,
             // PivotTable Options dialog — totals & layout-display options via ConfigurePivotTableOptionsCommand
             // (MainWindow.PivotOptions).
-            ["pivotAnalyze.options"] = OpenPivotTableOptions,
+            ["PivotTable Options"] = OpenPivotTableOptions,
             // Change Data Source dialog — validates/resolves a new source range via PivotDataSourcePlanner and
             // applies it through ChangePivotTableSourceCommand (MainWindow.PivotDataSource).
-            ["pivotAnalyze.changeDataSource"] = OpenPivotDataSource,
+            ["Change Data Source"] = OpenPivotDataSource,
             // PivotTable Styles gallery — picks a built-in style via PivotStyleGalleryPlanner and applies it
             // through ConfigurePivotTableOptionsCommand (MainWindow.PivotStyleGallery).
-            ["pivotDesign.pivotStyles"] = OpenPivotStyleGallery,
+            ["PivotTable Styles"] = OpenPivotStyleGallery,
             // PivotTable Name dialog — renames the active pivot via PivotNamePlanner + RenamePivotTableCommand
             // (MainWindow.PivotName).
-            ["pivotAnalyze.name"] = OpenPivotName,
+            ["PivotTable Name"] = OpenPivotName,
             // Group Field / Ungroup dialogs — date/number-range grouping via PivotGroupFieldPlanner, applied
             // through ConfigurePivotTableCalculatedItemsCommand (MainWindow.PivotGroupField).
-            ["pivotAnalyze.groupField"] = OpenPivotGroupField,
-            ["pivotAnalyze.ungroup"] = UngroupPivotField,
+            ["Group Field"] = OpenPivotGroupField,
+            [FreeXRibbonCommandIds.PivotUngroup] = UngroupPivotField,
             // Calculated Field dialog — add/modify/delete a calculated field via PivotCalculatedFieldPlanner,
             // applied through ConfigurePivotTableCalculatedItemsCommand (MainWindow.PivotCalculatedField).
-            ["pivotAnalyze.calculatedField"] = OpenPivotCalculatedField,
+            ["Calculated Field"] = OpenPivotCalculatedField,
             // Field Settings opens the value-field-settings dialog (MainWindow.PivotFieldSettings) for the
             // active pivot's first value field, reusing the same PivotValueFieldPlanner the header dropdown uses.
-            ["pivotAnalyze.fieldSettings"] = OpenActivePivotFieldSettings,
+            ["Field Settings"] = OpenActivePivotFieldSettings,
             // Show Details drills the selected value cell into a new detail sheet via DrillDownPivotTableCommand.
-            ["pivotAnalyze.showDetails"] = ShowActivePivotDetails,
+            ["Show Details"] = ShowActivePivotDetails,
             // Clear empties the active pivot's layout via ClearPivotTableViewCommand.
-            ["pivotAnalyze.clear"] = ClearActivePivotTable,
+            [FreeXRibbonCommandIds.PivotClear] = ClearActivePivotTable,
             // Select moves the selection onto the active pivot's full target range.
-            ["pivotAnalyze.select"] = SelectActivePivotTable,
+            ["Select"] = SelectActivePivotTable,
             // Move PivotTable opens the destination dialog (MainWindow.PivotMove) -> MovePivotTableCommand.
-            ["pivotAnalyze.move"] = OpenPivotMove,
+            ["Move PivotTable"] = OpenPivotMove,
             // Calculated Item opens the add/modify/delete dialog (MainWindow.PivotCalculatedItem) ->
             // ConfigurePivotTableCalculatedItemsCommand.
-            ["pivotAnalyze.calculatedItem"] = OpenPivotCalculatedItem,
+            ["Calculated Item"] = OpenPivotCalculatedItem,
             // +/- Buttons toggles PivotTableModel.ShowExpandCollapseButtons via ConfigurePivotTableOptionsCommand.
-            ["pivotAnalyze.plusMinusButtons"] = TogglePivotExpandCollapseButtons,
+            ["+/- Buttons"] = TogglePivotExpandCollapseButtons,
             // PivotChart inserts a PivotChart over the active pivot (MainWindow.PivotChart).
-            ["pivotAnalyze.pivotChart"] = InsertPivotChart,
+            ["PivotChart"] = InsertPivotChart,
             // Change Chart Type re-types the active pivot's chart (MainWindow.PivotChartCommands).
-            ["pivotAnalyze.changeChartType"] = () => RunGuarded(ChangeActivePivotChartTypeAsync),
+            [FreeXRibbonCommandIds.PivotChartChangeType] = () => RunGuarded(ChangeActivePivotChartTypeAsync),
             // PivotChart Options opens the field-button / data-table options dialog (MainWindow.PivotChartOptions).
-            ["pivotAnalyze.pivotChartOptions"] = () => RunGuarded(OpenPivotChartOptionsAsync),
+            ["PivotChart Options"] = () => RunGuarded(OpenPivotChartOptionsAsync),
 
             // Shape Effects is a dropdown: clicking the parent opens its menu (No Effect / Shadow, wired via
             // BuildPictureShapeTabCommands). Register the parent id too so the renderer keeps it enabled
             // rather than disabling it for an unregistered command.
-            ["shapeFormat.shapeEffects"] = () => RunGuarded(OpenShapeEffectsDialogAsync),
+            ["Shape Effects"] = () => RunGuarded(OpenShapeEffectsDialogAsync),
         };
 
         // Merge the Picture/Shape Format handlers (Arrange / Shape Styles / Accessibility), which also

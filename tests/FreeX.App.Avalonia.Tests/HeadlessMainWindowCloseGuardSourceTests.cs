@@ -91,16 +91,7 @@ public sealed class HeadlessMainWindowCloseGuardSourceTests
             yield return (start, lines.Length - 1);
     }
 
-    private static string TestSourceDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return Path.Combine(directory.FullName, "tests", "FreeX.App.Avalonia.Tests");
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root.");
-    }
+    private static string TestSourceDirectory() =>
+        TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory(
+            "tests", "FreeX.App.Avalonia.Tests");
 }

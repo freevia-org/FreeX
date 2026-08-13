@@ -6,7 +6,7 @@ internal static class ViewportScrollbarUpdater
 {
     public static bool TryExtendFromArrowSmallIncrement(ScrollBar scrollBar, uint absoluteLimit)
     {
-        var (maximum, value) = ViewportScrollCalculator.CalculateScrollbarArrowSmallIncrement(
+        var (maximum, value) = WorkbookViewportScrollPlanner.CalculateScrollbarArrowSmallIncrement(
             scrollBar.Value,
             scrollBar.Maximum,
             scrollBar.SmallChange,

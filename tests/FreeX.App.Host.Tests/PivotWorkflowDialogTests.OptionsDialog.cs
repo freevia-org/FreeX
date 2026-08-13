@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -12,9 +13,9 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class PivotWorkflowDialogTests
 {
     [Fact]
-    public void PivotTableOptionsDialog_CreateResult_CapturesModeledLayoutAndStyleSettings()
+    public void PivotOptionsPlanner_CreateDialogValues_CapturesModeledLayoutAndStyleSettings()
     {
-        var result = PivotTableOptionsDialog.CreateResult(
+        var result = PivotOptionsPlanner.CreateDialogValues(
             showRowGrandTotals: true,
             showColumnGrandTotals: false,
             showSubtotals: true,
@@ -83,9 +84,9 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
-    public void PivotTableOptionsDialog_CreateResult_CapturesEmptyAndErrorValueText()
+    public void PivotOptionsPlanner_CreateDialogValues_CapturesEmptyAndErrorValueText()
     {
-        var result = PivotTableOptionsDialog.CreateResult(
+        var result = PivotOptionsPlanner.CreateDialogValues(
             showRowGrandTotals: true,
             showColumnGrandTotals: true,
             showSubtotals: true,
@@ -104,7 +105,7 @@ public sealed partial class PivotWorkflowDialogTests
         result.EmptyValueText.Should().Be("N/A");
         result.ErrorValueText.Should().Be("#VALUE!");
 
-        var blankResult = PivotTableOptionsDialog.CreateResult(
+        var blankResult = PivotOptionsPlanner.CreateDialogValues(
             showRowGrandTotals: true,
             showColumnGrandTotals: true,
             showSubtotals: true,
@@ -125,9 +126,9 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
-    public void PivotTableOptionsDialog_CreateResult_KeepsExistingPositionalOptionalOrder()
+    public void PivotOptionsPlanner_CreateDialogValues_KeepsExistingPositionalOptionalOrder()
     {
-        var result = PivotTableOptionsDialog.CreateResult(
+        var result = PivotOptionsPlanner.CreateDialogValues(
             true,
             true,
             true,
@@ -170,7 +171,7 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
-    public void PivotTableOptionsDialog_FromPivotTable_UsesConnectedCacheDataOptions()
+    public void PivotOptionsPlanner_CaptureDialogValues_UsesConnectedCacheDataOptions()
     {
         var pivotTable = new PivotTableModel
         {
@@ -188,9 +189,9 @@ public sealed partial class PivotWorkflowDialogTests
             MissingItemsLimit = 0
         };
 
-        PivotTableOptionsDialog.FromPivotTable(pivotTable, cache)
+        PivotOptionsPlanner.CaptureDialogValues(pivotTable, cache)
             .Should()
-            .Match<PivotTableOptionsDialogResult>(result =>
+            .Match<PivotOptionsDialogValues>(result =>
                 result.RefreshOnOpen &&
                 !result.SaveSourceData &&
                 !result.EnableRefresh &&
@@ -199,17 +200,21 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
-    public void PivotTableOptionsDialogResult_DelegatesNormalizationToSharedPlanner()
+    public void PivotTableOptionsDialog_UsesCanonicalPresentationResultDirectly()
     {
-        var resultSource = DialogSourceTestSupport.ReadHostSources("PivotTableOptionsDialog.Result.cs");
         var dialogSource = DialogSourceTestSupport.ReadHostSources("PivotTableOptionsDialog.cs");
+        var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
 
-        resultSource.Should().Contain("PivotOptionsPlanner.CaptureDialogValues(pivotTable, cache)");
-        resultSource.Should().Contain("PivotOptionsPlanner.CreateDialogValues(");
-        resultSource.Should().Contain("private static PivotTableOptionsDialogResult FromShared(PivotOptionsDialogValues values)");
-        resultSource.Should().NotContain("private static string? NormalizeOptionalText");
-        resultSource.Should().NotContain("NormalizeCompactRowLabelIndent(int indent)");
-
+        dialogSource.Should().Contain("public PivotOptionsDialogValues Result { get; private set; }");
+        dialogSource.Should().Contain("Result = PivotOptionsPlanner.CaptureDialogValues(pivotTable, cache);");
+        dialogSource.Should().Contain("Result = PivotOptionsPlanner.CreateDialogValues(");
+        dialogSource.Should().NotContain("PivotTableOptionsDialogResult");
+        commandSource.Should().Contain("ApplyPivotOptions(PivotTableModel pivotTable, PivotOptionsDialogValues values)");
+        commandSource.Should().Contain("PivotApplication.PlanDialogOptions(");
+        commandSource.Should().NotContain("PivotOptionsPlanner.CreateDialogValues(");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "PivotTableOptionsDialog.Result.cs"))
+            .Should().BeFalse("the WPF dialog no longer needs a result projection partial");
         dialogSource.Should().Contain("PivotStyleGalleryPlanner.GetStyleNames(result.StyleName)");
         dialogSource.Should().Contain("PivotStyleGalleryPlanner.FindStyleIndex(styleNames, result.StyleName)");
         dialogSource.Should().Contain("PivotOptionsPlanner.TryParseCompactRowLabelIndent(_compactIndentBox.Text");
@@ -217,7 +222,7 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
-    public void PivotTableOptionsDialog_FromPivotTable_UsesCurrentPivotSettings()
+    public void PivotOptionsPlanner_CaptureDialogValues_UsesCurrentPivotSettings()
     {
         var sheetId = new SheetId(Guid.NewGuid());
         var pivotTable = new PivotTableModel
@@ -255,7 +260,7 @@ public sealed partial class PivotWorkflowDialogTests
             EnableDrill = false
         };
 
-        PivotTableOptionsDialog.FromPivotTable(pivotTable)
+        PivotOptionsPlanner.CaptureDialogValues(pivotTable)
             .Should()
             .BeEquivalentTo(new
             {
@@ -378,7 +383,7 @@ public sealed partial class PivotWorkflowDialogTests
         handlerSource.Should().NotContain("ShowPivotTableOptionsDialog();");
         source.Should().Contain("private void ShowPivotStyleGalleryDialog()");
         source.Should().Contain("new PivotStyleGalleryDialog(pivotTable.StyleName)");
-        source.Should().Contain("styleName: dialog.Result.StyleName");
+        source.Should().Contain("StyleName = dialog.Result.StyleName");
     }
 
     [Fact]
@@ -398,8 +403,8 @@ public sealed partial class PivotWorkflowDialogTests
         var end = source.IndexOf("    private void", start + 1, StringComparison.Ordinal);
         var handlerSource = source[start..end];
 
-        handlerSource.Should().Contain("ApplyPivotOptions(");
-        handlerSource.Should().Contain("pivotTable.StyleName");
+        handlerSource.Should().Contain("ApplyPivotDesignOptions(");
+        handlerSource.Should().Contain("PivotOptionsPlanner.CaptureDesignValues(pivotTable)");
         handlerSource.Should().Contain(toggledFlag);
         handlerSource.Should().NotContain("PivotStyleLight16");
         handlerSource.Should().NotContain("PivotStyleMedium");
@@ -469,7 +474,10 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("targetSurfaceId.StartsWith(\"dialog.PivotTableOptions.\", StringComparison.Ordinal)");
         source.Should().Contain("CaptureDialogTabs(results, \"dialog.PivotTableOptions\", outDir");
         source.Should().Contain("[\"LayoutAndFormat\", \"TotalsAndFilters\", \"Display\", \"Printing\", \"Data\", \"AltText\"]");
-        source.Should().Contain("Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, dialog.ScenarioManager, and dialog.Options.Save");
+        source.Should().Contain("Targeted WPF parity capture only supports");
+        source.Should().Contain("dialog.CreateTable");
+        source.Should().Contain("dialog.PivotTableOptions");
+        source.Should().Contain("the targeted Options tabs.");
     }
 
     [Fact]
@@ -560,7 +568,6 @@ public sealed partial class PivotWorkflowDialogTests
             "AddLabeledControl(layoutPanel, UiText.Get(\"PivotTableOptions_CompactIndentLabel\"), _compactIndentBox",
             "AddLabeledControl(formatPanel, UiText.Get(\"PivotTableOptions_EmptyCellsLabel\"), _emptyCellsBox",
             "AddLabeledControl(formatPanel, UiText.Get(\"PivotTableOptions_ErrorValuesLabel\"), _errorValuesBox",
-            "AddLabeledControl(dataPanel, UiText.Get(\"PivotTableOptions_RetainItemsDeletedLabel\"), _missingItemsLimitBox",
             "AddLabeledControl(filtersPanel, UiText.Get(\"PivotTableOptions_SubtotalPlacementLabel\"), _subtotalPlacementBox",
             "AddLabeledControl(stylePanel, UiText.Get(\"PivotTableOptions_PivotTableStyleLabel\"), _styleBox",
             "new Label",
@@ -568,6 +575,10 @@ public sealed partial class PivotWorkflowDialogTests
             "Target = control"
         })
             source.Should().Contain(content);
+
+        source.Should().Contain("UiText.Get(\"PivotTableOptions_RetainItemsDeletedLabel\")");
+        source.Should().Contain("_missingItemsLimitBox");
+        source.Should().Contain("PivotOptionsPlanner.MissingItemsLimits");
     }
 
     [Fact]
@@ -639,7 +650,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableOptionsDialog_ResultIncludesPrintingAndAltText()
     {
-        var result = PivotTableOptionsDialog.CreateResult(
+        var result = PivotOptionsPlanner.CreateDialogValues(
             showRowGrandTotals: true,
             showColumnGrandTotals: false,
             showSubtotals: true,

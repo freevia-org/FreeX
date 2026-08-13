@@ -29,25 +29,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freew-foreground-print-probe.sh"
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
-
-function Invoke-External {
-    param(
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments
-    )
-    Push-Location $repoRoot
-    try {
-        & $FilePath @Arguments
-        if ($LASTEXITCODE -ne 0) { throw "$FilePath exited with code $LASTEXITCODE." }
-    } finally { Pop-Location }
-}
+$resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 
 $sessionDirectory = $null
 $started = $false
@@ -63,7 +48,7 @@ try {
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
-    Invoke-External -FilePath "powershell.exe" -Arguments $startArguments
+    Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
     $started = $true
 
     $currentSessionPath = Join-Path $resolvedOutputRoot "freew/current-session.json"
@@ -87,11 +72,11 @@ try {
 } finally {
     if ($started) {
         try {
-            Invoke-External -FilePath "powershell.exe" -Arguments @(
+            Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", "FreeW", "-Port", "$Port",
                 "-OutputDir", $resolvedOutputRoot
-            )
+            ) -WorkingDirectory $repoRoot
         } catch { Write-Warning "Could not stop harness-owned FreeW container: $($_.Exception.Message)" }
     }
 }

@@ -5,10 +5,10 @@ public sealed class DialogThemeResourceParitySourceTests
     [Fact]
     public void Avalonia_compact_chrome_consumes_the_WPF_dialog_theme_aliases()
     {
-        var avalonia = File.ReadAllText(RepoFile(
-            "shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogChrome.cs"));
-        var wpf = File.ReadAllText(RepoFile(
-            "shared", "Free.Shared.Shell.Wpf", "DialogResources.xaml"));
+        var avalonia = TestWorkspaceFileLocator.ReadAllText(
+            "shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogChrome.cs");
+        var wpf = TestWorkspaceFileLocator.ReadAllText(
+            "shared", "Free.Shared.Shell.Wpf", "DialogResources.xaml");
 
         string[] sharedResourceKeys =
         [
@@ -32,8 +32,8 @@ public sealed class DialogThemeResourceParitySourceTests
     [Fact]
     public void Avalonia_compact_controls_match_WPF_accent_interaction_states()
     {
-        var source = File.ReadAllText(RepoFile(
-            "shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogChrome.cs"));
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogChrome.cs");
 
         source.Should().Contain("selector.OfType<Button>().Class(\":pointerover\")");
         source.Should().Contain("selector.OfType<Button>().Class(\":pressed\")");
@@ -42,15 +42,5 @@ public sealed class DialogThemeResourceParitySourceTests
         source.Should().Contain("selector.OfType<TextBox>().Class(\":pointerover\")");
         source.Should().Contain("groupBox.Foreground = accent;");
         source.Should().Contain("Foreground = accent,");
-    }
-
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
     }
 }

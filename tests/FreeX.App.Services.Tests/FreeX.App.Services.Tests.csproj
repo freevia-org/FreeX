@@ -1,10 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <ProjectReference Include="..\..\src\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
     <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
+    <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\SharedTestInfrastructure\FreeX\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
+    <Compile Include="..\..\tools\FreeX.Validation.Avalonia\PackagingSmokeValidation.cs" Link="Validation\PackagingSmokeValidation.cs" />
   </ItemGroup>
 
   <ItemGroup>
