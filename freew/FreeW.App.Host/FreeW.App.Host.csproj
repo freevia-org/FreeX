@@ -52,18 +52,26 @@
     </ProjectReference>
   </ItemDefinitionGroup>
 
+  <ItemDefinitionGroup Condition="'$(FreeWRenderCompareSupport)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeWRenderCompareSupport</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
   <ItemGroup>
     <Using Include="FreeW.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
-    <!-- The on-demand DOCX visual-fidelity harness (tools/FreeW.RenderCompare) renders pages through the
-         same print/preview paginator (internal PrintLayout.BuildPaginator). -->
-    <InternalsVisibleTo Include="FreeW.RenderCompare" />
     <!-- Tests reach the internal print paginator (HeaderFooterPaginator) directly. -->
     <InternalsVisibleTo Include="FreeW.App.Host.Tests" />
     <!-- FidelityRender composite path uses internal overlay/chrome/column helpers. -->
     <InternalsVisibleTo Include="FreeW.FidelityRender" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreeWRenderCompareSupport)' == 'true'">
+    <!-- The on-demand DOCX visual-fidelity harness renders through the internal print paginator. -->
+    <InternalsVisibleTo Include="FreeW.RenderCompare" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
