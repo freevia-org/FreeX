@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Styling;
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
@@ -1114,24 +1115,43 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
 
 internal sealed class ManageSourcesDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ActionSpacing = ManageSourcesDialogVisualMetrics.CloseActionSpacing,
+        };
 
+    private readonly IUserMessageService _messageService;
     private SourceManagementDialogState _state;
-    private readonly ListBox _masterList = new() { MinWidth = 220, MinHeight = 180 };
-    private readonly ListBox _currentList = new() { MinWidth = 220, MinHeight = 180 };
-    private readonly TextBlock _status = new()
+    private readonly ListBox _masterList = new()
     {
-        Foreground = Brushes.DarkRed,
-        Margin = new Thickness(16, 6, 16, 0),
-        IsVisible = false,
+        MinWidth = ManageSourcesDialogVisualMetrics.ListMinimumWidth,
+        MinHeight = ManageSourcesDialogVisualMetrics.ListMinimumHeight,
+        Margin = new Thickness(
+            0,
+            0,
+            0,
+            ManageSourcesDialogVisualMetrics.ListBottomMargin),
+    };
+    private readonly ListBox _currentList = new()
+    {
+        MinWidth = ManageSourcesDialogVisualMetrics.ListMinimumWidth,
+        MinHeight = ManageSourcesDialogVisualMetrics.ListMinimumHeight,
+        Margin = new Thickness(
+            0,
+            0,
+            0,
+            ManageSourcesDialogVisualMetrics.ListBottomMargin),
     };
 
     public SourceManagementDialogResult? Result { get; private set; }
 
     public ManageSourcesDialog(
         IReadOnlyList<Source> currentSources,
-        IReadOnlyList<Source> masterSources)
+        IReadOnlyList<Source> masterSources,
+        IUserMessageService? messageService = null)
     {
+        _messageService = messageService ?? new AvaloniaUserMessageService(this);
         _state = SourceManagementDialogPlanner.BuildInitialState(currentSources, masterSources);
         var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
 
@@ -1162,7 +1182,12 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
         var centerPane = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0),
+            Spacing = ManageSourcesDialogVisualMetrics.CopyActionSpacing,
+            Margin = new Thickness(
+                0,
+                0,
+                ManageSourcesDialogVisualMetrics.PaneGap,
+                0),
         };
         centerPane.Children.Add(copy);
         centerPane.Children.Add(copyBack);
@@ -1179,19 +1204,30 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
         var lists = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(16, 12, 16, 0),
+            Margin = new Thickness(
+                0,
+                0,
+                0,
+                ManageSourcesDialogVisualMetrics.ListsBottomMargin),
         };
+        masterPane.Margin = new Thickness(
+            0,
+            0,
+            ManageSourcesDialogVisualMetrics.PaneGap,
+            0);
         lists.Children.Add(masterPane);
         lists.Children.Add(centerPane);
         lists.Children.Add(currentPane);
 
         var ok = Button(text.OkButtonLabel, Accept, isDefault: true);
         var cancel = Button(text.CancelButtonLabel, () => Close(), isCancel: true);
-        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 12, 16, 14));
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0));
 
-        var body = new StackPanel();
+        var body = new StackPanel
+        {
+            Margin = new Thickness(ManageSourcesDialogVisualMetrics.OuterInset),
+        };
         body.Children.Add(lists);
-        body.Children.Add(_status);
         body.Children.Add(buttons);
         Content = body;
     }
@@ -1203,7 +1239,7 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
             return;
 
         var plan = SourceManagementDialogPlanner.AddMasterSource(_state, entry);
-        if (!ApplyValidation(plan.Validation))
+        if (!await ApplyValidationAsync(plan.Validation))
             return;
 
         _state = plan.State;
@@ -1228,7 +1264,7 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
             return;
 
         var plan = SourceManagementDialogPlanner.EditMasterSource(_state, index, entry);
-        if (!ApplyValidation(plan.Validation))
+        if (!await ApplyValidationAsync(plan.Validation))
             return;
 
         _state = plan.State;
@@ -1260,7 +1296,7 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
             return;
 
         var plan = SourceManagementDialogPlanner.AddCurrentSource(_state, entry);
-        if (!ApplyValidation(plan.Validation))
+        if (!await ApplyValidationAsync(plan.Validation))
             return;
 
         _state = plan.State;
@@ -1278,7 +1314,7 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
             return;
 
         var plan = SourceManagementDialogPlanner.EditCurrentSource(_state, index, entry);
-        if (!ApplyValidation(plan.Validation))
+        if (!await ApplyValidationAsync(plan.Validation))
             return;
 
         _state = plan.State;
@@ -1305,16 +1341,14 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
         return dialog.Entry;
     }
 
-    private bool ApplyValidation(SourceManagementValidation? validation)
+    private async Task<bool> ApplyValidationAsync(SourceManagementValidation? validation)
     {
         if (validation is null)
-        {
-            _status.IsVisible = false;
             return true;
-        }
 
-        _status.Text = validation.Message;
-        _status.IsVisible = true;
+        await _messageService.ShowWarningAsync(
+            validation.Message,
+            Title ?? SourceManagementDialogPlanner.ResolveText(UiText.Get).ManageSourcesTitle);
         return false;
     }
 
@@ -1334,7 +1368,6 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
 
         _state = plan.State;
         refresh(plan.SelectedIndex);
-        _status.IsVisible = false;
         return true;
     }
 
@@ -1359,14 +1392,21 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
     private static StackPanel Pane(string label, ListBox list, IReadOnlyList<Button> buttons)
     {
         var pane = new StackPanel();
-        pane.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        pane.Children.Add(new TextBlock
+        {
+            Text = label,
+            Margin = new Thickness(
+                0,
+                0,
+                0,
+                ManageSourcesDialogVisualMetrics.LabelBottomMargin),
+        });
         pane.Children.Add(list);
 
         var row = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Margin = new Thickness(0, 4, 0, 0),
+            Spacing = ManageSourcesDialogVisualMetrics.PaneActionSpacing,
         };
         foreach (var button in buttons)
             row.Children.Add(button);
@@ -1377,7 +1417,11 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
     private static Button Button(string label, Action click, bool isDefault = false, bool isCancel = false)
     {
         var button = new Button { Content = label, IsDefault = isDefault, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 72, isDefault: isDefault);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: ManageSourcesDialogVisualMetrics.ButtonMinimumWidth,
+            isDefault: isDefault);
         button.Click += (_, _) => click();
         return button;
     }

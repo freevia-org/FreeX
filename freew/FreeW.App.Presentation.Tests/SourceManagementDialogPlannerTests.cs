@@ -5,6 +5,83 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class SourceManagementDialogPlannerTests
 {
     [Fact]
+    public void ManageSourcesDialogVisualMetrics_PreserveSharedWpfAuthorityGeometry()
+    {
+        ManageSourcesDialogVisualMetrics.ListMinimumWidth.Should().Be(220);
+        ManageSourcesDialogVisualMetrics.ListMinimumHeight.Should().Be(180);
+        ManageSourcesDialogVisualMetrics.ListBottomMargin.Should().Be(4);
+        ManageSourcesDialogVisualMetrics.LabelBottomMargin.Should().Be(4);
+        ManageSourcesDialogVisualMetrics.ButtonMinimumWidth.Should().Be(72);
+        ManageSourcesDialogVisualMetrics.PaneActionSpacing.Should().Be(6);
+        ManageSourcesDialogVisualMetrics.CopyActionSpacing.Should().Be(6);
+        ManageSourcesDialogVisualMetrics.PaneGap.Should().Be(8);
+        ManageSourcesDialogVisualMetrics.OuterInset.Should().Be(16);
+        ManageSourcesDialogVisualMetrics.ListsBottomMargin.Should().Be(12);
+        ManageSourcesDialogVisualMetrics.CloseActionSpacing.Should().Be(8);
+    }
+
+    [Fact]
+    public void ManageSourcesRenderers_ConsumeSharedVisualMetricsAndUseModalValidationWarnings()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var avaloniaSource = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "ReferencesDialogs.cs"));
+        var wpfSource = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Host",
+            "Ribbon",
+            "FreeWRibbonCommands.cs"));
+        var avalonia = avaloniaSource[avaloniaSource.IndexOf(
+            "internal sealed class ManageSourcesDialog",
+            StringComparison.Ordinal)..];
+        var wpf = Slice(
+            wpfSource,
+            "private static class ManageSourcesDialog",
+            "private static class MergeRuleIfDialog");
+
+        foreach (var source in new[] { avalonia, wpf })
+        {
+            source.Should().Contain("ManageSourcesDialogVisualMetrics.ListMinimumWidth");
+            source.Should().Contain("ManageSourcesDialogVisualMetrics.ListMinimumHeight");
+            source.Should().Contain("ManageSourcesDialogVisualMetrics.ListBottomMargin");
+            source.Should().Contain("ManageSourcesDialogVisualMetrics.LabelBottomMargin");
+            source.Should().Contain("ManageSourcesDialogVisualMetrics.ButtonMinimumWidth");
+            source.Should().Contain("ManageSourcesDialogVisualMetrics.PaneActionSpacing");
+            source.Should().Contain("ManageSourcesDialogVisualMetrics.CopyActionSpacing");
+            source.Should().Contain("ManageSourcesDialogVisualMetrics.PaneGap");
+            source.Should().Contain("ManageSourcesDialogVisualMetrics.OuterInset");
+            source.Should().Contain("ManageSourcesDialogVisualMetrics.ListsBottomMargin");
+            source.Should().Contain("ManageSourcesDialogVisualMetrics.CloseActionSpacing");
+            source.Should().NotContain("MinWidth = 220");
+            source.Should().NotContain("MinHeight = 180");
+            source.Should().NotContain("MinWidth = 72");
+            source.Should().NotContain("new Thickness(16)");
+        }
+
+        avalonia.Should().Contain("IUserMessageService? messageService = null");
+        avalonia.Should().Contain("new AvaloniaUserMessageService(this)");
+        avalonia.Should().Contain("ApplyValidationAsync");
+        avalonia.Should().Contain("await _messageService.ShowWarningAsync(");
+        avalonia.Should().Contain("Spacing = ManageSourcesDialogVisualMetrics.CopyActionSpacing");
+        avalonia.Should().NotContain("private bool ApplyValidation(");
+        avalonia.Should().NotContain("_status");
+        wpf.Should().Contain("DialogMessageHelper.ShowWarning(");
+
+        static string Slice(string source, string startMarker, string endMarker)
+        {
+            var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+            start.Should().BeGreaterThanOrEqualTo(0);
+            var end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
+            end.Should().BeGreaterThan(start);
+            return source[start..end];
+        }
+    }
+
+    [Fact]
     public void PrimaryAuthorEditorVisualMetrics_PreserveSharedWpfAuthorityGeometry()
     {
         SourceManagementAuthorEditorVisualMetrics.AvaloniaWindowWidth.Should().Be(460);

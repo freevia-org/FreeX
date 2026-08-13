@@ -5176,17 +5176,25 @@ internal static class FreeWRibbonCommands
             // ── left pane: Master List ────────────────────────────────────────────────────────
             var masterList = new System.Windows.Controls.ListBox
             {
-                MinWidth = 220,
-                MinHeight = 180,
-                Margin = new Thickness(0, 0, 0, 4)
+                MinWidth = ManageSourcesDialogVisualMetrics.ListMinimumWidth,
+                MinHeight = ManageSourcesDialogVisualMetrics.ListMinimumHeight,
+                Margin = new Thickness(
+                    0,
+                    0,
+                    0,
+                    ManageSourcesDialogVisualMetrics.ListBottomMargin)
             };
 
             // ── right pane: Current Document ─────────────────────────────────────────────────
             var docList = new System.Windows.Controls.ListBox
             {
-                MinWidth = 220,
-                MinHeight = 180,
-                Margin = new Thickness(0, 0, 0, 4)
+                MinWidth = ManageSourcesDialogVisualMetrics.ListMinimumWidth,
+                MinHeight = ManageSourcesDialogVisualMetrics.ListMinimumHeight,
+                Margin = new Thickness(
+                    0,
+                    0,
+                    0,
+                    ManageSourcesDialogVisualMetrics.ListBottomMargin)
             };
 
             SourceManagementDialogResult? result = null;
@@ -5381,16 +5389,64 @@ internal static class FreeWRibbonCommands
             }
 
             // ── buttons ───────────────────────────────────────────────────────────────────────
-            var masterAdd    = new System.Windows.Controls.Button { Content = text.AddButtonLabel, MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
-            var masterEdit   = new System.Windows.Controls.Button { Content = text.EditButtonLabel, MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
-            var masterDelete = new System.Windows.Controls.Button { Content = text.DeleteButtonLabel, MinWidth = 72 };
-            var copyBtn      = new System.Windows.Controls.Button { Content = text.CopyToCurrentButtonLabel, MinWidth = 72 };
-            var copyBackBtn  = new System.Windows.Controls.Button { Content = text.CopyToMasterButtonLabel, MinWidth = 72, Margin = new Thickness(0, 6, 0, 0) };
-            var docAdd       = new System.Windows.Controls.Button { Content = text.AddButtonLabel, MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
-            var docEdit      = new System.Windows.Controls.Button { Content = text.EditButtonLabel, MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
-            var docDelete    = new System.Windows.Controls.Button { Content = text.DeleteButtonLabel, MinWidth = 72 };
-            var ok           = new System.Windows.Controls.Button { Content = text.OkButtonLabel, IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel       = new System.Windows.Controls.Button { Content = text.CancelButtonLabel, IsCancel = true, MinWidth = 72 };
+            var masterAdd = new System.Windows.Controls.Button
+            {
+                Content = text.AddButtonLabel,
+                MinWidth = ManageSourcesDialogVisualMetrics.ButtonMinimumWidth,
+                Margin = new Thickness(0, 0, ManageSourcesDialogVisualMetrics.PaneActionSpacing, 0)
+            };
+            var masterEdit = new System.Windows.Controls.Button
+            {
+                Content = text.EditButtonLabel,
+                MinWidth = ManageSourcesDialogVisualMetrics.ButtonMinimumWidth,
+                Margin = new Thickness(0, 0, ManageSourcesDialogVisualMetrics.PaneActionSpacing, 0)
+            };
+            var masterDelete = new System.Windows.Controls.Button
+            {
+                Content = text.DeleteButtonLabel,
+                MinWidth = ManageSourcesDialogVisualMetrics.ButtonMinimumWidth
+            };
+            var copyBtn = new System.Windows.Controls.Button
+            {
+                Content = text.CopyToCurrentButtonLabel,
+                MinWidth = ManageSourcesDialogVisualMetrics.ButtonMinimumWidth
+            };
+            var copyBackBtn = new System.Windows.Controls.Button
+            {
+                Content = text.CopyToMasterButtonLabel,
+                MinWidth = ManageSourcesDialogVisualMetrics.ButtonMinimumWidth,
+                Margin = new Thickness(0, ManageSourcesDialogVisualMetrics.CopyActionSpacing, 0, 0)
+            };
+            var docAdd = new System.Windows.Controls.Button
+            {
+                Content = text.AddButtonLabel,
+                MinWidth = ManageSourcesDialogVisualMetrics.ButtonMinimumWidth,
+                Margin = new Thickness(0, 0, ManageSourcesDialogVisualMetrics.PaneActionSpacing, 0)
+            };
+            var docEdit = new System.Windows.Controls.Button
+            {
+                Content = text.EditButtonLabel,
+                MinWidth = ManageSourcesDialogVisualMetrics.ButtonMinimumWidth,
+                Margin = new Thickness(0, 0, ManageSourcesDialogVisualMetrics.PaneActionSpacing, 0)
+            };
+            var docDelete = new System.Windows.Controls.Button
+            {
+                Content = text.DeleteButtonLabel,
+                MinWidth = ManageSourcesDialogVisualMetrics.ButtonMinimumWidth
+            };
+            var ok = new System.Windows.Controls.Button
+            {
+                Content = text.OkButtonLabel,
+                IsDefault = true,
+                MinWidth = ManageSourcesDialogVisualMetrics.ButtonMinimumWidth,
+                Margin = new Thickness(0, 0, ManageSourcesDialogVisualMetrics.CloseActionSpacing, 0)
+            };
+            var cancel = new System.Windows.Controls.Button
+            {
+                Content = text.CancelButtonLabel,
+                IsCancel = true,
+                MinWidth = ManageSourcesDialogVisualMetrics.ButtonMinimumWidth
+            };
 
             masterAdd.Click    += (_, _) => AddToMaster();
             masterEdit.Click   += (_, _) => EditMasterSource();
@@ -5419,15 +5475,22 @@ internal static class FreeWRibbonCommands
             masterButtons.Children.Add(masterEdit);
             masterButtons.Children.Add(masterDelete);
 
-            var masterPane = new System.Windows.Controls.StackPanel { Margin = new Thickness(0, 0, 8, 0) };
-            masterPane.Children.Add(new System.Windows.Controls.TextBlock { Text = SourceManagementDialogPlanner.MasterListLabel, Margin = new Thickness(0, 0, 0, 4) });
+            var masterPane = new System.Windows.Controls.StackPanel
+            {
+                Margin = new Thickness(0, 0, ManageSourcesDialogVisualMetrics.PaneGap, 0)
+            };
+            masterPane.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = SourceManagementDialogPlanner.MasterListLabel,
+                Margin = new Thickness(0, 0, 0, ManageSourcesDialogVisualMetrics.LabelBottomMargin)
+            });
             masterPane.Children.Add(masterList);
             masterPane.Children.Add(masterButtons);
 
             var centerPane = new System.Windows.Controls.StackPanel
             {
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0)
+                Margin = new Thickness(0, 0, ManageSourcesDialogVisualMetrics.PaneGap, 0)
             };
             centerPane.Children.Add(copyBtn);
             centerPane.Children.Add(copyBackBtn);
@@ -5442,11 +5505,18 @@ internal static class FreeWRibbonCommands
             docButtons.Children.Add(docDelete);
 
             var docPane = new System.Windows.Controls.StackPanel();
-            docPane.Children.Add(new System.Windows.Controls.TextBlock { Text = SourceManagementDialogPlanner.CurrentDocumentListLabel, Margin = new Thickness(0, 0, 0, 4) });
+            docPane.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = SourceManagementDialogPlanner.CurrentDocumentListLabel,
+                Margin = new Thickness(0, 0, 0, ManageSourcesDialogVisualMetrics.LabelBottomMargin)
+            });
             docPane.Children.Add(docList);
             docPane.Children.Add(docButtons);
 
-            var listsRow = new System.Windows.Controls.DockPanel { Margin = new Thickness(0, 0, 0, 12) };
+            var listsRow = new System.Windows.Controls.DockPanel
+            {
+                Margin = new Thickness(0, 0, 0, ManageSourcesDialogVisualMetrics.ListsBottomMargin)
+            };
             listsRow.Children.Add(masterPane);
             listsRow.Children.Add(centerPane);
             listsRow.Children.Add(docPane);
@@ -5459,7 +5529,10 @@ internal static class FreeWRibbonCommands
             closeButtons.Children.Add(ok);
             closeButtons.Children.Add(cancel);
 
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            var panel = new System.Windows.Controls.StackPanel
+            {
+                Margin = new Thickness(ManageSourcesDialogVisualMetrics.OuterInset)
+            };
             panel.Children.Add(listsRow);
             panel.Children.Add(closeButtons);
             dialog.Content = panel;
