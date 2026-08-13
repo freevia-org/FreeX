@@ -111,11 +111,21 @@ public sealed class DocumentView : Control
         DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
     private bool _showParagraphMarks;
     // AV-VIEW: layout-gridlines overlay (faint grid behind text) + ruler strip (top horizontal +
-    // left vertical with tick marks and margin markers). Both are view-only chrome — they never
-    // affect layout, only the Render pass — so toggling them just invalidates the visual.
+    // left vertical with tick marks and backed margin/indent/tab markers). Toggling either is view-only;
+    // ruler pointer edits route separately through the command bus and then relayout normally.
     private bool _showGridlines;
     private bool _showTableGridlines;
     private bool _showRuler;
+    private TabStopAlignment _rulerTabStopAlignment = TabStopAlignment.Left;
+    private RulerDragState? _rulerDrag;
+    private double? _rulerDragPreviewMarginPt;
+
+    private sealed record RulerDragState(
+        DocumentRulerDragKind Kind,
+        int TabIndex,
+        ParagraphFormatting StartFormatting,
+        Point Start,
+        double StartMarginPt = 0);
 
     // Standard Word font-size ladder (pt).
     private static readonly double[] FontSizeLadder = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
@@ -12909,11 +12919,12 @@ public sealed class DocumentView : Control
     /// <summary>
     /// AV-VIEW: Draw the ruler strips for the first page in Print Layout — a horizontal strip along the
     /// page top and a vertical strip along the page left edge, each with the page margins tinted darker
-    /// (so the lighter span marks the editable body area) and inch tick marks. Pure render chrome.
+    /// (so the lighter span marks the editable body area), inch tick marks, and the same backed indent,
+    /// tab-stop, and margin-editing affordances as the WPF ruler.
     /// </summary>
     private void DrawRuler(DrawingContext context)
     {
-        const double inchDip = 72.0;
+        const double inchDip = 96.0;
         var pageTop = _surfacePlan.PageTopDip(0); // first page only
         // ── Horizontal ruler: sits just above the page's top edge. ──
         var hRect = new Rect(_pageLeft, pageTop - RulerThicknessDip, _pageWidth, RulerThicknessDip);
@@ -12927,6 +12938,34 @@ public sealed class DocumentView : Control
         foreach (var x in rulerTicks)
             context.DrawLine(RulerTickPen, new Point(x, hRect.Y + RulerThicknessDip - 4), new Point(x, hRect.Y + RulerThicknessDip));
 
+        // Word-style tab selector in the top-left corner. Clicking it cycles Left/Center/Right/Decimal;
+        // the selected type is used when the user clicks an empty location on the horizontal ruler.
+        var selectorRect = RulerTabSelectorRect(pageTop);
+        context.FillRectangle(RulerMarginFill, selectorRect);
+        context.DrawRectangle(null, RulerBorderPen, selectorRect);
+        DrawRulerTabMarker(
+            context,
+            _rulerTabStopAlignment,
+            selectorRect.Center.X,
+            selectorRect.Bottom - 3,
+            markerHeight: 7);
+
+        // Current-paragraph indent and explicit-tab markers. Geometry decisions live in the shared
+        // interaction planner; this renderer only maps them to Avalonia drawing primitives.
+        var formatting = RulerParagraphFormatting();
+        var leftX = _contentLeft + PageLayout.PointsToDip(formatting.IndentLeftPt);
+        var firstX = leftX + PageLayout.PointsToDip(formatting.FirstLineIndentPt);
+        var rightX = bodyRight - PageLayout.PointsToDip(formatting.IndentRightPt);
+        DrawRulerTriangle(context, leftX, hRect.Bottom, pointsDown: false);
+        DrawRulerTriangle(context, rightX, hRect.Bottom, pointsDown: false);
+        DrawRulerTriangle(context, firstX, hRect.Top, pointsDown: true);
+        foreach (var tab in formatting.TabStops)
+        {
+            var tabX = _contentLeft + PageLayout.PointsToDip(tab.PositionPt);
+            if (tabX >= _contentLeft - 0.5 && tabX <= bodyRight + 0.5)
+                DrawRulerTabMarker(context, tab.Alignment, tabX, hRect.Bottom, markerHeight: 7);
+        }
+
         // ── Vertical ruler: sits just left of the page's left edge. ──
         var vRect = new Rect(_pageLeft - RulerThicknessDip, pageTop, RulerThicknessDip, _pageHeightPx);
         context.FillRectangle(RulerFill, vRect);
@@ -12935,8 +12974,65 @@ public sealed class DocumentView : Control
         context.FillRectangle(RulerMarginFill, new Rect(vRect.X, pageTop, RulerThicknessDip, _marginTopDip));
         context.FillRectangle(RulerMarginFill, new Rect(vRect.X, bodyBottom, RulerThicknessDip, pageTop + _pageHeightPx - bodyBottom));
         context.DrawRectangle(null, RulerBorderPen, vRect);
-        foreach (var y in rulerTicks.Select(tick => pageTop + tick - _pageLeft))
+        for (var y = pageTop; y <= pageTop + _pageHeightPx + 0.01; y += inchDip)
             context.DrawLine(RulerTickPen, new Point(vRect.X + RulerThicknessDip - 4, y), new Point(vRect.X + RulerThicknessDip, y));
+
+        if (_rulerDragPreviewMarginPt is { } preview
+            && _rulerDrag is { Kind: DocumentRulerDragKind.TopMargin or DocumentRulerDragKind.BottomMargin } drag)
+        {
+            var previewDip = PageLayout.PointsToDip(preview);
+            var previewY = drag.Kind == DocumentRulerDragKind.TopMargin
+                ? pageTop + previewDip
+                : pageTop + _pageHeightPx - previewDip;
+            context.DrawLine(RulerPreviewPen, new Point(vRect.Left, previewY), new Point(vRect.Right, previewY));
+        }
+    }
+
+    private Rect RulerTabSelectorRect(double pageTop) =>
+        new(_pageLeft - RulerThicknessDip, pageTop - RulerThicknessDip, RulerThicknessDip, RulerThicknessDip);
+
+    private static void DrawRulerTriangle(DrawingContext context, double x, double edgeY, bool pointsDown)
+    {
+        const double halfWidth = 4;
+        const double height = 5;
+        var tipY = pointsDown ? edgeY + height : edgeY - height;
+        var baseY = edgeY;
+        var geometry = new StreamGeometry();
+        using (var path = geometry.Open())
+        {
+            path.BeginFigure(new Point(x - halfWidth, baseY), true);
+            path.LineTo(new Point(x + halfWidth, baseY));
+            path.LineTo(new Point(x, tipY));
+            path.EndFigure(true);
+        }
+        context.DrawGeometry(RulerMarkerBrush, RulerMarkerPen, geometry);
+    }
+
+    private static void DrawRulerTabMarker(
+        DrawingContext context,
+        TabStopAlignment alignment,
+        double x,
+        double bottom,
+        double markerHeight)
+    {
+        var top = bottom - markerHeight;
+        context.DrawLine(RulerMarkerPen, new Point(x, top), new Point(x, bottom));
+        switch (alignment)
+        {
+            case TabStopAlignment.Center:
+                context.DrawLine(RulerMarkerPen, new Point(x - 3, bottom), new Point(x + 3, bottom));
+                break;
+            case TabStopAlignment.Right:
+                context.DrawLine(RulerMarkerPen, new Point(x - 5, bottom), new Point(x, bottom));
+                break;
+            case TabStopAlignment.Decimal:
+                context.DrawLine(RulerMarkerPen, new Point(x, bottom), new Point(x + 4, bottom));
+                context.DrawEllipse(RulerMarkerBrush, null, new Point(x + 5.5, bottom - 1.5), 1, 1);
+                break;
+            default:
+                context.DrawLine(RulerMarkerPen, new Point(x, bottom), new Point(x + 5, bottom));
+                break;
+        }
     }
 
     // AV-DESIGN: the model's page border (w:pgBorders) drawn inset just inside the page sheet. Word draws
@@ -13572,6 +13668,9 @@ public sealed class DocumentView : Control
     private static IBrush RulerFill        { get; } = new SolidColorBrush(Color.FromRgb(0xF4, 0xF6, 0xFA));
     private static Pen    RulerBorderPen   { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD4)), 0.75);
     private static Pen    RulerTickPen     { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x70, 0x80, 0x98)), 0.75);
+    private static IBrush RulerMarkerBrush { get; } = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
+    private static Pen    RulerMarkerPen   { get; } = new Pen(RulerMarkerBrush, 1.0);
+    private static Pen    RulerPreviewPen  { get; } = new Pen(RulerMarkerBrush, 1.0, dashStyle: new DashStyle([4, 3], 0));
     // AV-VIEW: darker tint marking the page margins on the ruler (the body text area is the lighter span).
     private static IBrush RulerMarginFill  { get; } = new SolidColorBrush(Color.FromRgb(0xD8, 0xDE, 0xE8));
     private static RunFormatting LineNumberFormatting { get; } = new() { FontSizePt = 8, ColorHex = "#606060" };
@@ -18895,6 +18994,244 @@ public sealed class DocumentView : Control
     internal void OpenEditorContextMenuForTests() => OpenEditorContextMenu();
     internal void RaiseKeyDownForContextMenuTests(KeyEventArgs args) => OnKeyDown(args);
 
+    private ParagraphFormatting RulerParagraphFormatting() =>
+        CurrentParagraph()?.Formatting ?? ParagraphFormatting.Default;
+
+    private Rect HorizontalRulerRect()
+    {
+        var pageTop = _surfacePlan.PageTopDip(0);
+        return new Rect(_pageLeft, pageTop - RulerThicknessDip, _pageWidth, RulerThicknessDip);
+    }
+
+    private Rect VerticalRulerRect()
+    {
+        var pageTop = _surfacePlan.PageTopDip(0);
+        return new Rect(_pageLeft - RulerThicknessDip, pageTop, RulerThicknessDip, _pageHeightPx);
+    }
+
+    private DocumentRulerHorizontalMetrics? RulerHorizontalMetrics() =>
+        DocumentRulerInteractionPlanner.TryBuildHorizontalMetrics(
+            _contentLeft,
+            _contentLeft + _contentWidth,
+            zoom: 1);
+
+    private DocumentRulerVerticalMetrics? RulerVerticalMetrics() =>
+        DocumentRulerInteractionPlanner.TryBuildVerticalMetrics(
+            _doc.Page,
+            zoom: 1,
+            pageTopDip: _surfacePlan.PageTopDip(0));
+
+    private bool TryBeginRulerInteraction(Point point, IPointer pointer)
+    {
+        if (!_showRuler || _viewMode != DocumentViewMode.PrintLayout)
+            return false;
+
+        var pageTop = _surfacePlan.PageTopDip(0);
+        if (RulerTabSelectorRect(pageTop).Contains(point))
+        {
+            _rulerTabStopAlignment = _rulerTabStopAlignment switch
+            {
+                TabStopAlignment.Left => TabStopAlignment.Center,
+                TabStopAlignment.Center => TabStopAlignment.Right,
+                TabStopAlignment.Right => TabStopAlignment.Decimal,
+                _ => TabStopAlignment.Left
+            };
+            InvalidateVisual();
+            return true;
+        }
+
+        if (HorizontalRulerRect().Contains(point) && RulerHorizontalMetrics() is { } horizontal)
+        {
+            var local = new DocumentRulerPoint(point.X, point.Y - HorizontalRulerRect().Top);
+            var formatting = RulerParagraphFormatting();
+            var kind = DocumentRulerInteractionPlanner.HitTestHorizontal(
+                local,
+                RulerThicknessDip,
+                horizontal,
+                formatting,
+                out var tabIndex);
+            if (kind == DocumentRulerDragKind.None)
+                return false;
+
+            _rulerDrag = new RulerDragState(kind, tabIndex, formatting, point);
+            pointer.Capture(this);
+            Cursor = new Cursor(StandardCursorType.SizeWestEast);
+            return true;
+        }
+
+        if (VerticalRulerRect().Contains(point) && RulerVerticalMetrics() is { } vertical)
+        {
+            var kind = DocumentRulerInteractionPlanner.HitTestVertical(point.Y, vertical);
+            if (kind is not (DocumentRulerDragKind.TopMargin or DocumentRulerDragKind.BottomMargin))
+                return false;
+
+            var startMargin = kind == DocumentRulerDragKind.TopMargin
+                ? _doc.Page.MarginTopPt
+                : _doc.Page.MarginBottomPt;
+            _rulerDrag = new RulerDragState(kind, -1, RulerParagraphFormatting(), point, startMargin);
+            pointer.Capture(this);
+            Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool UpdateRulerInteraction(Point point)
+    {
+        if (_rulerDrag is not { } drag)
+            return false;
+
+        if (drag.Kind is DocumentRulerDragKind.TopMargin or DocumentRulerDragKind.BottomMargin
+            && RulerVerticalMetrics() is { } metrics)
+        {
+            var otherMargin = drag.Kind == DocumentRulerDragKind.TopMargin
+                ? _doc.Page.MarginBottomPt
+                : _doc.Page.MarginTopPt;
+            _rulerDragPreviewMarginPt = DocumentRulerInteractionPlanner.ResolveVerticalMargin(
+                drag.Kind,
+                drag.StartMarginPt,
+                point.Y - drag.Start.Y,
+                otherMargin,
+                metrics);
+            InvalidateVisual();
+        }
+
+        return true;
+    }
+
+    private bool UpdateRulerHoverCursor(Point point)
+    {
+        if (!_showRuler || _viewMode != DocumentViewMode.PrintLayout)
+            return false;
+
+        if (HorizontalRulerRect().Contains(point) && RulerHorizontalMetrics() is { } horizontal)
+        {
+            var local = new DocumentRulerPoint(point.X, point.Y - HorizontalRulerRect().Top);
+            var kind = DocumentRulerInteractionPlanner.HitTestHorizontal(
+                local,
+                RulerThicknessDip,
+                horizontal,
+                RulerParagraphFormatting(),
+                out _);
+            Cursor = kind is DocumentRulerDragKind.LeftIndent
+                or DocumentRulerDragKind.FirstLineIndent
+                or DocumentRulerDragKind.RightIndent
+                or DocumentRulerDragKind.TabStop
+                ? new Cursor(StandardCursorType.SizeWestEast)
+                : Cursor.Default;
+            return true;
+        }
+
+        if (VerticalRulerRect().Contains(point) && RulerVerticalMetrics() is { } vertical)
+        {
+            var kind = DocumentRulerInteractionPlanner.HitTestVertical(point.Y, vertical);
+            Cursor = kind is DocumentRulerDragKind.TopMargin or DocumentRulerDragKind.BottomMargin
+                ? new Cursor(StandardCursorType.SizeNorthSouth)
+                : Cursor.Default;
+            return true;
+        }
+
+        if (RulerTabSelectorRect(_surfacePlan.PageTopDip(0)).Contains(point))
+        {
+            Cursor = Cursor.Default;
+            return true;
+        }
+
+        return false;
+    }
+
+    private void CommitRulerInteraction(Point point)
+    {
+        if (_rulerDrag is not { } drag)
+            return;
+
+        if (drag.Kind is DocumentRulerDragKind.TopMargin or DocumentRulerDragKind.BottomMargin)
+        {
+            if (RulerVerticalMetrics() is { } vertical)
+            {
+                var otherMargin = drag.Kind == DocumentRulerDragKind.TopMargin
+                    ? _doc.Page.MarginBottomPt
+                    : _doc.Page.MarginTopPt;
+                var margin = DocumentRulerInteractionPlanner.ResolveVerticalMargin(
+                    drag.Kind,
+                    drag.StartMarginPt,
+                    point.Y - drag.Start.Y,
+                    otherMargin,
+                    vertical);
+                if (drag.Kind == DocumentRulerDragKind.TopMargin)
+                    ApplyPageSettings(page => page.MarginTopPt = margin);
+                else
+                    ApplyPageSettings(page => page.MarginBottomPt = margin);
+            }
+        }
+        else if (RulerHorizontalMetrics() is { } horizontal)
+        {
+            var pointPt = horizontal.XToContentPoint(point.X);
+            switch (drag.Kind)
+            {
+                case DocumentRulerDragKind.LeftIndent:
+                case DocumentRulerDragKind.FirstLineIndent:
+                {
+                    var next = DocumentRulerInteractionPlanner.BuildIndentFormatting(
+                        drag.StartFormatting,
+                        drag.Kind,
+                        pointPt);
+                    FormatSelectedParagraphs(formatting => Indentation.SetIndents(
+                        formatting,
+                        next.IndentLeftPt,
+                        next.IndentRightPt,
+                        next.FirstLineIndentPt));
+                    break;
+                }
+                case DocumentRulerDragKind.RightIndent:
+                {
+                    var fromRight = horizontal.XToContentPoint(horizontal.ContentEnd) - pointPt;
+                    var next = DocumentRulerInteractionPlanner.BuildIndentFormatting(
+                        drag.StartFormatting,
+                        drag.Kind,
+                        fromRight);
+                    FormatSelectedParagraphs(formatting => Indentation.SetIndents(
+                        formatting,
+                        next.IndentLeftPt,
+                        next.IndentRightPt,
+                        next.FirstLineIndentPt));
+                    break;
+                }
+                case DocumentRulerDragKind.TabStop:
+                case DocumentRulerDragKind.NewTabStop:
+                {
+                    var localY = point.Y - HorizontalRulerRect().Top;
+                    if (drag.Kind == DocumentRulerDragKind.NewTabStop
+                        && DocumentRulerInteractionPlanner.IsTabStopRemovalDrop(localY, RulerThicknessDip))
+                        break;
+                    var stops = DocumentRulerInteractionPlanner.IsTabStopRemovalDrop(localY, RulerThicknessDip)
+                        ? DocumentRulerInteractionPlanner.RemoveTabStop(drag.StartFormatting.TabStops, drag.TabIndex)
+                        : DocumentRulerInteractionPlanner.MoveOrAddTabStop(
+                            drag.StartFormatting.TabStops,
+                            drag.TabIndex,
+                            pointPt,
+                            _rulerTabStopAlignment);
+                    SetParagraphTabStops(stops);
+                    break;
+                }
+            }
+        }
+
+        _rulerDrag = null;
+        _rulerDragPreviewMarginPt = null;
+        Cursor = Cursor.Default;
+        InvalidateVisual();
+    }
+
+    private void CancelRulerInteraction()
+    {
+        _rulerDrag = null;
+        _rulerDragPreviewMarginPt = null;
+        Cursor = Cursor.Default;
+        InvalidateVisual();
+    }
+
     // ---- Input ----------------------------------------------------------------------------------
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -18906,6 +19243,12 @@ public sealed class DocumentView : Control
         var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
         var ctrlOrMeta = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
         var updateKind = e.GetCurrentPoint(this).Properties.PointerUpdateKind;
+
+        if (updateKind == PointerUpdateKind.LeftButtonPressed && TryBeginRulerInteraction(point, e.Pointer))
+        {
+            e.Handled = true;
+            return;
+        }
 
         if (updateKind == PointerUpdateKind.RightButtonPressed)
         {
@@ -19110,6 +19453,12 @@ public sealed class DocumentView : Control
         base.OnPointerMoved(e);
         var point = e.GetPosition(this);
 
+        if (UpdateRulerInteraction(point))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (_shapeTextSelectionDragState is not null)
         {
             UpdateShapeTextSelectionDrag(point);
@@ -19119,6 +19468,9 @@ public sealed class DocumentView : Control
 
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
+            if (UpdateRulerHoverCursor(point))
+                return;
+
             // AV-HANDLES: with the button up, update the hover cursor over the selection so handles
             // advertise their resize direction (and the body shows a move cursor).
             if (_selectedFloating is not null && _floatDragState is null)
@@ -19204,6 +19556,8 @@ public sealed class DocumentView : Control
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         base.OnPointerCaptureLost(e);
+        if (_rulerDrag is not null)
+            CancelRulerInteraction();
         _hfSelectionDragActive = false;
         _hfSelectionDragPointer = null;
         if (_shapeTextSelectionDragState is not null)
@@ -19221,6 +19575,13 @@ public sealed class DocumentView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (_rulerDrag is not null)
+        {
+            CommitRulerInteraction(e.GetPosition(this));
+            e.Pointer.Capture(null);
+            e.Handled = true;
+            return;
+        }
         if (_hfSelectionDragActive)
         {
             TryHitTestHeaderFooter(e.GetPosition(this), extendSelection: true);
@@ -22023,7 +22384,8 @@ public sealed class DocumentView : Control
     /// <summary>
     /// AV-VIEW: Toggle a horizontal (top) + vertical (left) ruler strip with tick marks and margin
     /// markers, drawn on the first page in <see cref="DocumentViewMode.PrintLayout"/> (View → Show →
-    /// Ruler in Word). View-only chrome; does not affect layout.
+    /// Ruler in Word). Pointer interaction edits margins, paragraph indents, and tab stops through the
+    /// same undoable model paths used by the Page Setup and Paragraph dialogs.
     /// </summary>
     public bool ShowRuler
     {
@@ -22033,9 +22395,13 @@ public sealed class DocumentView : Control
             if (_showRuler == value)
                 return;
             _showRuler = value;
+            if (!value && _rulerDrag is not null)
+                CancelRulerInteraction();
             InvalidateVisual();
         }
     }
+
+    internal TabStopAlignment RulerTabStopAlignmentForTests => _rulerTabStopAlignment;
 
     /// <summary>
     /// AV-VIEW: Compute the layout-gridlines for the current layout — one horizontal line every
@@ -22073,7 +22439,7 @@ public sealed class DocumentView : Control
     {
         if (!_showRuler || _viewMode != DocumentViewMode.PrintLayout)
             return [];
-        const double inchDip = 72.0; // 1in = 72pt = 72 DIP at 96 DPI base
+        const double inchDip = 96.0; // 1in = 96 DIP (72 model points × 96/72)
         return DocumentViewLayoutPlanner.BuildRulerTicks(_surfacePlan, inchDip);
     }
 
