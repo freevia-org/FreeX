@@ -91,33 +91,20 @@ public sealed class ZoomDialogPlannerTests
     [Fact]
     public void BothHosts_DelegateFitPolicyAndAvaloniaDialogReceivesLiveFactors()
     {
-        var repoRoot = FindRepositoryRoot();
-        string Read(params string[] segments) =>
-            File.ReadAllText(Path.Combine(new[] { repoRoot }.Concat(segments).ToArray()));
+        string Read(params string[] segments) => TestWorkspaceFileLocator.ReadAllText(segments);
 
         var avaloniaMain = Read("freew", "FreeW.App.Avalonia", "MainWindow.cs");
         var avaloniaDialog = Read("freew", "FreeW.App.Avalonia", "ZoomDialog.cs");
         var wpfMain = Read("freew", "FreeW.App.Host", "MainWindow.cs");
 
         avaloniaMain.Should().Contain("new ZoomDialog(_zoomScale, ComputeZoomFitFactors())");
-        avaloniaMain.Should().Contain("ZoomDialogPlanner.BuildFitFactors(_editor.Document.Page");
+        avaloniaMain.Should().Contain("var page = _editor.Document.Page;");
+        avaloniaMain.Should().Contain("ZoomDialogPlanner.BuildFitFactors(page, viewportWidth, viewportHeight)");
         avaloniaDialog.Should().Contain("ZoomDialogFitFactors fitFactors");
-        avaloniaDialog.Should().Contain("TryCreateResult(BuildSelectionRequest(), _fitFactors");
+        avaloniaDialog.Should().Contain("_session.PlanAcceptance(_fitFactors)");
         avaloniaDialog.Should().NotContain("DefaultFitFactors");
-        wpfMain.Should().Contain("ZoomDialogPlanner.BuildFitFactors(_editor.Model.Page");
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not resolve repository root.");
+        wpfMain.Should().Contain("var page = _editor.Model.Page;");
+        wpfMain.Should().Contain("ZoomDialogPlanner.BuildFitFactors(page, viewportWidth, viewportHeight)");
     }
 
     [Theory]

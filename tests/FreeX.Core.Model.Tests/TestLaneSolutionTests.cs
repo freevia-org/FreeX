@@ -51,7 +51,13 @@ public sealed class TestLaneSolutionTests
 
         uiLaneProjects.Should().BeEquivalentTo(new[]
         {
-            "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj",
+            "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch1.csproj",
+            "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch2.csproj",
+            "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch3.csproj",
+            "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch4.csproj",
+            "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch5.csproj",
+            "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch6.csproj",
+            "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch7.csproj",
             "tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj",
             "tests/Free.Shared.Ribbon.Wpf.Tests/Free.Shared.Ribbon.Wpf.Tests.csproj",
             "tests/Free.Shared.Shell.Wpf.Tests/Free.Shared.Shell.Wpf.Tests.csproj"
@@ -84,6 +90,13 @@ public sealed class TestLaneSolutionTests
         var uiLaneProjects = ReadSolutionProjects(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
             "FreeX.UiTests.slnx"));
         var automaticLaneProjects = defaultLaneProjects.Concat(uiLaneProjects).ToHashSet(StringComparer.Ordinal);
+
+        const string canonicalHostProject = "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj";
+        var hostBatchProjects = Enumerable.Range(1, 7)
+            .Select(batch => $"tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch{batch}.csproj")
+            .ToArray();
+        if (hostBatchProjects.All(automaticLaneProjects.Contains))
+            automaticLaneProjects.Add(canonicalHostProject);
 
         var missing = testsDirectoryTestProjects.Where(path => !automaticLaneProjects.Contains(path)).ToArray();
 
