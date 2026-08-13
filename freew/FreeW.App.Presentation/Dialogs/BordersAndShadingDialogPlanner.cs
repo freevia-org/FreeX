@@ -73,6 +73,33 @@ public sealed record BordersAndShadingDialogAcceptance(
     public bool IsAccepted => Result is not null;
 }
 
+/// <summary>
+/// Renderer-neutral geometry for the paired WPF/Avalonia Borders and Shading surface.
+/// Values prefixed with <c>Avalonia</c> compensate only for native template measurement and remain
+/// separate from the cross-renderer authority metrics.
+/// </summary>
+public readonly record struct BordersAndShadingDialogVisualMetrics(
+    double DialogWidth,
+    double OuterInset,
+    double ActionTopInset,
+    double ActionBottomInset,
+    double ActionButtonWidth,
+    double ValidationTopInset,
+    double ContentInset,
+    double FieldMinWidth,
+    double RowVerticalInset,
+    double LabelRightInset,
+    double EdgeSpacing,
+    double SwatchWidth,
+    double SwatchHeight,
+    double SwatchBorderThickness,
+    double SwatchLabelSpacing,
+    double AvaloniaControlHeight,
+    double AvaloniaButtonHeight,
+    double AvaloniaButtonHorizontalPadding,
+    double AvaloniaButtonVerticalPadding,
+    double AvaloniaTabPaneHorizontalCompensation);
+
 public sealed class BordersAndShadingDialogSession
 {
     private readonly CultureInfo _culture;
@@ -109,6 +136,28 @@ public sealed class BordersAndShadingDialogSession
 
 public static class BordersAndShadingDialogPlanner
 {
+    public static BordersAndShadingDialogVisualMetrics VisualMetrics { get; } = new(
+        DialogWidth: 420,
+        OuterInset: 14,
+        ActionTopInset: 12,
+        ActionBottomInset: 12,
+        ActionButtonWidth: 72,
+        ValidationTopInset: 8,
+        ContentInset: 8,
+        FieldMinWidth: 160,
+        RowVerticalInset: 4,
+        LabelRightInset: 8,
+        EdgeSpacing: 16,
+        SwatchWidth: 28,
+        SwatchHeight: 12,
+        SwatchBorderThickness: 1,
+        SwatchLabelSpacing: 6,
+        AvaloniaControlHeight: 20,
+        AvaloniaButtonHeight: 26,
+        AvaloniaButtonHorizontalPadding: 10,
+        AvaloniaButtonVerticalPadding: 1,
+        AvaloniaTabPaneHorizontalCompensation: -12);
+
     public const string Title = "Borders and Shading";
     public const string BordersTabLabel = "Borders";
     public const string PageBorderTabLabel = "Page Border";

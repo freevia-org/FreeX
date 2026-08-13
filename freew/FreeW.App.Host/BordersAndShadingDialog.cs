@@ -12,6 +12,9 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private static readonly BordersAndShadingDialogVisualMetrics Layout =
+        BordersAndShadingDialogPlanner.VisualMetrics;
+
     private readonly BordersAndShadingDialogSession _session;
     private readonly ComboBox _setting;
     private readonly ComboBox _lineStyle;
@@ -40,7 +43,7 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
         Owner = owner;
         System.Windows.Automation.AutomationProperties.SetAutomationId(this, BordersAndShadingDialogPlanner.AutomationId);
         Title = BordersAndShadingDialogPlanner.Title;
-        Width = 420;
+        Width = Layout.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -83,7 +86,10 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
         SetAutomationId(_shadingColor, BordersAndShadingDialogPlanner.ShadingColorAutomationId);
         SetAutomationId(_shadingPattern, BordersAndShadingDialogPlanner.ShadingPatternAutomationId);
 
-        var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
+        var tabs = new TabControl
+        {
+            Margin = new Thickness(Layout.OuterInset, Layout.OuterInset, Layout.OuterInset, 0)
+        };
         SetAutomationId(tabs, BordersAndShadingDialogPlanner.TabsAutomationId);
         var bordersTab = new TabItem { Header = BordersAndShadingDialogPlanner.BordersTabLabel, Content = BuildBordersTab() };
         var pageBorderTab = new TabItem { Header = BordersAndShadingDialogPlanner.PageBorderTabLabel, Content = BuildPageBorderTab() };
@@ -95,7 +101,14 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
         tabs.Items.Add(pageBorderTab);
         tabs.Items.Add(shadingTab);
 
-        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(14, 12, 14, 12));
+        var buttons = DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: Layout.ActionButtonWidth,
+            rowMargin: new Thickness(
+                Layout.OuterInset,
+                Layout.ActionTopInset,
+                Layout.OuterInset,
+                Layout.ActionBottomInset));
         var ok = (Button)buttons.Children[0];
         var cancel = (Button)buttons.Children[1];
         SetAutomationId(ok, BordersAndShadingDialogPlanner.AcceptButtonAutomationId);
@@ -112,7 +125,7 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private Grid BuildBordersTab()
     {
-        var grid = TwoColumnGrid(7);
+        var grid = TwoColumnGrid(6);
         AddRow(grid, 0, BordersAndShadingDialogPlanner.SettingLabel, _setting);
         AddRow(grid, 1, BordersAndShadingDialogPlanner.StyleLabel, _lineStyle);
         AddRow(grid, 2, BordersAndShadingDialogPlanner.ColorLabel, _color);
@@ -143,7 +156,7 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private static Grid TwoColumnGrid(int rows)
     {
-        var grid = new Grid { Margin = new Thickness(8) };
+        var grid = new Grid { Margin = new Thickness(Layout.ContentInset) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         for (var i = 0; i < rows; i++)
@@ -154,7 +167,7 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private static StackPanel EdgeRow(CheckBox a, CheckBox b)
     {
         var panel = new StackPanel { Orientation = Orientation.Horizontal };
-        a.Margin = new Thickness(0, 0, 16, 0);
+        a.Margin = new Thickness(0, 0, Layout.EdgeSpacing, 0);
         panel.Children.Add(a);
         panel.Children.Add(b);
         return panel;
@@ -162,7 +175,7 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private static ComboBox Combo(IReadOnlyList<string> items, int selected)
     {
-        var combo = new ComboBox { MinWidth = 160 };
+        var combo = new ComboBox { MinWidth = Layout.FieldMinWidth };
         foreach (var item in items)
             combo.Items.Add(item);
         combo.SelectedIndex = Math.Clamp(selected, 0, items.Count - 1);
@@ -171,7 +184,7 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private static ComboBox ColorCombo(int selectedIndex, bool includeNone = false)
     {
-        var combo = new ComboBox { MinWidth = 160 };
+        var combo = new ComboBox { MinWidth = Layout.FieldMinWidth };
         if (includeNone)
             combo.Items.Add(new ComboBoxItem { Content = BordersAndShadingDialogPlanner.NoColorLabel, Tag = (string?)null });
         foreach (var hex in BordersAndShadingDialogPlanner.Palette)
@@ -186,12 +199,12 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
     {
         var swatch = new System.Windows.Shapes.Rectangle
         {
-            Width = 28,
-            Height = 12,
+            Width = Layout.SwatchWidth,
+            Height = Layout.SwatchHeight,
             Stroke = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
-            StrokeThickness = 1,
+            StrokeThickness = Layout.SwatchBorderThickness,
             Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)),
-            Margin = new Thickness(0, 0, 6, 0)
+            Margin = new Thickness(0, 0, Layout.SwatchLabelSpacing, 0)
         };
         var panel = new StackPanel { Orientation = Orientation.Horizontal };
         panel.Children.Add(swatch);
@@ -208,7 +221,7 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private static TextBox NumberBox(string text) => new()
     {
         Text = text,
-        MinWidth = 160
+        MinWidth = Layout.FieldMinWidth
     };
 
     private static CheckBox EdgeBox(string label, bool isChecked) => new()
@@ -224,14 +237,18 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
         {
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 4, 8, 4)
+            Margin = new Thickness(
+                0,
+                Layout.RowVerticalInset,
+                Layout.LabelRightInset,
+                Layout.RowVerticalInset)
         };
         Grid.SetRow(block, row);
         Grid.SetColumn(block, 0);
         grid.Children.Add(block);
 
         if (field is FrameworkElement fe)
-            fe.Margin = new Thickness(0, 4, 0, 4);
+            fe.Margin = new Thickness(0, Layout.RowVerticalInset, 0, Layout.RowVerticalInset);
         Grid.SetRow(field, row);
         Grid.SetColumn(field, 1);
         grid.Children.Add(field);
