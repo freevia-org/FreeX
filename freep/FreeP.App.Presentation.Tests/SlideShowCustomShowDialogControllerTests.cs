@@ -5,6 +5,37 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class SlideShowCustomShowDialogControllerTests
 {
     [Fact]
+    public void VisualMetrics_OwnSharedLayoutAndNativeWindowChromeCompensation()
+    {
+        SlideShowCustomShowDialogVisualMetrics.WpfWindowWidth.Should().Be(640);
+        SlideShowCustomShowDialogVisualMetrics.WpfWindowHeight.Should().Be(440);
+        SlideShowCustomShowDialogVisualMetrics.AvaloniaWindowWidth.Should().Be(625.3333333333334);
+        SlideShowCustomShowDialogVisualMetrics.AvaloniaWindowHeight.Should().Be(402.6666666666667);
+        SlideShowCustomShowDialogVisualMetrics.MinimumWindowWidth.Should().Be(560);
+        SlideShowCustomShowDialogVisualMetrics.MinimumWindowHeight.Should().Be(360);
+        SlideShowCustomShowDialogVisualMetrics.RootInset.Should().Be(14);
+        SlideShowCustomShowDialogVisualMetrics.ShowListColumnWidth.Should().Be(210);
+        SlideShowCustomShowDialogVisualMetrics.ShowListRightGap.Should().Be(10);
+        SlideShowCustomShowDialogVisualMetrics.NameMinimumWidth.Should().Be(260);
+        SlideShowCustomShowDialogVisualMetrics.NameBottomMargin.Should().Be(8);
+        SlideShowCustomShowDialogVisualMetrics.OrderedSlidesMinimumHeight.Should().Be(92);
+        SlideShowCustomShowDialogVisualMetrics.OrderedSlidesRowHeight.Should().Be(118);
+        SlideShowCustomShowDialogVisualMetrics.LabelBottomMargin.Should().Be(4);
+        SlideShowCustomShowDialogVisualMetrics.OrderHeaderTopMargin.Should().Be(2);
+        SlideShowCustomShowDialogVisualMetrics.AvailableSlidesTopMargin.Should().Be(8);
+        SlideShowCustomShowDialogVisualMetrics.ValidationTopMargin.Should().Be(4);
+        SlideShowCustomShowDialogVisualMetrics.ValidationBottomMargin.Should().Be(8);
+        SlideShowCustomShowDialogVisualMetrics.ActionRowTopMargin.Should().Be(12);
+        SlideShowCustomShowDialogVisualMetrics.ActionSpacing.Should().Be(6);
+        SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin.Should().Be(2);
+        SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight.Should().Be(20);
+        SlideShowCustomShowDialogVisualMetrics.AddSlideButtonMinimumWidth.Should().Be(58);
+        SlideShowCustomShowDialogVisualMetrics.ActionButtonMinimumWidth.Should().Be(82);
+        SlideShowCustomShowDialogVisualMetrics.ActionButtonHorizontalPadding.Should().Be(8);
+        SlideShowCustomShowDialogVisualMetrics.ActionButtonVerticalPadding.Should().Be(3);
+    }
+
+    [Fact]
     public void Controller_OwnsInitializationSelectionAndValidationDispatch()
     {
         var presentation = MakePresentation();
@@ -100,6 +131,12 @@ public sealed class SlideShowCustomShowDialogControllerTests
                 .And.Contain("_formSession.ApplyFullPlan(plan)")
                 .And.Contain("_formSession.ApplySelectedShowPlan(plan)")
                 .And.Contain("_formSession.ApplySlideSelection(plan)")
+                .And.Contain("SlideShowCustomShowDialogVisualMetrics.MinimumWindowWidth")
+                .And.Contain("SlideShowCustomShowDialogVisualMetrics.RootInset")
+                .And.Contain("SlideShowCustomShowDialogVisualMetrics.ShowListColumnWidth")
+                .And.Contain("SlideShowCustomShowDialogVisualMetrics.OrderedSlidesRowHeight")
+                .And.Contain("SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight")
+                .And.Contain("SlideShowCustomShowDialogVisualMetrics.ActionButtonHorizontalPadding")
                 .And.NotContain("private readonly SlideShowCustomShowDialogSession _session")
                 .And.NotContain("private void ApplyTransition(")
                 .And.NotContain("SlideShowCustomShowDialogTransitionDispatcher.Dispatch(")
@@ -109,8 +146,18 @@ public sealed class SlideShowCustomShowDialogControllerTests
                 .And.NotContain("_session.Rename(")
                 .And.NotContain("_session.UpdateSlides(")
                 .And.NotContain("_session.Delete(")
-                .And.NotContain("_session.StartShow(");
+                .And.NotContain("_session.StartShow(")
+                .And.NotContain("MinWidth = 560")
+                .And.NotContain("MinHeight = 360")
+                .And.NotContain("new Thickness(14)")
+                .And.NotContain("new GridLength(210)")
+                .And.NotContain("new GridLength(118)")
+                .And.NotContain("MinWidth = 82")
+                .And.NotContain("new Thickness(8, 3");
         }
+
+        wpf.Should().Contain("SlideShowCustomShowDialogVisualMetrics.WpfWindowWidth");
+        avalonia.Should().Contain("SlideShowCustomShowDialogVisualMetrics.AvaloniaWindowWidth");
 
         wpf.Should().Contain("PreviewMouseLeftButtonDown")
             .And.Contain("DragDrop.DoDragDrop(")

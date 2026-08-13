@@ -57,22 +57,30 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         Title = Surface.Title;
         AutomationProperties.SetName(this, Surface.AccessibleName);
         AutomationProperties.SetAutomationId(this, Surface.AutomationId);
-        Width = 640;
-        Height = 440;
-        MinWidth = 560;
-        MinHeight = 360;
+        Width = SlideShowCustomShowDialogVisualMetrics.WpfWindowWidth;
+        Height = SlideShowCustomShowDialogVisualMetrics.WpfWindowHeight;
+        MinWidth = SlideShowCustomShowDialogVisualMetrics.MinimumWindowWidth;
+        MinHeight = SlideShowCustomShowDialogVisualMetrics.MinimumWindowHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = FreePBrushes.SheetSurface;
 
-        _showList.Margin = new Thickness(0, 0, 10, 0);
+        _showList.Margin = new Thickness(
+            0,
+            0,
+            SlideShowCustomShowDialogVisualMetrics.ShowListRightGap,
+            0);
         PresentationDialogControlAdapter.ApplySemantic(_showList, Surface.Field(SlideShowCustomShowDialogField.CustomShows));
         _showList.SelectionChanged += (_, _) => _controller.SelectShow();
 
-        _nameBox.MinWidth = 260;
-        _nameBox.Margin = new Thickness(0, 0, 0, 8);
+        _nameBox.MinWidth = SlideShowCustomShowDialogVisualMetrics.NameMinimumWidth;
+        _nameBox.Margin = new Thickness(
+            0,
+            0,
+            0,
+            SlideShowCustomShowDialogVisualMetrics.NameBottomMargin);
         PresentationDialogControlAdapter.ApplySemantic(_nameBox, Surface.Field(SlideShowCustomShowDialogField.Name));
 
-        _customShowSlideList.MinHeight = 92;
+        _customShowSlideList.MinHeight = SlideShowCustomShowDialogVisualMetrics.OrderedSlidesMinimumHeight;
         PresentationDialogControlAdapter.ApplySemantic(_customShowSlideList, Surface.Field(SlideShowCustomShowDialogField.OrderedSlides));
         _customShowSlideList.SelectionChanged += (_, _) => _controller.SelectSlide();
         _customShowSlideList.AllowDrop = true;
@@ -83,7 +91,11 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         _validationText.Foreground = FreePBrushes.Accent;
         _validationText.TextWrapping = TextWrapping.Wrap;
-        _validationText.Margin = new Thickness(0, 4, 0, 8);
+        _validationText.Margin = new Thickness(
+            0,
+            SlideShowCustomShowDialogVisualMetrics.ValidationTopMargin,
+            0,
+            SlideShowCustomShowDialogVisualMetrics.ValidationBottomMargin);
         PresentationDialogControlAdapter.ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));
 
         _renameButton = MakeButton(SlideShowCustomShowDialogAction.Rename, _controller.Rename);
@@ -116,8 +128,14 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private UIElement BuildContent()
     {
-        var root = new Grid { Margin = new Thickness(14) };
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(210) });
+        var root = new Grid
+        {
+            Margin = new Thickness(SlideShowCustomShowDialogVisualMetrics.RootInset),
+        };
+        root.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(SlideShowCustomShowDialogVisualMetrics.ShowListColumnWidth),
+        });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -129,7 +147,10 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         var editor = new Grid();
         editor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         editor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        editor.RowDefinitions.Add(new RowDefinition { Height = new GridLength(118) });
+        editor.RowDefinitions.Add(new RowDefinition
+        {
+            Height = new GridLength(SlideShowCustomShowDialogVisualMetrics.OrderedSlidesRowHeight),
+        });
         editor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         editor.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         editor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -139,13 +160,25 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         {
             Text = Surface.Field(SlideShowCustomShowDialogField.Name).Label,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 4),
+            Margin = new Thickness(
+                0,
+                0,
+                0,
+                SlideShowCustomShowDialogVisualMetrics.LabelBottomMargin),
         });
         namePanel.Children.Add(_nameBox);
         Grid.SetRow(namePanel, 0);
         editor.Children.Add(namePanel);
 
-        var orderHeader = new DockPanel { Margin = new Thickness(0, 2, 0, 4), LastChildFill = true };
+        var orderHeader = new DockPanel
+        {
+            Margin = new Thickness(
+                0,
+                SlideShowCustomShowDialogVisualMetrics.OrderHeaderTopMargin,
+                0,
+                SlideShowCustomShowDialogVisualMetrics.LabelBottomMargin),
+            LastChildFill = true,
+        };
         var moveButtons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -176,7 +209,11 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         {
             Text = Surface.Field(SlideShowCustomShowDialogField.AvailableSlides).Label,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 8, 0, 4),
+            Margin = new Thickness(
+                0,
+                SlideShowCustomShowDialogVisualMetrics.AvailableSlidesTopMargin,
+                0,
+                SlideShowCustomShowDialogVisualMetrics.LabelBottomMargin),
         }, row: 3));
 
         var scroller = new ScrollViewer
@@ -198,7 +235,11 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(
+                0,
+                SlideShowCustomShowDialogVisualMetrics.ActionRowTopMargin,
+                0,
+                0),
         };
         buttons.Children.Add(MakeButton(SlideShowCustomShowDialogAction.Create, _controller.Create));
         buttons.Children.Add(_renameButton);
@@ -238,19 +279,35 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
             {
                 Content = slide.DisplayText,
                 Tag = slide.SlideId,
-                Margin = new Thickness(0, 2, 0, 2),
+                Margin = new Thickness(
+                    0,
+                    SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin,
+                    0,
+                    SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin),
+                Height = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight,
+                MinHeight = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight,
+                MaxHeight = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight,
+                Padding = new Thickness(0),
             };
             PresentationDialogControlAdapter.ApplySemantic(
                 checkBox,
                 Surface.Field(SlideShowCustomShowDialogField.AvailableSlides, slide.SlideId));
             _slideCheckBoxes.Add(checkBox);
             _formSession.RegisterAvailableSlide(slide.SlideId, checkBox);
-            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2), LastChildFill = true };
+            var row = new DockPanel
+            {
+                Margin = new Thickness(
+                    0,
+                    SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin,
+                    0,
+                    SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin),
+                LastChildFill = true,
+            };
             var addButton = MakeButton(
                 SlideShowCustomShowDialogAction.AddSlide,
                 () => _controller.AddSlideOccurrence(slide.SlideId),
                 slide.SlideId);
-            addButton.MinWidth = 58;
+            addButton.MinWidth = SlideShowCustomShowDialogVisualMetrics.AddSlideButtonMinimumWidth;
             DockPanel.SetDock(addButton, Dock.Right);
             row.Children.Add(addButton);
             row.Children.Add(checkBox);
@@ -356,9 +413,17 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         var button = new Button
         {
             Content = action.Label,
-            MinWidth = 82,
-            Margin = new Thickness(6, 0, 0, 0),
-            Padding = new Thickness(8, 3, 8, 3),
+            MinWidth = SlideShowCustomShowDialogVisualMetrics.ActionButtonMinimumWidth,
+            Margin = new Thickness(
+                SlideShowCustomShowDialogVisualMetrics.ActionSpacing,
+                0,
+                0,
+                0),
+            Padding = new Thickness(
+                SlideShowCustomShowDialogVisualMetrics.ActionButtonHorizontalPadding,
+                SlideShowCustomShowDialogVisualMetrics.ActionButtonVerticalPadding,
+                SlideShowCustomShowDialogVisualMetrics.ActionButtonHorizontalPadding,
+                SlideShowCustomShowDialogVisualMetrics.ActionButtonVerticalPadding),
             IsDefault = action.IsDefault,
             IsCancel = action.IsCancel,
         };
