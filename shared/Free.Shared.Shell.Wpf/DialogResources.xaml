@@ -1,6 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:shell="clr-namespace:Free.Shared.Shell;assembly=Free.Shared.Shell">
+                    xmlns:shell="clr-namespace:Free.Shared.Shell;assembly=Free.Shared.Shell"
+                    xmlns:local="clr-namespace:Free.Shared.Shell.Wpf">
 
     <!-- ════════════════════════════════════════════════════════════════════
          Shared dialog control theme.
@@ -35,15 +36,15 @@
     <!-- Standard dialog button: white resting fill + subtle border; hover/press wash with accent border. -->
     <Style TargetType="{x:Type Button}">
         <Setter Property="MinWidth" Value="84"/>
-        <Setter Property="MinHeight" Value="26"/>
-        <Setter Property="Padding" Value="12,3"/>
+        <Setter Property="MinHeight" Value="{x:Static shell:CompactDialogVisualTokens.ButtonHeight}"/>
+        <Setter Property="Padding" Value="{x:Static local:WpfCompactDialogMetrics.ButtonPadding}"/>
         <Setter Property="Margin" Value="6,0,0,0"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="{x:Static shell:CompactDialogVisualTokens.FontSize}"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="Background" Value="{DynamicResource ThemeNeutralWhiteBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource DialogBorder}"/>
-        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderThickness" Value="{x:Static local:WpfCompactDialogMetrics.UniformBorderThickness}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="Template">
@@ -52,7 +53,7 @@
                     <Border x:Name="bd" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="3" SnapsToDevicePixels="True">
+                            CornerRadius="{x:Static local:WpfCompactDialogMetrics.ButtonCornerRadius}" SnapsToDevicePixels="True">
                         <ContentPresenter Margin="{TemplateBinding Padding}"
                                           HorizontalAlignment="Center" VerticalAlignment="Center"
                                           RecognizesAccessKey="True"/>
@@ -94,7 +95,7 @@
                     <Border x:Name="bd" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="3" SnapsToDevicePixels="True">
+                            CornerRadius="{x:Static local:WpfCompactDialogMetrics.ButtonCornerRadius}" SnapsToDevicePixels="True">
                         <ContentPresenter Margin="{TemplateBinding Padding}"
                                           HorizontalAlignment="Center" VerticalAlignment="Center"
                                           RecognizesAccessKey="True"/>
@@ -121,13 +122,13 @@
     <!-- Text input: white field, calm border, accent focus ring (property-only — no template rewrite). -->
     <Style TargetType="{x:Type TextBox}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="FontSize" Value="12"/>
-        <Setter Property="MinHeight" Value="24"/>
+        <Setter Property="FontSize" Value="{x:Static shell:CompactDialogVisualTokens.FontSize}"/>
+        <Setter Property="MinHeight" Value="{x:Static shell:CompactDialogVisualTokens.ControlHeight}"/>
         <Setter Property="Padding" Value="5,3"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="Background" Value="{DynamicResource ThemeNeutralWhiteBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource DialogFieldBorder}"/>
-        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderThickness" Value="{x:Static local:WpfCompactDialogMetrics.UniformBorderThickness}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Style.Triggers>
@@ -143,8 +144,8 @@
     <!-- ComboBox: align sizing/typography with the text fields (property-only, keeps the default template). -->
     <Style TargetType="{x:Type ComboBox}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="FontSize" Value="12"/>
-        <Setter Property="MinHeight" Value="24"/>
+        <Setter Property="FontSize" Value="{x:Static shell:CompactDialogVisualTokens.FontSize}"/>
+        <Setter Property="MinHeight" Value="{x:Static shell:CompactDialogVisualTokens.ControlHeight}"/>
         <Setter Property="Padding" Value="5,2"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -154,14 +155,14 @@
     <!-- CheckBox / RadioButton: consistent typography + comfortable hit target. -->
     <Style TargetType="{x:Type CheckBox}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="{x:Static shell:CompactDialogVisualTokens.FontSize}"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Padding" Value="4,0,0,0"/>
     </Style>
     <Style TargetType="{x:Type RadioButton}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="{x:Static shell:CompactDialogVisualTokens.FontSize}"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Padding" Value="4,0,0,0"/>
@@ -170,12 +171,12 @@
     <!-- Labels / static text default to the dialog typography. -->
     <Style TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="{x:Static shell:CompactDialogVisualTokens.FontSize}"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
     </Style>
     <Style TargetType="{x:Type Label}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="{x:Static shell:CompactDialogVisualTokens.FontSize}"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="Padding" Value="0,0,0,0"/>
     </Style>
@@ -183,10 +184,10 @@
     <!-- GroupBox: clean accent-tinted header, light rule. -->
     <Style TargetType="{x:Type GroupBox}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="{x:Static shell:CompactDialogVisualTokens.FontSize}"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeAccentBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource DialogBorder}"/>
-        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderThickness" Value="{x:Static local:WpfCompactDialogMetrics.UniformBorderThickness}"/>
         <Setter Property="Margin" Value="0,4"/>
         <Setter Property="Padding" Value="8,6"/>
     </Style>
