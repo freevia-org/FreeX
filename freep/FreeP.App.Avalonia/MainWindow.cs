@@ -1236,20 +1236,22 @@ public sealed partial class MainWindow : Window,
         _mediaCaptionPaneHeading = new TextBlock
         {
             Text = PresentationPaneTextResources.MediaCaptionsHeading,
-            FontSize = 15,
+            FontSize = PresentationMediaPaneVisualMetrics.HeadingFontSize,
             FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(12, 12, 12, 4),
+            Margin = MediaPaneMargin(
+                PresentationMediaPaneVisualMetrics.HeadingTopMargin,
+                PresentationMediaPaneVisualMetrics.HeadingBottomMargin),
         };
         _mediaCaptionPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             Foreground = FreePBrushes.PaneSecondaryText,
-            Margin = new Thickness(12, 0, 12, 8),
+            Margin = MediaPaneMargin(0, PresentationMediaPaneVisualMetrics.MessageBottomMargin),
         };
         _mediaCaptionTrackBox = new ComboBox
         {
-            Margin = new Thickness(12, 0, 12, 6),
-            MinHeight = 28,
+            Margin = MediaPaneMargin(0, PresentationMediaPaneVisualMetrics.TrackBottomMargin),
+            MinHeight = PresentationMediaPaneVisualMetrics.CompactControlHeight,
         };
         _mediaCaptionTrackBox.SelectionChanged += (_, _) =>
         {
@@ -1274,10 +1276,10 @@ public sealed partial class MainWindow : Window,
         _mediaVolumeText.Text = PresentationPaneTextResources.PlaybackVolume;
         _mediaVolumeSlider = new Slider
         {
-            Minimum = 0,
-            Maximum = 100,
-            TickFrequency = 10,
-            Margin = new Thickness(12, 0, 12, 4),
+            Minimum = PresentationMediaPaneSession.MinimumVolumePercent,
+            Maximum = PresentationMediaPaneSession.MaximumVolumePercent,
+            TickFrequency = PresentationMediaPaneSession.VolumeTickFrequency,
+            Margin = MediaPaneMargin(0, PresentationMediaPaneVisualMetrics.FieldBottomMargin),
         };
         _mediaVolumeApplyButton = BuildMediaCaptionPaneButton();
         _mediaVolumeApplyButton.Content = PresentationPaneTextResources.ApplyVolume;
@@ -1286,8 +1288,8 @@ public sealed partial class MainWindow : Window,
         _mediaStartModeText.Text = PresentationPaneTextResources.PlaybackStart;
         _mediaStartModeBox = new ComboBox
         {
-            Margin = new Thickness(12, 0, 12, 4),
-            MinHeight = 28,
+            Margin = MediaPaneMargin(0, PresentationMediaPaneVisualMetrics.FieldBottomMargin),
+            MinHeight = PresentationMediaPaneVisualMetrics.CompactControlHeight,
             ItemsSource = PresentationPaneTextResources.MediaPlaybackStartOptions
                 .Select(option => option.Label)
                 .ToArray(),
@@ -1295,28 +1297,36 @@ public sealed partial class MainWindow : Window,
         _mediaLoopCheckBox = new CheckBox
         {
             Content = PresentationPaneTextResources.LoopUntilStopped,
-            Margin = new Thickness(12, 2, 12, 4),
+            Margin = MediaPaneMargin(
+                PresentationMediaPaneVisualMetrics.CheckBoxTopMargin,
+                PresentationMediaPaneVisualMetrics.FieldBottomMargin),
         };
         _mediaShowWhenStoppedCheckBox = new CheckBox
         {
             Content = PresentationPaneTextResources.ShowWhenStopped,
-            Margin = new Thickness(12, 2, 12, 4),
+            Margin = MediaPaneMargin(
+                PresentationMediaPaneVisualMetrics.CheckBoxTopMargin,
+                PresentationMediaPaneVisualMetrics.FieldBottomMargin),
             IsChecked = true,
         };
         _mediaRewindAfterPlayingCheckBox = new CheckBox
         {
             Content = PresentationPaneTextResources.RewindAfterPlaying,
-            Margin = new Thickness(12, 2, 12, 4),
+            Margin = MediaPaneMargin(
+                PresentationMediaPaneVisualMetrics.CheckBoxTopMargin,
+                PresentationMediaPaneVisualMetrics.FieldBottomMargin),
         };
         _mediaPlayFullScreenCheckBox = new CheckBox
         {
             Content = PresentationPaneTextResources.PlayFullScreen,
-            Margin = new Thickness(12, 2, 12, 4),
+            Margin = MediaPaneMargin(
+                PresentationMediaPaneVisualMetrics.CheckBoxTopMargin,
+                PresentationMediaPaneVisualMetrics.FieldBottomMargin),
         };
         _mediaStopAfterSlidesText = BuildMediaCaptionPaneLabel();
         _mediaStopAfterSlidesText.Text = PresentationPaneTextResources.StopAfterSlides;
         _mediaStopAfterSlidesBox = BuildMediaCaptionPaneTextBox(singleLine: true);
-        _mediaStopAfterSlidesBox.Text = "1";
+        _mediaStopAfterSlidesBox.Text = PresentationMediaPaneSession.DefaultStopAfterSlides.ToString();
         _mediaPlaybackApplyButton = BuildMediaCaptionPaneButton();
         _mediaPlaybackApplyButton.Content = PresentationPaneTextResources.ApplyPlayback;
         _mediaPlaybackApplyButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyPlayback();
@@ -1337,7 +1347,11 @@ public sealed partial class MainWindow : Window,
         _mediaTimingApplyButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyTiming();
         _mediaBookmarkText = BuildMediaCaptionPaneLabel();
         _mediaBookmarkText.Text = PresentationPaneTextResources.MediaBookmarks;
-        _mediaBookmarkBox = new ComboBox { Margin = new Thickness(12, 0, 12, 4), MinHeight = 28 };
+        _mediaBookmarkBox = new ComboBox
+        {
+            Margin = MediaPaneMargin(0, PresentationMediaPaneVisualMetrics.FieldBottomMargin),
+            MinHeight = PresentationMediaPaneVisualMetrics.CompactControlHeight,
+        };
         _mediaBookmarkBox.SelectionChanged += (_, _) =>
         {
             if (_mediaPaneHostCoordinator.IsUpdating)
@@ -1380,10 +1394,10 @@ public sealed partial class MainWindow : Window,
 
         return new Border
         {
-            Width = 320,
+            Width = PresentationMediaPaneVisualMetrics.PaneWidth,
             Background = FreePBrushes.White,
             BorderBrush = FreePBrushes.DisabledBorder,
-            BorderThickness = new Thickness(1, 0, 0, 0),
+            BorderThickness = new Thickness(PresentationMediaPaneVisualMetrics.PaneBorderThickness, 0, 0, 0),
             IsVisible = false,
             Child = new StackPanel
             {
@@ -1428,7 +1442,9 @@ public sealed partial class MainWindow : Window,
                     new WrapPanel
                     {
                         HorizontalAlignment = HorizontalAlignment.Right,
-                        Margin = new Thickness(12, 8, 12, 12),
+                        Margin = MediaPaneMargin(
+                            PresentationMediaPaneVisualMetrics.ActionRowTopMargin,
+                            PresentationMediaPaneVisualMetrics.ActionRowBottomMargin),
                         Children =
                         {
                             _mediaCaptionCreateButton,
@@ -1451,9 +1467,11 @@ public sealed partial class MainWindow : Window,
     private static TextBlock BuildMediaCaptionPaneLabel()
         => new()
         {
-            FontSize = 12,
+            FontSize = PresentationMediaPaneVisualMetrics.BodyFontSize,
             FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(12, 6, 12, 2),
+            Margin = MediaPaneMargin(
+                PresentationMediaPaneVisualMetrics.LabelTopMargin,
+                PresentationMediaPaneVisualMetrics.LabelBottomMargin),
         };
 
     private static TextBox BuildMediaCaptionPaneTextBox(bool singleLine)
@@ -1461,19 +1479,38 @@ public sealed partial class MainWindow : Window,
         {
             AcceptsReturn = !singleLine,
             TextWrapping = singleLine ? TextWrapping.NoWrap : TextWrapping.Wrap,
-            MinHeight = singleLine ? 28 : 128,
-            MaxHeight = singleLine ? 28 : 180,
-            Margin = new Thickness(12, 0, 12, 4),
-            Padding = new Thickness(6, 4),
+            MinHeight = singleLine
+                ? PresentationMediaPaneVisualMetrics.CompactControlHeight
+                : PresentationMediaPaneVisualMetrics.TranscriptMinimumHeight,
+            MaxHeight = singleLine
+                ? PresentationMediaPaneVisualMetrics.CompactControlHeight
+                : PresentationMediaPaneVisualMetrics.TranscriptMaximumHeight,
+            Margin = MediaPaneMargin(0, PresentationMediaPaneVisualMetrics.FieldBottomMargin),
+            Padding = new Thickness(
+                PresentationMediaPaneVisualMetrics.FieldHorizontalPadding,
+                PresentationMediaPaneVisualMetrics.FieldVerticalPadding),
         };
 
     private static Button BuildMediaCaptionPaneButton()
         => new()
         {
-            MinWidth = 72,
-            Padding = new Thickness(10, 4),
-            Margin = new Thickness(0, 0, 6, 6),
+            MinWidth = PresentationMediaPaneVisualMetrics.ActionButtonMinimumWidth,
+            Padding = new Thickness(
+                PresentationMediaPaneVisualMetrics.ActionButtonHorizontalPadding,
+                PresentationMediaPaneVisualMetrics.ActionButtonVerticalPadding),
+            Margin = new Thickness(
+                0,
+                0,
+                PresentationMediaPaneVisualMetrics.ActionButtonRightMargin,
+                PresentationMediaPaneVisualMetrics.ActionButtonBottomMargin),
         };
+
+    private static Thickness MediaPaneMargin(double top, double bottom) =>
+        new(
+            PresentationMediaPaneVisualMetrics.ContentSideMargin,
+            top,
+            PresentationMediaPaneVisualMetrics.ContentSideMargin,
+            bottom);
 
     private Border BuildSmartArtTextPaneHost()
     {

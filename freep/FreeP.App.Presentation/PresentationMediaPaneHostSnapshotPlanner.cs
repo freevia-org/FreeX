@@ -2,7 +2,7 @@ namespace FreeP.App.Compositor;
 
 public static class PresentationMediaPaneHostSnapshotPlanner
 {
-    public const double DefaultVolumePercent = 80;
+    public const double DefaultVolumePercent = PresentationMediaPaneSession.DefaultVolumePercent;
 
     public static PresentationMediaCaptionHostSnapshot CaptureCaption(
         string? label,

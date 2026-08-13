@@ -5,6 +5,44 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class PresentationMediaPaneSessionTests
 {
     [Fact]
+    public void SharedMediaPanePolicyOwnsRendererGeometryAndInputBounds()
+    {
+        PresentationMediaPaneVisualMetrics.PaneWidth.Should().Be(320);
+        PresentationMediaPaneVisualMetrics.PaneBorderThickness.Should().Be(1);
+        PresentationMediaPaneVisualMetrics.HeadingFontSize.Should().Be(15);
+        PresentationMediaPaneVisualMetrics.BodyFontSize.Should().Be(12);
+        PresentationMediaPaneVisualMetrics.ContentSideMargin.Should().Be(12);
+        PresentationMediaPaneVisualMetrics.HeadingTopMargin.Should().Be(12);
+        PresentationMediaPaneVisualMetrics.HeadingBottomMargin.Should().Be(4);
+        PresentationMediaPaneVisualMetrics.MessageBottomMargin.Should().Be(8);
+        PresentationMediaPaneVisualMetrics.TrackBottomMargin.Should().Be(6);
+        PresentationMediaPaneVisualMetrics.LabelTopMargin.Should().Be(6);
+        PresentationMediaPaneVisualMetrics.LabelBottomMargin.Should().Be(2);
+        PresentationMediaPaneVisualMetrics.FieldBottomMargin.Should().Be(4);
+        PresentationMediaPaneVisualMetrics.CheckBoxTopMargin.Should().Be(2);
+        PresentationMediaPaneVisualMetrics.ActionRowTopMargin.Should().Be(8);
+        PresentationMediaPaneVisualMetrics.ActionRowBottomMargin.Should().Be(12);
+        PresentationMediaPaneVisualMetrics.CompactControlHeight.Should().Be(28);
+        PresentationMediaPaneVisualMetrics.TranscriptMinimumHeight.Should().Be(128);
+        PresentationMediaPaneVisualMetrics.TranscriptMaximumHeight.Should().Be(180);
+        PresentationMediaPaneVisualMetrics.FieldHorizontalPadding.Should().Be(6);
+        PresentationMediaPaneVisualMetrics.FieldVerticalPadding.Should().Be(4);
+        PresentationMediaPaneVisualMetrics.ActionButtonMinimumWidth.Should().Be(72);
+        PresentationMediaPaneVisualMetrics.ActionButtonHorizontalPadding.Should().Be(10);
+        PresentationMediaPaneVisualMetrics.ActionButtonVerticalPadding.Should().Be(4);
+        PresentationMediaPaneVisualMetrics.ActionButtonRightMargin.Should().Be(6);
+        PresentationMediaPaneVisualMetrics.ActionButtonBottomMargin.Should().Be(6);
+
+        PresentationMediaPaneSession.MinimumVolumePercent.Should().Be(0);
+        PresentationMediaPaneSession.MaximumVolumePercent.Should().Be(100);
+        PresentationMediaPaneSession.VolumeTickFrequency.Should().Be(10);
+        PresentationMediaPaneSession.DefaultVolumePercent.Should().Be(80);
+        PresentationMediaPaneSession.DefaultStopAfterSlides.Should().Be(1);
+        PresentationMediaPaneHostSnapshotPlanner.DefaultVolumePercent
+            .Should().Be(PresentationMediaPaneSession.DefaultVolumePercent);
+    }
+
+    [Fact]
     public void TimingPlans_UseCurrentCultureAndNormalizeInvalidValues()
     {
         var formatted = PresentationMediaPaneSession.FormatTiming(12.34567);
@@ -354,6 +392,14 @@ public sealed class PresentationMediaPaneSessionTests
             source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CapturePlayback(");
             source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureTiming(");
             source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureBookmark(");
+            source.Should().Contain("PresentationMediaPaneVisualMetrics.PaneWidth");
+            source.Should().Contain("PresentationMediaPaneVisualMetrics.ContentSideMargin");
+            source.Should().Contain("PresentationMediaPaneVisualMetrics.CompactControlHeight");
+            source.Should().Contain("PresentationMediaPaneVisualMetrics.ActionButtonMinimumWidth");
+            source.Should().Contain("PresentationMediaPaneSession.MinimumVolumePercent");
+            source.Should().Contain("PresentationMediaPaneSession.MaximumVolumePercent");
+            source.Should().Contain("PresentationMediaPaneSession.VolumeTickFrequency");
+            source.Should().Contain("PresentationMediaPaneSession.DefaultStopAfterSlides");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyCaption(");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyVolume(");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyPlayback(");

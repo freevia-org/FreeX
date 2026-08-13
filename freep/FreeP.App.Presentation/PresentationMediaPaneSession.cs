@@ -79,6 +79,12 @@ public sealed record PresentationMediaBookmarkMutationPlan(
 /// </summary>
 public sealed class PresentationMediaPaneSession
 {
+    public const int MinimumVolumePercent = 0;
+    public const int MaximumVolumePercent = 100;
+    public const int VolumeTickFrequency = 10;
+    public const int DefaultVolumePercent = 80;
+    public const int DefaultStopAfterSlides = 1;
+
     private readonly Func<EditingSession> _getEditor;
     private readonly PresentationMediaPaneSessionCallbacks _callbacks;
 
@@ -257,13 +263,13 @@ public sealed class PresentationMediaPaneSession
 
         return new PresentationMediaPaneProjection(
             media is not null,
-            media?.VolumePercent ?? 80,
+            media?.VolumePercent ?? DefaultVolumePercent,
             media?.PlaybackStartMode ?? MediaPlaybackStartMode.InClickSequence,
             media?.Loop ?? false,
             media?.ShowWhenStopped ?? true,
             media?.RewindAfterPlaying ?? false,
             media?.PlayFullScreen ?? false,
-            NormalizeStopAfterSlides(media?.StopAfterSlides ?? 1),
+            NormalizeStopAfterSlides(media?.StopAfterSlides ?? DefaultStopAfterSlides),
             media is { IsVideo: true },
             media is { IsVideo: false },
             BuildTimingInputPlan(
@@ -278,7 +284,7 @@ public sealed class PresentationMediaPaneSession
     }
 
     public static int NormalizeVolumePercent(double volumePercent) =>
-        (int)Math.Clamp(Math.Round(volumePercent), 0, 100);
+        (int)Math.Clamp(Math.Round(volumePercent), MinimumVolumePercent, MaximumVolumePercent);
 
     public static int GetPlaybackStartModeIndex(MediaPlaybackStartMode startMode) =>
         startMode == MediaPlaybackStartMode.Automatically ? 1 : 0;
@@ -289,12 +295,12 @@ public sealed class PresentationMediaPaneSession
             : MediaPlaybackStartMode.InClickSequence;
 
     public static int NormalizeStopAfterSlides(int stopAfterSlides) =>
-        Math.Max(1, stopAfterSlides);
+        Math.Max(DefaultStopAfterSlides, stopAfterSlides);
 
     public static int ParseStopAfterSlides(string? text) =>
         int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value)
             ? NormalizeStopAfterSlides(value)
-            : 1;
+            : DefaultStopAfterSlides;
 
     public static PresentationMediaPlaybackInputPlan BuildPlaybackInputPlan(
         MediaPlaybackStartMode startMode,
