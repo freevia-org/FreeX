@@ -1040,7 +1040,8 @@ public static class TextLayoutPlanner
         var area = GetTextArea(text, bounds);
         double lineSpacingScale = GetLineSpacingScale(text, autoFitPlan);
         double totalHeight = paragraphs.Sum(p => p.TotalHeightDip * lineSpacingScale);
-        double currentY = ComputeStartY(area, totalHeight, text.Anchor);
+        double currentY = ComputeStartY(area, totalHeight, text.Anchor)
+            - ResolveImportedAptosBodyOriginOffsetY(text);
 
         var placements = new List<TextParagraphPlacement>(paragraphs.Count);
         foreach (var paragraph in paragraphs)

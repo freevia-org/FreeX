@@ -1571,11 +1571,13 @@ public sealed class TextLayoutPlannerTests
     [Fact]
     public void WpfAndAvaloniaImportedBulletBodyOrigin_ConsumeSharedPolicy()
     {
+        var planner = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "TextLayoutPlanner.cs");
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
         var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
 
-        wpf.Should().Contain("TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY");
-        avalonia.Should().Contain("TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY");
+        planner.Should().Contain("- ResolveImportedAptosBodyOriginOffsetY(text)");
+        wpf.Should().NotContain("TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY");
+        avalonia.Should().NotContain("TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY");
         wpf.Should().NotContain("ImportedAptosBodyOriginOffsetY = 6.0");
         avalonia.Should().NotContain("ImportedAptosBodyOriginOffsetY = 6.0");
         wpf.Should().NotContain("UsesImportedAptosBodyOrigin");

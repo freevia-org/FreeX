@@ -136,9 +136,7 @@ public abstract record ChartRenderCommand
         ChartStrokePlan? Stroke,
         bool UseAreaGeometry = false) : ChartRenderCommand;
 
-    public sealed record LinePath(
-        ChartLinePathFigurePrimitive Primitive,
-        ChartClassicThreeDDepthPlan? Depth = null) : ChartRenderCommand;
+    public sealed record LinePath(ChartLinePathFigurePrimitive Primitive) : ChartRenderCommand;
 
     public sealed record Marker(ChartMarkerRenderPlan Primitive) : ChartRenderCommand;
 
@@ -659,11 +657,7 @@ public static class ChartRenderCommandPlanner
         if (primitive.Depth is { } depth)
         {
             foreach (var path in primitive.LinePaths)
-            {
-                commands.Add(new ChartRenderCommand.LinePath(
-                    path with { Stroke = path.Stroke with { Alpha = depth.StrokeAlpha } },
-                    depth));
-            }
+                commands.Add(new ChartRenderCommand.LinePath(depth.Offset(path)));
         }
 
         foreach (var path in primitive.LinePaths)

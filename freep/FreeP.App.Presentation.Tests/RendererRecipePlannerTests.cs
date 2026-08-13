@@ -126,6 +126,39 @@ public sealed class RendererRecipePlannerTests
     }
 
     [Fact]
+    public void ShapeAutoFitPlanner_OwnsGrowthTransformsForNativeRenderers()
+    {
+        var shape = new DrawOp.Shape
+        {
+            BoundsDip = new LayoutRect(10, 20, 100, 50),
+            Text = new ResolvedTextLayout
+            {
+                AutoFitKind = TextAutoFitKind.Shape,
+                Anchor = VerticalAnchor.Middle,
+                InsetTopDip = 4,
+                InsetBottomDip = 4,
+                Paragraphs =
+                [
+                    new ResolvedParagraph
+                    {
+                        Runs = [new ResolvedRun { Text = "Measured" }],
+                        SpaceBeforePt = 1.5,
+                        SpaceAfterPt = 1.5,
+                    },
+                ],
+            },
+        };
+
+        var plan = ShapeAutoFitRenderPlanner.PlanRender(shape, _ => 80);
+
+        plan.Bounds.Should().Be(new LayoutRect(10, -1, 100, 92));
+        plan.RenderTransform.Should().Be(ShapeAffineTransform.Identity);
+        plan.GeometryTransform.M11.Should().Be(1);
+        plan.GeometryTransform.M22.Should().BeApproximately(1.84, 0.000001);
+        plan.GeometryTransform.OffsetY.Should().BeApproximately(-37.8, 0.000001);
+    }
+
+    [Fact]
     public void ShapeAutoFitPlanner_SkipsNativeMeasurementForTransformedShape()
     {
         var shape = new DrawOp.Shape

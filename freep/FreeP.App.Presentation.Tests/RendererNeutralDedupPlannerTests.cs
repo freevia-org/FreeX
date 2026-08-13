@@ -893,7 +893,8 @@ public sealed class RendererNeutralDedupPlannerTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("ShapeTransformPlanner.PlanShapeRenderTransform");
+            source.Should().Contain("ShapeAutoFitRenderPlanner.PlanRender");
+            source.Should().NotContain("ShapeTransformPlanner.PlanShapeRenderTransform");
             source.Should().Contain("ResolvedShapeEffectRenderPlanner.PlanOuterEffects");
             source.Should().Contain("TextRunEffectRenderPlanner");
             source.Should().NotContain("BuildWarpYFunc");
@@ -907,6 +908,25 @@ public sealed class RendererNeutralDedupPlannerTests
 
         wpf.Should().NotContain("BuildShapeTransform");
         avalonia.Should().NotContain("BuildShapeMatrix");
+    }
+
+    [Fact]
+    public void SlideCanvasAdapters_DoNotRetainExtractedRenderPolicy()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("callout.Visual");
+            source.Should().NotContain("Color.FromRgb(255, 249, 196)");
+            source.Should().NotContain("OffsetIfNeeded");
+            source.Should().NotContain("ImportedAptosBodyWpfRasterScale");
+            source.Should().NotContain("ImportedRadarValueLabelAvaloniaYCompensation");
+            source.Should().NotContain("AvaloniaImportedRadarAgilityLabelOffsetX");
+            source.Should().NotContain("AvaloniaImportedRadarStaminaLabelOffsetX");
+            source.Should().NotContain("AvaloniaImportedRadarLowerLabelOffsetY");
+        }
     }
 
     [Fact]

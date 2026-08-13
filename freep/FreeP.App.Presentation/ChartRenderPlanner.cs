@@ -412,7 +412,37 @@ public readonly record struct ChartClassicThreeDDepthPlan(
     double OffsetX,
     double OffsetY,
     byte StrokeAlpha,
-    byte FillAlpha);
+    byte FillAlpha)
+{
+    public ChartPlanPoint Offset(ChartPlanPoint point) =>
+        new(point.X + OffsetX, point.Y + OffsetY);
+
+    public ChartLinePathFigurePrimitive Offset(ChartLinePathFigurePrimitive figure) =>
+        Offset(figure, OffsetX, OffsetY, StrokeAlpha);
+
+    private static ChartLinePathFigurePrimitive Offset(
+        ChartLinePathFigurePrimitive figure,
+        double offsetX,
+        double offsetY,
+        byte strokeAlpha) =>
+        figure with
+        {
+            Start = new ChartPlanPoint(figure.Start.X + offsetX, figure.Start.Y + offsetY),
+            Segments = figure.Segments
+                .Select(segment => segment with
+                {
+                    End = new ChartPlanPoint(segment.End.X + offsetX, segment.End.Y + offsetY),
+                    Control1 = new ChartPlanPoint(
+                        segment.Control1.X + offsetX,
+                        segment.Control1.Y + offsetY),
+                    Control2 = new ChartPlanPoint(
+                        segment.Control2.X + offsetX,
+                        segment.Control2.Y + offsetY),
+                })
+                .ToArray(),
+            Stroke = figure.Stroke with { Alpha = strokeAlpha },
+        };
+}
 
 public readonly record struct ChartScatterSeriesPrimitive(
     int SeriesIndex,

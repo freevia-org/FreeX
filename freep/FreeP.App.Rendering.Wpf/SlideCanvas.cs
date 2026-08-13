@@ -30,7 +30,6 @@ namespace FreeP.App.Rendering.Wpf;
 public sealed partial class SlideCanvas : FrameworkElement
 {
     private const double ImportedAptosWpfRasterScale = 0.95;
-    private const double ImportedAptosBodyWpfRasterScale = 0.957;
     private const double ImportedAptosBodyWpfLightRasterScale = 1.016;
     private const double ImportedAptosDisplayWpfRasterScaleY = 0.86;
     private const double ImportedRadarAgilityLabelOffsetX = 35.0;
@@ -379,21 +378,42 @@ public sealed partial class SlideCanvas : FrameworkElement
 
     private static void RenderPrintCommentCallouts(DrawingContext dc, Presentation presentation, Slide slide)
     {
-        var fill = FreezeBrush(new SolidColorBrush(Color.FromRgb(255, 249, 196)));
-        var border = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(192, 160, 0))), 1);
-        var marker = FreezeBrush(new SolidColorBrush(Color.FromRgb(220, 40, 40)));
-
         foreach (var callout in SlidePrintMarkupPlanner.BuildCommentCallouts(presentation, slide))
         {
-            var card = new Rect(callout.CardX, callout.CardY, callout.CardWidth, callout.CardHeight);
+            var visual = callout.Visual;
+            var fill = FreezeBrush(new SolidColorBrush(Color.FromRgb(
+                visual.FillColor.R,
+                visual.FillColor.G,
+                visual.FillColor.B)));
+            var border = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(
+                visual.BorderColor.R,
+                visual.BorderColor.G,
+                visual.BorderColor.B))), visual.BorderThickness);
+            var marker = FreezeBrush(new SolidColorBrush(Color.FromRgb(
+                visual.MarkerColor.R,
+                visual.MarkerColor.G,
+                visual.MarkerColor.B)));
+            var card = new Rect(
+                visual.CardBounds.X,
+                visual.CardBounds.Y,
+                visual.CardBounds.Width,
+                visual.CardBounds.Height);
             dc.DrawRectangle(fill, border, card);
-            dc.DrawEllipse(marker, null, new Point(callout.AnchorX, callout.AnchorY), 3, 3);
-            DrawChartLabel(dc, callout.Author, new Rect(card.X + 6, card.Y + 3, card.Width - 12, 9),
-                isBold: true, fontSize: 8, align: TextAlignment.Left);
-            DrawChartLabel(dc, callout.Body, new Rect(card.X + 6, card.Y + 13, card.Width - 12, 11),
-                isBold: false, fontSize: 7, align: TextAlignment.Left);
+            dc.DrawEllipse(
+                marker,
+                null,
+                new Point(visual.AnchorCenter.X, visual.AnchorCenter.Y),
+                visual.MarkerRadius,
+                visual.MarkerRadius);
+            DrawChartLabel(dc, visual.Author.Text, ToWpfRect(visual.Author.Bounds),
+                visual.Author.IsBold, visual.Author.FontSize, TextAlignment.Left);
+            DrawChartLabel(dc, visual.Body.Text, ToWpfRect(visual.Body.Bounds),
+                visual.Body.IsBold, visual.Body.FontSize, TextAlignment.Left);
         }
     }
+
+    private static Rect ToWpfRect(LayoutRect rect) =>
+        new(rect.X, rect.Y, rect.Width, rect.Height);
 
     private SlideTransform ComputeViewTransform(
         double renderW,
@@ -455,27 +475,21 @@ public sealed partial class SlideCanvas : FrameworkElement
         if (shape.Geometry.Contours.Count == 0 && shape.Text is null
             && (shape.ElbowRouteDip is null || shape.ElbowRouteDip.Count < 2)) return;
 
-        var sourceBounds = shape.BoundsDip;
-        var bounds = ResolveShapeAutoFitBounds(shape);
-        bool grewForShapeAutoFit = bounds.Height > sourceBounds.Height + 0.5;
+        var autoFitPlan = ResolveShapeAutoFitPlan(shape);
+        var bounds = autoFitPlan.Bounds;
         var materialPlan = ShapeMaterialRenderPlanner.Plan(shape);
         var shapeGeometry = GetShapeRenderGeometry(shape, materialPlan);
-        var renderTransform = grewForShapeAutoFit
-            ? ShapeAffineTransform.Identity
-            : ShapeTransformPlanner.PlanShapeRenderTransform(shape);
-        bool hasTransform = !renderTransform.IsIdentity;
-        bool hasAutoFitGeometryScale = grewForShapeAutoFit && sourceBounds.Height > 0.001;
+        bool hasTransform = !autoFitPlan.RenderTransform.IsIdentity;
+        bool hasAutoFitGeometryScale = !autoFitPlan.GeometryTransform.IsIdentity;
 
         if (hasTransform)
         {
-            dc.PushTransform(ToWpfTransform(renderTransform));
+            dc.PushTransform(ToWpfTransform(autoFitPlan.RenderTransform));
         }
 
         if (hasAutoFitGeometryScale)
         {
-            double scaleY = bounds.Height / sourceBounds.Height;
-            dc.PushTransform(new MatrixTransform(new Matrix(
-                1, 0, 0, scaleY, 0, bounds.Y - scaleY * sourceBounds.Y)));
+            dc.PushTransform(ToWpfTransform(autoFitPlan.GeometryTransform));
         }
 
         // Effects: draw before the shape (painter's algorithm — shadow behind shape)
@@ -529,8 +543,8 @@ public sealed partial class SlideCanvas : FrameworkElement
             dc.Pop();
     }
 
-    private static LayoutRect ResolveShapeAutoFitBounds(DrawOp.Shape shape)
-        => ShapeAutoFitRenderPlanner.Plan(
+    private static ShapeAutoFitRenderPlan ResolveShapeAutoFitPlan(DrawOp.Shape shape)
+        => ShapeAutoFitRenderPlanner.PlanRender(
             shape,
             request => BuildFormattedText(
                 request.Paragraph,
@@ -1372,33 +1386,27 @@ public sealed partial class SlideCanvas : FrameworkElement
         var renderText = plan.RenderText;
         bool useImportedAptosRasterScale = UsesImportedAptosFont(renderText);
         bool useImportedAptosBodyRasterScale = UsesImportedAptosBodyFont(renderText);
-        double importedAptosBodyOriginOffsetY =
-            TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY(renderText);
         foreach (var placement in plan.Layout.Paragraphs)
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
             var ft = plan.Artifacts[placement.ParagraphIndex];
-            double placementY = placement.Y - importedAptosBodyOriginOffsetY;
 
             if (placement.Bullet is { } bullet)
-            {
-                bullet = bullet with { Y = bullet.Y - importedAptosBodyOriginOffsetY };
                 DrawBulletPlacementWpf(dc, bullet);
-            }
 
             switch (placement.RenderRoute)
             {
                 case TextParagraphRenderRoute.Math:
-                    RenderParaWithMath(dc, para, placement.X, placementY);
+                    RenderParaWithMath(dc, para, placement.X, placement.Y);
                     break;
                 case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placementY, placement.MaxWidthDip, renderText.Wrap, renderText, bounds);
+                    RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, renderText.Wrap, renderText, bounds);
                     break;
                 case TextParagraphRenderRoute.Tabs:
-                    RenderParaWithTabs(dc, para, placement.X, placementY, para.TabStops);
+                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
                     break;
                 case TextParagraphRenderRoute.Baseline:
-                    RenderParaWithBaseline(dc, para, placement.X, placementY, placement.MaxWidthDip);
+                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
                     break;
                 default:
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
@@ -1421,14 +1429,14 @@ public sealed partial class SlideCanvas : FrameworkElement
                             : 1.0;
                         double pivotY = useImportedAptosDisplayRasterScale
                             ? placement.Y + ft.Height
-                            : placementY;
+                            : placement.Y;
                         dc.PushTransform(new ScaleTransform(
                             scaleX,
                             scaleY,
                             centerX,
                             pivotY));
                     }
-                    dc.DrawText(ft, new Point(placement.X, placementY));
+                    dc.DrawText(ft, new Point(placement.X, placement.Y));
                     if (useImportedAptosRasterScale)
                     {
                         dc.Pop();
@@ -2557,35 +2565,28 @@ public sealed partial class SlideCanvas : FrameworkElement
     private static Point ToPoint(ChartPlanPoint point) =>
         new(point.X, point.Y);
 
-    private static ChartPlanPoint OffsetPoint(
-        ChartPlanPoint point,
-        ChartClassicThreeDDepthPlan depth) =>
-        new(point.X + depth.OffsetX, point.Y + depth.OffsetY);
-
-    private static Geometry ToGeometry(
-        ChartLinePathFigurePrimitive figure,
-        ChartClassicThreeDDepthPlan? depth = null)
+    private static Geometry ToGeometry(ChartLinePathFigurePrimitive figure)
     {
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
-            ctx.BeginFigure(ToPoint(OffsetIfNeeded(figure.Start, depth)), isFilled: false, isClosed: false);
+            ctx.BeginFigure(ToPoint(figure.Start), isFilled: false, isClosed: false);
             foreach (var segment in figure.Segments)
             {
                 switch (segment.Kind)
                 {
                     case ChartLinePathSegmentKind.CubicBezier:
                         ctx.BezierTo(
-                            ToPoint(OffsetIfNeeded(segment.Control1, depth)),
-                            ToPoint(OffsetIfNeeded(segment.Control2, depth)),
-                            ToPoint(OffsetIfNeeded(segment.End, depth)),
+                            ToPoint(segment.Control1),
+                            ToPoint(segment.Control2),
+                            ToPoint(segment.End),
                             isStroked: true,
                             isSmoothJoin: true);
                         break;
 
                     default:
                         ctx.LineTo(
-                            ToPoint(OffsetIfNeeded(segment.End, depth)),
+                            ToPoint(segment.End),
                             isStroked: true,
                             isSmoothJoin: true);
                         break;
@@ -2596,11 +2597,6 @@ public sealed partial class SlideCanvas : FrameworkElement
         if (geometry.CanFreeze) geometry.Freeze();
         return geometry;
     }
-
-    private static ChartPlanPoint OffsetIfNeeded(
-        ChartPlanPoint point,
-        ChartClassicThreeDDepthPlan? depth) =>
-        depth.HasValue ? OffsetPoint(point, depth.Value) : point;
 
     private static Brush ToBrush(ChartFillPlan fill) =>
         fill.Fill switch

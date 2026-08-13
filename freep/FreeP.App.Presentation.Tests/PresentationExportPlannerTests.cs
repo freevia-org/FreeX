@@ -696,6 +696,27 @@ public sealed class PresentationExportPlannerTests : IDisposable
         callout.CardY.Should().BeLessThan(deck.SlideSizeCyEmu / DrawingMlCoordinateUnits.EmuPerPixel);
         callout.Author.Should().Be("Reviewer");
         callout.Body.Should().Be("Check this slide");
+        callout.Visual.AnchorCenter.Should().Be(new LayoutPoint(callout.AnchorX, callout.AnchorY));
+        callout.Visual.CardBounds.Should().Be(new LayoutRect(
+            callout.CardX,
+            callout.CardY,
+            callout.CardWidth,
+            callout.CardHeight));
+        callout.Visual.FillColor.Should().Be(new SrgbColor(255, 249, 196));
+        callout.Visual.BorderColor.Should().Be(new SrgbColor(192, 160, 0));
+        callout.Visual.BorderThickness.Should().Be(1);
+        callout.Visual.MarkerColor.Should().Be(new SrgbColor(220, 40, 40));
+        callout.Visual.MarkerRadius.Should().Be(3);
+        callout.Visual.Author.Should().Be(new SlidePrintCommentTextPlan(
+            "Reviewer",
+            new LayoutRect(callout.CardX + 6, callout.CardY + 3, callout.CardWidth - 12, 9),
+            IsBold: true,
+            FontSize: 8));
+        callout.Visual.Body.Should().Be(new SlidePrintCommentTextPlan(
+            "Check this slide",
+            new LayoutRect(callout.CardX + 6, callout.CardY + 13, callout.CardWidth - 12, 11),
+            IsBold: false,
+            FontSize: 7));
     }
 
     [Fact]

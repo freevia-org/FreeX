@@ -1101,7 +1101,8 @@ public sealed class SlideCanvasTests
 
         planner.Should().Contain("foreach (var path in primitive.LinePaths)");
         planner.Should().Contain("new ChartRenderCommand.LinePath(");
-        execution.Should().Contain("ToGeometry(path.Primitive, path.Depth)");
+        execution.Should().Contain("ToGeometry(path.Primitive)");
+        execution.Should().NotContain("path.Depth");
         source.Should().Contain("ctx.BezierTo(");
         source.Should().Contain("ChartLinePathSegmentKind.CubicBezier");
     }

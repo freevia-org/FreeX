@@ -66,7 +66,7 @@ public sealed partial class SlideCanvas
                 dc.DrawGeometry(
                     null,
                     ToPen(path.Primitive.Stroke),
-                    ToGeometry(path.Primitive, path.Depth));
+                    ToGeometry(path.Primitive));
                 break;
             case ChartRenderCommand.Marker marker:
                 DrawChartMarker(dc, marker.Primitive);

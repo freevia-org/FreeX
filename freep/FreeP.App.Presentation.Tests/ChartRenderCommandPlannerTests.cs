@@ -302,6 +302,55 @@ public sealed class ChartRenderCommandPlannerTests
     }
 
     [Fact]
+    public void Plan_ResolvesThreeDLinePathDepthBeforeNativeExecution()
+    {
+        var path = new ChartLinePathFigurePrimitive(
+            new ChartPlanPoint(2, 3),
+            [
+                new ChartLinePathSegmentPrimitive(
+                    ChartLinePathSegmentKind.CubicBezier,
+                    new ChartPlanPoint(8, 9),
+                    new ChartPlanPoint(4, 5),
+                    new ChartPlanPoint(6, 7)),
+            ],
+            new ChartStrokePlan(new SrgbColor(10, 20, 30), 255, 2));
+        var series = new ChartLineSeriesPrimitive(
+            0,
+            WithMarkers: false,
+            Points: [],
+            path.Stroke,
+            MarkerFill: null,
+            MarkerStroke: null,
+            MarkerRadius: 0,
+            LineSegments: [],
+            LinePaths: [path],
+            Markers: [],
+            IsSmoothed: true)
+        {
+            Depth = new ChartClassicThreeDDepthPlan(5, -2, StrokeAlpha: 120, FillAlpha: 80),
+        };
+        var scene = new ChartScenePlan
+        {
+            Frame = Frame(),
+            GeometryKind = ChartSceneGeometryKind.Line,
+            LineSeries = [series],
+        };
+
+        var paths = ChartRenderCommandPlanner.Plan(scene, ChartRenderExecutionProfile.Wpf)
+            .OfType<ChartRenderCommand.LinePath>()
+            .Select(command => command.Primitive)
+            .ToArray();
+
+        paths.Should().HaveCount(2);
+        paths[0].Start.Should().Be(new ChartPlanPoint(7, 1));
+        paths[0].Segments[0].End.Should().Be(new ChartPlanPoint(13, 7));
+        paths[0].Segments[0].Control1.Should().Be(new ChartPlanPoint(9, 3));
+        paths[0].Segments[0].Control2.Should().Be(new ChartPlanPoint(11, 5));
+        paths[0].Stroke.Alpha.Should().Be(120);
+        paths[1].Should().Be(path);
+    }
+
+    [Fact]
     public void RendererSources_KeepTraversalAndDecisionPolicyInPresentationCore()
     {
         var planner = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Core", "ChartRenderCommandPlanner.cs");
