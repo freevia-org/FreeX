@@ -73,6 +73,33 @@ public sealed class IconPickerDialogSessionTests
     }
 
     [Fact]
+    public void InsertIconRenderers_PreserveAspectRatioThroughSharedModelPolicyAndUseModalFailures()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
+        var avaloniaMain = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        var avaloniaAdapter = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "PictureImport",
+            "AvaloniaIconInsertionAdapter.cs"));
+
+        wpf.Should().Contain("PictureInsertionPlanner.CreatePngIcon(");
+        wpf.Should().NotContain("private const double IconDefaultWidthPt");
+        avaloniaMain.Should().Contain("AvaloniaIconInsertionAdapter.Rasterize(selection)");
+        avaloniaMain.Should().Contain("AvaloniaUserMessageDialog.ShowErrorAsync(");
+        avaloniaMain.Should().Contain("IconPickerDialogPlanner.RasterizationErrorMessage(ex.Message)");
+        avaloniaMain.Should().NotContain("InsertInlineImage(bytes, 72, 72");
+        avaloniaAdapter.Should().Contain("SvgIconRasterizer.LoadFileToPaintedBounds(selection.Path)");
+        avaloniaAdapter.Should().Contain("PictureInsertionPlanner.BuildVectorRasterSurface(");
+        avaloniaAdapter.Should().Contain("SvgIconRasterizer.RasterizeToPng(");
+        avaloniaAdapter.Should().Contain("PictureInsertionPlanner.CreatePngIcon(");
+    }
+
+    [Fact]
     public void CatalogEnumeratesResourcesDeterministicallyAndOwnsDisplayText()
     {
         using var catalog = new TemporaryCatalog();

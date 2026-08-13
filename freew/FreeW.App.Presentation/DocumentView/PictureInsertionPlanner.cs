@@ -94,4 +94,15 @@ public static class PictureInsertionPlanner
         fitted.HeightPt = image.HeightPt * scale;
         return fitted;
     }
+
+    /// <summary>
+    /// Builds the canonical model payload for an SVG icon after a renderer has rasterized it.
+    /// Both desktop hosts use the same aspect-preserving PNG sizing and one-inch default width.
+    /// </summary>
+    public static InlineImage CreatePngIcon(
+        byte[] pngBytes,
+        int pixelWidth,
+        int pixelHeight,
+        double maximumWidthPt = DefaultIconWidthPt) =>
+        FitIcon(CreatePngImage(pngBytes, pixelWidth, pixelHeight), maximumWidthPt);
 }

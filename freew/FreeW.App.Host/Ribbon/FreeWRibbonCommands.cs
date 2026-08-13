@@ -3039,8 +3039,6 @@ internal static class FreeWRibbonCommands
     private sealed class InsertIconCommand(DocumentView editor) : IRibbonCommand
     {
         // Icons are decorative items — 72 pt (1 inch) is a sane default; the user can resize after.
-        private const double IconDefaultWidthPt = 72;
-
         public void Execute(RibbonCommandContext context)
         {
             var owner = Window.GetWindow(editor);
@@ -3048,7 +3046,10 @@ internal static class FreeWRibbonCommands
             if (image is null)
                 return;
 
-            image = PictureInsertionPlanner.FitIcon(image, IconDefaultWidthPt);
+            image = PictureInsertionPlanner.CreatePngIcon(
+                image.Bytes,
+                image.OriginalPixelWidth,
+                image.OriginalPixelHeight);
 
             editor.Focus();
             editor.InsertImage(image);

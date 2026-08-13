@@ -703,16 +703,18 @@ public sealed partial class MainWindow : Window
             var selection = await IconPickerDialog.ShowAsync(this);
             if (selection is null)
                 return;
-            var bytes = SvgIconRasterizer.RasterizeFileToPng(selection.Path);
-            _editor.InsertInlineImage(bytes, 72, 72, ImageFormat.Png);
-            _editor.Focus();
+            _editor.InsertInlineImage(AvaloniaIconInsertionAdapter.Rasterize(selection));
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                UiText.Get("Operation_InsertIcon"),
-                ex.Message);
+            await AvaloniaUserMessageDialog.ShowErrorAsync(
+                this,
+                IconPickerDialogPlanner.RasterizationErrorMessage(ex.Message),
+                IconPickerDialogPlanner.Surface.Title);
+        }
+        finally
+        {
+            _editor.Focus();
         }
     }
 

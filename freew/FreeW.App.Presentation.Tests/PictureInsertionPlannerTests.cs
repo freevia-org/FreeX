@@ -64,4 +64,23 @@ public sealed class PictureInsertionPlannerTests
         image.WidthPt.Should().Be(300);
         image.HeightPt.Should().Be(150);
     }
+
+    [Fact]
+    public void CreatePngIconBuildsCanonicalAspectPreservingOneInchModel()
+    {
+        var bytes = new byte[] { 0x89, 0x50, 0x4e, 0x47 };
+
+        var wide = PictureInsertionPlanner.CreatePngIcon(bytes, 400, 200);
+        var tall = PictureInsertionPlanner.CreatePngIcon(bytes, 200, 400);
+
+        wide.Bytes.Should().BeSameAs(bytes);
+        wide.WidthPt.Should().Be(72);
+        wide.HeightPt.Should().Be(36);
+        wide.OriginalPixelWidth.Should().Be(400);
+        wide.OriginalPixelHeight.Should().Be(200);
+        tall.WidthPt.Should().Be(72);
+        tall.HeightPt.Should().Be(144);
+        tall.OriginalPixelWidth.Should().Be(200);
+        tall.OriginalPixelHeight.Should().Be(400);
+    }
 }
