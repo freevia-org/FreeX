@@ -10,10 +10,13 @@ public sealed class PhysicalAnimationPaneFixtureSourceTests
         var renderer = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
         var tool = File.ReadAllText(RepoFile(
             "freep", "TestSupport", "Validation.Avalonia", "PhysicalFixtureValidation.cs"));
+        var adapter = File.ReadAllText(RepoFile(
+            "freep", "TestSupport", "Validation.Avalonia", "MainWindow.ValidationAccessAdapter.cs"));
 
         renderer.Should().NotContain("FREEP_PHYSICAL_ANIMATION_PANE_SEED");
         renderer.Should().NotContain("Animation Pane sample");
-        renderer.Should().Contain("CoordinateExternalAnimationPaneRequest();");
+        renderer.Should().Contain("CoordinateAnimationPaneRequestObserver();");
+        adapter.Should().Contain("partial void CoordinateAnimationPaneRequestObserver()");
         tool.Should().Contain("--physical-animation-pane-fixture");
         tool.Should().Contain("access.Editor.InsertTextBox(\"Animation Pane sample\")");
         tool.Should().Contain("slide.Animations.Add(new ShapeAnimation");

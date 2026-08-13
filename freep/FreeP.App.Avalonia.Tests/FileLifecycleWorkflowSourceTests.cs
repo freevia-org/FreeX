@@ -49,7 +49,8 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().Contain("_fileSession.SaveAsync()");
         source.Should().Contain("_fileSession.ConfirmCloseAllowedAsync()");
         source.Should().Contain("SisterAvaloniaAsyncWindowCloseCoordinator");
-        source.Should().Contain("Closing += (_, e) => e.Cancel =");
+        source.Should().Contain("Closing += (_, e) =>");
+        source.Should().Contain("var cancel = _closeCoordinator.ShouldCancelClosing();");
         source.Should().Contain("_closeCoordinator.ShouldCancelClosing();");
         source.Should().Contain("new PresentationFileLifecycleAdapter(");
         source.Should().Contain("_fileWorkflow.Workflow");

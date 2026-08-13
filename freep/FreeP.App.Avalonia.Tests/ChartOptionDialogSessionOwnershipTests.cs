@@ -10,8 +10,8 @@ public sealed class ChartOptionDialogSessionOwnershipTests
             var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", $"{family}Dialog.cs"));
 
             source.Should().Contain($"new {session}(editor", family);
-            source.Should().Contain("_session.BuildCommitPlan(_session.BuildInput(", family);
             source.Should().Contain("_session.TryCommit(", family);
+            source.Should().Contain("_session.BuildInput(_form.CaptureValues())", family);
             source.Should().Contain("ReadInput()", family);
             source.Should().Contain("ChartOptionsDialogChrome.", family);
             source.Should().NotContain("private readonly EditingSession", family);

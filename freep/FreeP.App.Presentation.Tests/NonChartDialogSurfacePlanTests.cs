@@ -143,7 +143,7 @@ public sealed class NonChartDialogSurfacePlanTests
     {
         AssertRendererPair(
             "CustomShowDialog.cs",
-            "_session.Surface",
+            "_controller.Surface",
             [
                 "\"Custom Shows\"", "\"Custom show order\"", "\"Deck slides\"",
                 "\"Create\"", "\"Update Slides\"", "\"Start Show\"",

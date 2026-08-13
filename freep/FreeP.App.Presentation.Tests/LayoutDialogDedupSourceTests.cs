@@ -12,7 +12,7 @@ public sealed class LayoutDialogDedupSourceTests
             source.Should().Contain("var initial = _session.State;");
             source.Should().Contain("ItemsSource = initial.DateFormatOptions");
             source.Should().Contain("_formSession.CaptureInput()");
-            source.Should().Contain("_formSession.ApplyState(state)");
+            source.Should().Contain("_session.SetInput(_formSession.CaptureInput())");
             source.Should().Contain("_formSession.ApplyEnabledState(enabled)");
             source.Should().Contain("_formSession.Focus(_session.RequestedFocusPlan)");
             source.Should().Contain("_session.TryCommit(scope)");

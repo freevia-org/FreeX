@@ -2529,6 +2529,11 @@ public sealed class ReviewWorkflowAdapterTests
             "freep",
             "FreeP.App.Host",
             "MainWindow.WorkareaEndpoint.cs"));
+        var ribbonProfileSource = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.RibbonProfile.cs"));
 
         source.Should().Contain("PresentationReviewWorkflowSession");
         source.Should().Contain("_reviewWorkflowSession.RefreshReviewWorkflowPlans();");
@@ -2546,8 +2551,8 @@ public sealed class ReviewWorkflowAdapterTests
         workareaEndpointSource.Should().Contain(
             "RefreshReadingOrder = () => _ = _reviewWorkflowSession.RefreshReadingOrderPlan()");
         source.Should().Contain("_reviewWorkflowSession.RefreshProofingRequestPlan();");
-        source.Should().Contain("_mediaPaneHostCoordinator.Show();");
-        source.Should().Contain("_mediaPaneHostCoordinator.SetCaptionInput(");
+        source.Should().Contain("OpenMediaCaptionPane: () => MediaPaneHost.Show()");
+        source.Should().Contain("IPresentationMediaPaneHostView.SetCaptionInput(");
         source.Should().Contain("_mediaPaneHostCoordinator.Refresh();");
         source.Should().Contain("_mediaPaneHostCoordinator.ApplyCaption(");
         source.Should().NotContain("_mediaCaptionPaneRefreshing");
@@ -2559,7 +2564,7 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("cm.InitialsBadgeText");
         source.Should().Contain("cm.ThreadStatusLabel");
         source.Should().Contain("reply.DisplayText");
-        source.Should().Contain("onLayoutPicker:     () => OpenLayoutPicker()");
+        ribbonProfileSource.Should().Contain("OpenLayoutPicker = _ => OpenLayoutPicker()");
         source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");

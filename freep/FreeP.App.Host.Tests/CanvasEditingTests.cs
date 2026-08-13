@@ -1099,9 +1099,9 @@ public sealed class CanvasEditingTests
         sharedSession.Should().Contain("editor.SetPictureCrop");
         sharedRouter.Should().Contain("_session.CommitGeometryAdjustment");
         gestures.Should().Contain("_gestureRouter.CompletePointer");
-        gestures.Should().Contain("CanvasGestureKind.GeometryAdjustment");
+        gestures.Should().Contain("projection.GeometryHandles");
         avaloniaGestures.Should().Contain("_gestureRouter.CompletePointer");
-        avaloniaGestures.Should().Contain("CanvasGestureKind.GeometryAdjustment");
+        avaloniaGestures.Should().Contain("projection.GeometryHandles");
         adorner.Should().Contain("UpdateGeometryHandles");
         adorner.Should().Contain("HitTestGeometryHandle");
     }

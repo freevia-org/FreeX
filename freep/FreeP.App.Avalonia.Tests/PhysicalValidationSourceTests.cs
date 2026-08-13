@@ -85,10 +85,10 @@ public sealed class PhysicalValidationSourceTests
     [Fact]
     public void Physical_validation_source_wires_the_real_output_and_slideshow_paths()
     {
-        var source = File.ReadAllText(RepoFile("freep/TestSupport/Validation.Avalonia/PhysicalValidation.cs"));
-        var adapter = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/MainWindow.ValidationAccessAdapter.cs"));
-        var slideshow = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/SlideShowWindow.cs"));
-        var program = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/Program.cs"));
+        var source = File.ReadAllText(RepoFile("freep", "TestSupport", "Validation.Avalonia", "PhysicalValidation.cs"));
+        var adapter = File.ReadAllText(RepoFile("freep", "TestSupport", "Validation.Avalonia", "MainWindow.ValidationAccessAdapter.cs"));
+        var slideshow = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs"));
+        var program = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "Program.cs"));
 
         source.Should().Contain("access.ExecuteVideoExportAsync(");
         source.Should().Contain("access.ExecutePrintAsync(");
@@ -106,15 +106,15 @@ public sealed class PhysicalValidationSourceTests
         adapter.Should().NotContain("--physical-validation");
         adapter.Should().NotContain("JsonSerializer");
         adapter.Should().NotContain("SystemProcessRunner");
-        slideshow.Should().Contain("internal sealed class ValidationAccessAdapter");
+        slideshow.Should().NotContain("internal sealed class ValidationAccessAdapter");
         slideshow.Should().NotContain("ActiveMediaPlansForTest");
         slideshow.Should().NotContain("MediaPlaybackAvailabilityForTest");
         slideshow.Should().NotContain("LastMediaPlaybackFailureForTest");
         program.Should().NotContain("PhysicalValidationOptions");
         program.Should().NotContain("--physical-validation");
         File.Exists(Path.Combine(Path.GetDirectoryName(RepoFile(
-            "freep/FreeP.App.Avalonia/Program.cs"))!, "PhysicalValidation.cs")).Should().BeFalse();
-        File.ReadAllText(RepoFile("tools/Run-FreePPhysicalLinuxValidation.ps1"))
+            "freep", "FreeP.App.Avalonia", "Program.cs"))!, "PhysicalValidation.cs")).Should().BeFalse();
+        File.ReadAllText(RepoFile("tools", "Run-FreePPhysicalLinuxValidation.ps1"))
             .Should().Contain("\"-Host\", \"Validation\"");
     }
 
@@ -131,6 +131,6 @@ public sealed class PhysicalValidationSourceTests
         source.Should().Contain("current is TextBox");
     }
 
-    private static string RepoFile(string relativePath) =>
-        TestWorkspaceFileLocator.Find(relativePath);
+    private static string RepoFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.Find(relativeParts);
 }

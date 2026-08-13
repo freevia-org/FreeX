@@ -12,8 +12,8 @@ public sealed class ChartAxisDisplayOptionsDialogSessionOwnershipTests
         var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", fileName));
 
         source.Should().Contain($"new {sessionType}(editor");
-        source.Should().Contain("_session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()))");
         source.Should().Contain("_session.Submit(ReadInput())");
+        source.Should().Contain("_session.BuildInput(_form.CaptureValues())");
         source.Should().Contain("ReadInput()");
         source.Should().Contain("ChartOptionsDialogChrome.");
         source.Should().NotContain("private readonly EditingSession");

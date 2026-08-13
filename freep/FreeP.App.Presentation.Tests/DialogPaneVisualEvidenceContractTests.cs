@@ -165,8 +165,8 @@ public sealed class DialogPaneVisualEvidenceContractTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var paths = new[]
         {
-            Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.VisualCaptureAdapter.cs"),
-            Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.VisualCaptureAdapter.cs"),
+            Path.Combine(root, "freep", "TestSupport", "VisualEvidence.Wpf", "MainWindow.VisualCaptureAdapter.cs"),
+            Path.Combine(root, "freep", "TestSupport", "VisualEvidence.Avalonia", "MainWindow.VisualCaptureAdapter.cs"),
         };
 
         foreach (var path in paths)

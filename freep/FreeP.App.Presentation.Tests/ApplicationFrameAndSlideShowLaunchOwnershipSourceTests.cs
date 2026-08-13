@@ -27,7 +27,8 @@ public sealed class ApplicationFrameAndSlideShowLaunchOwnershipSourceTests
         var frame = Read(root, "freep", "FreeP.App.Presentation", "FreePApplicationFrameDescriptor.cs");
         var launch = Read(root, "freep", "FreeP.App.Presentation", "SlideShowCustomShowSession.cs");
 
-        frame.Should().Contain("AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(pathProvider)")
+        frame.Should().Contain("ApplicationFrameDescriptor.Create(")
+            .And.Contain("Descriptor.ResolveDataFolderLabel(pathProvider)")
             .And.Contain("public static ApplicationWindowTitleSpec Title")
             .And.NotContain("FreePApplicationFrameTitleSpec")
             .And.NotContain("ToApplicationWindowTitleSpec()")

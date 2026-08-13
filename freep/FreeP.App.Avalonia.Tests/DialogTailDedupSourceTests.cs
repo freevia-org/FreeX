@@ -30,9 +30,8 @@ public sealed class DialogTailDedupSourceTests
         slideShow.Should().Contain("SlideShowSettingsDialogSession");
         slideShow.Should().Contain("SlideShowSettingsDialogFormSession<Control>");
         slideShow.Should().Contain("_formSession.CaptureInput()");
-        slideShow.Should().Contain("_formSession.ApplyInput(");
+        slideShow.Should().Contain("var initial = _session.InitialInput;");
         slideShow.Should().Contain("SlideShowSettingsDialogSession.ShowTypeOptions");
-        slideShow.Should().Contain("SlideShowSettingsDialogSession.CreateInput");
         slideShow.Should().NotContain("SlideShowSettingsPlanner.");
         slideShow.Should().NotContain("new SlideShowSettingsDialogInput");
         slideShow.Should().NotContain("\"Presented by a speaker\"");

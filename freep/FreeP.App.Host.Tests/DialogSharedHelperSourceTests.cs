@@ -53,7 +53,7 @@ public sealed class DialogSharedHelperSourceTests
     private static void AssertUsesSharedDialogWindow(string fileName, string className)
     {
         var source = ReadHostSource(fileName);
-        source.Should().Contain($"public sealed class {className} : Free.Shared.Ribbon.Wpf.DialogWindow");
+        source.Should().Contain($"public sealed partial class {className} : Free.Shared.Ribbon.Wpf.DialogWindow");
         source.Should().NotContain($"public sealed class {className} : Window");
         source.Should().NotContain($"public sealed class {className} : System.Windows.Window");
     }

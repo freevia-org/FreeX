@@ -57,8 +57,9 @@ public sealed class Wave89MultiSelectionEvidenceContractTests
         var runner = ReadWorkspaceFile("tools", "Run-FreePMultiSelectionX11Validation.ps1");
 
         runner.Should().Contain("Invoke-External powershell.exe $startArgs");
-        runner.Should().Contain("Wait-EvidenceFile");
-        runner.Should().Contain("Start-Sleep -Milliseconds 100");
+        runner.Should().Contain("$manifestPath = Join-Path $sessionDirectory");
+        runner.Should().Contain("probe evidence is");
+        runner.Should().Contain("already present on the host");
         runner.Should().NotContain("Invoke-External docker @(\"cp\"");
         runner.Should().Contain("if ($PublishDir) { $startArgs += @(\"-PublishDir\", $PublishDir) }");
         runner.Should().Contain("if ($SkipPublish) { $startArgs += \"-SkipPublish\" }");

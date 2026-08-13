@@ -73,8 +73,11 @@ public sealed class R126_FreePAvaloniaShellStringsLocalizationTests : IDisposabl
     {
         var source = File.ReadAllText(RepositoryFile("freep", "FreeP.App.Avalonia", "App.cs"));
 
-        source.Should().Contain(
-            "AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName)");
+        source.Should().Contain("new SisterAvaloniaLocalizationStartupDescriptor(");
+        source.Should().Contain("AvaloniaAppLocalizationBootstrap.InstallSharedSeams(");
+        source.Should().Contain("UiText.Get,");
+        source.Should().Contain("UiText.Format,");
+        source.Should().Contain("UiText.CreateAutomationName");
     }
 
     private static string RepositoryFile(params string[] parts) =>

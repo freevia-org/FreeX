@@ -11,10 +11,13 @@ public sealed class PhysicalHyperlinkFixtureSourceTests
         var slideShow = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs"));
         var tool = File.ReadAllText(RepoFile(
             "freep", "TestSupport", "Validation.Avalonia", "PhysicalFixtureValidation.cs"));
+        var adapter = File.ReadAllText(RepoFile(
+            "freep", "TestSupport", "Validation.Avalonia", "MainWindow.ValidationAccessAdapter.cs"));
 
         mainWindow.Should().NotContain("FREEP_PHYSICAL_HYPERLINK");
         mainWindow.Should().NotContain("Id = 9001");
-        mainWindow.Should().Contain("NotifyExternalHyperlinkApplied();");
+        mainWindow.Should().Contain("NotifyHyperlinkAppliedObserver();");
+        adapter.Should().Contain("partial void NotifyHyperlinkAppliedObserver()");
         slideShow.Should().NotContain("FREEP_PHYSICAL_HYPERLINK");
         slideShow.Should().NotContain("File.WriteAllText");
         slideShow.Should().Contain("_internalHyperlinkNavigationObserver?.Invoke");

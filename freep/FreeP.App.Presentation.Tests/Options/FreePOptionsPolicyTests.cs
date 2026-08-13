@@ -201,7 +201,8 @@ public sealed class FreePOptionsPolicyTests
         }
 
         wpfProgram.Should().Contain("SelectUiLanguage: FreePOptionsPolicy.SelectUiLanguage");
-        avaloniaApp.Should().Contain("var optionsStore = ApplicationOptionsStore<FreePOptions>.Create();");
+        avaloniaApp.Should().Contain("new SisterAvaloniaOptionsStartupDescriptor<FreePOptions>(");
+        avaloniaApp.Should().Contain("() => ApplicationOptionsStore<FreePOptions>.Create()");
         avaloniaApp.Should().Contain("optionsStore: optionsStore");
     }
 

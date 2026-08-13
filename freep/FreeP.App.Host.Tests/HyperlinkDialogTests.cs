@@ -19,7 +19,6 @@ public sealed class HyperlinkDialogTests
         source.Should().Contain("_session.Surface");
         source.Should().Contain("AutomationProperties.SetName(");
         source.Should().Contain("AutomationProperties.SetAutomationId(");
-        source.Should().Contain("_session.SetInput(");
         source.Should().Contain("_session.SelectTarget(");
         source.Should().Contain("_session.SetUrlText(");
         source.Should().Contain("_session.SelectSlide(");
