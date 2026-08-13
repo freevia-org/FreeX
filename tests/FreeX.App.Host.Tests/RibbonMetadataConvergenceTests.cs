@@ -129,6 +129,21 @@ public sealed class RibbonMetadataConvergenceTests
     }
 
     [Fact]
+    public void StaticDeclarativeMenuActions_UseSemanticIdsAndHaveWpfBindings()
+    {
+        var ids = FreeXRibbonDefinition.Build().Tabs
+            .SelectMany(tab => tab.Groups)
+            .SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .SelectMany(dropdown => EnumerateLeafCommandIds(dropdown.Menu.Items))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        ids.Should().OnlyContain(id => id.Contains('.', StringComparison.Ordinal));
+        ids.Should().OnlyContain(id => MainWindow.FreeXRibbonHandlers.ContainsKey(id));
+    }
+
+    [Fact]
     public void HomeBorderMenuAndPopupProjection_ShareTheTypedDefinitionCatalog()
     {
         var borders = HomeRibbonDefinition.HomeTab()
@@ -158,8 +173,8 @@ public sealed class RibbonMetadataConvergenceTests
             .Single(control => control.CommandId.Value == "Arrange All")
             .Menu.Items.ToDictionary(item => item.CommandId!.Value.Value, StringComparer.Ordinal);
 
-        arrangeMenu["Tiled"].Icon.Should().Be(new RibbonCommandIcon(RibbonCommandIconKind.Grid));
-        arrangeMenu["Cascade"].Icon.Should().Be(new RibbonCommandIcon(RibbonCommandIconKind.Window));
+        arrangeMenu[FreeXRibbonCommandIds.ViewArrangeTiled].Icon.Should().Be(new RibbonCommandIcon(RibbonCommandIconKind.Grid));
+        arrangeMenu[FreeXRibbonCommandIds.ViewArrangeCascade].Icon.Should().Be(new RibbonCommandIcon(RibbonCommandIconKind.Window));
 
         DialogSourceTestSupport.ReadHostSources("RibbonMenuIconSeeder.cs")
             .Should().NotContain("TryResolveGenericHeader");

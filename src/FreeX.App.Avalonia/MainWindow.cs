@@ -1039,8 +1039,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Paste Special"] = () => _ = ShowPasteSpecialDialogAsync(),
                     // Data tab tools.
                     ["Reapply"] = ReapplyCurrentFilterSort,
-                    ["Circle Invalid Data"] = CircleInvalidData,
-                    ["Clear Validation Circles"] = ClearValidationCircles,
+                    [FreeXRibbonCommandIds.DataValidationCircleInvalid] = CircleInvalidData,
+                    [FreeXRibbonCommandIds.DataValidationClearCircles] = ClearValidationCircles,
                     ["Get Data"] = GetDataFromText,
                     // Data ▸ Connections ▸ Refresh All: re-import the remembered file source in place; with
                     // no remembered source there is nothing to refresh (no external DB/web connection engine).
@@ -1052,10 +1052,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Arrange All"] = ArrangeAllWindows,
                     // View ▸ Window ▸ Arrange All submenu (canonical menu ids from the shared ribbon
                     // definition). Each positions every visible window via the shared layout planner.
-                    ["Tiled"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Tiled),
+                    [FreeXRibbonCommandIds.ViewArrangeTiled] = () => ArrangeAllWindows(WorkbookWindowArrangement.Tiled),
                     [FreeXRibbonCommandIds.ViewArrangeHorizontal] = () => ArrangeAllWindows(WorkbookWindowArrangement.Horizontal),
-                    ["Vertical"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Vertical),
-                    ["Cascade"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Cascade),
+                    [FreeXRibbonCommandIds.ViewArrangeVertical] = () => ArrangeAllWindows(WorkbookWindowArrangement.Vertical),
+                    [FreeXRibbonCommandIds.ViewArrangeCascade] = () => ArrangeAllWindows(WorkbookWindowArrangement.Cascade),
                     ["Hide"] = HideActiveWindow,
                     // View ▸ Window ▸ Side by Side + Synchronous Scrolling.
                     ["View Side by Side"] = ToggleViewSideBySide,
@@ -1084,11 +1084,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // Formulas-tab AutoSum picker shares these ids, so this covers both). Split-button face is
                     // wired above (home.autoSum). Mirrors the native AutoSum submenu handlers.
                     ["Sum"] = () => InsertAutoSumFormula("SUM"),
+                    [FreeXRibbonCommandIds.FormulasAutoSumSum] = () => InsertAutoSumFormula("SUM"),
                     ["Average"] = () => InsertAutoSumFormula("AVERAGE"),
+                    [FreeXRibbonCommandIds.FormulasAutoSumAverage] = () => InsertAutoSumFormula("AVERAGE"),
                     ["Count Numbers"] = () => InsertAutoSumFormula("COUNT"),
+                    [FreeXRibbonCommandIds.FormulasAutoSumCountNumbers] = () => InsertAutoSumFormula("COUNT"),
                     ["Count All"] = () => InsertAutoSumFormula("COUNTA"),
+                    [FreeXRibbonCommandIds.FormulasAutoSumCountAll] = () => InsertAutoSumFormula("COUNTA"),
                     ["Max"] = () => InsertAutoSumFormula("MAX"),
+                    [FreeXRibbonCommandIds.FormulasAutoSumMax] = () => InsertAutoSumFormula("MAX"),
                     ["Min"] = () => InsertAutoSumFormula("MIN"),
+                    [FreeXRibbonCommandIds.FormulasAutoSumMin] = () => InsertAutoSumFormula("MIN"),
                     ["More Functions"] = InsertFunction,
                     // Home ▸ Editing ▸ Find & Select dropdown items (canonical ids from HomeRibbonMenus.FindSelect).
                     // Split-button face is wired above (home.findSelect). "Conditional Formatting" is intentionally
@@ -1231,6 +1237,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Symbol"] = () => _ = ShowSymbolPickerAsync(),
                     // Formulas ▸ Error Checking.
                     ["Error Checking"] = () => _ = CheckFormulaErrorsAsync(),
+                    [FreeXRibbonCommandIds.FormulasErrorCheckingRun] = () => _ = CheckFormulaErrorsAsync(),
                     // Formulas ▸ Evaluate Formula (read-only diagnostics dialog).
                     ["Evaluate Formula"] = () => _ = ShowEvaluateFormulaDialogAsync(),
                     // Formulas ▸ Formula Auditing trace arrows.
@@ -1329,30 +1336,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
                     // Formulas ▸ Formula Auditing ▸ Watch Window / Remove Arrows submenu.
                     ["Watch Window"] = () => _ = ShowWatchWindowDialogAsync(),
-                    ["Remove Precedent Arrows"] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Precedent),
-                    ["Remove Dependent Arrows"] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Dependent),
+                    [FreeXRibbonCommandIds.FormulasRemovePrecedentArrows] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Precedent),
+                    [FreeXRibbonCommandIds.FormulasRemoveDependentArrows] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Dependent),
 
                     // Formulas ▸ Error Checking ▸ Error Checking Options.
-                    ["Error Checking Options"] = () => _ = ShowOptionsDialogAsync(),
+                    [FreeXRibbonCommandIds.FormulasErrorCheckingOptions] = () => _ = ShowOptionsDialogAsync(),
 
                     // Formulas ▸ Calculation ▸ Calculate Sheet + Calculation Options menu items.
                     ["Calculate Sheet"] = CalculateSheet,
-                    ["Automatic"] = SetCalculationModeAutomatic,
-                    ["Manual"] = SetCalculationModeManual,
-                    ["Automatic Except Data Tables"] = SetCalculationModeAutomaticExceptDataTables,
+                    [FreeXRibbonCommandIds.FormulasCalculationAutomatic] = SetCalculationModeAutomatic,
+                    [FreeXRibbonCommandIds.FormulasCalculationManual] = SetCalculationModeManual,
+                    [FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables] = SetCalculationModeAutomaticExceptDataTables,
 
                     // Data ▸ Sort & Filter ▸ Sort button (canonical id "Sort", no dotted prefix).
                     ["Sort"] = () => _ = ShowSortDialogAsync(),
 
                     // Data ▸ Data Tools ▸ What-If Analysis dropdown.
-                    ["Goal Seek"] = () => _ = ShowGoalSeekDialogAsync(),
-                    ["Scenario Manager"] = () => _ = ShowScenarioManagerDialogAsync(),
-                    ["Data Table"] = () => _ = ShowDataTableDialogAsync(),
+                    [FreeXRibbonCommandIds.DataWhatIfGoalSeek] = () => _ = ShowGoalSeekDialogAsync(),
+                    [FreeXRibbonCommandIds.DataWhatIfScenarioManager] = () => _ = ShowScenarioManagerDialogAsync(),
+                    [FreeXRibbonCommandIds.DataWhatIfDataTable] = () => _ = ShowDataTableDialogAsync(),
 
                     // Data ▸ Outline ▸ Show / Hide Detail, Clear Outline, Group / Ungroup submenu items.
                     ["Show Detail"] = ShowOutlineDetail,
                     ["Hide Detail"] = HideOutlineDetail,
-                    ["Clear Outline"] = ClearWorksheetOutline,
+                    [FreeXRibbonCommandIds.DataOutlineClear] = ClearWorksheetOutline,
                     [FreeXRibbonCommandIds.DataOutlineGroupRows] = GroupSelectedRows,
                     [FreeXRibbonCommandIds.DataOutlineUngroupRows] = UngroupSelection,
 
@@ -1376,18 +1383,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // View ▸ Window ▸ Freeze Panes split-button menu items. The "Freeze Panes" menu item
                     // keeps its handler suffix in the canonical id.
                     [FreeXRibbonCommandIds.ViewFreezeAtSelection] = FreezePanesAtActiveCell,
-                    ["Freeze Top Row"] = FreezeTopRow,
-                    ["Freeze First Column"] = FreezeFirstColumn,
-                    ["Unfreeze Panes"] = UnfreezePanes,
+                    [FreeXRibbonCommandIds.ViewFreezeTopRow] = FreezeTopRow,
+                    [FreeXRibbonCommandIds.ViewFreezeFirstColumn] = FreezeFirstColumn,
+                    [FreeXRibbonCommandIds.ViewUnfreezePanes] = UnfreezePanes,
 
                     // View ▸ Zoom split-button preset menu items. The "100%" menu item keeps its handler
                     // suffix in the canonical id.
-                    ["200%"] = () => ApplyZoomPercentPreset(200),
+                    [FreeXRibbonCommandIds.ViewZoomPreset200] = () => ApplyZoomPercentPreset(200),
                     [FreeXRibbonCommandIds.ViewZoomPreset100] = () => ApplyZoomPercentPreset(100),
-                    ["75%"] = () => ApplyZoomPercentPreset(75),
-                    ["50%"] = () => ApplyZoomPercentPreset(50),
-                    ["25%"] = () => ApplyZoomPercentPreset(25),
-                    ["More"] = () => _ = ShowZoomDialogAsync(),
+                    [FreeXRibbonCommandIds.ViewZoomPreset75] = () => ApplyZoomPercentPreset(75),
+                    [FreeXRibbonCommandIds.ViewZoomPreset50] = () => ApplyZoomPercentPreset(50),
+                    [FreeXRibbonCommandIds.ViewZoomPreset25] = () => ApplyZoomPercentPreset(25),
+                    [FreeXRibbonCommandIds.ViewZoomCustom] = () => _ = ShowZoomDialogAsync(),
 
                     // ─────────────────────────────────────────────────────────────────────────────
                     // Re-keyed from allowlist: formerly served via native menus / parent buttons only.
@@ -1403,27 +1410,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     [FreeXRibbonCommandIds.PageLayoutThemeColorsGrayscale] = () => _ = ShowThemeColorsGalleryAsync(),
                     [FreeXRibbonCommandIds.PageLayoutThemeColorful] = () => _ = ShowThemesGalleryAsync(),
                     [FreeXRibbonCommandIds.PageLayoutThemeColorsColorful] = () => _ = ShowThemeColorsGalleryAsync(),
-                    ["Customize"] = () => _ = ShowThemesGalleryAsync(),
-                    ["Customize Colors"] = () => _ = ShowThemeColorsGalleryAsync(),
-                    ["Customize Fonts"] = () => _ = ShowThemeFontsGalleryAsync(),
-                    ["Customize Effects"] = () => _ = ShowThemeEffectsGalleryAsync(),
-                    ["Arial"] = () => _ = ShowThemeFontsGalleryAsync(),
-                    ["Times New Roman"] = () => _ = ShowThemeFontsGalleryAsync(),
-                    ["Subtle"] = () => _ = ShowThemeEffectsGalleryAsync(),
-                    ["Refined"] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeCustomize] = () => _ = ShowThemesGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsCustomize] = () => _ = ShowThemeColorsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsCustomize] = () => _ = ShowThemeFontsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsCustomize] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsArial] = () => _ = ShowThemeFontsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsTimesNewRoman] = () => _ = ShowThemeFontsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsSubtle] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsRefined] = () => _ = ShowThemeEffectsGalleryAsync(),
 
                     // Shape Format ▸ Shape Effects submenu items (also wired via BuildPictureShapeTabCommands;
                     // declared here so the hygiene guard finds them in this file's ExtraCommands block).
-                    ["3-D Rotation"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.ThreeDRotation),
-                    ["Bevel"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Bevel),
-                    ["Glow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Glow),
-                    ["Inner Shadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.InnerShadow),
-                    ["Reflection"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Reflection),
-                    ["Soft Edges"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.SoftEdges),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectThreeDRotation] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.ThreeDRotation),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectBevel] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Bevel),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectGlow] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Glow),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectInnerShadow] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.InnerShadow),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectReflection] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Reflection),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectSoftEdges] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.SoftEdges),
 
                     // Picture Format ▸ Crop submenu items (also wired via BuildPictureShapeTabCommands).
-                    ["Crop"] = () => RunGuarded(OpenPictureCropDialogAsync),
-                    ["Reset Crop"] = () => ResetSelectedPictureCrop(),
+                    [FreeXRibbonCommandIds.DrawingCrop] = () => RunGuarded(OpenPictureCropDialogAsync),
+                    [FreeXRibbonCommandIds.DrawingResetCrop] = () => ResetSelectedPictureCrop(),
 
                     // Home ▸ Clipboard ▸ Paste menu items not previously wired by canonical id.
                     ["Keep Source Column Widths"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.All, default, "Keep Source Column Widths", keepSourceColumnWidths: true),

@@ -74,8 +74,8 @@ public static class DrawingObjectContextualRibbonPlanner
     [
         new("Format Picture", DrawingObjectContextualCommandAction.FormatPicture),
         new("Crop Picture", DrawingObjectContextualCommandAction.PictureCropMenuHint),
-        new("Crop", DrawingObjectContextualCommandAction.CropPicture),
-        new("Reset Crop", DrawingObjectContextualCommandAction.ResetPictureCrop),
+        new(FreeXRibbonCommandIds.DrawingCrop, DrawingObjectContextualCommandAction.CropPicture),
+        new(FreeXRibbonCommandIds.DrawingResetCrop, DrawingObjectContextualCommandAction.ResetPictureCrop),
         new("Bring Forward", DrawingObjectContextualCommandAction.BringForward),
         new("Send Backward", DrawingObjectContextualCommandAction.SendBackward),
         new(FreeXRibbonCommandIds.DrawingSelectionPane, DrawingObjectContextualCommandAction.SelectionPane),
@@ -86,14 +86,14 @@ public static class DrawingObjectContextualRibbonPlanner
         new("Object Outline", DrawingObjectContextualCommandAction.ShapeOutline),
         new(ShapeGradientCommandName, DrawingObjectContextualCommandAction.ShapeGradient),
         new(ShapeEffectsCommandName, DrawingObjectContextualCommandAction.ShapeEffectsDialog),
-        new("No Effect", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.None),
-        new("Shadow", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Shadow),
-        new("Inner Shadow", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.InnerShadow),
-        new("Reflection", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Reflection),
-        new("Glow", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Glow),
-        new("Soft Edges", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.SoftEdges),
-        new("Bevel", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Bevel),
-        new("3-D Rotation", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.ThreeDRotation),
+        new(FreeXRibbonCommandIds.DrawingShapeEffectNone, DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.None),
+        new(FreeXRibbonCommandIds.DrawingShapeEffectShadow, DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Shadow),
+        new(FreeXRibbonCommandIds.DrawingShapeEffectInnerShadow, DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.InnerShadow),
+        new(FreeXRibbonCommandIds.DrawingShapeEffectReflection, DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Reflection),
+        new(FreeXRibbonCommandIds.DrawingShapeEffectGlow, DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Glow),
+        new(FreeXRibbonCommandIds.DrawingShapeEffectSoftEdges, DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.SoftEdges),
+        new(FreeXRibbonCommandIds.DrawingShapeEffectBevel, DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Bevel),
+        new(FreeXRibbonCommandIds.DrawingShapeEffectThreeDRotation, DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.ThreeDRotation),
     ];
 
     public static DrawingObjectContextualRibbonPlan Build(

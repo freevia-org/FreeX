@@ -27,7 +27,6 @@ public sealed class CanonicalEndpointCommandIdsHygieneTests
             .ToArray();
 
         Assert.Empty(nonCanonical);
-        Assert.DoesNotContain(keys, IsDottedHandlerId);
     }
 
     private static ISet<string> ExtractRawCanonicalKeysFromSource()
@@ -65,13 +64,4 @@ public sealed class CanonicalEndpointCommandIdsHygieneTests
         return keys;
     }
 
-    // Historical renderer ids used "<lowerCamelSegment>.<segment>". Canonical definition ids must not.
-    private static bool IsDottedHandlerId(string key)
-    {
-        var dot = key.IndexOf('.');
-        if (dot <= 0)
-            return false;
-        var head = key[..dot];
-        return head.Length > 0 && head.All(c => char.IsLetter(c)) && char.IsLower(head[0]);
-    }
 }

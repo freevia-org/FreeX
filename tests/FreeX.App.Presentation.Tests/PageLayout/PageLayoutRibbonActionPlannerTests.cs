@@ -2,6 +2,7 @@ using FluentAssertions;
 
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Presentation.Tests.PageLayout;
 
@@ -40,18 +41,18 @@ public sealed class PageLayoutRibbonActionPlannerTests
     [Fact]
     public void RibbonActionDescriptors_OwnPresetAndPageBreakCommandPayloads()
     {
-        Descriptor("Normal").MarginPreset.Should().Be(PageLayoutMarginPreset.Normal);
-        Descriptor("Wide").MarginPreset.Should().Be(PageLayoutMarginPreset.Wide);
-        Descriptor("Portrait").OrientationPreset.Should().Be(PageLayoutOrientationPreset.Portrait);
-        Descriptor("Landscape").OrientationPreset.Should().Be(PageLayoutOrientationPreset.Landscape);
-        Descriptor("Letter").PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.Letter);
-        Descriptor("Legal").PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.Legal);
-        Descriptor("A4").PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.A4);
-        Descriptor("B4 (JIS)").PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.B4);
-        Descriptor("B5 (JIS)").PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.B5);
-        Descriptor("Insert Page Break").PageBreakAction.Should().Be(PageBreakMenuAction.Insert);
-        Descriptor("Remove Page Break").PageBreakAction.Should().Be(PageBreakMenuAction.Remove);
-        Descriptor("Reset All Page Breaks").PageBreakAction.Should().Be(PageBreakMenuAction.ResetAll);
+        Descriptor(FreeXRibbonCommandIds.PageLayoutMarginsNormal).MarginPreset.Should().Be(PageLayoutMarginPreset.Normal);
+        Descriptor(FreeXRibbonCommandIds.PageLayoutMarginsWide).MarginPreset.Should().Be(PageLayoutMarginPreset.Wide);
+        Descriptor(FreeXRibbonCommandIds.PageLayoutOrientationPortrait).OrientationPreset.Should().Be(PageLayoutOrientationPreset.Portrait);
+        Descriptor(FreeXRibbonCommandIds.PageLayoutOrientationLandscape).OrientationPreset.Should().Be(PageLayoutOrientationPreset.Landscape);
+        Descriptor(FreeXRibbonCommandIds.PageLayoutPaperSizeLetter).PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.Letter);
+        Descriptor(FreeXRibbonCommandIds.PageLayoutPaperSizeLegal).PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.Legal);
+        Descriptor(FreeXRibbonCommandIds.PageLayoutPaperSizeA4).PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.A4);
+        Descriptor(FreeXRibbonCommandIds.PageLayoutPaperSizeB4Jis).PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.B4);
+        Descriptor(FreeXRibbonCommandIds.PageLayoutPaperSizeB5Jis).PaperSizePreset.Should().Be(PageLayoutPaperSizePreset.B5);
+        Descriptor(FreeXRibbonCommandIds.PageLayoutBreakInsert).PageBreakAction.Should().Be(PageBreakMenuAction.Insert);
+        Descriptor(FreeXRibbonCommandIds.PageLayoutBreakRemove).PageBreakAction.Should().Be(PageBreakMenuAction.Remove);
+        Descriptor(FreeXRibbonCommandIds.PageLayoutBreakResetAll).PageBreakAction.Should().Be(PageBreakMenuAction.ResetAll);
     }
 
     [Fact]

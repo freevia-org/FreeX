@@ -641,6 +641,21 @@ public sealed class AvaloniaRibbonHostCallbackTests
         Assert.Throws<ArgumentException>(() =>
             AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, callbacks));
     }
+
+    [Fact]
+    public void StaticDeclarativeMenuActions_AreRegisteredByTheAvaloniaComposition()
+    {
+        var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new());
+        var menuIds = FreeXRibbonDefinition.Build().Tabs
+            .SelectMany(tab => tab.Groups)
+            .SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .SelectMany(dropdown => EnumerateMenuIds(dropdown.Menu.Items))
+            .Distinct(StringComparer.Ordinal);
+
+        foreach (var id in menuIds)
+            Assert.True(registry.TryGet(new RibbonCommandId(id), out _), id);
+    }
     private static AvaloniaRibbonHostCallbacks AllWired() => new()
     {
         OpenTextToColumns = () => { },
@@ -668,5 +683,16 @@ public sealed class AvaloniaRibbonHostCallbackTests
     {
         Assert.True(registry.TryGet(Canonical(commandId), out var command));
         command!.Execute(EmptyContext);
+    }
+
+    private static IEnumerable<string> EnumerateMenuIds(IReadOnlyList<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            if (item.CommandId is { } id)
+                yield return id.Value;
+            foreach (var child in EnumerateMenuIds(item.Children))
+                yield return child;
+        }
     }
 }
