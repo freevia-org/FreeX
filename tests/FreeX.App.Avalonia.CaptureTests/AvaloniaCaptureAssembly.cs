@@ -1,8 +1,13 @@
 using System.Diagnostics;
 using Avalonia.Headless;
 
+#if AVALONIA_CAPTURE_PER_TEST
+[assembly: AvaloniaTestApplication(typeof(FreeX.App.Avalonia.Tests.Batch6HeadlessApp))]
+[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerTest)]
+#else
 [assembly: AvaloniaTestApplication(typeof(FreeX.App.Avalonia.Tests.RibbonHeadlessApp))]
 [assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]
+#endif
 [assembly: Xunit.CollectionBehavior(DisableTestParallelization = true)]
 
 namespace FreeX.App.Avalonia.Tests;
