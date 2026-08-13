@@ -18,6 +18,24 @@ public sealed class ReviewRevisionSortPlannerTests
     }
 
     [Fact]
+    public void Options_are_the_single_ordered_menu_catalog()
+    {
+        ReviewRevisionSortPlanner.Options
+            .Select(option => (option.Order, option.Label))
+            .Should().Equal(
+                (ReviewRevisionSortOrder.Sequence, "By Sequence"),
+                (ReviewRevisionSortOrder.Author, "By Author"),
+                (ReviewRevisionSortOrder.Kind, "By Type"),
+                (ReviewRevisionSortOrder.Date, "By Date"));
+
+        foreach (var option in ReviewRevisionSortPlanner.Options)
+        {
+            ReviewRevisionSortPlanner.IndexOf(option.Order)
+                .Should().Be(Array.IndexOf(ReviewRevisionSortPlanner.Options.ToArray(), option));
+        }
+    }
+
+    [Fact]
     public void Sort_orders_are_stable_and_leave_sequence_untouched()
     {
         var entries = new[]
@@ -35,5 +53,25 @@ public sealed class ReviewRevisionSortPlannerTests
                 RevisionEntryKind.Insertion, RevisionEntryKind.Insertion, RevisionEntryKind.Deletion);
         ReviewRevisionSortPlanner.Sort(entries, ReviewRevisionSortOrder.Date)
             .Select(entry => entry.Text).Should().Equal("a", "b", "c");
+    }
+
+    [Fact]
+    public void Sort_preserves_WPF_null_empty_and_single_entry_contracts()
+    {
+        var nullDate = Entry(0, RevisionEntryKind.Insertion, "Alice", "missing", null);
+        var dated = Entry(1, RevisionEntryKind.Insertion, "Bob", "dated", "2026-06-19T10:00:00Z");
+
+        ReviewRevisionSortPlanner.Sort([dated, nullDate], ReviewRevisionSortOrder.Date)
+            .Should().Equal(nullDate, dated);
+        ReviewRevisionSortPlanner.Sort([], ReviewRevisionSortOrder.Author).Should().BeEmpty();
+        ReviewRevisionSortPlanner.Sort([dated], ReviewRevisionSortOrder.Author)
+            .Should().ContainSingle().Which.Should().BeSameAs(dated);
+    }
+
+    [Fact]
+    public void IndexOf_rejects_unknown_order()
+    {
+        FluentActions.Invoking(() => ReviewRevisionSortPlanner.IndexOf((ReviewRevisionSortOrder)99))
+            .Should().Throw<ArgumentOutOfRangeException>();
     }
 }

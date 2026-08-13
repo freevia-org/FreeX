@@ -83,11 +83,9 @@ public sealed class ReviewingPane : SidePaneBase
         {
             Width = 132,
         };
-        _sortCombo.Items.Add(new ComboBoxItem { Content = "By Sequence", Tag = ReviewRevisionSortOrder.Sequence });
-        _sortCombo.Items.Add(new ComboBoxItem { Content = "By Author", Tag = ReviewRevisionSortOrder.Author });
-        _sortCombo.Items.Add(new ComboBoxItem { Content = "By Type", Tag = ReviewRevisionSortOrder.Kind });
-        _sortCombo.Items.Add(new ComboBoxItem { Content = "By Date", Tag = ReviewRevisionSortOrder.Date });
-        _sortCombo.SelectedIndex = 0;
+        foreach (var option in ReviewRevisionSortPlanner.Options)
+            _sortCombo.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Order });
+        _sortCombo.SelectedIndex = ReviewRevisionSortPlanner.IndexOf(_sortOrder);
         _sortCombo.SelectionChanged += (_, _) =>
         {
             if (_sortCombo.SelectedItem is ComboBoxItem { Tag: ReviewRevisionSortOrder order })
@@ -230,15 +228,7 @@ public sealed class ReviewingPane : SidePaneBase
 
     internal void SetSortOrderForTest(ReviewRevisionSortOrder order)
     {
-        var index = order switch
-        {
-            ReviewRevisionSortOrder.Sequence => 0,
-            ReviewRevisionSortOrder.Author => 1,
-            ReviewRevisionSortOrder.Kind => 2,
-            ReviewRevisionSortOrder.Date => 3,
-            _ => 0,
-        };
-        _sortCombo.SelectedIndex = index;
+        _sortCombo.SelectedIndex = ReviewRevisionSortPlanner.IndexOf(order);
     }
 
     /// <summary>

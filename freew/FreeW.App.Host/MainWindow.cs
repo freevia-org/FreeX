@@ -76,7 +76,7 @@ public sealed class MainWindow : Window
     // The revisions currently shown in the pane (the live snapshot the list items index into).
     private System.Collections.Generic.IReadOnlyList<RevisionEntry> _reviewEntries = System.Array.Empty<RevisionEntry>();
     // Active sort order for the Reviewing Pane. Default: reading order (sequence/date).
-    private RevisionSortOrder _reviewSortOrder = RevisionSortOrder.Sequence;
+    private ReviewRevisionSortOrder _reviewSortOrder = ReviewRevisionSortOrder.Sequence;
 
     // Thesaurus Pane (Review > Proofing > Thesaurus, Shift+F7): a docked right pane showing senses +
     // synonyms for the word at the caret, backed by the bundled compact synonym dictionary. Insert replaces
@@ -1571,14 +1571,12 @@ public sealed class MainWindow : Window
             Margin = new Thickness(0, 0, 6, 0)
         });
         var sortCombo = new ComboBox { MinWidth = 130 };
-        sortCombo.Items.Add(new ComboBoxItem { Content = "By Sequence", Tag = RevisionSortOrder.Sequence });
-        sortCombo.Items.Add(new ComboBoxItem { Content = "By Author", Tag = RevisionSortOrder.Author });
-        sortCombo.Items.Add(new ComboBoxItem { Content = "By Type", Tag = RevisionSortOrder.Kind });
-        sortCombo.Items.Add(new ComboBoxItem { Content = "By Date", Tag = RevisionSortOrder.Date });
-        sortCombo.SelectedIndex = 0;
+        foreach (var option in ReviewRevisionSortPlanner.Options)
+            sortCombo.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Order });
+        sortCombo.SelectedIndex = ReviewRevisionSortPlanner.IndexOf(_reviewSortOrder);
         sortCombo.SelectionChanged += (_, _) =>
         {
-            if (sortCombo.SelectedItem is ComboBoxItem { Tag: RevisionSortOrder order })
+            if (sortCombo.SelectedItem is ComboBoxItem { Tag: ReviewRevisionSortOrder order })
             {
                 _reviewSortOrder = order;
                 RefreshReviewPane();
@@ -1649,7 +1647,7 @@ public sealed class MainWindow : Window
             return;
 
         var previousIndex = _reviewList.SelectedIndex;
-        _reviewEntries = RevisionSortComparer.Sort(_editor.ListRevisions(), _reviewSortOrder);
+        _reviewEntries = ReviewRevisionSortPlanner.Sort(_editor.ListRevisions(), _reviewSortOrder);
 
         _reviewList.Items.Clear();
         foreach (var entry in _reviewEntries)
