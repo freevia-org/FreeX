@@ -10,7 +10,6 @@ public static class UserMessageServiceExtensions
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messageService);
-        ArgumentException.ThrowIfNullOrWhiteSpace(message);
 
         return messageService.ShowMessageAsync(
             new UserMessageRequest(

@@ -59,6 +59,10 @@ public sealed class DesignDialogPlannerTests
         avalonia.Should().NotContain("CustomizeThemeFontsDialogPlanner.DialogMargin");
         avalonia.Should().Contain("Layout.AvaloniaColorRowHeight");
         avalonia.Should().Contain("Layout.AvaloniaSeparatorHeight");
+        avalonia.Should().Contain("IUserMessageService? messageService = null");
+        avalonia.Should().Contain("messageService ?? new AvaloniaUserMessageService(this)");
+        avalonia.Should().Contain("await _messageService.ShowWarningAsync(");
+        avalonia.Should().Contain("ok.Click += (_, _) => AcceptAndClose()");
     }
 
     [Fact]

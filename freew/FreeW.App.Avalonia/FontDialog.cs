@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
@@ -39,6 +40,7 @@ public sealed class FontDialog : FreeWDialogWindow
         };
 
     private readonly FontDialogSession _session;
+    private readonly IUserMessageService _messageService;
 
     private readonly TextBox _familyBox;
     private readonly ComboBox _sizeBox;
@@ -62,14 +64,17 @@ public sealed class FontDialog : FreeWDialogWindow
     private readonly ComboBox _numberSpacingBox;
     private readonly TextBlock _status = new();
 
-    public FontDialog(RunFormatting current)
-        : this(new FontDialogSelectionState(current))
+    public FontDialog(RunFormatting current, IUserMessageService? messageService = null)
+        : this(new FontDialogSelectionState(current), messageService)
     {
     }
 
-    public FontDialog(FontDialogSelectionState selection)
+    public FontDialog(
+        FontDialogSelectionState selection,
+        IUserMessageService? messageService = null)
     {
         _session = FontDialogPlanner.CreateSession(selection, CultureInfo.CurrentCulture);
+        _messageService = messageService ?? new AvaloniaUserMessageService(this);
 
         Title = Surface.Title;
         Width = Surface.WindowWidth;
@@ -227,7 +232,7 @@ public sealed class FontDialog : FreeWDialogWindow
         };
     }
 
-    private void OnOk()
+    private async void OnOk()
     {
         _status.IsVisible = false;
         var acceptance = _session.PlanAcceptance(FontDialogPlanner.CaptureControlState(
@@ -245,8 +250,7 @@ public sealed class FontDialog : FreeWDialogWindow
 
         if (!acceptance.IsAccepted)
         {
-            _status.Text = acceptance.ErrorMessage ?? string.Empty;
-            _status.IsVisible = true;
+            await _messageService.ShowWarningAsync(acceptance.ErrorMessage ?? string.Empty);
             return;
         }
 

@@ -65,6 +65,20 @@ public sealed class FontDialogPlannerTests
     }
 
     [Fact]
+    public void AvaloniaProductionValidationUsesTheSharedWarningFeedbackPort()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Avalonia", "FontDialog.cs"));
+
+        source.Should().Contain("IUserMessageService? messageService = null");
+        source.Should().Contain("messageService ?? new AvaloniaUserMessageService(this)");
+        source.Should().Contain("private async void OnOk()");
+        source.Should().Contain("await _messageService.ShowWarningAsync(");
+        source.Should().NotContain("_status.IsVisible = true");
+    }
+
+    [Fact]
     public void CaptureControlState_MapsTypedEffectsToAcceptanceState()
     {
         var state = FontDialogPlanner.CaptureControlState(
