@@ -232,11 +232,3 @@ public sealed class WindowsPrintService : IPlatformPrintService
     private static PrintSubmissionResult CancelledSubmission(string? printerName) =>
         new(PrintSubmissionStatus.Cancelled, printerName, Message: "Print submission was cancelled.");
 }
-
-public static class PlatformPrintServiceFactory
-{
-    public static IPlatformPrintService Create() =>
-        OperatingSystem.IsWindows()
-            ? new WindowsPrintService()
-            : new CupsPrintService();
-}

@@ -11,6 +11,12 @@ public sealed class PrintPlatformDedupSourceTests
         var freeP = Read(root, "freep", "FreeP.App.Recording.Windows", "WindowsNativePrintHandoff.cs");
         var freePAvalonia = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var sharedService = Read(root, "shared", "Free.Shared.AppServices.Windows", "WindowsPrintService.cs");
+        var selector = Read(
+            root,
+            "shared",
+            "Free.Shared.AppServices",
+            "Printing",
+            "PlatformPrintServiceSelector.cs");
         var catalog = Read(root, "shared", "Free.Shared.AppServices.Windows", "WindowsPrinterCatalog.cs");
         var handoff = Read(root, "shared", "Free.Shared.AppServices.Windows", "WindowsShellPdfPrintHandoff.cs");
         var formerFreeWOwner = Path.Combine(
@@ -26,6 +32,7 @@ public sealed class PrintPlatformDedupSourceTests
         freeP.Should().NotContain("SubmitAsync(");
         freeP.Should().NotContain("WindowsNativePrintHandoffAdapter");
         freePAvalonia.Should().Contain("IPlatformPrintService");
+        freePAvalonia.Should().Contain("PlatformPrintServiceSelector.Select(");
         freePAvalonia.Should().Contain("new WindowsPrintService(");
         freePAvalonia.Should().Contain("_printService.SubmitAsync(");
         freeP.Should().NotContain("IWindowsPdfPrintHandoff");
@@ -35,7 +42,9 @@ public sealed class PrintPlatformDedupSourceTests
         freeP.Should().NotContain("ProcessStartInfo");
 
         sharedService.Should().Contain("class WindowsPrintService");
-        sharedService.Should().Contain("class PlatformPrintServiceFactory");
+        sharedService.Should().NotContain("PlatformPrintServiceFactory");
+        selector.Should().Contain("class PlatformPrintServiceSelector");
+        selector.Should().Contain("OperatingSystem.IsWindows()");
         catalog.Should().Contain("class WindowsPrinterCatalog");
         catalog.Should().Contain("EnumPrinters(");
         catalog.Should().Contain("GetDefaultPrinter(");

@@ -190,7 +190,9 @@ public sealed partial class MainWindow : Window
         _platformClipboard = platformClipboard ?? new AvaloniaPlatformClipboard(
             () => TopLevel.GetTopLevel(this)?.Clipboard);
         _editor.CanPasteProvider = () => _platformClipboard.IsAvailable;
-        _printService = printService ?? PlatformPrintServiceFactory.Create();
+        _printService = printService ?? PlatformPrintServiceSelector.Select(
+            windowsFactory: static () => new WindowsPrintService(),
+            cupsFactory: static () => new CupsPrintService());
         _portablePrintWorkflow = new FreeWPortablePrintWorkflow(_printService);
         _showPrintSelectionDialog = showPrintSelectionDialog ??
             ((owner, discovery, cancellationToken) =>

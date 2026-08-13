@@ -22,6 +22,7 @@
   <ItemGroup>
     <!-- Tests exercise the internal normalization and recovery policy hooks directly. -->
     <InternalsVisibleTo Include="FreeX.App.Services.Tests" />
+    <InternalsVisibleTo Include="Free.Shared.AppServices.Tests" />
   </ItemGroup>
 
 </Project>

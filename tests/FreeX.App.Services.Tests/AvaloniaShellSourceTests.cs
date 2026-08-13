@@ -408,8 +408,9 @@ public sealed class AvaloniaShellSourceTests
 
         printSource.Should().Contain("IPlatformPrintService");
         printSource.Should().NotContain("IPlatformPrinter");
-        mainSource.Should().Contain(
-            "new CupsPrintService(discoveryMode: CupsPrinterDiscoveryMode.DestinationNames)");
+        mainSource.Should().Contain("PlatformPrintServiceSelector.Select(");
+        mainSource.Should().Contain("cupsFactory: static () => new CupsPrintService(");
+        mainSource.Should().Contain("discoveryMode: CupsPrinterDiscoveryMode.DestinationNames");
     }
 
     [Fact]

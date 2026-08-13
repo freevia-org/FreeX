@@ -10,17 +10,6 @@ public sealed class WindowsPrintServiceTests : IDisposable
 
     public void Dispose() => _temporaryDirectory.Dispose();
     [Fact]
-    public void Factory_SelectsWindowsBackendOnWindows()
-    {
-        var service = PlatformPrintServiceFactory.Create();
-
-        if (OperatingSystem.IsWindows())
-            service.Should().BeOfType<WindowsPrintService>();
-        else
-            service.Should().BeOfType<CupsPrintService>();
-    }
-
-    [Fact]
     public void WindowsBackend_DeclaresPreparedPdfRangeAndOrientationHandling()
     {
         IPlatformPrintService service = new WindowsPrintService(isSupportedOverride: true);

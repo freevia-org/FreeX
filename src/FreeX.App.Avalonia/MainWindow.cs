@@ -960,7 +960,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private static IPlatformPrintService CreatePlatformPrintService() =>
-        new CupsPrintService(discoveryMode: CupsPrinterDiscoveryMode.DestinationNames);
+        PlatformPrintServiceSelector.Select(
+            windowsFactory: null,
+            cupsFactory: static () => new CupsPrintService(
+                discoveryMode: CupsPrinterDiscoveryMode.DestinationNames));
 
     private Control BuildContent()
     {

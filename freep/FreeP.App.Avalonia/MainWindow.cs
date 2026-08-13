@@ -3794,19 +3794,17 @@ public sealed partial class MainWindow : Window,
         return new LinuxNativeOutputCapabilityDetector().Detect();
     }
 
-    private static IPlatformPrintService CreatePlatformPrintService()
-    {
+    private static IPlatformPrintService CreatePlatformPrintService() =>
+        PlatformPrintServiceSelector.Select(
 #if FREEP_WINDOWS_CAPTURE
-        if (OperatingSystem.IsWindows())
-        {
-            return new WindowsPrintService(
+            windowsFactory: static () => new WindowsPrintService(
                 options: new WindowsPrintServiceOptions(
                     RequirePrinterDiscoveryBeforeSubmission: false,
-                    RejectNonZeroHandlerExitCode: false));
-        }
+                    RejectNonZeroHandlerExitCode: false)),
+#else
+            windowsFactory: null,
 #endif
-        return new CupsPrintService();
-    }
+            cupsFactory: static () => new CupsPrintService());
 
     private static Task<PrintSelection?> ShowPlatformPrintSelectionDialogAsync(
         Window owner,
