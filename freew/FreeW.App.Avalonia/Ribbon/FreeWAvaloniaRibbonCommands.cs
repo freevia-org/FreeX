@@ -1203,7 +1203,11 @@ internal static class FreeWAvaloniaRibbonCommands
             "Image",
             callbacks.OpenImagePositionDialog,
             callbacks.OpenImageSizeDialog);
-        RegisterFloatingPositionCommands(r, "image", imageObjectCommands);
+        FreeWRibbonEditorExecutionProfile.RegisterFloatingPositionCommands(
+            r,
+            "image",
+            imageObjectCommands,
+            FreeWRibbonDefinitionData.FloatingPositionPresets);
         r.Bind(FreeWRibbonCommandAction.ImageAdjustDialog, new SelectedImageDialogCommand(
             editor,
             callbacks.OpenImageAdjustDialog));
@@ -1232,7 +1236,11 @@ internal static class FreeWAvaloniaRibbonCommands
             "Shape",
             callbacks.OpenShapePositionDialog,
             callbacks.OpenShapeSizeDialog);
-        RegisterFloatingPositionCommands(r, "shape", shapeObjectCommands);
+        FreeWRibbonEditorExecutionProfile.RegisterFloatingPositionCommands(
+            r,
+            "shape",
+            shapeObjectCommands,
+            FreeWRibbonDefinitionData.FloatingPositionPresets);
         r.Bind(
             FreeWRibbonCommandAction.ShapeSize,
             FreeWRibbonFloatingObjectCommandFactory.CreateSize(shapeObjectCommands));
@@ -1369,29 +1377,6 @@ internal static class FreeWAvaloniaRibbonCommands
             RegisterImageMutation(registry, editor, action, Apply);
         else
             RegisterImageMutation(registry, editor, preset.CommandId!, Apply);
-    }
-
-    private static void RegisterFloatingPositionCommands(
-        IRibbonCommandRegistry r,
-        string prefix,
-        FreeWRibbonFloatingObjectCommandPorts ports)
-    {
-        r.Register(
-            $"freew.{prefix}-position",
-            FreeWRibbonFloatingObjectCommandFactory.CreatePosition(ports));
-        foreach (var preset in FreeWRibbonDefinitionData.FloatingPositionPresets)
-        {
-            var captured = preset;
-            r.Register(
-                $"freew.{prefix}-position-{captured.Suffix}",
-                FreeWRibbonFloatingObjectCommandFactory.CreatePositionPreset(
-                    ports,
-                    new FreeWRibbonObjectPositionInput(
-                        captured.HorizontalOffsetPt,
-                        captured.VerticalOffsetPt,
-                        captured.HorizontalAnchor,
-                        captured.VerticalAnchor)));
-        }
     }
 
     private static FreeWRibbonFloatingObjectCommandPorts CreateFloatingObjectCommandPorts(

@@ -90,4 +90,49 @@ public sealed class FreeWRibbonFloatingObjectCommandFactoryTests
         positions.Should().Equal(position);
         sizes.Should().Equal((216d, 108d));
     }
+
+    [Fact]
+    public void EditorProfileRegistersTheFloatingPositionFamily()
+    {
+        var registry = new RibbonCommandRegistry();
+        var positions = new List<FreeWRibbonObjectPositionInput>();
+        var ports = new FreeWRibbonFloatingObjectCommandPorts(
+            () => true,
+            positions.Add,
+            (_, _) => { });
+        IFreeWRibbonFloatingPositionPreset[] presets =
+        [
+            new TestPositionPreset(
+                "page-top",
+                12,
+                24,
+                HorizontalAnchor.Page,
+                VerticalAnchor.Page),
+        ];
+
+        FreeWRibbonEditorExecutionProfile.RegisterFloatingPositionCommands(
+            registry,
+            "image",
+            ports,
+            presets);
+
+        registry.TryGet("freew.image-position", out var positionCommand).Should().BeTrue();
+        positionCommand.Should().BeAssignableTo<IRibbonStatefulCommand>();
+        registry.TryGet("freew.image-position-page-top", out var presetCommand).Should().BeTrue();
+
+        presetCommand!.Execute(RibbonCommandContext.Empty);
+
+        positions.Should().Equal(new FreeWRibbonObjectPositionInput(
+            12,
+            24,
+            HorizontalAnchor.Page,
+            VerticalAnchor.Page));
+    }
+
+    private sealed record TestPositionPreset(
+        string Suffix,
+        double HorizontalOffsetPt,
+        double VerticalOffsetPt,
+        HorizontalAnchor HorizontalAnchor,
+        VerticalAnchor VerticalAnchor) : IFreeWRibbonFloatingPositionPreset;
 }

@@ -110,15 +110,26 @@ public sealed class FreeWFinalTailOwnershipSourceTests
     {
         var wpf = Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
         var avalonia = Read("freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+        var profile = Read(
+            "freew",
+            "FreeW.App.Presentation",
+            "Ribbon",
+            "FreeWRibbonEditorExecutionProfile.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("FreeWRibbonFloatingObjectCommandFactory.CreatePosition(");
+            source.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloatingPositionCommands(");
             source.Should().Contain("FreeWRibbonFloatingObjectCommandFactory.CreateSize(");
             source.Should().Contain("FreeWRibbonDefinitionData.FloatingPositionPresets");
+            source.Should().NotContain("private static void RegisterFloatingPositionCommands(");
+            source.Should().NotContain("FreeWRibbonFloatingObjectCommandFactory.CreatePosition(");
             source.Should().NotContain("private sealed class FloatingObjectPositionCommand");
             source.Should().NotContain("private sealed class FloatingObjectSizeCommand");
         }
+
+        profile.Should().Contain("public static void RegisterFloatingPositionCommands(");
+        profile.Should().Contain("FreeWRibbonFloatingObjectCommandFactory.CreatePosition(");
+        profile.Should().Contain("FreeWRibbonFloatingObjectCommandFactory.CreatePositionPreset(");
 
         wpf.Should().NotContain("private sealed class ImagePositionCommand");
         wpf.Should().NotContain("private sealed class ImageSizeCommand");

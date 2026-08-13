@@ -10,7 +10,7 @@ public sealed record FreeWFloatingPositionPreset(
     double HorizontalOffsetPt,
     double VerticalOffsetPt,
     HorizontalAnchor HorizontalAnchor,
-    VerticalAnchor VerticalAnchor);
+    VerticalAnchor VerticalAnchor) : IFreeWRibbonFloatingPositionPreset;
 
 public sealed record FreeWFloatingSizePreset(string Suffix, string Label, double WidthPt, double HeightPt);
 

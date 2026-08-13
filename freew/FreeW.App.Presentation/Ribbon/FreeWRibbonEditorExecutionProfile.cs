@@ -51,6 +51,15 @@ public sealed class FreeWRibbonEditorCommandFamilyBuilder
 
 public sealed record FreeWRibbonFloatingFeedback(string Title, string Message);
 
+public interface IFreeWRibbonFloatingPositionPreset
+{
+    string Suffix { get; }
+    double HorizontalOffsetPt { get; }
+    double VerticalOffsetPt { get; }
+    HorizontalAnchor HorizontalAnchor { get; }
+    VerticalAnchor VerticalAnchor { get; }
+}
+
 public static class FreeWRibbonFloatingFeedbackCatalog
 {
     public static readonly FreeWRibbonFloatingFeedback EditShape = new(
@@ -298,6 +307,35 @@ public static class FreeWRibbonEditorExecutionProfile
 
         foreach (var (commandId, command) in ports.AdapterCommands)
             bindings.Register(commandId, command);
+    }
+
+    public static void RegisterFloatingPositionCommands(
+        IRibbonCommandRegistry registry,
+        string prefix,
+        FreeWRibbonFloatingObjectCommandPorts ports,
+        IEnumerable<IFreeWRibbonFloatingPositionPreset> presets)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        ArgumentException.ThrowIfNullOrWhiteSpace(prefix);
+        ArgumentNullException.ThrowIfNull(ports);
+        ArgumentNullException.ThrowIfNull(presets);
+
+        registry.Register(
+            $"freew.{prefix}-position",
+            FreeWRibbonFloatingObjectCommandFactory.CreatePosition(ports));
+        foreach (var preset in presets)
+        {
+            var captured = preset;
+            registry.Register(
+                $"freew.{prefix}-position-{captured.Suffix}",
+                FreeWRibbonFloatingObjectCommandFactory.CreatePositionPreset(
+                    ports,
+                    new FreeWRibbonObjectPositionInput(
+                        captured.HorizontalOffsetPt,
+                        captured.VerticalOffsetPt,
+                        captured.HorizontalAnchor,
+                        captured.VerticalAnchor)));
+        }
     }
 
     public static void RegisterFloating(

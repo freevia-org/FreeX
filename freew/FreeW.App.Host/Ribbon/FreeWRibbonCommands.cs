@@ -430,7 +430,11 @@ internal static class FreeWRibbonCommands
         // and align the image's (image-only) paragraph left/center/right. Both mutate the model + re-render.
         registry.Bind(FreeWRibbonCommandAction.ImageAltText, new ImageAltTextCommand(editor));
         // Picture Format tab — Arrange > Position.
-        RegisterFloatingPositionCommands(registry, "image", imageObjectCommands);
+        FreeWRibbonEditorExecutionProfile.RegisterFloatingPositionCommands(
+            registry,
+            "image",
+            imageObjectCommands,
+            FreeWRibbonDefinitionData.FloatingPositionPresets);
         // Picture Format tab — Adjust > Corrections (brightness/contrast presets + dialog).
         foreach (var preset in ImageAdjustmentCommandPlanner.AdjustmentPresets
                      .Where(item => item.Channel is ImageAdjustmentChannel.Brightness or ImageAdjustmentChannel.Contrast))
@@ -564,7 +568,11 @@ internal static class FreeWRibbonCommands
         // Alt Text: text prompt for shape or WordArt.
         registry.Bind(FreeWRibbonCommandAction.ShapeAltText, new ShapeAltTextCommand(editor));
         // Drawing Tools > Arrange — Position (opens the same dialog as image-position, applied to shape).
-        RegisterFloatingPositionCommands(registry, "shape", shapeObjectCommands);
+        FreeWRibbonEditorExecutionProfile.RegisterFloatingPositionCommands(
+            registry,
+            "shape",
+            shapeObjectCommands,
+            FreeWRibbonDefinitionData.FloatingPositionPresets);
 
         // ── WordArt style gallery — original four + extended eleven (W24) ─────────────────────────
         registry.Register("freew.wordart-style", new ActionRibbonCommand(() =>
@@ -1419,29 +1427,6 @@ internal static class FreeWRibbonCommands
 
         RefreshStatefulCommands();
         return FreeWRibbonExecutionProfile.Build(registry).Registry;
-    }
-
-    private static void RegisterFloatingPositionCommands(
-        FreeWRibbonCommandBindingPorts registry,
-        string prefix,
-        FreeWRibbonFloatingObjectCommandPorts ports)
-    {
-        registry.Register(
-            $"freew.{prefix}-position",
-            FreeWRibbonFloatingObjectCommandFactory.CreatePosition(ports));
-        foreach (var preset in FreeWRibbonDefinitionData.FloatingPositionPresets)
-        {
-            var captured = preset;
-            registry.Register(
-                $"freew.{prefix}-position-{captured.Suffix}",
-                FreeWRibbonFloatingObjectCommandFactory.CreatePositionPreset(
-                    ports,
-                    new FreeWRibbonObjectPositionInput(
-                        captured.HorizontalOffsetPt,
-                        captured.VerticalOffsetPt,
-                        captured.HorizontalAnchor,
-                        captured.VerticalAnchor)));
-        }
     }
 
     private static FreeWRibbonFloatingObjectCommandPorts CreateFloatingObjectCommandPorts(
