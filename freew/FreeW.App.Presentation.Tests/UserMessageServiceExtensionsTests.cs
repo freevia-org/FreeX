@@ -19,6 +19,16 @@ public sealed class UserMessageServiceExtensionsTests
             UserMessageIcon.Warning));
     }
 
+    [Fact]
+    public async Task ShowWarningAsyncPreservesAnEmptyRendererMessageLikeWpf()
+    {
+        var service = new RecordingMessageService();
+
+        await service.ShowWarningAsync(string.Empty);
+
+        service.Request!.Message.Should().BeEmpty();
+    }
+
     private sealed class RecordingMessageService : IUserMessageService
     {
         public UserMessageRequest? Request { get; private set; }

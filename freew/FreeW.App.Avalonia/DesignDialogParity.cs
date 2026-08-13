@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -20,13 +21,17 @@ public sealed partial class CustomizeThemeColorsDialog : FreeWDialogWindow
     private readonly TextBox _nameBox;
     private readonly TextBlock _status = new();
     private readonly DesignDialogText _text;
+    private readonly IUserMessageService _messageService;
 
     public DocumentTheme? Result { get; private set; }
 
-    public CustomizeThemeColorsDialog(DocumentTheme current)
+    public CustomizeThemeColorsDialog(
+        DocumentTheme current,
+        IUserMessageService? messageService = null)
     {
         ArgumentNullException.ThrowIfNull(current);
         _current = current;
+        _messageService = messageService ?? new AvaloniaUserMessageService(this);
         _text = DesignDialogTextCatalog.Resolve(UiText.Get);
         var state = CustomizeThemeColorsDialogPlanner.BuildInitialState(current);
         _colorBoxes = state.ColorHexTexts.Select(text => MakeTextBox(text, Layout.ColorFieldMinWidth)).ToArray();
@@ -105,11 +110,26 @@ public sealed partial class CustomizeThemeColorsDialog : FreeWDialogWindow
         return true;
     }
 
+    private async void AcceptAndClose()
+    {
+        if (Accept(closeOnSuccess: false))
+        {
+            Close();
+            return;
+        }
+
+        var message = _status.Text ?? _text.InvalidThemeColorsMessage;
+        _status.IsVisible = false;
+        await _messageService.ShowWarningAsync(
+            message,
+            Title ?? CustomizeThemeColorsDialogPlanner.Title);
+    }
+
     private StackPanel CreateActionRow()
     {
         var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDialogLayout.ChromeStyle, Layout.ActionButtonWidth, isDefault: true);
-        ok.Click += (_, _) => Accept(closeOnSuccess: true);
+        ok.Click += (_, _) => AcceptAndClose();
 
         var cancel = new Button { Content = UiText.Get("Common_CancelText"), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDialogLayout.ChromeStyle, Layout.ActionButtonWidth);
