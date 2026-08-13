@@ -23,6 +23,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
 {
     private sealed class MainWindowHarness : IDisposable
     {
+        // Clipboard-isolated tests run on a dedicated STA, so each dispatcher needs its own WPF window.
+        [ThreadStatic]
         private static SharedMainWindowSession? SharedSession;
 
         private readonly MainWindow _window;

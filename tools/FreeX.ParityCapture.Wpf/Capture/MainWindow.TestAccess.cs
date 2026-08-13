@@ -185,6 +185,8 @@ public partial class MainWindow
 
     internal void AddAdditionalRowSelectionForTest(uint row) => AddAdditionalRowSelection(row);
 
+    internal void SelectRangeForTest(GridRange range) => SetSelectionRange(range, range.Start);
+
     internal void SelectAllForTest() => SelectAll();
 
     internal void PreviewColumnResizeForTest(uint column, double width) => OnColumnResizing(column, width);

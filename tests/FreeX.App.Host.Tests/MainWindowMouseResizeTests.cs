@@ -136,10 +136,10 @@ public sealed class MainWindowMouseResizeTests
         StaTestRunner.Run(() =>
         {
             using var harness = MainWindowHarness.Create();
-            harness.SelectRange(1, 2, 1, 4);
+            harness.SelectColumns(2, 4);
 
             harness.PreviewColumnResize(3, 160);
-            harness.SelectRange(1, 6, 1, 6);
+            harness.SelectColumns(6, 6);
             harness.CommitColumnResize(3, 160);
 
             var expectedWidth = ColumnWidthPixelMapper.PixelsToColumnWidth(160);
@@ -156,7 +156,7 @@ public sealed class MainWindowMouseResizeTests
         StaTestRunner.Run(() =>
         {
             using var harness = MainWindowHarness.Create();
-            harness.SelectRange(1, 2, 1, 4);
+            harness.SelectColumns(2, 4);
 
             harness.PreviewColumnResize(3, 0);
             harness.CommitColumnResize(3, 0);
@@ -219,10 +219,10 @@ public sealed class MainWindowMouseResizeTests
         StaTestRunner.Run(() =>
         {
             using var harness = MainWindowHarness.Create();
-            harness.SelectRange(2, 1, 4, 1);
+            harness.SelectRows(2, 4);
 
             harness.PreviewRowResize(3, 36);
-            harness.SelectRange(6, 1, 6, 1);
+            harness.SelectRows(6, 6);
             harness.CommitRowResize(3, 36);
 
             harness.CurrentSheet.RowHeights[2].Should().BeApproximately(36, 0.0001);
@@ -238,7 +238,7 @@ public sealed class MainWindowMouseResizeTests
         StaTestRunner.Run(() =>
         {
             using var harness = MainWindowHarness.Create();
-            harness.SelectRange(2, 1, 4, 1);
+            harness.SelectRows(2, 4);
 
             harness.PreviewRowResize(3, 0);
             harness.CommitRowResize(3, 0);
@@ -329,10 +329,16 @@ public sealed class MainWindowMouseResizeTests
 
         public void SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
         {
-            SheetGrid.SelectedRange = new GridRange(
+            _window.SelectRangeForTest(new GridRange(
                 new CellAddress(CurrentSheet.Id, startRow, startCol),
-                new CellAddress(CurrentSheet.Id, endRow, endCol));
+                new CellAddress(CurrentSheet.Id, endRow, endCol)));
         }
+
+        public void SelectColumns(uint startCol, uint endCol) =>
+            SelectRange(1, startCol, CellAddress.MaxRow, endCol);
+
+        public void SelectRows(uint startRow, uint endRow) =>
+            SelectRange(startRow, 1, endRow, CellAddress.MaxCol);
 
         public void PreviewColumnResize(uint col, double width)
         {

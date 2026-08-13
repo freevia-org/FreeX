@@ -14,6 +14,7 @@ public sealed class WpfRendererTestAccessOwnershipTests
         "BeginFormulaPointModeEditForTest",
         "RaiseFormulaBoxKeyDownForTest",
         "RouteFormulaPointSelectionForTest",
+        "SelectRangeForTest",
         "FindRenderedRibbonCommandControlForTest",
         "PopulateTableDesignStyleGalleryMenuForTest"
     ];

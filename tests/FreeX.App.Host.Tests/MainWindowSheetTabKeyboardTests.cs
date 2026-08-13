@@ -558,7 +558,8 @@ public sealed class MainWindowSheetTabKeyboardTests
         source.Should().Contain("private void ClearSheetTabDragState()");
         source.Should().Contain("_currentSheetId = draggedId;");
 
-        groupClick.Should().Contain("var modifiers = Keyboard.Modifiers;");
+        groupClick.Should().Contain("=> UpdateGroupedSheetsForClick(clickedSheetId, Keyboard.Modifiers);");
+        groupClick.Should().Contain("UpdateGroupedSheetsForClick(SheetId clickedSheetId, ModifierKeys modifiers)");
         groupClick.Should().Contain("(modifiers & ModifierKeys.Shift) != 0");
         groupClick.Should().Contain("SheetGroupSelectionService.SelectRange");
         groupClick.Should().Contain("(modifiers & ModifierKeys.Control) != 0");
