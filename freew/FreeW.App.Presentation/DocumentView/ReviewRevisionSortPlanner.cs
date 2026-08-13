@@ -11,11 +11,35 @@ public enum ReviewRevisionSortOrder
     Date,
 }
 
+/// <summary>One renderer-neutral option in the Reviewing Pane's Sort menu.</summary>
+public sealed record ReviewRevisionSortOption(
+    ReviewRevisionSortOrder Order,
+    string Label);
+
 /// <summary>
 /// Applies the WPF Reviewing Pane ordering contract without mutating the document model.
 /// </summary>
 public static class ReviewRevisionSortPlanner
 {
+    public static IReadOnlyList<ReviewRevisionSortOption> Options { get; } =
+    [
+        new(ReviewRevisionSortOrder.Sequence, "By Sequence"),
+        new(ReviewRevisionSortOrder.Author, "By Author"),
+        new(ReviewRevisionSortOrder.Kind, "By Type"),
+        new(ReviewRevisionSortOrder.Date, "By Date"),
+    ];
+
+    public static int IndexOf(ReviewRevisionSortOrder order)
+    {
+        for (var index = 0; index < Options.Count; index++)
+        {
+            if (Options[index].Order == order)
+                return index;
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(order));
+    }
+
     public static IReadOnlyList<RevisionEntry> Sort(
         IReadOnlyList<RevisionEntry> entries,
         ReviewRevisionSortOrder order)

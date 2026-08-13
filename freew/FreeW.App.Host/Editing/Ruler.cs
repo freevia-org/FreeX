@@ -3,14 +3,15 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Editing;
 
 /// <summary>
 /// A Word-style ruler drawn directly above (horizontal) or to the left of (vertical) the
-/// <see cref="DocumentView"/> in Print-Layout mode. It is a passive, read-only piece of view chrome:
-/// it draws an inch tick scale across the page, shades the left/right (or top/bottom) margin zones from
+/// <see cref="DocumentView"/> in Print-Layout mode. It draws an inch tick scale across the page and
+/// shades the left/right (or top/bottom) margin zones from
 /// the document's <see cref="PageSettings"/>, and — for the horizontal ruler — overlays the current
 /// paragraph's left / right / first-line indent markers and its tab stops.
 ///
@@ -35,7 +36,6 @@ namespace FreeW.App.Host.Editing;
 /// </summary>
 public sealed class Ruler : FrameworkElement
 {
-    private const double DipPerPoint = PageLayout.DipPerPoint;
     private const double DipPerInch = 96.0;
 
     // A 16-DIP-tall horizontal strip / 16-DIP-wide vertical strip — Word's slim ruler footprint.
@@ -50,8 +50,6 @@ public sealed class Ruler : FrameworkElement
     private static readonly Brush IndentBrush = Frozen(Color.FromRgb(0x2B, 0x57, 0x9A));
     private static readonly Pen IndentPen = FrozenPen(Color.FromRgb(0x2B, 0x57, 0x9A), 1.0);
     private static readonly Pen TabPen = FrozenPen(Color.FromRgb(0x40, 0x40, 0x40), 1.0);
-    private const double HitRadius = 7;
-    private const double TabGridPt = 6;
 
     private readonly DocumentView _editor;
     private readonly Orientation _orientation;
@@ -113,10 +111,11 @@ public sealed class Ruler : FrameworkElement
 
     internal sealed record HorizontalMetrics(double ContentStart, double ContentEnd, double Zoom)
     {
-        public double PointToContentPt(double x) =>
-            Math.Clamp((x - ContentStart) / (DipPerPoint * Zoom), 0, Math.Max(0, (ContentEnd - ContentStart) / (DipPerPoint * Zoom)));
+        private DocumentRulerHorizontalMetrics Shared => new(ContentStart, ContentEnd, Zoom);
 
-        public double ContentPtToX(double pt) => ContentStart + PageLayout.PointsToDip(pt) * Zoom;
+        public double PointToContentPt(double x) => Shared.XToContentPoint(x);
+
+        public double ContentPtToX(double pt) => Shared.ContentPointToX(pt);
     }
 
     // Vertical ruler hit geometry: the two margin boundary Y positions (in ruler/screen DIP) computed
@@ -130,7 +129,9 @@ public sealed class Ruler : FrameworkElement
         /// Convert a Y-delta in DIP (positive = down) into a margin delta in points, preserving sign.
         /// Divides by (DipPerPoint * Zoom) — the exact inverse of PointsToDip(pt) * zoom.
         /// </summary>
-        public double DipDeltaToPointsDelta(double dipDelta) => dipDelta / (DipPerPoint * Zoom);
+        public double DipDeltaToPointsDelta(double dipDelta) =>
+            new DocumentRulerVerticalMetrics(TopBoundaryY, BottomBoundaryY, PageHeightPt, Zoom, -ScrollOffsetDip)
+                .DipDeltaToPointsDelta(dipDelta);
     }
 
     /// <summary>
@@ -142,39 +143,29 @@ public sealed class Ruler : FrameworkElement
     /// </summary>
     internal static VerticalMetrics? TryVerticalMetrics(PageSettings page, double zoom, double scrollOffsetDip = 0)
     {
-        if (zoom <= 0)
-            return null;
-
-        // The page top (in ruler DIP) accounts for the editor's scroll: at offset 0 the page top sits
-        // at ruler Y=0; scrolling down moves it upward (negative pageY).
-        var pageY         = -scrollOffsetDip;
-        var pageHeightDip = PageLayout.PointsToDip(page.HeightPt) * zoom;
-        var topDip        = PageLayout.PointsToDip(page.MarginTopPt) * zoom;
-        var bottomDip     = PageLayout.PointsToDip(page.MarginBottomPt) * zoom;
-
-        return new VerticalMetrics(
-            TopBoundaryY:    pageY + topDip,
-            BottomBoundaryY: pageY + pageHeightDip - bottomDip,
-            PageHeightPt:    page.HeightPt,
-            Zoom:            zoom,
-            ScrollOffsetDip: scrollOffsetDip);
+        var shared = DocumentRulerInteractionPlanner.TryBuildVerticalMetrics(page, zoom, -scrollOffsetDip);
+        return shared is null
+            ? null
+            : new VerticalMetrics(
+                shared.TopBoundaryY,
+                shared.BottomBoundaryY,
+                shared.PageHeightPt,
+                shared.Zoom,
+                scrollOffsetDip);
     }
 
     // Clamp a new margin so it is non-negative and leaves at least a 1-pt content strip on the page
     // (top + bottom < pageHeight). Mirrors the implicit guarantee in PageLayout.ContentAreaDip.
     internal static double ClampVerticalMargin(double newMarginPt, double otherMarginPt, double pageHeightPt)
     {
-        var clamped = Math.Max(0, newMarginPt);
-        // Ensure top + bottom does not consume the entire page; keep at least 1 pt of content.
-        var maxAllowed = Math.Max(0, pageHeightPt - otherMarginPt - 1);
-        return Math.Min(clamped, maxAllowed);
+        return DocumentRulerInteractionPlanner.ClampVerticalMargin(newMarginPt, otherMarginPt, pageHeightPt);
     }
 
     internal static IReadOnlyList<TabStop> MoveOrAddLeftTabStop(
         IReadOnlyList<TabStop> stops,
         int index,
         double positionPt) =>
-        MoveOrAddTabStop(stops, index, positionPt, TabStopAlignment.Left);
+        DocumentRulerInteractionPlanner.MoveOrAddTabStop(stops, index, positionPt, TabStopAlignment.Left);
 
     internal static IReadOnlyList<TabStop> MoveOrAddTabStop(
         IReadOnlyList<TabStop> stops,
@@ -182,51 +173,22 @@ public sealed class Ruler : FrameworkElement
         double positionPt,
         TabStopAlignment alignment)
     {
-        var snapped = SnapPoint(positionPt);
-        var result = stops.ToList();
-        var replacement = new TabStop(snapped, alignment);
-        if (index >= 0 && index < result.Count)
-        {
-            var current = result[index];
-            replacement = current with { PositionPt = snapped };
-            result[index] = replacement;
-        }
-        else
-        {
-            result.Add(replacement);
-        }
-
-        return result
-            .Where(s => s.PositionPt >= 0)
-            .OrderBy(s => s.PositionPt)
-            .ThenBy(s => s.Alignment)
-            .ThenBy(s => s.Leader)
-            .ToArray();
+        return DocumentRulerInteractionPlanner.MoveOrAddTabStop(stops, index, positionPt, alignment);
     }
 
     internal static IReadOnlyList<TabStop> RemoveTabStop(IReadOnlyList<TabStop> stops, int index)
     {
-        if (index < 0 || index >= stops.Count)
-            return stops.ToArray();
-
-        var result = stops.ToList();
-        result.RemoveAt(index);
-        return result.ToArray();
+        return DocumentRulerInteractionPlanner.RemoveTabStop(stops, index);
     }
 
     internal static bool IsTabStopRemovalDrop(Point point, Size size) =>
-        point.Y < -HitRadius || point.Y > size.Height + HitRadius;
+        DocumentRulerInteractionPlanner.IsTabStopRemovalDrop(point.Y, size.Height);
 
     internal static double SnapPoint(double pt) =>
-        Math.Max(0, Math.Round(pt / TabGridPt, MidpointRounding.AwayFromZero) * TabGridPt);
+        DocumentRulerInteractionPlanner.SnapPoint(pt);
 
-    internal static ParagraphFormatting IndentsForDrag(ParagraphFormatting start, DragKind kind, double pointPt) => kind switch
-    {
-        DragKind.LeftIndent => Indentation.SetIndents(start, SnapPoint(pointPt), start.IndentRightPt, start.FirstLineIndentPt),
-        DragKind.FirstLineIndent => Indentation.SetIndents(start, start.IndentLeftPt, start.IndentRightPt, SnapPoint(pointPt - start.IndentLeftPt)),
-        DragKind.RightIndent => Indentation.SetIndents(start, start.IndentLeftPt, SnapPoint(pointPt), start.FirstLineIndentPt),
-        _ => start
-    };
+    internal static ParagraphFormatting IndentsForDrag(ParagraphFormatting start, DragKind kind, double pointPt) =>
+        DocumentRulerInteractionPlanner.BuildIndentFormatting(start, (DocumentRulerDragKind)kind, pointPt);
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -351,11 +313,15 @@ public sealed class Ruler : FrameworkElement
             {
                 // Compute the preview margin from the current pointer position (same math as mouse-up
                 // commit, but clamped and stored for RenderVertical to draw the dashed preview line).
-                var deltaDip = point.Y - vDrag.Start.Y;
-                var deltaPt  = vm.DipDeltaToPointsDelta(deltaDip);
-                _dragPreviewMarginPt = vDrag.Kind == DragKind.TopMargin
-                    ? ClampVerticalMargin(vDrag.StartMarginPt + deltaPt, page.MarginBottomPt, vm.PageHeightPt)
-                    : ClampVerticalMargin(vDrag.StartMarginPt - deltaPt, page.MarginTopPt, vm.PageHeightPt);
+                var sharedMetrics = new DocumentRulerVerticalMetrics(
+                    vm.TopBoundaryY, vm.BottomBoundaryY, vm.PageHeightPt, vm.Zoom, -vm.ScrollOffsetDip);
+                var otherMargin = vDrag.Kind == DragKind.TopMargin ? page.MarginBottomPt : page.MarginTopPt;
+                _dragPreviewMarginPt = DocumentRulerInteractionPlanner.ResolveVerticalMargin(
+                    (DocumentRulerDragKind)vDrag.Kind,
+                    vDrag.StartMarginPt,
+                    point.Y - vDrag.Start.Y,
+                    otherMargin,
+                    sharedMetrics);
                 Refresh();
             }
         }
@@ -373,18 +339,28 @@ public sealed class Ruler : FrameworkElement
             var page = _editor.Model.Page;
             if (TryVerticalMetrics(page, _editor.ZoomLevel, _editor.VerticalOffset) is { } vm)
             {
-                var releaseY  = e.GetPosition(this).Y;
-                var deltaDip  = releaseY - vDrag.Start.Y;
-                var deltaPt   = vm.DipDeltaToPointsDelta(deltaDip);
+                var sharedMetrics = new DocumentRulerVerticalMetrics(
+                    vm.TopBoundaryY, vm.BottomBoundaryY, vm.PageHeightPt, vm.Zoom, -vm.ScrollOffsetDip);
+                var releaseDelta = e.GetPosition(this).Y - vDrag.Start.Y;
                 if (vDrag.Kind == DragKind.TopMargin)
                 {
-                    var newTop = ClampVerticalMargin(vDrag.StartMarginPt + deltaPt, page.MarginBottomPt, vm.PageHeightPt);
+                    var newTop = DocumentRulerInteractionPlanner.ResolveVerticalMargin(
+                        DocumentRulerDragKind.TopMargin,
+                        vDrag.StartMarginPt,
+                        releaseDelta,
+                        page.MarginBottomPt,
+                        sharedMetrics);
                     _editor.ApplyPageSettings(p => p.MarginTopPt = newTop);
                 }
                 else
                 {
                     // Bottom margin drag: positive Y-delta (drag down) shrinks the bottom margin.
-                    var newBottom = ClampVerticalMargin(vDrag.StartMarginPt - deltaPt, page.MarginTopPt, vm.PageHeightPt);
+                    var newBottom = DocumentRulerInteractionPlanner.ResolveVerticalMargin(
+                        DocumentRulerDragKind.BottomMargin,
+                        vDrag.StartMarginPt,
+                        releaseDelta,
+                        page.MarginTopPt,
+                        sharedMetrics);
                     _editor.ApplyPageSettings(p => p.MarginBottomPt = newBottom);
                 }
             }
@@ -444,53 +420,29 @@ public sealed class Ruler : FrameworkElement
 
     private DragOperation HitTest(Point point, HorizontalMetrics metrics, ParagraphFormatting f)
     {
-        if (point.X < metrics.ContentStart || point.X > metrics.ContentEnd)
-            return new DragOperation(DragKind.None, -1, f, point);
-
-        var leftX = metrics.ContentPtToX(f.IndentLeftPt);
-        var firstX = metrics.ContentPtToX(f.IndentLeftPt + f.FirstLineIndentPt);
-        var rightX = metrics.ContentEnd - PageLayout.PointsToDip(f.IndentRightPt) * metrics.Zoom;
-
-        if (Math.Abs(point.X - firstX) <= HitRadius && point.Y <= Thickness * 0.55)
-            return new DragOperation(DragKind.FirstLineIndent, -1, f, point);
-        if (Math.Abs(point.X - leftX) <= HitRadius && point.Y >= Thickness * 0.45)
-            return new DragOperation(DragKind.LeftIndent, -1, f, point);
-        if (Math.Abs(point.X - rightX) <= HitRadius && point.Y >= Thickness * 0.45)
-            return new DragOperation(DragKind.RightIndent, -1, f, point);
-
-        for (var i = 0; i < f.TabStops.Count; i++)
-        {
-            var x = metrics.ContentPtToX(f.TabStops[i].PositionPt);
-            if (Math.Abs(point.X - x) <= HitRadius)
-                return new DragOperation(DragKind.TabStop, i, f, point);
-        }
-
-        return new DragOperation(DragKind.NewTabStop, -1, f, point);
+        var shared = new DocumentRulerHorizontalMetrics(metrics.ContentStart, metrics.ContentEnd, metrics.Zoom);
+        var kind = DocumentRulerInteractionPlanner.HitTestHorizontal(
+            new DocumentRulerPoint(point.X, point.Y),
+            Thickness,
+            shared,
+            f,
+            out var tabIndex);
+        return new DragOperation((DragKind)kind, tabIndex, f, point);
     }
 
     // Vertical hit-test: return TopMargin if the Y coordinate is within HitRadius of the top-margin
     // boundary, BottomMargin if within HitRadius of the bottom-margin boundary, else None.
     internal static DragKind VerticalHitTest(double y, VerticalMetrics vm)
     {
-        if (Math.Abs(y - vm.TopBoundaryY) <= HitRadius)
-            return DragKind.TopMargin;
-        if (Math.Abs(y - vm.BottomBoundaryY) <= HitRadius)
-            return DragKind.BottomMargin;
-        return DragKind.None;
+        var shared = new DocumentRulerVerticalMetrics(
+            vm.TopBoundaryY, vm.BottomBoundaryY, vm.PageHeightPt, vm.Zoom, -vm.ScrollOffsetDip);
+        return (DragKind)DocumentRulerInteractionPlanner.HitTestVertical(y, shared);
     }
 
     internal static HorizontalMetrics? TryMetrics(Size size, PageSettings page, double zoom)
     {
-        if (size.Width <= 0 || zoom <= 0)
-            return null;
-
-        var pageWidth = PageLayout.PointsToDip(page.WidthPt) * zoom;
-        var left = PageLayout.PointsToDip(page.MarginLeftPt) * zoom;
-        var right = PageLayout.PointsToDip(page.MarginRightPt) * zoom;
-        var pageX = Math.Max(0, (size.Width - pageWidth) / 2);
-        var contentStart = pageX + left;
-        var contentEnd = pageX + pageWidth - right;
-        return contentEnd <= contentStart ? null : new HorizontalMetrics(contentStart, contentEnd, zoom);
+        var shared = DocumentRulerInteractionPlanner.TryBuildCenteredHorizontalMetrics(size.Width, page, zoom);
+        return shared is null ? null : new HorizontalMetrics(shared.ContentStart, shared.ContentEnd, shared.Zoom);
     }
 
     // Dashed pen for the live-drag preview line: a thin blue rule that previews the margin boundary

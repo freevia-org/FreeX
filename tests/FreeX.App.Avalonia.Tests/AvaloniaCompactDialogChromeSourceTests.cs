@@ -132,8 +132,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("public IBrush? ButtonHoverBackgroundBrush { get; init; }");
         source.Should().Contain("public IBrush? ButtonPressedBackgroundBrush { get; init; }");
         source.Should().Contain("public IBrush? ButtonAccentBrush { get; init; }");
-        source.Should().Contain("Color.FromRgb(0, 120, 215)");
-        source.Should().Contain("Color.FromRgb(112, 112, 112)");
+        source.Should().Contain("ThemeBrush(\"ThemeAccentBrush\", ButtonAccentBrush)");
+        source.Should().Contain("Color.FromRgb(200, 200, 200)");
         source.Should().Contain("Color.FromRgb(183, 188, 194)");
         source.Should().Contain("button.Height = style.ButtonHeight;");
         source.Should().Contain("button.MinHeight = style.ButtonHeight;");

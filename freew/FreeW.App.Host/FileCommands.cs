@@ -170,6 +170,18 @@ internal sealed class FileCommands
         _workflow.MarkDirty();
     }
 
+    /// <summary>Loads the shared New Window snapshot and restores its file identity.</summary>
+    public void LoadDocumentWindow(FreeWDocumentWindowPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        _editor.LoadModel(plan.Document);
+        _workflow.ApplyDocumentState(
+            plan.CurrentPath,
+            plan.IsDirty,
+            () => _editor.CurrentFileName = plan.CurrentPath is null ? null : Path.GetFileName(plan.CurrentPath));
+    }
+
     /// <summary>
     /// File &gt; New. Routes through the shared dirty-gate so unsaved work is not silently lost
     /// (previously FreeW dropped changes without prompting). Returns false if the user cancels.
