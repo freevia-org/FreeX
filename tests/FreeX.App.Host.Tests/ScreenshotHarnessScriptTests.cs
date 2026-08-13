@@ -19,27 +19,24 @@ public sealed class ScreenshotHarnessScriptTests
         var script = ReadScript(scriptName);
 
         script.Should().Contain($"Join-Path $PSScriptRoot \"{outputDirectory}\"");
-        script.Should().Contain("function Write-ScreenshotEvidenceManifest");
+        script.Should().Contain("function Write-RibbonScreenshotEvidenceManifest");
         script.Should().Contain("screenshot_manifest.json");
-        script.Should().Contain($"OutputNaming = \"{namingPattern}\"");
+        script.Should().Contain($"-OutputNaming \"{namingPattern}\"");
         script.Should().Contain($"CatalogEvidenceTarget = \"docs/testing/ui-test-catalog.md\"");
         script.Should().Contain("WidthSource = \"RibbonScreenshotTourPlanner.DefaultWidths\"");
-        var plannedCaptureCountSource = scriptName == "screenshot_excel.ps1"
-            ? "$plannedCaptureCount = $script:availableTabNames.Count * $widths.Count"
-            : "$plannedCaptureCount = $tabNames.Count * $widths.Count";
-        script.Should().Contain(plannedCaptureCountSource);
+        script.Should().Contain("$plannedCaptureCount = $Tabs.Count * $Widths.Count");
         script.Should().Contain("PlannedCaptureCount = $plannedCaptureCount");
-        script.Should().Contain("ActualCaptureCount = $files.Count");
+        script.Should().Contain("ActualCaptureCount = $Captures.Count");
         script.Should().Contain("CaptureStatus = \"complete\"");
         script.Should().Contain("CaptureMethod = \"CopyFromScreen-window-rectangle-top-band\"");
         script.Should().Contain("ForegroundGuard = [pscustomobject]");
-        script.Should().Contain("ExpectedProcessId = $expectedPid");
-        script.Should().Contain("ExpectedWindowTitle = $expectedTitle");
+        script.Should().Contain("ExpectedProcessId = $ExpectedProcessId");
+        script.Should().Contain("ExpectedWindowTitle = $ExpectedWindowTitle");
         script.Should().Contain("WindowBounds = [pscustomobject]");
-        script.Should().Contain("CaptureLogicalHeight = $captureLogicalHeight");
-        script.Should().Contain("CapturePhysicalHeight = $capturePhysicalHeight");
-        script.Should().Contain("Widths = $widths");
-        script.Should().Contain("Captures = $files");
+        script.Should().Contain("CaptureLogicalHeight = $CaptureLogicalHeight");
+        script.Should().Contain("CapturePhysicalHeight = $CapturePhysicalHeight");
+        script.Should().Contain("Widths = $Widths");
+        script.Should().Contain("$manifest[\"Captures\"] = $Captures");
         script.Should().Contain("CaptureSequence = $script:capturedFiles.Count + 1");
         script.Should().Contain("CaptureKey = \"ribbon:$($widthSpec.Label):$safe\"");
         script.Should().Contain($"$fileName = \"{filePattern}\"");
@@ -60,7 +57,7 @@ public sealed class ScreenshotHarnessScriptTests
             script.Should().Contain("foreach ($tabName in $script:requestedTabNames)");
             script.Should().Contain("foreach ($tabName in $script:availableTabNames)");
             script.Should().Contain("SkippedTabs = $script:skippedTabNames");
-            script.Should().Contain("SkippedCaptures = $skippedCaptures");
+            script.Should().Contain("$manifest[\"SkippedCaptures\"] = $skippedCaptures");
         }
         else
         {
@@ -82,7 +79,7 @@ public sealed class ScreenshotHarnessScriptTests
         var script = ReadScript(scriptName);
 
         script.Should().Contain("$interactiveCapturePlan = @(");
-        script.Should().Contain("InteractiveCapturePlan = $interactiveCapturePlan");
+        script.Should().Contain("-InteractiveCapturePlan $interactiveCapturePlan");
         script.Should().Contain("ScenarioId = \"popup:table-autofilter-dropdown\"");
         script.Should().Contain("ScenarioId = \"dropdown:home-number-format\"");
         script.Should().Contain("ScenarioId = \"context-menu:worksheet-cell\"");
@@ -175,8 +172,8 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("Pairing = [pscustomobject]");
         script.Should().Contain("PairKeyPattern = \"ribbon:<WidthLabel>:<TabFileName>\"");
         script.Should().Contain($"CounterpartSubject = \"{counterpartSubject}\"");
-        script.Should().Contain($"CounterpartTool = \"{counterpartTool}\"");
-        script.Should().Contain($"CounterpartOutputNaming = \"{counterpartOutputNaming}\"");
+        script.Should().Contain($"-CounterpartTool \"{counterpartTool}\"");
+        script.Should().Contain($"-CounterpartOutputNaming \"{counterpartOutputNaming}\"");
         script.Should().Contain("PairKey = \"ribbon:$($widthSpec.Label):$safe\"");
         script.Should().Contain("CaptureKey = \"ribbon:$($widthSpec.Label):$safe\"");
         script.Should().Contain("TabFileName = $safe");
@@ -213,7 +210,7 @@ public sealed class ScreenshotHarnessScriptTests
 
         script.Should().Contain("GetWindowRect($hwnd");
         script.Should().Contain("$w = $wrect.Right - $wrect.Left");
-        script.Should().Contain("CopyFromScreen($wrect.Left, $wrect.Top, 0, 0");
+        script.Should().Contain("CopyFromScreen($left, $top, 0, 0");
         script.Should().Contain("Width = $w");
         script.Should().Contain("Height = $captureH");
     }
@@ -226,8 +223,8 @@ public sealed class ScreenshotHarnessScriptTests
         var script = ReadScript(scriptName);
 
         script.Should().Contain("function Clear-ScreenshotEvidenceArtifacts");
-        script.Should().Contain("Get-ChildItem $outDir -Filter \"*.png\" -ErrorAction SilentlyContinue");
-        script.Should().Contain("Remove-Item -LiteralPath (Join-Path $outDir \"screenshot_manifest.json\")");
+        script.Should().Contain("Get-ChildItem $OutputDirectory -Filter \"*.png\" -ErrorAction SilentlyContinue");
+        script.Should().Contain("Remove-Item -LiteralPath (Join-Path $OutputDirectory \"screenshot_manifest.json\")");
         Regex.Matches(script, "Clear-ScreenshotEvidenceArtifacts")
             .Count
             .Should()
@@ -240,7 +237,7 @@ public sealed class ScreenshotHarnessScriptTests
     public void ScreenshotScripts_CheckForegroundOwnershipImmediatelyBeforeScreenCopy(string scriptName)
     {
         var lines = File.ReadAllLines(WorkspaceFileLocator.Find("tools", scriptName));
-        var copyLine = Array.FindIndex(lines, line => line.Contains("CopyFromScreen($wrect.Left", StringComparison.Ordinal));
+        var copyLine = Array.FindIndex(lines, line => line.Contains("Capture-ScreenRectangle $wrect.Left", StringComparison.Ordinal));
 
         copyLine.Should().BeGreaterThan(0);
         var precedingCaptureBlock = string.Join(
@@ -296,8 +293,8 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("[string]$ExePath = $env:FREEX_RIBBON_EXE_PATH");
         script.Should().Contain("function Resolve-FreeXExecutablePath");
         script.Should().Contain("Test-Path -LiteralPath $resolvedRequestedExePath -PathType Leaf");
-        script.Should().Contain($"Pass -ExePath with an existing {FreeXUiRun.AppExecutableName}");
-        script.Should().Contain($"Get-ChildItem -LiteralPath $binRoot -Recurse -Filter \"{FreeXUiRun.AppExecutableName}\" -File");
+        script.Should().Contain("Pass -ExePath with an existing FreeX.ParityCapture.Wpf.exe");
+        script.Should().Contain("Get-ChildItem -LiteralPath $binRoot -Recurse -Filter \"FreeX.ParityCapture.Wpf.exe\" -File");
         script.Should().Contain("Sort-Object LastWriteTimeUtc -Descending");
         script.Should().Contain("$exe = Resolve-FreeXExecutablePath $ExePath");
         script.Should().Contain("$proc = Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) -PassThru");
@@ -393,13 +390,13 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("CaptureStatus = \"complete\"");
         script.Should().Contain("State = \"opened\"");
         script.Should().Contain("function Click-ExcelAutoFilterHeaderDropdown");
-        script.Should().Contain("[Win32e]::SetProcessDPIAware() | Out-Null");
-        script.Should().Contain("[Win32e]::SetCursorPos($clickX, $clickY) | Out-Null");
+        script.Should().Contain("[ScreenshotWin32]::SetProcessDPIAware() | Out-Null");
+        script.Should().Contain("[ScreenshotWin32]::SetCursorPos($clickX, $clickY) | Out-Null");
         script.Should().Contain("$pointToScreenScale = 2.0");
         script.Should().Contain("$clickX = [int]($left + ($header.Width * $pointToScreenScale) - 12)");
         script.Should().Contain("function Set-ExcelForegroundWindow");
         script.Should().Contain("New-Object -ComObject WScript.Shell");
-        script.Should().Contain("[Win32e]::SetWindowPos($excelHwnd, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null");
+        script.Should().Contain("[ScreenshotWin32]::SetWindowPos($excelHwnd, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null");
         script.Should().Contain("Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle \"Excel AutoFilter flyout setup\"");
         script.Should().Contain("PairKey = \"interactive:table-autofilter-dropdown:opened\"");
         script.Should().Contain("CounterpartTool = \"FREEX_AUTOFILTER_FLYOUT_TOUR\"");
@@ -560,6 +557,14 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel native Save As dialog screen capture\"");
     }
 
-    private static string ReadScript(string scriptName) =>
-        WorkspaceFileLocator.ReadAllText("tools", scriptName);
+    private static string ReadScript(string scriptName)
+    {
+        var script = WorkspaceFileLocator.ReadAllText("tools", scriptName);
+        script.Should().Contain(". (Join-Path $PSScriptRoot \"ScreenshotCaptureSupport.ps1\")");
+
+        return string.Join(
+            Environment.NewLine,
+            WorkspaceFileLocator.ReadAllText("tools", "ScreenshotCaptureSupport.ps1"),
+            script);
+    }
 }

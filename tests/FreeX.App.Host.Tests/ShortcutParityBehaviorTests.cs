@@ -355,9 +355,12 @@ public sealed class ShortcutParityBehaviorTests
     public void DataFilterCommands_UsesFilterPromptPlannerForTopBottomAverageAndCriterionFilters()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
+        var workflowSource = DialogSourceTestSupport.ReadPresentationSources(
+            "Filtering", "WorksheetFilterWorkflowSession.cs");
 
-        source.Should().Contain("FilterPromptPlanner.TryPlan");
-        source.Should().Contain("promptPlan.CreateCommand");
+        source.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
+        workflowSource.Should().Contain("FilterPromptPlanner.TryPlan");
+        workflowSource.Should().Contain("promptPlan.CreateCommand");
     }
 
     // --- Ctrl+Q (Quick Analysis) ---

@@ -23,6 +23,8 @@ public sealed class StatusBarCustomizeMenuSourceTests
     {
         var gridStatusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.GridStatus.cs"));
         var optionsSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "AppOptions.cs");
+        var rendererPlannerSource = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Services", "FreeXStatusBarRendererPlanner.cs");
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var contextMenuSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ContextMenus.cs"));
 
@@ -42,8 +44,9 @@ public sealed class StatusBarCustomizeMenuSourceTests
         optionsSource.Should().Contain("public bool StatusBarShowZoomSlider { get; set; } = true;");
         gridStatusSource.Should().Contain("private void StatusBarCustomizeMenu_Opened(object sender, RoutedEventArgs e)");
         gridStatusSource.Should().Contain("private void StatusBarCustomizeMenuItem_Click(object sender, RoutedEventArgs e)");
-        gridStatusSource.Should().Contain("StatusBarPresentationPlanner.Build(");
-        gridStatusSource.Should().Contain("StatusBarPresentationPlanner.BuildRendererPlan(plan);");
+        gridStatusSource.Should().Contain("FreeXStatusBarRendererPlanner.BuildRendererPlan(");
+        rendererPlannerSource.Should().Contain("StatusBarPresentationPlanner.Build(");
+        rendererPlannerSource.Should().Contain("StatusBarPresentationPlanner.BuildRendererPlan(");
         gridStatusSource.Should().Contain("foreach (var entry in rendererPlan.VisibilityElements)");
         gridStatusSource.Should().Contain("GetStatusBarReadoutTextBlock(readout.Kind)");
         gridStatusSource.Should().Contain("private void ApplyStatusBarInteractiveDisplayState(StatusBarRendererPlan rendererPlan)");

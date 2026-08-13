@@ -8,11 +8,15 @@ public sealed class SheetTabWorkflowsScreenshotTourTests
     public void MainWindowScreenshotTour_CapturesSheetTabWorkflowAndPersistenceEvidence()
     {
         var startupSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.Startup.cs");
+        var parityCaptureOwnershipSource = WorkspaceFileLocator.ReadAllText(
+            "tools", "FreeX.ParityCapture.Wpf", "Capture", "MainWindow.ParityCaptureOwnership.cs");
         var dispatcherSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.ScreenshotTour.cs");
         var tourSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.ScreenshotTour.SheetTabWorkflows.cs");
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
 
-        startupSource.Should().Contain("TryStartSheetTabWorkflowsTour();");
+        startupSource.Should().Contain("StartExternalLoadedWorkflows();");
+        startupSource.Should().NotContain("TryStartSheetTabWorkflowsTour();");
+        parityCaptureOwnershipSource.Should().Contain("TryStartSheetTabWorkflowsTour();");
         dispatcherSource.Should().Contain("SheetTabWorkflowsTourOutputDirectoryName = \"sheet-tab-workflows-tour\"");
         dispatcherSource.Should().Contain("SheetTabWorkflowsTourManifestFileName = \"sheet_tab_workflows_tour_manifest.json\"");
         dispatcherSource.Should().Contain("SheetTabWorkflowsTourSavedWorkbookFileName = \"freex_sheet_tab_workflows_persisted.xlsx\"");
