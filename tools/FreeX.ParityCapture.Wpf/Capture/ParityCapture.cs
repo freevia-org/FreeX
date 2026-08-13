@@ -149,6 +149,8 @@ internal static class ParityCapture
             PumpDispatcher();
             EnsureFormulaBarVisibleForParityCapture(window);
             PumpDispatcher();
+            InvokePrivate(window, "HideStartScreen");
+            TrySelectRibbonTab(window, FreeXRibbonTabIds.Home);
             window.UpdateLayout();
             PumpDispatcher();
 
@@ -1749,6 +1751,7 @@ internal static class ParityCapture
     {
         var definition = FreeXRibbon.Build();
         return definition.VisibleTabs
+            .Where(tab => tab.Id != FreeXRibbonTabIds.File)
             .Select(tab => ("tab." + SurfaceName(tab), tab.Id))
             .ToArray();
     }

@@ -87,4 +87,15 @@ public sealed class ParityCaptureAssemblyOwnershipTests
         project.Should().NotContain("<DefineConstants>");
         toolStartup.Should().Contain("ParityCapture.Run(");
     }
+
+    [Fact]
+    public void WpfCapture_NormalizesBackstageBeforeCapturingContentTabs()
+    {
+        var capture = WorkspaceFileLocator.ReadAllText(
+            "tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs");
+
+        capture.Should().Contain(".Where(tab => tab.Id != FreeXRibbonTabIds.File)");
+        capture.Should().Contain("InvokePrivate(window, \"HideStartScreen\")");
+        capture.Should().Contain("TrySelectRibbonTab(window, FreeXRibbonTabIds.Home)");
+    }
 }
