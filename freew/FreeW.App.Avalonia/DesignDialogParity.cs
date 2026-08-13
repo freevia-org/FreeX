@@ -12,10 +12,8 @@ namespace FreeW.App.Avalonia;
 /// <summary>Avalonia counterpart of WPF's Create New Theme Colors dialog.</summary>
 public sealed partial class CustomizeThemeColorsDialog : FreeWDialogWindow
 {
-    private const double DialogWidth = 440;
-    private const double LabelColumnWidth = 190;
-    private const double ColorRowHeight = 29.4;
-    private const double ActionButtonWidth = 72;
+    private static readonly CustomizeThemeColorsDialogVisualMetrics Layout =
+        CustomizeThemeColorsDialogPlanner.VisualMetrics;
 
     private readonly DocumentTheme _current;
     private readonly TextBox[] _colorBoxes;
@@ -31,23 +29,24 @@ public sealed partial class CustomizeThemeColorsDialog : FreeWDialogWindow
         _current = current;
         _text = DesignDialogTextCatalog.Resolve(UiText.Get);
         var state = CustomizeThemeColorsDialogPlanner.BuildInitialState(current);
-        _colorBoxes = state.ColorHexTexts.Select(text => MakeTextBox(text, 120)).ToArray();
-        _nameBox = MakeTextBox(state.NameText, 200);
+        _colorBoxes = state.ColorHexTexts.Select(text => MakeTextBox(text, Layout.ColorFieldMinWidth)).ToArray();
+        _nameBox = MakeTextBox(state.NameText, Layout.NameFieldMinWidth);
 
         Title = CustomizeThemeColorsDialogPlanner.Title;
-        Width = DialogWidth;
+        Width = Layout.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        var content = new StackPanel { Margin = new Thickness(CustomizeThemeFontsDialogPlanner.DialogMargin) };
+        var content = new StackPanel { Margin = new Thickness(Layout.DialogMargin) };
         content.Children.Add(new TextBlock
         {
             Text = CustomizeThemeColorsDialogPlanner.Hint,
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
-            Margin = new Thickness(0, 0, 0, 6),
+            FontSize = Layout.HintFontSize,
+            Margin = new Thickness(0, 0, 0, Layout.HintBottomMargin),
         });
 
         var grid = CreateGrid();
@@ -57,14 +56,14 @@ public sealed partial class CustomizeThemeColorsDialog : FreeWDialogWindow
                 index,
                 CustomizeThemeColorsDialogPlanner.Slots[index].Label,
                 _colorBoxes[index],
-                ColorRowHeight,
-                new Thickness(0, 0, 8, 0));
+                Layout.AvaloniaColorRowHeight,
+                new Thickness(0, 0, Layout.LabelRightMargin, 0));
         content.Children.Add(grid);
         content.Children.Add(new Border
         {
-            Height = 1,
+            Height = Layout.AvaloniaSeparatorHeight,
             Background = Brushes.Gray,
-            Margin = new Thickness(0, 8, 0, 4),
+            Margin = new Thickness(0, Layout.SeparatorTopMargin, 0, Layout.SeparatorBottomMargin),
         });
         var nameGrid = CreateGrid();
         InsertDialogLayout.AddLabeledRow(
@@ -72,10 +71,13 @@ public sealed partial class CustomizeThemeColorsDialog : FreeWDialogWindow
             0,
             CustomizeThemeColorsDialogPlanner.NameLabel,
             _nameBox,
-            ColorRowHeight,
-            new Thickness(0, 0, 8, 0));
+            Layout.AvaloniaColorRowHeight,
+            new Thickness(0, 0, Layout.LabelRightMargin, 0));
         content.Children.Add(nameGrid);
-        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, InsertDialogLayout.ChromeStyle, new Thickness(0, 8, 0, 0));
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(
+            _status,
+            InsertDialogLayout.ChromeStyle,
+            new Thickness(0, Layout.AvaloniaValidationTopMargin, 0, 0));
         _status.IsVisible = false;
         content.Children.Add(_status);
         content.Children.Add(CreateActionRow());
@@ -106,20 +108,22 @@ public sealed partial class CustomizeThemeColorsDialog : FreeWDialogWindow
     private StackPanel CreateActionRow()
     {
         var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true };
-        AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDialogLayout.ChromeStyle, ActionButtonWidth, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDialogLayout.ChromeStyle, Layout.ActionButtonWidth, isDefault: true);
         ok.Click += (_, _) => Accept(closeOnSuccess: true);
 
         var cancel = new Button { Content = UiText.Get("Common_CancelText"), IsCancel = true };
-        AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDialogLayout.ChromeStyle, ActionButtonWidth);
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDialogLayout.ChromeStyle, Layout.ActionButtonWidth);
         cancel.Click += (_, _) => Close();
 
-        return AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0));
+        return AvaloniaCompactDialogChrome.CreateActionRow(
+            [ok, cancel],
+            new Thickness(0, Layout.ActionRowTopMargin, 0, 0));
     }
 
     private static Grid CreateGrid()
     {
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(LabelColumnWidth) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Layout.LabelColumnWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         return grid;
     }

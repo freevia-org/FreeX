@@ -6,6 +6,62 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class DesignDialogPlannerTests
 {
     [Fact]
+    public void ThemeColors_VisualMetricsPreservePairedWpfAuthorityGeometry()
+    {
+        CustomizeThemeColorsDialogPlanner.VisualMetrics.Should().Be(
+            new CustomizeThemeColorsDialogVisualMetrics(
+                DialogWidth: 440,
+                DialogMargin: 14,
+                HintFontSize: 10,
+                HintBottomMargin: 10,
+                LabelColumnWidth: 190,
+                ColorFieldMinWidth: 120,
+                NameFieldMinWidth: 200,
+                RowVerticalMargin: 2,
+                LabelRightMargin: 8,
+                SeparatorTopMargin: 8,
+                SeparatorBottomMargin: 4,
+                ActionButtonWidth: 72,
+                ActionRowTopMargin: 12,
+                AvaloniaColorRowHeight: 29.4,
+                AvaloniaSeparatorHeight: 1,
+                AvaloniaValidationTopMargin: 8));
+    }
+
+    [Fact]
+    public void ThemeColors_RenderersConsumeSharedVisualMetrics()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Host", "CustomizeThemeColorsDialog.cs"));
+        var avaloniaFile = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Avalonia", "DesignDialogParity.cs"));
+        var avalonia = avaloniaFile[..avaloniaFile.IndexOf(
+            "public sealed partial class CustomizeThemeFontsDialog", StringComparison.Ordinal)];
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("CustomizeThemeColorsDialogPlanner.VisualMetrics");
+            source.Should().Contain("Layout.DialogWidth");
+            source.Should().Contain("Layout.DialogMargin");
+            source.Should().Contain("Layout.HintFontSize");
+            source.Should().Contain("Layout.HintBottomMargin");
+            source.Should().Contain("Layout.LabelColumnWidth");
+            source.Should().Contain("Layout.ColorFieldMinWidth");
+            source.Should().Contain("Layout.NameFieldMinWidth");
+            source.Should().Contain("Layout.ActionButtonWidth");
+            source.Should().Contain("Layout.ActionRowTopMargin");
+        }
+
+        wpf.Should().NotContain("Width = 440;");
+        wpf.Should().NotContain("MinWidth = 120");
+        avalonia.Should().NotContain("private const double DialogWidth");
+        avalonia.Should().NotContain("CustomizeThemeFontsDialogPlanner.DialogMargin");
+        avalonia.Should().Contain("Layout.AvaloniaColorRowHeight");
+        avalonia.Should().Contain("Layout.AvaloniaSeparatorHeight");
+    }
+
+    [Fact]
     public void ThemeColors_UsesWpfSlotOrderAndCurrentSchemeDefaults()
     {
         var state = CustomizeThemeColorsDialogPlanner.BuildInitialState(DocumentTheme.Default);
