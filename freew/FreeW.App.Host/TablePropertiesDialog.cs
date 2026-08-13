@@ -12,6 +12,9 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private static readonly TablePropertiesDialogVisualMetrics Layout =
+        TablePropertiesDialogPlanner.VisualMetrics;
+
     private readonly TablePropertiesDialogSession _session;
     private readonly CheckBox _preferredWidthOn;
     private readonly TextBox _preferredWidth;
@@ -66,7 +69,7 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
         _session = new TablePropertiesDialogSession(context, CultureInfo.CurrentCulture, initialTab);
         Owner = owner;
         Title = TablePropertiesDialogPlanner.Title;
-        Width = 440;
+        Width = Layout.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -84,7 +87,7 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
             Content = TablePropertiesDialogPlanner.AllowOverlapLabel,
             IsThreeState = true,
             IsChecked = state.FloatingTableAllowsOverlap,
-            Margin = new Thickness(0, 4, 0, 4)
+            Margin = new Thickness(0, Layout.RowVerticalInset, 0, Layout.RowVerticalInset)
         };
         AutomationProperties.SetAutomationId(_allowFloatingOverlap, TablePropertiesDialogPlanner.AllowOverlapAutomationId);
         _floatingHorizontalAnchor = Combo(
@@ -130,7 +133,12 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
         _rowHeightOn = Check(TablePropertiesDialogPlanner.SpecifyRowHeightLabel, state.RowHeightOn);
         _rowRule = Combo(_session.RowRuleNames, state.RowRuleIndex);
         _allowRowBreak = new CheckBox { Content = TablePropertiesDialogPlanner.AllowRowBreakLabel, IsChecked = state.AllowRowBreak };
-        _repeatHeader = new CheckBox { Content = TablePropertiesDialogPlanner.RepeatHeaderLabel, IsChecked = state.RepeatHeaderRow, Margin = new Thickness(0, 4, 0, 0) };
+        _repeatHeader = new CheckBox
+        {
+            Content = TablePropertiesDialogPlanner.RepeatHeaderLabel,
+            IsChecked = state.RepeatHeaderRow,
+            Margin = new Thickness(0, Layout.RowVerticalInset, 0, 0)
+        };
 
         _columnWidth = NumberBox(state.ColumnWidthText);
         _columnWidthOn = Check(TablePropertiesDialogPlanner.PreferredWidthLabel, state.ColumnWidthOn);
@@ -147,7 +155,10 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
         _cellFitText = Check(TablePropertiesDialogPlanner.FitTextLabel, state.CellFitText);
         SetControlAutomationIds();
 
-        var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
+        var tabs = new TabControl
+        {
+            Margin = new Thickness(Layout.OuterInset, Layout.OuterInset, Layout.OuterInset, 0)
+        };
         tabs.Items.Add(CreateTabItem(TablePropertiesDialogPlanner.TableTabLabel, TablePropertiesDialogPlanner.TableTabAutomationId, BuildTableTab()));
         tabs.Items.Add(CreateTabItem(TablePropertiesDialogPlanner.RowTabLabel, TablePropertiesDialogPlanner.RowTabAutomationId, BuildRowTab()));
         tabs.Items.Add(CreateTabItem(TablePropertiesDialogPlanner.ColumnTabLabel, TablePropertiesDialogPlanner.ColumnTabAutomationId, BuildColumnTab()));
@@ -155,7 +166,14 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
         tabs.SelectedIndex = (int)_session.InitialFocusPlan.Tab;
         AutomationProperties.SetAutomationId(tabs, TablePropertiesDialogPlanner.TabsAutomationId);
 
-        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(14, 12, 14, 12));
+        var buttons = DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: Layout.ActionButtonWidth,
+            rowMargin: new Thickness(
+                Layout.OuterInset,
+                Layout.ActionTopInset,
+                Layout.OuterInset,
+                Layout.ActionBottomInset));
 
         var root = new DockPanel();
         DockPanel.SetDock(buttons, Dock.Bottom);
@@ -179,7 +197,12 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
         AddRow(grid, 2, TablePropertiesDialogPlanner.TextWrappingLabel, _wrapping);
         AddRow(grid, 3, TablePropertiesDialogPlanner.IndentFromLeftLabel, _indent);
 
-        var marginsHeader = new TextBlock { Text = TablePropertiesDialogPlanner.DefaultCellMarginsLabel, Margin = new Thickness(0, 10, 0, 4), FontWeight = FontWeights.SemiBold };
+        var marginsHeader = new TextBlock
+        {
+            Text = TablePropertiesDialogPlanner.DefaultCellMarginsLabel,
+            Margin = new Thickness(0, Layout.SectionHeaderTopInset, 0, Layout.SectionHeaderBottomInset),
+            FontWeight = FontWeights.SemiBold
+        };
         var marginsGrid = TwoColumnGrid(4);
         AddRow(marginsGrid, 0, TablePropertiesDialogPlanner.TopLabel, _cellMarginTop);
         AddRow(marginsGrid, 1, TablePropertiesDialogPlanner.LeftLabel, _cellMarginLeft);
@@ -189,7 +212,7 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
         var spacingGrid = TwoColumnGrid(1);
         AddRow(spacingGrid, 0, _cellSpacingOn, _cellSpacing);
 
-        var stack = new StackPanel { Margin = new Thickness(14) };
+        var stack = new StackPanel { Margin = new Thickness(Layout.ContentInset) };
         stack.Children.Add(grid);
         stack.Children.Add(marginsHeader);
         stack.Children.Add(marginsGrid);
@@ -203,11 +226,11 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
         AddRow(grid, 0, _rowHeightOn, _rowHeight);
         AddRow(grid, 1, TablePropertiesDialogPlanner.RowHeightRuleLabel, _rowRule);
 
-        var checks = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var checks = new StackPanel { Margin = new Thickness(0, Layout.SecondarySectionTopInset, 0, 0) };
         checks.Children.Add(_allowRowBreak);
         checks.Children.Add(_repeatHeader);
 
-        var stack = new StackPanel { Margin = new Thickness(14) };
+        var stack = new StackPanel { Margin = new Thickness(Layout.ContentInset) };
         stack.Children.Add(grid);
         stack.Children.Add(checks);
         return stack;
@@ -217,7 +240,7 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
     {
         var grid = TwoColumnGrid(1);
         AddRow(grid, 0, _columnWidthOn, _columnWidth);
-        return new StackPanel { Margin = new Thickness(14), Children = { grid } };
+        return new StackPanel { Margin = new Thickness(Layout.ContentInset), Children = { grid } };
     }
 
     private UIElement BuildCellTab()
@@ -226,14 +249,19 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
         AddRow(grid, 0, _cellWidthOn, _cellWidth);
         AddRow(grid, 1, TablePropertiesDialogPlanner.VerticalAlignmentLabel, _cellVAlign);
 
-        var marginsHeader = new TextBlock { Text = TablePropertiesDialogPlanner.CellMarginsLabel, Margin = new Thickness(0, 10, 0, 4), FontWeight = FontWeights.SemiBold };
+        var marginsHeader = new TextBlock
+        {
+            Text = TablePropertiesDialogPlanner.CellMarginsLabel,
+            Margin = new Thickness(0, Layout.SectionHeaderTopInset, 0, Layout.SectionHeaderBottomInset),
+            FontWeight = FontWeights.SemiBold
+        };
         var marginsGrid = TwoColumnGrid(4);
         AddRow(marginsGrid, 0, TablePropertiesDialogPlanner.TopLabel, _cmTop);
         AddRow(marginsGrid, 1, TablePropertiesDialogPlanner.LeftLabel, _cmLeft);
         AddRow(marginsGrid, 2, TablePropertiesDialogPlanner.BottomLabel, _cmBottom);
         AddRow(marginsGrid, 3, TablePropertiesDialogPlanner.RightLabel, _cmRight);
 
-        var stack = new StackPanel { Margin = new Thickness(14) };
+        var stack = new StackPanel { Margin = new Thickness(Layout.ContentInset) };
         stack.Children.Add(grid);
         stack.Children.Add(BuildFloatingPositioningPanel());
         stack.Children.Add(_cellWrapText);
@@ -260,13 +288,17 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
         AddRow(distanceGrid, 2, TablePropertiesDialogPlanner.BottomLabel, _floatingDistanceBottom);
         AddRow(distanceGrid, 3, TablePropertiesDialogPlanner.RightLabel, _floatingDistanceRight);
 
-        var stack = new StackPanel { Margin = new Thickness(8) };
+        var stack = new StackPanel { Margin = new Thickness(Layout.ExpanderContentInset) };
         stack.Children.Add(positionGrid);
         stack.Children.Add(new TextBlock
         {
             Text = TablePropertiesDialogPlanner.DistanceFromTextLabel,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 8, 0, 4)
+            Margin = new Thickness(
+                0,
+                Layout.SecondarySectionTopInset,
+                0,
+                Layout.SectionHeaderBottomInset)
         });
         stack.Children.Add(distanceGrid);
         stack.Children.Add(_allowFloatingOverlap);
@@ -344,7 +376,7 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
 
     private static ComboBox Combo(IReadOnlyList<string> items, int selectedIndex)
     {
-        var combo = new ComboBox { MinWidth = 180 };
+        var combo = new ComboBox { MinWidth = Layout.ChoiceFieldMinWidth };
         foreach (var item in items)
             combo.Items.Add(item);
         combo.SelectedIndex = Math.Clamp(selectedIndex, 0, items.Count - 1);
@@ -354,15 +386,34 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
     private static TextBox NumberBox(string text) => new()
     {
         Text = text,
-        MinWidth = 120
+        MinWidth = Layout.NumberFieldMinWidth
     };
 
     private static CheckBox Check(string content, bool isChecked) =>
-        new() { Content = content, IsChecked = isChecked, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 4) };
+        new()
+        {
+            Content = content,
+            IsChecked = isChecked,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(
+                0,
+                Layout.RowVerticalInset,
+                Layout.LabelRightInset,
+                Layout.RowVerticalInset)
+        };
 
     private static void AddRow(Grid grid, int row, string label, UIElement field)
     {
-        var block = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 4) };
+        var block = new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(
+                0,
+                Layout.RowVerticalInset,
+                Layout.LabelRightInset,
+                Layout.RowVerticalInset)
+        };
         Grid.SetRow(block, row);
         Grid.SetColumn(block, 0);
         grid.Children.Add(block);
@@ -382,7 +433,7 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
         Grid.SetRow(field, row);
         Grid.SetColumn(field, 1);
         if (field is FrameworkElement fe)
-            fe.Margin = new Thickness(0, 4, 0, 4);
+            fe.Margin = new Thickness(0, Layout.RowVerticalInset, 0, Layout.RowVerticalInset);
         grid.Children.Add(field);
     }
 

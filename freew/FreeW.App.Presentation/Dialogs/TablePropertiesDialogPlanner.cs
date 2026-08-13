@@ -191,6 +191,34 @@ public sealed record TablePropertiesDialogAcceptance(
     public bool IsAccepted => Result is not null;
 }
 
+/// <summary>
+/// Renderer-neutral geometry for the paired WPF/Avalonia Table Properties surface.
+/// Values prefixed with <c>Avalonia</c> compensate only for native template measurement and are
+/// kept distinct from the cross-renderer authority metrics.
+/// </summary>
+public readonly record struct TablePropertiesDialogVisualMetrics(
+    double DialogWidth,
+    double OuterInset,
+    double ActionTopInset,
+    double ActionBottomInset,
+    double ActionButtonWidth,
+    double ActionSpacing,
+    double ContentInset,
+    double SectionHeaderTopInset,
+    double SectionHeaderBottomInset,
+    double RowVerticalInset,
+    double LabelRightInset,
+    double NumberFieldMinWidth,
+    double ChoiceFieldMinWidth,
+    double SecondarySectionTopInset,
+    double ExpanderContentInset,
+    double AvaloniaTabPaneHorizontalCompensation,
+    double AvaloniaMainLabelColumnWidth,
+    double AvaloniaRowLabelColumnWidth,
+    double AvaloniaMarginLabelColumnWidth,
+    double AvaloniaCellSpacingLabelColumnWidth,
+    double AvaloniaPositionGridRightInset);
+
 public sealed class TablePropertiesDialogSession
 {
     private readonly CultureInfo _culture;
@@ -267,6 +295,28 @@ public sealed class TablePropertiesDialogSession
 public static class TablePropertiesDialogPlanner
 {
     public const string Title = "Table Properties";
+    public static TablePropertiesDialogVisualMetrics VisualMetrics { get; } = new(
+        DialogWidth: 440,
+        OuterInset: 14,
+        ActionTopInset: 12,
+        ActionBottomInset: 12,
+        ActionButtonWidth: 72,
+        ActionSpacing: 14,
+        ContentInset: 14,
+        SectionHeaderTopInset: 10,
+        SectionHeaderBottomInset: 4,
+        RowVerticalInset: 4,
+        LabelRightInset: 8,
+        NumberFieldMinWidth: 120,
+        ChoiceFieldMinWidth: 180,
+        SecondarySectionTopInset: 8,
+        ExpanderContentInset: 8,
+        AvaloniaTabPaneHorizontalCompensation: -12,
+        AvaloniaMainLabelColumnWidth: 137,
+        AvaloniaRowLabelColumnWidth: 131,
+        AvaloniaMarginLabelColumnWidth: 54,
+        AvaloniaCellSpacingLabelColumnWidth: 203,
+        AvaloniaPositionGridRightInset: 4);
     private static readonly ResourceTextDescriptor CursorOutsideTableMessage = new(
         "TableProperties_CursorOutsideTable_Message",
         "The cursor must be inside a table to edit its properties.");
