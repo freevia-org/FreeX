@@ -51,23 +51,11 @@ public static class AvaloniaThemeApplier
             resources[typography.FontWeightKey] = ToFontWeight(token.Weight);
         }
 
-        var colors = theme.Colors;
-        AddAliasBrush(resources, "ThemeNeutralTextBrush", colors.Text);
-        AddAliasBrush(resources, "ThemeNeutralMutedTextBrush", colors.MutedText);
-        AddAliasBrush(resources, "ThemeNeutralWhiteBrush", colors.White);
-        AddAliasBrush(resources, "ThemeNeutralDangerBrush", colors.Danger);
-        AddAliasBrush(resources, "ThemeNeutralSheetSurfaceBrush", colors.SheetSurface);
-        AddAliasBrush(resources, "ThemeAccentBrush", colors.Accent);
-        AddAliasBrush(resources, "ThemeAccentDarkBrush", colors.AccentDark);
-        AddAliasBrush(resources, "ThemeAccentSoftBrush", colors.AccentSoft);
-        AddAliasBrush(resources, "ThemeAccentPressedBrush", colors.AccentPressed);
-        AddAliasBrush(resources, "ThemeRibbonButtonHoverBrush", colors.RibbonButtonHover);
+        foreach (var sharedBrush in plan.SharedBrushes)
+            resources[sharedBrush.Key] = new ImmutableSolidColorBrush(ToColor(sharedBrush.Value));
 
         return resources;
     }
-
-    private static void AddAliasBrush(ResourceDictionary resources, string key, ThemeColor color) =>
-        resources[key] = new ImmutableSolidColorBrush(ToColor(color));
 
     public static void Apply(Application application, Theme theme, string keyPrefix)
     {

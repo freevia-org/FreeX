@@ -17,6 +17,8 @@ public sealed class ThemeApplierAvaloniaTests
         ("ThemeNeutralWhiteBrush", "WhiteBrush"),
         ("ThemeNeutralDangerBrush", "DangerBrush"),
         ("ThemeNeutralSheetSurfaceBrush", "SheetSurfaceBrush"),
+        ("ThemeNeutralBorderBrush", "BorderBrush"),
+        ("ThemeNeutralBorderStrongBrush", "BorderStrongBrush"),
         ("ThemeAccentBrush", "AccentBrush"),
         ("ThemeAccentDarkBrush", "AccentDarkBrush"),
         ("ThemeAccentSoftBrush", "AccentSoftBrush"),
