@@ -21,7 +21,9 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("private void SparklineColumnBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"column\");");
         insertSource.Should().Contain("private void SparklineWinLossBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline(\"winloss\");");
         insertSource.Should().Contain("new SparklineDialog(");
-        insertSource.Should().Contain("new AddSparklineCommand(_currentSheetId, members[0].DataRange, currentRange.Start, kind)");
+        insertSource.Should().Contain("SparklinePlanner.BuildInsertCommand(");
+        DialogSourceTestSupport.ReadPresentationSources("SparklineUI", "SparklinePlanner.cs")
+            .Should().Contain("new AddSparklineCommand(");
 
         pivotSource.Should().Contain("private void PivotTableBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("PivotApplication.PrepareCreate(_currentSheetId, SheetGrid.SelectedRange)");
@@ -75,7 +77,7 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("var address = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId).Start;");
         insertSource.Should().Contain("new SetHyperlinkCommand(");
         insertSource.Should().Contain("new HyperlinkMetadata(");
-        insertSource.Should().Contain("ToCoreHyperlinkTargetKind(dialog.Result.LinkType)");
+        insertSource.Should().Contain("dialog.Result.LinkType,");
         insertSource.Should().Contain("private void InsertCommentBtn_Click(object sender, RoutedEventArgs e) => ReviewNewThreadedCommentBtn_Click(sender, e);");
         insertSource.Should().Contain("new HeaderFooterDialog(sheet)");
         insertSource.Should().Contain("PageSetupCommandFactory.BuildHeaderFooterCommand(");

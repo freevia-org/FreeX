@@ -9,12 +9,12 @@ public sealed class TableDesignCommandSourceTests
     [Fact]
     public void TableDesignHeaderRow_IsHiddenUntilARealHeaderRowCommandExists()
     {
-        var xaml = ReadTableDesignTabXaml();
+        var tab = FreeXRibbon.Build().FindTab(FreeXRibbonTabIds.TableDesign);
         var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
 
-        xaml.Should().NotContain("TableDesignHeaderRowBtn");
-        xaml.Should().NotContain("ribbonWpf:RibbonMetadata.CommandName=\"Header Row\"");
-        xaml.Should().NotContain("MainWindow_TooltipDescription_HeaderRowsRemainVisibleForStructuredTablesInFreeX");
+        tab.Should().NotBeNull("the declarative Table Design contextual tab should be present");
+        tab!.Groups.SelectMany(group => group.Controls).Select(control => control.Label)
+            .Should().NotContain("Header Row");
         source.Should().NotContain("TableDesignHeaderRowBtn");
     }
 
@@ -75,17 +75,6 @@ public sealed class TableDesignCommandSourceTests
         source.Should().Contain("TableDesignCommandPlanner.BuildConvertToRangePlan(");
         source.Should().Contain("plan.Command");
         source.Should().Contain("_messageService.AskYesNo(");
-    }
-
-    private static string ReadTableDesignTabXaml()
-    {
-        var xaml = ReadMainWindowXaml();
-        var start = xaml.IndexOf("Header=\"{local:Loc Key=MainWindow_Header_TableDesign}\"", StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, "the Table Design contextual tab should be present");
-
-        var end = xaml.IndexOf("Header=\"{local:Loc Key=MainWindow_Header_PivotTableAnalyze}\"", start, StringComparison.Ordinal);
-        end.Should().BeGreaterThan(start, "the PivotTable Analyze contextual tab should follow Table Design");
-        return xaml[start..end];
     }
 
 }

@@ -23,12 +23,13 @@ namespace Free.Shared.Ribbon.Wpf;
 public sealed record RibbonWpfRendererOptions(
     bool UseExternalDropdownZones = false,
     double MediumIconSize = RibbonVisualMetrics.MediumIconSize,
-    double SmallIconSize = RibbonVisualMetrics.SmallIconSize)
+    double SmallIconSize = RibbonVisualMetrics.SmallIconSize,
+    double? LargeButtonWidth = null)
 {
     public static RibbonWpfRendererOptions Default { get; } = new();
 
     public static RibbonWpfRendererOptions FreeXHost { get; } =
-        new(UseExternalDropdownZones: true, MediumIconSize: 20, SmallIconSize: 20);
+        new(UseExternalDropdownZones: true, MediumIconSize: 20, SmallIconSize: 20, LargeButtonWidth: 58);
 }
 
 public static class RibbonWpfRenderer
@@ -378,6 +379,8 @@ public static class RibbonWpfRenderer
             RibbonMetadata.SetCommandContentLayout(stack, RibbonCommandContentLayout.Large);
 
         var button = NewButton(control, resourceHost, "RibbonLargeButton");
+        if (options.LargeButtonWidth is { } largeButtonWidth)
+            button.Width = largeButtonWidth;
         ((ContentControl)button).Content = stack;
         WireMetadata(button, control, registry, stateStore, options);
         return button;

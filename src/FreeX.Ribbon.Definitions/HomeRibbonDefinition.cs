@@ -80,7 +80,7 @@ public static class HomeRibbonDefinition
                 .Large("Format as Table", "Format as Table", Ico.Table, "T", dropdown: true)
                 .Large("Cell Styles", "Cell Styles", Ico.Theme, "J", menu: HomeRibbonMenus.CellStyles))
 
-            .Group("HomeCellsGroup", "Cells", "E", priority: 50, g => g
+            .Group("HomeCellsGroup", "Cells", "E", priority: 65, g => g
                 .Medium("Insert", "Insert", Ico.Insert, "I", menu: HomeRibbonMenus.Insert)
                 .Medium("Delete", "Delete", Ico.Delete, "D", menu: HomeRibbonMenus.Delete)
                 .Medium("Format", "Format", Ico.Size, "O", menu: HomeRibbonMenus.Format))

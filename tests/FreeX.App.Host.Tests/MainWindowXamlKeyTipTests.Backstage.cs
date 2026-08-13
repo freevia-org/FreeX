@@ -260,19 +260,15 @@ public sealed partial class MainWindowXamlKeyTipTests
         });
     }
 
-    // ── Backstage content panes (unchanged XAML) — still asserted on the markup ──────
+    // Backstage content panes and their shared presentation contracts.
 
     [Fact]
-    public void BackstageInfoVersion_MatchesAboutDialogVersion()
+    public void BackstageAccountAndAbout_UseSharedAssemblyVersionPresentation()
     {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        var account = LocalAccountInfoPlanner.Build(typeof(MainWindow).Assembly);
 
-        document
-            .Descendants(presentation + "TextBlock")
-            .Where(element => LocalizedAttribute(element, "Text") == AppInfo.VersionText)
-            .Should()
-            .ContainSingle("Backstage Info and About should show the same FreeX version");
+        account.VersionText.Should().Be(AppInfo.ExactVersionText);
+        AppInfo.AboutText.Should().Contain(AppInfo.VersionText);
     }
 
     [Fact]

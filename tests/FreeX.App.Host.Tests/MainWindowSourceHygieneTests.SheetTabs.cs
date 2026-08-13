@@ -104,6 +104,9 @@ public sealed partial class MainWindowSourceHygieneTests
         var formulaSessionSource = DialogSourceTestSupport.ReadPresentationSources(
             "FormulaBar",
             "FormulaRangeEditingSession.cs");
+        var formulaControllerSource = DialogSourceTestSupport.ReadPresentationSources(
+            "FormulaBar",
+            "FormulaReferenceEditingController.cs");
 
         mainSource.Should().NotContain("private void EnterEditMode(");
         mainSource.Should().NotContain("private void ShowInlineEditor(");
@@ -131,7 +134,8 @@ public sealed partial class MainWindowSourceHygieneTests
         editingSource.Should().NotContain("CellEntryParser");
         formulaReferenceSource.Should().Contain("private bool TryApplyFormulaRangeSelection(");
         formulaReferenceSource.Should().Contain("_formulaRangeEditingSession.PlanSelection(");
-        formulaReferenceSource.Should().Contain("FormulaReferenceHighlightPlanner");
+        formulaReferenceSource.Should().Contain("FormulaReferenceEditingController.BuildHighlights(");
+        formulaControllerSource.Should().Contain("FormulaReferenceHighlightPlanner.GetHighlights(");
         dropdownSource.Should().Contain("private void RefreshValidationDropdown(");
         dropdownSource.Should().Contain("private void OpenActiveDropdown(");
         dropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner");
@@ -605,6 +609,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var gridStatusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.GridStatus.cs");
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var rendererPlannerSource = DialogSourceTestSupport.ReadAppServicesSource("FreeXStatusBarRendererPlanner.cs");
 
         xaml.Should().Contain("x:Name=\"StatusStatsPanel\"");
         xaml.Should().Contain("x:Name=\"StatusCountText\"");
@@ -622,7 +627,8 @@ public sealed partial class MainWindowSourceHygieneTests
         gridStatusSource.Should().Contain("IsFileOperationProgressVisible()");
         gridStatusSource.Should().Contain("SetVisibilityIfChanged(StatusReadyText, Visibility.Collapsed)");
         gridStatusSource.Should().Contain("SetVisibilityIfChanged(StatusStatsPanel, Visibility.Collapsed)");
-        gridStatusSource.Should().Contain("StatusBarPresentationPlanner.BuildRendererPlan(plan)");
+        gridStatusSource.Should().Contain("FreeXStatusBarRendererPlanner.BuildRendererPlan(");
+        rendererPlannerSource.Should().Contain("StatusBarPresentationPlanner.BuildRendererPlan(");
         gridStatusSource.Should().Contain("GetStatusBarReadoutTextBlock(readout.Kind)");
         gridStatusSource.Should().Contain("StatusBarReadoutKind.Count => StatusCountText");
         gridStatusSource.Should().Contain("StatusBarReadoutKind.NumericalCount => StatusNumericalCountText");
@@ -905,12 +911,13 @@ public sealed partial class MainWindowSourceHygieneTests
         var source =
             DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs") +
             DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var plannerSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("WorksheetContextMenuPlanner.cs");
 
         source.Should().Contain("SetThreadedCommentResolution = Handled<CellAddress, bool>");
         source.Should().Contain("TryExecuteRepeatableCurrentRangeCommand(");
         source.Should().Contain("range => new ResolveThreadedCommentCommand(_currentSheetId, range.Start, resolved)");
-        source.Should().Contain("sheet.ThreadedComments.TryGetValue(address, out var threadedComment)");
-        source.Should().Contain("IsThreadedCommentResolved: threadedComment?.IsResolved == true");
+        plannerSource.Should().Contain("sheet.ThreadedComments.TryGetValue(address, out var threadedComment)");
+        plannerSource.Should().Contain("IsThreadedCommentResolved: threadedComment?.IsResolved == true");
     }
 
     [Fact]
@@ -938,6 +945,7 @@ public sealed partial class MainWindowSourceHygieneTests
         // to ReviewSessionController.NavigateThreadedComment/NavigateNote) and into the shared
         // PresentationReviewSessionController used by both the WPF and Avalonia hosts.
         var controllerSource = DialogSourceTestSupport.ReadPresentationSources("Comments", "PresentationReviewSessionController.cs");
+        var workflowSource = DialogSourceTestSupport.ReadAppServicesSource("ReviewWorkflowPlanner.cs");
 
         source.Should().Contain("CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments)");
         source.Should().Contain("ShowOrRefreshCommentListWindow(");
@@ -947,7 +955,8 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("private void ReviewPrevNoteBtn_Click(");
         source.Should().Contain("private void ReviewNextNoteBtn_Click(");
         source.Should().Contain("private void ReviewShowNotesBtn_Click(");
-        source.Should().Contain("CommentListWindow.CreateNoteItems(sheet.Comments)");
+        workflowSource.Should().Contain("CreateNoteItems(sheet)");
+        workflowSource.Should().Contain("CreateThreadedCommentItems(sheet)");
         source.Should().Contain("ReviewSessionController.NavigateNote(previous)");
         controllerSource.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(sheet.Comments)");
         // NavigateNote's own "sheet.Comments.Count == 0" empty-sheet guard was generalized (52ebe84d9f)

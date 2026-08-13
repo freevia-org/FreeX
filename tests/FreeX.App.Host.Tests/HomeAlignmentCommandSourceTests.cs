@@ -46,7 +46,7 @@ public sealed class HomeAlignmentCommandSourceTests
         source.Should().Contain("presentation.DialogAutomationId");
         source.Should().NotContain("Merging cells can discard cell contents.");
         source.Should().NotContain("Keep only first cell");
-        source.Should().NotContain("MergeCellsContentWarningDialog");
+        source.Should().NotContain("new MergeCellsContentWarningDialog(");
         source.Should().Contain("CellMergePlanner.ResolveContentChoice(");
         source.Should().Contain("return decision.ShouldProceed;");
         source.Should().Contain("MergeAcrossMenuItem_Click");

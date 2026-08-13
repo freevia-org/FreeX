@@ -343,8 +343,10 @@ public sealed partial class MainWindowSourceHygieneTests
         var startupSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Startup.cs");
         // After the ribbon XAML→declarative cutover the Home Number Format combo is populated on the
         // *rendered* declarative ribbon by PopulateAndWireRenderedHomeCombos (MainWindow.RibbonDeclarative.cs),
-        // which startup reaches via TryApplyDeclarativeRibbon(). The planner no longer feeds a startup stub.
+        // which startup reaches via TryApplyDeclarativeRibbon(). Portable choices are injected by the
+        // shared composition planner before either renderer sees the definition.
         var declarativeSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDeclarative.cs");
+        var compositionSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("FreeXRibbonCompositionPlanner.cs");
 
         mainSource.Should().NotContain("private void MainWindow_Loaded(");
         mainSource.Should().NotContain("HomeNumberFormatDropdownPlanner");
@@ -354,7 +356,8 @@ public sealed partial class MainWindowSourceHygieneTests
         startupSource.Should().Contain("TryApplyDeclarativeRibbon();");
         startupSource.IndexOf("TryApplyDeclarativeRibbon();", StringComparison.Ordinal).Should().BeLessThan(
             startupSource.IndexOf("ApplyOptionsToView();", StringComparison.Ordinal));
-        declarativeSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options");
+        declarativeSource.Should().Contain("FreeXRibbonCompositionPlanner.Compose(FreeXRibbon.Build(), UiText.Get)");
+        compositionSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options");
         startupSource.Should().Contain("CreateNewWorkbook();");
         startupSource.Should().NotContain("UpdateRibbonCompactMode");
     }

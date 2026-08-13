@@ -55,7 +55,7 @@ internal static class RibbonXamlCatalogSnapshotReader
 
     private static RibbonTabDefinition ConvertTab(SharedRibbon.RibbonTab tab) =>
         new(
-            tab.Header,
+            tab.Context?.Label ?? tab.Header,
             tab.Id,
             tab.Id,
             tab.KeyTip,

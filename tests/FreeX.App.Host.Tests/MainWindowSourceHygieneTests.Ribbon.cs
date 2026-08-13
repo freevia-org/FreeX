@@ -786,16 +786,19 @@ public sealed partial class MainWindowSourceHygieneTests
     public void HomeNumberFormatDropdown_ExposesExcelFormatFamiliesFromOneCatalog()
     {
         // After the ribbon XAML→declarative cutover the Number Format combo is populated from the one
-        // catalog on the *rendered* declarative ribbon (MainWindow.RibbonDeclarative.cs) rather than a
-        // startup stub, so the label projection now lives there.
-        var source = DialogSourceTestSupport.ReadHostSourcesWithSeparator(
-            "",
-            "MainWindow.RibbonDeclarative.cs",
-            "MainWindow.HomeFormatting.cs")
+        // catalog on the composed declarative ribbon rather than a startup stub, so both renderers
+        // consume the same value/label choices.
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs")
             + DialogSourceTestSupport.ReadAppServicesSource("HomeNumberFormatDropdownPlanner.cs")
             + DialogSourceTestSupport.ReadAppServicesSource("FormatCellsNumberFormatPlanner.cs");
+        var definition = FreeXRibbonCompositionPlanner.Compose(FreeXRibbon.Build(), key => key);
+        var numberFormatCombo = definition.FindTab(FreeXRibbonTabIds.Home)!
+            .Groups.SelectMany(group => group.Controls)
+            .OfType<RibbonComboBox>()
+            .Single(control => control.CommandId.Value == "Number Format");
 
-        source.Should().Contain("HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label)");
+        numberFormatCombo.Choices.Select(choice => (choice.Value, choice.Label)).Should().Equal(
+            HomeNumberFormatDropdownPlanner.Options.Select(option => (option.Value, option.Label)));
         source.Should().Contain("HomeNumberFormatDropdownPlanner.Options[selectedIndex]");
         source.Should().Contain("Accounting ($#,##0.00)");
         source.Should().Contain("Fraction (# ?/?)");
@@ -811,12 +814,15 @@ public sealed partial class MainWindowSourceHygieneTests
         // single-source ribbon (FreeXRibbonDefinition.cs). The host attaches the same Opened handler the
         // original XAML used onto the rendered menu (MainWindow.RibbonDeclarative.cs), and that handler
         // still drives the per-item checkmarks from the stored workbook arrangement.
-        var ribbon = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
+        var arrangeAll = FreeXRibbon.Build().FindTab("ViewTab")!
+            .Groups.SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .Single(control => control.Label == "Arrange All");
         var declarativeSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDeclarative.cs");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ViewCommands.cs");
 
-        ribbon.Should().Contain(".Medium(\"Arrange All\", \"Arrange All\"");
-        ribbon.Should().Contain(".Item(\"Cascade\", \"Cascade\"");
+        arrangeAll.Menu.Items.Select(item => (item.CommandId?.Value, item.Header)).Should().Contain(
+            (FreeXRibbonCommandIds.ViewArrangeCascade, "Cascade"));
         declarativeSource.Should().Contain("arrangeMenu.Opened += ArrangeAllContextMenu_Opened;");
         source.Should().Contain("ArrangeAllContextMenu_Opened");
         source.Should().Contain("item.IsChecked = ArrangeAllMenuPlanner.IsChecked(item.Tag, _workbook.WindowArrangement)");
@@ -1420,19 +1426,17 @@ public sealed partial class MainWindowSourceHygieneTests
         // command name carried by each declarative control (the renderer derives AutomationProperties
         // from it), so the catalog command names are the post-cutover equivalent of the old explicit
         // AutomationIds. The Shape Effects command keeps its full submenu of effect choices.
-        var ribbon = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
+        var controls = FreeXRibbon.Build().FindTab("DrawTab")!
+            .Groups.SelectMany(group => group.Controls)
+            .ToArray();
 
-        ribbon.Should().Contain(".Large(\"Bring Forward\", \"Bring Forward\"");
-        ribbon.Should().Contain(".Large(\"Send Backward\", \"Send Backward\"");
-        ribbon.Should().Contain(".Large(FreeXRibbonCommandIds.DrawingSelectionPane, \"Selection Pane\"");
-        ribbon.Should().Contain(".Large(\"Rotate Object\", \"Rotate Object\"");
-        ribbon.Should().Contain(".Large(\"Object Size\", \"Object Size\"");
-        ribbon.Should().Contain(".Medium(\"Shape Fill\", \"Shape Fill\"");
-        ribbon.Should().Contain(".Medium(\"Object Outline\", \"Object Outline\"");
-        ribbon.Should().Contain(".Medium(\"Shape Gradient\", \"Shape Gradient\"");
-        ribbon.Should().Contain(".Medium(\"Shape Effects\", \"Shape Effects\"");
-        ribbon.Should().Contain(".Item(\"No Effect\", \"No Effect\"");
-        ribbon.Should().Contain(".Item(\"3-D Rotation\", \"3-D Rotation\"");
+        controls.Select(control => control.Label).Should().Contain([
+            "Bring Forward", "Send Backward", "Selection Pane", "Rotate Object", "Object Size",
+            "Shape Fill", "Object Outline", "Shape Gradient", "Shape Effects"]);
+        controls.Single(control => control.Label == "Selection Pane").CommandId.Value
+            .Should().Be(FreeXRibbonCommandIds.DrawingSelectionPane);
+        var effects = controls.OfType<RibbonDropdown>().Single(control => control.Label == "Shape Effects");
+        effects.Menu.Items.Select(item => item.Header).Should().Contain(["No Effect", "3-D Rotation"]);
     }
 
     [Fact]

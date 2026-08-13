@@ -452,16 +452,21 @@ public sealed partial class MainWindowSourceHygieneTests
         // The ribbon moved to the single-source FreeXRibbonDefinition (FreeX.Ribbon.Definitions project);
         // the "Crop Picture" split button exposes "Crop..." and "Reset Crop" menu items, which the
         // generated handler map wires to the dialog/reset handlers in MainWindow.Drawing.cs.
-        var ribbon = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
+        var crop = FreeXRibbon.Build().FindTab(FreeXRibbonTabIds.PictureFormat)!
+            .Groups.SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .Single(control => control.Label == "Crop Picture");
         var handlers = DialogSourceTestSupport.ReadHostSources("Ribbon\\FreeXRibbonHandlerMap.g.cs");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
         var plannerSource = DialogSourceTestSupport.ReadPresentationSources(
             "DrawingUI",
             "PictureCropPlanner.cs");
 
-        ribbon.Should().Contain("menu: m => m.Item(\"Crop\", \"Crop...\", \"C\").Item(\"Reset Crop\", \"Reset Crop\", \"R\")");
-        handlers.Should().Contain("[\"Crop\"] = new(static (owner, sender, eventArgs) => owner.PictureCropDialogMenuItem_Click");
-        handlers.Should().Contain("[\"Reset Crop\"] = new(static (owner, sender, eventArgs) => owner.PictureResetCropMenuItem_Click");
+        crop.Menu.Items.Select(item => (item.CommandId?.Value, item.Header)).Should().Equal(
+            (FreeXRibbonCommandIds.DrawingCrop, "Crop..."),
+            (FreeXRibbonCommandIds.DrawingResetCrop, "Reset Crop"));
+        handlers.Should().Contain("[FreeXRibbonCommandIds.DrawingCrop] = new(static (owner, sender, eventArgs) => owner.PictureCropDialogMenuItem_Click");
+        handlers.Should().Contain("[FreeXRibbonCommandIds.DrawingResetCrop] = new(static (owner, sender, eventArgs) => owner.PictureResetCropMenuItem_Click");
         source.Should().Contain("PictureResetCropMenuItem_Click");
         source.Should().Contain("PictureCropDialogPlanner.BuildResetCommand(");
         plannerSource.Should().Contain("public static SetPictureCropCommand BuildResetCommand");

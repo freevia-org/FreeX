@@ -370,7 +370,8 @@ public sealed class RibbonTabParityTests
             "Current Selection",
             "Shape Styles",
             "Text",
-            "Axes");
+            "Axes",
+            "Axis Options");
 
         CommandTitles(Group(formatTab, "Current Selection")).Should().Contain([
             "Format Chart Area",
@@ -391,6 +392,11 @@ public sealed class RibbonTabParityTests
             "X Axis Bounds",
             "Y Axis Bounds",
             "X Axis Gridlines");
+        CommandTitles(Group(formatTab, "Axis Options")).Should().Contain([
+            "X Axis Ticks",
+            "Y Axis Ticks",
+            "X Axis Number Format",
+            "Y Axis Number Format"]);
     }
 
     [Fact]
