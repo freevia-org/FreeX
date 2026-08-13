@@ -249,6 +249,7 @@ public sealed class ReviewingPane : SidePaneBase
         public RevisionItemView(RevisionEntry entry, ReviewingPane pane)
         {
             Entry = entry;
+            var row = ReviewingPaneRowPlanner.Build(entry);
 
             // Kind badge (coloured pill).
             var kindBadge = new Border
@@ -259,7 +260,7 @@ public sealed class ReviewingPane : SidePaneBase
                 Margin = new Thickness(0, 0, 6, 0),
                 Child = new TextBlock
                 {
-                    Text = KindLabel(entry.Kind),
+                    Text = row.KindLabel,
                     FontSize = 10,
                     FontWeight = FontWeight.SemiBold,
                     Foreground = Brushes.White,
@@ -269,7 +270,7 @@ public sealed class ReviewingPane : SidePaneBase
             // Author name.
             var author = new TextBlock
             {
-                Text = string.IsNullOrWhiteSpace(entry.Author) ? "(unknown)" : entry.Author,
+                Text = row.AuthorLabel,
                 FontWeight = FontWeight.SemiBold,
                 FontSize = 11,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -280,24 +281,19 @@ public sealed class ReviewingPane : SidePaneBase
             topRow.Children.Add(kindBadge);
             topRow.Children.Add(author);
 
-            // Snippet of affected text (truncated for readability).
-            var snippet = entry.Text.Length > 60
-                ? string.Concat("\"", entry.Text.AsSpan(0, 57), "…\"")
-                : $"\"{entry.Text}\"";
+            // The shared plan normalizes line endings and whitespace using WPF's established row contract.
             var snippetBlock = new TextBlock
             {
-                Text = snippet,
+                Text = row.PreviewText,
                 FontSize = 11,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
-                TextWrapping = TextWrapping.NoWrap,
+                TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 2),
             };
 
-            // Date (parsed from W3CDTF; falls back to raw string when not parseable).
-            var dateText = FormatDate(entry.DateXml);
             var dateBlock = new TextBlock
             {
-                Text = dateText,
+                Text = row.DateLabel,
                 FontSize = 10,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
                 Margin = new Thickness(0, 0, 0, 2),
@@ -311,7 +307,7 @@ public sealed class ReviewingPane : SidePaneBase
                 Margin = new Thickness(0, 0, 4, 0),
                 FontSize = 10,
             };
-            ToolTip.SetTip(acceptBtn, $"Accept this {KindLabel(entry.Kind).ToLowerInvariant()} change");
+            ToolTip.SetTip(acceptBtn, row.AcceptToolTip);
             acceptBtn.Click += (_, _) => pane.AcceptEntry(entry);
 
             var rejectBtn = new Button
@@ -320,7 +316,7 @@ public sealed class ReviewingPane : SidePaneBase
                 Padding = new Thickness(6, 2),
                 FontSize = 10,
             };
-            ToolTip.SetTip(rejectBtn, $"Reject this {KindLabel(entry.Kind).ToLowerInvariant()} change");
+            ToolTip.SetTip(rejectBtn, row.RejectToolTip);
             rejectBtn.Click += (_, _) => pane.RejectEntry(entry);
 
             var btnRow = new StackPanel { Orientation = Orientation.Horizontal };
@@ -330,8 +326,10 @@ public sealed class ReviewingPane : SidePaneBase
             // Vertical card layout.
             var card = new StackPanel { Margin = new Thickness(4, 4, 4, 2) };
             card.Children.Add(topRow);
-            card.Children.Add(snippetBlock);
-            card.Children.Add(dateBlock);
+            if (row.PreviewText.Length > 0)
+                card.Children.Add(snippetBlock);
+            if (row.DateLabel.Length > 0)
+                card.Children.Add(dateBlock);
             card.Children.Add(btnRow);
 
             Content = new Border
@@ -346,14 +344,6 @@ public sealed class ReviewingPane : SidePaneBase
 
         // ── Helpers ────────────────────────────────────────────────────────────
 
-        private static string KindLabel(RevisionEntryKind kind) => kind switch
-        {
-            RevisionEntryKind.Insertion => "Insertion",
-            RevisionEntryKind.Deletion  => "Deletion",
-            RevisionEntryKind.Formatting => "Formatting",
-            _ => kind.ToString(),
-        };
-
         private static IBrush KindBrush(RevisionEntryKind kind) => kind switch
         {
             RevisionEntryKind.Insertion  => new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32)),   // green
@@ -362,13 +352,5 @@ public sealed class ReviewingPane : SidePaneBase
             _ => Brushes.Gray,
         };
 
-        private static string FormatDate(string? dateXml)
-        {
-            if (string.IsNullOrEmpty(dateXml))
-                return string.Empty;
-            // W3CDTF: "2024-03-15T10:30:00Z" — take the date part only for brevity.
-            var i = dateXml.IndexOf('T');
-            return i > 0 ? dateXml[..i] : dateXml;
-        }
     }
 }

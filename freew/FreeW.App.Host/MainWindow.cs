@@ -1663,26 +1663,19 @@ public sealed class MainWindow : Window
     // One reviewing-pane row: a bold "Author • Type" caption over the affected text (wrapped, dimmed).
     private static UIElement BuildRevisionItem(RevisionEntry entry)
     {
-        var verb = entry.Kind switch
-        {
-            RevisionEntryKind.Insertion => "Inserted",
-            RevisionEntryKind.Deletion => "Deleted",
-            _ => "Formatted"
-        };
-        var author = string.IsNullOrWhiteSpace(entry.Author) ? "Unknown" : entry.Author;
+        var row = ReviewingPaneRowPlanner.Build(entry);
 
         var panel = new StackPanel { Margin = new Thickness(6, 4, 6, 4) };
         panel.Children.Add(new TextBlock
         {
-            Text = $"{author} • {verb}",
+            Text = row.Title,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))
         });
-        var preview = entry.Text.Replace("\r", " ").Replace("\n", " ").Trim();
-        if (preview.Length > 0)
+        if (row.PreviewText.Length > 0)
             panel.Children.Add(new TextBlock
             {
-                Text = preview,
+                Text = row.PreviewText,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50))
             });
