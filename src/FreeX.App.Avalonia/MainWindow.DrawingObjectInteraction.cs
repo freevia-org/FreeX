@@ -295,21 +295,11 @@ public sealed partial class MainWindow
     /// Bring Forward for the selected drawing object, matching the contextual tab handlers and the
     /// cross-kind <see cref="FreeX.Core.Commands.MoveSelectionPaneObjectCommand"/> path.
     /// </summary>
-    private void BringSelectedDrawingObjectForward()
-    {
-        if (_selectedDrawingObjectKind == SelectionPaneObjectKind.Picture)
-            BringSelectedPictureForward();
-        else
-            BringSelectedShapeForward();
-    }
+    private void BringSelectedDrawingObjectForward() =>
+        ReorderSelectedDrawingObject(forward: true);
 
-    private void SendSelectedDrawingObjectBackward()
-    {
-        if (_selectedDrawingObjectKind == SelectionPaneObjectKind.Picture)
-            SendSelectedPictureBackward();
-        else
-            SendSelectedShapeBackward();
-    }
+    private void SendSelectedDrawingObjectBackward() =>
+        ReorderSelectedDrawingObject(forward: false);
 
     // Drawing-object selection chrome matches the WPF grid: eight 8px resize handles, a 10px
     // rotation grip 20px above the object, and a 4px hit pad around each affordance.

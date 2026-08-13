@@ -346,23 +346,6 @@ public partial class MainWindow
         if (sheet is null)
             return WorksheetContextMenuState.Default;
 
-        sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
-        var hasAutoFilterHeaderTarget =
-            SelectionRangeService.GetCurrentRegion(sheet, address) is { } currentRegion &&
-            AutoFilterDropdownMenuPlanner.TryPlan(currentRegion, address, out _);
-        var hasValidationDropdown =
-            sheet.DataValidations.Count > 0 &&
-            DataValidationService.GetApplicable(sheet, address)
-                .Any(rule => rule.Type == DvType.List && rule.ShowDropdown);
-        var hasPivotTableTarget = PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null;
-        return new WorksheetContextMenuState(
-            HasThreadedComment: threadedComment is not null,
-            IsThreadedCommentResolved: threadedComment?.IsResolved == true,
-            HasNote: sheet.Comments.ContainsKey(address),
-            HasHyperlink: sheet.Hyperlinks.ContainsKey(address),
-            HasAutoFilterHeaderTarget: hasAutoFilterHeaderTarget,
-            HasDropdownTarget: hasAutoFilterHeaderTarget || hasValidationDropdown,
-            HasPivotTableTarget: hasPivotTableTarget,
-            NoteIsShown: sheet.ShownComments.Contains(address));
+        return WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address);
     }
 }

@@ -15,8 +15,8 @@ public enum DrawingObjectContextualCommandAction
     PictureCropMenuHint,
     CropPicture,
     ResetPictureCrop,
-    BringPictureForward,
-    SendPictureBackward,
+    BringForward,
+    SendBackward,
     SelectionPane,
     RotateObject,
     ResizeObject,
@@ -25,9 +25,7 @@ public enum DrawingObjectContextualCommandAction
     ShapeOutline,
     ShapeGradient,
     ShapeEffectsDialog,
-    ShapeEffectPreset,
-    BringShapeForward,
-    SendShapeBackward
+    ShapeEffectPreset
 }
 
 public sealed record DrawingObjectContextualCommandSpec(
@@ -73,22 +71,20 @@ public static class DrawingObjectContextualRibbonPlanner
 
     public static IReadOnlyList<DrawingObjectContextualCommandSpec> CreatePictureShapeCommandSpecs() =>
     [
-        new("pictureFormat.formatPicture", DrawingObjectContextualCommandAction.FormatPicture),
-        new("pictureFormat.crop", DrawingObjectContextualCommandAction.PictureCropMenuHint),
+        new("Format Picture", DrawingObjectContextualCommandAction.FormatPicture),
+        new("Crop Picture", DrawingObjectContextualCommandAction.PictureCropMenuHint),
         new("Crop", DrawingObjectContextualCommandAction.CropPicture),
         new("Reset Crop", DrawingObjectContextualCommandAction.ResetPictureCrop),
-        new("pictureFormat.bringForward", DrawingObjectContextualCommandAction.BringPictureForward),
-        new("pictureFormat.sendBackward", DrawingObjectContextualCommandAction.SendPictureBackward),
-        new("pictureFormat.selectionPane", DrawingObjectContextualCommandAction.SelectionPane),
-        new("pictureFormat.rotate", DrawingObjectContextualCommandAction.RotateObject),
-        new("pictureFormat.size", DrawingObjectContextualCommandAction.ResizeObject),
-        new("pictureFormat.altText", DrawingObjectContextualCommandAction.EditAltText),
-        new("shapeFormat.shapeFill", DrawingObjectContextualCommandAction.ShapeFill),
-        new("shapeFormat.shapeOutline", DrawingObjectContextualCommandAction.ShapeOutline),
-        new("shapeFormat.shapeGradient", DrawingObjectContextualCommandAction.ShapeGradient),
-        new("shapeFormat.shapeEffectNone", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.None),
-        new("shapeFormat.shapeEffectShadow", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Shadow),
-        new("shapeFormat.shapeEffects", DrawingObjectContextualCommandAction.ShapeEffectsDialog),
+        new("Bring Forward", DrawingObjectContextualCommandAction.BringForward),
+        new("Send Backward", DrawingObjectContextualCommandAction.SendBackward),
+        new("Selection Pane#SelectionPaneBtn_Click", DrawingObjectContextualCommandAction.SelectionPane),
+        new("Rotate Object", DrawingObjectContextualCommandAction.RotateObject),
+        new("Object Size", DrawingObjectContextualCommandAction.ResizeObject),
+        new("Alt Text", DrawingObjectContextualCommandAction.EditAltText),
+        new("Shape Fill", DrawingObjectContextualCommandAction.ShapeFill),
+        new("Object Outline", DrawingObjectContextualCommandAction.ShapeOutline),
+        new(ShapeGradientCommandName, DrawingObjectContextualCommandAction.ShapeGradient),
+        new(ShapeEffectsCommandName, DrawingObjectContextualCommandAction.ShapeEffectsDialog),
         new("No Effect", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.None),
         new("Shadow", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Shadow),
         new("Inner Shadow", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.InnerShadow),
@@ -97,12 +93,6 @@ public static class DrawingObjectContextualRibbonPlanner
         new("Soft Edges", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.SoftEdges),
         new("Bevel", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Bevel),
         new("3-D Rotation", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.ThreeDRotation),
-        new("shapeFormat.bringForward", DrawingObjectContextualCommandAction.BringShapeForward),
-        new("shapeFormat.sendBackward", DrawingObjectContextualCommandAction.SendShapeBackward),
-        new("shapeFormat.selectionPane", DrawingObjectContextualCommandAction.SelectionPane),
-        new("shapeFormat.rotate", DrawingObjectContextualCommandAction.RotateObject),
-        new("shapeFormat.size", DrawingObjectContextualCommandAction.ResizeObject),
-        new("shapeFormat.altText", DrawingObjectContextualCommandAction.EditAltText),
     ];
 
     public static DrawingObjectContextualRibbonPlan Build(

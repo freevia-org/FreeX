@@ -35,7 +35,7 @@ namespace FreeX.App.Avalonia;
 /// object-list building, the can-move-up/down reasoning, the reorder math and the change-to-Core-command
 /// translation come from the portable <see cref="SelectionPaneSession"/> so this behaves identically to the
 /// WPF host's Selection Pane and is reusable on macOS. Reached from the Picture/Shape Format contextual tabs'
-/// "Selection Pane" buttons (pictureFormat.selectionPane / shapeFormat.selectionPane).
+/// canonical "Selection Pane" buttons on the Picture Format and Shape Format tabs.
 /// </summary>
 public sealed partial class MainWindow
 {

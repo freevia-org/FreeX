@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -14,6 +15,20 @@ public sealed class FreeXRibbonCommandCatalogOwnershipTests
         FreeXRibbonCommandCatalog.TryGet("legacy.home.bold", out _).Should().BeFalse();
         Action action = () => FreeXRibbonCommandCatalog.GetRequired("legacy.home.bold");
         action.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void DrawingObjectContextualSpecs_AllConvergeWithDeclarativeCatalog()
+    {
+        var specs = DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs();
+
+        specs.Select(spec => spec.CommandId).Should().OnlyHaveUniqueItems();
+        var missingIds = specs
+            .Where(spec => !FreeXRibbonCommandCatalog.TryGet(spec.CommandId, out _))
+            .Select(spec => spec.CommandId)
+            .ToArray();
+        missingIds.Should().BeEmpty(
+            "every shared picture/shape command spec must bind through the declarative ribbon catalog");
     }
 
     [Fact]

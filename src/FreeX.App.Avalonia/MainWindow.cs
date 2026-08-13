@@ -7696,7 +7696,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// </summary>
     private void CommitAutofillHandleDoubleClick(GridRange source)
     {
-        var adjacentLastRow = ResolveAutofillAdjacentColumnLastPopulatedRow(_session.ActiveSheet, source);
+        var adjacentLastRow = GridAutofillPlanner.ResolveAdjacentColumnLastPopulatedRow(_session.ActiveSheet, source);
         var fillRange = GridAutofillPlanner.CalculateDoubleClickFillRange(source, adjacentLastRow);
         if (fillRange is null)
             return;
@@ -7708,39 +7708,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShell(result.Success
             ? UiText.Format("MainLoc_AutofilledStatusFormat", FormatRangeReference(completedSelection))
             : result.ErrorMessage ?? UiText.Get("MainLoc_AutofillFailed"));
-    }
-
-    /// <summary>
-    /// Finds the last populated row of the contiguous data run in the column immediately to the
-    /// left of <paramref name="source"/> (checked first) or immediately to the right, starting
-    /// from the row below the source's seed row and stopping at the first blank cell. Returns null
-    /// when neither neighbor has any data immediately below the seed row.
-    /// </summary>
-    private static uint? ResolveAutofillAdjacentColumnLastPopulatedRow(Sheet sheet, GridRange source)
-    {
-        var seedRow = source.Start.Row;
-        if (source.Start.Col > 1 &&
-            ResolveAutofillColumnLastPopulatedRow(sheet, source.Start.Col - 1, seedRow) is { } leftRow)
-        {
-            return leftRow;
-        }
-
-        return ResolveAutofillColumnLastPopulatedRow(sheet, source.End.Col + 1, seedRow);
-    }
-
-    private static uint? ResolveAutofillColumnLastPopulatedRow(Sheet sheet, uint column, uint seedRow)
-    {
-        if (column > CellAddress.MaxCol || seedRow >= CellAddress.MaxRow)
-            return null;
-
-        if (sheet.GetValue(seedRow + 1, column) is BlankValue)
-            return null;
-
-        var lastRow = seedRow + 1;
-        while (lastRow < CellAddress.MaxRow && sheet.GetValue(lastRow + 1, column) is not BlankValue)
-            lastRow++;
-
-        return lastRow;
     }
 
     private bool IsPointerOnAutofillHandle(PointerEventArgs args)
@@ -10988,25 +10955,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var sheet = _session.ActiveSheet;
         var address = _session.ActiveCell;
-        sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
-        var hasAutoFilterHeaderTarget =
-            SelectionRangeService.GetCurrentRegion(sheet, address) is { } currentRegion &&
-            AutoFilterDropdownMenuPlanner.TryPlan(currentRegion, address, out _);
-        var hasValidationDropdown =
-            sheet.DataValidations.Count > 0 &&
-            DataValidationService.GetApplicable(sheet, address)
-                .Any(rule => rule.Type == DvType.List && rule.ShowDropdown);
-        var state = WorksheetContextMenuState.Default with
-        {
-            HasThreadedComment = threadedComment is not null,
-            IsThreadedCommentResolved = threadedComment?.IsResolved == true,
-            HasNote = sheet.Comments.ContainsKey(address),
-            HasHyperlink = sheet.Hyperlinks.ContainsKey(address),
-            HasAutoFilterHeaderTarget = hasAutoFilterHeaderTarget,
-            HasDropdownTarget = hasAutoFilterHeaderTarget || hasValidationDropdown,
-            HasPivotTableTarget = PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null,
-            NoteIsShown = sheet.ShownComments.Contains(address),
-        };
+        var state = WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address);
         var commands = WorksheetContextMenuPlanner.BuildCommands(
             WorksheetContextMenuTargetKind.Worksheet,
             state);

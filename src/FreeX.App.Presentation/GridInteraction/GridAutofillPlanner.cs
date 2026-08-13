@@ -114,6 +114,40 @@ public static class GridAutofillPlanner
             new CellAddress(source.Start.Sheet, lastRow, source.End.Col));
     }
 
+    /// <summary>
+    /// Finds the contiguous data extent used by a fill-handle double-click. The column immediately
+    /// left of the source wins when it has data below the seed row; otherwise the right neighbor is
+    /// used. Scanning stops at the first blank cell, matching Excel's double-click fill boundary.
+    /// </summary>
+    public static uint? ResolveAdjacentColumnLastPopulatedRow(Sheet sheet, GridRange source)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        var seedRow = source.Start.Row;
+        if (source.Start.Col > 1 &&
+            ResolveColumnLastPopulatedRow(sheet, source.Start.Col - 1, seedRow) is { } leftRow)
+        {
+            return leftRow;
+        }
+
+        return ResolveColumnLastPopulatedRow(sheet, source.End.Col + 1, seedRow);
+    }
+
+    private static uint? ResolveColumnLastPopulatedRow(Sheet sheet, uint column, uint seedRow)
+    {
+        if (column > CellAddress.MaxCol || seedRow >= CellAddress.MaxRow)
+            return null;
+
+        if (sheet.GetValue(seedRow + 1, column) is BlankValue)
+            return null;
+
+        var lastRow = seedRow + 1;
+        while (lastRow < CellAddress.MaxRow && sheet.GetValue(lastRow + 1, column) is not BlankValue)
+            lastRow++;
+
+        return lastRow;
+    }
+
     public static GridRange CalculateCompletedSelectionRange(GridRange source, GridRange fillRange)
     {
         if (source.Contains(fillRange) && fillRange != source)

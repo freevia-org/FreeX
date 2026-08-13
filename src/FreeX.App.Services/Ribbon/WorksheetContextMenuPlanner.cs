@@ -1,3 +1,8 @@
+using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.PivotUI;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
 namespace FreeX.App.Services.Ribbon;
 
 public static class WorksheetContextMenuPlanner
@@ -12,6 +17,30 @@ public static class WorksheetContextMenuPlanner
 
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> TextBoxCommands =
         BuildDrawingObjectCommands("Format Text Box...", includeReorder: false);
+
+    public static WorksheetContextMenuState ResolveWorksheetState(Sheet sheet, CellAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
+        var hasAutoFilterHeaderTarget =
+            SelectionRangeService.GetCurrentRegion(sheet, address) is { } currentRegion &&
+            AutoFilterDropdownMenuPlanner.TryPlan(currentRegion, address, out _);
+        var hasValidationDropdown =
+            sheet.DataValidations.Count > 0 &&
+            DataValidationService.GetApplicable(sheet, address)
+                .Any(rule => rule.Type == DvType.List && rule.ShowDropdown);
+
+        return new WorksheetContextMenuState(
+            HasThreadedComment: threadedComment is not null,
+            IsThreadedCommentResolved: threadedComment?.IsResolved == true,
+            HasNote: sheet.Comments.ContainsKey(address),
+            HasHyperlink: sheet.Hyperlinks.ContainsKey(address),
+            HasAutoFilterHeaderTarget: hasAutoFilterHeaderTarget,
+            HasDropdownTarget: hasAutoFilterHeaderTarget || hasValidationDropdown,
+            HasPivotTableTarget: PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null,
+            NoteIsShown: sheet.ShownComments.Contains(address));
+    }
 
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> ChartCommands =
         BuildChartCommands();

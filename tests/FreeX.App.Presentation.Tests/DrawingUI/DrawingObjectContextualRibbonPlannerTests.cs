@@ -99,13 +99,13 @@ public sealed class DrawingObjectContextualRibbonPlannerTests
 
         specs.Select(spec => spec.CommandId).Should().OnlyHaveUniqueItems();
         specs.Should().Contain(new DrawingObjectContextualCommandSpec(
-            "pictureFormat.formatPicture",
+            "Format Picture",
             DrawingObjectContextualCommandAction.FormatPicture));
         specs.Should().Contain(new DrawingObjectContextualCommandSpec(
-            "shapeFormat.shapeGradient",
+            "Shape Gradient",
             DrawingObjectContextualCommandAction.ShapeGradient));
         specs.Should().Contain(new DrawingObjectContextualCommandSpec(
-            "shapeFormat.shapeEffectShadow",
+            "Shadow",
             DrawingObjectContextualCommandAction.ShapeEffectPreset,
             DrawingShapeEffectPreset.Shadow));
         specs.Should().Contain(new DrawingObjectContextualCommandSpec(

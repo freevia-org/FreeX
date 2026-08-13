@@ -164,4 +164,41 @@ public sealed class GridAutofillPlannerFAutofillCoreTests
                 new CellAddress(sheet, 3, 1),
                 new CellAddress(sheet, 10, 1)));
     }
+
+    [Fact]
+    public void ResolveAdjacentColumnLastPopulatedRow_PrefersContiguousLeftNeighbor()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var source = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 2, 2));
+        PopulateColumn(sheet, column: 1, firstRow: 3, lastRow: 5);
+        PopulateColumn(sheet, column: 3, firstRow: 3, lastRow: 8);
+
+        GridAutofillPlanner.ResolveAdjacentColumnLastPopulatedRow(sheet, source)
+            .Should()
+            .Be(5);
+    }
+
+    [Fact]
+    public void ResolveAdjacentColumnLastPopulatedRow_FallsBackRightAndStopsAtFirstBlank()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var source = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 2, 2));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(40));
+        PopulateColumn(sheet, column: 3, firstRow: 3, lastRow: 5);
+        sheet.SetCell(new CellAddress(sheet.Id, 7, 3), new NumberValue(70));
+
+        GridAutofillPlanner.ResolveAdjacentColumnLastPopulatedRow(sheet, source)
+            .Should()
+            .Be(5);
+    }
+
+    private static void PopulateColumn(Sheet sheet, uint column, uint firstRow, uint lastRow)
+    {
+        for (var row = firstRow; row <= lastRow; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, column), new NumberValue(row));
+    }
 }

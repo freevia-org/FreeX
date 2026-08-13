@@ -535,7 +535,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
             return;
 
-        var adjacentLastRow = ResolveAdjacentColumnLastPopulatedRow(sheet, source);
+        var adjacentLastRow = GridAutofillPlanner.ResolveAdjacentColumnLastPopulatedRow(sheet, source);
         var fillRange = GridAutofillPlanner.CalculateDoubleClickFillRange(source, adjacentLastRow);
         if (fillRange is null)
             return;
@@ -545,39 +545,6 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         // Excel's double-click fill always behaves like a plain (non-Ctrl) drag, so pass false
         // explicitly rather than reading the possibly-stale field.
         ExecuteAutofill(source, fillRange.Value, ctrlHeld: false);
-    }
-
-    /// <summary>
-    /// Finds the last populated row of the contiguous data run in the column immediately to the
-    /// left of <paramref name="source"/> (checked first) or immediately to the right, starting
-    /// from the row below the source's seed row and stopping at the first blank cell. Returns null
-    /// when neither neighbor has any data immediately below the seed row.
-    /// </summary>
-    private static uint? ResolveAdjacentColumnLastPopulatedRow(Sheet sheet, GridRange source)
-    {
-        var seedRow = source.Start.Row;
-        if (source.Start.Col > 1 &&
-            ResolveColumnLastPopulatedRow(sheet, source.Start.Col - 1, seedRow) is { } leftRow)
-        {
-            return leftRow;
-        }
-
-        return ResolveColumnLastPopulatedRow(sheet, source.End.Col + 1, seedRow);
-    }
-
-    private static uint? ResolveColumnLastPopulatedRow(Sheet sheet, uint column, uint seedRow)
-    {
-        if (column > CellAddress.MaxCol || seedRow >= CellAddress.MaxRow)
-            return null;
-
-        if (sheet.GetValue(seedRow + 1, column) is BlankValue)
-            return null;
-
-        var lastRow = seedRow + 1;
-        while (lastRow < CellAddress.MaxRow && sheet.GetValue(lastRow + 1, column) is not BlankValue)
-            lastRow++;
-
-        return lastRow;
     }
 
     private void CommandStackChangeNotifier_StackChanged(object? sender, CommandStackChangedEventArgs e)
