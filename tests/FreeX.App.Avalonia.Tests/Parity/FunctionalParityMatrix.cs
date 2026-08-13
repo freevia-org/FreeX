@@ -11,9 +11,9 @@ namespace FreeX.App.Avalonia.Tests.Parity;
 /// The functional parity matrix: for every canonical command id the shared ribbon definition emits, whether
 /// the WPF shell and the Avalonia shell each bind a handler, and the resulting parity classification.
 ///
-/// WPF coverage is read from the committed handler-id snapshot (<c>docs/parity/wpf-handler-ids.txt</c>), which
-/// a guard test in the App.Host.Tests lane keeps byte-for-byte in lock-step with the generated
-/// <c>FreeXRibbonHandlerMap</c>. Avalonia coverage is <see cref="SurfaceCatalog.AvaloniaBoundCanonicalIds"/>.
+/// WPF coverage combines the committed legacy handler-id snapshot (<c>docs/parity/wpf-handler-ids.txt</c>)
+/// with typed semantic ids projected from <c>FreeXRibbonHandlerMap</c>. Avalonia coverage is
+/// <see cref="SurfaceCatalog.AvaloniaBoundCanonicalIds"/>.
 /// </summary>
 public static class FunctionalParityMatrix
 {
@@ -67,12 +67,27 @@ public static class FunctionalParityMatrix
         return rows;
     }
 
-    /// <summary>Loads the committed WPF handler-id snapshot from <c>docs/parity/wpf-handler-ids.txt</c>.</summary>
+    /// <summary>
+    /// Loads the committed legacy WPF inventory and augments it with typed semantic ids from the generated
+    /// WPF handler map. The source projection is required while the preserved snapshot remains display-oriented.
+    /// </summary>
     public static IReadOnlySet<string> LoadWpfHandlerIds()
-        => File.ReadAllLines(WpfHandlerIdsPath)
+    {
+        var ids = File.ReadAllLines(WpfHandlerIdsPath)
             .Where(line => !string.IsNullOrWhiteSpace(line))
             .Select(NormalizeLegacyWpfHandlerId)
             .ToHashSet(StringComparer.Ordinal);
+
+        FreeXRibbonCommandSourceScanner.AddTypedCommandIds(
+            File.ReadAllText(Path.Combine(
+                RepoRoot(),
+                "src",
+                "FreeX.App.Host",
+                "Ribbon",
+                "FreeXRibbonHandlerMap.g.cs")),
+            ids);
+        return ids;
+    }
 
     private static string NormalizeLegacyWpfHandlerId(string commandId) => commandId switch
     {

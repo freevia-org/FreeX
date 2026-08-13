@@ -113,7 +113,7 @@ public sealed class StartupDirtyTraceTests
     {
         var testOutput = Path.GetDirectoryName(typeof(StartupDirtyTraceTests).Assembly.Location)!;
         var targetFramework = Path.GetFileName(testOutput);
-        var configuration = Directory.GetParent(testOutput)!.Name;
+        var configuration = Path.GetFileName(Path.GetDirectoryName(testOutput))!;
         return RepoFile(
             "freep",
             "TestSupport",

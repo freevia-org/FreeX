@@ -7,7 +7,7 @@ public sealed class DedupOwnershipGuardTests
     [Fact]
     public void ConditionalFormatMathAndReferenceGrammarHaveSingleProductionOwners()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var productionSources = Directory.GetFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories);
         var mathOwners = productionSources.Where(path => File.ReadAllText(path).Contains("class ConditionalFormatEvaluationMath", StringComparison.Ordinal));
         var referenceTokenOwners = productionSources.Where(path => File.ReadAllText(path).Contains("IReadOnlyList<string> SplitReferences", StringComparison.Ordinal));
@@ -29,7 +29,7 @@ public sealed class DedupOwnershipGuardTests
     [Fact]
     public void StaleServicePlannerOwnersDoNotReturn()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var servicesRoot = Path.Combine(root, "src", "FreeX.App.Services");
         File.Exists(Path.Combine(servicesRoot, "SymbolPickerSelectionPlanner.cs")).Should().BeFalse();
         File.Exists(Path.Combine(servicesRoot, "WorkbookSheetNameGenerator.cs")).Should().BeFalse();
@@ -38,13 +38,5 @@ public sealed class DedupOwnershipGuardTests
         var dataTable = File.ReadAllText(Path.Combine(servicesRoot, "DataTablePlanner.cs"));
         dataValidation.Should().NotContain("CreateDefaultRule(");
         dataTable.Should().NotContain("public static CellAddress GetDefaultFormulaCell(");
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-        return directory?.FullName ?? throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 }

@@ -64,7 +64,7 @@ public sealed class ValidationHostOwnershipTests
     {
         var testOutput = Path.GetDirectoryName(typeof(ValidationHostOwnershipTests).Assembly.Location)!;
         var targetFramework = Path.GetFileName(testOutput);
-        var configuration = Directory.GetParent(testOutput)!.Name;
+        var configuration = Path.GetFileName(Path.GetDirectoryName(testOutput))!;
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var binDirectory = Path.Combine(root, "freep", "FreeP.App.Avalonia", "bin");
         return variant is null

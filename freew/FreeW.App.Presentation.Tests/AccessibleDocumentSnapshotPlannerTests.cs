@@ -182,13 +182,6 @@ public sealed class AccessibleDocumentSnapshotPlannerTests
         source.Should().Contain("_selectionAnchor = null;\n        InvalidateVisual();\n        CaretMoved?.Invoke();");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-        if (directory is null)
-            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
-        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.FindFromWorkspaceRoot(parts);
 }

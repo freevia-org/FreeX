@@ -71,7 +71,7 @@ public sealed class SlideShowTestSupportOwnershipTests
     {
         var testOutput = Path.GetDirectoryName(typeof(SlideShowTestSupportOwnershipTests).Assembly.Location)!;
         var targetFramework = Path.GetFileName(testOutput);
-        var configuration = Directory.GetParent(testOutput)!.Name;
+        var configuration = Path.GetFileName(Path.GetDirectoryName(testOutput))!;
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         return Path.Combine(
             root,
