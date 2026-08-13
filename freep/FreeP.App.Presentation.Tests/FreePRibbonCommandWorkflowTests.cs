@@ -91,6 +91,59 @@ public sealed class FreePRibbonCommandWorkflowTests
     }
 
     [Fact]
+    public void TextChoiceCommandsAcceptStableTokensAndTypedDescriptors()
+    {
+        var editor = MakeEditor();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            TextBody = new TextBody(),
+        };
+        editor.CurrentSlide!.Shapes.Add(shape);
+        editor.Select(shape.Id);
+        var registry = FreePRibbonCommandWorkflow.Build(editor, new RibbonStateStore()).Registry;
+
+        Execute(registry, "freep.text-autofit", SelectedValue("text-autofit.normal"));
+        Execute(registry, "freep.text-direction", SelectedValue(TextVerticalType.Vertical270));
+        Execute(registry, "freep.text-columns", SelectedValue("text-columns.4"));
+        Execute(registry, "freep.text-column-spacing", SelectedValue(152_400L));
+
+        shape.TextBody.AutoFitKind.Should().Be(TextAutoFitKind.Normal);
+        shape.TextBody.VerticalType.Should().Be(TextVerticalType.Vertical270);
+        shape.TextBody.ColumnCount.Should().Be(4);
+        shape.TextBody.ColumnSpacingEmu.Should().Be(152_400);
+    }
+
+    [Fact]
+    public void TableChoiceCommandsAcceptStableTokensTypedDescriptorsAndLegacyLabels()
+    {
+        var editor = MakeEditor();
+        var shape = editor.InsertTable(1, 1);
+        editor.Select(shape.Id);
+        editor.SetActiveTableCell(0, 0);
+        var registry = FreePRibbonCommandWorkflow.Build(editor, new RibbonStateStore()).Registry;
+
+        Execute(registry, "freep.table-cell-fill", SelectedValue("color.blue"));
+        Execute(registry, "freep.table-cell-anchor", SelectedValue("table-cell-anchor.bottom"));
+        Execute(registry, "freep.table-cell-border", SelectedValue("table-cell-border.left.none"));
+        Execute(
+            registry,
+            "freep.table-cell-inset",
+            SelectedValue(new FreePRibbonTableCellInsetChoiceDescriptor(TableCellInsetSide.All, 4.0)));
+        Execute(registry, "freep.table-row-height", RibbonCommandContext.ForSelectedValue("0.75in"));
+
+        var cell = shape.Table!.Rows[0].Cells[0];
+        cell.Fill.Should().BeOfType<ShapeFill.Solid>()
+            .Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x0000FF));
+        cell.Anchor.Should().Be(TableCellAnchor.Bottom);
+        cell.Borders!.Left.Should().BeSameAs(ShapeOutline.None.Instance);
+        cell.InsetLeftPt.Should().Be(4.0);
+        cell.InsetBottomPt.Should().Be(4.0);
+        shape.Table.Rows[0].HeightEmu.Should().Be(685_800);
+    }
+
+    [Fact]
     public void BindIntoRetargetsAnExistingRendererRegistryToTheReplacementEditor()
     {
         var original = MakeEditor();
@@ -164,9 +217,23 @@ public sealed class FreePRibbonCommandWorkflowTests
 
     private static void Execute(RibbonCommandRegistry registry, string commandId)
     {
-        registry.TryGet(commandId, out var command).Should().BeTrue();
-        command!.Execute(RibbonCommandContext.Empty);
+        Execute(registry, commandId, RibbonCommandContext.Empty);
     }
+
+    private static void Execute(
+        RibbonCommandRegistry registry,
+        string commandId,
+        RibbonCommandContext context)
+    {
+        registry.TryGet(commandId, out var command).Should().BeTrue();
+        command!.Execute(context);
+    }
+
+    private static RibbonCommandContext SelectedValue(object? value) =>
+        new(new Dictionary<string, object?>
+        {
+            [RibbonCommandContext.SelectedValueKey] = value,
+        });
 
     private static string Slice(string source, string startMarker, string endMarker)
     {

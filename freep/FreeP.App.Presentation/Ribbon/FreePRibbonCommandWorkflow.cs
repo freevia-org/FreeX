@@ -361,12 +361,12 @@ public static class FreePRibbonCommandWorkflow
         });
         commands.Context(FreePRibbonCommandGroup.Text, "freep.text-autofit", context =>
         {
-            if (TextAutoFitOptionParser.TryParse(context.SelectedValue, out var kind))
+            if (TextAutoFitOptionParser.TryParse(GetSelectedValue(context), out var kind))
                 editor.SetTextAutoFitOnSelection(kind);
         });
         commands.Context(FreePRibbonCommandGroup.Text, "freep.text-direction", context =>
         {
-            if (!TextVerticalTypeOptionParser.TryParse(context.SelectedValue, out var verticalType) ||
+            if (!TextVerticalTypeOptionParser.TryParse(GetSelectedValue(context), out var verticalType) ||
                 host.TryHandle(FreePRibbonTextActionKind.SetTextVerticalType, verticalType))
                 return;
 
@@ -375,12 +375,12 @@ public static class FreePRibbonCommandWorkflow
         });
         commands.Context(FreePRibbonCommandGroup.Text, "freep.text-columns", context =>
         {
-            if (TextColumnCountOptionParser.TryParse(context.SelectedValue, out var count))
+            if (TextColumnCountOptionParser.TryParse(GetSelectedValue(context), out var count))
                 editor.SetTextColumnCountOnSelection(count);
         });
         commands.Context(FreePRibbonCommandGroup.Text, "freep.text-column-spacing", context =>
         {
-            if (TextColumnSpacingOptionParser.TryParse(context.SelectedValue, out var spacingEmu))
+            if (TextColumnSpacingOptionParser.TryParse(GetSelectedValue(context), out var spacingEmu))
                 editor.SetTextColumnSpacingOnSelection(spacingEmu);
         });
     }
@@ -404,19 +404,19 @@ public static class FreePRibbonCommandWorkflow
         });
         commands.Context(FreePRibbonCommandGroup.Table, "freep.table-cell-border", context =>
         {
-            if (TableCellBorderOptionParser.TryParse(context.SelectedValue, out var side, out var outline) &&
+            if (TableCellBorderOptionParser.TryParse(GetSelectedValue(context), out var side, out var outline) &&
                 !host.TryHandle(FreePRibbonTextActionKind.SetTableCellBorder, side, outline))
                 editor.TryApplyActiveTableCellBorder(side, outline);
         });
         commands.Context(FreePRibbonCommandGroup.Table, "freep.table-cell-inset", context =>
         {
-            if (TableCellInsetOptionParser.TryParse(context.SelectedValue, out var side, out var insetPt) &&
+            if (TableCellInsetOptionParser.TryParse(GetSelectedValue(context), out var side, out var insetPt) &&
                 !host.TryHandle(FreePRibbonTextActionKind.SetTableCellInset, side, insetPt))
                 editor.TryApplyActiveTableCellInset(side, insetPt);
         });
         commands.Context(FreePRibbonCommandGroup.Table, "freep.table-row-height", context =>
         {
-            if (TableRowHeightOptionParser.TryParse(context.SelectedValue, out var heightEmu) &&
+            if (TableRowHeightOptionParser.TryParse(GetSelectedValue(context), out var heightEmu) &&
                 !host.TryHandle(FreePRibbonTextActionKind.SetTableRowHeight, heightEmu))
                 editor.TryApplyActiveTableRowHeight(heightEmu);
         });
@@ -915,6 +915,15 @@ public static class FreePRibbonCommandWorkflow
         if (!context.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value))
             return false;
 
+        if (FreePRibbonChoiceCatalog.TryResolve(
+                value,
+                FreePRibbonChoiceCatalog.ColorChoices,
+                out FreePRibbonColorChoiceDescriptor descriptor))
+        {
+            color = descriptor.Color;
+            return true;
+        }
+
         switch (value)
         {
             case ThemeAwareColor themeColor:
@@ -937,11 +946,6 @@ public static class FreePRibbonCommandWorkflow
             return false;
 
         var text = value.Trim();
-        if (text.Equals("automatic", StringComparison.OrdinalIgnoreCase) ||
-            text.Equals("auto", StringComparison.OrdinalIgnoreCase) ||
-            text.Equals("default", StringComparison.OrdinalIgnoreCase))
-            return true;
-
         if (RgbColorTextCodec.TryParse(
                 text,
                 RgbColorTextProfile.TrimmedHashOrBare,
@@ -951,21 +955,7 @@ public static class FreePRibbonCommandWorkflow
             return true;
         }
 
-        color = text.ToLowerInvariant() switch
-        {
-            "black" => ThemeAwareColor.Black,
-            "white" => ThemeAwareColor.White,
-            "red" => new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)),
-            "green" => new ThemeAwareColor(SrgbColor.FromRgb(0x008000)),
-            "blue" => new ThemeAwareColor(SrgbColor.FromRgb(0x0000FF)),
-            "yellow" => new ThemeAwareColor(SrgbColor.FromRgb(0xFFFF00)),
-            "orange" => new ThemeAwareColor(SrgbColor.FromRgb(0xF4B183)),
-            "purple" => new ThemeAwareColor(SrgbColor.FromRgb(0x7030A0)),
-            "dark-red" or "dark red" => new ThemeAwareColor(SrgbColor.FromRgb(0x800000)),
-            "dark-blue" or "dark blue" => new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)),
-            _ => null,
-        };
-        return color is not null;
+        return false;
     }
 
     private static bool TryGetTableCellAnchor(RibbonCommandContext context, out TableCellAnchor? anchor)
@@ -973,29 +963,29 @@ public static class FreePRibbonCommandWorkflow
         anchor = null;
         if (!context.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value))
             return false;
+
+        if (FreePRibbonChoiceCatalog.TryResolve(
+                value,
+                FreePRibbonChoiceCatalog.TableCellAnchorChoices,
+                out FreePRibbonTableCellAnchorChoiceDescriptor descriptor))
+        {
+            anchor = descriptor.Anchor;
+            return true;
+        }
+
         if (value is TableCellAnchor cellAnchor)
         {
             anchor = cellAnchor;
             return true;
         }
-        if (value is not string text || string.IsNullOrWhiteSpace(text))
-            return false;
 
-        return text.Trim().ToLowerInvariant() switch
-        {
-            "automatic" or "auto" or "default" => true,
-            "top" => SetAnchor(TableCellAnchor.Top, out anchor),
-            "middle" or "center" or "centre" => SetAnchor(TableCellAnchor.Middle, out anchor),
-            "bottom" => SetAnchor(TableCellAnchor.Bottom, out anchor),
-            _ => false,
-        };
+        return false;
     }
 
-    private static bool SetAnchor(TableCellAnchor value, out TableCellAnchor? anchor)
-    {
-        anchor = value;
-        return true;
-    }
+    private static object? GetSelectedValue(RibbonCommandContext context) =>
+        context.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value)
+            ? value
+            : null;
 
     private static readonly (string CommandId, SmartArtLayoutPreset Preset)[] SmartArtLayouts =
     [

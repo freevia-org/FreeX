@@ -804,6 +804,58 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Semantic_combo_items_project_portable_choice_labels_and_tokens_are_unique()
+    {
+        AssertChoiceProjection(
+            FreePRibbonDefinitionData.FontColors,
+            FreePRibbonChoiceCatalog.ColorChoices);
+        AssertChoiceProjection(
+            FreePRibbonDefinitionData.TextAutoFitOptions,
+            FreePRibbonChoiceCatalog.TextAutoFitChoices);
+        AssertChoiceProjection(
+            FreePRibbonDefinitionData.TextVerticalTypeOptions,
+            FreePRibbonChoiceCatalog.TextVerticalTypeChoices);
+        AssertChoiceProjection(
+            FreePRibbonDefinitionData.TextColumnCountOptions,
+            FreePRibbonChoiceCatalog.TextColumnCountChoices);
+        AssertChoiceProjection(
+            FreePRibbonDefinitionData.TextColumnSpacingOptions,
+            FreePRibbonChoiceCatalog.TextColumnSpacingChoices);
+        AssertChoiceProjection(
+            FreePRibbonDefinitionData.TableCellAnchorOptions,
+            FreePRibbonChoiceCatalog.TableCellAnchorChoices);
+        AssertChoiceProjection(
+            FreePRibbonDefinitionData.TableCellBorderOptions,
+            FreePRibbonChoiceCatalog.TableCellBorderChoices);
+        AssertChoiceProjection(
+            FreePRibbonDefinitionData.TableCellInsetOptions,
+            FreePRibbonChoiceCatalog.TableCellInsetChoices);
+        AssertChoiceProjection(
+            FreePRibbonDefinitionData.TableRowHeightOptions,
+            FreePRibbonChoiceCatalog.TableRowHeightChoices);
+
+        var tokens = FreePRibbonChoiceCatalog.ColorChoices.Select(static choice => choice.Token)
+            .Concat(FreePRibbonChoiceCatalog.TextAutoFitChoices.Select(static choice => choice.Token))
+            .Concat(FreePRibbonChoiceCatalog.TextVerticalTypeChoices.Select(static choice => choice.Token))
+            .Concat(FreePRibbonChoiceCatalog.TextColumnCountChoices.Select(static choice => choice.Token))
+            .Concat(FreePRibbonChoiceCatalog.TextColumnSpacingChoices.Select(static choice => choice.Token))
+            .Concat(FreePRibbonChoiceCatalog.TableCellAnchorChoices.Select(static choice => choice.Token))
+            .Concat(FreePRibbonChoiceCatalog.TableCellBorderChoices.Select(static choice => choice.Token))
+            .Concat(FreePRibbonChoiceCatalog.TableCellInsetChoices.Select(static choice => choice.Token))
+            .Concat(FreePRibbonChoiceCatalog.TableRowHeightChoices.Select(static choice => choice.Token))
+            .ToArray();
+
+        tokens.Should().OnlyHaveUniqueItems();
+        tokens.Should().OnlyContain(static token => !string.IsNullOrWhiteSpace(token));
+        tokens.Should().Contain([
+            "text-autofit.normal",
+            "text-direction.vertical-270",
+            "table-cell-border.bottom.black-1pt",
+            "table-cell-inset.all.4pt",
+        ]);
+    }
+
+    [Fact]
     public void Avalonia_profile_exposes_transition_commands_as_shared_surface()
     {
         var wpfIds = CommandIds(FreePRibbon.Build(FreePRibbonCapabilities.Wpf))
@@ -1543,6 +1595,11 @@ public sealed class FreePRibbonDefinitionProfileTests
     private static RibbonComboBox RequiredCombo(RibbonDefinition definition, string commandId) =>
         RequiredControl(definition, commandId) as RibbonComboBox
         ?? throw new InvalidOperationException($"Ribbon control '{commandId}' is not a combo box.");
+
+    private static void AssertChoiceProjection<TDescriptor>(
+        IEnumerable<string> actualLabels,
+        IReadOnlyList<FreePRibbonChoice<TDescriptor>> choices) =>
+        actualLabels.Should().Equal(choices.Select(static choice => choice.Label));
 
     private static IEnumerable<string> ControlText(RibbonDefinition definition, params string[] commandIds)
     {
