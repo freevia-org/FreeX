@@ -38,13 +38,17 @@ public sealed class FreeWFinalTailOwnershipSourceTests
             "'$(FreeWValidationHost)' == 'true'",
             "FreeW.Validation.Avalonia",
             "freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj");
-        foreach (var friend in new[] { "FreeW.App.Host.Tests", "FreeW.RenderCompare", "FreeW.FidelityRender" })
+        foreach (var friend in new[] { "FreeW.App.Host.Tests", "FreeW.FidelityRender" })
         {
             AssertFriendCondition(
                 "'$(FreeWHostTestSupport)' == 'true'",
                 friend,
                 "freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
         }
+        AssertFriendCondition(
+            "'$(FreeWRenderCompareSupport)' == 'true'",
+            "FreeW.RenderCompare",
+            "freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
     }
 
     [Fact]
