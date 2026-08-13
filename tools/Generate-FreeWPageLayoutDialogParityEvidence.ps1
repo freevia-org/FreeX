@@ -43,7 +43,7 @@ $avaloniaPaths = @(
     "freew\FreeW.App.Avalonia\PageSetupDialog.cs",
     "freew\FreeW.App.Avalonia\ParagraphDialog.cs",
     "freew\FreeW.App.Avalonia\PageLayoutDialogs.cs",
-    "freew\FreeW.Ribbon.Definitions\FreeWAvaloniaRibbonDefinition.cs"
+    "freew\FreeW.Ribbon.Definitions\FreeWCanonicalRibbonTabs.cs"
 )
 $wpfSource = Read-SourceSet $wpfPaths
 $avaloniaSource = Read-SourceSet $avaloniaPaths
