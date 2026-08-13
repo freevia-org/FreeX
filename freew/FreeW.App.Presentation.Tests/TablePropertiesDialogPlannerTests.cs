@@ -537,4 +537,21 @@ public sealed class TablePropertiesDialogSessionOwnershipTests
         avalonia.Should().Contain(
             "_repeatHeader.Margin = new Thickness(0, Layout.RowVerticalInset, 0, 0);");
     }
+
+    [Fact]
+    public void ProductionRenderersUseOwnedWarningDialogsForInvalidTableProperties()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Host", "TablePropertiesDialog.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Avalonia", "TableDialogs.cs"));
+
+        wpf.Should().Contain("DialogMessageHelper.ShowWarning(this, acceptance.ValidationMessage)");
+        avalonia.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(");
+        avalonia.Should().Contain("acceptance.ValidationMessage ?? TablePropertiesDialogPlanner.ValidationMessage");
+        avalonia.Should().Contain("Title ?? TablePropertiesDialogPlanner.Title");
+        avalonia.Should().Contain("private TablePropertiesDialogAcceptance CaptureAcceptance()");
+        avalonia.Should().Contain("private TablePropertiesValues? TryAccept(bool close)");
+    }
 }
