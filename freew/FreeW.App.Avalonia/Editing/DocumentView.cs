@@ -2327,8 +2327,12 @@ public sealed class DocumentView : Control
         var ownsUndoGroup = NormalizedHfSelection() is not null && !_bus.IsUndoGroupOpen;
         if (ownsUndoGroup)
             _bus.BeginUndoGroup();
-        if (NormalizedHfSelection() is not null)
-            TryDeleteHfSelection();
+        if (NormalizedHfSelection() is not null && !TryDeleteHfSelection())
+        {
+            if (ownsUndoGroup)
+                _bus.RollbackUndoGroup();
+            return;
+        }
         if (_hfCaret is not { } activeCaret)
             return;
         var target = activeCaret.Target;
@@ -2353,8 +2357,12 @@ public sealed class DocumentView : Control
         var ownsUndoGroup = NormalizedHfSelection() is not null && !_bus.IsUndoGroupOpen;
         if (ownsUndoGroup)
             _bus.BeginUndoGroup();
-        if (NormalizedHfSelection() is not null)
-            TryDeleteHfSelection();
+        if (NormalizedHfSelection() is not null && !TryDeleteHfSelection())
+        {
+            if (ownsUndoGroup)
+                _bus.RollbackUndoGroup();
+            return false;
+        }
         if (_hfCaret is not { } activeCaret)
             return false;
 
@@ -2375,8 +2383,11 @@ public sealed class DocumentView : Control
     {
         if (_hfCaret is not { } hc)
             return;
-        if (TryDeleteHfSelection())
+        if (NormalizedHfSelection() is not null)
+        {
+            TryDeleteHfSelection();
             return;
+        }
         var target = hc.Target;
         var offset = hc.Offset;
         if (offset <= 0)
@@ -2386,6 +2397,14 @@ public sealed class DocumentView : Control
                 || GetHfSlot(previousStore, target.Slot) is not { } previousStory)
                 return;
             var previousParagraphIndex = target.ParaIdx - 1;
+            if (previousStory.Table is not null
+                && !HeaderFooterTableTextPlanner.AreInSameCell(
+                    previousStory,
+                    previousParagraphIndex,
+                    target.ParaIdx))
+            {
+                return;
+            }
             _hfSelectionAnchor = (
                 target with { ParaIdx = previousParagraphIndex },
                 previousStory.Paragraphs[previousParagraphIndex].PlainText.Length);
@@ -2410,8 +2429,11 @@ public sealed class DocumentView : Control
     {
         if (_hfCaret is not { } hc)
             return;
-        if (TryDeleteHfSelection())
+        if (NormalizedHfSelection() is not null)
+        {
+            TryDeleteHfSelection();
             return;
+        }
         var target = hc.Target;
         var offset = hc.Offset;
         var atoms0 = GetHfParagraph(target) is { } p0 ? HfAtoms(p0) : new List<HfAtom>();
@@ -2422,6 +2444,14 @@ public sealed class DocumentView : Control
                 || GetHfSlot(nextStore, target.Slot) is not { } nextStory
                 || target.ParaIdx + 1 >= nextStory.Paragraphs.Count)
                 return;
+            if (nextStory.Table is not null
+                && !HeaderFooterTableTextPlanner.AreInSameCell(
+                    nextStory,
+                    target.ParaIdx,
+                    target.ParaIdx + 1))
+            {
+                return;
+            }
             _hfSelectionAnchor = (target with { ParaIdx = target.ParaIdx + 1 }, 0);
             TryDeleteHfSelection();
             return;
@@ -2444,8 +2474,12 @@ public sealed class DocumentView : Control
         var ownsUndoGroup = NormalizedHfSelection() is not null && !_bus.IsUndoGroupOpen;
         if (ownsUndoGroup)
             _bus.BeginUndoGroup();
-        if (NormalizedHfSelection() is not null)
-            TryDeleteHfSelection();
+        if (NormalizedHfSelection() is not null && !TryDeleteHfSelection())
+        {
+            if (ownsUndoGroup)
+                _bus.RollbackUndoGroup();
+            return;
+        }
         if (_hfCaret is not { } activeCaret)
             return;
         var target = activeCaret.Target;
@@ -2487,24 +2521,53 @@ public sealed class DocumentView : Control
         if (_hfCaret is not { } caret
             || ResolveHfStore(caret.Target) is not { } store
             || GetHfSlot(store, caret.Target.Slot) is not { } story
-            || NormalizedHfSelection() is not { } selection
-            || HeaderFooterTextEditPlanner.PlanDelete(story, selection) is not { } plan)
+            || NormalizedHfSelection() is not { } selection)
         {
             return false;
         }
 
-        var startTarget = caret.Target with { ParaIdx = plan.FirstParagraphIndex };
-        _bus.Execute(new SpliceHeaderFooterParagraphsCommand(
-            startTarget.SectionIndex,
-            startTarget.UseFinalSectionStore,
-            (int)startTarget.Slot,
-            plan.FirstParagraphIndex,
-            plan.RemoveCount,
-            () => plan.ReplacementParagraphs));
+        HeaderFooterTextPosition nextCaret;
+        if (story.Table is not null)
+        {
+            var tablePlan = HeaderFooterTableTextPlanner.PlanDelete(story, selection);
+            if (tablePlan is null)
+                return false;
+
+            var ownsUndoGroup = tablePlan.CellPlans.Count > 1 && !_bus.IsUndoGroupOpen;
+            if (ownsUndoGroup)
+                _bus.BeginUndoGroup();
+            foreach (var cellPlan in tablePlan.CellPlans.Reverse())
+            {
+                _bus.Execute(new SpliceHeaderFooterParagraphsCommand(
+                    caret.Target.SectionIndex,
+                    caret.Target.UseFinalSectionStore,
+                    (int)caret.Target.Slot,
+                    cellPlan.FirstParagraphIndex,
+                    cellPlan.RemoveCount,
+                    () => cellPlan.ReplacementParagraphs));
+            }
+            if (ownsUndoGroup)
+                _bus.CommitUndoGroup("Delete header/footer table selection");
+            nextCaret = tablePlan.Caret;
+        }
+        else
+        {
+            var plan = HeaderFooterTextEditPlanner.PlanDelete(story, selection);
+            if (plan is null)
+                return false;
+            _bus.Execute(new SpliceHeaderFooterParagraphsCommand(
+                caret.Target.SectionIndex,
+                caret.Target.UseFinalSectionStore,
+                (int)caret.Target.Slot,
+                plan.FirstParagraphIndex,
+                plan.RemoveCount,
+                () => plan.ReplacementParagraphs));
+            nextCaret = plan.Caret;
+        }
 
         _hfCaret = (
-            startTarget with { ParaIdx = plan.Caret.ParagraphIndex },
-            plan.Caret.Offset);
+            caret.Target with { ParaIdx = nextCaret.ParagraphIndex },
+            nextCaret.Offset);
         _hfSelectionAnchor = null;
         var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
         Relayout(width);
@@ -8986,7 +9049,7 @@ public sealed class DocumentView : Control
         double availWidth,
         string pageNumberText,
         int pageCount,
-        Func<int, HfTarget>? targetFactory = null,
+        Func<int, HfTarget?>? targetFactory = null,
         string slotName = "",
         int pageNumber = 1,
         int sectionOrdinal = 1,
@@ -9000,7 +9063,7 @@ public sealed class DocumentView : Control
         if (hf.Table is { Rows.Count: > 0 } table)
         {
             return EmitHfTable(
-                table, startY, availWidth, pageNumberText, pageCount,
+                hf, table, startY, availWidth, pageNumberText, pageCount, targetFactory,
                 slotName, pageNumber, sectionOrdinal, sectionRelativePageNumber, sectionPageCount);
         }
 
@@ -9338,16 +9401,19 @@ public sealed class DocumentView : Control
     /// case — reusing that logic instead of duplicating it. <see cref="_contentLeft"/> is temporarily
     /// pointed at each cell's X so the reused logic's existing <c>_contentLeft</c>-relative math (alignment,
     /// tab stops, clamping) lands the cell's content in the right column; it is restored afterward.
-    /// Table-cell paragraphs are not wired to the click-to-edit caret target (<c>targetFactory: null</c>) —
-    /// editing inside a preserved header/footer table is a follow-up, not part of this rendering fix.
+    /// Table-cell paragraphs keep their compatibility-flat story indices through the shared
+    /// <see cref="HeaderFooterTableTextPlanner"/>, so hit testing and edits address the same paragraph
+    /// instances that the authored table owns.
     /// Returns the Y position after the table's last row.
     /// </summary>
     private double EmitHfTable(
+        HeaderFooter story,
         Table table,
         double startY,
         double totalWidth,
         string pageNumberText,
         int pageCount,
+        Func<int, HfTarget?>? targetFactory,
         string slotName,
         int pageNumber,
         int sectionOrdinal,
@@ -9358,8 +9424,9 @@ public sealed class DocumentView : Control
         var y = startY;
         try
         {
-            foreach (var row in table.Rows)
+            for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
             {
+                var row = table.Rows[rowIndex];
                 if (row.Cells.Count == 0)
                     continue;
 
@@ -9373,9 +9440,18 @@ public sealed class DocumentView : Control
                     _contentLeft = cellX;
                     var cellHf = new HeaderFooter();
                     cellHf.Paragraphs.AddRange(cell.Paragraphs);
+                    HfTarget? ResolveCellTarget(int cellParagraphIndex)
+                    {
+                        if (targetFactory is null)
+                            return null;
+                        var flatIndex = HeaderFooterTableTextPlanner.ResolveParagraphIndex(
+                            story,
+                            new HeaderFooterTableParagraphAddress(rowIndex, cellIndex, cellParagraphIndex));
+                        return flatIndex >= 0 ? targetFactory(flatIndex) : null;
+                    }
                     var cellEndY = EmitHfParagraphs(
                         cellHf, y, cellWidth, pageNumberText, pageCount,
-                        targetFactory: null, slotName, pageNumber, sectionOrdinal, sectionRelativePageNumber,
+                        ResolveCellTarget, slotName, pageNumber, sectionOrdinal, sectionRelativePageNumber,
                         sectionPageCount);
                     rowEndY = Math.Max(rowEndY, cellEndY);
                     cellX += cellWidth;

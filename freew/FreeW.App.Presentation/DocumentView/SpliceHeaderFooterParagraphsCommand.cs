@@ -12,12 +12,16 @@ public sealed class SpliceHeaderFooterParagraphsCommand(
     Func<IReadOnlyList<Paragraph>> buildReplacement) : IDocumentCommand
 {
     private List<Paragraph>? _removed;
+    private HeaderFooterTableParagraphAddress? _tableAddress;
     private int _insertedCount;
 
     public string Label => "Edit header/footer";
 
     public void Apply(IDocumentCommandContext context)
     {
+        _removed = null;
+        _tableAddress = null;
+        _insertedCount = 0;
         var story = HeaderFooterCommandAddress.ResolveStory(
             context.Document,
             sectionIndex,
@@ -29,10 +33,26 @@ public sealed class SpliceHeaderFooterParagraphsCommand(
         var paragraphs = story.Paragraphs;
         var at = Math.Clamp(firstParagraphIndex, 0, paragraphs.Count - 1);
         var actualRemoveCount = Math.Clamp(removeCount, 0, paragraphs.Count - at);
+        if (!HeaderFooterTableTextPlanner.CanSplice(story, at, actualRemoveCount))
+            return;
+
+        var tableAddress = HeaderFooterTableTextPlanner.TryResolveAddress(story, at, out var resolvedAddress)
+            ? resolvedAddress
+            : (HeaderFooterTableParagraphAddress?)null;
         var replacement = buildReplacement();
+        if (tableAddress is not null && replacement.Count == 0)
+            return;
+
         _removed = paragraphs.GetRange(at, actualRemoveCount);
+        _tableAddress = tableAddress;
         paragraphs.RemoveRange(at, actualRemoveCount);
         paragraphs.InsertRange(at, replacement);
+        if (_tableAddress is { } address && story.Table is { } table)
+        {
+            var cellParagraphs = table.Rows[address.RowIndex].Cells[address.CellIndex].Paragraphs;
+            cellParagraphs.RemoveRange(address.CellParagraphIndex, actualRemoveCount);
+            cellParagraphs.InsertRange(address.CellParagraphIndex, replacement);
+        }
         _insertedCount = replacement.Count;
     }
 
@@ -53,6 +73,13 @@ public sealed class SpliceHeaderFooterParagraphsCommand(
         var count = Math.Clamp(_insertedCount, 0, paragraphs.Count - at);
         paragraphs.RemoveRange(at, count);
         paragraphs.InsertRange(at, _removed);
+        if (_tableAddress is { } address && story.Table is { } table)
+        {
+            var cellParagraphs = table.Rows[address.RowIndex].Cells[address.CellIndex].Paragraphs;
+            var cellCount = Math.Clamp(_insertedCount, 0, cellParagraphs.Count - address.CellParagraphIndex);
+            cellParagraphs.RemoveRange(address.CellParagraphIndex, cellCount);
+            cellParagraphs.InsertRange(address.CellParagraphIndex, _removed);
+        }
     }
 }
 
