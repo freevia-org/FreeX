@@ -19,7 +19,7 @@ namespace FreeW.App.Host;
 /// list. View-only: it touches no docx I/O and changes no model shapes — only the existing
 /// <see cref="Paragraph.BookmarkName"/> marker.
 /// </summary>
-internal sealed class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private static readonly BookmarkManagerSurfaceSpec Surface = BookmarkManagerDialogPlanner.Surface;
     private readonly DocumentView _editor;

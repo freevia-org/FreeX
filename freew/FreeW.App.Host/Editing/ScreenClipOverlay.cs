@@ -14,7 +14,7 @@ namespace FreeW.App.Host.Editing;
 /// <see cref="ScreenshotCapture.CaptureRegionPng"/>); pressing Escape, right-clicking, or a zero-size
 /// drag cancels and returns <see langword="null"/>.
 /// </summary>
-internal sealed class ScreenClipOverlay : Window
+internal sealed partial class ScreenClipOverlay : Window
 {
     private readonly Canvas _canvas;
     private readonly WpfRectangle _selection;

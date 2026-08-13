@@ -4,7 +4,7 @@ using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia.Printing;
 
-internal sealed class CupsPrintDialog : FreeWDialogWindow
+internal sealed partial class CupsPrintDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaPrintDialogOptions Options = new()
     {

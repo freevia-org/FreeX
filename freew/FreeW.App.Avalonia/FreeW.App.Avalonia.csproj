@@ -24,6 +24,11 @@
     <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
+    <OutputPath>bin\DialogHarness\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\DialogHarness\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
   <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
     <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.TestAccess.cs"
              Link="MainWindow.TestAccess.cs" />
@@ -33,6 +38,10 @@
              Link="AutosaveAdapter.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Avalonia\DialogsAndPanes.TestAccess.cs"
              Link="DialogsAndPanes.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\Backstage.TestAccess.cs"
+             Link="Backstage\Backstage.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\CupsPrintDialog.TestAccess.cs"
+             Link="Printing\CupsPrintDialog.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Avalonia\EditingControls.TestAccess.cs"
              Link="Editing\EditingControls.TestAccess.cs" />
   </ItemGroup>
@@ -40,6 +49,12 @@
   <ItemDefinitionGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
     <ProjectReference>
       <GlobalPropertiesToRemove>FreeWHostTestSupport</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeWDialogHarnessSupport</GlobalPropertiesToRemove>
     </ProjectReference>
   </ItemDefinitionGroup>
 
@@ -86,6 +101,18 @@
 
   <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
     <InternalsVisibleTo Include="FreeW.App.Avalonia.Tests" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\DialogsAndPanes.TestAccess.cs"
+             Link="DialogsAndPanes.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\ScreenClipOverlay.DialogHarnessAccess.cs"
+             Link="Editing\ScreenClipOverlay.DialogHarnessAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\Backstage.TestAccess.cs"
+             Link="Backstage\Backstage.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\CupsPrintDialog.TestAccess.cs"
+             Link="Printing\CupsPrintDialog.TestAccess.cs" />
+    <InternalsVisibleTo Include="FreeW.DialogVisualHarness.Avalonia" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreeWValidationHost)' == 'true'">

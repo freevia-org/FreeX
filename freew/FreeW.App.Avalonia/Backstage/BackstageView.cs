@@ -28,7 +28,7 @@ namespace FreeW.App.Avalonia.Backstage;
 ///
 /// Opened via <see cref="BackstageView.ShowAsync"/>; dismissed by the Back button or Escape.
 /// </summary>
-internal sealed class BackstageView : Window
+internal sealed partial class BackstageView : Window
 {
     // Keep the pane typography and field metrics byte-for-byte aligned with the WPF
     // BackstageVisualKit. The shared Avalonia chrome is intentionally more generic and

@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -273,8 +272,7 @@ static void Populate(Window dialog, Scenario scenario)
         else if (state == "validation-error" && routeTextBoxes.Length > 0)
         {
             routeTextBoxes[0].Text = "not-a-number";
-            dialog.GetType().GetMethod("ValidateForTest", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .Invoke(dialog, null);
+            ((FootnoteEndnoteOptionsDialog)dialog).ValidateForTest();
         }
         FocusScenarioTarget(dialog, scenario);
         return;

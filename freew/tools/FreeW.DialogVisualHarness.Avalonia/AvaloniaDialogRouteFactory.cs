@@ -9,8 +9,11 @@ using Avalonia.Controls.Shapes;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using FreeW.App.Avalonia;
+using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Avalonia.Printing;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Backstage;
 using FreeW.Core.Model;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Ribbon;
@@ -60,21 +63,12 @@ internal static class AvaloniaDialogRouteFactory
             editor.LoadDocument(document);
         }
 
-        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.BookmarkManagerDialog", true)!;
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            .Single(candidate => candidate.GetParameters().Length == 1);
-        return (Window)constructor.Invoke([editor]);
+        return new BookmarkManagerDialog(editor);
     }
 
     private static Window CreateOptions()
     {
-        var assembly = typeof(MainWindow).Assembly;
-        return (Window)Activator.CreateInstance(
-            assembly.GetType("FreeW.App.Avalonia.OptionsDialog", true)!,
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            null,
-            [new FreeWOptions()],
-            null)!;
+        return new OptionsDialog(new FreeWOptions());
     }
 
     private static Window CreatePageSetup() => new PageSetupDialog(
@@ -83,36 +77,21 @@ internal static class AvaloniaDialogRouteFactory
 
     private static Window CreateBackstage(FreeWDialogEvidenceRoute route)
     {
-        var assembly = typeof(MainWindow).Assembly;
-        var type = assembly.GetType("FreeW.App.Avalonia.Backstage.BackstageView", true)!;
         // Use the real production shell to obtain the same sample document,
         // recent-file workflow, file formats, and persisted options as the WPF
         // authority. Synthesizing empty callbacks makes the panes look unlike
         // the application users actually see.
         var shell = new MainWindow();
-        var callbacks = typeof(MainWindow)
-            .GetMethod("BuildBackstageCallbacks", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            ?.Invoke(shell, null)
-            ?? throw new MissingMethodException(typeof(MainWindow).FullName, "BuildBackstageCallbacks");
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).OrderByDescending(candidate => candidate.GetParameters().Length).First();
+        var callbacks = shell.BuildBackstageCallbacks();
         // Keep this capture contract aligned with the WPF authority: invoke the
         // production pane builder and capture the pane in a neutral host. Capturing
         // the full Avalonia Backstage window here would compare the navigation rail
         // and frame chrome instead of the actual pane surface.
-        var methodName = route.BackstageMethodName
-            ?? throw new InvalidOperationException($"Backstage route {route.RouteId} has no pane builder.");
-
-        var home = Enum.Parse(assembly.GetType("FreeW.App.Avalonia.Backstage.BackstagePane", true)!, "Home");
-        Window? backstage = null;
+        BackstageView? backstage = null;
         try
         {
-            backstage = (Window)constructor.Invoke([callbacks, home]);
-            var method = type.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
-                .SingleOrDefault(candidate => candidate.Name.Equals(methodName, StringComparison.Ordinal)
-                    && candidate.GetParameters().Length == 0)
-                ?? throw new MissingMethodException(type.FullName, methodName);
-            var control = (Control)method.Invoke(backstage, null)!;
-            return WrapControl(control);
+            backstage = new BackstageView(callbacks, BackstagePane.Home);
+            return WrapControl(backstage.BuildPaneForVisualHarness(route.RouteId));
         }
         finally
         {
@@ -123,18 +102,15 @@ internal static class AvaloniaDialogRouteFactory
 
     private static Window CreateNotesPane()
     {
-        var assembly = typeof(MainWindow).Assembly;
-        var type = assembly.GetType("FreeW.App.Avalonia.NotesPane", true)!;
         var editor = new DocumentView();
         editor.LoadDocument(TextDocument.CreateEmpty());
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single();
-        var pane = (Control)constructor.Invoke([editor]);
-        type.GetMethod("Toggle", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.Invoke(pane, null);
-        return WrapControl(pane);
+        return WrapControl(NotesPane.CreateForVisualHarness(editor));
     }
 
     private static Window CreateType(string typeName, string state)
     {
+        // The catalog intentionally proves that every generic dialog remains constructible.
+        // Product-specific behavior and private UI state use typed harness access above.
         var assembly = typeof(MainWindow).Assembly;
         var type = assembly.GetType($"FreeW.App.Avalonia.{typeName}", false)
             ?? assembly.GetTypes().FirstOrDefault(candidate => candidate.Name.Equals(typeName, StringComparison.Ordinal));
@@ -161,11 +137,9 @@ internal static class AvaloniaDialogRouteFactory
 
     private static Window CreateCharacterFormattingPicker(string state)
     {
-        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.CharacterFormattingPickerDialog", true)!;
-        var methodName = state.Equals("populated", StringComparison.OrdinalIgnoreCase)
-            ? "ForTestShading"
-            : "ForTestBorder";
-        return (Window)type.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!.Invoke(null, null)!;
+        return state.Equals("populated", StringComparison.OrdinalIgnoreCase)
+            ? CharacterFormattingPickerDialog.ForTestShading()
+            : CharacterFormattingPickerDialog.ForTestBorder();
     }
 
     private static Window CreateManualHyphenation(string state)
@@ -178,41 +152,20 @@ internal static class AvaloniaDialogRouteFactory
         var candidate = ManualHyphenationPlanner.CreateSession(document).Current
             ?? throw new InvalidOperationException("The manual-hyphenation harness fixture did not produce a real candidate.");
 
-        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.ManualHyphenationDialog", true)!;
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            .Single(candidateConstructor => candidateConstructor.GetParameters().Length == 1);
-        return (Window)constructor.Invoke([candidate]);
+        return new ManualHyphenationDialog(candidate);
     }
 
     private static Window CreateCupsPrint()
     {
-        var assembly = typeof(MainWindow).Assembly;
-        var type = assembly.GetType("FreeW.App.Avalonia.Printing.CupsPrintDialog", true)!;
-        var planType = typeof(Free.Shared.AppServices.Printing.PrinterDiscoveryResult);
-        var discovery = Activator.CreateInstance(
-            planType,
-            Free.Shared.AppServices.Printing.PrinterDiscoveryStatus.NoPrinters,
-            Array.Empty<Free.Shared.AppServices.Printing.PrinterInfo>(),
-            null,
-            "No printers are installed or available.")!;
-        var planner = typeof(Free.Shared.AppServices.Printing.PrintSelectionPlanner);
-        var plan = planner.GetMethod("Build")!.Invoke(null, [discovery, null])!;
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-            .Single(candidate => candidate.GetParameters().Length == 1);
-        return (Window)constructor.Invoke([plan]);
+        return CupsPrintDialog.CreateForVisualHarness();
     }
 
     private static Window CreateCompareDocuments(string state, string? tab)
     {
-        var assembly = typeof(MainWindow).Assembly;
-        var type = assembly.GetType("FreeW.App.Avalonia.CompareDocumentsDialog", true)!;
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-            .OrderBy(candidate => candidate.GetParameters().Length)
-            .First();
         var promptState = new CompareDocumentsPromptState("Reviewer", "Revised.docx");
-        var dialog = (Window)constructor.Invoke(["C:\\Harness\\Original.docx", promptState]);
+        var dialog = CompareDocumentsDialog.CreateForTest("C:\\Harness\\Original.docx", promptState);
         if (state == "validation-error")
-            type.GetMethod("AcceptForTest", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(dialog, [" "]);
+            dialog.AcceptForTest(" ");
         if (tab?.Equals("More", StringComparison.OrdinalIgnoreCase) == true)
             dialog.GetLogicalDescendants().OfType<Expander>().Single(expander => expander.Header?.ToString() == "More").IsExpanded = true;
         return dialog;
@@ -220,46 +173,22 @@ internal static class AvaloniaDialogRouteFactory
 
     private static Window CreatePasswordPrompt()
     {
-        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.PasswordPromptDialog", true)!;
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic).Single();
-        return (Window)constructor.Invoke(["Unprotect Document", "Enter the password:"]);
+        return PasswordPromptDialog.CreateForTest("Unprotect Document", "Enter the password:");
     }
 
     private static Window CreateScreenClipOverlay()
     {
-        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.Editing.ScreenClipOverlay", true)!;
-        var overlay = (Window)Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [new PixelRect(0, 0, 560, 600), 1d], null)!;
-        type.GetMethod("BeginSelectionForTest", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(overlay, [new Point(80, 90)]);
-        type.GetMethod("CompleteSelectionForTest", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(overlay, [new Point(360, 300), 1d]);
-        var canvas = (Control)overlay.Content!;
-        overlay.Content = null;
-        var selection = ((Canvas)canvas).Children.OfType<Rectangle>().Single();
-        Canvas.SetLeft(selection, 80);
-        Canvas.SetTop(selection, 90);
-        selection.Width = 280;
-        selection.Height = 210;
-        selection.IsVisible = true;
-        var surface = new Grid { Background = new SolidColorBrush(Color.FromRgb(0xE8, 0xEB, 0xF0)) };
-        surface.Children.Add(new Border { Background = overlay.Background });
-        surface.Children.Add(canvas);
-        return new Window
-        {
-            Width = 560,
-            Height = 600,
-            Content = surface,
-            Title = "Screen Clip Overlay Capture",
-        };
+        return ScreenClipOverlay.CreateForVisualHarness();
     }
 
     private static Window CreateTableFormula(string state)
     {
-        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.TableFormulaDialog", true)!;
         var initialState = state == "initial"
             ? new TableFormulaDialogInitialState("=", 0)
             : new TableFormulaDialogInitialState("=SUM(ABOVE)", 3);
-        var dialog = (Window)Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [initialState], null)!;
+        var dialog = new TableFormulaDialog(initialState);
         if (state == "validation-error")
-            type.GetMethod("AcceptForTest", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(dialog, [" ", "0"]);
+            dialog.AcceptForTest(" ", "0");
         return dialog;
     }
 
@@ -271,11 +200,8 @@ internal static class AvaloniaDialogRouteFactory
         row.Cells.Add(cell);
         table.Rows.Add(row);
         var context = new ModelTableContext(table, row, cell);
-        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.TablePropertiesDialog", true)!;
-        var tabType = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.TablePropertiesDialogTab", true)!;
-        var initialTab = Enum.Parse(tabType, tab ?? "Table", true);
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single();
-        var dialog = (Window)constructor.Invoke([context, initialTab]);
+        var initialTab = Enum.Parse<TablePropertiesDialogTabKind>(tab ?? "Table", true);
+        var dialog = new TablePropertiesDialog(context, initialTab);
 
         // Keep state setup in the shared harness Populate pass, exactly as WPF does.
         // The Avalonia adapter previously mutated these fields here, which made the
@@ -285,7 +211,6 @@ internal static class AvaloniaDialogRouteFactory
 
     private static Window CreateStyle(string state)
     {
-        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.StyleDialog", true)!;
         var catalog = state == "populated"
             ? new Dictionary<string, string>
             {
@@ -294,12 +219,7 @@ internal static class AvaloniaDialogRouteFactory
             }
             : new Dictionary<string, string>();
         var session = StyleDialogPlanner.CreateNewSession(catalog, defaultBasedOnId: null);
-        return (Window)Activator.CreateInstance(
-            type,
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            null,
-            [session],
-            null)!;
+        return StyleDialog.CreateForVisualHarness(session);
     }
 
     private static Window WrapControl(Control control)

@@ -1,4 +1,6 @@
+using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
@@ -18,6 +20,19 @@ internal sealed partial class FindReplaceDialog
     internal void ReplaceForTest() => Execute(FindReplaceDialogActionKind.Replace);
     internal void ReplaceAllForTest() => Execute(FindReplaceDialogActionKind.ReplaceAll);
     internal string StatusForTest => _status.Text;
+}
+
+internal sealed partial class BookmarkManagerDialog
+{
+    internal static BookmarkManagerDialog CreateForVisualHarness(Window owner, DocumentView editor) =>
+        new(owner, editor);
+}
+
+internal sealed partial class ManualHyphenationDialog
+{
+    internal static ManualHyphenationDialog CreateForVisualHarness(
+        Window owner,
+        ManualHyphenationCandidate candidate) => new(owner, candidate);
 }
 
 internal sealed partial class MarkIndexEntryDialog

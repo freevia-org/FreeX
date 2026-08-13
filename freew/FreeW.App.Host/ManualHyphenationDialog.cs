@@ -6,7 +6,7 @@ using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
-internal sealed class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ManualHyphenationDialogSession _session;
     private readonly ComboBox _choices;

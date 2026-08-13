@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using FreeW.App.Host;
+using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
@@ -42,6 +43,8 @@ internal static class WpfDialogRouteFactory
                 throw new InvalidOperationException($"Unsupported WPF dialog harness action {route.Wpf.OpenAction} for {routeId}.");
         }
 
+        // The catalog intentionally proves that every generic dialog remains constructible.
+        // Product-specific behavior and private UI state use typed harness access below.
         var typeName = route.Wpf.DialogTypeName;
         var assembly = typeof(MainWindow).Assembly;
         var type = assembly.GetType($"FreeW.App.Host.{typeName}", false)
@@ -79,10 +82,7 @@ internal static class WpfDialogRouteFactory
             editor.Rerender();
         }
 
-        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Host.BookmarkManagerDialog", true)!;
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            .Single(candidate => candidate.GetParameters().Length == 2);
-        return (Window)constructor.Invoke([owner, editor]);
+        return BookmarkManagerDialog.CreateForVisualHarness(owner, editor);
     }
 
     private static Window CreateManualHyphenation(string state, Window owner)
@@ -93,10 +93,7 @@ internal static class WpfDialogRouteFactory
         var candidate = ManualHyphenationPlanner.CreateSession(editor.Model).Current
             ?? throw new InvalidOperationException("The manual-hyphenation harness fixture did not produce a real candidate.");
 
-        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Host.ManualHyphenationDialog", true)!;
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            .Single(candidateConstructor => candidateConstructor.GetParameters().Length == 2);
-        return (Window)constructor.Invoke([owner, candidate]);
+        return ManualHyphenationDialog.CreateForVisualHarness(owner, candidate);
     }
 
     public static bool IsStaticPromptRoute(string routeId) =>
@@ -109,23 +106,30 @@ internal static class WpfDialogRouteFactory
         if (hostRoute?.OpenAction != FreeWDialogOpenAction.StaticPrompt || hostRoute.EntryPointName is null)
             throw new ArgumentOutOfRangeException(nameof(routeId));
 
-        var assembly = typeof(MainWindow).Assembly;
-        var arguments = route.Fixture switch
+        switch (route.Fixture)
         {
-            FreeWDialogFixtureKind.DefaultRunFormatting => new object?[] { owner, DefaultValue(typeof(RunFormatting)) },
-            FreeWDialogFixtureKind.DefaultParagraphFormatting => new object?[] { owner, DefaultValue(typeof(ParagraphFormatting)) },
-            FreeWDialogFixtureKind.EmptyListFormats => new object?[] { owner, Array.Empty<ListNumberFormat>() },
-            FreeWDialogFixtureKind.HarnessClipboardText => new object?[] { owner },
-            FreeWDialogFixtureKind.StyleCatalog => new object?[] { owner, StyleCatalogForState(state), null },
-            FreeWDialogFixtureKind.EmptyTextDocument => new object?[] { owner, new TextDocument(), null },
-            _ => throw new ArgumentOutOfRangeException(nameof(routeId)),
-        };
-        var type = assembly.GetType($"FreeW.App.Host.{hostRoute.DialogTypeName}", true)!;
-        var method = type.GetMethod(hostRoute.EntryPointName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(type.FullName, hostRoute.EntryPointName);
-        if (route.Fixture == FreeWDialogFixtureKind.HarnessClipboardText)
-            System.Windows.Clipboard.SetText("Harness clipboard text");
-        method.Invoke(null, arguments);
+            case FreeWDialogFixtureKind.DefaultRunFormatting:
+                FontDialog.Prompt(owner, RunFormatting.Default);
+                break;
+            case FreeWDialogFixtureKind.DefaultParagraphFormatting:
+                ParagraphBreaksDialog.Prompt(owner, ParagraphFormatting.Default);
+                break;
+            case FreeWDialogFixtureKind.EmptyListFormats:
+                MultilevelListDialog.Prompt(owner, []);
+                break;
+            case FreeWDialogFixtureKind.HarnessClipboardText:
+                System.Windows.Clipboard.SetText("Harness clipboard text");
+                PasteSpecialDialog.Prompt(owner);
+                break;
+            case FreeWDialogFixtureKind.StyleCatalog:
+                StyleDialog.AskNew(owner, StyleCatalogForState(state), null);
+                break;
+            case FreeWDialogFixtureKind.EmptyTextDocument:
+                ManageStylesDialog.Ask(owner, new TextDocument(), null);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(routeId));
+        }
     }
 
     private static object? DefaultValue(Type type) =>
@@ -145,15 +149,7 @@ internal static class WpfDialogRouteFactory
     private static Window CreateBackstage(FreeWDialogEvidenceRoute route)
     {
         var shell = new MainWindow(new FreeWOptions());
-        var backstageField = typeof(MainWindow).GetField("_backstage", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingFieldException(typeof(MainWindow).FullName, "_backstage");
-        var backstage = backstageField.GetValue(shell)
-            ?? throw new InvalidOperationException("WPF BackstageView was not initialized by MainWindow.");
-        var methodName = route.BackstageMethodName
-            ?? throw new InvalidOperationException($"Backstage route {route.RouteId} has no pane builder.");
-        var method = backstage.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(backstage.GetType().FullName, methodName);
-        var content = (System.Windows.UIElement)method.Invoke(backstage, null)!;
+        var content = shell.BackstageForVisualHarness.BuildPaneForVisualHarness(route.RouteId);
         shell.Close();
         return new Window
         {
@@ -167,31 +163,7 @@ internal static class WpfDialogRouteFactory
 
     private static Window CreateScreenClipOverlay(Window owner)
     {
-        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Host.Editing.ScreenClipOverlay", true)!;
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic).Single();
-        var overlay = (Window)constructor.Invoke(null);
-        var canvas = (Canvas)overlay.Content;
-        overlay.Content = null;
-        var selection = (Rectangle)type.GetField("_selection", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(overlay)!;
-        Canvas.SetLeft(selection, 80);
-        Canvas.SetTop(selection, 90);
-        selection.Width = 280;
-        selection.Height = 210;
-        selection.Visibility = Visibility.Visible;
-        var surface = new Grid { Background = new SolidColorBrush(Color.FromRgb(0xE8, 0xEB, 0xF0)) };
-        surface.Children.Add(new Border { Background = overlay.Background });
-        surface.Children.Add(canvas);
-        return new Window
-        {
-            Owner = owner,
-            Width = 560,
-            Height = 600,
-            Content = surface,
-            Title = "Screen Clip Overlay Capture",
-            WindowStyle = WindowStyle.None,
-            ResizeMode = ResizeMode.NoResize,
-            ShowInTaskbar = false,
-        };
+        return ScreenClipOverlay.CreateForVisualHarness(owner);
     }
 
     private static object? ValueFor(Type type, string state, Window owner)

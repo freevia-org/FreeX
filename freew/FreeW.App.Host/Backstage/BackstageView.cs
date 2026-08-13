@@ -25,7 +25,7 @@ namespace FreeW.App.Host.Backstage;
 /// so that changing the theme value propagates to the backstage — byte-identical today since
 /// <c>BrandThemes.FreeW.Colors.Accent == #0F6D8C</c> matches the previous hard-coded <c>LinkColor</c>.
 /// </summary>
-internal sealed class BackstageView : UserControl
+internal sealed partial class BackstageView : UserControl
 {
     private static readonly SisterBackstageTheme Theme = SisterBackstageTheme.FreeW;
 

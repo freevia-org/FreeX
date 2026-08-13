@@ -18,6 +18,11 @@
     <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
+    <OutputPath>bin\DialogHarness\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\DialogHarness\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
   <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
     <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.TestAccess.cs"
              Link="MainWindow.TestAccess.cs" />
@@ -27,6 +32,10 @@
              Link="AutosaveCoordinator.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Wpf\Dialogs.TestAccess.cs"
              Link="Dialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\Backstage.TestAccess.cs"
+             Link="Backstage\Backstage.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\ScreenClipOverlay.TestAccess.cs"
+             Link="Editing\ScreenClipOverlay.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Wpf\OutlineView.TestAccess.cs"
              Link="Editing\OutlineView.TestAccess.cs" />
   </ItemGroup>
@@ -34,6 +43,12 @@
   <ItemDefinitionGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
     <ProjectReference>
       <GlobalPropertiesToRemove>FreeWHostTestSupport</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeWDialogHarnessSupport</GlobalPropertiesToRemove>
     </ProjectReference>
   </ItemDefinitionGroup>
 
@@ -49,6 +64,18 @@
     <InternalsVisibleTo Include="FreeW.App.Host.Tests" />
     <!-- FidelityRender composite path uses internal overlay/chrome/column helpers. -->
     <InternalsVisibleTo Include="FreeW.FidelityRender" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Wpf\Dialogs.TestAccess.cs"
+             Link="Dialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\DialogHarness.TestAccess.cs"
+             Link="DialogHarness.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\Backstage.TestAccess.cs"
+             Link="Backstage\Backstage.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\ScreenClipOverlay.TestAccess.cs"
+             Link="Editing\ScreenClipOverlay.TestAccess.cs" />
+    <InternalsVisibleTo Include="FreeW.DialogVisualHarness.Wpf" />
   </ItemGroup>
 
   <ItemGroup>

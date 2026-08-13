@@ -100,6 +100,7 @@ internal sealed partial class RestrictEditingDialog
 
 internal sealed partial class StyleDialog
 {
+    internal static StyleDialog CreateForVisualHarness(StyleDialogSession session) => new(session);
     internal static double ControlHeightForTests => DialogChromeStyle.ControlHeight;
     internal static double ButtonHeightForTests => DialogChromeStyle.ButtonHeight;
     internal static double CheckBoxHeightForTests => StyleDialogMetrics.CheckBoxHeight;
@@ -383,6 +384,13 @@ internal sealed partial class OptionsDialog
 
 internal sealed partial class NotesPane
 {
+    internal static NotesPane CreateForVisualHarness(DocumentView editor)
+    {
+        var pane = new NotesPane(editor);
+        pane.Toggle();
+        return pane;
+    }
+
     internal int ItemCountForTest => _list.ItemCount;
     internal DocumentView SubEditorForTest => _subEditor;
     internal void SelectForTest(bool footnote, int id) => ShowAndSelect(footnote, id);
