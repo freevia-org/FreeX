@@ -1,10 +1,12 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Microsoft.Extensions.DependencyInjection;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Services;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -121,6 +123,24 @@ public partial class MainWindow
 
     internal void ShowInlineEditorForTest(CellAddress address, double? clickX = null) =>
         ShowInlineEditor(address, clickX);
+
+    internal WorksheetViewStateSnapshot GetEffectiveViewStateForTest(Sheet sheet) =>
+        GetEffectiveViewState(sheet);
+
+    internal void SyncWindowViewStateForTest(IReadOnlyList<SheetId> sheetIds) =>
+        SyncWindowViewState(sheetIds);
+
+    internal void ApplyCustomViewWorkbookViewStateForTest() =>
+        ApplyCustomViewWorkbookViewState();
+
+    internal IReadOnlyDictionary<SheetId, WorksheetViewStateSnapshot> WorksheetViewStateSnapshotsForTest =>
+        _worksheetViewStates.Snapshots;
+
+    internal void SeedSplitPaneViewportOffsetForTest(SheetId sheetId) =>
+        _splitPaneViewportOffsets[sheetId] = new SplitPaneViewportOffsets(3u, null);
+
+    internal IReadOnlyCollection<SheetId> SplitPaneViewportOffsetKeysForTest =>
+        _splitPaneViewportOffsets.Keys;
 
     internal void ExecuteClearSelectionForTest() => ExecuteClearSelection();
 
@@ -254,4 +274,12 @@ public partial class MainWindow
     internal void SelectAllSheetsFromContextMenuForTest() =>
         SheetCtxSelectAllSheets_Click(this, new RoutedEventArgs());
 
+}
+
+public partial class App
+{
+    internal static void ConfigureServicesForTest(
+        IServiceCollection services,
+        FreeXOptionsRuntimeSession optionsRuntimeSession) =>
+        ConfigureServices(services, optionsRuntimeSession);
 }

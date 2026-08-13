@@ -1,4 +1,3 @@
-using System.Reflection;
 using FluentAssertions;
 using FreeX.Core.IO;
 using Microsoft.Extensions.DependencyInjection;
@@ -86,10 +85,9 @@ public sealed class AppFileAdapterRegistrationTests
     private static ServiceProvider BuildAppServices()
     {
         var services = new ServiceCollection();
-        var configureServices = typeof(App).GetMethod("ConfigureServices", BindingFlags.NonPublic | BindingFlags.Static);
-        configureServices.Should().NotBeNull();
-
-        configureServices!.Invoke(null, [services]);
+        App.ConfigureServicesForTest(
+            services,
+            new FreeXOptionsRuntimeSession(new AppOptions()));
         return services.BuildServiceProvider();
     }
 

@@ -430,11 +430,9 @@ public sealed class StatusBarLayoutTests
     {
         private readonly MainWindow _window;
         private readonly MethodInfo _cycleShellFocus;
-        private readonly FieldInfo _currentSheetId;
         private readonly MethodInfo _getCurrentShellFocusTarget;
         private readonly MethodInfo _invalidateNavigationCaches;
         private readonly MethodInfo _refreshStatusBar;
-        private readonly MethodInfo _showInlineEditor;
         private readonly MethodInfo _tryHandleFocusedStatusBarKeyboardNavigation;
         private string? _visibleTaskPaneFocusCandidateName;
 
@@ -442,9 +440,6 @@ public sealed class StatusBarLayoutTests
         {
             _window = window;
             Workbook = workbook;
-            _currentSheetId = typeof(MainWindow)
-                .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
             _cycleShellFocus = typeof(MainWindow)
                 .GetMethod("CycleShellFocus", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "CycleShellFocus");
@@ -457,9 +452,6 @@ public sealed class StatusBarLayoutTests
             _refreshStatusBar = typeof(MainWindow)
                 .GetMethod("RefreshStatusBar", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "RefreshStatusBar");
-            _showInlineEditor = typeof(MainWindow)
-                .GetMethod("ShowInlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ShowInlineEditor");
             _tryHandleFocusedStatusBarKeyboardNavigation = typeof(MainWindow)
                 .GetMethod("TryHandleFocusedStatusBarKeyboardNavigation", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFocusedStatusBarKeyboardNavigation");
@@ -469,7 +461,7 @@ public sealed class StatusBarLayoutTests
 
         public Workbook ActiveWorkbook => _window.Session.Workbook;
 
-        public SheetId CurrentSheetId => (SheetId)_currentSheetId.GetValue(_window)!;
+        public SheetId CurrentSheetId => _window.CurrentSheetIdForTest;
 
         public ShellFocusTarget CurrentShellFocusTarget =>
             (ShellFocusTarget)_getCurrentShellFocusTarget.Invoke(_window, [])!;
@@ -577,7 +569,7 @@ public sealed class StatusBarLayoutTests
 
         public void ShowInlineEditor(CellAddress address)
         {
-            _showInlineEditor.Invoke(_window, [address]);
+            _window.ShowInlineEditorForTest(address);
             PumpDispatcher();
         }
 
