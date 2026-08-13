@@ -128,6 +128,15 @@ public sealed record PageSetupDialogPresentationMetrics
     // side after the shared pane compensation is applied. WPF has no equivalent
     // template inset, so the Avalonia host consumes this shared authority value.
     public double AvaloniaTabContentInset { get; init; } = 3;
+    // Avalonia's Fluent templates measure the authority's compact WPF tab headers and action
+    // chrome differently. Keep the measured compensations beside the rest of the shared visual
+    // contract so the native renderer only projects them.
+    public IReadOnlyList<double> AvaloniaTabWidths { get; init; } = [59, 40, 48];
+    public double AvaloniaActionSpacing { get; init; } = 14;
+    public double AvaloniaActionRightInset { get; init; } = 15;
+    public double AvaloniaLauncherLeftInset { get; init; } = -1;
+    public double AvaloniaLauncherSpacing { get; init; } = 14;
+    public PageSetupDialogThickness AvaloniaValidationMargin { get; init; } = new(16, 8, 16, 0);
     public IReadOnlyList<string> TabNames =>
         PageSetupDialogPlanner.Surface.Tabs.Select(tab => tab.Header).ToArray();
     public PageSetupDialogValidationPolicy Validation { get; init; } =
