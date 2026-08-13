@@ -91,6 +91,15 @@ public static class AvaloniaRibbonIcons
         return Build(new RibbonCommandIcon(kind), size, foreground: null);
     }
 
+    /// <summary>Builds an icon with explicit kind/accent metadata and optional per-command artwork.</summary>
+    public static Control Build(RibbonCommandIcon icon, double size, string? commandName)
+    {
+        if (TryBuildCommandSvg(commandName, size, monochromeForeground: null) is { } svg)
+            return svg;
+
+        return Build(icon, size, foreground: null);
+    }
+
     /// <summary>
     /// Builds a command icon from the shared SVG asset and recolours its visible paint to
     /// <paramref name="foreground"/>. This is used by dark chrome such as the Office backstage rail,

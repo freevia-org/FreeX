@@ -162,7 +162,7 @@ public class RibbonWpfRendererTests
             .Tab("t", "T", "T", tab => tab
                 .Group("g", "G", "G", 1, g => g
                     .Medium("Shape Effects", "Shape Effects", RibbonCommandIconKind.RibbonShape, "FX",
-                        menu: m => m.Item("Shadow", "Shadow", "S").Separator().Item("Glow", "Glow", "G"))))
+                        menu: m => m.Item("Shadow", "Shadow", RibbonCommandIconKind.Effects, "S").Separator().Item("Glow", "Glow", "G"))))
             .Build();
 
         StaTestRunner.Run(() =>
@@ -180,6 +180,7 @@ public class RibbonWpfRendererTests
             menu.Should().NotBeNull();
             menu!.IsOpen.Should().BeTrue();
             var shadowItem = menu.Items.OfType<MenuItem>().First(mi => Equals(mi.Header, "Shadow"));
+            shadowItem.Icon.Should().BeAssignableTo<FrameworkElement>();
             shadowItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         });
 

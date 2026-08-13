@@ -31,7 +31,10 @@ public sealed class AvaloniaRibbonMenuStateTests
                         {
                             new RibbonMenuItem("Child", "child", "C")
                         }) { IsEnabled = false },
-                        new RibbonMenuItem("Checked", "checked") { IsChecked = true }
+                        new RibbonMenuItem(
+                            "Checked",
+                            "checked",
+                            Icon: new RibbonCommandIcon(RibbonCommandIconKind.Warning)) { IsChecked = true }
                     }), control => control with { KeyTip = "M" })))
                 .Build();
             var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
@@ -52,6 +55,7 @@ public sealed class AvaloniaRibbonMenuStateTests
                 var checkedItem = items.Single(item => Equals(item.Header, "Checked"));
                 Assert.Equal(MenuItemToggleType.CheckBox, checkedItem.ToggleType);
                 Assert.True(checkedItem.IsChecked);
+                Assert.IsType<Viewbox>(checkedItem.Icon);
             }
             finally
             {

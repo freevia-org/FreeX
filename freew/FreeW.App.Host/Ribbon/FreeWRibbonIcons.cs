@@ -125,18 +125,6 @@ internal static class FreeWRibbonIcons
             ["freew.hf-footer-from-bottom"]     = RibbonCommandIconKind.Margins,
             ["freew.hf-insert-page-number-footer"] = RibbonCommandIconKind.PageNumber,
 
-            ["freew.custom-margins"] = RibbonCommandIconKind.Margins,
-            ["freew.more-paper-sizes"] = RibbonCommandIconKind.OnePage,
-            ["freew.columns-one"] = RibbonCommandIconKind.TextColumns,
-            ["freew.columns-two"] = RibbonCommandIconKind.TextColumns,
-            ["freew.columns-three"] = RibbonCommandIconKind.TextColumns,
-            ["freew.columns-left"] = RibbonCommandIconKind.TextColumns,
-            ["freew.columns-right"] = RibbonCommandIconKind.TextColumns,
-            ["freew.columns-more"] = RibbonCommandIconKind.TextColumns,
-            ["freew.hyphenation-none"] = RibbonCommandIconKind.Hyphenation,
-            ["freew.hyphenation-auto"] = RibbonCommandIconKind.Hyphenation,
-            ["freew.hyphenation-manual"] = RibbonCommandIconKind.Hyphenation,
-            ["freew.hyphenation-options"] = RibbonCommandIconKind.Hyphenation,
 
             ["freew.read-mode-column-narrow"]  = RibbonCommandIconKind.ReadMode,
             ["freew.read-mode-column-default"] = RibbonCommandIconKind.ReadMode,

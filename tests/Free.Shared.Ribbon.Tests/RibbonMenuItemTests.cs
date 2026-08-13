@@ -24,4 +24,26 @@ public class RibbonMenuItemTests
     {
         RibbonMenuItem.Separator().IsChecked.Should().BeNull();
     }
+
+    [Fact]
+    public void Builder_CarriesOptionalMenuIconKindAndAccent()
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("tab", "Tab", "T", tab => tab.Group("group", "Group", "G", 1, group =>
+                group.Medium("menu", "Menu", RibbonCommandIconKind.More, menu: menu =>
+                    menu.Item(
+                        "warning",
+                        "Warning",
+                        RibbonCommandIconKind.Warning,
+                        "W",
+                        accent: RibbonCommandIconAccent.Warning))))
+            .Build();
+
+        var item = definition.Tabs.Single().Groups.Single().Controls
+            .OfType<RibbonDropdown>().Single().Menu.Items.Single();
+
+        item.Icon.Should().Be(new RibbonCommandIcon(
+            RibbonCommandIconKind.Warning,
+            RibbonCommandIconAccent.Warning));
+    }
 }

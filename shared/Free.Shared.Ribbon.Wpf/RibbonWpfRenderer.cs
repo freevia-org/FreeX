@@ -977,6 +977,13 @@ public static class RibbonWpfRenderer
         {
             Header = presentation.Header,
             InputGestureText = presentation.InputGestureText,
+            Icon = item.Icon is null
+                ? null
+                : RibbonIconFactory.CreateCommandIcon(
+                    item.Header,
+                    item.Icon,
+                    RibbonVisualMetrics.SmallIconSize,
+                    Brushes.Black),
             IsEnabled = item.IsEnabled,
             IsCheckable = item.IsChecked.HasValue,
             IsChecked = item.IsChecked ?? false,

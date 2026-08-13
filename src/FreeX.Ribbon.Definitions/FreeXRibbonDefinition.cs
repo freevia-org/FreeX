@@ -250,7 +250,7 @@ public static class FreeXRibbonDefinition
             .Group("ViewWindowGroup", "Window", null, priority: 90,
                 g => g
                 .Medium("New Window", "New Window", Ico.Window, "NW")
-                .Medium("Arrange All", "Arrange All", Ico.Grid, "A", menu: m => m.Item("Tiled", "Tiled", "T").Item(FreeXRibbonCommandIds.ViewArrangeHorizontal, "Horizontal", "H").Item("Vertical", "Vertical", "V").Item("Cascade", "Cascade", "C"))
+                .Medium("Arrange All", "Arrange All", Ico.Grid, "A", menu: m => m.Item("Tiled", "Tiled", Ico.Grid, "T").Item(FreeXRibbonCommandIds.ViewArrangeHorizontal, "Horizontal", "H").Item("Vertical", "Vertical", "V").Item("Cascade", "Cascade", Ico.Window, "C"))
                 .Medium(FreeXRibbonCommandIds.ViewFreezePanes, "Freeze Panes", Ico.Freeze, "FP", menu: m => m.Item(FreeXRibbonCommandIds.ViewFreezeAtSelection, "Freeze Panes", "F").Item("Freeze Top Row", "Freeze Top Row", "R").Item("Freeze First Column", "Freeze First Column", "C").Separator().Item("Unfreeze Panes", "Unfreeze Panes", "U"))
                 .IconToggle("Split", "Split", Ico.Window, "SP")
                 .IconToggle("View Side by Side", "View Side by Side", Ico.Window, "B")

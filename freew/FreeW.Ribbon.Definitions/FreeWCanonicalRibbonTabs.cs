@@ -24,22 +24,22 @@ internal static partial class FreeWCanonicalRibbonTabs
                         group.Large("freew.margins", "Margins", RibbonCommandIconKind.Margins, "M", menu: menu =>
                         {
                             menu.Item("freew.margins", "Normal / Narrow (toggle)", "N");
-                            menu.Item("freew.custom-margins", "Custom Margins\u2026", "A");
+                            menu.Item("freew.custom-margins", "Custom Margins\u2026", RibbonCommandIconKind.Margins, "A");
                         });
                         group.Medium("freew.orientation", "Orientation", RibbonCommandIconKind.Orientation, dropdown: true);
                         group.Medium("freew.size", "Size", RibbonCommandIconKind.OnePage, "Z", menu: menu =>
                         {
                             menu.Item("freew.size", "Letter / A4 (toggle)", "L");
-                            menu.Item("freew.more-paper-sizes", "More Paper Sizes\u2026", "M");
+                            menu.Item("freew.more-paper-sizes", "More Paper Sizes\u2026", RibbonCommandIconKind.OnePage, "M");
                         });
                         group.Medium("freew.columns", "Columns", RibbonCommandIconKind.TextColumns, menu: menu =>
                         {
-                            menu.Item("freew.columns-one", "One", "O");
-                            menu.Item("freew.columns-two", "Two", "T");
-                            menu.Item("freew.columns-three", "Three", "H");
-                            menu.Item("freew.columns-left", "Left", "L");
-                            menu.Item("freew.columns-right", "Right", "R");
-                            menu.Item("freew.columns-more", "More Columns...", "M");
+                            menu.Item("freew.columns-one", "One", RibbonCommandIconKind.TextColumns, "O");
+                            menu.Item("freew.columns-two", "Two", RibbonCommandIconKind.TextColumns, "T");
+                            menu.Item("freew.columns-three", "Three", RibbonCommandIconKind.TextColumns, "H");
+                            menu.Item("freew.columns-left", "Left", RibbonCommandIconKind.TextColumns, "L");
+                            menu.Item("freew.columns-right", "Right", RibbonCommandIconKind.TextColumns, "R");
+                            menu.Item("freew.columns-more", "More Columns...", RibbonCommandIconKind.TextColumns, "M");
                         });
                         group.Medium("freew.breaks", "Breaks", RibbonCommandIconKind.PageBreak, "B", menu: menu =>
                         {
@@ -63,10 +63,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                         });
                         group.Icon("freew.hyphenation", "Hyphenation", RibbonCommandIconKind.Hyphenation, "HY", menu: menu =>
                         {
-                            menu.Item("freew.hyphenation-none", "None", "N");
-                            menu.Item("freew.hyphenation-auto", "Automatic", "A");
-                            menu.Item("freew.hyphenation-manual", "Manual", "M");
-                            menu.Item("freew.hyphenation-options", "Hyphenation Options\u2026", "H");
+                            menu.Item("freew.hyphenation-none", "None", RibbonCommandIconKind.Hyphenation, "N");
+                            menu.Item("freew.hyphenation-auto", "Automatic", RibbonCommandIconKind.Hyphenation, "A");
+                            menu.Item("freew.hyphenation-manual", "Manual", RibbonCommandIconKind.Hyphenation, "M");
+                            menu.Item("freew.hyphenation-options", "Hyphenation Options\u2026", RibbonCommandIconKind.Hyphenation, "H");
                         });
                         group.Icon("freew.page-valign", "Vertical Align", RibbonCommandIconKind.AlignJustify);
                         group.Icon("freew.different-first-page", "Different First Page", RibbonCommandIconKind.CoverPage);

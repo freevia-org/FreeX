@@ -2361,6 +2361,12 @@ public static class AvaloniaRibbonRenderer
         var menuItem = new MenuItem
         {
             Header = presentation.Header,
+            Icon = item.Icon is null
+                ? null
+                : AvaloniaRibbonIcons.Build(
+                    item.Icon,
+                    RibbonVisualMetrics.SmallIconSize,
+                    item.Header),
             InputGesture = null,
             Tag = item.CommandId?.Value,
             IsEnabled = item.IsEnabled,

@@ -20,9 +20,6 @@ internal static class FreePRibbonIcons
         new Dictionary<string, RibbonCommandIconKind>(StringComparer.OrdinalIgnoreCase)
         {
             // Legacy entrance effects retained by command registration and older documents.
-            ["freep.anim.entrance.dissolve"] = RibbonCommandIconKind.Effects,
-            ["freep.anim.entrance.flash"] = RibbonCommandIconKind.Flash,
-            ["freep.anim.entrance.crawl"] = RibbonCommandIconKind.ArrowRight,
             ["freep.anim.entrance.peek"] = RibbonCommandIconKind.ArrowRight,
             ["freep.anim.entrance.spiral"] = RibbonCommandIconKind.Rotate,
             ["freep.anim.entrance.swivel"] = RibbonCommandIconKind.Rotate,
@@ -32,9 +29,6 @@ internal static class FreePRibbonIcons
             ["freep.anim.entrance.boomerang"] = RibbonCommandIconKind.Effects,
 
             // Legacy exit effects retained by command registration and older documents.
-            ["freep.anim.exit.dissolve-out"] = RibbonCommandIconKind.Effects,
-            ["freep.anim.exit.flash-out"] = RibbonCommandIconKind.Flash,
-            ["freep.anim.exit.crawl-out"] = RibbonCommandIconKind.ArrowLeft,
             ["freep.anim.exit.peek-out"] = RibbonCommandIconKind.ArrowLeft,
             ["freep.anim.exit.spiral-out"] = RibbonCommandIconKind.Rotate,
             ["freep.anim.exit.swivel-out"] = RibbonCommandIconKind.Rotate,

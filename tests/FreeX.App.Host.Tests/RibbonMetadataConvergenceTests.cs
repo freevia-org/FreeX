@@ -148,6 +148,23 @@ public sealed class RibbonMetadataConvergenceTests
             .Equal("Presets", "Draw", "Line Color", "Line Style", "Actions");
     }
 
+    [Fact]
+    public void ArrangeMenu_OwnsStableIconsWithoutEnglishLabelReconstruction()
+    {
+        var arrangeMenu = FreeXRibbon.Build().Tabs
+            .SelectMany(tab => tab.Groups)
+            .SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "Arrange All")
+            .Menu.Items.ToDictionary(item => item.CommandId!.Value.Value, StringComparer.Ordinal);
+
+        arrangeMenu["Tiled"].Icon.Should().Be(new RibbonCommandIcon(RibbonCommandIconKind.Grid));
+        arrangeMenu["Cascade"].Icon.Should().Be(new RibbonCommandIcon(RibbonCommandIconKind.Window));
+
+        DialogSourceTestSupport.ReadHostSources("RibbonMenuIconSeeder.cs")
+            .Should().NotContain("TryResolveGenericHeader");
+    }
+
     private static IEnumerable<string> EnumerateLeafCommandIds(IReadOnlyList<RibbonMenuItem> items)
     {
         foreach (var item in items)
