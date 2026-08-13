@@ -16,6 +16,34 @@ public sealed class TablePropertiesDialogPlannerTests
     }
 
     [Fact]
+    public void VisualMetrics_PreserveThePairedWpfAuthorityGeometry()
+    {
+        TablePropertiesDialogPlanner.VisualMetrics.Should().Be(
+            new TablePropertiesDialogVisualMetrics(
+                DialogWidth: 440,
+                OuterInset: 14,
+                ActionTopInset: 12,
+                ActionBottomInset: 12,
+                ActionButtonWidth: 72,
+                ActionSpacing: 14,
+                ContentInset: 14,
+                SectionHeaderTopInset: 10,
+                SectionHeaderBottomInset: 4,
+                RowVerticalInset: 4,
+                LabelRightInset: 8,
+                NumberFieldMinWidth: 120,
+                ChoiceFieldMinWidth: 180,
+                SecondarySectionTopInset: 8,
+                ExpanderContentInset: 8,
+                AvaloniaTabPaneHorizontalCompensation: -12,
+                AvaloniaMainLabelColumnWidth: 137,
+                AvaloniaRowLabelColumnWidth: 131,
+                AvaloniaMarginLabelColumnWidth: 54,
+                AvaloniaCellSpacingLabelColumnWidth: 203,
+                AvaloniaPositionGridRightInset: 4));
+    }
+
+    [Fact]
     public void BuildInitialState_SeedsAllTabsFromCaretTableContext()
     {
         var table = Table.Create(1, 1);
@@ -476,5 +504,37 @@ public sealed class TablePropertiesDialogSessionOwnershipTests
         source.Should().Contain("TablePropertiesDialogTabKind initialTab");
         source.Should().NotContain("enum TablePropertiesDialogTab");
         source.Should().NotContain("internal enum Tab");
+    }
+
+    [Fact]
+    public void RenderersConsumeSharedVisualMetricsAndAvaloniaMatchesWpfRowCheckSpacing()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Host", "TablePropertiesDialog.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Avalonia", "TableDialogs.cs"));
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("TablePropertiesDialogPlanner.VisualMetrics");
+            source.Should().Contain("Layout.DialogWidth");
+            source.Should().Contain("Layout.OuterInset");
+            source.Should().Contain("Layout.ActionButtonWidth");
+            source.Should().Contain("Layout.ContentInset");
+            source.Should().Contain("Layout.RowVerticalInset");
+            source.Should().Contain("Layout.NumberFieldMinWidth");
+            source.Should().Contain("Layout.ChoiceFieldMinWidth");
+        }
+
+        wpf.Should().NotContain("Width = 440;");
+        wpf.Should().NotContain("MinWidth = 120");
+        wpf.Should().NotContain("MinWidth = 180");
+        avalonia.Should().NotContain("Width = 440;");
+        avalonia.Should().NotContain("TwoColumnGrid(4, 137)");
+        avalonia.Should().NotContain("TwoColumnGrid(2, 131)");
+        avalonia.Should().Contain("_allowRowBreak.Margin = new Thickness(0);");
+        avalonia.Should().Contain(
+            "_repeatHeader.Margin = new Thickness(0, Layout.RowVerticalInset, 0, 0);");
     }
 }

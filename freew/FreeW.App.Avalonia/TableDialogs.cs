@@ -165,12 +165,15 @@ internal sealed partial class TableFormulaDialog : FreeWDialogWindow
 
 internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
 {
+    private static readonly TablePropertiesDialogVisualMetrics Layout =
+        TablePropertiesDialogPlanner.VisualMetrics;
+
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
             // WPF's standard action row keeps the two buttons 14px apart and does not
             // paint the default-button border until that button receives focus.
-            ActionSpacing = 14,
+            ActionSpacing = Layout.ActionSpacing,
             DefaultButtonBorderBrush = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
         };
 
@@ -228,7 +231,7 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
         var state = _session.InitialState;
 
         Title = TablePropertiesDialogPlanner.Title;
-        Width = 440;
+        Width = Layout.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -244,7 +247,7 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
             Content = TablePropertiesDialogPlanner.AllowOverlapLabel,
             IsThreeState = true,
             IsChecked = state.FloatingTableAllowsOverlap,
-            Margin = new Thickness(0, 4, 0, 4),
+            Margin = new Thickness(0, Layout.RowVerticalInset, 0, Layout.RowVerticalInset),
             IsEnabled = state.WrappingIndex == 1,
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_allowFloatingOverlap, DialogChromeStyle);
@@ -287,6 +290,11 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
         _rowRule = Combo(_session.RowRuleNames, state.RowRuleIndex, TablePropertiesDialogPlanner.RowRuleAutomationId);
         _allowRowBreak = Check(TablePropertiesDialogPlanner.AllowRowBreakLabel, state.AllowRowBreak, TablePropertiesDialogPlanner.AllowRowBreakAutomationId);
         _repeatHeader = Check(TablePropertiesDialogPlanner.RepeatHeaderLabel, state.RepeatHeaderRow, TablePropertiesDialogPlanner.RepeatHeaderAutomationId);
+        // WPF authority stacks these as a flush first row followed by one 4px inter-item gap.
+        // The general field-row helper adds vertical margins on both controls, so remove that
+        // template-neutral spacing for this dedicated checkbox stack.
+        _allowRowBreak.Margin = new Thickness(0);
+        _repeatHeader.Margin = new Thickness(0, Layout.RowVerticalInset, 0, 0);
 
         _columnWidth = NumberBox(state.ColumnWidthText, TablePropertiesDialogPlanner.ColumnWidthAutomationId);
         _columnWidthOn = Check(TablePropertiesDialogPlanner.PreferredWidthLabel, state.ColumnWidthOn, TablePropertiesDialogPlanner.ColumnWidthToggleAutomationId);
@@ -302,7 +310,10 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
         _cellWrapText = Check(TablePropertiesDialogPlanner.WrapTextLabel, state.CellWrapText, TablePropertiesDialogPlanner.CellWrapTextAutomationId);
         _cellFitText = Check(TablePropertiesDialogPlanner.FitTextLabel, state.CellFitText, TablePropertiesDialogPlanner.CellFitTextAutomationId);
 
-        _tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
+        _tabs = new TabControl
+        {
+            Margin = new Thickness(Layout.OuterInset, Layout.OuterInset, Layout.OuterInset, 0)
+        };
         _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.TableTabLabel, TablePropertiesDialogPlanner.TableTabAutomationId, BuildTableTab()));
         _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.RowTabLabel, TablePropertiesDialogPlanner.RowTabAutomationId, BuildRowTab()));
         _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.ColumnTabLabel, TablePropertiesDialogPlanner.ColumnTabAutomationId, BuildColumnTab()));
@@ -319,11 +330,15 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             _tabs,
             DialogChromeStyle,
-            contentPaneMargin: new Thickness(-12, 0, -12, 0));
+            contentPaneMargin: new Thickness(
+                Layout.AvaloniaTabPaneHorizontalCompensation,
+                0,
+                Layout.AvaloniaTabPaneHorizontalCompensation,
+                0));
         AvaloniaCompactDialogChrome.ApplyValidationStatus(
             _validation,
             DialogChromeStyle,
-            new Thickness(14, 6, 14, 0));
+            new Thickness(Layout.OuterInset, 6, Layout.OuterInset, 0));
         AutomationProperties.SetAutomationId(_validation, TablePropertiesDialogPlanner.ValidationAutomationId);
 
         var ok = TableFormulaDialogButton(TablePropertiesDialogPlanner.AcceptButtonLabel, TablePropertiesDialogPlanner.AcceptButtonAutomationId, isDefault: true);
@@ -332,7 +347,11 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
         cancel.Click += (_, _) => Close();
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
             [ok, cancel],
-            new Thickness(14, 12, 14, 12),
+            new Thickness(
+                Layout.OuterInset,
+                Layout.ActionTopInset,
+                Layout.OuterInset,
+                Layout.ActionBottomInset),
             DialogChromeStyle);
 
         var bottom = new StackPanel();
@@ -356,18 +375,18 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
     internal IReadOnlyList<string> FocusTraceForValidation => _focusTrace;
     private Control BuildTableTab()
     {
-        var grid = TwoColumnGrid(4, 137);
+        var grid = TwoColumnGrid(4, Layout.AvaloniaMainLabelColumnWidth);
         AddRow(grid, 0, _preferredWidthOn, _preferredWidth);
         AddRow(grid, 1, TablePropertiesDialogPlanner.AlignmentLabel, _alignment);
         AddRow(grid, 2, TablePropertiesDialogPlanner.TextWrappingLabel, _wrapping);
         AddRow(grid, 3, TablePropertiesDialogPlanner.IndentFromLeftLabel, _indent);
 
-        var margins = TwoColumnGrid(4, 54);
+        var margins = TwoColumnGrid(4, Layout.AvaloniaMarginLabelColumnWidth);
         AddRow(margins, 0, TablePropertiesDialogPlanner.TopLabel, _cellMarginTop);
         AddRow(margins, 1, TablePropertiesDialogPlanner.LeftLabel, _cellMarginLeft);
         AddRow(margins, 2, TablePropertiesDialogPlanner.BottomLabel, _cellMarginBottom);
         AddRow(margins, 3, TablePropertiesDialogPlanner.RightLabel, _cellMarginRight);
-        var spacing = TwoColumnGrid(1, 203);
+        var spacing = TwoColumnGrid(1, Layout.AvaloniaCellSpacingLabelColumnWidth);
         AddRow(spacing, 0, _cellSpacingOn, _cellSpacing);
 
         return Stack(
@@ -379,8 +398,8 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
 
     private Control BuildFloatingPositioningPanel()
     {
-        var position = TwoColumnGrid(6, 137);
-        position.Margin = new Thickness(0, 0, 4, 0);
+        var position = TwoColumnGrid(6, Layout.AvaloniaMainLabelColumnWidth);
+        position.Margin = new Thickness(0, 0, Layout.AvaloniaPositionGridRightInset, 0);
         AddRow(position, 0, TablePropertiesDialogPlanner.HorizontalRelativeToLabel, _floatingHorizontalAnchor);
         AddRow(position, 1, TablePropertiesDialogPlanner.HorizontalAlignmentLabel, _floatingHorizontalMode);
         AddRow(position, 2, TablePropertiesDialogPlanner.HorizontalPositionLabel, _floatingHorizontalOffset);
@@ -388,15 +407,17 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
         AddRow(position, 4, TablePropertiesDialogPlanner.VerticalAlignmentLabel, _floatingVerticalMode);
         AddRow(position, 5, TablePropertiesDialogPlanner.VerticalPositionLabel, _floatingVerticalOffset);
 
-        var distances = TwoColumnGrid(4, 54);
+        var distances = TwoColumnGrid(4, Layout.AvaloniaMarginLabelColumnWidth);
         AddRow(distances, 0, TablePropertiesDialogPlanner.TopLabel, _floatingDistanceTop);
         AddRow(distances, 1, TablePropertiesDialogPlanner.LeftLabel, _floatingDistanceLeft);
         AddRow(distances, 2, TablePropertiesDialogPlanner.BottomLabel, _floatingDistanceBottom);
         AddRow(distances, 3, TablePropertiesDialogPlanner.RightLabel, _floatingDistanceRight);
 
-        var stack = new StackPanel { Margin = new Thickness(8) };
+        var stack = new StackPanel { Margin = new Thickness(Layout.ExpanderContentInset) };
         stack.Children.Add(position);
-        stack.Children.Add(Header(TablePropertiesDialogPlanner.DistanceFromTextLabel, top: 8));
+        stack.Children.Add(Header(
+            TablePropertiesDialogPlanner.DistanceFromTextLabel,
+            top: Layout.SecondarySectionTopInset));
         stack.Children.Add(distances);
         stack.Children.Add(_allowFloatingOverlap);
         var expander = new Expander { Header = TablePropertiesDialogPlanner.PositioningLabel, IsExpanded = true, Content = stack };
@@ -441,10 +462,10 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
 
     private Control BuildRowTab()
     {
-        var grid = TwoColumnGrid(2, 131);
+        var grid = TwoColumnGrid(2, Layout.AvaloniaRowLabelColumnWidth);
         AddRow(grid, 0, _rowHeightOn, _rowHeight);
         AddRow(grid, 1, TablePropertiesDialogPlanner.RowHeightRuleLabel, _rowRule);
-        var checks = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var checks = new StackPanel { Margin = new Thickness(0, Layout.SecondarySectionTopInset, 0, 0) };
         checks.Children.Add(_allowRowBreak);
         checks.Children.Add(_repeatHeader);
         return Stack(grid, checks);
@@ -452,17 +473,17 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
 
     private Control BuildColumnTab()
     {
-        var grid = TwoColumnGrid(1, 137);
+        var grid = TwoColumnGrid(1, Layout.AvaloniaMainLabelColumnWidth);
         AddRow(grid, 0, _columnWidthOn, _columnWidth);
         return Stack(grid);
     }
 
     private Control BuildCellTab()
     {
-        var grid = TwoColumnGrid(2, 137);
+        var grid = TwoColumnGrid(2, Layout.AvaloniaMainLabelColumnWidth);
         AddRow(grid, 0, _cellWidthOn, _cellWidth);
         AddRow(grid, 1, TablePropertiesDialogPlanner.VerticalAlignmentLabel, _cellVAlign);
-        var margins = TwoColumnGrid(4, 54);
+        var margins = TwoColumnGrid(4, Layout.AvaloniaMarginLabelColumnWidth);
         AddRow(margins, 0, TablePropertiesDialogPlanner.TopLabel, _cmTop);
         AddRow(margins, 1, TablePropertiesDialogPlanner.LeftLabel, _cmLeft);
         AddRow(margins, 2, TablePropertiesDialogPlanner.BottomLabel, _cmBottom);
@@ -527,18 +548,22 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
 
     private static StackPanel Stack(params Control[] controls)
     {
-        var panel = new StackPanel { Margin = new Thickness(14) };
+        var panel = new StackPanel { Margin = new Thickness(Layout.ContentInset) };
         foreach (var control in controls)
             panel.Children.Add(control);
         return panel;
     }
 
-    private static TextBlock Header(string text, double top = 10) => new()
+    private static TextBlock Header(string text, double? top = null) => new()
     {
         Text = text,
         Foreground = Brushes.Black,
         FontWeight = FontWeight.SemiBold,
-        Margin = new Thickness(0, top, 0, 4),
+        Margin = new Thickness(
+            0,
+            top ?? Layout.SectionHeaderTopInset,
+            0,
+            Layout.SectionHeaderBottomInset),
     };
 
     private static Grid TwoColumnGrid(int rows, double? firstColumnWidth = null)
@@ -556,7 +581,7 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
 
     private static TextBox NumberBox(string text, string automationId)
     {
-        var box = new TextBox { Text = text, MinWidth = 120 };
+        var box = new TextBox { Text = text, MinWidth = Layout.NumberFieldMinWidth };
         AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
         AutomationProperties.SetAutomationId(box, automationId);
         return box;
@@ -569,7 +594,11 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
             Content = text,
             IsChecked = isChecked,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 4, 8, 4),
+            Margin = new Thickness(
+                0,
+                Layout.RowVerticalInset,
+                Layout.LabelRightInset,
+                Layout.RowVerticalInset),
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
         AutomationProperties.SetAutomationId(box, automationId);
@@ -581,7 +610,7 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
         int selectedIndex,
         string automationId)
     {
-        var combo = new ComboBox { MinWidth = 180 };
+        var combo = new ComboBox { MinWidth = Layout.ChoiceFieldMinWidth };
         foreach (var item in items)
             combo.Items.Add(item);
         combo.SelectedIndex = Math.Clamp(selectedIndex, 0, items.Count - 1);
@@ -597,7 +626,11 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
             Text = label,
             Foreground = Brushes.Black,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 4, 8, 4),
+            Margin = new Thickness(
+                0,
+                Layout.RowVerticalInset,
+                Layout.LabelRightInset,
+                Layout.RowVerticalInset),
         };
         Grid.SetRow(block, row);
         Grid.SetColumn(block, 0);
@@ -617,7 +650,7 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
     {
         Grid.SetRow(field, row);
         Grid.SetColumn(field, 1);
-        field.Margin = new Thickness(0, 4, 0, 4);
+        field.Margin = new Thickness(0, Layout.RowVerticalInset, 0, Layout.RowVerticalInset);
         grid.Children.Add(field);
     }
 
@@ -633,7 +666,11 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
             IsDefault = isDefault,
             IsCancel = isCancel,
         };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, 72, isDefault);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            Layout.ActionButtonWidth,
+            isDefault);
         AutomationProperties.SetAutomationId(button, automationId);
         return button;
     }
