@@ -498,16 +498,27 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
             margins);
     }
 
-    private void Accept() => TryAccept(close: true);
+    private async void Accept()
+    {
+        var acceptance = CaptureAcceptance();
+        if (!acceptance.IsAccepted)
+        {
+            _validation.IsVisible = false;
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                acceptance.ValidationMessage ?? TablePropertiesDialogPlanner.ValidationMessage,
+                Title ?? TablePropertiesDialogPlanner.Title);
+            FocusInitialField();
+            return;
+        }
+
+        Result = acceptance.Result;
+        Close();
+    }
 
     private TablePropertiesValues? TryAccept(bool close)
     {
-        var input = _session.CaptureInput(
-            automationId => Control<CheckBox>(automationId).IsChecked,
-            automationId => Control<TextBox>(automationId).Text,
-            automationId => Control<ComboBox>(automationId).SelectedIndex);
-
-        var acceptance = _session.PlanAcceptance(input);
+        var acceptance = CaptureAcceptance();
         if (!acceptance.IsAccepted)
         {
             _validation.Text = acceptance.ValidationMessage!;
@@ -522,6 +533,12 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
             Close();
         return Result;
     }
+
+    private TablePropertiesDialogAcceptance CaptureAcceptance() =>
+        _session.PlanAcceptance(_session.CaptureInput(
+            automationId => Control<CheckBox>(automationId).IsChecked,
+            automationId => Control<TextBox>(automationId).Text,
+            automationId => Control<ComboBox>(automationId).SelectedIndex));
 
     private T Control<T>(string automationId) where T : Control =>
         this.GetLogicalDescendants()
