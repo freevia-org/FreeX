@@ -132,7 +132,7 @@ public sealed class DocumentView : Control
 
     private readonly Dictionary<string, IBrush> _brushCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PlacedChar> _placed = new();
-    private readonly HashSet<int> _collapsedHeadings = [];
+    private readonly OutlineCollapseState _outlineCollapse = new();
     private readonly List<(double X, double Y, string Text, RunFormatting Fmt)> _markers = new();
     // AV-TAB: leader spans emitted during body tab layout; drawn in Render before glyph text.
     // Each entry: (X1=tab start, X2=segment start, Y=page-space top, LineHeight, Leader kind, RunFmt for color/size).
@@ -636,7 +636,7 @@ public sealed class DocumentView : Control
         _selectionAnchor = null;
         _cellCaret = null; // AV-TBL: clear cell state on document load
         _cellAnchor = null;
-        _collapsedHeadings.Clear();
+        _outlineCollapse.Clear();
         _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
         _selectedFloatingGroupChild = null;
@@ -906,47 +906,25 @@ public sealed class DocumentView : Control
             _doc,
             blockIndex,
             moveUp,
-            _collapsedHeadings.Clear);
+            _outlineCollapse.Clear);
         return result.CurrentBlockIndex;
     }
 
     public void CollapseHeading(int blockIndex)
     {
-        if (!IsHeadingBlock(blockIndex) || !_collapsedHeadings.Add(blockIndex))
+        if (!_outlineCollapse.Collapse(_doc.Blocks, blockIndex))
             return;
         InvalidateLayoutAndVisual();
     }
 
     public void ExpandHeading(int blockIndex)
     {
-        if (!_collapsedHeadings.Remove(blockIndex))
+        if (!_outlineCollapse.Expand(blockIndex))
             return;
         InvalidateLayoutAndVisual();
     }
 
-    public bool IsHeadingCollapsed(int blockIndex) => _collapsedHeadings.Contains(blockIndex);
-
-    private bool IsHeadingBlock(int blockIndex) =>
-        blockIndex >= 0 && blockIndex < _doc.Blocks.Count
-        && _doc.Blocks[blockIndex] is Paragraph paragraph
-        && DocumentOutline.TryGetLevel(paragraph.StyleId, out _);
-
-    private HashSet<int> HiddenOutlineBlockIndices()
-    {
-        var hidden = new HashSet<int>();
-        foreach (var headingIndex in _collapsedHeadings.ToArray())
-        {
-            var (start, end) = OutlineTools.SubtreeRange(_doc.Blocks, headingIndex);
-            if (end <= start)
-            {
-                _collapsedHeadings.Remove(headingIndex);
-                continue;
-            }
-            for (var index = start + 1; index < end; index++)
-                hidden.Add(index);
-        }
-        return hidden;
-    }
+    public bool IsHeadingCollapsed(int blockIndex) => _outlineCollapse.IsCollapsed(blockIndex);
 
     /// <summary>If the current selection equals <paramref name="query"/>, replace it; then select the next match.</summary>
     public bool ReplaceNext(string query, string replacement)
@@ -8566,7 +8544,7 @@ public sealed class DocumentView : Control
         var levelCounters = new int[MaxListDepth];
         var multiLevelMarkers = new MultiLevelListMarkerState(_doc.MultiLevelList.NumberFormats);
         var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_doc);
-        var hiddenBlocks = HiddenOutlineBlockIndices();
+        var hiddenBlocks = _outlineCollapse.BuildHiddenBlockIndices(_doc.Blocks);
         for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
         {
             if (hiddenBlocks.Contains(blockIndex))
