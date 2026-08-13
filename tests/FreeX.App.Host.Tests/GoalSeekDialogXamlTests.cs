@@ -125,9 +125,10 @@ public sealed class GoalSeekDialogXamlTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("GoalSeekDialog.xaml.cs");
 
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, error, UiText.Get(\"GoalSeek_GoalSeek\"));");
-        source.Should().Contain("FocusInvalidInput(error);");
-        source.Should().Contain("private void FocusInvalidInput(string error)");
+        source.Should().Contain("GoalSeekStatusDialogPlanner.DescribeValidationError(");
+        source.Should().Contain("validation.Message.Resolve(UiText.Get, UiText.Format)");
+        source.Should().Contain("FocusInvalidInput(validation.FocusTarget);");
+        source.Should().Contain("private void FocusInvalidInput(GoalSeekValidationFocusTarget focusTarget)");
         source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 

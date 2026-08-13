@@ -164,36 +164,12 @@ public sealed class GoToNavigationR1C1RegressionTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly FieldInfo _formulaEditCellField;
-        private readonly MethodInfo _setActiveCell;
-        private readonly MethodInfo _showInlineEditor;
-        private readonly MethodInfo _formulaBarKeyDown;
-        private readonly MethodInfo _inlineEditorKeyDown;
         private readonly MethodInfo _findFormulasMenuItemClick;
         private readonly MethodInfo _recalculateWorkbook;
-        private readonly FieldInfo _inlineEditorField;
 
         private MainWindowHarness(MainWindow window)
         {
             _window = window;
-            _formulaEditCellField = typeof(MainWindow)
-                .GetField("_formulaEditCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_formulaEditCell");
-            _inlineEditorField = typeof(MainWindow)
-                .GetField("_inlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_inlineEditor");
-            _setActiveCell = typeof(MainWindow)
-                .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-            _showInlineEditor = typeof(MainWindow)
-                .GetMethod("ShowInlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ShowInlineEditor");
-            _formulaBarKeyDown = typeof(MainWindow)
-                .GetMethod("FormulaBar_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "FormulaBar_KeyDown");
-            _inlineEditorKeyDown = typeof(MainWindow)
-                .GetMethod("InlineEditor_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "InlineEditor_KeyDown");
             _findFormulasMenuItemClick = typeof(MainWindow)
                 .GetMethod("FindFormulasMenuItem_Click", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "FindFormulasMenuItem_Click");
@@ -210,7 +186,7 @@ public sealed class GoToNavigationR1C1RegressionTests
 
         public string? InlineEditorText => InlineEditor?.Text;
 
-        private TextBox? InlineEditor => (TextBox?)_inlineEditorField.GetValue(_window);
+        private TextBox? InlineEditor => _window.InlineEditorForTest;
 
         private Workbook Workbook => _window.Session.Workbook;
 
@@ -228,7 +204,7 @@ public sealed class GoToNavigationR1C1RegressionTests
         public void SelectActiveCell(uint row, uint col)
         {
             var sheet = Workbook.Sheets[0];
-            _setActiveCell.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            _window.SetActiveCellForTest(new CellAddress(sheet.Id, row, col));
             PumpDispatcher();
         }
 
@@ -265,14 +241,14 @@ public sealed class GoToNavigationR1C1RegressionTests
         public void SetFormulaEditCell(uint row, uint col)
         {
             var sheet = Workbook.Sheets[0];
-            _formulaEditCellField.SetValue(_window, new CellAddress(sheet.Id, row, col));
+            _window.SetFormulaEditCellForTest(new CellAddress(sheet.Id, row, col));
             PumpDispatcher();
         }
 
         public void ShowInlineEditor(uint row, uint col)
         {
             var sheet = Workbook.Sheets[0];
-            _showInlineEditor.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            _window.ShowInlineEditorForTest(new CellAddress(sheet.Id, row, col));
             PumpDispatcher();
         }
 
@@ -320,7 +296,7 @@ public sealed class GoToNavigationR1C1RegressionTests
             {
                 RoutedEvent = Keyboard.KeyDownEvent
             };
-            _formulaBarKeyDown.Invoke(_window, [(TextBox)_window.FindName("FormulaBar"), args]);
+            _window.RaiseFormulaBarKeyDownForTest(args);
             PumpDispatcher();
             return args.Handled;
         }
@@ -334,7 +310,7 @@ public sealed class GoToNavigationR1C1RegressionTests
             {
                 RoutedEvent = Keyboard.KeyDownEvent
             };
-            _inlineEditorKeyDown.Invoke(_window, [inlineEditor, args]);
+            _window.RaiseInlineEditorKeyDownForTest(args);
             PumpDispatcher();
             return args.Handled;
         }
