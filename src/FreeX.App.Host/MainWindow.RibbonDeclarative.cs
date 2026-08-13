@@ -26,7 +26,7 @@ public partial class MainWindow
 
         try
         {
-            var definition = FreeXRibbon.Build();
+            var definition = FreeXRibbonCompositionPlanner.Compose(FreeXRibbon.Build(), UiText.Get);
             BuildRibbonTabShells(definition);
 
             // Hidden backplane controls (MainWindow.RibbonBackplane.g.cs) hold state and serve as the
@@ -354,7 +354,6 @@ public partial class MainWindow
 
         if (rendered.TryGetValue("Number Format", out var numberControl) && numberControl is ComboBox numberBox)
         {
-            PopulateRenderedComboItems(numberBox, HomeNumberFormatLabels);
             _suppressToolbarSync = true;
             try
             {
@@ -386,7 +385,6 @@ public partial class MainWindow
     {
         if (rendered.TryGetValue("Scale Width", out var widthControl) && widthControl is ComboBox widthBox)
         {
-            PopulateRenderedComboItems(widthBox, PageLayoutInputParser.ScalePageCountOptions);
             if (!_renderedPageLayoutCombosWired)
             {
                 widthBox.SelectionChanged += PageLayoutScaleWidthBox_SelectionChanged;
@@ -397,7 +395,6 @@ public partial class MainWindow
 
         if (rendered.TryGetValue("Scale Height", out var heightControl) && heightControl is ComboBox heightBox)
         {
-            PopulateRenderedComboItems(heightBox, PageLayoutInputParser.ScalePageCountOptions);
             if (!_renderedPageLayoutCombosWired)
             {
                 heightBox.SelectionChanged += PageLayoutScaleHeightBox_SelectionChanged;
@@ -408,7 +405,6 @@ public partial class MainWindow
 
         if (rendered.TryGetValue("Scale Percent", out var percentControl) && percentControl is ComboBox percentBox)
         {
-            PopulateRenderedComboItems(percentBox, PageLayoutInputParser.ScalePercentOptions);
             if (!_renderedPageLayoutCombosWired)
             {
                 percentBox.SelectionChanged += PageLayoutScalePercentBox_SelectionChanged;
@@ -433,10 +429,6 @@ public partial class MainWindow
     /// <summary>Default font-size choices for the rendered Home Font Size combo.</summary>
     private static readonly System.Collections.Generic.IReadOnlyList<string> HomeFontSizeOptions =
         new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36", "48", "72" };
-
-    /// <summary>Number-format labels for the rendered Home Number Format combo.</summary>
-    private static readonly System.Collections.Generic.IReadOnlyList<string> HomeNumberFormatLabels =
-        HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label).ToArray();
 
     /// <summary>Replaces a rendered combo's declarative placeholder items with the full host source.</summary>
     private static void PopulateRenderedComboItems(

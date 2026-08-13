@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Presentation.PageLayout;
 
@@ -78,13 +79,11 @@ public static class PageLayoutRibbonActionPlanner
         new("Choose Background", PageLayoutRibbonActionKind.ChooseBackground),
         new("Delete Background", PageLayoutRibbonActionKind.DeleteBackground),
 
-        new("Normal", PageLayoutRibbonActionKind.ApplyMarginsPreset,
-            MarginPreset: PageLayoutMarginPreset.Normal),
         new("Wide", PageLayoutRibbonActionKind.ApplyMarginsPreset,
             MarginPreset: PageLayoutMarginPreset.Wide),
         new("Narrow", PageLayoutRibbonActionKind.ApplyMarginsPreset,
             MarginPreset: PageLayoutMarginPreset.Narrow),
-        new("Normal#MarginNormalMenuItem_Click", PageLayoutRibbonActionKind.ApplyMarginsPreset,
+        new(FreeXRibbonCommandIds.PageLayoutMarginsNormal, PageLayoutRibbonActionKind.ApplyMarginsPreset,
             MarginPreset: PageLayoutMarginPreset.Normal),
         new("Custom Margins", PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.CustomMargins),

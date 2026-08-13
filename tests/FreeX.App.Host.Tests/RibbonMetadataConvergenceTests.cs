@@ -47,10 +47,53 @@ public sealed class RibbonMetadataConvergenceTests
         ribbonTabs.Elements(presentation + "TabItem").Should().BeEmpty();
 
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDeclarative.cs");
+        source.Should().Contain("FreeXRibbonCompositionPlanner.Compose(FreeXRibbon.Build(), UiText.Get)");
         source.Should().Contain("BuildRibbonTabShells(definition)");
         source.Should().Contain("foreach (var tab in definition.Tabs)");
         source.Should().Contain("RibbonMetadata.SetCatalogId(item, tab.Id)");
         source.Should().Contain("FindRibbonTabByCatalogId(FreeXRibbonTabIds.ShapeFormat)");
+    }
+
+    [Fact]
+    public void WpfComposition_UsesDefinitionOwnedLocalizedTabPresentation()
+    {
+        var definition = FreeXRibbonCompositionPlanner.Compose(
+            FreeXRibbon.Build(),
+            key => key == "MainWindow_Header_Home" ? "Accueil" :
+                FreeXRibbonTabPresentationCatalog.GetRequired(
+                    FreeXRibbonTabPresentationCatalog.All.Single(item => item.ResourceKey == key).TabId)
+                    .EnglishFallback);
+
+        definition.FindTab(FreeXRibbonTabIds.Home)!.Header.Should().Be("Accueil");
+        FreeXRibbon.Build().FindTab(FreeXRibbonTabIds.Home)!.Header.Should().Be("Home");
+        definition.Tabs.Select(tab => tab.Id)
+            .Should().Equal(FreeXRibbonTabPresentationCatalog.All.Select(item => item.TabId));
+    }
+
+    [Fact]
+    public void FreeXComposition_UsesStableChoicesOnlyForSemanticEditableCombos()
+    {
+        var definition = FreeXRibbonCompositionPlanner.Compose(
+            FreeXRibbon.Build(),
+            key => FreeXRibbonTabPresentationCatalog.All
+                .Single(item => item.ResourceKey == key).EnglishFallback);
+        var combos = definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .SelectMany(group => group.Controls)
+            .OfType<RibbonComboBox>()
+            .ToDictionary(combo => combo.CommandId.Value, StringComparer.Ordinal);
+
+        combos["Number Format"].Choices.Select(choice => choice.Value)
+            .Should().Equal(HomeNumberFormatDropdownPlanner.Options.Select(option => option.Value));
+        combos["Scale Width"].Choices.Select(choice => choice.Value)
+            .Should().Equal("auto", "1", "2", "3", "4", "5", "10");
+        combos["Scale Height"].Choices.Should().Equal(combos["Scale Width"].Choices);
+        combos["Scale Percent"].Choices.Select(choice => choice.Value)
+            .Should().Equal("auto", "10", "25", "50", "75", "90", "100", "125", "150", "200", "400");
+        combos["Font"].Choices.Should().BeEmpty();
+        combos["Font"].Items.Should().Contain("Calibri");
+        combos["Font Size"].Choices.Should().BeEmpty();
+        combos["Font Size"].Items.Should().Contain("11");
     }
 
     [Fact]

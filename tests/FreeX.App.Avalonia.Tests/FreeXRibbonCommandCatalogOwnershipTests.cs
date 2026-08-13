@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
+using System.Globalization;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Avalonia.Ribbon;
 using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -10,8 +12,8 @@ public sealed class FreeXRibbonCommandCatalogOwnershipTests
     public void CanonicalCatalog_RejectsUnknownIdsAndPreservesHandlerSuffixes()
     {
         FreeXRibbonCommandCatalog.GetRequired("Bold").Value.Should().Be("Bold");
-        FreeXRibbonCommandCatalog.GetRequired("Change Chart Type#ChangeChartTypeBtn_Click").Value
-            .Should().Be("Change Chart Type#ChangeChartTypeBtn_Click");
+        FreeXRibbonCommandCatalog.GetRequired(FreeXRibbonCommandIds.ChartChangeType).Value
+            .Should().Be(FreeXRibbonCommandIds.ChartChangeType);
         FreeXRibbonCommandCatalog.TryGet("legacy.home.bold", out _).Should().BeFalse();
         Action action = () => FreeXRibbonCommandCatalog.GetRequired("legacy.home.bold");
         action.Should().Throw<ArgumentException>();
@@ -23,12 +25,34 @@ public sealed class FreeXRibbonCommandCatalogOwnershipTests
         var specs = DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs();
 
         specs.Select(spec => spec.CommandId).Should().OnlyHaveUniqueItems();
+        specs.Single(spec => spec.Action == DrawingObjectContextualCommandAction.SelectionPane).CommandId
+            .Should().Be(FreeXRibbonCommandIds.DrawingSelectionPane);
         var missingIds = specs
             .Where(spec => !FreeXRibbonCommandCatalog.TryGet(spec.CommandId, out _))
             .Select(spec => spec.CommandId)
             .ToArray();
         missingIds.Should().BeEmpty(
             "every shared picture/shape command spec must bind through the declarative ribbon catalog");
+    }
+
+    [Fact]
+    public void AvaloniaComposition_ResolvesTabsFromDefinitionOwnedLocalizationCatalog()
+    {
+        var originalCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("fr-FR");
+            var definition = AvaloniaRibbonComposition.BuildDefinition();
+
+            definition.FindTab(FreeXRibbonTabIds.Home)!.Header.Should().Be("Accueil");
+            definition.FindTab("PageLayoutTab")!.Header.Should().Be("Mise en page");
+            definition.Tabs.Select(tab => tab.Id)
+                .Should().Equal(FreeXRibbonTabPresentationCatalog.All.Select(item => item.TabId));
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = originalCulture;
+        }
     }
 
     [Fact]

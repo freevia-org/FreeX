@@ -34,10 +34,10 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("Table")]
     [InlineData("Format as Table")]
     [InlineData("Conditional Formatting")]
-    [InlineData("Sort A to Z#SortAscButton_Click")]
-    [InlineData("Sort Z to A#SortDescButton_Click")]
-    [InlineData("Filter#FilterButton_Click")]
-    [InlineData("Data Validation#ValidationButton_Click")]
+    [InlineData(FreeXRibbonCommandIds.DataSortAscending)]
+    [InlineData(FreeXRibbonCommandIds.DataSortDescending)]
+    [InlineData(FreeXRibbonCommandIds.DataFilter)]
+    [InlineData(FreeXRibbonCommandIds.DataValidation)]
     [InlineData("Cut")]
     [InlineData("Copy")]
     [InlineData("Paste")]
@@ -60,7 +60,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [Theory]
     [InlineData("Table")]
     [InlineData("Conditional Formatting")]
-    [InlineData("Sort A to Z#SortAscButton_Click")]
+    [InlineData(FreeXRibbonCommandIds.DataSortAscending)]
     public void BuildRegistry_WithoutCallbacks_LeavesNoOp(string commandId)
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
@@ -90,7 +90,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
 
         Execute(registry, "Table");
         Execute(registry, "Conditional Formatting");
-        Execute(registry, "Sort Z to A#SortDescButton_Click");
+        Execute(registry, FreeXRibbonCommandIds.DataSortDescending);
         Execute(registry, "Copy");
         Execute(registry, "Center");
         Execute(registry, "Percent Style");
@@ -216,17 +216,17 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Theory]
-    [InlineData("More Functions#FormulaMoreBtn_Click")]
+    [InlineData(FreeXRibbonCommandIds.FormulasMoreFunctions)]
     [InlineData("Name Manager")]
-    [InlineData("AutoSum#FormulasAutoSumPickerBtn_Click")]
-    [InlineData("Protect Sheet#ProtectSheetBtn_Click")]
+    [InlineData(FreeXRibbonCommandIds.FormulasAutoSum)]
+    [InlineData(FreeXRibbonCommandIds.ReviewProtectSheet)]
     [InlineData("Check Accessibility")]
     [InlineData("Convert to Comments")]
-    [InlineData("Copy Diagnostics#CopyDiagnosticsBtn_Click")]
-    [InlineData("Legal Notices#LegalNoticesBtn_Click")]
+    [InlineData(FreeXRibbonCommandIds.HelpCopyDiagnostics)]
+    [InlineData(FreeXRibbonCommandIds.HelpLegalNotices)]
     [InlineData("Gridlines")]
-    [InlineData("Freeze Panes#FreezePanesPickerBtn_Click")]
-    [InlineData("100%#Zoom100Btn_Click")]
+    [InlineData(FreeXRibbonCommandIds.ViewFreezePanes)]
+    [InlineData(FreeXRibbonCommandIds.ViewZoom100)]
     [InlineData("Margins")]
     [InlineData("Strikethrough")]
     [InlineData("Increase Font Size")]
@@ -234,7 +234,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("Increase Indent")]
     [InlineData("Increase Decimal Places")]
     [InlineData("Flash Fill")]
-    [InlineData("Remove Duplicates#RemoveDuplicatesBtn_Click")]
+    [InlineData(FreeXRibbonCommandIds.DataRemoveDuplicates)]
     [InlineData("Advanced")]
     [InlineData("What-If Analysis")]
     [InlineData("Unhide")]

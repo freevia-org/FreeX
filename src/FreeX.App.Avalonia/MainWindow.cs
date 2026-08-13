@@ -38,6 +38,7 @@ using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
+using FreeX.Ribbon.Definitions;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Presentation.Rendering;
 using FreeX.App.Presentation.ScenarioManager;
@@ -1006,7 +1007,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Paste Values"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Values, default, "Values"),
                     ["Paste Formatting"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formats, default, "Formatting"),
                     // Formulas tab.
-                    ["AutoSum#FormulasAutoSumPickerBtn_Click"] = () => InsertAutoSumFormula("SUM"),
+                    [FreeXRibbonCommandIds.FormulasAutoSum] = () => InsertAutoSumFormula("SUM"),
                     ["Name Manager"] = NameManager,
                     ["Define Name"] = DefineName,
                     ["Create from Selection"] = CreateNamesFromSelection,
@@ -1014,7 +1015,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // Review tab.
                     ["Spelling"] = () => _ = ShowSpellingDialogAsync(),
                     ["Check Accessibility"] = () => _ = ShowAccessibilityCheckerDialogAsync(),
-                    ["Protect Sheet#ProtectSheetBtn_Click"] = () => _ = ShowProtectSheetDialogAsync(),
+                    [FreeXRibbonCommandIds.ReviewProtectSheet] = () => _ = ShowProtectSheetDialogAsync(),
                     ["Protect Workbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
                     ["Allow Users to Edit Ranges"] = AllowEditRanges,
                     // View tab.
@@ -1022,9 +1023,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Gridlines"] = ToggleShowGridlines,
                     ["Headings"] = ToggleShowHeadings,
                     ["Zoom"] = () => _ = ShowZoomDialogAsync(),
-                    ["100%#Zoom100Btn_Click"] = ZoomTo100Percent,
+                    [FreeXRibbonCommandIds.ViewZoom100] = ZoomTo100Percent,
                     ["Zoom to Selection"] = ZoomToSelection,
-                    ["Freeze Panes#FreezePanesPickerBtn_Click"] = FreezePanesAtActiveCell,
+                    [FreeXRibbonCommandIds.ViewFreezePanes] = FreezePanesAtActiveCell,
                     ["Page Break Preview"] = TogglePageBreakPreview,
                     ["Formula Bar"] = ToggleFormulaBarVisibility,
                     ["Page Layout"] = SetPageLayoutView,
@@ -1049,7 +1050,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // View ▸ Window ▸ Arrange All submenu (canonical menu ids from the shared ribbon
                     // definition). Each positions every visible window via the shared layout planner.
                     ["Tiled"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Tiled),
-                    ["Horizontal#ArrangeAllMenuItem_Click"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Horizontal),
+                    [FreeXRibbonCommandIds.ViewArrangeHorizontal] = () => ArrangeAllWindows(WorkbookWindowArrangement.Horizontal),
                     ["Vertical"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Vertical),
                     ["Cascade"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Cascade),
                     ["Hide"] = HideActiveWindow,
@@ -1171,12 +1172,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // Formulas Function Library category buttons open the function picker.
                     ["Lookup & Reference"] = InsertFunction,
                     ["Math & Trig"] = InsertFunction,
-                    ["More Functions#FormulaMoreBtn_Click"] = InsertFunction,
+                    [FreeXRibbonCommandIds.FormulasMoreFunctions] = InsertFunction,
                     ["Recently Used"] = InsertFunction,
                     // Data tab (Sort & Filter / Tools / Forecast / Outline groups).
                     ["Advanced"] = () => _ = ShowAdvancedFilterDialogAsync(),
                     ["Flash Fill"] = FlashFillSelectedRange,
-                    ["Remove Duplicates#RemoveDuplicatesBtn_Click"] = () => _ = ShowRemoveDuplicatesDialogAsync(),
+                    [FreeXRibbonCommandIds.DataRemoveDuplicates] = () => _ = ShowRemoveDuplicatesDialogAsync(),
                     ["What-If Analysis"] = () => _ = ShowGoalSeekDialogAsync(),
                     ["Forecast Sheet"] = () => _ = ShowForecastSheetDialogAsync(),
                     ["Subtotal"] = () => _ = ShowSubtotalDialogAsync(),
@@ -1204,8 +1205,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Column Sparkline"] = () => InsertOrEditSparkline(SparklineKind.Column),
                     ["Win/Loss Sparkline"] = () => InsertOrEditSparkline(SparklineKind.WinLoss),
                     // Data: Outline Group / Ungroup.
-                    ["Group#GroupRowsBtn_Click"] = GroupSelectedRows,
-                    ["Ungroup#UngroupRowsBtn_Click"] = UngroupSelection,
+                    [FreeXRibbonCommandIds.DataOutlineGroup] = GroupSelectedRows,
+                    [FreeXRibbonCommandIds.DataOutlineUngroup] = UngroupSelection,
                     // Home ▸ Cells: Insert / Delete Cells (with shift-direction prompt).
                     ["Insert"] = () => _ = ShowInsertCellsDialogAsync(),
                     ["Delete"] = () => _ = ShowDeleteCellsDialogAsync(),
@@ -1214,7 +1215,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // Review ▸ Delete Comment; View ▸ Split / Normal.
                     ["Delete Comment"] = DeleteActiveCellThreadedComment,
                     ["Split"] = SplitPanesAtActiveCell,
-                    ["Normal#NormalViewBtn_Click"] = SetNormalView,
+                    [FreeXRibbonCommandIds.ViewNormal] = SetNormalView,
                     // Insert ▸ Comment (reuse New Comment); Insert ▸ Header & Footer (Page Setup).
                     ["Comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
                     ["Header & Footer"] = () => _ = ShowPageSetupDialogAsync(),
@@ -1232,7 +1233,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // Formulas ▸ Formula Auditing trace arrows.
                     ["Trace Precedents"] = TraceFormulaPrecedents,
                     ["Trace Dependents"] = TraceFormulaDependents,
-                    ["Remove Arrows#RemoveArrowsBtn_Click"] = RemoveFormulaTraceArrows,
+                    [FreeXRibbonCommandIds.FormulasRemoveArrows] = RemoveFormulaTraceArrows,
                     // Formulas ▸ Calculation group.
                     ["Calculation Options"] = ToggleCalculationMode,
                     ["Calculate Now"] = CalculateNow,
@@ -1349,8 +1350,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Show Detail"] = ShowOutlineDetail,
                     ["Hide Detail"] = HideOutlineDetail,
                     ["Clear Outline"] = ClearWorksheetOutline,
-                    ["Group#GroupRowsMenuItem_Click"] = GroupSelectedRows,
-                    ["Ungroup#UngroupRowsMenuItem_Click"] = UngroupSelection,
+                    [FreeXRibbonCommandIds.DataOutlineGroupRows] = GroupSelectedRows,
+                    [FreeXRibbonCommandIds.DataOutlineUngroupRows] = UngroupSelection,
 
                     // Review ▸ Proofing / Comments / Notes / Share.
                     ["Workbook Statistics"] = () => _ = ShowWorkbookStatisticsDialogAsync(),
@@ -1371,7 +1372,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
                     // View ▸ Window ▸ Freeze Panes split-button menu items. The "Freeze Panes" menu item
                     // keeps its handler suffix in the canonical id.
-                    ["Freeze Panes#FreezeAtSelectionMenuItem_Click"] = FreezePanesAtActiveCell,
+                    [FreeXRibbonCommandIds.ViewFreezeAtSelection] = FreezePanesAtActiveCell,
                     ["Freeze Top Row"] = FreezeTopRow,
                     ["Freeze First Column"] = FreezeFirstColumn,
                     ["Unfreeze Panes"] = UnfreezePanes,
@@ -1379,7 +1380,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // View ▸ Zoom split-button preset menu items. The "100%" menu item keeps its handler
                     // suffix in the canonical id.
                     ["200%"] = () => ApplyZoomPercentPreset(200),
-                    ["100%#ZoomPresetMenuItem_Click"] = () => ApplyZoomPercentPreset(100),
+                    [FreeXRibbonCommandIds.ViewZoomPreset100] = () => ApplyZoomPercentPreset(100),
                     ["75%"] = () => ApplyZoomPercentPreset(75),
                     ["50%"] = () => ApplyZoomPercentPreset(50),
                     ["25%"] = () => ApplyZoomPercentPreset(25),
@@ -1391,14 +1392,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // ─────────────────────────────────────────────────────────────────────────────
 
                     // Page Layout ▸ Themes preset submenu ids + customize entries.
-                    ["Office#ThemeOfficeMenuItem_Click"] = () => _ = ShowThemesGalleryAsync(),
-                    ["Office#ThemeColorsOfficeMenuItem_Click"] = () => _ = ShowThemeColorsGalleryAsync(),
-                    ["Office#ThemeFontsOfficeMenuItem_Click"] = () => _ = ShowThemeFontsGalleryAsync(),
-                    ["Office#ThemeEffectsOfficeMenuItem_Click"] = () => _ = ShowThemeEffectsGalleryAsync(),
-                    ["Grayscale#ThemeGrayscaleMenuItem_Click"] = () => _ = ShowThemesGalleryAsync(),
-                    ["Grayscale#ThemeColorsGrayscaleMenuItem_Click"] = () => _ = ShowThemeColorsGalleryAsync(),
-                    ["FreeX Colorful#ThemeColorfulMenuItem_Click"] = () => _ = ShowThemesGalleryAsync(),
-                    ["FreeX Colorful#ThemeColorsColorfulMenuItem_Click"] = () => _ = ShowThemeColorsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeOffice] = () => _ = ShowThemesGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsOffice] = () => _ = ShowThemeColorsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsOffice] = () => _ = ShowThemeFontsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsOffice] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeGrayscale] = () => _ = ShowThemesGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsGrayscale] = () => _ = ShowThemeColorsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorful] = () => _ = ShowThemesGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsColorful] = () => _ = ShowThemeColorsGalleryAsync(),
                     ["Customize"] = () => _ = ShowThemesGalleryAsync(),
                     ["Customize Colors"] = () => _ = ShowThemeColorsGalleryAsync(),
                     ["Customize Fonts"] = () => _ = ShowThemeFontsGalleryAsync(),
@@ -1435,9 +1436,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Previous Note"] = () => NavigateReviewNote(previous: true),
 
                     // Menu-item variants: AutoSum "More Functions", Remove-all-arrows, Data Clear-filter.
-                    ["More Functions#AutoSumMoreMenuItem_Click"] = InsertFunction,
-                    ["Remove Arrows#RemoveAllArrowsMenuItem_Click"] = RemoveFormulaTraceArrows,
-                    ["Clear#ClearFilterButton_Click"] = ClearActiveSheetFilters,
+                    [FreeXRibbonCommandIds.FormulasAutoSumMoreFunctions] = InsertFunction,
+                    [FreeXRibbonCommandIds.FormulasRemoveAllArrows] = RemoveFormulaTraceArrows,
+                    [FreeXRibbonCommandIds.DataClearFilter] = ClearActiveSheetFilters,
                 },
                 ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>(StringComparer.Ordinal)
                 {
@@ -1463,8 +1464,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Total Row"] = () => GetTableStyleOptionRibbonState(t => t.TotalsRowShown),
                     ["First Column"] = () => GetTableStyleOptionRibbonState(t => t.ShowFirstColumn),
                     ["Last Column"] = () => GetTableStyleOptionRibbonState(t => t.ShowLastColumn),
-                    ["Banded Rows#TableDesignBandedRowsBtn_Click"] = () => GetTableStyleOptionRibbonState(t => t.ShowRowStripes),
-                    ["Banded Columns#TableDesignBandedColumnsBtn_Click"] = () => GetTableStyleOptionRibbonState(t => t.ShowColumnStripes),
+                    [FreeXRibbonCommandIds.TableBandedRows] = () => GetTableStyleOptionRibbonState(t => t.ShowRowStripes),
+                    [FreeXRibbonCommandIds.TableBandedColumns] = () => GetTableStyleOptionRibbonState(t => t.ShowColumnStripes),
                     ["Filter Button"] = () => GetTableStyleOptionRibbonState(t => t.HasAutoFilter),
                     // Review ▸ Comments/Notes enablement (mirrors WPF's RefreshReviewCommentNoteCommandStates):
                     // Delete/navigation/Convert commands grey out when the active cell or sheet has nothing
@@ -24772,10 +24773,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ApplySelectedRangeNumberFormat(NumberFormatShortcutService.GetFormat(shortcut), successAction, failureMessage);
     }
 
-    private void ApplyRibbonNumberFormat(string? selectedLabel)
+    private void ApplyRibbonNumberFormat(string? selectedValue)
     {
-        var option = HomeNumberFormatDropdownPlanner.Options.FirstOrDefault(candidate =>
-            string.Equals(candidate.Label, selectedLabel, StringComparison.Ordinal));
+        var option = HomeNumberFormatDropdownPlanner.FindByValueOrLegacyLabel(selectedValue);
         if (option is null)
             return;
 

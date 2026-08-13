@@ -336,21 +336,13 @@ internal static class AvaloniaRibbonComposition
     /// <summary>The canonical, single-source ribbon definition shared with the WPF app.</summary>
     public static RibbonDefinition BuildDefinition()
     {
-        var definition = FreeXRibbon.Build();
-        var numberFormatCommandId = FreeXRibbonCommandCatalog.GetRequired("Number Format");
-        var numberFormatLabels = HomeNumberFormatDropdownPlanner.Options
-            .Select(option => option.Label)
-            .ToArray();
+        var definition = FreeXRibbonCompositionPlanner.Compose(FreeXRibbon.Build(), UiText.Get);
         var tabs = definition.Tabs.Select(tab => tab with
         {
             Groups = tab.Groups.Select(group => group with
             {
                 Controls = group.Controls.Select(control =>
                 {
-                    if (control is RibbonComboBox combo &&
-                        combo.CommandId == numberFormatCommandId)
-                        return combo with { Items = numberFormatLabels };
-
                     return string.Equals(control.CommandId.Value, "Shapes", StringComparison.Ordinal)
                         ? CreateShapeGallerySplitButton(control)
                         : control;
@@ -446,10 +438,10 @@ internal static class AvaloniaRibbonComposition
             Register(registry, "Font Size", new ValueRibbonCommand(setFontSize));
         if (callbacks.SetFontName is { } setFontName)
             Register(registry, "Font", new ValueRibbonCommand(setFontName));
-        Bind("Sort A to Z#SortAscButton_Click", callbacks.SortAscending);
-        Bind("Sort Z to A#SortDescButton_Click", callbacks.SortDescending);
-        Bind("Filter#FilterButton_Click", callbacks.ToggleFilter);
-        Bind("Data Validation#ValidationButton_Click", callbacks.DataValidation);
+        Bind(FreeXRibbonCommandIds.DataSortAscending, callbacks.SortAscending);
+        Bind(FreeXRibbonCommandIds.DataSortDescending, callbacks.SortDescending);
+        Bind(FreeXRibbonCommandIds.DataFilter, callbacks.ToggleFilter);
+        Bind(FreeXRibbonCommandIds.DataValidation, callbacks.DataValidation);
 
         Bind("Cut", callbacks.Cut);
         Bind("Copy", callbacks.Copy);

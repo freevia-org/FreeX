@@ -16,6 +16,7 @@ using FreeX.App.Presentation.DrawingUI;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Ribbon.Icons;
+using FreeX.Ribbon.Definitions;
 using AvaloniaPath = Avalonia.Controls.Shapes.Path;
 using SelectionPaneObjectKind = FreeX.Core.Model.SelectionPaneObjectKind;
 
@@ -830,7 +831,7 @@ public sealed class AvaloniaRibbonRendererTests
 
         var bringForward = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Bring Forward"));
         var sendBackward = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Send Backward"));
-        var selectionPane = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Selection Pane#SelectionPaneBtn_Click"));
+        var selectionPane = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, FreeXRibbonCommandIds.DrawingSelectionPane));
         var rotate = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Rotate Object"));
         var objectSize = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Object Size"));
         var fill = content.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "Shape Fill"));
@@ -938,7 +939,7 @@ public sealed class AvaloniaRibbonRendererTests
     [InlineData("Paste")]
     [InlineData("Format Painter")]
     [InlineData("Conditional Formatting")]
-    [InlineData("Selection Pane#SelectionPaneBtn_Click")]
+    [InlineData("Selection Pane")]
     [InlineData("Remove Duplicates#RemoveDuplicatesBtn_Click")]
         [InlineData("Advanced")]
         [InlineData("Page Setup dialog")]

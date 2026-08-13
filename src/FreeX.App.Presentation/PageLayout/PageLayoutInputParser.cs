@@ -12,33 +12,41 @@ public enum PageBreakInputKind
 
 public sealed record PageBreakInput(PageBreakInputKind Kind, uint? Row = null, uint? Column = null);
 
+public sealed record PageLayoutScaleChoice(string Value, string Label);
+
 public static class PageLayoutInputParser
 {
-    public static IReadOnlyList<string> ScalePageCountOptions { get; } =
+    public static IReadOnlyList<PageLayoutScaleChoice> ScalePageCountChoices { get; } =
     [
-        "Automatic",
-        "1 page",
-        "2 pages",
-        "3 pages",
-        "4 pages",
-        "5 pages",
-        "10 pages"
+        new("auto", "Automatic"),
+        new("1", "1 page"),
+        new("2", "2 pages"),
+        new("3", "3 pages"),
+        new("4", "4 pages"),
+        new("5", "5 pages"),
+        new("10", "10 pages")
+    ];
+
+    public static IReadOnlyList<string> ScalePageCountOptions { get; } =
+        ScalePageCountChoices.Select(choice => choice.Label).ToArray();
+
+    public static IReadOnlyList<PageLayoutScaleChoice> ScalePercentChoices { get; } =
+    [
+        new("auto", "Automatic"),
+        new("10", "10%"),
+        new("25", "25%"),
+        new("50", "50%"),
+        new("75", "75%"),
+        new("90", "90%"),
+        new("100", "100%"),
+        new("125", "125%"),
+        new("150", "150%"),
+        new("200", "200%"),
+        new("400", "400%")
     ];
 
     public static IReadOnlyList<string> ScalePercentOptions { get; } =
-    [
-        "Automatic",
-        "10%",
-        "25%",
-        "50%",
-        "75%",
-        "90%",
-        "100%",
-        "125%",
-        "150%",
-        "200%",
-        "400%"
-    ];
+        ScalePercentChoices.Select(choice => choice.Label).ToArray();
 
     public static bool TryParseBreakInput(string input, string keyword, out uint value)
     {

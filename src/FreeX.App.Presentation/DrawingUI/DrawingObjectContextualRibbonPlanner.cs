@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Presentation.DrawingUI;
 
@@ -77,7 +78,7 @@ public static class DrawingObjectContextualRibbonPlanner
         new("Reset Crop", DrawingObjectContextualCommandAction.ResetPictureCrop),
         new("Bring Forward", DrawingObjectContextualCommandAction.BringForward),
         new("Send Backward", DrawingObjectContextualCommandAction.SendBackward),
-        new("Selection Pane#SelectionPaneBtn_Click", DrawingObjectContextualCommandAction.SelectionPane),
+        new(FreeXRibbonCommandIds.DrawingSelectionPane, DrawingObjectContextualCommandAction.SelectionPane),
         new("Rotate Object", DrawingObjectContextualCommandAction.RotateObject),
         new("Object Size", DrawingObjectContextualCommandAction.ResizeObject),
         new("Alt Text", DrawingObjectContextualCommandAction.EditAltText),

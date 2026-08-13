@@ -443,10 +443,24 @@ public partial class MainWindow
     }
 
     private static string GetComboBoxText(ComboBox comboBox) =>
-        comboBox.SelectedItem?.ToString() ?? comboBox.Text ?? "";
+        comboBox.SelectedItem is RibbonComboBoxChoice choice
+            ? choice.Value
+            : comboBox.SelectedItem?.ToString() ?? comboBox.Text ?? "";
 
     private static void SetComboBoxTextIfChanged(ComboBox comboBox, string text)
     {
+        var matchingChoice = comboBox.Items
+            .OfType<RibbonComboBoxChoice>()
+            .FirstOrDefault(choice =>
+                string.Equals(choice.Value, text, StringComparison.Ordinal) ||
+                string.Equals(choice.Label, text, StringComparison.Ordinal));
+        if (matchingChoice is not null)
+        {
+            if (!Equals(comboBox.SelectedItem, matchingChoice))
+                comboBox.SelectedItem = matchingChoice;
+            return;
+        }
+
         if (comboBox.Items.Contains(text))
         {
             if (!Equals(comboBox.SelectedItem, text))

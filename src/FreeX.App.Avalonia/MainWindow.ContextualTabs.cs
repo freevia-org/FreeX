@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Services;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia;
 
@@ -23,12 +24,12 @@ public sealed partial class MainWindow
         var dict = new Dictionary<string, Action>(StringComparer.Ordinal)
         {
             // --- Help tab (always visible). ---
-            ["About FreeX#AboutBtn_Click"] = () => RunGuarded(ShowAboutDialogAsync),
-            ["Help Online#HelpOnlineBtn_Click"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"))),
-            ["Feedback#FeedbackBtn_Click"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"))),
-            ["Check for Updates#CheckForUpdatesBtn_Click"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"))),
-            ["Copy Diagnostics#CopyDiagnosticsBtn_Click"] = () => RunGuarded(CopyDiagnosticsToClipboardAsync),
-            ["Legal Notices#LegalNoticesBtn_Click"] = () => RunGuarded(ShowLegalNoticesDialogAsync),
+            [FreeXRibbonCommandIds.HelpAbout] = () => RunGuarded(ShowAboutDialogAsync),
+            [FreeXRibbonCommandIds.HelpOnline] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"))),
+            [FreeXRibbonCommandIds.HelpFeedback] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"))),
+            [FreeXRibbonCommandIds.HelpCheckForUpdates] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"))),
+            [FreeXRibbonCommandIds.HelpCopyDiagnostics] = () => RunGuarded(CopyDiagnosticsToClipboardAsync),
+            [FreeXRibbonCommandIds.HelpLegalNotices] = () => RunGuarded(ShowLegalNoticesDialogAsync),
 
             // --- Chart Design (chart.selected) — real handlers via SetChartLayoutCommand /
             // ChangeChartTypeCommand / ChangeChartSourceCommand / SetChartStyleCommand (MainWindow.ChartTabs). ---
@@ -47,7 +48,7 @@ public sealed partial class MainWindow
             ["Secondary Axis Series"] = CycleChartSecondaryAxisSeries,
             ["Chart Styles"] = CycleChartStyle,
             ["Select Data Source"] = () => RunGuarded(ShowSelectChartDataDialog),
-            ["Change Chart Type#ChangeChartTypeBtn_Click"] = () => RunGuarded(ShowChangeChartTypeDialog),
+            [FreeXRibbonCommandIds.ChartChangeType] = () => RunGuarded(ShowChangeChartTypeDialog),
             // WPF's Combo Chart button is an immediate shared ComboToggle mutation. Keep the full
             // per-series planner dialog available to parity capture, but route the ribbon command
             // through the same quick-command path as WPF so existing combo charts can be toggled off
@@ -121,11 +122,11 @@ public sealed partial class MainWindow
             ["Total Row"] = ToggleActiveTableTotalRow,
             ["First Column"] = ToggleActiveTableFirstColumn,
             ["Last Column"] = ToggleActiveTableLastColumn,
-            ["Banded Rows#TableDesignBandedRowsBtn_Click"] = ToggleActiveTableBandedRows,
-            ["Banded Columns#TableDesignBandedColumnsBtn_Click"] = ToggleActiveTableBandedColumns,
+            [FreeXRibbonCommandIds.TableBandedRows] = ToggleActiveTableBandedRows,
+            [FreeXRibbonCommandIds.TableBandedColumns] = ToggleActiveTableBandedColumns,
             ["Filter Button"] = ToggleActiveTableFilterButton,
             ["Convert to Range"] = ConvertActiveTableToRange,
-            ["Remove Duplicates#TableDesignRemoveDuplicatesBtn_Click"] = () => RunGuarded(ShowRemoveDuplicatesDialogAsync),
+            [FreeXRibbonCommandIds.TableRemoveDuplicates] = () => RunGuarded(ShowRemoveDuplicatesDialogAsync),
             // Table Name dialog — validates/renames the active table via TableNamePlanner +
             // RenameStructuredTableCommand (MainWindow.TableName).
             ["Table Name"] = OpenTableName,
@@ -150,8 +151,8 @@ public sealed partial class MainWindow
             ["Subtotals"] = TogglePivotSubtotals,
             ["Report Layout"] = CyclePivotReportLayout,
             ["Blank Rows"] = TogglePivotBlankRows,
-            ["Banded Rows#PivotBandedRowsBtn_Click"] = TogglePivotBandedRows,
-            ["Banded Columns#PivotBandedColumnsBtn_Click"] = TogglePivotBandedColumns,
+            [FreeXRibbonCommandIds.PivotBandedRows] = TogglePivotBandedRows,
+            [FreeXRibbonCommandIds.PivotBandedColumns] = TogglePivotBandedColumns,
             ["Row Headers"] = TogglePivotRowHeaders,
             ["Column Headers"] = TogglePivotColumnHeaders,
             // PivotTable Options dialog — totals & layout-display options via ConfigurePivotTableOptionsCommand
@@ -169,7 +170,7 @@ public sealed partial class MainWindow
             // Group Field / Ungroup dialogs — date/number-range grouping via PivotGroupFieldPlanner, applied
             // through ConfigurePivotTableCalculatedItemsCommand (MainWindow.PivotGroupField).
             ["Group Field"] = OpenPivotGroupField,
-            ["Ungroup#PivotUngroupFieldBtn_Click"] = UngroupPivotField,
+            [FreeXRibbonCommandIds.PivotUngroup] = UngroupPivotField,
             // Calculated Field dialog — add/modify/delete a calculated field via PivotCalculatedFieldPlanner,
             // applied through ConfigurePivotTableCalculatedItemsCommand (MainWindow.PivotCalculatedField).
             ["Calculated Field"] = OpenPivotCalculatedField,
@@ -179,7 +180,7 @@ public sealed partial class MainWindow
             // Show Details drills the selected value cell into a new detail sheet via DrillDownPivotTableCommand.
             ["Show Details"] = ShowActivePivotDetails,
             // Clear empties the active pivot's layout via ClearPivotTableViewCommand.
-            ["Clear#PivotTableClearBtn_Click"] = ClearActivePivotTable,
+            [FreeXRibbonCommandIds.PivotClear] = ClearActivePivotTable,
             // Select moves the selection onto the active pivot's full target range.
             ["Select"] = SelectActivePivotTable,
             // Move PivotTable opens the destination dialog (MainWindow.PivotMove) -> MovePivotTableCommand.
@@ -192,7 +193,7 @@ public sealed partial class MainWindow
             // PivotChart inserts a PivotChart over the active pivot (MainWindow.PivotChart).
             ["PivotChart"] = InsertPivotChart,
             // Change Chart Type re-types the active pivot's chart (MainWindow.PivotChartCommands).
-            ["Change Chart Type#PivotChartChangeTypeBtn_Click"] = () => RunGuarded(ChangeActivePivotChartTypeAsync),
+            [FreeXRibbonCommandIds.PivotChartChangeType] = () => RunGuarded(ChangeActivePivotChartTypeAsync),
             // PivotChart Options opens the field-button / data-table options dialog (MainWindow.PivotChartOptions).
             ["PivotChart Options"] = () => RunGuarded(OpenPivotChartOptionsAsync),
 
