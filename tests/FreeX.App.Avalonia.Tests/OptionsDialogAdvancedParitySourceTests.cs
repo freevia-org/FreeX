@@ -22,7 +22,6 @@ public sealed class OptionsDialogAdvancedParitySourceTests
     public void AdvancedOptions_UsesSharedMetricsAndWpfRowGeometry()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
-
         source.Should().Contain("OptionsDialogPlanner.CategoryColumnWidth");
         source.Should().Contain("OptionsDialogPlanner.ContentPaddingHorizontal");
         source.Should().Contain("OptionsDialogPlanner.FooterHeight");
@@ -37,11 +36,14 @@ public sealed class OptionsDialogAdvancedParitySourceTests
     public void ViewOptions_UsesWpfHeaderRhythmAndCaptureFixture()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+        var avaloniaCapture = File.ReadAllText(RepoFile(
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "Program.cs"));
         var wpf = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
         var fixture = File.ReadAllText(RepoFile(
             "tools", "FreeX.ParityCapture.Support", "Services", "OptionsDialogParityFixture.cs"));
 
-        source.Should().Contain("OptionsDialogParityFixture.Create()");
+        source.Should().NotContain("OptionsDialogParityFixture.Create");
+        avaloniaCapture.Should().Contain(": OptionsDialogParityFixture.Create;");
         source.Should().Contain("OptionsSectionHeader(OptionsText(\"Options_WorkbookViewOptions\"), topMargin: 0, bottomMargin: 12)");
         source.Should().Contain("viewPanel.Spacing = 0;");
         source.Should().Contain("RowDefinitions = new RowDefinitions(\"*,Auto\")");

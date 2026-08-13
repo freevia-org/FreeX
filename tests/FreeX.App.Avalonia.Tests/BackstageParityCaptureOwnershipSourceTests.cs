@@ -36,13 +36,6 @@ public sealed class BackstageParityCaptureOwnershipSourceTests
         capture.Should().Contain("BackstageInfoParityProjection.Build(");
     }
 
-    private static string RepoFile(params string[] segments)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-
-        directory.Should().NotBeNull();
-        return Path.Combine([directory!.FullName, .. segments]);
-    }
+    private static string RepoFile(params string[] segments) =>
+        TestWorkspaceFileLocator.FindFileFromBaseDirectory(segments);
 }

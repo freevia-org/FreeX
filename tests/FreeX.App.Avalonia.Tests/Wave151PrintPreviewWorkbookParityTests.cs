@@ -90,7 +90,7 @@ public sealed class Wave151PrintPreviewWorkbookParityTests
         var method = typeof(MainWindow).GetMethod(
             "ShowPrintPreviewDialogAsync",
             BindingFlags.Instance | BindingFlags.NonPublic)!;
-        _ = (Task)method.Invoke(window, [null, null])!;
+        _ = (Task)method.Invoke(window, [null, null, null])!;
         await DrainInputAsync();
         await DrainInputAsync();
         return window.OwnedWindows.Single();

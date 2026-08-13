@@ -233,7 +233,8 @@ public sealed class ContextMenuInteractionValidationTests
             !row.ProductionRoute.Contains("planner", StringComparison.OrdinalIgnoreCase) &&
             !row.ProductionRoute.Contains("catalog", StringComparison.OrdinalIgnoreCase));
 
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.InteractionValidation.cs"));
+        var source = File.ReadAllText(RepoFile(
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ContextMenuInteractionValidation.cs"));
         source.Should().NotContain("planned-enabled");
         source.Should().NotContain("planned-disabled");
         source.Should().NotContain("neutral-planner-backed");

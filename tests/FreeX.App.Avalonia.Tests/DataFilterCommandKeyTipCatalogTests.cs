@@ -1,4 +1,5 @@
 using FreeX.App.Avalonia.Tests.Parity;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -8,12 +9,12 @@ public sealed class DataFilterCommandKeyTipCatalogTests
     public void SharedDataFilterCommand_StaysOnDataTabAndAvaloniaBound()
     {
         var command = SurfaceCatalog.RibbonCommands
-            .Single(entry => entry.CommandId == "Filter#FilterButton_Click" && !entry.IsMenuItem);
+            .Single(entry => entry.CommandId == FreeXRibbonCommandIds.DataFilter && !entry.IsMenuItem);
 
         command.TabHeader.Should().Be("Data");
         command.GroupHeader.Should().Be("Sort Filter");
         command.Display.Should().Be("Filter");
         command.KeyTip.Should().Be("T");
-        SurfaceCatalog.AvaloniaBoundCanonicalIds.Should().Contain("Filter#FilterButton_Click");
+        SurfaceCatalog.AvaloniaBoundCanonicalIds.Should().Contain(FreeXRibbonCommandIds.DataFilter);
     }
 }

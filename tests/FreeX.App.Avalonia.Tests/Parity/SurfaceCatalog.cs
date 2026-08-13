@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Ribbon;
 using FreeX.Ribbon.Definitions;
@@ -68,6 +70,9 @@ public static class SurfaceCatalog
             if (FreeX.App.Presentation.Charts.Editing.ChartCommandWorkflowPlanner.ChartTypeForRibbonCommand(id) is not null)
                 ids.Add(id);
 
+        foreach (var spec in DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs())
+            ids.Add(FreeXRibbonCommandCatalog.GetRequired(spec.CommandId).Value);
+
         return ids;
     }
 
@@ -87,10 +92,23 @@ public static class SurfaceCatalog
             new Regex("^\\s*Bind\\(\\\"(?<key>(?:[^\\\"\\\\]|\\\\.)*)\\\"", RegexOptions.Compiled),
             new Regex("^\\s*Register\\(registry,\\s*\\\"(?<key>(?:[^\\\"\\\\]|\\\\.)*)\\\"", RegexOptions.Compiled),
         };
+        var typedCommandPattern = new Regex(
+            "FreeXRibbonCommandIds\\.(?<name>[A-Za-z_][A-Za-z0-9_]*)",
+            RegexOptions.Compiled);
         var ids = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var file in files)
         foreach (var line in File.ReadLines(file))
+        {
+            foreach (Match match in typedCommandPattern.Matches(line))
+            {
+                var field = typeof(FreeXRibbonCommandIds).GetField(
+                    match.Groups["name"].Value,
+                    BindingFlags.Public | BindingFlags.Static);
+                if (field?.GetRawConstantValue() is string commandId)
+                    ids.Add(FreeXRibbonCommandCatalog.GetRequired(commandId).Value);
+            }
+
         foreach (var pattern in patterns)
         {
             var match = pattern.Match(line);
@@ -100,6 +118,7 @@ public static class SurfaceCatalog
             var value = Regex.Unescape(match.Groups["key"].Value);
             ids.Add(FreeXRibbonCommandCatalog.GetRequired(value).Value);
             break;
+        }
         }
 
         foreach (var descriptor in PageLayoutRibbonActionPlanner.RibbonActionDescriptors)

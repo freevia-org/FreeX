@@ -53,7 +53,7 @@ internal static class AvaloniaStatusBarCustomizeMenu
 
         var menuItem = new MenuItem
         {
-            Header = UiText.Get(command.ResourceKey),
+            Header = UiText.Get(ResolveResourceKey(command.ResourceKey)),
             IsEnabled = command.IsEnabled,
         };
 
@@ -72,4 +72,9 @@ internal static class AvaloniaStatusBarCustomizeMenu
 
         return menuItem;
     }
+
+    private static string ResolveResourceKey(string resourceKey) =>
+        resourceKey == StatusBarCustomizeResourceKeys.Zoom
+            ? "MainWindow_Text_Zoom"
+            : resourceKey;
 }

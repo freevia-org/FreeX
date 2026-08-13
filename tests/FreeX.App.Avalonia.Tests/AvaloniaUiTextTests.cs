@@ -37,8 +37,11 @@ public sealed class AvaloniaUiTextTests
         requiredKeys.Should().NotBeEmpty();
         foreach (var key in requiredKeys)
         {
-            UiText.GetNeutralResourceKeys().Should().Contain(key);
-            UiText.Get(key).Should().NotBe(UiText.CreateMissingText(key));
+            var avaloniaResourceKey = key == StatusBarCustomizeResourceKeys.Zoom
+                ? "MainWindow_Text_Zoom"
+                : key;
+            UiText.GetNeutralResourceKeys().Should().Contain(avaloniaResourceKey);
+            UiText.Get(avaloniaResourceKey).Should().NotBe(UiText.CreateMissingText(avaloniaResourceKey));
         }
     }
 }

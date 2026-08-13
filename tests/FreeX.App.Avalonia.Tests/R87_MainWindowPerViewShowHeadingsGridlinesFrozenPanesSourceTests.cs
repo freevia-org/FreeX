@@ -98,8 +98,8 @@ public sealed class R87_MainWindowPerViewShowHeadingsGridlinesFrozenPanesSourceT
         source.Should().NotContain("_session.ActiveSheet.ViewMode");
         source.Should().Contain("WorksheetViewModeUiStatePlanner.Build(_session.ViewMode)");
 
-        source.Should().Contain("[\"view.gridlines\"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),");
-        source.Should().Contain("[\"view.headings\"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),");
+        source.Should().Contain("[\"Gridlines\"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),");
+        source.Should().Contain("[\"Headings\"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),");
         source.Should().Contain("IsShowingGridlines: _session.IsShowingGridlines,");
         source.Should().Contain("IsShowingHeadings: _session.IsShowingHeadings,");
         source.Should().Contain("var showGridlines = !_session.IsShowingGridlines;");

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
+using FreeX.Ribbon.Definitions;
+
 namespace FreeX.App.Avalonia.Tests.Parity;
 
 /// <summary>
@@ -69,7 +71,17 @@ public static class FunctionalParityMatrix
     public static IReadOnlySet<string> LoadWpfHandlerIds()
         => File.ReadAllLines(WpfHandlerIdsPath)
             .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(NormalizeLegacyWpfHandlerId)
             .ToHashSet(StringComparer.Ordinal);
+
+    private static string NormalizeLegacyWpfHandlerId(string commandId) => commandId switch
+    {
+        "B4 (JIS)" => FreeXRibbonCommandIds.PageLayoutPaperSizeB4Jis,
+        "B5 (JIS)" => FreeXRibbonCommandIds.PageLayoutPaperSizeB5Jis,
+        "Copy Diagnostics#CopyDiagnosticsBtn_Click" => FreeXRibbonCommandIds.HelpCopyDiagnostics,
+        "Legal Notices#LegalNoticesBtn_Click" => FreeXRibbonCommandIds.HelpLegalNotices,
+        _ => commandId,
+    };
 
     public static string WpfHandlerIdsPath => Path.Combine(RepoRoot(), "docs", "parity", "wpf-handler-ids.txt");
 

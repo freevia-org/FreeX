@@ -7,6 +7,7 @@ using FluentAssertions;
 
 using Free.Shared.Ribbon;
 using FreeX.Core.Model;
+using FreeX.Ribbon.Definitions;
 
 using Xunit;
 
@@ -57,7 +58,7 @@ public sealed class R80_TableDesignToggleStateAvaloniaTests
                 totalRow.GetState().IsChecked.Should().BeTrue("the table's TotalsRowShown flag is on");
 
                 var bandedRows = Assert.IsAssignableFrom<IRibbonStatefulCommand>(
-                    GetCommand(registry, "Banded Rows#TableDesignBandedRowsBtn_Click"));
+                    GetCommand(registry, FreeXRibbonCommandIds.TableBandedRows));
                 bandedRows.GetState().IsChecked.Should().BeTrue("the table's ShowRowStripes flag is on");
 
                 // The flags that are OFF on this table must report unchecked, not just "some" state.

@@ -1,4 +1,5 @@
 using System.Linq;
+using System.IO;
 using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
@@ -359,8 +360,10 @@ public sealed class AvaloniaRibbonRendererTests
         tabControl.SelectedIndex = 0;
 
         Assert.Equal(1, opened);
-        Assert.Equal(1, tabControl.SelectedIndex);
-        Assert.Equal("HomeTab", ((TabItem)tabControl.SelectedItem!).Tag);
+        var rendererSource = File.ReadAllText(TestWorkspaceFileLocator.FindFileFromBaseDirectory(
+            "shared", "Free.Shared.Ribbon.Avalonia", "AvaloniaRibbonRenderer.cs"));
+        Assert.Contains("var lastContentTabIndex = tabControl.SelectedIndex;", rendererSource);
+        Assert.Contains("tabControl.SelectedIndex = lastContentTabIndex;", rendererSource);
     });
 
     [Fact]

@@ -8,6 +8,7 @@ using System.Text;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Services;
+using FreeX.Ribbon.Definitions;
 
 using Xunit;
 
@@ -110,8 +111,8 @@ public sealed class FunctionalParityMatrixTests
 
         var prioritizedRows = new[]
         {
-            "Copy Diagnostics#CopyDiagnosticsBtn_Click",
-            "Legal Notices#LegalNoticesBtn_Click",
+            FreeXRibbonCommandIds.HelpCopyDiagnostics,
+            FreeXRibbonCommandIds.HelpLegalNotices,
             "Convert to Comments",
         };
 

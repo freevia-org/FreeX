@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using FluentAssertions;
@@ -46,7 +47,7 @@ public sealed class LinuxWorksheetEditingParityTests
             window.Measure(new Size(1120, 720));
             window.Arrange(new Rect(0, 0, 1120, 720));
 
-            var buttons = window.GetVisualDescendants()
+            var buttons = window.RibbonControlForTest!.GetLogicalDescendants()
                 .OfType<Button>()
                 .Where(button => button.Tag is "Fill Color" or "Font Color")
                 .ToDictionary(button => (string)button.Tag!);

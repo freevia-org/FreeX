@@ -125,7 +125,7 @@ public sealed class AvaloniaGridInputSourceTests
         // -- it no longer hardcodes `_formulaBox` here.
         source.Should().Contain("editor.Foreground = Brushes.Transparent;");
         source.Should().Contain("new Run(text) { Foreground = brush }");
-        source.Should().Contain("RefreshShell(\"Ready\");");
+        source.Should().Contain("RefreshShell(UiText.Get(\"MainLoc_Ready\"));");
     }
 
     [Fact]

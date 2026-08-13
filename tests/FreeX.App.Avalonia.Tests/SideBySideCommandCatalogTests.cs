@@ -46,8 +46,8 @@ public sealed class SideBySideCommandCatalogTests
     }
 
     [Theory]
-    [InlineData("B4 (JIS)")]
-    [InlineData("B5 (JIS)")]
+    [InlineData(FreeXRibbonCommandIds.PageLayoutPaperSizeB4Jis)]
+    [InlineData(FreeXRibbonCommandIds.PageLayoutPaperSizeB5Jis)]
     public void JisPaperSize_IsCanonicalAndBound(string commandId)
     {
         FreeXRibbonCommandCatalog.TryGet(commandId, out _).Should().BeTrue();
@@ -55,8 +55,8 @@ public sealed class SideBySideCommandCatalogTests
     }
 
     [Theory]
-    [InlineData("B4 (JIS)")]
-    [InlineData("B5 (JIS)")]
+    [InlineData(FreeXRibbonCommandIds.PageLayoutPaperSizeB4Jis)]
+    [InlineData(FreeXRibbonCommandIds.PageLayoutPaperSizeB5Jis)]
     public void JisPaperSize_IsNotOnIntentionalLinuxOmissions(string commandId)
     {
         FunctionalParityMatrixTests.IntentionalLinuxOmissions.Should().NotContain(commandId,
@@ -90,8 +90,8 @@ public sealed class SideBySideCommandCatalogTests
     }
 
     [Theory]
-    [InlineData("B4 (JIS)")]
-    [InlineData("B5 (JIS)")]
+    [InlineData(FreeXRibbonCommandIds.PageLayoutPaperSizeB4Jis)]
+    [InlineData(FreeXRibbonCommandIds.PageLayoutPaperSizeB5Jis)]
     public void ParityMatrix_JisPaperSize_ShowsParity(string commandId)
     {
         var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();

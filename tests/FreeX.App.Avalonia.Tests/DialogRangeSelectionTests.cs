@@ -113,7 +113,8 @@ public sealed class DialogRangeSelectionTests
     public void ConsolidateCapture_UsesExplicitFixtureStateWhileProductionRemainsSelectionDerived()
     {
         var consolidate = ReadSource("MainWindow.Consolidate.cs");
-        var parityCapture = ReadSource("MainWindow.ParityCapture.cs");
+        var parityCapture = File.ReadAllText(RepoFile(
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         consolidate.Should().Contain("ConsolidateDialogInitialState? initialState = null");
         consolidate.Should().Contain("initialState?.SourceReference ?? FormatRangeReference(selectedRange)");

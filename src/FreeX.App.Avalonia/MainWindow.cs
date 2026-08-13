@@ -1121,12 +1121,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["More Borders"] = () => _ = ShowFormatCellsDialogAsync(),
                     // Home ▸ Font ▸ Orientation dropdown items (canonical ids from HomeRibbonMenus.Orientation).
                     // Same rotation values as the native Format ▸ Orientation flyout.
-                    ["Horizontal"] = () => ApplySelectedRangeTextRotation(0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("TextRotation_HorizontalFailed")),
-                    ["Angle Counterclockwise"] = () => ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_CounterclockwiseSuccessAction"), UiText.Get("TextRotation_CounterclockwiseFailed")),
-                    ["Angle Clockwise"] = () => ApplySelectedRangeTextRotation(-45, UiText.Get("TextRotation_ClockwiseSuccessAction"), UiText.Get("TextRotation_ClockwiseFailed")),
-                    ["Vertical Text"] = () => ApplySelectedRangeTextRotation(255, UiText.Get("TextRotation_VerticalSuccessAction"), UiText.Get("TextRotation_VerticalFailed")),
-                    ["Rotate Text Up"] = () => ApplySelectedRangeTextRotation(90, UiText.Get("TextRotation_UpSuccessAction"), UiText.Get("TextRotation_UpFailed")),
-                    ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, UiText.Get("TextRotation_DownSuccessAction"), UiText.Get("TextRotation_DownFailed")),
+                    ["Horizontal"] = () => ApplySelectedRangeTextRotation(0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                    ["Angle Counterclockwise"] = () => ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_CounterclockwiseSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                    ["Angle Clockwise"] = () => ApplySelectedRangeTextRotation(-45, UiText.Get("TextRotation_ClockwiseSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                    ["Vertical Text"] = () => ApplySelectedRangeTextRotation(255, UiText.Get("TextRotation_VerticalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                    ["Rotate Text Up"] = () => ApplySelectedRangeTextRotation(90, UiText.Get("TextRotation_UpSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                    ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, UiText.Get("TextRotation_DownSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
                     // Home ▸ Cells ▸ Insert / Delete / Format dropdown items that map to existing handlers
                     // (canonical ids from HomeRibbonMenus.Insert/Delete/Format). The lock-cell item stays NoOp
                     // until that operation exists in the shell.
@@ -1173,7 +1173,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Increase Decimal Places"] = IncreaseSelectedRangeDecimalPlaces,
                     ["Decrease Decimal Places"] = DecreaseSelectedRangeDecimalPlaces,
                     // Home Alignment Orientation + Cells Format → existing handlers.
-                    ["Orientation"] = () => ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_GenericSuccessAction"), UiText.Get("TextRotation_OrientationFailed")),
+                    ["Orientation"] = () => ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_GenericSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
                     ["Format"] = () => _ = ShowFormatCellsDialogAsync(),
                     // View tab (Window group) + Formulas tab.
                     ["Unhide"] = () => RunGuarded(ShowUnhideWindowDialogAsync),
@@ -2281,22 +2281,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formatCellsMenuItem.Click += async (_, _) => await ShowFormatCellsDialogAsync();
 
         _horizontalTextMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("TextRotation_HorizontalFailed"));
+            ApplySelectedRangeTextRotation(0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
 
         _angleCounterclockwiseMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_CounterclockwiseSuccessAction"), UiText.Get("TextRotation_CounterclockwiseFailed"));
+            ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_CounterclockwiseSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
 
         _angleClockwiseMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(-45, UiText.Get("TextRotation_ClockwiseSuccessAction"), UiText.Get("TextRotation_ClockwiseFailed"));
+            ApplySelectedRangeTextRotation(-45, UiText.Get("TextRotation_ClockwiseSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
 
         _verticalTextMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(255, UiText.Get("TextRotation_VerticalSuccessAction"), UiText.Get("TextRotation_VerticalFailed"));
+            ApplySelectedRangeTextRotation(255, UiText.Get("TextRotation_VerticalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
 
         _rotateTextUpMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(90, UiText.Get("TextRotation_UpSuccessAction"), UiText.Get("TextRotation_UpFailed"));
+            ApplySelectedRangeTextRotation(90, UiText.Get("TextRotation_UpSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
 
         _rotateTextDownMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(-90, UiText.Get("TextRotation_DownSuccessAction"), UiText.Get("TextRotation_DownFailed"));
+            ApplySelectedRangeTextRotation(-90, UiText.Get("TextRotation_DownSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
 
         _currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();
 
@@ -5322,7 +5322,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetName(
             container,
             UiText.Format(
-                "DrawingObject_AutomationNameFormat",
+                "RecentFile_AutomationNameFormat",
                 FormatDrawingObjectKind(drawingObject.Kind),
                 drawingObject.DisplayName));
         AutomationProperties.SetHelpText(container, UiText.Get("DrawingObject_PreviewHelpText"));
@@ -5415,9 +5415,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
         RefreshShell(UiText.Format(
-            "DrawingObject_SelectedStatusFormat",
-            FormatDrawingObjectKind(drawingObject.Kind),
-            drawingObject.DisplayName));
+            "MainLoc_SelectedX",
+            UiText.Format(
+                "RecentFile_AutomationNameFormat",
+                FormatDrawingObjectKind(drawingObject.Kind),
+                drawingObject.DisplayName)));
     }
 
     private bool IsSelectedDrawingObject(DrawingObjectBounds drawingObject) =>
@@ -11955,12 +11957,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = new[]
             {
-                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_Horizontal"), 0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("TextRotation_HorizontalFailed")),
-                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_AngleCounterclockwise"), 45, UiText.Get("TextRotation_CounterclockwiseSuccessAction"), UiText.Get("TextRotation_CounterclockwiseFailed")),
-                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_AngleClockwise"), -45, UiText.Get("TextRotation_ClockwiseSuccessAction"), UiText.Get("TextRotation_ClockwiseFailed")),
-                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_VerticalText"), 255, UiText.Get("TextRotation_VerticalSuccessAction"), UiText.Get("TextRotation_VerticalFailed")),
-                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_RotateTextUp"), 90, UiText.Get("TextRotation_UpSuccessAction"), UiText.Get("TextRotation_UpFailed")),
-                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_RotateTextDown"), -90, UiText.Get("TextRotation_DownSuccessAction"), UiText.Get("TextRotation_DownFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_Horizontal"), 0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_AngleCounterclockwise"), 45, UiText.Get("TextRotation_CounterclockwiseSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_AngleClockwise"), -45, UiText.Get("TextRotation_ClockwiseSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_VerticalText"), 255, UiText.Get("TextRotation_VerticalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_RotateTextUp"), 90, UiText.Get("TextRotation_UpSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_RotateTextDown"), -90, UiText.Get("TextRotation_DownSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
             },
         };
 
@@ -12846,7 +12848,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         RefreshViewportSizeForZoom();
         RefreshShell(UiText.Format(
-            "Zoom_StatusFormat",
+            "MainLoc_ActionRangeStatusFormat",
+            UiText.Get("MainWindow_Text_Zoom"),
             StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent)));
     }
 
@@ -18441,9 +18444,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
         RefreshShell(UiText.Format(
-            "DrawingObject_SelectedStatusFormat",
-            FormatDrawingObjectKind(objectKind),
-            item.Name));
+            "MainLoc_SelectedX",
+            UiText.Format(
+                "RecentFile_AutomationNameFormat",
+                FormatDrawingObjectKind(objectKind),
+                item.Name)));
         RecordOptionalNameBoxSelection(item);
         return true;
     }
@@ -18657,7 +18662,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         RefreshShell(UiText.Format(
-            "MainLoc_InsertedFunctionStatusFormat",
+            "MainLoc_ActionRangeStatusFormat",
             functionName.ToUpperInvariant(),
             targetReference));
     }
@@ -18718,9 +18723,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         RefreshShell(UiText.Format(
-            "MainLoc_SortedDirectionStatusFormat",
-            rangeReference,
-            UiText.Get(ascending ? "Sort_AtoZ" : "Sort_ZtoA")));
+            "MainLoc_SortedX",
+            UiText.Format(
+                "MainLoc_ActionRangeStatusFormat",
+                rangeReference,
+                UiText.Get(ascending ? "Sort_AtoZ" : "Sort_ZtoA"))));
     }
 
     /// <summary>
@@ -21665,11 +21672,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var result = _session.ExecuteScenarioManagerSavePlan(savePlan, request);
             if (!ApplyScenarioManagerResult(
                     result,
-                    UiText.Format(
-                        "ScenarioManager_SavedStatusFormat",
-                        acceptedName,
-                        changingCells.Count,
-                        FormatCountLabel(changingCells.Count, "ScenarioManager_CellSingular", "ScenarioManager_CellPlural"))))
+                    UiText.Format("MainLoc_SavedX", acceptedName)))
             {
                 var target = action == ScenarioManagerAction.Edit
                     ? nameBox
@@ -21692,7 +21695,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (!ApplyScenarioManagerResult(
                     result,
                     UiText.Format(
-                        "ScenarioManager_ShowedStatusFormat",
+                        "MainLoc_ActionRangeStatusFormat",
+                        UiText.Get("ScenarioManager_Show"),
                         showPlan.SelectedScenario?.Name ?? scenarioName)))
                 return;
 
@@ -21747,8 +21751,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (!ApplyScenarioManagerResult(
                     result,
                     UiText.Format(
-                        "ScenarioManager_CreatedSummaryStatusFormat",
-                        summaryPlan.Scenarios.Count,
+                        "MainLoc_ActionRangeStatusFormat",
+                        UiText.Get("ScenarioManager_Summary"),
                         FormatCountLabel(
                             summaryPlan.Scenarios.Count,
                             "ScenarioManager_ScenarioSingular",
@@ -21887,10 +21891,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static string FormatScenarioManagerSelectionSummary(GridRange range) =>
         UiText.Format(
-            "ScenarioManager_CurrentSelectionFormat",
-            FormatRangeReference(range),
-            range.CellCount,
-            FormatCountLabel(range.CellCount, "ScenarioManager_CellSingular", "ScenarioManager_CellPlural"));
+            "MainLoc_SelectedX",
+            FormatRangeReference(range));
 
     private static string FormatScenarioManagerScenarioDetails(ScenarioManagerScenarioChoice? choice)
     {
@@ -21908,13 +21910,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var flagText = flags.Count == 0
             ? UiText.Get("ScenarioManager_VisibleEditableState")
-            : UiText.Format("ScenarioManager_FlagListFormat", string.Join(UiText.Get("Common_ListSeparator"), flags));
+            : UiText.Format("ScenarioManager_FlagListFormat", string.Join(UiText.Get("ManageConditionalFormats_ListSeparator"), flags));
         return string.Join(
             Environment.NewLine,
             UiText.Format(
-                "ScenarioManager_ChangingCellCountFormat",
+                "MainLoc_ActionRangeStatusFormat",
                 choice.Name,
-                choice.ChangingCellCount,
                 FormatCountLabel(
                     choice.ChangingCellCount,
                     "ScenarioManager_ChangingCellSingular",
@@ -21977,7 +21978,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         RefreshShell(UiText.Format(
-            "DataTable_CreatedStatusFormat",
+            "MainLoc_ActionRangeStatusFormat",
             FormatDataTableMode(plan),
             tableRange));
     }
@@ -25719,7 +25720,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         RefreshShell(UiText.Format(
-            "DataValidation_PickedValueStatusFormat",
+            "MainLoc_ActionRangeStatusFormat",
             selected,
             FormatCellReference(address)));
     }

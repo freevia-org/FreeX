@@ -71,7 +71,7 @@ public sealed class DialogVisualParitySourceTests
 
         var chrome = File.ReadAllText(RepoFile("shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogChrome.cs"));
         chrome.Should().Contain("IBrush? borderBrush = null");
-        chrome.Should().Contain("Color.FromRgb(198, 215, 232)");
+        chrome.Should().Contain("private static readonly IBrush GroupBoxBorderBrush = ButtonBorderBrush;");
         chrome.Should().Contain("groupBox.BorderBrush = borderBrush ?? GroupBoxBorderBrush;");
     }
 

@@ -50,8 +50,8 @@ public sealed class AvaloniaChartQuickCommandSourceTests
         var contextualSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"));
         var quickSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatTextTabs.cs"));
 
-        contextualSource.Should().Contain("[\"chartDesign.comboChart\"] = CycleChartCombo");
-        contextualSource.Should().NotContain("[\"chartDesign.comboChart\"] = () => RunGuarded(ShowChartComboDialog)");
+        contextualSource.Should().Contain("[\"Combo Chart\"] = CycleChartCombo");
+        contextualSource.Should().NotContain("[\"Combo Chart\"] = () => RunGuarded(ShowChartComboDialog)");
         quickSource.Should().Contain("private void CycleChartCombo()");
         quickSource.Should().Contain("ChartQuickCommandCatalog.ComboToggle");
     }
@@ -61,9 +61,9 @@ public sealed class AvaloniaChartQuickCommandSourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"));
 
-        source.Should().Contain("[\"chartFormat.seriesColor\"] = () => RunGuarded(ShowChartSeriesFormatDialog)");
-        source.Should().Contain("[\"chartFormat.seriesWidth\"] = () => RunGuarded(ShowChartSeriesFormatDialog)");
-        source.Should().NotContain("[\"chartFormat.seriesColor\"] = () => RunGuarded(ShowChartSeriesColorDialog)");
+        source.Should().Contain("[\"Series Color\"] = () => RunGuarded(ShowChartSeriesFormatDialog)");
+        source.Should().Contain("[\"Series Width\"] = () => RunGuarded(ShowChartSeriesFormatDialog)");
+        source.Should().NotContain("[\"Series Color\"] = () => RunGuarded(ShowChartSeriesColorDialog)");
         source.Should().Contain("ChartSeriesFormatPlanner");
     }
 

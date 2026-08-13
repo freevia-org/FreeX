@@ -381,7 +381,7 @@ public sealed partial class MainWindow
 
             if (result.SelectedRange is { } selectedRange)
                 RefreshShell(UiText.Format(
-                    "AccessibilityChecker_SelectedIssueStatusFormat",
+                    "MainLoc_SelectedX",
                     FormatRangeReference(selectedRange)));
         }
     }

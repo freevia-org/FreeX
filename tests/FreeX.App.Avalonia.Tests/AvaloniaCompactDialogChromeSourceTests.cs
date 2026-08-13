@@ -139,18 +139,18 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("button.MinHeight = style.ButtonHeight;");
         source.Should().Contain("button.MaxHeight = style.ButtonHeight;");
         source.Should().Contain("button.CornerRadius = style.ButtonCornerRadius;");
-        source.Should().Contain("var restingBackground = style.ButtonBackgroundBrush ?? ButtonBackgroundBrush;");
+        source.Should().Contain("var restingBackground = style.ButtonBackgroundBrush ?? ThemeWhiteBrush();");
         source.Should().Contain("new Setter(Button.BackgroundProperty, restingBackground)");
         source.Should().Contain("Class(\":pointerover\")");
         source.Should().Contain("Class(\":pressed\")");
-        source.Should().Contain("? style.DefaultButtonBorderBrush ?? DefaultButtonBorderBrush");
+        source.Should().Contain("? style.DefaultButtonBorderBrush ?? accentBrush");
         source.Should().Contain(": style.ButtonBorderBrush ?? ButtonBorderBrush;");
         source.Should().Contain("button.IsDefault = true;");
         source.Should().Contain("if (fixedHeight)");
         source.Should().Contain("var height = style.TextBoxHeight ?? style.ControlHeight;");
         source.Should().Contain("textBox.Padding = style.TextBoxPadding;");
         source.Should().Contain("textBox.FocusAdorner = null;");
-        source.Should().Contain("style.FocusedInputBorderBrush ?? inputBorder");
+        source.Should().Contain("style.FocusedInputBorderBrush ?? ThemeAccentBrush(style)");
         source.Should().Contain("var height = style.ComboBoxHeight ?? style.ControlHeight;");
         source.Should().Contain("comboBox.Padding = style.ComboBoxPadding;");
         source.Should().Contain("public static void ApplyCheckBox(");
@@ -437,6 +437,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         var printSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
         var autoFilterSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs"));
         var errorCheckingSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ErrorChecking.cs"));
+        var parityCaptureSource = File.ReadAllText(RepoFile(
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         getDataSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle GetDataDialogChromeStyle => new(FormulaBarFontFamily);");
         getDataSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, GetDataDialogChromeStyle, minWidth, isDefault);");
@@ -465,7 +467,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
 
         errorCheckingSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle ErrorCheckingDialogChromeStyle => new(FormulaBarFontFamily);");
         errorCheckingSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, ErrorCheckingDialogChromeStyle);");
-        errorCheckingSource.Should().Contain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
+        errorCheckingSource.Should().NotContain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
+        parityCaptureSource.Should().Contain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
         errorCheckingSource.Should().Contain("Width = ErrorCheckingDialogPlanner.AvaloniaClientWidth");
         errorCheckingSource.Should().Contain("Height = ErrorCheckingDialogPlanner.AvaloniaClientHeight");
         errorCheckingSource.Should().Contain("HorizontalAlignment = AvaloniaHorizontalAlignment.Left");

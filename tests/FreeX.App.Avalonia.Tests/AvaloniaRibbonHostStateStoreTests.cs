@@ -27,7 +27,7 @@ public sealed class AvaloniaRibbonHostStateStoreTests
             {
                 ExtraCommands = new Dictionary<string, Action>
                 {
-                    ["view.gridlines"] = () =>
+                    ["Gridlines"] = () =>
                     {
                         observedByCommand = store.GetState("Gridlines").IsChecked;
                         state = !state;
@@ -35,7 +35,7 @@ public sealed class AvaloniaRibbonHostStateStoreTests
                 },
                 ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>
                 {
-                    ["view.gridlines"] = () => new(IsChecked: state),
+                    ["Gridlines"] = () => new(IsChecked: state),
                 },
             };
 

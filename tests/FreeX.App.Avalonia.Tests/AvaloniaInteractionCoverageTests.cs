@@ -69,7 +69,7 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Equal(631, rows.Length);
         Assert.Equal(309, rows.Count(row => row.Kind != nameof(RibbonMenuItem)));
         Assert.Equal(322, rows.Count(row => row.Kind == nameof(RibbonMenuItem)));
-        Assert.Equal(588, rows.Select(row => row.CommandId).Distinct().Count());
+        Assert.Equal(595, rows.Select(row => row.CommandId).Distinct().Count());
         Assert.Equal(74, definition.Tabs.Sum(tab => tab.Groups.Count));
 
         var runner = File.ReadAllText(RepoFile("tools", "Run-FreeXLinuxInteractionValidation.ps1"));

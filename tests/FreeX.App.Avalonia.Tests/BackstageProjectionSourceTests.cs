@@ -186,6 +186,11 @@ public sealed class BackstageProjectionSourceTests
             "shared",
             "Free.Shared.Shell",
             "BackstageFrameSession.cs"));
+        var testAccessSource = File.ReadAllText(RepoFile(
+            "tools",
+            "FreeX.ParityCapture.Avalonia",
+            "TestSupport",
+            "MainWindow.LiveBackstage.TestAccess.cs"));
 
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
         source.Should().Contain("FreeXBackstageFramePlan LiveBackstageFramePlan");
@@ -198,7 +203,8 @@ public sealed class BackstageProjectionSourceTests
         source.Should().Contain("AutomationId = navigation.AutomationId");
         source.Should().Contain("KeyTip = navigation.KeyTip");
         source.Should().Contain("_backstageOverlay.TryActivateEntry(");
-        source.Should().Contain("_backstageOverlay.GetEntryButton(");
+        source.Should().NotContain("_backstageOverlay.GetEntryButton(");
+        testAccessSource.Should().Contain("_backstageOverlay.GetEntryButton(");
 
         source.Should().NotContain("BuildLiveBackstageRail(");
         source.Should().NotContain("CreateLiveBackstageRailButton(");
