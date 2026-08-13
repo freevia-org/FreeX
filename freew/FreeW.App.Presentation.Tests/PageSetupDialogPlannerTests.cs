@@ -13,6 +13,36 @@ public sealed class PageSetupDialogPlannerTests
     }
 
     [Fact]
+    public void PresentationMetrics_OwnAvaloniaAuthorityTemplateCompensations()
+    {
+        var metrics = PageSetupDialogPlanner.PresentationMetrics;
+
+        metrics.AvaloniaTabWidths.Should().Equal(59, 40, 48);
+        metrics.AvaloniaActionSpacing.Should().Be(14);
+        metrics.AvaloniaActionRightInset.Should().Be(15);
+        metrics.AvaloniaLauncherLeftInset.Should().Be(-1);
+        metrics.AvaloniaLauncherSpacing.Should().Be(14);
+        metrics.AvaloniaValidationMargin.Should().Be(new PageSetupDialogThickness(16, 8, 16, 0));
+    }
+
+    [Fact]
+    public void AvaloniaRenderer_ProjectsSharedAuthorityMetricsWithoutLocalLayoutPolicy()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Avalonia", "PageSetupDialog.cs"));
+
+        source.Should().Contain("metrics.AvaloniaTabWidths");
+        source.Should().Contain("metrics.AvaloniaActionSpacing");
+        source.Should().Contain("metrics.AvaloniaActionRightInset");
+        source.Should().Contain("metrics.AvaloniaLauncherLeftInset");
+        source.Should().Contain("metrics.AvaloniaLauncherSpacing");
+        source.Should().Contain("metrics.AvaloniaValidationMargin");
+        source.Should().NotContain("AuthorityTabWidths");
+        source.Should().NotContain("private const double Authority");
+    }
+
+    [Fact]
     public void VisualHarnessSectionStart_is_an_explicit_shared_seed()
     {
         PageSetupDialogPlanner.VisualHarnessSectionStart.Should().Be(SectionBreakKind.NextPage);

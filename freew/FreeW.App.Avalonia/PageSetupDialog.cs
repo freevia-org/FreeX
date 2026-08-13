@@ -20,14 +20,6 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = PageLayoutDialogChrome.Style;
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
-    // The authority capture is rendered at 96 DPI with the WPF dialog's compact tab metrics.
-    // Avalonia's Fluent header measures these three English labels differently on Linux, so keep
-    // the route's tab geometry explicit while the shared chrome still owns colors and templates.
-    private static readonly double[] AuthorityTabWidths = [59, 40, 48];
-    private const double AuthorityActionSpacing = 14;
-    private const double AuthorityActionRightInset = 15;
-    private const double AuthorityLauncherLeftInset = -1;
-    private const double AuthorityLauncherSpacing = 14;
 
     private readonly TextBox _top;
     private readonly TextBox _bottom;
@@ -107,10 +99,13 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
             tabs,
             DialogChromeStyle,
             contentPaneMargin: ToThickness(metrics.TabPaneMargin));
-        for (var index = 0; index < tabs.Items.Count && index < AuthorityTabWidths.Length; index++)
-            ((TabItem)tabs.Items[index]!).Width = AuthorityTabWidths[index];
+        for (var index = 0; index < tabs.Items.Count && index < metrics.AvaloniaTabWidths.Count; index++)
+            ((TabItem)tabs.Items[index]!).Width = metrics.AvaloniaTabWidths[index];
 
-        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(
+            _status,
+            DialogChromeStyle,
+            ToThickness(metrics.AvaloniaValidationMargin));
         var root = new Grid
         {
             RowDefinitions = new RowDefinitions("*,Auto,Auto")
@@ -119,7 +114,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
         Grid.SetRow(_status, 1);
         var actionStyle = DialogChromeStyle with
         {
-            ActionSpacing = AuthorityActionSpacing
+            ActionSpacing = metrics.AvaloniaActionSpacing
         };
         var actions = PageLayoutDialogChrome.Actions(
             Accept,
@@ -130,7 +125,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
         actions.Margin = new Thickness(
             actionMargin.Left,
             actionMargin.Top,
-            AuthorityActionRightInset,
+            metrics.AvaloniaActionRightInset,
             actionMargin.Bottom);
         Grid.SetRow(actions, 2);
         root.Children.Add(actions);
@@ -164,8 +159,8 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
         var launchers = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = AuthorityLauncherSpacing,
-            Margin = new Thickness(AuthorityLauncherLeftInset, metrics.LauncherTopSpacing, 0, 0)
+            Spacing = metrics.AvaloniaLauncherSpacing,
+            Margin = new Thickness(metrics.AvaloniaLauncherLeftInset, metrics.LauncherTopSpacing, 0, 0)
         };
         foreach (var launcher in PageSetupDialogPlanner.Surface.LayoutLaunchers)
         {
