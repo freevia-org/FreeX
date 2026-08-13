@@ -346,7 +346,9 @@ public partial class GridView
         }
 
         var address = new CellAddress(ActiveSheetId, row, col);
-        var range = merge is { } merged && merged.Start == address
+        var range = merge is { } merged &&
+            merged.Start.Row == row &&
+            merged.Start.Col == col
             ? merged
             : new GridRange(address, address);
         if (!ViewportGeometryPlanner.TryGetVisibleRangeBounds(

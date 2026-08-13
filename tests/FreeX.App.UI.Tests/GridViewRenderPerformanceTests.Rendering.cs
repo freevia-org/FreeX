@@ -455,10 +455,12 @@ public sealed partial class GridViewRenderPerformanceTests
     public void RenderSparklines_AvoidsEmptyRenderAllocations()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.Sparklines.cs");
-        // Slice the RenderSparklines method body (entry point is last method in file).
-        // Ends at the closing brace of the class (last "}" in the file).
+        // Slice only the interactive entry point; the public print/PDF helper below deliberately
+        // owns a one-shot uncached clip geometry when no renderer cache is supplied.
         var renderSparklinesStart = source.IndexOf("private void RenderSparklines(DrawingContext dc)", StringComparison.Ordinal);
-        var renderSparklines = source[renderSparklinesStart..];
+        var renderSparklines = source[
+            renderSparklinesStart..
+            source.IndexOf("public static void DrawSparklineIntoCell", renderSparklinesStart, StringComparison.Ordinal)];
 
         // Early-out guards are still in place — no work done when there's nothing to render.
         renderSparklines.Should().Contain("Sparklines is not { Count: > 0 }");
@@ -840,14 +842,18 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_ReusesCellColorBrushesWithinRenderPass()
     {
-        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
+        var source = AppUiSourceTestSupport.ReadAppUiSources(
+            "GridView.Rendering.cs",
+            "GridView.Rendering.CellStyles.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
 
-        // R114-render-theme-color-reresolution: the fill color painted is now the theme-RESOLVED
-        // value (bg.ResolveFillColor(WorkbookTheme)), not the raw baked bg.FillColor field.
-        renderCells.Should().Contain("BrushForCellColor(resolvedFillColor, _brushCache)");
+        // The shared fill materialization plan resolves theme colors; WPF only materializes that
+        // portable plan through its bounded brush cache.
+        renderCells.Should().Contain("CellFillMaterializationPlanner.Plan(");
+        renderCells.Should().Contain("BuildCellBackgroundBrush(fillPlan, _brushCache)");
+        source.Should().Contain("BrushForCellColor(color, brushCache)");
         renderCells.Should().Contain("BrushForCellColor(fc, _brushCache)");
         renderCells.Should().NotContain("new SolidColorBrush");
     }

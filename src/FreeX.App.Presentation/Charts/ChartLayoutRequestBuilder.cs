@@ -125,18 +125,14 @@ public static class ChartLayoutRequestBuilder
         if (!ChartLayoutEngine.IsSupported(chart.Type))
             return null;
 
-        // R113-presentation-chart-embedded-fallback-1: a chart preserved through the named-range
-        // embedded-cache fallback (XlsxChartPartReader.*'s numCache/strCache readers, r110-r112)
-        // carries a synthetic 1x1 placeholder DataRange -- its real series/point data lives in
-        // chart.EmbeddedSeriesData instead. This is the SAME authoritative-when-present rule
-        // ChartTypeSupport.GetDataSeriesCount/GetDataPointCount already apply (r112); reuse it here
-        // rather than re-deriving from the placeholder DataRange, which either returns null outright
-        // (a header row makes the synthetic range's dataStartRow > endRow) or builds a meaningless
-        // single-point series from whatever real cell happens to sit at the placeholder's (1,1)
-        // address. Cell-accessor lookups can never recover the real data here anyway (the accessor
-        // has no way to address a different sheet than the one it was built for), so preferring the
-        // embedded cache whenever it is present is a strict improvement, never a regression.
-        if (chart.EmbeddedSeriesData is { Count: > 0 } embeddedSeries)
+        // Named-range and chartEx fallback models use a synthetic range whose shape cannot contain
+        // the embedded series; in that case the cache is authoritative and the accessor must not be
+        // touched. Cross-sheet direct references retain a compatible real range, so try their live
+        // cells first and fall back to the cache only when no numeric source values are available.
+        var embeddedSeries = chart.EmbeddedSeriesData;
+        var canPreferLiveRange = embeddedSeries is { Count: > 0 } &&
+            CanDataRangeRepresentEmbeddedSeries(chart, embeddedSeries);
+        if (embeddedSeries is { Count: > 0 } && !canPreferLiveRange)
             return BuildFromEmbeddedData(chart, embeddedSeries, plotArea, textMeasurer);
 
         var range = chart.DataRange;
@@ -224,6 +220,9 @@ public static class ChartLayoutRequestBuilder
             _ => ExtractSeries(chart, cellAccessor, startRow, dataStartRow, endRow, dataStartCol, endCol),
         };
 
+        if (embeddedSeries is { Count: > 0 } && !HasNumericSeriesData(series))
+            return BuildFromEmbeddedData(chart, embeddedSeries, plotArea, textMeasurer);
+
         return new ChartLayoutRequest
         {
             Chart = chart,
@@ -232,6 +231,42 @@ public static class ChartLayoutRequestBuilder
             PlotArea = plotArea,
             TextMeasurer = textMeasurer,
         };
+    }
+
+    private static bool CanDataRangeRepresentEmbeddedSeries(
+        ChartModel chart,
+        IReadOnlyList<ChartEmbeddedSeriesData> embeddedSeries)
+    {
+        var rowCount = (ulong)chart.DataRange.End.Row - chart.DataRange.Start.Row + 1;
+        var columnCount = (ulong)chart.DataRange.End.Col - chart.DataRange.Start.Col + 1;
+        if (chart.SeriesInRows)
+            (rowCount, columnCount) = (columnCount, rowCount);
+
+        var dataRowCount = rowCount - (chart.FirstRowIsHeader ? 1UL : 0UL);
+        var dataColumnCount = columnCount - (chart.FirstColIsCategories ? 1UL : 0UL);
+        if (dataRowCount == 0 || dataColumnCount == 0)
+            return false;
+
+        var requiredPointCount = 0;
+        foreach (var embedded in embeddedSeries)
+            requiredPointCount = Math.Max(requiredPointCount, embedded.Values.Count);
+
+        return dataRowCount >= (ulong)requiredPointCount &&
+            dataColumnCount >= (ulong)embeddedSeries.Count;
+    }
+
+    private static bool HasNumericSeriesData(IReadOnlyList<ChartSeriesData> series)
+    {
+        foreach (var item in series)
+        {
+            foreach (var value in item.Values)
+            {
+                if (value.HasValue)
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

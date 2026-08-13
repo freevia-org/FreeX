@@ -237,11 +237,14 @@ public sealed class GridViewPointerCursorTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
         var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
         var objectMoveBlock = source[
-            source.IndexOf("if (dragKind == ObjectDragKind.Move)", mouseUpStart, StringComparison.Ordinal)..
-            source.IndexOf("else", source.IndexOf("if (dragKind == ObjectDragKind.Move)", mouseUpStart, StringComparison.Ordinal), StringComparison.Ordinal)];
+            source.IndexOf("if (_objectDragKind != ObjectDragKind.None)", mouseUpStart, StringComparison.Ordinal)..
+            source.IndexOf("if (_marginDragEdge.HasValue)", mouseUpStart, StringComparison.Ordinal)];
 
         objectMoveBlock.Should().Contain("HitTestAnchorCell(new Point(currentRect.Left, currentRect.Top))");
         objectMoveBlock.Should().NotContain("HitTestAnchorCell(pos)");
+        objectMoveBlock.Should().Contain("GridObjectDragPlanner.PlanCommit(");
+        objectMoveBlock.Should().Contain("case ObjectDragCommitKind.Move:");
+        objectMoveBlock.Should().Contain("ObjectMoved?.Invoke(id, kind, plan.Anchor!.Value);");
     }
 
     [Fact]
@@ -262,11 +265,12 @@ public sealed class GridViewPointerCursorTests
         rotationMouseMoveBlock.Should().Contain("Cursor = ObjectDragCursor(_objectDragKind);");
         rotationMouseMoveBlock.Should().Contain("InvalidateVisual();");
         objectMouseUpBlock.Should().Contain("var rotationDegrees = _objectRotationPreviewDegrees;");
-        objectMouseUpBlock.Should().Contain("if (dragKind == ObjectDragKind.Rotate)");
-        objectMouseUpBlock.Should().Contain("ObjectRotated?.Invoke(id, kind, rotationDegrees);");
+        objectMouseUpBlock.Should().Contain("GridObjectDragPlanner.PlanCommit(");
+        objectMouseUpBlock.Should().Contain("case ObjectDragCommitKind.Rotate:");
+        objectMouseUpBlock.Should().Contain("ObjectRotated?.Invoke(id, kind, plan.RotationDegrees);");
         objectMouseUpBlock.IndexOf("var rotationDegrees = _objectRotationPreviewDegrees;", StringComparison.Ordinal)
             .Should().BeLessThan(objectMouseUpBlock.IndexOf("_objectRotationPreviewDegrees = 0;", StringComparison.Ordinal));
-        objectMouseUpBlock.IndexOf("ObjectRotated?.Invoke(id, kind, rotationDegrees);", StringComparison.Ordinal)
+        objectMouseUpBlock.IndexOf("ObjectRotated?.Invoke(id, kind, plan.RotationDegrees);", StringComparison.Ordinal)
             .Should().BeLessThan(objectMouseUpBlock.IndexOf("InvalidateVisual();", StringComparison.Ordinal));
     }
 
@@ -283,9 +287,9 @@ public sealed class GridViewPointerCursorTests
         eventsSource.Should().Contain("ChartBoundsChanged");
         objectMouseUpBlock.Should().Contain("if (kind == ObjectKind.Chart)");
         objectMouseUpBlock.Should().Contain("CommitChartObjectBoundsChange(id, startRect, currentRect);");
-        objectMouseUpBlock.Should().Contain("ObjectMoved?.Invoke(id, kind, newAnchor.Value);");
+        objectMouseUpBlock.Should().Contain("ObjectMoved?.Invoke(id, kind, plan.Anchor!.Value);");
         objectMouseUpBlock.IndexOf("if (kind == ObjectKind.Chart)", StringComparison.Ordinal)
-            .Should().BeLessThan(objectMouseUpBlock.IndexOf("ObjectMoved?.Invoke(id, kind, newAnchor.Value);", StringComparison.Ordinal));
+            .Should().BeLessThan(objectMouseUpBlock.IndexOf("ObjectMoved?.Invoke(id, kind, plan.Anchor!.Value);", StringComparison.Ordinal));
     }
 
     [Fact]

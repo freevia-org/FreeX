@@ -34,38 +34,51 @@ public sealed partial class GridViewRenderPerformanceTests
         var calculateLayout = source[
             source.IndexOf("public static SplitDividerLayout CalculateSplitDividerLayout", StringComparison.Ordinal)..
             source.IndexOf("public static SplitPaneScrollbarChrome CalculateSplitPaneScrollbarChrome", StringComparison.Ordinal)];
+        var sharedPlanner = WorkspaceFileLocator.ReadAllTextWithFailureMessage(
+            "Unable to locate workspace file",
+            "src",
+            "FreeX.App.Presentation",
+            "GridInteraction",
+            "SplitPanePointerPlanner.cs");
 
-        calculateLayout.Should().Contain("FindRowMetric(viewport.RowMetrics, splitRow)");
-        calculateLayout.Should().Contain("FindColMetric(viewport.ColMetrics, splitColumn)");
-        calculateLayout.Should().Contain("SumRowHeights(pinnedRows)");
-        calculateLayout.Should().Contain("SumColumnWidths(pinnedColumns)");
+        calculateLayout.Should().Contain("SplitPanePointerPlanner.CalculateDividerLayout(");
+        sharedPlanner.Should().Contain("FindRowMetric(viewport.RowMetrics, splitRow)");
+        sharedPlanner.Should().Contain("FindColumnMetric(viewport.ColMetrics, splitColumn)");
+        sharedPlanner.Should().Contain("SumRowHeights(pinnedRows)");
+        sharedPlanner.Should().Contain("SumColumnWidths(pinnedColumns)");
         calculateLayout.Should().NotContain("FirstOrDefault");
         calculateLayout.Should().NotContain(".Sum(");
-        source.Should().NotContain(".Sum(");
+        sharedPlanner.Should().NotContain("FirstOrDefault");
+        sharedPlanner.Should().NotContain(".Sum(");
     }
 
     [Fact]
     public void CalculateSplitDividerDragTarget_StopsSortedMetricScansAfterPointer()
     {
-        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
+        var source = WorkspaceFileLocator.ReadAllTextWithFailureMessage(
+            "Unable to locate workspace file",
+            "src",
+            "FreeX.App.Presentation",
+            "GridInteraction",
+            "SplitPanePointerPlanner.cs");
         var findSplitRow = source[
             source.IndexOf("private static uint? FindSplitRow", StringComparison.Ordinal)..
             source.IndexOf("private static uint? FindSplitColumn", StringComparison.Ordinal)];
         var findSplitColumn = source[
             source.IndexOf("private static uint? FindSplitColumn", StringComparison.Ordinal)..
-            source.IndexOf("private static uint IncrementWithinLimit", StringComparison.Ordinal)];
+            source.IndexOf("private static uint TranslateMetricIndexFromSplitAnchor", StringComparison.Ordinal)];
 
         findSplitRow.Should().Contain("foreach (var row in mainRows)");
         findSplitRow.Should().Contain("if (y < top)");
         findSplitRow.Should().Contain("break;");
         findSplitRow.IndexOf("if (y < top)", StringComparison.Ordinal)
-            .Should().BeLessThan(findSplitRow.IndexOf("if (y >= top && y <= top + row.Height)", StringComparison.Ordinal));
+            .Should().BeLessThan(findSplitRow.IndexOf("if (y <= top + row.Height", StringComparison.Ordinal));
 
         findSplitColumn.Should().Contain("foreach (var column in mainColumns)");
         findSplitColumn.Should().Contain("if (x < left)");
         findSplitColumn.Should().Contain("break;");
         findSplitColumn.IndexOf("if (x < left)", StringComparison.Ordinal)
-            .Should().BeLessThan(findSplitColumn.IndexOf("if (x >= left && x <= left + column.Width)", StringComparison.Ordinal));
+            .Should().BeLessThan(findSplitColumn.IndexOf("if (x <= left + column.Width", StringComparison.Ordinal));
     }
 
     [Fact]

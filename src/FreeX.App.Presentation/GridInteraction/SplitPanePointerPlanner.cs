@@ -433,17 +433,47 @@ public static class SplitPanePointerPlanner
         return (uint)Math.Min((ulong)limit, (ulong)splitAnchor + relativeOffset);
     }
 
-    private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row) =>
-        metrics.FirstOrDefault(metric => metric.Row == row);
+    private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row)
+    {
+        foreach (var metric in metrics)
+        {
+            if (metric.Row == row)
+                return metric;
+            if (metric.Row > row)
+                break;
+        }
 
-    private static ColMetric? FindColumnMetric(IReadOnlyList<ColMetric> metrics, uint column) =>
-        metrics.FirstOrDefault(metric => metric.Col == column);
+        return null;
+    }
 
-    private static double SumRowHeights(IReadOnlyList<RowMetric> rows) =>
-        rows.Sum(row => row.Height);
+    private static ColMetric? FindColumnMetric(IReadOnlyList<ColMetric> metrics, uint column)
+    {
+        foreach (var metric in metrics)
+        {
+            if (metric.Col == column)
+                return metric;
+            if (metric.Col > column)
+                break;
+        }
 
-    private static double SumColumnWidths(IReadOnlyList<ColMetric> columns) =>
-        columns.Sum(column => column.Width);
+        return null;
+    }
+
+    private static double SumRowHeights(IReadOnlyList<RowMetric> rows)
+    {
+        var total = 0.0;
+        foreach (var row in rows)
+            total += row.Height;
+        return total;
+    }
+
+    private static double SumColumnWidths(IReadOnlyList<ColMetric> columns)
+    {
+        var total = 0.0;
+        foreach (var column in columns)
+            total += column.Width;
+        return total;
+    }
 
     private static bool IsInside(GridRect rect, GridPoint point) =>
         point.X >= rect.Left && point.X <= rect.Right && point.Y >= rect.Top && point.Y <= rect.Bottom;

@@ -30,14 +30,16 @@ public sealed partial class GridViewRenderPerformanceTests
             selectionSource.IndexOf("private void RenderSelectionRange(", StringComparison.Ordinal)..
             selectionSource.IndexOf("private static void DrawSelectionHandle", StringComparison.Ordinal)];
         renderSelectionRange.Should().Contain("CalculateSelectionRangeLayout(Viewport, range, rowHeaderWidth, columnHeaderHeight)");
-        renderSelectionRange.Should().Contain("IsSingleCellRange(range)");
-        renderSelectionRange.Should().Contain("CalculateVisibleSingleCellSelectionLayout(viewport, range, rowHeaderWidth, columnHeaderHeight)");
-        renderSelectionRange.Should().Contain("GetRenderMetricLookups(viewport)");
-        renderSelectionRange.Should().Contain("lookups.Rows.TryGetValue(range.Start.Row");
-        renderSelectionRange.Should().Contain("lookups.Columns.TryGetValue(range.Start.Col");
-        renderSelectionRange.IndexOf("IsSingleCellRange(range)", StringComparison.Ordinal)
+
+        var singleCellLayout = selectionSource[
+            selectionSource.IndexOf("private SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateSelectionRangeLayout", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private static bool IsSingleCellRange", StringComparison.Ordinal)];
+        singleCellLayout.Should().Contain("IsSingleCellRange(range)");
+        singleCellLayout.Should().Contain("CalculateVisibleSingleCellSelectionLayout(viewport, range, rowHeaderWidth, columnHeaderHeight)");
+        singleCellLayout.Should().Contain("ViewportGeometryPlanner.TryGetCellBounds(");
+        singleCellLayout.IndexOf("IsSingleCellRange(range)", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(renderSelectionRange.IndexOf("CalculateVisibleSelectionLayout", StringComparison.Ordinal));
+            .BeLessThan(singleCellLayout.IndexOf("CalculateVisibleSelectionLayout", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -77,7 +79,7 @@ public sealed partial class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private const int MarchingAntsPhaseCount = 16;");
         gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsBlackPens = CreateMarchingAntsPens(Brushes.Black, 2.5);");
         gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsCopyOverlayPens = CreateMarchingAntsPens(Brushes.White, 1.5);");
-        gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsCutOverlayPens = CreateMarchingAntsPens(MakeBrush(245, 124, 0), 1.5);");
+        gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsCutOverlayPens = MarchingAntsCopyOverlayPens;");
         gridViewSource.Should().Contain("private static Pen[] CreateMarchingAntsPens");
         gridViewSource.Should().Contain("private static int GetMarchingAntsPhase(double offset)");
         renderMarchingAnts.Should().Contain("var phase = GetMarchingAntsPhase(_marchOffset);");
