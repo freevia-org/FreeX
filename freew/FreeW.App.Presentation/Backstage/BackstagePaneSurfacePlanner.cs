@@ -50,7 +50,10 @@ public static class BackstagePaneSurfacePlanner
 
     public static BackstageOpenPaneVisualMetrics OpenPaneVisualMetrics { get; } =
         new(
+            PaneMaxWidth: 720,
+            HeadingFontSize: 26,
             HeadingBottomMargin: new(0, 0, 0, 18),
+            DescriptionFontSize: 12,
             DescriptionBottomMargin: new(0, 0, 0, 16),
             SearchWidth: 520,
             SearchMinWidth: 360,
@@ -60,10 +63,19 @@ public static class BackstagePaneSurfacePlanner
             TabsWidth: 640,
             TabsMinHeight: 63,
             TabsMargin: new(0, 0, 0, 14),
+            SectionHeaderFontSize: 15,
+            SectionHeaderMargin: new(0, 16, 0, 6),
             ActionFontSize: 13,
-            DescriptionFontSize: 11,
+            ActionDescriptionFontSize: 11,
             ActionRowMargin: new(0, 0, 0, 10),
-            DescriptionMargin: new(0, 2, 0, 0));
+            DescriptionMargin: new(0, 2, 0, 0),
+            EmptyStateMargin: new(0, 8, 0, 12),
+            AvaloniaTabContentWidth: 638,
+            AvaloniaTabControlHeight: 24,
+            AvaloniaTabHeight: 22,
+            AvaloniaTabFontSize: 12,
+            AvaloniaTabContentPadding: new(4, 3, 0, 0),
+            AvaloniaActionHeight: 17);
 
     private const string OpenSearchAutomationName = "Search recent documents";
     private const string OpenSearchAutomationId = "OpenSearchBox";
@@ -429,7 +441,10 @@ public sealed record BackstageOpenPaneTabSurface(
     string RecoveryHeading);
 
 public readonly record struct BackstageOpenPaneVisualMetrics(
+    double PaneMaxWidth,
+    double HeadingFontSize,
     BackstageThickness HeadingBottomMargin,
+    double DescriptionFontSize,
     BackstageThickness DescriptionBottomMargin,
     double SearchWidth,
     double SearchMinWidth,
@@ -439,10 +454,19 @@ public readonly record struct BackstageOpenPaneVisualMetrics(
     double TabsWidth,
     double TabsMinHeight,
     BackstageThickness TabsMargin,
+    double SectionHeaderFontSize,
+    BackstageThickness SectionHeaderMargin,
     double ActionFontSize,
-    double DescriptionFontSize,
+    double ActionDescriptionFontSize,
     BackstageThickness ActionRowMargin,
-    BackstageThickness DescriptionMargin);
+    BackstageThickness DescriptionMargin,
+    BackstageThickness EmptyStateMargin,
+    double AvaloniaTabContentWidth,
+    double AvaloniaTabControlHeight,
+    double AvaloniaTabHeight,
+    double AvaloniaTabFontSize,
+    BackstageThickness AvaloniaTabContentPadding,
+    double AvaloniaActionHeight);
 
 public readonly record struct BackstageHomePaneVisualMetrics(
     double PaneMaxWidth,

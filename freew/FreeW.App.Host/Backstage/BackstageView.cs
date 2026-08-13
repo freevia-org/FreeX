@@ -182,14 +182,20 @@ internal sealed partial class BackstageView : UserControl
     {
         var surface = BuildOpenSurface(filter: null);
         var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
-        var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel
+        {
+            MaxWidth = metrics.PaneMaxWidth,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
         var heading = Kit.HeadingText(surface.Title);
+        heading.FontSize = metrics.HeadingFontSize;
         heading.Margin = ToThickness(metrics.HeadingBottomMargin);
         panel.Children.Add(heading);
         panel.Children.Add(new TextBlock
         {
             Text = surface.Description,
             Foreground = Kit.Muted,
+            FontSize = metrics.DescriptionFontSize,
             TextWrapping = TextWrapping.Wrap,
             Margin = ToThickness(metrics.DescriptionBottomMargin)
         });
@@ -484,14 +490,19 @@ internal sealed partial class BackstageView : UserControl
 
     private void PopulateOpenGroup(Panel panel, string heading, IReadOnlyList<BackstageActionRow> rows)
     {
+        var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
         panel.Children.Clear();
-        panel.Children.Add(Kit.SubHeading(heading));
+        var sectionHeading = Kit.SubHeading(heading);
+        sectionHeading.FontSize = metrics.SectionHeaderFontSize;
+        sectionHeading.Margin = ToThickness(metrics.SectionHeaderMargin);
+        panel.Children.Add(sectionHeading);
         foreach (var row in rows)
             panel.Children.Add(OpenActionRow(row));
     }
 
     private void PopulateOpenRows(Panel panel, IReadOnlyList<BackstageActionRow> rows, string emptyText)
     {
+        var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
         panel.Children.Clear();
         if (rows.Count == 0)
         {
@@ -500,7 +511,7 @@ internal sealed partial class BackstageView : UserControl
                 Text = emptyText,
                 Foreground = Kit.Muted,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 8, 0, 12)
+                Margin = ToThickness(metrics.EmptyStateMargin)
             });
             return;
         }
@@ -522,7 +533,7 @@ internal sealed partial class BackstageView : UserControl
         {
             Text = action.Description,
             Foreground = Kit.Muted,
-            FontSize = metrics.DescriptionFontSize,
+            FontSize = metrics.ActionDescriptionFontSize,
             TextWrapping = TextWrapping.Wrap,
             Margin = ToThickness(metrics.DescriptionMargin)
         });
