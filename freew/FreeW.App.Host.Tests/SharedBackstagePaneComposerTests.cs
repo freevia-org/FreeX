@@ -199,7 +199,7 @@ public sealed class SharedBackstagePaneComposerTests
         buttons.Select(button => button.Content).Should().Equal(
             "Create PDF or XPS",
             "Export to XPS");
-        buttons[0].FontSize.Should().Be(surface.VisualMetrics.ActionFontSize);
+        buttons[0].FontSize.Should().Be(BackstagePaneSurfacePlanner.ComposerProfile.Metrics.ActionFontSize);
         buttons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         buttons[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         invoked.Should().Equal("pdf", "xps");

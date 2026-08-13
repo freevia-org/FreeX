@@ -49,7 +49,7 @@ internal sealed partial class OutlineView
     internal void SetOutlineLevel(int level) => _controller.SetOutlineLevel(level);
     internal int CurrentOutlineLevel => _controller.CurrentOutlineLevel;
     internal string? RowDisplayTextForTests(int blockIndex) =>
-        _list.Items.OfType<OutlineRowItem>()
+        _list.Items.OfType<OutlineDisplayRow>()
             .FirstOrDefault(item => item.Row.BlockIndex == blockIndex)
             ?.ToString();
 

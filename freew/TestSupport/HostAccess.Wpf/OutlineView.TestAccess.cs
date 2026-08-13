@@ -16,7 +16,7 @@ internal sealed partial class OutlineView
     internal void ExecuteForTests(OutlineCommand command) => _controller.Execute(command);
 
     internal string? RowDisplayTextForTests(int blockIndex) =>
-        _list.Items.OfType<OutlineRowItem>()
+        _list.Items.OfType<OutlineDisplayRow>()
             .FirstOrDefault(item => item.Row.BlockIndex == blockIndex)
             ?.ToString();
 }
