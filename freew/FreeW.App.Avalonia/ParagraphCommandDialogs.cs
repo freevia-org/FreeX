@@ -630,6 +630,11 @@ public sealed partial class BordersAndShadingDialog : FreeWDialogWindow
 
 public sealed class SortDialog : FreeWDialogWindow
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ActionSpacing = SortDialogVisualMetrics.ActionSpacing,
+        };
     private readonly SortDialogSession _session;
     private readonly ComboBox _type1;
     private readonly ComboBox _type2;
@@ -640,9 +645,33 @@ public sealed class SortDialog : FreeWDialogWindow
     private readonly RadioButton _desc1 = DescRadio("sort1");
     private readonly RadioButton _desc2 = DescRadio("sort2");
     private readonly RadioButton _desc3 = DescRadio("sort3");
-    private readonly CheckBox _useKey2 = new() { Content = SortDialogPlanner.ThenByLabel, Margin = new Thickness(0, 8, 0, 4) };
-    private readonly CheckBox _useKey3 = new() { Content = SortDialogPlanner.ThenBySecondLabel, Margin = new Thickness(0, 8, 0, 4) };
-    private readonly CheckBox _caseSensitive = new() { Content = SortDialogPlanner.CaseSensitiveLabel, Margin = new Thickness(0, 10, 0, 4) };
+    private readonly CheckBox _useKey2 = new()
+    {
+        Content = SortDialogPlanner.ThenByLabel,
+        Margin = new Thickness(
+            0,
+            SortDialogVisualMetrics.OptionalKeyTopMargin,
+            0,
+            SortDialogVisualMetrics.OptionalKeyBottomMargin),
+    };
+    private readonly CheckBox _useKey3 = new()
+    {
+        Content = SortDialogPlanner.ThenBySecondLabel,
+        Margin = new Thickness(
+            0,
+            SortDialogVisualMetrics.OptionalKeyTopMargin,
+            0,
+            SortDialogVisualMetrics.OptionalKeyBottomMargin),
+    };
+    private readonly CheckBox _caseSensitive = new()
+    {
+        Content = SortDialogPlanner.CaseSensitiveLabel,
+        Margin = new Thickness(
+            0,
+            SortDialogVisualMetrics.CaseSensitiveTopMargin,
+            0,
+            SortDialogVisualMetrics.CaseSensitiveBottomMargin),
+    };
     private readonly CheckBox _hasHeaderRow = new() { Content = SortDialogPlanner.HeaderRowLabel };
 
     public SortDialog(bool forTable)
@@ -652,7 +681,7 @@ public sealed class SortDialog : FreeWDialogWindow
         _type2 = Combo(_session.TypeChoices);
         _type3 = Combo(_session.TypeChoices);
         Title = SortDialogPlanner.Title;
-        Width = 360;
+        Width = SortDialogVisualMetrics.WindowWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -661,13 +690,18 @@ public sealed class SortDialog : FreeWDialogWindow
         AutomationProperties.SetAutomationId(_type1, SortDialogPlanner.Key1TypeAutomationId);
         AutomationProperties.SetAutomationId(_type2, SortDialogPlanner.Key2TypeAutomationId);
         AutomationProperties.SetAutomationId(_type3, SortDialogPlanner.Key3TypeAutomationId);
+        ApplyControlChrome();
 
         ApplyEnabledState();
         _useKey2.IsCheckedChanged += (_, _) => ApplyEnabledState();
         _useKey3.IsCheckedChanged += (_, _) => ApplyEnabledState();
 
-        var outer = new StackPanel { Margin = new Thickness(16) };
-        outer.Children.Add(new TextBlock { Text = _session.Prompt, Margin = new Thickness(0, 0, 0, 8) });
+        var outer = new StackPanel { Margin = new Thickness(SortDialogVisualMetrics.RootInset) };
+        outer.Children.Add(new TextBlock
+        {
+            Text = _session.Prompt,
+            Margin = new Thickness(0, 0, 0, SortDialogVisualMetrics.PromptBottomMargin),
+        });
         outer.Children.Add(KeySection(SortDialogPlanner.SortByLabel, _type1, _asc1, _desc1));
         outer.Children.Add(_useKey2);
         outer.Children.Add(KeySection(null, _type2, _asc2, _desc2));
@@ -677,12 +711,21 @@ public sealed class SortDialog : FreeWDialogWindow
         outer.Children.Add(_hasHeaderRow);
 
         var actionPlans = SortDialogPlanner.ActionButtons;
-        var ok = Button(actionPlans[0].Label, (_, _) => Accept());
-        ok.IsDefault = actionPlans[0].IsDefault;
-        var cancel = Button(actionPlans[1].Label, (_, _) => Close(null));
-        cancel.IsCancel = actionPlans[1].IsCancel;
+        var ok = AvaloniaCompactDialogChrome.CreateActionButton(
+            actionPlans[0].Label,
+            Accept,
+            SortDialogVisualMetrics.ActionButtonWidth,
+            isDefault: actionPlans[0].IsDefault,
+            style: DialogChromeStyle);
+        var cancel = AvaloniaCompactDialogChrome.CreateActionButton(
+            actionPlans[1].Label,
+            () => Close(null),
+            SortDialogVisualMetrics.ActionButtonWidth,
+            isCancel: actionPlans[1].IsCancel,
+            style: DialogChromeStyle);
         outer.Children.Add(ButtonRow(ok, cancel));
         Content = outer;
+        Opened += (_, _) => _type1.Focus();
     }
 
     public static void ApplyResult(DocumentView editor, SortDialogResult result)
@@ -725,9 +768,23 @@ public sealed class SortDialog : FreeWDialogWindow
     {
         var panel = new StackPanel();
         if (!string.IsNullOrWhiteSpace(heading))
-            panel.Children.Add(new TextBlock { Text = heading, FontWeight = FontWeight.SemiBold });
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
-        row.Children.Add(new TextBlock { Text = SortDialogPlanner.TypeLabel, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+            panel.Children.Add(new TextBlock
+            {
+                Text = heading,
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, 0, 0, SortDialogVisualMetrics.PrimaryHeadingBottomMargin),
+            });
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, SortDialogVisualMetrics.KeyRowBottomMargin),
+        };
+        row.Children.Add(new TextBlock
+        {
+            Text = SortDialogPlanner.TypeLabel,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, SortDialogVisualMetrics.TypeLabelTrailingMargin, 0),
+        });
         row.Children.Add(type);
         panel.Children.Add(row);
         panel.Children.Add(asc);
@@ -735,26 +792,40 @@ public sealed class SortDialog : FreeWDialogWindow
         return panel;
     }
 
-    private static ComboBox Combo(IReadOnlyList<SortDialogChoice<SortKind>> choices) => new()
+    private static ComboBox Combo(IReadOnlyList<SortDialogChoice<SortKind>> choices)
     {
-        ItemsSource = choices.Select(choice => choice.Label).ToArray(),
-        SelectedIndex = 0,
-        MinWidth = 120
-    };
+        var combo = new ComboBox
+        {
+            ItemsSource = choices.Select(choice => choice.Label).ToArray(),
+            SelectedIndex = 0,
+            MinWidth = SortDialogVisualMetrics.TypeMinimumWidth,
+            Margin = new Thickness(0, 0, 0, SortDialogVisualMetrics.TypeControlBottomMargin),
+        };
+        AvaloniaCompactDialogChrome.ApplyComboBox(combo, DialogChromeStyle);
+        return combo;
+    }
 
     private static RadioButton AscRadio(string groupName) => new()
     {
         Content = SortDialogPlanner.AscendingLabel,
         GroupName = groupName,
         IsChecked = true,
-        Margin = new Thickness(4, 0, 0, 2)
+        Margin = new Thickness(
+            SortDialogVisualMetrics.RadioLeftMargin,
+            0,
+            SortDialogVisualMetrics.AscendingRightMargin,
+            SortDialogVisualMetrics.RadioBottomMargin)
     };
 
     private static RadioButton DescRadio(string groupName) => new()
     {
         Content = SortDialogPlanner.DescendingLabel,
         GroupName = groupName,
-        Margin = new Thickness(4, 0, 0, 2)
+        Margin = new Thickness(
+            SortDialogVisualMetrics.RadioLeftMargin,
+            0,
+            0,
+            SortDialogVisualMetrics.RadioBottomMargin)
     };
 
     private static void SetKeyEnabled(ComboBox type, RadioButton asc, RadioButton desc, bool enabled)
@@ -771,13 +842,17 @@ public sealed class SortDialog : FreeWDialogWindow
         SetKeyEnabled(_type3, _asc3, _desc3, state.Key3Enabled);
     }
 
-    private static StackPanel ButtonRow(params Button[] buttons) =>
-        AvaloniaCompactDialogChrome.CreateActionRow(buttons, new Thickness(0, 12, 0, 0));
-
-    private static Button Button(string text, EventHandler<RoutedEventArgs> click)
+    private void ApplyControlChrome()
     {
-        var button = new Button { Content = text, MinWidth = 76 };
-        button.Click += click;
-        return button;
+        foreach (var radio in new[] { _asc1, _asc2, _asc3, _desc1, _desc2, _desc3 })
+            AvaloniaCompactDialogChrome.ApplyRadioButton(radio, DialogChromeStyle);
+        foreach (var checkBox in new[] { _useKey2, _useKey3, _caseSensitive, _hasHeaderRow })
+            AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
     }
+
+    private static StackPanel ButtonRow(params Button[] buttons) =>
+        AvaloniaCompactDialogChrome.CreateActionRow(
+            buttons,
+            new Thickness(0, SortDialogVisualMetrics.ActionRowTopMargin, 0, 0),
+            DialogChromeStyle);
 }

@@ -32,7 +32,7 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _session = new SortDialogSession(forTable);
         Owner = owner;
         Title = SortDialogPlanner.Title;
-        Width = 380;
+        Width = SortDialogVisualMetrics.WindowWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -43,20 +43,44 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _asc1  = AscRadio();
         var desc1 = DescRadio();
 
-        _useKey2 = new CheckBox { Content = SortDialogPlanner.ThenByLabel, Margin = new Thickness(0, 8, 0, 4) };
+        _useKey2 = new CheckBox
+        {
+            Content = SortDialogPlanner.ThenByLabel,
+            Margin = new Thickness(
+                0,
+                SortDialogVisualMetrics.OptionalKeyTopMargin,
+                0,
+                SortDialogVisualMetrics.OptionalKeyBottomMargin)
+        };
         _type2 = TypeCombo(_session.TypeChoices);
         _asc2  = AscRadio();
         var desc2 = DescRadio();
         System.Windows.Automation.AutomationProperties.SetAutomationId(_type2, SortDialogPlanner.Key2TypeAutomationId);
 
-        _useKey3 = new CheckBox { Content = SortDialogPlanner.ThenBySecondLabel, Margin = new Thickness(0, 8, 0, 4) };
+        _useKey3 = new CheckBox
+        {
+            Content = SortDialogPlanner.ThenBySecondLabel,
+            Margin = new Thickness(
+                0,
+                SortDialogVisualMetrics.OptionalKeyTopMargin,
+                0,
+                SortDialogVisualMetrics.OptionalKeyBottomMargin)
+        };
         _type3 = TypeCombo(_session.TypeChoices);
         _asc3  = AscRadio();
         var desc3 = DescRadio();
         System.Windows.Automation.AutomationProperties.SetAutomationId(_type1, SortDialogPlanner.Key1TypeAutomationId);
         System.Windows.Automation.AutomationProperties.SetAutomationId(_type3, SortDialogPlanner.Key3TypeAutomationId);
 
-        _caseSensitive = new CheckBox { Content = SortDialogPlanner.CaseSensitiveLabel, Margin = new Thickness(0, 10, 0, 4) };
+        _caseSensitive = new CheckBox
+        {
+            Content = SortDialogPlanner.CaseSensitiveLabel,
+            Margin = new Thickness(
+                0,
+                SortDialogVisualMetrics.CaseSensitiveTopMargin,
+                0,
+                SortDialogVisualMetrics.CaseSensitiveBottomMargin)
+        };
         _hasHeaderRow  = new CheckBox { Content = SortDialogPlanner.HeaderRowLabel, Margin = new Thickness(0, 0, 0, 0) };
 
         void ApplyEnabledState()
@@ -71,11 +95,20 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _useKey3.Checked += (_, _) => ApplyEnabledState();
         _useKey3.Unchecked += (_, _) => ApplyEnabledState();
 
-        var panel = new StackPanel { Margin = new Thickness(14) };
-        panel.Children.Add(new TextBlock { Text = _session.Prompt, Margin = new Thickness(0, 0, 0, 10) });
+        var panel = new StackPanel { Margin = new Thickness(SortDialogVisualMetrics.RootInset) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = _session.Prompt,
+            Margin = new Thickness(0, 0, 0, SortDialogVisualMetrics.PromptBottomMargin)
+        });
 
         // Key 1: Sort by
-        panel.Children.Add(new TextBlock { Text = SortDialogPlanner.SortByLabel, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        panel.Children.Add(new TextBlock
+        {
+            Text = SortDialogPlanner.SortByLabel,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, SortDialogVisualMetrics.PrimaryHeadingBottomMargin)
+        });
         panel.Children.Add(KeyRow(_type1));
         panel.Children.Add(_asc1);
         panel.Children.Add(desc1);
@@ -97,7 +130,10 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         // Reuse the shared OK/Cancel button row (accelerators, automation names, shell strings; Cancel is
         // IsCancel so Esc/Cancel closes). Single source of truth shared with FreeX's dialogs.
-        panel.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 14, 0, 0)));
+        panel.Children.Add(DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: SortDialogVisualMetrics.ActionButtonWidth,
+            rowMargin: new Thickness(0, SortDialogVisualMetrics.ActionRowTopMargin, 0, 0)));
 
         Content = panel;
         Loaded += (_, _) => _type1.Focus();
@@ -105,7 +141,11 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private static ComboBox TypeCombo<TValue>(IReadOnlyList<SortDialogChoice<TValue>> choices)
     {
-        var box = new ComboBox { MinWidth = 120, Margin = new Thickness(0, 0, 0, 4) };
+        var box = new ComboBox
+        {
+            MinWidth = SortDialogVisualMetrics.TypeMinimumWidth,
+            Margin = new Thickness(0, 0, 0, SortDialogVisualMetrics.TypeControlBottomMargin)
+        };
         foreach (var choice in choices)
             box.Items.Add(choice.Label);
         box.SelectedIndex = 0;
@@ -113,19 +153,40 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     private static RadioButton AscRadio() =>
-        new() { Content = SortDialogPlanner.AscendingLabel, IsChecked = true, Margin = new Thickness(4, 0, 8, 4) };
+        new()
+        {
+            Content = SortDialogPlanner.AscendingLabel,
+            IsChecked = true,
+            Margin = new Thickness(
+                SortDialogVisualMetrics.RadioLeftMargin,
+                0,
+                SortDialogVisualMetrics.AscendingRightMargin,
+                SortDialogVisualMetrics.RadioBottomMargin)
+        };
 
     private static RadioButton DescRadio() =>
-        new() { Content = SortDialogPlanner.DescendingLabel, Margin = new Thickness(4, 0, 0, 4) };
+        new()
+        {
+            Content = SortDialogPlanner.DescendingLabel,
+            Margin = new Thickness(
+                SortDialogVisualMetrics.RadioLeftMargin,
+                0,
+                0,
+                SortDialogVisualMetrics.RadioBottomMargin)
+        };
 
     private static StackPanel KeyRow(ComboBox typeBox)
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, SortDialogVisualMetrics.KeyRowBottomMargin)
+        };
         row.Children.Add(new TextBlock
         {
             Text = SortDialogPlanner.TypeLabel,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 0)
+            Margin = new Thickness(0, 0, SortDialogVisualMetrics.TypeLabelTrailingMargin, 0)
         });
         row.Children.Add(typeBox);
         return row;

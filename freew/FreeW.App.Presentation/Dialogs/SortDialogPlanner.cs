@@ -32,6 +32,32 @@ public sealed record SortDialogInput(
 
 public sealed record SortDialogEnabledState(bool Key2Enabled, bool Key3Enabled);
 
+/// <summary>
+/// WPF-authority geometry for the paired Sort dialogs. Renderers translate these neutral values
+/// into native controls while the shared session continues to own state and acceptance behavior.
+/// </summary>
+public static class SortDialogVisualMetrics
+{
+    public const double WindowWidth = 380;
+    public const double RootInset = 14;
+    public const double PromptBottomMargin = 10;
+    public const double PrimaryHeadingBottomMargin = 4;
+    public const double OptionalKeyTopMargin = 8;
+    public const double OptionalKeyBottomMargin = 4;
+    public const double TypeMinimumWidth = 120;
+    public const double TypeControlBottomMargin = 4;
+    public const double KeyRowBottomMargin = 4;
+    public const double TypeLabelTrailingMargin = 8;
+    public const double RadioLeftMargin = 4;
+    public const double AscendingRightMargin = 8;
+    public const double RadioBottomMargin = 4;
+    public const double CaseSensitiveTopMargin = 10;
+    public const double CaseSensitiveBottomMargin = 4;
+    public const double ActionButtonWidth = 72;
+    public const double ActionRowTopMargin = 14;
+    public const double ActionSpacing = 8;
+}
+
 public sealed class SortDialogSession
 {
     public SortDialogSession(bool forTable)

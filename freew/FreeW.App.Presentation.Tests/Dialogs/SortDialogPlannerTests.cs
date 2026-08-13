@@ -6,6 +6,73 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class SortDialogPlannerTests
 {
     [Fact]
+    public void VisualMetrics_PreserveSharedWpfAuthorityGeometry()
+    {
+        SortDialogVisualMetrics.WindowWidth.Should().Be(380);
+        SortDialogVisualMetrics.RootInset.Should().Be(14);
+        SortDialogVisualMetrics.PromptBottomMargin.Should().Be(10);
+        SortDialogVisualMetrics.PrimaryHeadingBottomMargin.Should().Be(4);
+        SortDialogVisualMetrics.OptionalKeyTopMargin.Should().Be(8);
+        SortDialogVisualMetrics.OptionalKeyBottomMargin.Should().Be(4);
+        SortDialogVisualMetrics.TypeMinimumWidth.Should().Be(120);
+        SortDialogVisualMetrics.TypeControlBottomMargin.Should().Be(4);
+        SortDialogVisualMetrics.KeyRowBottomMargin.Should().Be(4);
+        SortDialogVisualMetrics.TypeLabelTrailingMargin.Should().Be(8);
+        SortDialogVisualMetrics.RadioLeftMargin.Should().Be(4);
+        SortDialogVisualMetrics.AscendingRightMargin.Should().Be(8);
+        SortDialogVisualMetrics.RadioBottomMargin.Should().Be(4);
+        SortDialogVisualMetrics.CaseSensitiveTopMargin.Should().Be(10);
+        SortDialogVisualMetrics.CaseSensitiveBottomMargin.Should().Be(4);
+        SortDialogVisualMetrics.ActionButtonWidth.Should().Be(72);
+        SortDialogVisualMetrics.ActionRowTopMargin.Should().Be(14);
+        SortDialogVisualMetrics.ActionSpacing.Should().Be(8);
+    }
+
+    [Fact]
+    public void Renderers_ConsumeSharedVisualMetricsAndAvaloniaUsesCompactChromeAndInitialFocus()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "SortDialog.cs"));
+        var avaloniaSource = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "ParagraphCommandDialogs.cs"));
+        var avaloniaStart = avaloniaSource.IndexOf("public sealed class SortDialog", StringComparison.Ordinal);
+        avaloniaStart.Should().BeGreaterThanOrEqualTo(0);
+        var avalonia = avaloniaSource[avaloniaStart..];
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("SortDialogVisualMetrics.WindowWidth");
+            source.Should().Contain("SortDialogVisualMetrics.RootInset");
+            source.Should().Contain("SortDialogVisualMetrics.PromptBottomMargin");
+            source.Should().Contain("SortDialogVisualMetrics.PrimaryHeadingBottomMargin");
+            source.Should().Contain("SortDialogVisualMetrics.OptionalKeyTopMargin");
+            source.Should().Contain("SortDialogVisualMetrics.TypeMinimumWidth");
+            source.Should().Contain("SortDialogVisualMetrics.TypeControlBottomMargin");
+            source.Should().Contain("SortDialogVisualMetrics.KeyRowBottomMargin");
+            source.Should().Contain("SortDialogVisualMetrics.TypeLabelTrailingMargin");
+            source.Should().Contain("SortDialogVisualMetrics.RadioLeftMargin");
+            source.Should().Contain("SortDialogVisualMetrics.AscendingRightMargin");
+            source.Should().Contain("SortDialogVisualMetrics.RadioBottomMargin");
+            source.Should().Contain("SortDialogVisualMetrics.CaseSensitiveTopMargin");
+            source.Should().Contain("SortDialogVisualMetrics.ActionButtonWidth");
+            source.Should().Contain("SortDialogVisualMetrics.ActionRowTopMargin");
+            source.Should().NotContain("Width = 360");
+            source.Should().NotContain("new Thickness(16)");
+            source.Should().NotContain("MinWidth = 120");
+            source.Should().NotContain("MinWidth = 76");
+        }
+
+        avalonia.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(combo, DialogChromeStyle)");
+        avalonia.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(radio, DialogChromeStyle)");
+        avalonia.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle)");
+        avalonia.Should().Contain("AvaloniaCompactDialogChrome.CreateActionButton(");
+        avalonia.Should().Contain("Opened += (_, _) => _type1.Focus()");
+    }
+
+    [Fact]
     public void TypeChoices_ExposeWordSortTypesInDisplayOrder()
     {
         SortDialogPlanner.TypeChoices.Select(choice => choice.Label)
