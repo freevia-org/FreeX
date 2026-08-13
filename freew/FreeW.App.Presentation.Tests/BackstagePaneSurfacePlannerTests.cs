@@ -278,7 +278,7 @@ public sealed class BackstagePaneSurfacePlannerTests
     }
 
     [Fact]
-    public void GenericActionPane_Exposes_shared_visual_metrics_and_planner_order()
+    public void GenericActionPane_Uses_the_portable_composer_profile_and_planner_order()
     {
         var surface = BackstagePaneSurfacePlanner.BuildSharePane(
             currentPath: null,
@@ -288,7 +288,8 @@ public sealed class BackstagePaneSurfacePlannerTests
             saveCopy: static () => { },
             exportPdf: static () => { });
 
-        surface.VisualMetrics.Should().Be(BackstagePaneSurfacePlanner.ActionPaneVisualMetrics);
+        BackstagePaneSurfacePlanner.ComposerProfile.Metrics.Should().BeSameAs(BackstageVisualContract.Pane);
+        BackstagePaneSurfacePlanner.ComposerProfile.ActionPaneMaxWidth.Should().Be(720);
         surface.Groups.SelectMany(group => group.Actions).Select(action => action.Label)
             .Should().Equal("Save As", "Save a Copy", "Create PDF/XPS");
         surface.Groups.SelectMany(group => group.Actions).Select(action => action.Description)
@@ -536,21 +537,23 @@ public sealed class BackstagePaneSurfacePlannerTests
     }
 
     [Fact]
-    public void ExportPaneVisualMetrics_encode_the_measured_WPF_authority_geometry()
+    public void ExportPaneVisualMetrics_use_the_portable_WPF_authority_contract()
     {
-        var metrics = BackstageExportPanePlanner.VisualMetrics;
+        var profile = BackstagePaneSurfacePlanner.ComposerProfile;
+        var metrics = profile.Metrics;
 
-        metrics.PaneMaxWidth.Should().Be(720);
+        metrics.Should().BeSameAs(BackstageVisualContract.Pane);
+        profile.ActionPaneMaxWidth.Should().Be(720);
         metrics.HeadingFontSize.Should().Be(26);
-        metrics.HeadingBottomMargin.Should().Be(new BackstageThickness(0, 0, 0, 18));
+        metrics.HeadingMargin.Should().Be(new BackstageVisualThickness(0, 0, 0, 18));
         metrics.DescriptionFontSize.Should().Be(12);
-        metrics.DescriptionBottomMargin.Should().Be(new BackstageThickness(0, 0, 0, 16));
+        profile.DescriptionMargin.Should().Be(new BackstageVisualThickness(0, 0, 0, 16));
         metrics.SectionHeaderFontSize.Should().Be(15);
-        metrics.SectionHeaderMargin.Should().Be(new BackstageThickness(0, 16, 0, 6));
+        metrics.SectionHeaderMargin.Should().Be(new BackstageVisualThickness(0, 16, 0, 6));
         metrics.ActionFontSize.Should().Be(14);
-        metrics.DescriptionTextFontSize.Should().Be(11);
-        metrics.ActionRowMargin.Should().Be(new BackstageThickness(0, 0, 0, 10));
-        metrics.ActionDescriptionMargin.Should().Be(new BackstageThickness(0, 2, 0, 0));
+        metrics.ActionDescriptionFontSize.Should().Be(11);
+        metrics.ActionRowMargin.Should().Be(new BackstageVisualThickness(0, 0, 0, 10));
+        metrics.ActionDescriptionMargin.Should().Be(new BackstageVisualThickness(0, 2, 0, 0));
     }
 
     [Fact]

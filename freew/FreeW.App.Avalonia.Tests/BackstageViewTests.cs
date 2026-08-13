@@ -833,7 +833,8 @@ public class BackstageViewTests : IDisposable
                 "Word 97-2003 Document (*.doc)",
                 "Word 97-2003 Template (*.dot)");
 
-            var metrics = BackstageExportPanePlanner.VisualMetrics;
+            var profile = BackstagePaneSurfacePlanner.ComposerProfile;
+            var metrics = profile.Metrics;
             var pdf = buttons[0];
             pdf.FontSize.Should().Be(metrics.ActionFontSize);
             pdf.Parent.Should().BeOfType<StackPanel>();
@@ -852,7 +853,7 @@ public class BackstageViewTests : IDisposable
 
             var pane = view.GetLogicalDescendants()
                 .OfType<ScrollViewer>()
-                .Single(scroll => scroll.Content is StackPanel panel && panel.MaxWidth == metrics.PaneMaxWidth);
+                .Single(scroll => scroll.Content is StackPanel panel && panel.MaxWidth == profile.ActionPaneMaxWidth);
             pane.Padding.Should().Be(new Thickness(0));
             pane.Margin.Should().Be(new Thickness(0, 0, 1, 0));
             pane.FontFamily.Name.Should().Be("Segoe UI");

@@ -12,19 +12,7 @@ public static class BackstagePaneSurfacePlanner
 
     public static BackstagePaneComposerProfile ComposerProfile { get; } = new()
     {
-        Metrics = new BackstagePaneMetrics(
-            HeadingFontSize: 26,
-            HeadingMargin: new BackstageVisualThickness(0, 0, 0, 18),
-            DescriptionFontSize: 12,
-            SectionHeaderFontSize: 15,
-            SectionHeaderMargin: new BackstageVisualThickness(0, 16, 0, 6),
-            DetailGridMargin: new BackstageVisualThickness(0, 2),
-            DetailLabelColumnWidth: 120,
-            DetailFontSize: 12,
-            ActionFontSize: 14,
-            ActionDescriptionFontSize: 11,
-            ActionRowMargin: new BackstageVisualThickness(0, 0, 0, 10),
-            ActionDescriptionMargin: new BackstageVisualThickness(0, 2, 0, 0)),
+        Metrics = BackstageVisualContract.Pane,
         PaneSpacing = 0,
         UseLinkActionRows = true,
         UseTextBlockActionContent = true,
@@ -59,20 +47,6 @@ public static class BackstagePaneSurfacePlanner
             FieldRowMargin: new(0, 2, 0, 2),
             OptionsFontSize: 13,
             OptionsMargin: new(0, 18, 0, 0));
-
-    public static BackstageActionPaneVisualMetrics ActionPaneVisualMetrics { get; } =
-        new(
-            PaneMaxWidth: 720,
-            HeadingFontSize: 26,
-            HeadingBottomMargin: new(0, 0, 0, 18),
-            DescriptionFontSize: 12,
-            DescriptionBottomMargin: new(0, 0, 0, 16),
-            SectionHeaderFontSize: 15,
-            SectionHeaderMargin: new(0, 16, 0, 6),
-            ActionFontSize: 14,
-            DescriptionTextFontSize: 11,
-            ActionRowMargin: new(0, 0, 0, 10),
-            ActionDescriptionMargin: new(0, 2, 0, 0));
 
     public static BackstageOpenPaneVisualMetrics OpenPaneVisualMetrics { get; } =
         new(
@@ -206,7 +180,6 @@ public static class BackstagePaneSurfacePlanner
         return new BackstageActionPaneSurfaceSpec(
             BackstageViewTextResources.Open.Title,
             BackstageViewTextResources.Open.Description,
-            ActionPaneVisualMetrics,
             BackstageOpenPanePlanner.Build(recentEntries, openRecent, browse, recoverUnsaved));
     }
 
@@ -299,7 +272,6 @@ public static class BackstagePaneSurfacePlanner
         return new BackstageActionPaneSurfaceSpec(
             BackstageViewTextResources.Share.Title,
             BackstageViewTextResources.Share.Description,
-            ActionPaneVisualMetrics,
             BackstageSharePanePlanner.Build(
                 currentPath,
                 fileExists,
@@ -345,7 +317,6 @@ public static class BackstagePaneSurfacePlanner
         return new BackstageActionPaneSurfaceSpec(
             text.Title,
             text.Description,
-            ActionPaneVisualMetrics,
             [
                 new(text.FixedLayoutGroupHeading, fixedLayoutRows),
                 BackstageExportFileTypePlanner.BuildChangeFileTypeGroup(formats.ToArray(), saveAsFormat),
@@ -382,7 +353,6 @@ public static class BackstagePaneSurfacePlanner
 public sealed record BackstageActionPaneSurfaceSpec(
     string Title,
     string Description,
-    BackstageActionPaneVisualMetrics VisualMetrics,
     IReadOnlyList<BackstageActionGroup> Groups)
 {
     public BackstageActionPaneSpec ToPaneSpec() => new(Title, Description, Groups);
@@ -500,19 +470,6 @@ public readonly record struct BackstageAccountPaneVisualMetrics(
     BackstageThickness FieldRowMargin,
     double OptionsFontSize,
     BackstageThickness OptionsMargin);
-
-public readonly record struct BackstageActionPaneVisualMetrics(
-    double PaneMaxWidth,
-    double HeadingFontSize,
-    BackstageThickness HeadingBottomMargin,
-    double DescriptionFontSize,
-    BackstageThickness DescriptionBottomMargin,
-    double SectionHeaderFontSize,
-    BackstageThickness SectionHeaderMargin,
-    double ActionFontSize,
-    double DescriptionTextFontSize,
-    BackstageThickness ActionRowMargin,
-    BackstageThickness ActionDescriptionMargin);
 
 public readonly record struct BackstageThickness(double Left, double Top, double Right, double Bottom)
 {

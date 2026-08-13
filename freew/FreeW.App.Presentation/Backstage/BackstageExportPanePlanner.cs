@@ -9,9 +9,6 @@ namespace FreeW.App.Presentation.Backstage;
 /// </summary>
 public static class BackstageExportPanePlanner
 {
-    public static BackstageActionPaneVisualMetrics VisualMetrics =>
-        BackstagePaneSurfacePlanner.ActionPaneVisualMetrics;
-
     public static IReadOnlyList<BackstageActionRow> BuildFixedLayoutActions(
         IReadOnlyList<DocumentFormatCapabilityRow> capabilities,
         Action exportPdf,
