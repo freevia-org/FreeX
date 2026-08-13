@@ -124,7 +124,7 @@ public sealed partial class AutoFilterDialog : Window
             _criteriaSuggestionLabel.Visibility = Visibility.Visible;
         }
 
-        var criteriaOptions = AutoFilterMenuPlanner.CreateCriteriaOptions(menuPlan.FilterKind, AutoFilterMenuResources.TextProvider);
+        var criteriaOptions = AutoFilterMenuPlanner.CreateCriteriaOptions(menuPlan.FilterKind, WpfResourceKeyTextResolver.Resources.AutoFilter);
         if (criteriaOptions.Count > 0)
         {
             _criteriaOperatorBox.ItemsSource = criteriaOptions;
@@ -132,7 +132,7 @@ public sealed partial class AutoFilterDialog : Window
             _criteriaOperatorBox.SelectedIndex = 0;
             _criteriaOperatorBox.ToolTip = UiText.Format(
                 "AutoFilter_FilterFamilyOperatorToolTip",
-                AutoFilterMenuPlanner.GetFilterFamilyHeader(menuPlan.FilterKind, AutoFilterMenuResources.TextProvider));
+                AutoFilterMenuPlanner.GetFilterFamilyHeader(menuPlan.FilterKind, WpfResourceKeyTextResolver.Resources.AutoFilter));
             _criteriaValueBox.Visibility = Visibility.Visible;
             _criteriaValueBox.ToolTip = UiText.Get("AutoFilter_ValueForTheSelectedTypedFilter");
             _criteriaConnectorBox.Visibility = Visibility.Visible;
@@ -141,7 +141,7 @@ public sealed partial class AutoFilterDialog : Window
             _criteriaOperatorBox2.SelectedIndex = 0;
             _criteriaOperatorBox2.ToolTip = UiText.Format(
                 "AutoFilter_SecondFilterFamilyOperatorToolTip",
-                AutoFilterMenuPlanner.GetFilterFamilyHeader(menuPlan.FilterKind, AutoFilterMenuResources.TextProvider));
+                AutoFilterMenuPlanner.GetFilterFamilyHeader(menuPlan.FilterKind, WpfResourceKeyTextResolver.Resources.AutoFilter));
             _criteriaValueBox2.Visibility = Visibility.Visible;
             _criteriaValueBox2.ToolTip = UiText.Get("AutoFilter_ValueForTheSecondTypedFilter");
             _criteriaBox.ToolTip = UiText.Get("AutoFilter_GeneratedCriterionThatWillBeApplied");

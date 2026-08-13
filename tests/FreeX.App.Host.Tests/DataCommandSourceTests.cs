@@ -27,7 +27,7 @@ public sealed class DataCommandSourceTests
         filterButtonHandler.Should().NotContain("ApplyFilterPrompt");
         filterSource.Should().NotContain("private void ApplyFilterPrompt(");
         editingDropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
-        editingDropdownSource.Should().Contain("AutoFilterMenuResources.TextProvider");
+        editingDropdownSource.Should().Contain("WpfResourceKeyTextResolver.Resources.AutoFilter");
         filterSource.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
         filterSource.Should().Contain("WorksheetFilterMessagePlanner.GetPlanErrorResourceKey(plan)");
         filterSource.Should().NotContain("new FilterCommand(_currentSheetId, currentRange, filterColOffset");

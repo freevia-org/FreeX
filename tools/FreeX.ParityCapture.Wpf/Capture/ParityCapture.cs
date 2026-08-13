@@ -869,8 +869,8 @@ internal static class ParityCapture
         var fixture = AutoFilterParityFixturePlanner.CreateFixturePlan(
             workbook,
             sheet,
-            AutoFilterMenuResources.TextProvider,
-            AutoFilterMenuResources.BlankDisplayText);
+            WpfResourceKeyTextResolver.Resources.AutoFilter,
+            WpfResourceKeyTextResolver.Resources.AutoFilter.BlankDisplayText);
         return new AutoFilterDialog(fixture.MenuPlan);
     }
 

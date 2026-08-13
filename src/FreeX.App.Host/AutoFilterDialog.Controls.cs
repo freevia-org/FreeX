@@ -289,7 +289,7 @@ public sealed partial class AutoFilterDialog
     {
         var labels = AutoFilterDropdownMenuPlanner.GetSortLabels(
             filterKind,
-            AutoFilterMenuResources.TextProvider);
+            WpfResourceKeyTextResolver.Resources.AutoFilter);
         SetMenuCommandButtonContent(_sortAscendingButton, labels.Ascending, RibbonCommandIconKind.SortAscending);
         SetMenuCommandButtonContent(_sortDescendingButton, labels.Descending, RibbonCommandIconKind.SortDescending);
     }

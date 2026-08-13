@@ -328,14 +328,14 @@ public sealed class ShortcutParityBehaviorTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.EditingDropdowns.cs");
 
         source.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
-        source.Should().Contain("AutoFilterMenuResources.TextProvider");
+        source.Should().Contain("WpfResourceKeyTextResolver.Resources.AutoFilter");
         source.Should().Contain("new AutoFilterDialog(menuPlan)");
     }
 
     [Fact]
     public void AutoFilterDropdownMenuPlanner_SupportsCriteriaSuggestionsAndFilterFamilySubmenus()
     {
-        var hostResourcesSource = DialogSourceTestSupport.ReadHostSources("AutoFilterMenuResources.cs");
+        var hostResourcesSource = DialogSourceTestSupport.ReadPresentationSources("Localization", "FreeXPlannerTextResources.cs");
         var plannerSource = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Presentation", "Filtering", "AutoFilterDropdownMenuPlanner.cs");
         var menuModelSource = WorkspaceFileLocator.ReadAllText(

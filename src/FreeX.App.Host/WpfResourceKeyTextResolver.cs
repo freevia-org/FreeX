@@ -5,7 +5,9 @@ namespace FreeX.App.Host;
 
 internal static class WpfResourceKeyTextResolver
 {
-    public static ResourceKeyTextResolver Instance { get; } = new(UiText.Get, UiText.Format);
+    public static FreeXPlannerTextResources Resources { get; } = new(UiText.Get, UiText.Format);
+
+    public static ResourceKeyTextResolver Instance => Resources.Text;
 
     public static IStatusBarTextProvider StatusBarTextProvider { get; } =
         new ResourceKeyStatusBarTextProvider(Instance.Get);

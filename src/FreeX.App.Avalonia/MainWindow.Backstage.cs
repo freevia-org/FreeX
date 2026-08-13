@@ -52,7 +52,7 @@ public sealed partial class MainWindow
         var display = WorkbookInfoDisplayPlanner.Build(
             plan,
             WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog,
-            CreateWorkbookInfoDisplayStrings(),
+            AvaloniaPlannerTextResources.Text,
             CultureInfo.CurrentCulture);
 
         var dialog = new Window
@@ -105,9 +105,6 @@ public sealed partial class MainWindow
             // while a Windows user did.
             cyclicCells: _session.CyclicCells);
     }
-
-    private static WorkbookInfoDisplayStrings CreateWorkbookInfoDisplayStrings() =>
-        new(UiText.Get, (key, args) => UiText.Format(key, args));
 
     private static FreeXBackstageInfoPaneRequest CreateBackstageInfoPaneRequest(
         WorkbookInfoDisplayPlan display) =>

@@ -74,7 +74,7 @@ public sealed class BackstageInfoPanelSourceTests
         serviceSource.Should().Contain("public static class BackstageInfoPlanner");
         source.Should().Contain("var activeSheet = _workbook.GetSheet(_currentSheetId);");
         source.Should().Contain("BackstageInfoPlanner.Build(");
-        source.Should().Contain("BackstageInfoResources.Strings");
+        source.Should().Contain("WpfResourceKeyTextResolver.Instance");
         source.Should().Contain("hasSelection: SheetGrid.SelectedRange is not null");
         source.Should().Contain("FreeXBackstageInfoPanePlanner.Build(");
         source.Should().Contain("BackstageInfoPlanner.CreatePaneRequest(info)");

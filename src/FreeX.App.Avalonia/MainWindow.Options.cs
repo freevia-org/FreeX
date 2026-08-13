@@ -377,7 +377,7 @@ public sealed partial class MainWindow
         var autoCorrectButton = OptionsButton(OptionsText("Options_AutoCorrectOptions2"), OptionsDialogPlanner.ProofingAutoCorrectButtonWidth);
         var autoCorrectMessage = DeferredCommandMessageResolver.Resolve(
             DeferredCommandMessagePlanner.AutoCorrectOptions(),
-            new ResourceKeyTextResolver(UiText.Get, UiText.Format));
+            AvaloniaPlannerTextResources.Text);
         autoCorrectButton.Click += (_, _) => ShowOptionsWarning(autoCorrectMessage.Body);
 
         var proofingChecks = new StackPanel

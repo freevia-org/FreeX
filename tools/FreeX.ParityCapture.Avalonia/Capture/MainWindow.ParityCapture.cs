@@ -4140,7 +4140,7 @@ public sealed partial class MainWindow
         var info = BackstageInfoPlanner.Build(
             workbook,
             null,
-            CreateWorkbookInfoDisplayStrings(),
+            AvaloniaPlannerTextResources.Text,
             activeSheet,
             CultureInfo.CurrentCulture);
 

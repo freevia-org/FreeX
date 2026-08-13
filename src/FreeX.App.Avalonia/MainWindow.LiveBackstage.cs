@@ -355,7 +355,7 @@ public sealed partial class MainWindow
         var display = WorkbookInfoDisplayPlanner.Build(
             BuildWorkbookInfoPlan(),
             WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog,
-            CreateWorkbookInfoDisplayStrings());
+            AvaloniaPlannerTextResources.Text);
         var pane = FreeXBackstageInfoPanePlanner.Build(
             FreeXBackstageInfoSurface.AvaloniaLivePane,
             CreateBackstageInfoPaneRequest(display));

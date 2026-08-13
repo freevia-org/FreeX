@@ -1,5 +1,6 @@
 using System.Globalization;
 using Free.Shared.AppServices;
+using Free.Shared.Localization;
 using FreeX.App.Presentation.Backstage;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -25,7 +26,7 @@ public static class BackstageInfoPlanner
     public static BackstageInfoPlan Build(
         Workbook workbook,
         string? currentFilePath,
-        WorkbookInfoDisplayStrings strings,
+        ResourceKeyTextResolver strings,
         Sheet? activeSheet = null,
         CultureInfo? culture = null,
         Func<string, bool>? fileExists = null,
@@ -88,10 +89,10 @@ public static class BackstageInfoPlanner
             plan.FormulaErrorSummary);
     }
 
-    private static string FormatAccessibilitySummary(int issueCount, WorkbookInfoDisplayStrings strings) =>
+    private static string FormatAccessibilitySummary(int issueCount, ResourceKeyTextResolver strings) =>
         FormulaIssueSummaryFormatter.Format(issueCount, "Backstage_Info_NoAccessibilityIssues", strings);
 
-    private static string FormatFormulaErrorSummary(int issueCount, WorkbookInfoDisplayStrings strings) =>
+    private static string FormatFormulaErrorSummary(int issueCount, ResourceKeyTextResolver strings) =>
         FormulaIssueSummaryFormatter.Format(issueCount, "Backstage_Info_NoFormulaErrors", strings);
 
     private static int ResolveActiveSheetIndex(Workbook workbook, Sheet? activeSheet)

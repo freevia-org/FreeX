@@ -16,6 +16,13 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class AutoFilterMenuPlannerTests
 {
     [Fact]
+    public void ShellPlannerTextResources_UseTheLocalizedAutoFilterBlankLabel()
+    {
+        AvaloniaPlannerTextResources.AutoFilter.BlankDisplayText
+            .Should().Be(UiText.Get("AutoFilter_BlankDisplayText"));
+    }
+
+    [Fact]
     public void Build_FromSharedPlan_PreservesEntryKindsLabelsValuesAndEnablement()
     {
         var plan = new AutoFilterMenuPlan(

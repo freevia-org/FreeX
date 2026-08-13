@@ -352,7 +352,7 @@ public partial class MainWindow
         var info = BackstageInfoPlanner.Build(
             _workbook,
             _currentFilePath,
-            BackstageInfoResources.Strings,
+            WpfResourceKeyTextResolver.Instance,
             activeSheet,
             hasSelection: SheetGrid.SelectedRange is not null,
             cyclicCells: _session.CyclicCells);

@@ -265,7 +265,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
 
         editingSource.Should().Contain("private AutoFilterDialog? CreateAutoFilterFlyoutDialog");
         editingSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
-        editingSource.Should().Contain("AutoFilterMenuResources.TextProvider");
+        editingSource.Should().Contain("WpfResourceKeyTextResolver.Resources.AutoFilter");
         editingSource.Should().Contain("dialog.ConfigureAsModelessFlyout();");
         editingSource.Should().Contain("PositionAutoFilterFlyout(dialog, headerCell, anchorPoint);");
     }

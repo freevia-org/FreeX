@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Free.Shared.Localization;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.Options;
 
 namespace FreeX.App.Presentation.Tests.Localization;
@@ -24,6 +25,21 @@ public sealed class LocalizedPresentationContractTests
         LocalizedTextDescriptor.Literal("Ready").Resolve(resolver).Should().Be("Ready");
         validation.FocusTarget.Should().Be(FocusTarget.Name);
         validation.Message.Should().BeSameAs(text);
+    }
+
+    [Fact]
+    public void Planner_text_resources_adapt_resource_keys_and_preserve_localized_blank_text()
+    {
+        var resources = new FreeXPlannerTextResources(
+            key => key == "AutoFilter_BlankDisplayText" ? "(vide)" : $"get:{key}",
+            (key, arguments) => $"format:{key}:{string.Join(",", arguments)}");
+
+        resources.AutoFilter.BlankDisplayText.Should().Be("(vide)");
+        resources.AutoFilter.Get("AutoFilter_Search").Should().Be("get:AutoFilter_Search");
+        resources.AutoFilter.Format("AutoFilter_ColumnHeader", "A")
+            .Should().Be("format:AutoFilter_ColumnHeader:A");
+        resources.Text.Get("Backstage_Info_NotSavedYet")
+            .Should().Be("get:Backstage_Info_NotSavedYet");
     }
 
     [Fact]

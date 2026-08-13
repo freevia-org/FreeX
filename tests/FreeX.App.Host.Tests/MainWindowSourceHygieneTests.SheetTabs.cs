@@ -135,7 +135,7 @@ public sealed partial class MainWindowSourceHygieneTests
         dropdownSource.Should().Contain("private void RefreshValidationDropdown(");
         dropdownSource.Should().Contain("private void OpenActiveDropdown(");
         dropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner");
-        dropdownSource.Should().Contain("AutoFilterMenuResources");
+        dropdownSource.Should().Contain("WpfResourceKeyTextResolver.Resources.AutoFilter");
         dropdownSource.Should().Contain("DataValidationDropdownPlanner");
     }
 
@@ -1076,7 +1076,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var dialog = DialogSourceTestSupport.ReadHostSources("AutoFilterDialog.cs");
 
         source.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
-        source.Should().Contain("AutoFilterMenuResources.TextProvider");
+        source.Should().Contain("WpfResourceKeyTextResolver.Resources.AutoFilter");
         source.Should().Contain("new AutoFilterDialog(menuPlan)");
         dialog.Should().Contain("AutoFilterMenuPlan menuPlan");
         dialog.Should().Contain("CriteriaSuggestions");

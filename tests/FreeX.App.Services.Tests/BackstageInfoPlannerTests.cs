@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using FluentAssertions;
+using Free.Shared.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -216,7 +217,7 @@ public sealed class BackstageInfoPlannerTests
         plan.Summary.ActiveSheetProtectionSummary.Should().Be("Active sheet protected.");
     }
 
-    private static WorkbookInfoDisplayStrings Strings() =>
+    private static ResourceKeyTextResolver Strings() =>
         new(GetText, (key, args) => string.Format(CultureInfo.InvariantCulture, GetText(key), args));
 
     private static string GetText(string key) => key switch

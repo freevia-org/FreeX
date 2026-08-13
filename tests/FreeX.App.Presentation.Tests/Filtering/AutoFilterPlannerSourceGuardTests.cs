@@ -50,7 +50,10 @@ public sealed class AutoFilterPlannerSourceGuardTests
         var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var avaloniaSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs"));
         var hostDropdownSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.EditingDropdowns.cs"));
-        var hostResourcesSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterMenuResources.cs"));
+        var plannerResourcesSource = File.ReadAllText(Path.Combine(
+            presentationRoot,
+            "Localization",
+            "FreeXPlannerTextResources.cs"));
         var hostDataFilterSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
         var presentationPromptSource = File.ReadAllText(Path.Combine(presentationRoot, "Filtering", "FilterPromptPlanner.cs"));
         var presentationMenuSource = File.ReadAllText(Path.Combine(presentationRoot, "Filtering", "AutoFilterMenuPlanner.cs"));
@@ -65,15 +68,19 @@ public sealed class AutoFilterPlannerSourceGuardTests
         avaloniaSource.Should().Contain("WorksheetFilterMessagePlanner.GetPlanErrorResourceKey(plan)");
         avaloniaSource.Should().Contain("WorksheetFilterMessagePlanner.GetCommandFailureResourceKey(plan.Kind)");
         avaloniaSource.Should().Contain("WorksheetFilterMessagePlanner.GetSuccessResourceKey(plan.Kind)");
-        avaloniaSource.Should().Contain("InvariantAutoFilterMenuTextProvider.Instance");
+        avaloniaSource.Should().Contain("AvaloniaPlannerTextResources.AutoFilter");
+        avaloniaSource.Should().NotContain("InvariantAutoFilterMenuTextProvider.Instance");
         avaloniaSource.Should().NotContain("RangeHasActiveFilter(");
         avaloniaSource.Should().NotContain("private static string FormatFilterPromptPlanError(");
         hostDropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange");
         hostDropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
-        hostDropdownSource.Should().Contain("AutoFilterMenuResources.TextProvider");
+        hostDropdownSource.Should().Contain("WpfResourceKeyTextResolver.Resources.AutoFilter");
         hostDropdownSource.Should().NotContain("AutoFilterDropdownPlanner.");
-        hostResourcesSource.Should().Contain("IAutoFilterMenuTextProvider");
-        hostResourcesSource.Should().NotContain("AutoFilterDropdownMenuPlanner.");
+        plannerResourcesSource.Should().Contain("IAutoFilterMenuTextProvider");
+        plannerResourcesSource.Should().Contain("AutoFilter_BlankDisplayText");
+        plannerResourcesSource.Should().NotContain("AutoFilterDropdownMenuPlanner.");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterMenuResources.cs"))
+            .Should().BeFalse("both renderers should compose the portable planner-text adapter");
         hostDataFilterSource.Should().Contain("AutoFilterToggleRangePlanner.Create(sheet, selectedRange)");
         hostDataFilterSource.Should().Contain("AutoFilterDropdownMenuPlanner.HasActiveFilter(sheet, range)");
         hostDataFilterSource.Should().Contain("_filterWorkflowSession.PlanDialogResult(");

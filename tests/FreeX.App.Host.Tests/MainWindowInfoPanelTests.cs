@@ -44,7 +44,7 @@ public sealed class MainWindowInfoPanelTests
         source.Should().Contain("BackstageInfoPlanner.Build(");
         source.Should().Contain("_workbook,");
         source.Should().Contain("_currentFilePath,");
-        source.Should().Contain("BackstageInfoResources.Strings,");
+        source.Should().Contain("WpfResourceKeyTextResolver.Instance,");
         source.Should().Contain("activeSheet,");
         source.Should().Contain("hasSelection: SheetGrid.SelectedRange is not null");
         source.Should().Contain("FreeXBackstageInfoPanePlanner.Build(");

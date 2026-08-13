@@ -156,11 +156,11 @@ public sealed partial class MainWindow
             _session.Workbook,
             sheet,
             dropdownPlan,
-            InvariantAutoFilterMenuTextProvider.Instance,
-            InvariantAutoFilterMenuTextProvider.BlankDisplayText);
+            AvaloniaPlannerTextResources.AutoFilter,
+            AvaloniaPlannerTextResources.AutoFilter.BlankDisplayText);
         var model = AutoFilterMenuPlanner.Build(
             menuPlan,
-            InvariantAutoFilterMenuTextProvider.Instance);
+            AvaloniaPlannerTextResources.AutoFilter);
 
         var panel = new StackPanel { Spacing = 4, MinWidth = 260, MaxWidth = 340 };
         var allItems = AutoFilterMenuPlanner.CreateDialogItems(model).ToList();

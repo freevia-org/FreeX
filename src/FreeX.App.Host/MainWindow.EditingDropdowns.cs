@@ -430,8 +430,8 @@ public partial class MainWindow
             _workbook,
             sheet,
             plan,
-            AutoFilterMenuResources.TextProvider,
-            AutoFilterMenuResources.BlankDisplayText);
+            WpfResourceKeyTextResolver.Resources.AutoFilter,
+            WpfResourceKeyTextResolver.Resources.AutoFilter.BlankDisplayText);
         if (menuPlan.Entries.All(entry => entry.Kind != AutoFilterMenuEntryKind.ChecklistItem))
             return null;
 
