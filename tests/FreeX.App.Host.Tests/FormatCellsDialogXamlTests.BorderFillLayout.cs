@@ -148,12 +148,14 @@ public sealed partial class FormatCellsDialogXamlTests
         foreach (var expected in new[]
         {
             "Text=\"Background Color:\"",
-            "x:Name=\"DlgBorderLineColorPreview\"",
-            "ToolTip=\"Black border\"",
-            "ToolTip=\"Red border\"",
-            "ToolTip=\"Blue border\""
+            "x:Name=\"DlgBorderLineColorPreview\""
         })
             xaml.Should().Contain(expected);
+
+        FormatCellsBorderPalettePlanner.ColorEntries
+            .Select(entry => entry.ResourceKey)
+            .Should()
+            .Contain(["FormatCells_BlackBorder", "FormatCells_RedBorder", "FormatCells_BlueBorder"]);
     }
 
     [Fact]

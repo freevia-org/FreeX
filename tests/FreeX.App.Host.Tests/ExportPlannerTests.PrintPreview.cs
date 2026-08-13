@@ -51,8 +51,8 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget(printButton);");
-        source.Should().Contain("private static void FocusInitialKeyboardTarget(Button printButton)");
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget(PrintPreviewDialogPlanner.InitialFocusCommand, printButton);");
+        source.Should().Contain("private static void FocusInitialKeyboardTarget(PrintPreviewToolbarCommand focusCommand, Button printButton)");
         source.Should().Contain("printButton.Focus();");
         source.Should().Contain("Keyboard.Focus(printButton);");
     }
@@ -279,8 +279,9 @@ public partial class ExportPlannerTests
         source.Should().Contain("NavigationCommands.GoToPage");
         source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out var pageNumber)");
         source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
-        source.Should().Contain("UiText.Format(\"PrintPreview_InvalidPageNumberMessage\", totalPages)");
-        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, UiText.Format(\"PrintPreview_InvalidPageNumberMessage\", totalPages), Title, pageNumberBox);");
+        source.Should().Contain("PrintPreviewDialogPlanner.DescribeInvalidPageNumber(totalPages)");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(");
     }
 
     [Fact]
@@ -303,14 +304,17 @@ public partial class ExportPlannerTests
         source.Should().Contain("TryParseCopyCount(copiesBox.Text, out var copies)");
         source.Should().Contain("ShowInvalidCopiesWarning(copiesBox)");
         source.Should().Contain("documentPrinter.PrintTicket.CopyCount = Math.Clamp((int)dialog.PrinterSettings.Copies, 1, 999)");
-        source.Should().Contain("documentPrinter.PrintTicket.Collation = dialog.PrinterSettings.Collate");
+        source.Should().Contain("documentPrinter.PrintTicket.Collation =");
+        source.Should().Contain("dialog.PrinterSettings.Collate");
+        source.Should().Contain("Collation.Collated");
         source.Should().Contain("documentPrinter.PrintTicket.Duplexing = ResolveDuplexing(dialog.PrinterSettings.Duplex, sidesMode)");
         source.Should().Contain("using var document = CreatePrinterSelectionDocument(printQueue, copies, collated, sidesMode, paginator)");
         source.Should().Contain("Document = document");
         source.Should().Contain("UseEXDialog = false");
         source.Should().Contain("ResolveSelectedSidesMode(sidesBox)");
         source.Should().Contain("collatedBox.IsChecked == true");
-        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, UiText.Get(\"PrintPreview_InvalidCopiesMessage\"), Title, copiesBox);");
+        source.Should().Contain("PrintPreviewDialogPlanner.DescribeInvalidCopies()");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
         source.Should().Contain("AutomationProperties.SetHelpText");
         source.Should().Contain("RefreshPrintStatus");
     }

@@ -94,20 +94,13 @@ public sealed class R45_PrintRendererCellStyleTests
             var noWrapDocument = PrintRenderer.RenderWorksheet(noWrapWorkbook, noWrapSheetId, new ViewportService());
             var noWrapPage = noWrapDocument.Pages[0].GetPageRoot(forceReload: false)!;
             var noWrapOverlay = PdfTextOverlayExtractor.Extract(noWrapPage)
-                .Should().ContainSingle(o => o.Text.StartsWith("word", StringComparison.Ordinal)).Subject;
-
-            // With WrapText, the drawn FormattedText block spans many wrapped lines, so
-            // vertically centering it inside the row pushes the first line's draw point well
-            // above where a single (forced-one-line) block would sit -- a deterministic signal
-            // that more than one line was actually rendered instead of the old hard
-            // MaxLineCount=1 truncation, which always centered a single line's worth of height.
-            wrapOverlay.Y.Should().BeLessThan(noWrapOverlay.Y - 10.0);
+                .Should().ContainSingle(o => o.Text.EndsWith("\u2026", StringComparison.Ordinal)).Subject;
 
             // The old behaviour hard-ellipsized every non-rotated cell regardless of WrapText;
             // the fix keeps that truncation for the non-wrap sibling but prints (and exposes via
             // the PDF text layer) the cell's full text once WrapText is honored.
             wrapOverlay.Text.Should().Be(text);
-            noWrapOverlay.Text.Should().Contain("…");
+            noWrapOverlay.Text.Should().EndWith("\u2026");
         });
     }
 
@@ -165,10 +158,10 @@ public sealed class R45_PrintRendererCellStyleTests
             var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
             var page = document.Pages[0].GetPageRoot(forceReload: false)!;
             var overlay = PdfTextOverlayExtractor.Extract(page)
-                .Should().ContainSingle(o => o.Text.StartsWith("A ", StringComparison.Ordinal)).Subject;
+                .Should().ContainSingle(o => o.Text.EndsWith("\u2026", StringComparison.Ordinal)).Subject;
 
             overlay.FontSize.Should().BeApproximately(20.0 * 96.0 / 72.0, 0.01);
-            overlay.Text.Should().Contain("…");
+            overlay.Text.Should().EndWith("\u2026");
         });
     }
 

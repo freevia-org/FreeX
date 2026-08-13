@@ -151,7 +151,10 @@ public partial class ColorPickerDialog : Window
         AutomationProperties.SetItemStatus(button, NotSelectedItemStatus);
         button.Click += SwatchButton_Click;
         _initialFocusButton ??= button;
-        if (SelectedColor == swatch.Color)
+        // A color can appear in more than one palette (for example standard red also appears in
+        // the custom spectrum). Keep the first visible match selected during construction instead
+        // of moving selection to the last duplicate, which can live on a different tab.
+        if (_selectedSwatchButton is null && SelectedColor == swatch.Color)
             MarkSelectedSwatch(button);
         return button;
     }

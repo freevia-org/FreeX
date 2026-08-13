@@ -68,13 +68,13 @@ public sealed partial class FormatCellsDialogXamlTests
                 GetControl<TextBox>(dialog, "DlgFillPatternColorBox").Text = "#5B9BD5";
                 GetControl<ComboBox>(dialog, "DlgFillPatternStyleBox").SelectedItem = "Diagonal Crosshatch";
                 GetControl<TextBox>(dialog, "DlgBorderLineColorBox").Text = "#7030A0";
-                GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = nameof(BorderStyle.Thin);
+                GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.Thin);
                 GetControl<TextBox>(dialog, "DlgBorderTopColorBox").Text = "#FFC000";
-                GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = nameof(BorderStyle.Medium);
+                GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.Medium);
                 GetControl<TextBox>(dialog, "DlgBorderRightColorBox").Text = "#4472C4";
-                GetControl<ComboBox>(dialog, "DlgBorderBottomStyleBox").SelectedItem = nameof(BorderStyle.Dashed);
+                GetControl<ComboBox>(dialog, "DlgBorderBottomStyleBox").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.Dashed);
                 GetControl<TextBox>(dialog, "DlgBorderBottomColorBox").Text = "#70AD47";
-                GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = nameof(BorderStyle.Double);
+                GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.Double);
                 GetControl<TextBox>(dialog, "DlgBorderLeftColorBox").Text = "#ED7D31";
 
                 ClickOkForTest(dialog);
@@ -111,13 +111,13 @@ public sealed partial class FormatCellsDialogXamlTests
             var dialog = ShowDialogForTest(current);
             try
             {
-                GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.None);
                 GetControl<TextBox>(dialog, "DlgBorderTopColorBox").Text = "";
-                GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.None);
                 GetControl<TextBox>(dialog, "DlgBorderRightColorBox").Text = "";
-                GetControl<ComboBox>(dialog, "DlgBorderBottomStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<ComboBox>(dialog, "DlgBorderBottomStyleBox").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.None);
                 GetControl<TextBox>(dialog, "DlgBorderBottomColorBox").Text = "";
-                GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.None);
                 GetControl<TextBox>(dialog, "DlgBorderLeftColorBox").Text = "";
 
                 ClickOkForTest(dialog);

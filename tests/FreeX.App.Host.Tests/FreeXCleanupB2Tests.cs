@@ -246,6 +246,7 @@ public sealed class FreeXCleanupB2RightToLeftTests
                 Height = 720
             };
 
+            window.AdoptWorkbookForParityCapture(workbook);
             window.Show();
             window.Activate();
             window.UpdateLayout();

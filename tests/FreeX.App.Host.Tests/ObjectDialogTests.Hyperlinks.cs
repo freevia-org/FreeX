@@ -274,7 +274,7 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("UiText.Get(\"Hyperlink_ScreenTipTextAutomationName\")");
         source.Should().Contain("UiText.Get(\"Hyperlink_BookmarkOrCellReferenceAutomationName\")");
         source.Should().Contain("string.Concat(title.Where(char.IsLetterOrDigit)) + \"TextBox\"");
-        source.Should().Contain("$\"Enter {CreateAutomationName(label).ToLowerInvariant()}.\"");
+        source.Should().Contain("UiText.Format(\"TextEntry_EnterValueHelpTextFormat\", CreateAutomationName(label))");
     }
 
     [Fact]
