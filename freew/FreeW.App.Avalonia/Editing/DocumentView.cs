@@ -91,18 +91,28 @@ public sealed partial class DocumentView : Control
         DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
     private bool _showParagraphMarks;
     // AV-VIEW: layout-gridlines overlay (faint grid behind text) + ruler strip (top horizontal +
-    // left vertical with tick marks and margin markers). Both are view-only chrome — they never
-    // affect layout, only the Render pass — so toggling them just invalidates the visual.
+    // left vertical with tick marks and backed margin/indent/tab markers). Toggling either is view-only;
+    // ruler pointer edits route separately through the command bus and then relayout normally.
     private bool _showGridlines;
     private bool _showTableGridlines;
     private bool _showRuler;
+    private TabStopAlignment _rulerTabStopAlignment = TabStopAlignment.Left;
+    private RulerDragState? _rulerDrag;
+    private double? _rulerDragPreviewMarginPt;
+
+    private sealed record RulerDragState(
+        DocumentRulerDragKind Kind,
+        int TabIndex,
+        ParagraphFormatting StartFormatting,
+        Point Start,
+        double StartMarginPt = 0);
 
     // Standard Word font-size ladder (pt).
     private static readonly double[] FontSizeLadder = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
 
     private readonly Dictionary<string, IBrush> _brushCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PlacedChar> _placed = new();
-    private readonly HashSet<int> _collapsedHeadings = [];
+    private readonly OutlineCollapseState _outlineCollapse = new();
     private readonly List<(double X, double Y, string Text, RunFormatting Fmt)> _markers = new();
     // AV-TAB: leader spans emitted during body tab layout; drawn in Render before glyph text.
     // Each entry: (X1=tab start, X2=segment start, Y=page-space top, LineHeight, Leader kind, RunFmt for color/size).
@@ -200,6 +210,11 @@ public sealed partial class DocumentView : Control
     // Mirrors the _cellCaret pattern but addresses the per-section HeaderFooter store instead of a
     // table cell. When set, the body caret/selection state is suppressed (drawn separately).
     private (HfTarget Target, int Offset)? _hfCaret;
+    // Fixed endpoint for a header/footer text selection. The target may address a different paragraph,
+    // but must identify the same section store + slot as _hfCaret.
+    private (HfTarget Target, int Offset)? _hfSelectionAnchor;
+    private bool _hfSelectionDragActive;
+    private IPointer? _hfSelectionDragPointer;
 
     // ── AV-FLSEL: floating-object selection + placement edit ──────────────────────────────────────
     // Selected floating object (null = no selection). Kind = "Image"|"Shape"|"Chart"|"WordArt"|"SmartArt"|"Group".
@@ -559,7 +574,7 @@ public sealed partial class DocumentView : Control
         _selectionAnchor = null;
         _cellCaret = null; // AV-TBL: clear cell state on document load
         _cellAnchor = null;
-        _collapsedHeadings.Clear();
+        _outlineCollapse.Clear();
         _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
         _selectedFloatingGroupChild = null;
@@ -767,13 +782,15 @@ public sealed partial class DocumentView : Control
         return -1;
     }
 
-    public void PromoteHeading(int blockIndex) => ShiftHeadingStyle(blockIndex, OutlineTools.Promote);
+    public void PromoteHeading(int blockIndex) =>
+        OutlineMutationCoordinator.Promote(_bus, _doc, blockIndex);
 
-    public void DemoteHeading(int blockIndex) => ShiftHeadingStyle(blockIndex, OutlineTools.Demote);
+    public void DemoteHeading(int blockIndex) =>
+        OutlineMutationCoordinator.Demote(_bus, _doc, blockIndex);
 
     /// <summary>Sets the selected paragraph directly to Heading 1, matching WPF Outline.</summary>
     public void PromoteHeadingToHeading1(int blockIndex) =>
-        ShiftHeadingStyle(blockIndex, _ => "Heading1");
+        OutlineMutationCoordinator.PromoteToHeading1(_bus, _doc, blockIndex);
 
     /// <summary>
     /// Sets a paragraph to an explicit outline level through the undoable document command bus.
@@ -790,47 +807,25 @@ public sealed partial class DocumentView : Control
 
     public int MoveHeading(int blockIndex, bool moveUp)
     {
-        _collapsedHeadings.Clear();
+        _outlineCollapse.Clear();
         return _editingSession.MoveHeadingSubtree(blockIndex, moveUp);
     }
 
     public void CollapseHeading(int blockIndex)
     {
-        if (!IsHeadingBlock(blockIndex) || !_collapsedHeadings.Add(blockIndex))
+        if (!_outlineCollapse.Collapse(_doc.Blocks, blockIndex))
             return;
         InvalidateLayoutAndVisual();
     }
 
     public void ExpandHeading(int blockIndex)
     {
-        if (!_collapsedHeadings.Remove(blockIndex))
+        if (!_outlineCollapse.Expand(blockIndex))
             return;
         InvalidateLayoutAndVisual();
     }
 
-    public bool IsHeadingCollapsed(int blockIndex) => _collapsedHeadings.Contains(blockIndex);
-
-    private bool IsHeadingBlock(int blockIndex) =>
-        blockIndex >= 0 && blockIndex < _doc.Blocks.Count
-        && _doc.Blocks[blockIndex] is Paragraph paragraph
-        && DocumentOutline.TryGetLevel(paragraph.StyleId, out _);
-
-    private HashSet<int> HiddenOutlineBlockIndices()
-    {
-        var hidden = new HashSet<int>();
-        foreach (var headingIndex in _collapsedHeadings.ToArray())
-        {
-            var (start, end) = OutlineTools.SubtreeRange(_doc.Blocks, headingIndex);
-            if (end <= start)
-            {
-                _collapsedHeadings.Remove(headingIndex);
-                continue;
-            }
-            for (var index = start + 1; index < end; index++)
-                hidden.Add(index);
-        }
-        return hidden;
-    }
+    public bool IsHeadingCollapsed(int blockIndex) => _outlineCollapse.IsCollapsed(blockIndex);
 
     /// <summary>If the current selection equals <paramref name="query"/>, replace it; then select the next match.</summary>
     public bool ReplaceNext(string query, string replacement)
@@ -1144,10 +1139,21 @@ public sealed partial class DocumentView : Control
     /// Core header/footer caret placement: clamps the offset to the paragraph's literal length, sets
     /// <c>_hfCaret</c>, and clears body/cell caret state. Used by the public helper and the hit-test path.
     /// </summary>
-    private void PlaceCaretInHeaderFooter(HfTarget target, int offset)
+    private void PlaceCaretInHeaderFooter(HfTarget target, int offset, bool extendSelection = false)
     {
         var len = HfParaLength(target);
         offset = Math.Clamp(offset, 0, len);
+        var previousCaret = _hfCaret;
+        if (extendSelection
+            && previousCaret is { } previous
+            && SameHfStory(previous.Target, target))
+        {
+            _hfSelectionAnchor ??= previous;
+        }
+        else
+        {
+            _hfSelectionAnchor = null;
+        }
         _hfCaret = (target, offset);
         // Suppress body + cell caret so only the H/F caret renders + receives edits.
         _cellCaret = null;
@@ -1173,6 +1179,9 @@ public sealed partial class DocumentView : Control
         if (_hfCaret is null)
             return;
         _hfCaret = null;
+        _hfSelectionAnchor = null;
+        _hfSelectionDragActive = false;
+        _hfSelectionDragPointer = null;
         ClampCaret();
         InvalidateVisual();
         CaretMoved?.Invoke();
@@ -1183,7 +1192,7 @@ public sealed partial class DocumentView : Control
     /// editable header/footer line, places the H/F caret at the nearest character offset and returns true.
     /// Mirrors the table-cell entry point: a click inside the region routes the caret into that region.
     /// </summary>
-    private bool TryHitTestHeaderFooter(Point point)
+    private bool TryHitTestHeaderFooter(Point point, bool extendSelection = false)
     {
         // Find the closest editable region line whose vertical band contains the click, preferring an exact
         // Y-band hit. Each item's band is [Y, Y + LineHeight); X must be within the content area.
@@ -1220,8 +1229,43 @@ public sealed partial class DocumentView : Control
             return false;
 
         var modelOffset = HfOffsetFromPoint(best, point.X);
-        PlaceCaretInHeaderFooter(target, modelOffset);
+        PlaceCaretInHeaderFooter(target, modelOffset, extendSelection);
         return true;
+    }
+
+    private static bool SameHfStory(HfTarget left, HfTarget right) =>
+        left.SectionIndex == right.SectionIndex
+        && left.UseFinalSectionStore == right.UseFinalSectionStore
+        && left.Slot == right.Slot;
+
+    private HeaderFooterTextRange? NormalizedHfSelection()
+    {
+        if (_hfCaret is not { } caret
+            || _hfSelectionAnchor is not { } anchor
+            || !SameHfStory(caret.Target, anchor.Target)
+            || ResolveHfStore(caret.Target) is not { } store
+            || HeaderFooterDialogPlanner.GetSlot(store, caret.Target.Slot) is not { } story)
+        {
+            return null;
+        }
+
+        return HeaderFooterTextSelectionPlanner.Normalize(
+            story,
+            new HeaderFooterTextPosition(caret.Target.ParaIdx, caret.Offset),
+            new HeaderFooterTextPosition(anchor.Target.ParaIdx, anchor.Offset));
+    }
+
+    private string HeaderFooterSelectedText()
+    {
+        if (_hfCaret is not { } caret
+            || ResolveHfStore(caret.Target) is not { } store
+            || HeaderFooterDialogPlanner.GetSlot(store, caret.Target.Slot) is not { } story
+            || NormalizedHfSelection() is not { } selection)
+        {
+            return string.Empty;
+        }
+
+        return HeaderFooterTextSelectionPlanner.GetText(story, selection);
     }
 
     /// <summary>Horizontal distance from <paramref name="x"/> to a rendered H/F item's drawn text range (0 when inside).</summary>
@@ -1345,9 +1389,6 @@ public sealed partial class DocumentView : Control
         return (atoms.Count, false);
     }
 
-    /// <summary>The model-offset length of an atom list (sum of each atom's model length).</summary>
-    private static int HfAtomsModelLength(List<HfAtom> atoms) => atoms.Sum(a => a.ModelLength);
-
     /// <summary>The active run formatting for a typed character at <paramref name="modelOffset"/> (inherits the char before, else after, else default).</summary>
     private static RunFormatting HfActiveFormatting(List<HfAtom> atoms, int modelOffset)
     {
@@ -1365,7 +1406,7 @@ public sealed partial class DocumentView : Control
     private void HfEditParagraph(HfTarget target, Action<List<HfAtom>> mutate, int newOffset)
     {
         var slot = HeaderFooterDialogPlanner.CommandSlotIndexFor(target.Slot);
-        _bus.Execute(new EditHeaderFooterParagraphCommand(
+        _bus.Execute(new FreeW.Core.Model.EditHeaderFooterParagraphCommand(
             target.SectionIndex, target.UseFinalSectionStore, slot, target.ParaIdx, p =>
             {
                 var atoms = HfAtoms(p);
@@ -1374,6 +1415,7 @@ public sealed partial class DocumentView : Control
             }));
         var len = HfParaLength(target);
         _hfCaret = (target, Math.Clamp(newOffset, 0, len));
+        _hfSelectionAnchor = null;
         // Re-layout at the current width so the H/F band + caret reflect the edit immediately.
         var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
         Relayout(width);
@@ -1386,8 +1428,15 @@ public sealed partial class DocumentView : Control
     {
         if (_hfCaret is not { } hc)
             return;
-        var target = hc.Target;
-        var offset = hc.Offset;
+        var ownsUndoGroup = NormalizedHfSelection() is not null && !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        if (NormalizedHfSelection() is not null)
+            TryDeleteHfSelection();
+        if (_hfCaret is not { } activeCaret)
+            return;
+        var target = activeCaret.Target;
+        var offset = activeCaret.Offset;
         HfEditParagraph(target, atoms =>
         {
             var (idx, _) = HfAtomIndexForOffset(atoms, offset);
@@ -1396,6 +1445,8 @@ public sealed partial class DocumentView : Control
             foreach (var ch in text)
                 atoms.Insert(at++, new HfAtom(ch, fmt, null));
         }, offset + text.Length);
+        if (ownsUndoGroup)
+            _bus.CommitUndoGroup("Replace header/footer selection");
     }
 
     private bool HfInsertFieldRun(Run run)
@@ -1403,13 +1454,23 @@ public sealed partial class DocumentView : Control
         if (_hfCaret is not { } caret)
             return false;
 
-        var target = caret.Target;
-        var offset = caret.Offset;
+        var ownsUndoGroup = NormalizedHfSelection() is not null && !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        if (NormalizedHfSelection() is not null)
+            TryDeleteHfSelection();
+        if (_hfCaret is not { } activeCaret)
+            return false;
+
+        var target = activeCaret.Target;
+        var offset = activeCaret.Offset;
         HfEditParagraph(target, atoms =>
         {
             var (index, _) = HfAtomIndexForOffset(atoms, offset);
             atoms.Insert(index, new HfAtom('\0', run.Formatting, run));
         }, offset + run.Text.Length);
+        if (ownsUndoGroup)
+            _bus.CommitUndoGroup("Replace header/footer selection with field");
         return true;
     }
 
@@ -1418,10 +1479,23 @@ public sealed partial class DocumentView : Control
     {
         if (_hfCaret is not { } hc)
             return;
+        if (TryDeleteHfSelection())
+            return;
         var target = hc.Target;
         var offset = hc.Offset;
         if (offset <= 0)
-            return; // at start of paragraph — H/F single-paragraph editing does not merge across slots
+        {
+            if (target.ParaIdx <= 0
+                || ResolveHfStore(target) is not { } previousStore
+                || HeaderFooterDialogPlanner.GetSlot(previousStore, target.Slot) is not { } previousStory)
+                return;
+            var previousParagraphIndex = target.ParaIdx - 1;
+            _hfSelectionAnchor = (
+                target with { ParaIdx = previousParagraphIndex },
+                previousStory.Paragraphs[previousParagraphIndex].PlainText.Length);
+            TryDeleteHfSelection();
+            return;
+        }
         var atoms0 = GetHfParagraph(target) is { } p0 ? HfAtoms(p0) : new List<HfAtom>();
         var (idx, _) = HfAtomIndexForOffset(atoms0, offset);
         var removeIdx = idx - 1;
@@ -1440,12 +1514,22 @@ public sealed partial class DocumentView : Control
     {
         if (_hfCaret is not { } hc)
             return;
+        if (TryDeleteHfSelection())
+            return;
         var target = hc.Target;
         var offset = hc.Offset;
         var atoms0 = GetHfParagraph(target) is { } p0 ? HfAtoms(p0) : new List<HfAtom>();
         var (idx, _) = HfAtomIndexForOffset(atoms0, offset);
         if (idx < 0 || idx >= atoms0.Count)
+        {
+            if (ResolveHfStore(target) is not { } nextStore
+                || HeaderFooterDialogPlanner.GetSlot(nextStore, target.Slot) is not { } nextStory
+                || target.ParaIdx + 1 >= nextStory.Paragraphs.Count)
+                return;
+            _hfSelectionAnchor = (target with { ParaIdx = target.ParaIdx + 1 }, 0);
+            TryDeleteHfSelection();
             return;
+        }
         HfEditParagraph(target, atoms =>
         {
             if (idx >= 0 && idx < atoms.Count)
@@ -1461,8 +1545,15 @@ public sealed partial class DocumentView : Control
     {
         if (_hfCaret is not { } hc)
             return;
-        var target = hc.Target;
-        var offset = hc.Offset;
+        var ownsUndoGroup = NormalizedHfSelection() is not null && !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        if (NormalizedHfSelection() is not null)
+            TryDeleteHfSelection();
+        if (_hfCaret is not { } activeCaret)
+            return;
+        var target = activeCaret.Target;
+        var offset = activeCaret.Offset;
         var store = ResolveHfStore(target);
         var hf = store is null ? null : HeaderFooterDialogPlanner.GetSlot(store, target.Slot);
         if (hf is null || target.ParaIdx < 0 || target.ParaIdx >= hf.Paragraphs.Count)
@@ -1471,7 +1562,7 @@ public sealed partial class DocumentView : Control
         var atoms = HfAtoms(para);
         var (idx, _) = HfAtomIndexForOffset(atoms, offset);
 
-        _bus.Execute(new SpliceHeaderFooterParagraphsCommand(
+        _bus.Execute(new FreeW.Core.Model.SpliceHeaderFooterParagraphsCommand(
             target.SectionIndex,
             target.UseFinalSectionStore,
             HeaderFooterDialogPlanner.CommandSlotIndexFor(target.Slot),
@@ -1488,19 +1579,131 @@ public sealed partial class DocumentView : Control
             }));
 
         _hfCaret = (target with { ParaIdx = target.ParaIdx + 1 }, 0);
+        _hfSelectionAnchor = null;
         var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
         Relayout(width);
         InvalidateVisual();
         CaretMoved?.Invoke();
+        if (ownsUndoGroup)
+            _bus.CommitUndoGroup("Replace header/footer selection with paragraph break");
     }
 
-    /// <summary>Move the H/F caret left/right by one model offset within the current paragraph (clamped to its bounds).</summary>
-    private void HfMoveCaret(int delta)
+    private bool TryDeleteHfSelection()
+    {
+        if (_hfCaret is not { } caret
+            || ResolveHfStore(caret.Target) is not { } store
+            || HeaderFooterDialogPlanner.GetSlot(store, caret.Target.Slot) is not { } story
+            || NormalizedHfSelection() is not { } selection
+            || HeaderFooterTextEditPlanner.PlanDelete(story, selection) is not { } plan)
+        {
+            return false;
+        }
+
+        var startTarget = caret.Target with { ParaIdx = plan.FirstParagraphIndex };
+        _bus.Execute(new FreeW.App.Presentation.DocumentView.SpliceHeaderFooterParagraphsCommand(
+            startTarget.SectionIndex,
+            startTarget.UseFinalSectionStore,
+            HeaderFooterDialogPlanner.CommandSlotIndexFor(startTarget.Slot),
+            plan.FirstParagraphIndex,
+            plan.RemoveCount,
+            () => plan.ReplacementParagraphs));
+
+        _hfCaret = (
+            startTarget with { ParaIdx = plan.Caret.ParagraphIndex },
+            plan.Caret.Offset);
+        _hfSelectionAnchor = null;
+        var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
+        Relayout(width);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+        return true;
+    }
+
+    /// <summary>Move the H/F caret through the shared story model, crossing paragraph boundaries.</summary>
+    private void HfMoveCaret(int delta, bool extendSelection)
     {
         if (_hfCaret is not { } hc)
             return;
-        var len = HfParaLength(hc.Target);
-        _hfCaret = (hc.Target, Math.Clamp(hc.Offset + delta, 0, len));
+        if (ResolveHfStore(hc.Target) is not { } store
+            || HeaderFooterDialogPlanner.GetSlot(store, hc.Target.Slot) is not { } story)
+            return;
+
+        HeaderFooterTextPosition position;
+        if (!extendSelection && NormalizedHfSelection() is { } selection)
+        {
+            position = delta < 0 ? selection.Start : selection.End;
+        }
+        else
+        {
+            if (extendSelection)
+                _hfSelectionAnchor ??= hc;
+            else
+                _hfSelectionAnchor = null;
+            position = HeaderFooterTextSelectionPlanner.MoveHorizontal(
+                story,
+                new HeaderFooterTextPosition(hc.Target.ParaIdx, hc.Offset),
+                delta);
+        }
+
+        _hfCaret = (hc.Target with { ParaIdx = position.ParagraphIndex }, position.Offset);
+        if (!extendSelection)
+            _hfSelectionAnchor = null;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    private void HfMoveToParagraphEdge(bool toStart, bool extendSelection)
+    {
+        if (_hfCaret is not { } hc
+            || ResolveHfStore(hc.Target) is not { } store
+            || HeaderFooterDialogPlanner.GetSlot(store, hc.Target.Slot) is not { } story)
+            return;
+
+        if (extendSelection)
+            _hfSelectionAnchor ??= hc;
+        else
+            _hfSelectionAnchor = null;
+        var position = HeaderFooterTextSelectionPlanner.MoveToParagraphEdge(
+            story,
+            new HeaderFooterTextPosition(hc.Target.ParaIdx, hc.Offset),
+            toStart);
+        _hfCaret = (hc.Target with { ParaIdx = position.ParagraphIndex }, position.Offset);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    private void HfMoveCaretVertical(int paragraphDelta, bool extendSelection)
+    {
+        if (_hfCaret is not { } hc
+            || ResolveHfStore(hc.Target) is not { } store
+            || HeaderFooterDialogPlanner.GetSlot(store, hc.Target.Slot) is not { } story)
+            return;
+
+        if (extendSelection)
+            _hfSelectionAnchor ??= hc;
+        else
+            _hfSelectionAnchor = null;
+        var position = HeaderFooterTextSelectionPlanner.MoveVertical(
+            story,
+            new HeaderFooterTextPosition(hc.Target.ParaIdx, hc.Offset),
+            paragraphDelta);
+        _hfCaret = (hc.Target with { ParaIdx = position.ParagraphIndex }, position.Offset);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    private void SelectAllHeaderFooterText()
+    {
+        if (_hfCaret is not { } hc
+            || ResolveHfStore(hc.Target) is not { } store
+            || HeaderFooterDialogPlanner.GetSlot(store, hc.Target.Slot) is not { Paragraphs.Count: > 0 } story)
+            return;
+
+        var lastParagraphIndex = story.Paragraphs.Count - 1;
+        _hfSelectionAnchor = (hc.Target with { ParaIdx = 0 }, 0);
+        _hfCaret = (
+            hc.Target with { ParaIdx = lastParagraphIndex },
+            story.Paragraphs[lastParagraphIndex].PlainText.Length);
         InvalidateVisual();
         CaretMoved?.Invoke();
     }
@@ -6114,7 +6317,7 @@ public sealed partial class DocumentView : Control
         var listMarkerSequence = new DocumentListMarkerSequencePlanner(
             _doc.MultiLevelList.NumberFormats);
         var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_doc);
-        var hiddenBlocks = HiddenOutlineBlockIndices();
+        var hiddenBlocks = _outlineCollapse.BuildHiddenBlockIndices(_doc.Blocks);
         for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
         {
             if (hiddenBlocks.Contains(blockIndex))
@@ -6782,6 +6985,7 @@ public sealed partial class DocumentView : Control
                     Target           = paraTarget,
                     LineHeight       = lineH,
                     ModelStartOffset = seg.ModelStart,
+                    OwnerTarget      = paraTarget,
                 });
             }
             else if (!hasAnyTab)
@@ -6800,6 +7004,7 @@ public sealed partial class DocumentView : Control
                         Alignment        = pf.Alignment,
                         Target           = paraTarget,
                         LineHeight       = lineH,
+                        OwnerTarget      = paraTarget,
                     });
                 }
                 else
@@ -10171,11 +10376,12 @@ public sealed partial class DocumentView : Control
     /// <summary>
     /// AV-VIEW: Draw the ruler strips for the first page in Print Layout — a horizontal strip along the
     /// page top and a vertical strip along the page left edge, each with the page margins tinted darker
-    /// (so the lighter span marks the editable body area) and inch tick marks. Pure render chrome.
+    /// (so the lighter span marks the editable body area), inch tick marks, and the same backed indent,
+    /// tab-stop, and margin-editing affordances as the WPF ruler.
     /// </summary>
     private void DrawRuler(DrawingContext context)
     {
-        const double inchDip = 72.0;
+        const double inchDip = 96.0;
         var pageTop = _surfacePlan.PageTopDip(0); // first page only
         // ── Horizontal ruler: sits just above the page's top edge. ──
         var hRect = new Rect(_pageLeft, pageTop - RulerThicknessDip, _pageWidth, RulerThicknessDip);
@@ -10189,6 +10395,34 @@ public sealed partial class DocumentView : Control
         foreach (var x in rulerTicks)
             context.DrawLine(RulerTickPen, new Point(x, hRect.Y + RulerThicknessDip - 4), new Point(x, hRect.Y + RulerThicknessDip));
 
+        // Word-style tab selector in the top-left corner. Clicking it cycles Left/Center/Right/Decimal;
+        // the selected type is used when the user clicks an empty location on the horizontal ruler.
+        var selectorRect = RulerTabSelectorRect(pageTop);
+        context.FillRectangle(RulerMarginFill, selectorRect);
+        context.DrawRectangle(null, RulerBorderPen, selectorRect);
+        DrawRulerTabMarker(
+            context,
+            _rulerTabStopAlignment,
+            selectorRect.Center.X,
+            selectorRect.Bottom - 3,
+            markerHeight: 7);
+
+        // Current-paragraph indent and explicit-tab markers. Geometry decisions live in the shared
+        // interaction planner; this renderer only maps them to Avalonia drawing primitives.
+        var formatting = RulerParagraphFormatting();
+        var leftX = _contentLeft + PageLayout.PointsToDip(formatting.IndentLeftPt);
+        var firstX = leftX + PageLayout.PointsToDip(formatting.FirstLineIndentPt);
+        var rightX = bodyRight - PageLayout.PointsToDip(formatting.IndentRightPt);
+        DrawRulerTriangle(context, leftX, hRect.Bottom, pointsDown: false);
+        DrawRulerTriangle(context, rightX, hRect.Bottom, pointsDown: false);
+        DrawRulerTriangle(context, firstX, hRect.Top, pointsDown: true);
+        foreach (var tab in formatting.TabStops)
+        {
+            var tabX = _contentLeft + PageLayout.PointsToDip(tab.PositionPt);
+            if (tabX >= _contentLeft - 0.5 && tabX <= bodyRight + 0.5)
+                DrawRulerTabMarker(context, tab.Alignment, tabX, hRect.Bottom, markerHeight: 7);
+        }
+
         // ── Vertical ruler: sits just left of the page's left edge. ──
         var vRect = new Rect(_pageLeft - RulerThicknessDip, pageTop, RulerThicknessDip, _pageHeightPx);
         context.FillRectangle(RulerFill, vRect);
@@ -10197,8 +10431,65 @@ public sealed partial class DocumentView : Control
         context.FillRectangle(RulerMarginFill, new Rect(vRect.X, pageTop, RulerThicknessDip, _marginTopDip));
         context.FillRectangle(RulerMarginFill, new Rect(vRect.X, bodyBottom, RulerThicknessDip, pageTop + _pageHeightPx - bodyBottom));
         context.DrawRectangle(null, RulerBorderPen, vRect);
-        foreach (var y in rulerTicks.Select(tick => pageTop + tick - _pageLeft))
+        for (var y = pageTop; y <= pageTop + _pageHeightPx + 0.01; y += inchDip)
             context.DrawLine(RulerTickPen, new Point(vRect.X + RulerThicknessDip - 4, y), new Point(vRect.X + RulerThicknessDip, y));
+
+        if (_rulerDragPreviewMarginPt is { } preview
+            && _rulerDrag is { Kind: DocumentRulerDragKind.TopMargin or DocumentRulerDragKind.BottomMargin } drag)
+        {
+            var previewDip = PageLayout.PointsToDip(preview);
+            var previewY = drag.Kind == DocumentRulerDragKind.TopMargin
+                ? pageTop + previewDip
+                : pageTop + _pageHeightPx - previewDip;
+            context.DrawLine(RulerPreviewPen, new Point(vRect.Left, previewY), new Point(vRect.Right, previewY));
+        }
+    }
+
+    private Rect RulerTabSelectorRect(double pageTop) =>
+        new(_pageLeft - RulerThicknessDip, pageTop - RulerThicknessDip, RulerThicknessDip, RulerThicknessDip);
+
+    private static void DrawRulerTriangle(DrawingContext context, double x, double edgeY, bool pointsDown)
+    {
+        const double halfWidth = 4;
+        const double height = 5;
+        var tipY = pointsDown ? edgeY + height : edgeY - height;
+        var baseY = edgeY;
+        var geometry = new StreamGeometry();
+        using (var path = geometry.Open())
+        {
+            path.BeginFigure(new Point(x - halfWidth, baseY), true);
+            path.LineTo(new Point(x + halfWidth, baseY));
+            path.LineTo(new Point(x, tipY));
+            path.EndFigure(true);
+        }
+        context.DrawGeometry(RulerMarkerBrush, RulerMarkerPen, geometry);
+    }
+
+    private static void DrawRulerTabMarker(
+        DrawingContext context,
+        TabStopAlignment alignment,
+        double x,
+        double bottom,
+        double markerHeight)
+    {
+        var top = bottom - markerHeight;
+        context.DrawLine(RulerMarkerPen, new Point(x, top), new Point(x, bottom));
+        switch (alignment)
+        {
+            case TabStopAlignment.Center:
+                context.DrawLine(RulerMarkerPen, new Point(x - 3, bottom), new Point(x + 3, bottom));
+                break;
+            case TabStopAlignment.Right:
+                context.DrawLine(RulerMarkerPen, new Point(x - 5, bottom), new Point(x, bottom));
+                break;
+            case TabStopAlignment.Decimal:
+                context.DrawLine(RulerMarkerPen, new Point(x, bottom), new Point(x + 4, bottom));
+                context.DrawEllipse(RulerMarkerBrush, null, new Point(x + 5.5, bottom - 1.5), 1, 1);
+                break;
+            default:
+                context.DrawLine(RulerMarkerPen, new Point(x, bottom), new Point(x + 5, bottom));
+                break;
+        }
     }
 
     // AV-DESIGN: the model's page border (w:pgBorders) drawn inset just inside the page sheet. Word draws
@@ -10529,6 +10820,9 @@ public sealed partial class DocumentView : Control
     private static IBrush RulerFill        { get; } = new SolidColorBrush(Color.FromRgb(0xF4, 0xF6, 0xFA));
     private static Pen    RulerBorderPen   { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD4)), 0.75);
     private static Pen    RulerTickPen     { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x70, 0x80, 0x98)), 0.75);
+    private static IBrush RulerMarkerBrush { get; } = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
+    private static Pen    RulerMarkerPen   { get; } = new Pen(RulerMarkerBrush, 1.0);
+    private static Pen    RulerPreviewPen  { get; } = new Pen(RulerMarkerBrush, 1.0, dashStyle: new DashStyle([4, 3], 0));
     // AV-VIEW: darker tint marking the page margins on the ruler (the body text area is the lighter span).
     private static IBrush RulerMarginFill  { get; } = new SolidColorBrush(Color.FromRgb(0xD8, 0xDE, 0xE8));
     private static RunFormatting LineNumberFormatting { get; } = new() { FontSizePt = 8, ColorHex = "#606060" };
@@ -10911,6 +11205,7 @@ public sealed partial class DocumentView : Control
         {
             foreach (var item in _headerFooterItems)
             {
+                DrawHeaderFooterSelection(context, item);
                 if (item.Image is { } image)
                 {
                     var rect = new Rect(item.X, item.Y, Math.Max(1, item.Width), Math.Max(1, item.Height));
@@ -11195,6 +11490,68 @@ public sealed partial class DocumentView : Control
     /// the caret offset within the target paragraph's first rendered line. Returns false when no item for
     /// the target is laid out.
     /// </summary>
+    private void DrawHeaderFooterSelection(DrawingContext context, HfRenderItem item)
+    {
+        if (NormalizedHfSelection() is not { } selection
+            || _hfCaret is not { } caret
+            || (item.OwnerTarget ?? item.Target) is not { } itemTarget
+            || !SameHfStory(caret.Target, itemTarget)
+            || itemTarget.ParaIdx < selection.Start.ParagraphIndex
+            || itemTarget.ParaIdx > selection.End.ParagraphIndex)
+        {
+            return;
+        }
+
+        var selectionStart = itemTarget.ParaIdx == selection.Start.ParagraphIndex
+            ? selection.Start.Offset
+            : 0;
+        var selectionEnd = itemTarget.ParaIdx == selection.End.ParagraphIndex
+            ? selection.End.Offset
+            : int.MaxValue;
+
+        if (string.IsNullOrEmpty(item.Text))
+        {
+            if (item.Width > 0
+                && selectionStart <= item.ModelStartOffset
+                && selectionEnd > item.ModelStartOffset)
+            {
+                context.FillRectangle(
+                    SelectionBrush,
+                    new Rect(item.X, item.Y, Math.Max(2, item.Width), Math.Max(1, item.LineHeight)));
+            }
+            return;
+        }
+
+        var itemStart = item.ModelStartOffset;
+        var itemEnd = itemStart + item.Text.Length;
+        var overlapStart = Math.Max(selectionStart, itemStart);
+        var overlapEnd = Math.Min(selectionEnd, itemEnd);
+        if (overlapEnd <= overlapStart)
+            return;
+
+        var ft = Build(item.Text, item.Fmt);
+        var alignOffset = AlignmentOffset(
+            item.Alignment,
+            item.AvailableWidth,
+            ft.WidthIncludingTrailingWhitespace,
+            isLast: true);
+        var localStart = Math.Clamp(overlapStart - itemStart, 0, item.Text.Length);
+        var localEnd = Math.Clamp(overlapEnd - itemStart, localStart, item.Text.Length);
+        var prefixWidth = localStart == 0
+            ? 0
+            : Build(item.Text[..localStart], item.Fmt).WidthIncludingTrailingWhitespace;
+        var selectedWidth = localEnd == localStart
+            ? 0
+            : Build(item.Text[localStart..localEnd], item.Fmt).WidthIncludingTrailingWhitespace;
+        context.FillRectangle(
+            SelectionBrush,
+            new Rect(
+                item.X + alignOffset + prefixWidth,
+                item.Y,
+                Math.Max(2, selectedWidth),
+                Math.Max(1, item.LineHeight)));
+    }
+
     private bool TryGetHfCaretRect(out Rect rect)
     {
         rect = default;
@@ -15183,6 +15540,244 @@ public sealed partial class DocumentView : Control
 
     private ContextMenu? _activeContextMenu;
 
+    private ParagraphFormatting RulerParagraphFormatting() =>
+        CurrentParagraph()?.Formatting ?? ParagraphFormatting.Default;
+
+    private Rect HorizontalRulerRect()
+    {
+        var pageTop = _surfacePlan.PageTopDip(0);
+        return new Rect(_pageLeft, pageTop - RulerThicknessDip, _pageWidth, RulerThicknessDip);
+    }
+
+    private Rect VerticalRulerRect()
+    {
+        var pageTop = _surfacePlan.PageTopDip(0);
+        return new Rect(_pageLeft - RulerThicknessDip, pageTop, RulerThicknessDip, _pageHeightPx);
+    }
+
+    private DocumentRulerHorizontalMetrics? RulerHorizontalMetrics() =>
+        DocumentRulerInteractionPlanner.TryBuildHorizontalMetrics(
+            _contentLeft,
+            _contentLeft + _contentWidth,
+            zoom: 1);
+
+    private DocumentRulerVerticalMetrics? RulerVerticalMetrics() =>
+        DocumentRulerInteractionPlanner.TryBuildVerticalMetrics(
+            _doc.Page,
+            zoom: 1,
+            pageTopDip: _surfacePlan.PageTopDip(0));
+
+    private bool TryBeginRulerInteraction(Point point, IPointer pointer)
+    {
+        if (!_showRuler || _viewMode != DocumentViewMode.PrintLayout)
+            return false;
+
+        var pageTop = _surfacePlan.PageTopDip(0);
+        if (RulerTabSelectorRect(pageTop).Contains(point))
+        {
+            _rulerTabStopAlignment = _rulerTabStopAlignment switch
+            {
+                TabStopAlignment.Left => TabStopAlignment.Center,
+                TabStopAlignment.Center => TabStopAlignment.Right,
+                TabStopAlignment.Right => TabStopAlignment.Decimal,
+                _ => TabStopAlignment.Left
+            };
+            InvalidateVisual();
+            return true;
+        }
+
+        if (HorizontalRulerRect().Contains(point) && RulerHorizontalMetrics() is { } horizontal)
+        {
+            var local = new DocumentRulerPoint(point.X, point.Y - HorizontalRulerRect().Top);
+            var formatting = RulerParagraphFormatting();
+            var kind = DocumentRulerInteractionPlanner.HitTestHorizontal(
+                local,
+                RulerThicknessDip,
+                horizontal,
+                formatting,
+                out var tabIndex);
+            if (kind == DocumentRulerDragKind.None)
+                return false;
+
+            _rulerDrag = new RulerDragState(kind, tabIndex, formatting, point);
+            pointer.Capture(this);
+            Cursor = new Cursor(StandardCursorType.SizeWestEast);
+            return true;
+        }
+
+        if (VerticalRulerRect().Contains(point) && RulerVerticalMetrics() is { } vertical)
+        {
+            var kind = DocumentRulerInteractionPlanner.HitTestVertical(point.Y, vertical);
+            if (kind is not (DocumentRulerDragKind.TopMargin or DocumentRulerDragKind.BottomMargin))
+                return false;
+
+            var startMargin = kind == DocumentRulerDragKind.TopMargin
+                ? _doc.Page.MarginTopPt
+                : _doc.Page.MarginBottomPt;
+            _rulerDrag = new RulerDragState(kind, -1, RulerParagraphFormatting(), point, startMargin);
+            pointer.Capture(this);
+            Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool UpdateRulerInteraction(Point point)
+    {
+        if (_rulerDrag is not { } drag)
+            return false;
+
+        if (drag.Kind is DocumentRulerDragKind.TopMargin or DocumentRulerDragKind.BottomMargin
+            && RulerVerticalMetrics() is { } metrics)
+        {
+            var otherMargin = drag.Kind == DocumentRulerDragKind.TopMargin
+                ? _doc.Page.MarginBottomPt
+                : _doc.Page.MarginTopPt;
+            _rulerDragPreviewMarginPt = DocumentRulerInteractionPlanner.ResolveVerticalMargin(
+                drag.Kind,
+                drag.StartMarginPt,
+                point.Y - drag.Start.Y,
+                otherMargin,
+                metrics);
+            InvalidateVisual();
+        }
+
+        return true;
+    }
+
+    private bool UpdateRulerHoverCursor(Point point)
+    {
+        if (!_showRuler || _viewMode != DocumentViewMode.PrintLayout)
+            return false;
+
+        if (HorizontalRulerRect().Contains(point) && RulerHorizontalMetrics() is { } horizontal)
+        {
+            var local = new DocumentRulerPoint(point.X, point.Y - HorizontalRulerRect().Top);
+            var kind = DocumentRulerInteractionPlanner.HitTestHorizontal(
+                local,
+                RulerThicknessDip,
+                horizontal,
+                RulerParagraphFormatting(),
+                out _);
+            Cursor = kind is DocumentRulerDragKind.LeftIndent
+                or DocumentRulerDragKind.FirstLineIndent
+                or DocumentRulerDragKind.RightIndent
+                or DocumentRulerDragKind.TabStop
+                ? new Cursor(StandardCursorType.SizeWestEast)
+                : Cursor.Default;
+            return true;
+        }
+
+        if (VerticalRulerRect().Contains(point) && RulerVerticalMetrics() is { } vertical)
+        {
+            var kind = DocumentRulerInteractionPlanner.HitTestVertical(point.Y, vertical);
+            Cursor = kind is DocumentRulerDragKind.TopMargin or DocumentRulerDragKind.BottomMargin
+                ? new Cursor(StandardCursorType.SizeNorthSouth)
+                : Cursor.Default;
+            return true;
+        }
+
+        if (RulerTabSelectorRect(_surfacePlan.PageTopDip(0)).Contains(point))
+        {
+            Cursor = Cursor.Default;
+            return true;
+        }
+
+        return false;
+    }
+
+    private void CommitRulerInteraction(Point point)
+    {
+        if (_rulerDrag is not { } drag)
+            return;
+
+        if (drag.Kind is DocumentRulerDragKind.TopMargin or DocumentRulerDragKind.BottomMargin)
+        {
+            if (RulerVerticalMetrics() is { } vertical)
+            {
+                var otherMargin = drag.Kind == DocumentRulerDragKind.TopMargin
+                    ? _doc.Page.MarginBottomPt
+                    : _doc.Page.MarginTopPt;
+                var margin = DocumentRulerInteractionPlanner.ResolveVerticalMargin(
+                    drag.Kind,
+                    drag.StartMarginPt,
+                    point.Y - drag.Start.Y,
+                    otherMargin,
+                    vertical);
+                if (drag.Kind == DocumentRulerDragKind.TopMargin)
+                    ApplyPageSettings(page => page.MarginTopPt = margin);
+                else
+                    ApplyPageSettings(page => page.MarginBottomPt = margin);
+            }
+        }
+        else if (RulerHorizontalMetrics() is { } horizontal)
+        {
+            var pointPt = horizontal.XToContentPoint(point.X);
+            switch (drag.Kind)
+            {
+                case DocumentRulerDragKind.LeftIndent:
+                case DocumentRulerDragKind.FirstLineIndent:
+                {
+                    var next = DocumentRulerInteractionPlanner.BuildIndentFormatting(
+                        drag.StartFormatting,
+                        drag.Kind,
+                        pointPt);
+                    FormatSelectedParagraphs(formatting => Indentation.SetIndents(
+                        formatting,
+                        next.IndentLeftPt,
+                        next.IndentRightPt,
+                        next.FirstLineIndentPt));
+                    break;
+                }
+                case DocumentRulerDragKind.RightIndent:
+                {
+                    var fromRight = horizontal.XToContentPoint(horizontal.ContentEnd) - pointPt;
+                    var next = DocumentRulerInteractionPlanner.BuildIndentFormatting(
+                        drag.StartFormatting,
+                        drag.Kind,
+                        fromRight);
+                    FormatSelectedParagraphs(formatting => Indentation.SetIndents(
+                        formatting,
+                        next.IndentLeftPt,
+                        next.IndentRightPt,
+                        next.FirstLineIndentPt));
+                    break;
+                }
+                case DocumentRulerDragKind.TabStop:
+                case DocumentRulerDragKind.NewTabStop:
+                {
+                    var localY = point.Y - HorizontalRulerRect().Top;
+                    if (drag.Kind == DocumentRulerDragKind.NewTabStop
+                        && DocumentRulerInteractionPlanner.IsTabStopRemovalDrop(localY, RulerThicknessDip))
+                        break;
+                    var stops = DocumentRulerInteractionPlanner.IsTabStopRemovalDrop(localY, RulerThicknessDip)
+                        ? DocumentRulerInteractionPlanner.RemoveTabStop(drag.StartFormatting.TabStops, drag.TabIndex)
+                        : DocumentRulerInteractionPlanner.MoveOrAddTabStop(
+                            drag.StartFormatting.TabStops,
+                            drag.TabIndex,
+                            pointPt,
+                            _rulerTabStopAlignment);
+                    SetParagraphTabStops(stops);
+                    break;
+                }
+            }
+        }
+
+        _rulerDrag = null;
+        _rulerDragPreviewMarginPt = null;
+        Cursor = Cursor.Default;
+        InvalidateVisual();
+    }
+
+    private void CancelRulerInteraction()
+    {
+        _rulerDrag = null;
+        _rulerDragPreviewMarginPt = null;
+        Cursor = Cursor.Default;
+        InvalidateVisual();
+    }
+
     // ---- Input ----------------------------------------------------------------------------------
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -15194,6 +15789,12 @@ public sealed partial class DocumentView : Control
         var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
         var ctrlOrMeta = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
         var updateKind = e.GetCurrentPoint(this).Properties.PointerUpdateKind;
+
+        if (updateKind == PointerUpdateKind.LeftButtonPressed && TryBeginRulerInteraction(point, e.Pointer))
+        {
+            e.Handled = true;
+            return;
+        }
 
         if (updateKind == PointerUpdateKind.RightButtonPressed)
         {
@@ -15351,8 +15952,11 @@ public sealed partial class DocumentView : Control
         // AV-HFEDIT: a click inside a rendered header/footer region routes the caret into that region.
         // Only in PrintLayout (the only mode that draws H/F bands). Checked before the body hit-test
         // because H/F bands sit in the page margins, which the body hit-test does not own.
-        if (!shift && _viewMode == DocumentViewMode.PrintLayout && TryHitTestHeaderFooter(point))
+        if (_viewMode == DocumentViewMode.PrintLayout && TryHitTestHeaderFooter(point, extendSelection: shift))
         {
+            _hfSelectionDragActive = true;
+            _hfSelectionDragPointer = e.Pointer;
+            e.Pointer.Capture(this);
             CaretMoved?.Invoke();
             e.Handled = true;
             return;
@@ -15362,6 +15966,7 @@ public sealed partial class DocumentView : Control
         {
             // AV-HFEDIT: clicking back into the body exits any active header/footer caret.
             _hfCaret = null;
+            _hfSelectionAnchor = null;
 
             // AV-TBL2: clear any prior cross-cell block selection on a fresh (non-shift) press.
             if (!shift)
@@ -15394,6 +15999,12 @@ public sealed partial class DocumentView : Control
         base.OnPointerMoved(e);
         var point = e.GetPosition(this);
 
+        if (UpdateRulerInteraction(point))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (_shapeTextSelectionDragState is not null)
         {
             UpdateShapeTextSelectionDrag(point);
@@ -15403,6 +16014,9 @@ public sealed partial class DocumentView : Control
 
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
+            if (UpdateRulerHoverCursor(point))
+                return;
+
             // AV-HANDLES: with the button up, update the hover cursor over the selection so handles
             // advertise their resize direction (and the body shows a move cursor).
             if (_selectedFloating is not null && !_floatingDrag.IsActive)
@@ -15413,6 +16027,14 @@ public sealed partial class DocumentView : Control
                 else
                     Cursor = hover == FloatHandle.None ? Cursor.Default : CursorForHandle(hover);
             }
+            return;
+        }
+
+        if (_hfSelectionDragActive && _hfCaret is not null)
+        {
+            if (TryHitTestHeaderFooter(point, extendSelection: true))
+                CaretMoved?.Invoke();
+            e.Handled = true;
             return;
         }
 
@@ -15480,6 +16102,10 @@ public sealed partial class DocumentView : Control
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         base.OnPointerCaptureLost(e);
+        if (_rulerDrag is not null)
+            CancelRulerInteraction();
+        _hfSelectionDragActive = false;
+        _hfSelectionDragPointer = null;
         if (_shapeTextSelectionDragState is not null)
             FinishShapeTextSelectionDrag(releasePointerCapture: false);
         if (_shapeEditPointDragState is null)
@@ -15495,6 +16121,22 @@ public sealed partial class DocumentView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (_rulerDrag is not null)
+        {
+            CommitRulerInteraction(e.GetPosition(this));
+            e.Pointer.Capture(null);
+            e.Handled = true;
+            return;
+        }
+        if (_hfSelectionDragActive)
+        {
+            TryHitTestHeaderFooter(e.GetPosition(this), extendSelection: true);
+            _hfSelectionDragActive = false;
+            _hfSelectionDragPointer?.Capture(null);
+            _hfSelectionDragPointer = null;
+            e.Handled = true;
+            return;
+        }
         if (_shapeTextSelectionDragState is not null)
         {
             UpdateShapeTextSelectionDrag(e.GetPosition(this));
@@ -15844,18 +16486,19 @@ public sealed partial class DocumentView : Control
                     e.Handled = true;
                     return;
                 case Key.Left:
-                    HfMoveCaret(-1); e.Handled = true; return;
+                    HfMoveCaret(-1, shift); e.Handled = true; return;
                 case Key.Right:
-                    HfMoveCaret(+1); e.Handled = true; return;
+                    HfMoveCaret(+1, shift); e.Handled = true; return;
                 case Key.Home:
-                    _hfCaret = (_hfCaret.Value.Target, 0); InvalidateVisual(); CaretMoved?.Invoke(); e.Handled = true; return;
+                    HfMoveToParagraphEdge(toStart: true, shift); e.Handled = true; return;
                 case Key.End:
-                    _hfCaret = (_hfCaret.Value.Target, HfParaLength(_hfCaret.Value.Target)); InvalidateVisual(); CaretMoved?.Invoke(); e.Handled = true; return;
+                    HfMoveToParagraphEdge(toStart: false, shift); e.Handled = true; return;
                 case Key.Back: Backspace(); e.Handled = true; return;
                 case Key.Delete: DeleteForward(); e.Handled = true; return;
                 case Key.Enter: InsertParagraphBreak(); e.Handled = true; return;
                 case Key.Z when ctrl: Undo(); e.Handled = true; return;
                 case Key.Y when ctrl: Redo(); e.Handled = true; return;
+                case Key.A when ctrl: SelectAllHeaderFooterText(); e.Handled = true; return;
                 // DD1 (AV-HFEDIT): Tab/Shift+Tab while H/F caret is active — insert a literal tab into the
                 // header/footer and mark handled. This prevents fall-through to the body Tab path which would
                 // fire ListTabAtItemStart and mutate body list items (or navigate table cells) instead.
@@ -15864,13 +16507,11 @@ public sealed partial class DocumentView : Control
                 case Key.Tab:
                     if (!shift) HfInsertText("\t");
                     e.Handled = true; return;
-                // DD2 (AV-HFEDIT): Up/Down are consumed as no-ops inside a header/footer.
-                // Previously the comment said "no-op for H/F" but both keys fell through to MoveCaretVertical
-                // which moved the BODY caret while _hfCaret stayed non-null, leaving the body caret displaced
-                // after ExitHeaderFooterCaret(). Intercept here so the body caret never moves during H/F editing.
+                // Route vertical navigation through the shared header/footer story rather than the body caret.
                 case Key.Up:
+                    HfMoveCaretVertical(-1, shift); e.Handled = true; return;
                 case Key.Down:
-                    e.Handled = true; return;
+                    HfMoveCaretVertical(1, shift); e.Handled = true; return;
             }
             // All other keys fall through to default handling below.
         }
@@ -17960,6 +18601,18 @@ public sealed partial class DocumentView : Control
             accept ? RevisionResolutionAction.Accept : RevisionResolutionAction.Reject);
     }
 
+    /// <summary>Accepts one reviewing-pane entry through the shared undoable revision command path.</summary>
+    public bool AcceptRevision(RevisionEntry entry) =>
+        ResolveRevision(entry, RevisionResolutionAction.Accept);
+
+    /// <summary>Rejects one reviewing-pane entry through the shared undoable revision command path.</summary>
+    public bool RejectRevision(RevisionEntry entry) =>
+        ResolveRevision(entry, RevisionResolutionAction.Reject);
+
+    private bool ResolveRevision(RevisionEntry entry, RevisionResolutionAction action) =>
+        _editingSession.Review.ResolveRevisionTarget(entry) is { } target
+        && _editingSession.Review.TryResolveRevision(target, action);
+
     /// <summary>
     /// Accept every tracked change: insertions become ordinary text, deletions are removed. Undoable as a
     /// single step; re-renders. Returns true when there was anything to resolve.
@@ -18218,7 +18871,8 @@ public sealed partial class DocumentView : Control
     /// <summary>
     /// AV-VIEW: Toggle a horizontal (top) + vertical (left) ruler strip with tick marks and margin
     /// markers, drawn on the first page in <see cref="DocumentViewMode.PrintLayout"/> (View → Show →
-    /// Ruler in Word). View-only chrome; does not affect layout.
+    /// Ruler in Word). Pointer interaction edits margins, paragraph indents, and tab stops through the
+    /// same undoable model paths used by the Page Setup and Paragraph dialogs.
     /// </summary>
     public bool ShowRuler
     {
@@ -18228,6 +18882,8 @@ public sealed partial class DocumentView : Control
             if (_showRuler == value)
                 return;
             _showRuler = value;
+            if (!value && _rulerDrag is not null)
+                CancelRulerInteraction();
             InvalidateVisual();
         }
     }
@@ -18756,6 +19412,14 @@ public sealed partial class DocumentView : Control
             OriginalPixelWidth = Math.Max(0, originalPixelWidth),
             OriginalPixelHeight = Math.Max(0, originalPixelHeight),
         };
+        InsertInlineImage(image);
+    }
+
+    /// <summary>Inserts a fully planned shared image model through Avalonia's undoable object-run adapter.</summary>
+    public void InsertInlineImage(InlineImage image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        image.Wrapping = ImageWrapping.Inline;
         InsertObjectRun(new Run(string.Empty, RunFormatting.Default) { Image = image });
     }
 
@@ -21067,15 +21731,23 @@ public sealed partial class DocumentView : Control
     /// <summary>Text spanning the current selection (empty when there is no selection).</summary>
     public string SelectedText
     {
-        get => NormalizedSelection() is null
-            ? string.Empty
-            : _editingSession.Interaction.ProjectSelectionText(CurrentBodyTextRange());
+        get
+        {
+            if (_hfCaret is not null)
+                return HeaderFooterSelectedText();
+            return NormalizedSelection() is null
+                ? string.Empty
+                : _editingSession.Interaction.ProjectSelectionText(CurrentBodyTextRange());
+        }
     }
 
     public bool TryDeleteSelection()
     {
         if (IsEditingLocked)
             return false;
+
+        if (_hfCaret is not null)
+            return TryDeleteHfSelection();
 
         if (NormalizedSelection() is null)
             return false;
@@ -21085,6 +21757,12 @@ public sealed partial class DocumentView : Control
 
     public void SelectAllText()
     {
+        if (_hfCaret is not null)
+        {
+            SelectAllHeaderFooterText();
+            return;
+        }
+
         if (_editingSession.Interaction.SelectAllBodyText() is not { } selection)
             return;
 

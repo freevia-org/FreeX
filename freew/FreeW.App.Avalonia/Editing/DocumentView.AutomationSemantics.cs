@@ -46,8 +46,15 @@ public sealed partial class DocumentView
             var sectionNumber = Math.Max(0, headerFooterCaret.Target.SectionIndex) + 1;
             return AccessibleDocumentSnapshotPlanner.BuildHeaderFooter(
                 story,
-                headerFooterCaret.Target.ParaIdx,
-                headerFooterCaret.Offset,
+                new HeaderFooterTextPosition(
+                    headerFooterCaret.Target.ParaIdx,
+                    headerFooterCaret.Offset),
+                _hfSelectionAnchor is { } headerFooterAnchor
+                    && SameHfStory(headerFooterCaret.Target, headerFooterAnchor.Target)
+                        ? new HeaderFooterTextPosition(
+                            headerFooterAnchor.Target.ParaIdx,
+                            headerFooterAnchor.Offset)
+                        : null,
                 $"Section {sectionNumber} {StoryName(headerFooterCaret.Target.Slot)}");
         }
 
