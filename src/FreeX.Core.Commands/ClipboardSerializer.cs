@@ -5,6 +5,36 @@ namespace FreeX.Core.Commands;
 
 public static class ClipboardSerializer
 {
+    /// <summary>
+    /// Converts the tab/newline-delimited clipboard representation produced by <see cref="Serialize"/>
+    /// into comma-delimited RFC 4180 field syntax. Both desktop renderers use this payload for their
+    /// platform-specific CSV clipboard formats.
+    /// </summary>
+    public static string ConvertTsvToCsv(string? tsvText)
+    {
+        if (string.IsNullOrEmpty(tsvText))
+            return string.Empty;
+
+        var rows = Deserialize(tsvText);
+        var sb = new StringBuilder(tsvText.Length + 16);
+        for (var rowIndex = 0; rowIndex < rows.Length; rowIndex++)
+        {
+            if (rowIndex > 0)
+                sb.Append("\r\n");
+
+            var row = rows[rowIndex];
+            for (var columnIndex = 0; columnIndex < row.Length; columnIndex++)
+            {
+                if (columnIndex > 0)
+                    sb.Append(',');
+
+                AppendCsvField(sb, row[columnIndex]);
+            }
+        }
+
+        return sb.ToString();
+    }
+
     /// <summary>Serialises the display text of <paramref name="range"/> as spreadsheet-compatible
     /// tab/newline-delimited text.</summary>
     public static string Serialize(ViewportModel viewport, GridRange range)
@@ -201,6 +231,37 @@ public static class ClipboardSerializer
         }
 
         sb.Append('"');
+    }
+
+    private static void AppendCsvField(StringBuilder sb, string field)
+    {
+        if (!RequiresCsvQuoting(field))
+        {
+            sb.Append(field);
+            return;
+        }
+
+        sb.Append('"');
+        foreach (var ch in field)
+        {
+            if (ch == '"')
+                sb.Append("\"\"");
+            else
+                sb.Append(ch);
+        }
+
+        sb.Append('"');
+    }
+
+    private static bool RequiresCsvQuoting(string field)
+    {
+        foreach (var ch in field)
+        {
+            if (ch is ',' or '"' or '\r' or '\n')
+                return true;
+        }
+
+        return false;
     }
 
     private static void AppendTsvCell(Span<char> destination, ref int offset, string text)

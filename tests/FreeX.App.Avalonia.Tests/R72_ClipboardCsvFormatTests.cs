@@ -8,8 +8,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// <summary>
 /// R72-services-clipboard-interop-4-2: the Avalonia shell's copy (<c>AddClipboardTextAndHtml</c>) placed
 /// plain text plus the two HTML clipboard variants on the OS clipboard, but never a CSV-typed format --
-/// unlike the WPF host (<c>MainWindow.ClipboardCommands.cs</c>'s <c>BuildCsvClipboardText</c>, added in
-/// R57), which additionally places a comma-delimited "CSV" format so a destination app that specifically
+/// unlike the WPF host (R57), which additionally places a comma-delimited "CSV" format so a destination app that specifically
 /// enumerates for CSV (skipping plain text) still gets a payload. These tests exercise the new
 /// <c>MainWindow.AddClipboardTextAndHtmlForTest</c> path directly against a real <see cref="DataTransfer"/>
 /// (a concrete Avalonia type, unlike the platform clipboard itself, which is <c>[NotClientImplementable]</c>).
