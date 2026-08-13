@@ -25213,28 +25213,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(key, modifiers, out route) ||
         WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(key, modifiers, out route);
 
-    private static bool TryGetWorkbookShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
-    {
-        var keyName = key switch
-        {
-            Key.NumPad1 => nameof(WorkbookShortcutKey.D1),
-            Key.NumPad2 => nameof(WorkbookShortcutKey.D2),
-            Key.NumPad3 => nameof(WorkbookShortcutKey.D3),
-            Key.NumPad4 => nameof(WorkbookShortcutKey.D4),
-            Key.NumPad5 => nameof(WorkbookShortcutKey.D5),
-            Key.NumPad6 => nameof(WorkbookShortcutKey.D6),
-            Key.Add => nameof(WorkbookShortcutKey.OemPlus),
-            Key.Subtract => nameof(WorkbookShortcutKey.OemMinus),
-            Key.Decimal => nameof(WorkbookShortcutKey.OemPeriod),
-            Key.Oem1 => nameof(WorkbookShortcutKey.OemSemicolon),
-            Key.Oem4 => nameof(WorkbookShortcutKey.OemOpenBrackets),
-            Key.Oem6 => nameof(WorkbookShortcutKey.OemCloseBrackets),
-            Key.Oem7 => nameof(WorkbookShortcutKey.OemQuotes),
-            _ => key.ToString()
-        };
-
-        return WorkbookKeyboardShortcutCatalog.TryParseKeyName(keyName, out shortcutKey);
-    }
+    private static bool TryGetWorkbookShortcutKey(Key key, out WorkbookShortcutKey shortcutKey) =>
+        WorkbookKeyboardShortcutCatalog.TryParseKeyName(key.ToString(), out shortcutKey);
 
     private static WorkbookShortcutModifiers ToWorkbookShortcutModifiers(KeyModifiers modifiers)
     {

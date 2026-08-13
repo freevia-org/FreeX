@@ -184,12 +184,30 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     }
 
     [Theory]
+    [InlineData("NumPad2", WorkbookShortcutKey.D2)]
+    [InlineData("Add", WorkbookShortcutKey.OemPlus)]
+    [InlineData("Subtract", WorkbookShortcutKey.OemMinus)]
+    [InlineData("Decimal", WorkbookShortcutKey.OemPeriod)]
+    [InlineData("Next", WorkbookShortcutKey.PageDown)]
+    [InlineData("Prior", WorkbookShortcutKey.PageUp)]
+    [InlineData("Oem1", WorkbookShortcutKey.OemSemicolon)]
+    [InlineData("Oem4", WorkbookShortcutKey.OemOpenBrackets)]
+    [InlineData("Oem6", WorkbookShortcutKey.OemCloseBrackets)]
+    [InlineData("Oem7", WorkbookShortcutKey.OemQuotes)]
+    public void TryParseKeyName_MapsPlatformAliases(
+        string keyName,
+        WorkbookShortcutKey expected)
+    {
+        WorkbookKeyboardShortcutCatalog.TryParseKeyName(keyName, out var key).Should().BeTrue();
+        key.Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("a")]
-    [InlineData("NumPad2")]
     [InlineData("Space")]
-    public void TryParseKeyName_RejectsAliasesAndUnsupportedKeys(string? keyName)
+    public void TryParseKeyName_RejectsUnsupportedKeys(string? keyName)
     {
         WorkbookKeyboardShortcutCatalog.TryParseKeyName(keyName, out _).Should().BeFalse();
     }

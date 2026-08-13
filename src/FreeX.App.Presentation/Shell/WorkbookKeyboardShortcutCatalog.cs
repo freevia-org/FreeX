@@ -480,14 +480,36 @@ public static class WorkbookKeyboardShortcutCatalog
         WorkbookShortcutModifiers> ApplicationCommands = new(ApplicationCommandShortcuts);
 
     /// <summary>
-    /// Maps a platform key enum name onto the portable shortcut key catalog. Platform adapters retain
-    /// only aliases whose enum names differ, such as NumPad2 and Add.
+    /// Maps a platform key enum name onto the portable shortcut key catalog, including the aliases
+    /// used by the WPF and Avalonia key enums.
     /// </summary>
     public static bool TryParseKeyName(string? keyName, out WorkbookShortcutKey key)
     {
         key = default;
-        return !string.IsNullOrWhiteSpace(keyName) &&
-            Enum.TryParse(keyName, ignoreCase: false, out key) &&
+        if (string.IsNullOrWhiteSpace(keyName))
+            return false;
+
+        var canonicalName = keyName switch
+        {
+            "NumPad1" => nameof(WorkbookShortcutKey.D1),
+            "NumPad2" => nameof(WorkbookShortcutKey.D2),
+            "NumPad3" => nameof(WorkbookShortcutKey.D3),
+            "NumPad4" => nameof(WorkbookShortcutKey.D4),
+            "NumPad5" => nameof(WorkbookShortcutKey.D5),
+            "NumPad6" => nameof(WorkbookShortcutKey.D6),
+            "Add" => nameof(WorkbookShortcutKey.OemPlus),
+            "Subtract" => nameof(WorkbookShortcutKey.OemMinus),
+            "Decimal" => nameof(WorkbookShortcutKey.OemPeriod),
+            "Next" => nameof(WorkbookShortcutKey.PageDown),
+            "Prior" => nameof(WorkbookShortcutKey.PageUp),
+            "Oem1" => nameof(WorkbookShortcutKey.OemSemicolon),
+            "Oem4" => nameof(WorkbookShortcutKey.OemOpenBrackets),
+            "Oem6" => nameof(WorkbookShortcutKey.OemCloseBrackets),
+            "Oem7" => nameof(WorkbookShortcutKey.OemQuotes),
+            _ => keyName
+        };
+
+        return Enum.TryParse(canonicalName, ignoreCase: false, out key) &&
             Enum.IsDefined(key);
     }
 

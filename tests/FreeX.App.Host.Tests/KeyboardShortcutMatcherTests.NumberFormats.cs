@@ -43,12 +43,8 @@ public sealed partial class KeyboardShortcutMatcherTests
         result.Should().BeFalse();
     }
 
-    // R125-keyboard-numberformat-numpad-1: the Avalonia shell's TryGetWorkbookShortcutKey (see
-    // MainWindow.cs) aliases NumPad1..6 to the same D1..D6 shortcut keys used by the top-row
-    // digits, so Ctrl+Shift+NumPad1..6 already applies these number formats there. This host's
-    // matcher used a separate resolver (TryGetWorkbookNumberFormatShortcutKey) that had NO NumPad
-    // aliases at all, silently swallowing the numpad chord instead of applying the format --
-    // a real cross-shell divergence, fixed to match Avalonia's aliasing.
+    // The shared shortcut catalog aliases NumPad1..6 to the same D1..D6 shortcut keys used by
+    // the top-row digits, keeping number-format chords aligned in WPF and Avalonia.
     [Theory]
     [InlineData(Key.NumPad1, NumberFormatShortcut.Number)]
     [InlineData(Key.NumPad2, NumberFormatShortcut.Time)]

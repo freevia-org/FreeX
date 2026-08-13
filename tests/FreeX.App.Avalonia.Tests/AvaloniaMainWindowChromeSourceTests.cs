@@ -39,9 +39,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         routingSource.Should().Contain("ToggleBold = Handled<WorkbookApplicationCommandInvocation");
         routingSource.Should().Contain("ActivateAdjacentSheet = Result<int>");
         routingSource.Should().Contain("SelectAdjacentSheetGroup = Result<int>");
-        source.Should().Contain("WorkbookKeyboardShortcutCatalog.TryParseKeyName(keyName, out shortcutKey)");
-        source.Should().Contain("Key.NumPad1 => nameof(WorkbookShortcutKey.D1)");
-        source.Should().Contain("Key.Add => nameof(WorkbookShortcutKey.OemPlus)");
+        source.Should().Contain("WorkbookKeyboardShortcutCatalog.TryParseKeyName(key.ToString(), out shortcutKey)");
+        source.Should().NotContain("Key.NumPad1 => nameof(WorkbookShortcutKey.D1)");
+        source.Should().NotContain("Key.Add => nameof(WorkbookShortcutKey.OemPlus)");
         source.Should().NotContain("Key.D7 => WorkbookShortcutKey.D7");
         routingSource.Should().Contain("ApplyOutlineBorder = Handled(");
         routingSource.Should().Contain("ClearOutlineBorder = Handled(");
