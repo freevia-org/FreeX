@@ -17,10 +17,9 @@ public sealed partial class MainWindow
 {
     private static AvaloniaCompactDialogChromeStyle ProofingDialogChromeStyle => new(FormulaBarFontFamily);
 
-    // Review ▸ Proofing (Thesaurus / Translate) and Insert ▸ Equation / Object.
-    // Honest scope: the thesaurus uses the shared small built-in synonym planner,
-    // translation is offline-unavailable (no network/service in this build), equation is
-    // inserted as plain cell text (no true equation object), and object embedding is unsupported.
+    // Review ▸ Proofing (Thesaurus / Translate) and Insert ▸ Equation.
+    // The thesaurus and manual translation flows use shared planners. Equation input commits through
+    // the normal cell-edit session; Insert Object is implemented separately in MainWindow.InsertObjects.
 
     private bool CommitProofingText(string text, string successStatus)
     {

@@ -6,18 +6,16 @@ using FreeX.Ribbon.Definitions;
 namespace FreeX.App.Avalonia;
 
 /// <summary>
-/// Phase-1 wiring for the Help tab and the contextual ribbon tabs (Chart/Picture/Shape/Table/Pivot).
-/// The contextual tabs render as shells on selection (driven by <see cref="AvaloniaRibbonContextSource"/>);
-/// most of their commands are honest "not yet available" status reports, and the few tractable ones reuse
-/// existing shell handlers. The command ids here mirror those declared in
+/// Production wiring for the Help tab and the contextual ribbon tabs (Chart/Picture/Shape/Table/Pivot).
+/// Visibility is driven by <see cref="AvaloniaRibbonContextSource"/> while command behavior delegates to
+/// shared workflow planners and command-backed session APIs. The command ids here mirror those declared in
 /// <see cref="Ribbon.AvaloniaRibbonHost"/>'s definition.
 /// </summary>
 public sealed partial class MainWindow
 {
     /// <summary>
-    /// Central map of Help/contextual-tab command id → handler, merged into the ribbon's ExtraCommands so
-    /// every Phase-1 button does something honest. Real handlers reuse existing shell behavior; the rest
-    /// report a clearly-labeled "not yet available" status (no silent no-ops, no invented behavior).
+    /// Central map of Help/contextual-tab command id → handler, merged into the ribbon's ExtraCommands.
+    /// Renderers only gather native input and dispatch the shared planner/session operation.
     /// </summary>
     private IReadOnlyDictionary<string, Action> BuildContextualTabCommands()
     {
@@ -210,10 +208,6 @@ public sealed partial class MainWindow
 
         return dict;
     }
-
-    /// <summary>Reports that a contextual-tab command is a Phase-1 shell, on the status bar.</summary>
-    private void ReportContextualNotYetAvailable(string commandLabel)
-        => RefreshShell(UiText.Format("InsertLoc_NotYetAvailable", commandLabel));
 
     /// <summary>
     /// Launches a fire-and-forget async UI handler so a thrown exception is surfaced on the status

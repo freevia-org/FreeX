@@ -20,10 +20,9 @@ namespace FreeX.App.Avalonia;
 /// Real wiring for the Picture Format (picture.selected) and Shape Format (shape.selected) contextual tabs.
 /// Handlers operate on the currently-selected drawing object (<see cref="_selectedDrawingObjectKind"/> /
 /// <see cref="_selectedDrawingObjectId"/>) and run Core commands through the shared session command path
-/// (<see cref="WorkbookSession.ExecuteReviewCommand"/>). Where Core exposes a real command for the object kind
-/// the button does the real thing (rotate / size / alt text for both kinds; z-order, fill, outline, gradient,
-/// effects for shapes); where it does not (picture z-order, picture/shape crop, format-picture, selection
-/// pane) it reports an honest, clearly-labeled status — no silent no-ops, no invented APIs.
+/// (<see cref="WorkbookSession.ExecuteReviewCommand"/>). The shared contextual plan covers format/crop,
+/// z-order, selection, rotation, size, alt text, fill, outline, gradient, and effect actions; this host only
+/// adapts native dialogs and pointer-driven crop interaction to those shared operations.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -31,8 +30,7 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Picture/Shape Format command id -> handler entries. Merge these into
-    /// <see cref="BuildContextualTabCommands"/> (they replace the four Phase-1 picture/shape shells and add
-    /// the new Arrange / Shape Styles / Accessibility commands).
+    /// <see cref="BuildContextualTabCommands"/> to add the Arrange, Shape Styles, and Accessibility commands.
     /// </summary>
     private IEnumerable<KeyValuePair<string, Action>> BuildPictureShapeTabCommands()
     {

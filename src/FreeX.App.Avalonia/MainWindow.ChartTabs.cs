@@ -34,11 +34,10 @@ namespace FreeX.App.Avalonia;
 ///   plot-area / title / legend / data-label / axis-gridline / series formatting toggles. Core fully
 ///   supports these via <c>ApplyOptions</c>.</item>
 /// </list>
-/// Commands without Core support (combo overlays needing series pickers, Move Chart's sheet-target
-/// dialog, and the type-specific Bar/Pie/Bubble/Stock format dialogs) report an honest "not yet
-/// available" status rather than inventing behavior. Shared chart cycling and command-planning policy
-/// lives in <see cref="FreeX.App.Presentation.Charts.Editing"/> so this renderer only resolves selection,
-/// gathers user input, and applies Core commands.
+/// Shared chart cycling, support gates, validation, and command-planning policy live in
+/// <see cref="FreeX.App.Presentation.Charts.Editing"/>. This renderer resolves selection, gathers native
+/// input, and applies the resulting Core commands, including Move Chart and the type-specific
+/// Bar/Pie/Bubble/Stock formatting workflows.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -1003,7 +1002,4 @@ public sealed partial class MainWindow
         ApplyChartLayout(commandLabel, chart, options);
     }
 
-    /// <summary>Reports that a Chart-tab command has no Core support yet (no silent no-op, no invented behavior).</summary>
-    private void ReportChartCommandNotYetAvailable(string commandLabel)
-        => RefreshShell(UiText.Format(ChartWorkflowCommandCatalog.CommandNotYetAvailableStatusResourceKey, commandLabel));
 }

@@ -208,8 +208,4 @@ public sealed partial class MainWindow
             values,
             showExpandCollapseButtons);
 
-    /// <summary>Reports that a PivotTable contextual command is not yet backed by Core.</summary>
-    private void ReportPivotNotYetAvailable(string commandLabel)
-        => RefreshShell(UiText.Format("PivotLoc_NotYetAvailable", commandLabel));
-
 }
