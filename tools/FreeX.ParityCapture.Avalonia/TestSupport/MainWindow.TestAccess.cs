@@ -818,6 +818,9 @@ public sealed partial class MainWindow
     internal static Task SettleDialogRangeInteractionBoundaryForTestAsync(Window dialog) =>
         SettleDialogRangeInteractionBoundaryAsync(dialog);
 
+    internal void RaiseDialogRangeValidationKeyForTest(Key key) =>
+        RaiseDialogRangeValidationKey(key);
+
     internal static int CountDialogTabStopsForTest(Window dialog) => CountDialogTabStops(dialog);
 
     internal static Task<string> ExerciseTabCycleForTestAsync(
