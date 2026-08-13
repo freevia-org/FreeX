@@ -22,13 +22,6 @@ internal sealed class ZoomDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
-    // Representative fit scales for the page-relative presets. These mirror typical Word values for
-    // a Letter page in a roughly 1000px workspace; exact fit-to-viewport computation is deferred.
-    private static readonly ZoomDialogFitFactors DefaultFitFactors = new(
-        PageWidthFactor: 1.25,
-        TextWidthFactor: 1.5,
-        WholePageFactor: 0.6);
-
     private readonly RadioButton _pageWidthButton = Preset("Page width");
     private readonly RadioButton _textWidthButton = Preset("Text width");
     private readonly RadioButton _wholePageButton = Preset("Whole page");
@@ -40,13 +33,15 @@ internal sealed class ZoomDialog : FreeWDialogWindow
     };
     private readonly TextBlock _status = new();
     private readonly List<(RadioButton Button, int Percent)> _presetButtons = [];
+    private readonly ZoomDialogFitFactors _fitFactors;
     private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Zoom;
 
     /// <summary>The scale the user accepted (1.0 == 100%), or <c>null</c> if cancelled.</summary>
     public double? Result { get; private set; }
 
-    public ZoomDialog(double currentScale)
+    public ZoomDialog(double currentScale, ZoomDialogFitFactors fitFactors)
     {
+        _fitFactors = fitFactors;
         Title = "Zoom";
         Width = 280;
         SizeToContent = SizeToContent.Height;
@@ -129,7 +124,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
     }
 
     internal bool TryResolveScale(out double scale, out ZoomDialogValidationError? error) =>
-        ZoomDialogPlanner.TryCreateResult(BuildSelectionRequest(), DefaultFitFactors, out scale, out error);
+        ZoomDialogPlanner.TryCreateResult(BuildSelectionRequest(), _fitFactors, out scale, out error);
 
     private void Accept()
     {

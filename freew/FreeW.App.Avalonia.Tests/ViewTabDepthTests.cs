@@ -919,9 +919,9 @@ public sealed class ViewTabDepthTests
         var ran = await OnUiThread(() =>
         {
             // 100% current → the 100% radio is pre-selected → ResolveScale == 1.0.
-            scale100 = new ZoomDialog(1.0).ResolveScale();
+            scale100 = new ZoomDialog(1.0, new ZoomDialogFitFactors(1.25, 1.5, 0.6)).ResolveScale();
             // 200% current → the 200% radio is pre-selected → ResolveScale == 2.0.
-            scale200 = new ZoomDialog(2.0).ResolveScale();
+            scale200 = new ZoomDialog(2.0, new ZoomDialogFitFactors(1.25, 1.5, 0.6)).ResolveScale();
         });
 
         if (!ran) return;
@@ -936,7 +936,7 @@ public sealed class ViewTabDepthTests
         var ran = await OnUiThread(() =>
         {
             // A non-preset current zoom (e.g. 130%) selects the custom radio; ResolveScale reads the box.
-            var dialog = new ZoomDialog(1.3);
+            var dialog = new ZoomDialog(1.3, new ZoomDialogFitFactors(1.25, 1.5, 0.6));
             scale = dialog.ResolveScale();
         });
 

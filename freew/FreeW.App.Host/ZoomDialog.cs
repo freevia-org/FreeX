@@ -29,7 +29,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private double? _result;
     private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Zoom;
 
-    private ZoomDialog(Window? owner, double currentFactor, double pageWidthFactor, double textWidthFactor, double wholePageFactor)
+    private ZoomDialog(Window? owner, double currentFactor, ZoomDialogFitFactors fitFactors)
     {
         Owner = owner;
         Title = "Zoom";
@@ -39,7 +39,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _fitFactors = new ZoomDialogFitFactors(pageWidthFactor, textWidthFactor, wholePageFactor);
+        _fitFactors = fitFactors;
 
         var plan = ZoomDialogPlanner.Build(currentFactor);
         _percentBox.Text = plan.CustomPercentText;
@@ -163,11 +163,9 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     public static double? Prompt(
         Window? owner,
         double currentFactor,
-        double pageWidthFactor,
-        double textWidthFactor,
-        double wholePageFactor)
+        ZoomDialogFitFactors fitFactors)
     {
-        var dialog = new ZoomDialog(owner, currentFactor, pageWidthFactor, textWidthFactor, wholePageFactor);
+        var dialog = new ZoomDialog(owner, currentFactor, fitFactors);
         dialog.ShowDialog();
         return dialog._result;
     }

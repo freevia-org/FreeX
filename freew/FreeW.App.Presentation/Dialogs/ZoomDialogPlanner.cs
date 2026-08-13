@@ -49,6 +49,25 @@ public static class ZoomDialogPlanner
 
     public static IReadOnlyList<int> Presets => PresetValues;
 
+    /// <summary>
+    /// Computes the three page-relative zoom choices from model page geometry and the renderer's live
+    /// viewport. Hosts only supply the available size; the fit policy remains shared.
+    /// </summary>
+    public static ZoomDialogFitFactors BuildFitFactors(
+        PageSettings page,
+        double viewportWidthDip,
+        double viewportHeightDip)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+
+        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(page);
+        var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
+        return new ZoomDialogFitFactors(
+            ZoomFit.PageWidth(pageWidthDip, viewportWidthDip),
+            ZoomFit.TextWidth(contentWidthDip, viewportWidthDip),
+            ZoomFit.WholePage(pageWidthDip, pageHeightDip, viewportWidthDip, viewportHeightDip));
+    }
+
     public static ZoomDialogPlan Build(double currentFactor)
     {
         var currentPercent = PercentPolicy.NormalizeWholePercent(ZoomLevels.ToPercent(currentFactor));

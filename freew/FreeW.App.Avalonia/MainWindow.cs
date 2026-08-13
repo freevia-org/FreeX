@@ -1317,7 +1317,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task OpenZoomDialogAsync()
     {
-        var dialog = new ZoomDialog(_zoomScale);
+        var dialog = new ZoomDialog(_zoomScale, ComputeZoomFitFactors());
         await dialog.ShowDialog(this);
         if (dialog.Result is { } scale)
         {
@@ -1776,12 +1776,8 @@ public sealed partial class MainWindow : Window
         return (Math.Max(1, width), Math.Max(1, height));
     }
 
-    private (double PageWidthFactor, double TextWidthFactor, double WholePageFactor) ComputeZoomFitFactors()
+    private ZoomDialogFitFactors ComputeZoomFitFactors()
     {
-        var page = _editor.Document.Page;
-        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(page);
-        var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
-
         var viewportWidth = 0.0;
         var viewportHeight = 0.0;
         if (_scroller is not null)
@@ -1790,10 +1786,7 @@ public sealed partial class MainWindow : Window
             viewportHeight = Math.Max(0, _scroller.Bounds.Height - _scroller.Padding.Top - _scroller.Padding.Bottom);
         }
 
-        return (
-            ZoomFit.PageWidth(pageWidthDip, viewportWidth),
-            ZoomFit.TextWidth(contentWidthDip, viewportWidth),
-            ZoomFit.WholePage(pageWidthDip, pageHeightDip, viewportWidth, viewportHeight));
+        return ZoomDialogPlanner.BuildFitFactors(_editor.Document.Page, viewportWidth, viewportHeight);
     }
 
     /// <summary>

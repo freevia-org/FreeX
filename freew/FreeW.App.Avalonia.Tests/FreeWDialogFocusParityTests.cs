@@ -23,7 +23,7 @@ public sealed class FreeWDialogFocusParityTests
                 new CompareDocumentsPromptState("Reviewer", "Revised.docx"));
             var properties = new PropertiesDialog(new DocumentProperties());
             var formula = new TableFormulaDialog(new TableFormulaDialogInitialState("=SUM(ABOVE)", 0));
-            var zoom = new ZoomDialog(1.0);
+            var zoom = new ZoomDialog(1.0, new ZoomDialogFitFactors(1.25, 1.5, 0.6));
 
             AutomationProperties.GetAutomationId(compare.AuthorBoxForTest)
                 .Should().Be(FreeWDialogFocusPlanner.CompareDocuments.InitialFocusTargetAutomationId);
