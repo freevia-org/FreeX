@@ -206,7 +206,11 @@ internal sealed partial class BackstageView : Window
     {
         var surface = BuildOpenSurface(filter: null);
         var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
-        var content = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+        var content = new StackPanel
+        {
+            MaxWidth = metrics.PaneMaxWidth,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
         content.Children.Add(BuildOpenPaneHeader(surface.Title, surface.Description, metrics));
 
         var searchBox = new TextBox
@@ -233,12 +237,12 @@ internal sealed partial class BackstageView : Window
 
         var documentsPanel = new StackPanel
         {
-            Width = 638,
+            Width = metrics.AvaloniaTabContentWidth,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
         var foldersPanel = new StackPanel
         {
-            Width = 638,
+            Width = metrics.AvaloniaTabContentWidth,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
         var tabs = new TabControl
@@ -259,12 +263,12 @@ internal sealed partial class BackstageView : Window
             tabs,
             new AvaloniaCompactDialogChromeStyle(BackstageFontFamily)
             {
-                ControlHeight = 24,
+                ControlHeight = metrics.AvaloniaTabControlHeight,
                 // WPF's default Backstage tab header is two DIPs shorter than the
                 // compact dialog tab default; keep the Open rows on the authority's
                 // vertical registration without changing the content pane height.
-                TabHeight = 22,
-                FontSize = 12,
+                TabHeight = metrics.AvaloniaTabHeight,
+                FontSize = metrics.AvaloniaTabFontSize,
             },
             contentPaneMargin: new Thickness(0));
         tabs.Styles.Add(new Style(selector =>
@@ -282,7 +286,7 @@ internal sealed partial class BackstageView : Window
             Setters =
             {
                 new Setter(Layoutable.MarginProperty, new Thickness(0)),
-                new Setter(ContentPresenter.PaddingProperty, new Thickness(4, 3, 0, 0)),
+                new Setter(ContentPresenter.PaddingProperty, ToThickness(metrics.AvaloniaTabContentPadding)),
                 new Setter(ContentPresenter.HorizontalContentAlignmentProperty, HorizontalAlignment.Left),
                 new Setter(ContentPresenter.VerticalContentAlignmentProperty, VerticalAlignment.Top),
             },
@@ -299,7 +303,7 @@ internal sealed partial class BackstageView : Window
 
             selectedPane.Margin = new Thickness(0);
             selectedPane.HorizontalAlignment = HorizontalAlignment.Stretch;
-            selectedPane.Padding = new Thickness(4, 3, 0, 0);
+            selectedPane.Padding = ToThickness(metrics.AvaloniaTabContentPadding);
         }
 
         tabs.AttachedToVisualTree += (_, _) => NormalizeSelectedContentHost();
@@ -534,14 +538,14 @@ internal sealed partial class BackstageView : Window
             automationId: action.ResolveAutomationId("BackstageAction_"));
         // Avalonia's default Button template reserves one extra DIP here;
         // match the WPF link-button footprint so repeated rows do not drift.
-        button.MinHeight = 17;
-        button.Height = 17;
+        button.MinHeight = metrics.AvaloniaActionHeight;
+        button.Height = metrics.AvaloniaActionHeight;
         stack.Children.Add(button);
         stack.Children.Add(new TextBlock
         {
             Text = action.Description,
             Foreground = SecondaryInk,
-            FontSize = metrics.DescriptionFontSize,
+            FontSize = metrics.ActionDescriptionFontSize,
             TextWrapping = TextWrapping.Wrap,
             Margin = ToThickness(metrics.DescriptionMargin),
         });
@@ -558,8 +562,9 @@ internal sealed partial class BackstageView : Window
         string heading,
         IReadOnlyList<BackstageActionRow> rows)
     {
+        var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
         panel.Children.Clear();
-        panel.Children.Add(BuildSectionHeader(heading));
+        panel.Children.Add(BuildSectionHeader(heading, metrics));
         foreach (var row in rows)
             panel.Children.Add(BuildOpenActionRow(row));
     }
@@ -569,13 +574,14 @@ internal sealed partial class BackstageView : Window
         IReadOnlyList<BackstageActionRow> rows,
         string emptyText)
     {
+        var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
         panel.Children.Clear();
         if (rows.Count == 0)
         {
             panel.Children.Add(AvaloniaBackstageChrome.CreateNote(
                 emptyText,
                 BackstageChromeStyle,
-                margin: new Thickness(0, 4, 0, 8)));
+                margin: ToThickness(metrics.EmptyStateMargin)));
             return;
         }
 
@@ -647,7 +653,7 @@ internal sealed partial class BackstageView : Window
         panel.Children.Add(new TextBlock
         {
             Text = title,
-            FontSize = 26,
+            FontSize = metrics.HeadingFontSize,
             FontWeight = FontWeight.Light,
             Foreground = PrimaryInk,
             Margin = ToThickness(metrics.HeadingBottomMargin),
@@ -659,6 +665,7 @@ internal sealed partial class BackstageView : Window
                 Text = description,
                 Foreground = SecondaryInk,
                 TextWrapping = TextWrapping.Wrap,
+                FontSize = metrics.DescriptionFontSize,
                 Margin = ToThickness(metrics.DescriptionBottomMargin),
             });
         }
@@ -696,6 +703,15 @@ internal sealed partial class BackstageView : Window
     };
 
     private static TextBlock CreateSectionHeader(string text, BackstageHomePaneVisualMetrics metrics) => new()
+    {
+        Text = text,
+        FontSize = metrics.SectionHeaderFontSize,
+        FontWeight = FontWeight.SemiBold,
+        Foreground = PrimaryInk,
+        Margin = ToThickness(metrics.SectionHeaderMargin),
+    };
+
+    private static TextBlock BuildSectionHeader(string text, BackstageOpenPaneVisualMetrics metrics) => new()
     {
         Text = text,
         FontSize = metrics.SectionHeaderFontSize,

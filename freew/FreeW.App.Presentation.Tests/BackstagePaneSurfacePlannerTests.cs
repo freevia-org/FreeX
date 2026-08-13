@@ -57,13 +57,59 @@ public sealed class BackstagePaneSurfacePlannerTests
     {
         var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
 
+        metrics.PaneMaxWidth.Should().Be(720);
+        metrics.HeadingFontSize.Should().Be(26);
+        metrics.HeadingBottomMargin.Should().Be(new BackstageThickness(0, 0, 0, 18));
+        metrics.DescriptionFontSize.Should().Be(12);
+        metrics.DescriptionBottomMargin.Should().Be(new BackstageThickness(0, 0, 0, 16));
+        metrics.SearchWidth.Should().Be(520);
+        metrics.SearchMinWidth.Should().Be(360);
+        metrics.SearchHeight.Should().Be(30);
         metrics.SearchMargin.Should().Be(new BackstageThickness(0, 0, 0, 12));
         metrics.SearchPadding.Should().Be(new BackstageThickness(8, 3, 8, 3));
         metrics.TabsWidth.Should().Be(640);
         metrics.TabsMinHeight.Should().Be(63);
         metrics.TabsMargin.Should().Be(new BackstageThickness(0, 0, 0, 14));
+        metrics.SectionHeaderFontSize.Should().Be(15);
+        metrics.SectionHeaderMargin.Should().Be(new BackstageThickness(0, 16, 0, 6));
+        metrics.ActionFontSize.Should().Be(13);
+        metrics.ActionDescriptionFontSize.Should().Be(11);
         metrics.ActionRowMargin.Should().Be(new BackstageThickness(0, 0, 0, 10));
         metrics.DescriptionMargin.Should().Be(new BackstageThickness(0, 2, 0, 0));
+        metrics.EmptyStateMargin.Should().Be(new BackstageThickness(0, 8, 0, 12));
+        metrics.AvaloniaTabContentWidth.Should().Be(638);
+        metrics.AvaloniaTabControlHeight.Should().Be(24);
+        metrics.AvaloniaTabHeight.Should().Be(22);
+        metrics.AvaloniaTabFontSize.Should().Be(12);
+        metrics.AvaloniaTabContentPadding.Should().Be(new BackstageThickness(4, 3, 0, 0));
+        metrics.AvaloniaActionHeight.Should().Be(17);
+    }
+
+    [Fact]
+    public void OpenPaneRenderers_consume_the_shared_visual_contract()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Host", "Backstage", "BackstageView.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Avalonia", "Backstage", "BackstageView.cs"));
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("metrics.PaneMaxWidth");
+            source.Should().Contain("metrics.HeadingFontSize");
+            source.Should().Contain("metrics.DescriptionFontSize");
+            source.Should().Contain("metrics.SectionHeaderFontSize");
+            source.Should().Contain("metrics.SectionHeaderMargin");
+            source.Should().Contain("metrics.EmptyStateMargin");
+            source.Should().Contain("metrics.ActionDescriptionFontSize");
+        }
+
+        wpf.Should().NotContain("Margin = new Thickness(0, 8, 0, 12)");
+        avalonia.Should().NotContain("margin: new Thickness(0, 4, 0, 8)");
+        avalonia.Should().Contain("metrics.AvaloniaTabContentWidth");
+        avalonia.Should().Contain("metrics.AvaloniaTabContentPadding");
+        avalonia.Should().Contain("metrics.AvaloniaActionHeight");
     }
 
     [Fact]
