@@ -28,17 +28,6 @@ public sealed class FreeXCleanupB10Tests
             var workbook = new Workbook("Book1");
             var sheet = workbook.AddSheet("Sheet1");
 
-            // Three non-overlapping print areas reliably yield 3 pages (mirrors
-            // PrintRendererMultiAreaTests), giving us a real multi-page document to slice.
-            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
-            sheet.SetCell(new CellAddress(sheet.Id, 1, 5), new TextValue("E1"));
-            sheet.SetCell(new CellAddress(sheet.Id, 1, 9), new TextValue("I1"));
-            sheet.SetPrintAreas([
-                new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 3)),
-                new GridRange(new CellAddress(sheet.Id, 1, 5), new CellAddress(sheet.Id, 2, 7)),
-                new GridRange(new CellAddress(sheet.Id, 1, 9), new CellAddress(sheet.Id, 2, 11)),
-            ]);
-
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();
@@ -62,6 +51,20 @@ public sealed class FreeXCleanupB10Tests
             {
                 window.Show();
                 window.UpdateLayout();
+
+                // Startup can replace the constructor workbook, so build the fixture in the
+                // authoritative session workbook used by the print-preview production path.
+                sheet = window.Session.Workbook.GetSheetAt(0);
+                // Three non-overlapping print areas reliably yield 3 pages (mirrors
+                // PrintRendererMultiAreaTests), giving us a real multi-page document to slice.
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 5), new TextValue("E1"));
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 9), new TextValue("I1"));
+                sheet.SetPrintAreas([
+                    new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 3)),
+                    new GridRange(new CellAddress(sheet.Id, 1, 5), new CellAddress(sheet.Id, 2, 7)),
+                    new GridRange(new CellAddress(sheet.Id, 1, 9), new CellAddress(sheet.Id, 2, 11)),
+                ]);
 
                 var buildPreview = typeof(MainWindow)
                     .GetMethod("BuildActiveSheetPrintPreview", BindingFlags.Instance | BindingFlags.NonPublic)

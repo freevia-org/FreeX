@@ -3,7 +3,6 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Documents;
-using System.Windows.Markup;
 using Free.Shared.Shell.Wpf;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
@@ -95,23 +94,8 @@ public partial class MainWindow
             {
                 var rangedDoc = new FixedDocument();
                 rangedDoc.DocumentPaginator.PageSize = document.DocumentPaginator.PageSize;
-                // Each source PageContent (and its FixedPage) is still a logical child of the
-                // source 'document'; WPF's PageContentCollection.Add throws InvalidOperationException
-                // ("already the logical child of another element") if we add one still parented
-                // elsewhere, and PageContentCollection exposes no Remove. So detach each selected
-                // page's FixedPage and re-wrap it in a fresh PageContent added to rangedDoc.
-                // 'document' is discarded once this subset is built (reassigned below, never read).
-                var selectedPages = new List<PageContent>();
                 for (var i = from - 1; i <= to - 1 && i < document.Pages.Count; i++)
-                    selectedPages.Add(document.Pages[i]);
-                foreach (var page in selectedPages)
-                {
-                    var fixedPage = page.Child;
-                    page.Child = null;
-                    var moved = new PageContent();
-                    ((IAddChild)moved).AddChild(fixedPage);
-                    rangedDoc.Pages.Add(moved);
-                }
+                    rangedDoc.Pages.Add(PrintRenderer.ClonePageAsBitmap(document, document.Pages[i]));
                 document = rangedDoc;
             }
         }
@@ -475,55 +459,8 @@ public partial class MainWindow
         return result;
     }
 
-    private static PageContent CloneExportPage(FixedDocument document, PageContent pageContent)
-    {
-        pageContent.GetPageRoot(forceReload: false);
-        var sourcePage = pageContent.Child ??
-            throw new InvalidOperationException("FixedDocument page content did not contain a FixedPage.");
-        var width = sourcePage.Width > 0 && !double.IsNaN(sourcePage.Width)
-            ? sourcePage.Width
-            : document.DocumentPaginator.PageSize.Width;
-        var height = sourcePage.Height > 0 && !double.IsNaN(sourcePage.Height)
-            ? sourcePage.Height
-            : document.DocumentPaginator.PageSize.Height;
-        var size = new Size(width, height);
-        sourcePage.Measure(size);
-        sourcePage.Arrange(new Rect(size));
-        sourcePage.UpdateLayout();
-        var textOverlays = PdfTextOverlayExtractor.Extract(sourcePage);
-        var linkOverlays = PdfLinkOverlayExtractor.Extract(sourcePage);
-        var cellDestinationOverlays = PdfCellDestinationOverlayExtractor.Extract(sourcePage);
-
-        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
-            Math.Max(1, (int)Math.Ceiling(width)),
-            Math.Max(1, (int)Math.Ceiling(height)),
-            96,
-            96,
-            System.Windows.Media.PixelFormats.Pbgra32);
-        bitmap.Render(sourcePage);
-        bitmap.Freeze();
-
-        var fixedPage = new FixedPage { Width = width, Height = height };
-        fixedPage.Children.Add(new System.Windows.Controls.Image
-        {
-            Source = bitmap,
-            Width = width,
-            Height = height
-        });
-        if (textOverlays.Count > 0 || linkOverlays.Count > 0 || cellDestinationOverlays.Count > 0)
-        {
-            fixedPage.Children.Add(new VisualHost
-            {
-                TextOverlays = textOverlays,
-                LinkOverlays = linkOverlays,
-                CellDestinationOverlays = cellDestinationOverlays
-            });
-        }
-
-        var clone = new PageContent();
-        ((System.Windows.Markup.IAddChild)clone).AddChild(fixedPage);
-        return clone;
-    }
+    private static PageContent CloneExportPage(FixedDocument document, PageContent pageContent) =>
+        PrintRenderer.ClonePageAsBitmap(document, pageContent);
 
     private IReadOnlyList<PdfBookmark>? CreatePdfBookmarks(ExportOptions options)
     {

@@ -224,7 +224,7 @@ public static partial class PrintRenderer
         return WorksheetPrintPageContentPlanner.ComputeTotalPageCount(sheet, printPlan);
     }
 
-    private static PageContent ClonePageAsBitmap(FixedDocument document, PageContent pageContent)
+    internal static PageContent ClonePageAsBitmap(FixedDocument document, PageContent pageContent)
     {
         pageContent.GetPageRoot(forceReload: false);
         var sourcePage = pageContent.Child ??
