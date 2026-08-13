@@ -6,6 +6,61 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class BordersAndShadingDialogPlannerTests
 {
     [Fact]
+    public void VisualMetrics_PreservePairedWpfAuthorityGeometry()
+    {
+        BordersAndShadingDialogPlanner.VisualMetrics.Should().Be(
+            new BordersAndShadingDialogVisualMetrics(
+                DialogWidth: 420,
+                OuterInset: 14,
+                ActionTopInset: 12,
+                ActionBottomInset: 12,
+                ActionButtonWidth: 72,
+                ValidationTopInset: 8,
+                ContentInset: 8,
+                FieldMinWidth: 160,
+                RowVerticalInset: 4,
+                LabelRightInset: 8,
+                EdgeSpacing: 16,
+                SwatchWidth: 28,
+                SwatchHeight: 12,
+                SwatchBorderThickness: 1,
+                SwatchLabelSpacing: 6,
+                AvaloniaControlHeight: 20,
+                AvaloniaButtonHeight: 26,
+                AvaloniaButtonHorizontalPadding: 10,
+                AvaloniaButtonVerticalPadding: 1,
+                AvaloniaTabPaneHorizontalCompensation: -12));
+    }
+
+    [Fact]
+    public void RenderersConsumeSharedVisualMetricsAndUseStretchableNumericFields()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Host", "BordersAndShadingDialog.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Avalonia", "ParagraphCommandDialogs.cs"));
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("BordersAndShadingDialogPlanner.VisualMetrics");
+            source.Should().Contain("Layout.DialogWidth");
+            source.Should().Contain("Layout.OuterInset");
+            source.Should().Contain("Layout.ActionButtonWidth");
+            source.Should().Contain("Layout.ContentInset");
+            source.Should().Contain("Layout.FieldMinWidth");
+            source.Should().Contain("Layout.RowVerticalInset");
+            source.Should().Contain("Layout.SwatchWidth");
+        }
+
+        wpf.Should().NotContain("Width = 420;");
+        wpf.Should().NotContain("MinWidth = 160");
+        avalonia.Should().NotContain("Width = 420;");
+        avalonia.Should().NotContain("new TextBox { Width = 160 }");
+        avalonia.Should().Contain("new TextBox { MinWidth = Layout.FieldMinWidth }");
+    }
+
+    [Fact]
     public void SettingIndexFor_MapsNullBoxAndCustomBorders()
     {
         BordersAndShadingDialogPlanner.SettingIndexFor(null).Should().Be(0);
