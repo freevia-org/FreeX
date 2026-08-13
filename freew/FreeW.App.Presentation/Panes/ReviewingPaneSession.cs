@@ -47,10 +47,8 @@ public sealed class ReviewingPaneSession
     public ReviewingPaneOutcome Refresh()
     {
         var entries = ReviewRevisionSortPlanner.Sort(_enumerate(), State.SortOrder);
-        var selectedIndex = entries.Count == 0
-            ? -1
-            : Math.Clamp(State.SelectedIndex < 0 ? 0 : State.SelectedIndex, 0, entries.Count - 1);
-        State = new ReviewingPaneViewState(entries, selectedIndex, State.SortOrder);
+        var refresh = ReviewingPaneStatePlanner.BuildRefreshState(entries.Count, State.SelectedIndex);
+        State = new ReviewingPaneViewState(entries, refresh.SelectedIndex, State.SortOrder);
         return new ReviewingPaneOutcome(State);
     }
 
@@ -76,9 +74,10 @@ public sealed class ReviewingPaneSession
         if (State.Entries.Count == 0)
             return new ReviewingPaneOutcome(State);
 
-        var next = State.SelectedIndex < 0
-            ? (direction < 0 ? State.Entries.Count - 1 : 0)
-            : (State.SelectedIndex + Math.Sign(direction) + State.Entries.Count) % State.Entries.Count;
+        var next = ReviewingPaneStatePlanner.ResolveStep(
+            State.Entries.Count,
+            State.SelectedIndex,
+            direction);
         return SelectIndex(next);
     }
 

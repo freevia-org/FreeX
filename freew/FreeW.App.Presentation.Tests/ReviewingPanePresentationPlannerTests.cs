@@ -31,8 +31,8 @@ public sealed class ReviewingPanePresentationPlannerTests
     [InlineData(ReviewingPanePresentationProfile.CompactWpf, 1, "1 change")]
     [InlineData(ReviewingPanePresentationProfile.CompactWpf, 4, "4 changes")]
     [InlineData(ReviewingPanePresentationProfile.DetailedAvalonia, 0, "No tracked changes")]
-    [InlineData(ReviewingPanePresentationProfile.DetailedAvalonia, 1, "1 tracked change")]
-    [InlineData(ReviewingPanePresentationProfile.DetailedAvalonia, 4, "4 tracked changes")]
+    [InlineData(ReviewingPanePresentationProfile.DetailedAvalonia, 1, "1 change")]
+    [InlineData(ReviewingPanePresentationProfile.DetailedAvalonia, 4, "4 changes")]
     public void Count_text_preserves_each_renderer_profile(
         ReviewingPanePresentationProfile profile,
         int count,
@@ -62,7 +62,7 @@ public sealed class ReviewingPanePresentationPlannerTests
     }
 
     [Fact]
-    public void Detailed_profile_preserves_quoted_truncation_date_and_per_kind_actions()
+    public void Detailed_profile_preserves_live_avalonia_row_semantics()
     {
         var text = new string('x', 61);
         var entry = Entry(
@@ -76,8 +76,9 @@ public sealed class ReviewingPanePresentationPlannerTests
             ReviewingPanePresentationProfile.DetailedAvalonia);
 
         presentation.KindLabel.Should().Be("Insertion");
-        presentation.AuthorText.Should().Be("(unknown)");
-        presentation.SnippetText.Should().Be($"\"{new string('x', 57)}\u2026\"");
+        presentation.AuthorText.Should().Be("Unknown");
+        presentation.CaptionText.Should().Be(ReviewingPaneRowPlanner.Build(entry).Title);
+        presentation.SnippetText.Should().Be(text);
         presentation.DateText.Should().Be("2026-08-10");
         presentation.AcceptToolTip.Should().Be("Accept this insertion change");
         presentation.RejectToolTip.Should().Be("Reject this insertion change");

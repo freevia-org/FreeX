@@ -6,6 +6,19 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class FreeWDocumentWindowPlannerTests
 {
     [Fact]
+    public void Avalonia_renderer_wires_new_windows_through_the_portable_planner()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("_documentWindowPlanner.CreateNext(");
+        source.Should().Contain("documentWindowPlanner: _documentWindowPlanner");
+        source.Should().Contain("_fileWorkflow.Workflow.ApplyDocumentState(plan.CurrentPath, plan.IsDirty)");
+        source.Should().Contain("ApplicationWindowTitlePolicy.Compose(");
+        source.Should().Contain("FreeWDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber)");
+    }
+
+    [Fact]
     public void CreateNext_ClonesLiveDocumentAndPreservesFileState()
     {
         var source = TextDocument.CreateEmpty();

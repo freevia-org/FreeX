@@ -100,8 +100,8 @@ public static class ReviewingPanePresentationPlanner
             ReviewingPanePresentationProfile.DetailedAvalonia => count switch
             {
                 0 => "No tracked changes",
-                1 => "1 tracked change",
-                _ => $"{count} tracked changes"
+                1 => "1 change",
+                _ => $"{count} changes"
             },
             _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, null)
         };
@@ -143,26 +143,15 @@ public static class ReviewingPanePresentationPlanner
 
     private static ReviewingPaneRevisionPresentation BuildDetailedRevision(RevisionEntry entry)
     {
-        var kindLabel = entry.Kind switch
-        {
-            RevisionEntryKind.Insertion => "Insertion",
-            RevisionEntryKind.Deletion => "Deletion",
-            RevisionEntryKind.Formatting => "Formatting",
-            _ => entry.Kind.ToString()
-        };
-        var author = string.IsNullOrWhiteSpace(entry.Author) ? "(unknown)" : entry.Author;
-        var snippet = entry.Text.Length > 60
-            ? string.Concat("\"", entry.Text.AsSpan(0, 57), "\u2026\"")
-            : $"\"{entry.Text}\"";
-        var actionKind = kindLabel.ToLowerInvariant();
+        var row = ReviewingPaneRowPlanner.Build(entry);
         return new ReviewingPaneRevisionPresentation(
-            kindLabel,
-            author,
-            $"{author} \u2022 {kindLabel}",
-            snippet,
-            FormatDate(entry.DateXml),
-            $"Accept this {actionKind} change",
-            $"Reject this {actionKind} change");
+            row.KindLabel,
+            row.AuthorLabel,
+            row.Title,
+            row.PreviewText,
+            row.DateLabel,
+            row.AcceptToolTip,
+            row.RejectToolTip);
     }
 
     private static string FormatDate(string? dateXml)

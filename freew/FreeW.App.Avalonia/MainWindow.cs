@@ -101,6 +101,8 @@ public sealed partial class MainWindow : Window
     private readonly FreeWOptions _options;
     private readonly FreeWOptionsRuntimeSession _optionsRuntime;
     private readonly IApplicationOptionsStore<FreeWOptions> _optionsStore;
+    private readonly FreeWDocumentWindowPlanner _documentWindowPlanner;
+    private readonly int _documentWindowNumber;
     private readonly AutosaveAdapter _autosave;
     private readonly NavigationPane _navPane;
     private readonly ReviewingPane _reviewingPane;
@@ -182,9 +184,16 @@ public sealed partial class MainWindow : Window
         Func<Task<string?>>? pickPdfImportPathAsync = null,
         Action<DocumentView, Stream, PrintSelection>? saveSelectedPrintPdf = null,
         IPlatformClipboard? platformClipboard = null,
-        bool suppressStartupRecoveryOffer = false)
+        bool suppressStartupRecoveryOffer = false,
+        FreeWDocumentWindowPlanner? documentWindowPlanner = null,
+        int documentWindowNumber = 1)
     {
+        if (documentWindowNumber < 1)
+            throw new ArgumentOutOfRangeException(nameof(documentWindowNumber));
+
         _optionsStore = optionsStore;
+        _documentWindowPlanner = documentWindowPlanner ?? new FreeWDocumentWindowPlanner();
+        _documentWindowNumber = documentWindowNumber;
         _documentPersistence = documentPersistence ?? new DocumentPersistenceWorkflow();
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
         _platformClipboard = platformClipboard ?? new AvaloniaPlatformClipboard(
@@ -240,6 +249,7 @@ public sealed partial class MainWindow : Window
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
             restoreOwnerFocus: RestoreOwnerFocus);
+        RefreshDocumentWindowTitle();
         _documentFileWorkflow = new FreeWDocumentFileWorkflow(
             _fileWorkflow.Workflow,
             _documentPersistence,
@@ -1288,14 +1298,18 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            using var buffer = new MemoryStream();
-            DocxWriter.Write(_editor.Document, buffer);
-            buffer.Position = 0;
-            var copy = DocxReader.Read(buffer);
-
-            var second = new MainWindow();
-            second.LoadDocumentContent(copy);
-            second.Title = Title + " : 2";
+            var plan = _documentWindowPlanner.CreateNext(
+                _editor.Document,
+                _fileWorkflow.CurrentPath,
+                _fileWorkflow.IsDirty);
+            var second = new MainWindow(
+                Array.Empty<string>(),
+                _options,
+                _optionsStore,
+                documentWindowPlanner: _documentWindowPlanner,
+                documentWindowNumber: plan.WindowNumber);
+            second.LoadDocumentContent(plan.Document);
+            second._fileWorkflow.Workflow.ApplyDocumentState(plan.CurrentPath, plan.IsDirty);
             second.Show();
         }
         catch (Exception ex)
@@ -3819,8 +3833,19 @@ public sealed partial class MainWindow : Window
 
     private void OnFileWorkflowChanged()
     {
+        RefreshDocumentWindowTitle();
         _editor.CurrentFileName = _fileWorkflow.CurrentFileName;
         UpdateStatus();
+    }
+
+    private void RefreshDocumentWindowTitle()
+    {
+        Title = ApplicationWindowTitlePolicy.Compose(
+            FreeWApplicationFrameDescriptor.Title,
+            _fileWorkflow.CurrentFileName ?? FreeWApplicationFrameDescriptor.Title.DefaultDocumentDisplayName,
+            _fileWorkflow.IsDirty,
+            FreeWDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber),
+            isDefaultDocument: _fileWorkflow.CurrentPath is null);
     }
 
     private void UpdateStatus()

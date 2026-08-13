@@ -271,7 +271,7 @@ public sealed partial class ReviewingPane : SidePaneBase
                 Text = presentation.SnippetText,
                 FontSize = 11,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
-                TextWrapping = TextWrapping.NoWrap,
+                TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 2),
             };
 
@@ -311,8 +311,10 @@ public sealed partial class ReviewingPane : SidePaneBase
             // Vertical card layout.
             var card = new StackPanel { Margin = new Thickness(4, 4, 4, 2) };
             card.Children.Add(topRow);
-            card.Children.Add(snippetBlock);
-            card.Children.Add(dateBlock);
+            if (presentation.SnippetText.Length > 0)
+                card.Children.Add(snippetBlock);
+            if (presentation.DateText.Length > 0)
+                card.Children.Add(dateBlock);
             card.Children.Add(btnRow);
 
             Content = new Border
