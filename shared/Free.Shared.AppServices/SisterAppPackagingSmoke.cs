@@ -1,11 +1,93 @@
 namespace Free.Shared.AppServices;
 
+public enum SisterAppPackagingSmokeOutputTarget
+{
+    StandardOutput,
+    StandardError,
+}
+
+public sealed record SisterAppPackagingSmokeResult(
+    int ExitCode,
+    SisterAppPackagingSmokeOutputTarget OutputTarget,
+    string ConsoleOutput,
+    string? ReportContent = null);
+
+public delegate SisterAppPackagingSmokeResult SisterAppPackagingSmokeBody(
+    IReadOnlyList<string> startupArguments);
+
+public delegate SisterAppPackagingSmokeResult SisterAppPackagingSmokeExceptionHandler(
+    Exception exception);
+
 /// <summary>
-/// Shared command-line and report helpers for sister-app packaging smoke lanes.
+/// Shared command envelope for sister-app packaging smoke lanes.
 /// </summary>
 public static class SisterAppPackagingSmoke
 {
     public const string Argument = "--packaging-smoke";
+
+    public static bool TryRun(
+        IReadOnlyList<string> args,
+        TextWriter output,
+        TextWriter error,
+        SisterAppPackagingSmokeBody execute,
+        out int exitCode) =>
+        TryRun(args, output, error, execute, exceptionHandler: null, out exitCode);
+
+    public static bool TryRun(
+        IReadOnlyList<string> args,
+        TextWriter output,
+        TextWriter error,
+        SisterAppPackagingSmokeBody execute,
+        SisterAppPackagingSmokeExceptionHandler? exceptionHandler,
+        out int exitCode)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentNullException.ThrowIfNull(error);
+        ArgumentNullException.ThrowIfNull(execute);
+
+        if (!HasArgument(args))
+        {
+            exitCode = 0;
+            return false;
+        }
+
+        var reportPath = FindReportPath(args);
+        try
+        {
+            var result = execute(RemoveArgumentTokens(args))
+                ?? throw new InvalidOperationException("Packaging smoke body returned no result.");
+            ApplyResult(result, reportPath, output, error);
+            exitCode = result.ExitCode;
+        }
+        catch (Exception exception) when (exceptionHandler is not null)
+        {
+            var result = exceptionHandler(exception)
+                ?? throw new InvalidOperationException("Packaging smoke exception handler returned no result.");
+            ApplyResult(result, reportPath, output, error);
+            exitCode = result.ExitCode;
+        }
+
+        return true;
+    }
+
+    private static void ApplyResult(
+        SisterAppPackagingSmokeResult result,
+        string? reportPath,
+        TextWriter output,
+        TextWriter error)
+    {
+        WriteReport(reportPath, result.ReportContent, error);
+        var writer = result.OutputTarget switch
+        {
+            SisterAppPackagingSmokeOutputTarget.StandardOutput => output,
+            SisterAppPackagingSmokeOutputTarget.StandardError => error,
+            _ => throw new InvalidOperationException(
+                $"Unsupported packaging smoke output target '{result.OutputTarget}'."),
+        };
+        writer.Write(result.ConsoleOutput);
+        writer.Flush();
+    }
 
     public static bool HasArgument(IReadOnlyList<string> args)
     {
@@ -34,12 +116,11 @@ public static class SisterAppPackagingSmoke
         return null;
     }
 
-    public static void WriteReport(string? path, string content, TextWriter error)
+    public static void WriteReport(string? path, string? content, TextWriter error)
     {
-        ArgumentNullException.ThrowIfNull(content);
         ArgumentNullException.ThrowIfNull(error);
 
-        if (string.IsNullOrWhiteSpace(path))
+        if (string.IsNullOrWhiteSpace(path) || content is null)
             return;
 
         try

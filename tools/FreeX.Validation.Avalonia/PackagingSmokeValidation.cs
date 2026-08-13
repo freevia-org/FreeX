@@ -408,23 +408,17 @@ internal static class PackagingSmokeCommand
         IReadOnlyList<string> args,
         TextWriter output,
         TextWriter error,
-        out int exitCode)
+        out int exitCode) =>
+        SisterAppPackagingSmoke.TryRun(args, output, error, Execute, out exitCode);
+
+    private static SisterAppPackagingSmokeResult Execute(IReadOnlyList<string> startupArguments)
     {
-        ArgumentNullException.ThrowIfNull(args);
-        ArgumentNullException.ThrowIfNull(output);
-        ArgumentNullException.ThrowIfNull(error);
-
-        if (!SisterAppPackagingSmoke.HasArgument(args))
-        {
-            exitCode = 0;
-            return false;
-        }
-
-        var startupArguments = SisterAppPackagingSmoke.RemoveArgumentTokens(args);
         var result = new WorkbookStartupSmokeService().Run(startupArguments);
-        var writer = result.Success ? output : error;
-        writer.WriteLine(result.Message);
-        exitCode = result.ExitCode;
-        return true;
+        return new SisterAppPackagingSmokeResult(
+            result.ExitCode,
+            result.Success
+                ? SisterAppPackagingSmokeOutputTarget.StandardOutput
+                : SisterAppPackagingSmokeOutputTarget.StandardError,
+            result.Message + Environment.NewLine);
     }
 }

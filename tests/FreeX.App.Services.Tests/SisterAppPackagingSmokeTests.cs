@@ -47,8 +47,11 @@ public sealed class SisterAppPackagingSmokeTests
         var validationProgram = Read(root, "tools", "FreeX.Validation.Avalonia", "Program.cs");
 
         freeX.Should().Contain("public const string Argument = SisterAppPackagingSmoke.Argument;")
-            .And.Contain("SisterAppPackagingSmoke.HasArgument(args)")
-            .And.Contain("SisterAppPackagingSmoke.RemoveArgumentTokens(args)")
+            .And.Contain("SisterAppPackagingSmoke.TryRun(args, output, error, Execute, out exitCode)")
+            .And.Contain("new WorkbookStartupSmokeService().Run(startupArguments)")
+            .And.NotContain("SisterAppPackagingSmoke.HasArgument(")
+            .And.NotContain("SisterAppPackagingSmoke.RemoveArgumentTokens(")
+            .And.NotContain("SisterAppPackagingSmoke.WriteReport(")
             .And.NotContain("public const string Argument = \"--packaging-smoke\"");
         shippingProgram.Should().NotContain("PackagingSmokeCommand");
         parityProgram.Should().NotContain("PackagingSmokeCommand");

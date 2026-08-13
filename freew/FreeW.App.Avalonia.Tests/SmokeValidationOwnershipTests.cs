@@ -94,8 +94,12 @@ public sealed class SmokeValidationOwnershipTests
         program.Should().Contain("PackagingSmoke.TryRun");
         program.Should().Contain("ReadAloudPauseSmoke.TryRun");
         program.Should().Contain("SisterAppLaunchSmokeOptions.TryParse");
+        packaging.Should().Contain("SisterAppPackagingSmoke.TryRun(args, output, error, Execute, HandleException, out exitCode)");
         packaging.Should().Contain("SampleDocument.Create()");
         packaging.Should().Contain("DocxWriter.Write(doc, stream)");
+        packaging.Should().NotContain("SisterAppPackagingSmoke.HasArgument(");
+        packaging.Should().NotContain("output.Write(");
+        packaging.Should().NotContain("error.WriteLine(");
         readAloud.Should().Contain("new AvaloniaSpeechEngine(");
         readAloud.Should().Contain("ReadLinuxProcessState(");
         launch.Should().Contain("new SisterAppLaunchSmokeReport(snapshot.IsPassed, snapshot.ToReport())");

@@ -9089,12 +9089,16 @@ public sealed class MainWindowHeadlessTests : IDisposable
         var report = Path.Combine(TempDirectory, "packaging-smoke.txt");
         {
             var args = new[] { "--packaging-smoke", report };
+            using var output = new StringWriter();
+            using var error = new StringWriter();
             var result = PackagingSmokeCommand.TryRun(
-                args, TextWriter.Null, TextWriter.Null, out var exit);
+                args, output, error, out var exit);
             result.Should().BeTrue("--packaging-smoke must be handled");
             exit.Should().Be(0, "packaging smoke must pass on an empty presentation");
+            output.ToString().Should().Be("freep_packaging_smoke=passed\nslides=1\n");
+            error.ToString().Should().BeEmpty();
             File.Exists(report).Should().BeTrue("packaging smoke must write a report file");
-            File.ReadAllText(report).Should().Contain("freep_packaging_smoke=passed");
+            File.ReadAllText(report).Should().Be(output.ToString());
         }
     }
 

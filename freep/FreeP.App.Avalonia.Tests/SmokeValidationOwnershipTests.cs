@@ -47,9 +47,14 @@ public sealed class SmokeValidationOwnershipTests
         program.Should().Contain("ValidationHostCommandRouteExecutor.Run(");
         program.Should().Contain("PackagingSmokeCommand.TryRun");
         program.Should().Contain("SisterAppLaunchSmokeOptions.TryParse");
+        packaging.Should().Contain("SisterAppPackagingSmoke.TryRun(args, output, error, Execute, HandleException, out exitCode)");
         packaging.Should().Contain("Presentation.CreateEmpty()");
         packaging.Should().Contain("PptxPackageWriter.Write(");
-        packaging.Should().Contain("SisterAppPackagingSmoke.WriteReport(");
+        packaging.Should().NotContain("SisterAppPackagingSmoke.HasArgument(");
+        packaging.Should().NotContain("SisterAppPackagingSmoke.FindReportPath(");
+        packaging.Should().NotContain("SisterAppPackagingSmoke.WriteReport(");
+        packaging.Should().NotContain("output.Write(");
+        packaging.Should().NotContain("error.WriteLine(");
         launch.Should().Contain("SisterAppLaunchSmokeCoordinator.Start(");
         launch.Should().Contain("freep_launch_smoke=");
         adapter.Should().Contain("internal bool HasToolbar");
