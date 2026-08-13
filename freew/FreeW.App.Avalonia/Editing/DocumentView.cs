@@ -19596,8 +19596,7 @@ public sealed class DocumentView : Control
     /// </summary>
     private bool TryAutoCorrect(char justTyped)
     {
-        if (!AutoCorrectEnabled
-            || _shapeCaret is not null
+        if (_shapeCaret is not null
             || _hfCaret is not null
             || _cellCaret is not null
             || NormalizedSelection() is not null
@@ -19608,24 +19607,19 @@ public sealed class DocumentView : Control
         var cells = ParaCells(paragraph);
         var bodyOffset = Math.Clamp(_caret.Offset, 0, cells.Count);
         var textBefore = new string(cells.Take(bodyOffset).Select(cell => cell.Ch).ToArray());
-        var result = AutoCorrectEngine.Evaluate(textBefore, justTyped, AutoCorrectOptions);
-        if (!result.Applies)
-        {
-            // WPF's list paragraph exposes its list marker to the native text range, so the first real
-            // list-item character is not treated as a sentence-start capitalization candidate. The custom
-            // Avalonia model stores that marker in paragraph formatting, so carry the same context into
-            // the shared rule evaluation.
-            var formatOptions = paragraph.Formatting.ListKind != ListKind.None && bodyOffset == 0
-                ? AutoFormatOptions with { Capitalization = false }
-                : AutoFormatOptions;
-            result = AutoCorrect.Evaluate(textBefore, justTyped, formatOptions);
-        }
-        if (!result.Applies)
+        var plan = AutoCorrectTypingPlanner.Build(
+            textBefore,
+            justTyped,
+            AutoCorrectEnabled,
+            AutoCorrectOptions,
+            AutoFormatOptions,
+            suppressCapitalizationAtListStart: paragraph.Formatting.ListKind != ListKind.None
+                && bodyOffset == 0);
+        if (!plan.Applies)
             return false;
+        var result = plan.Result;
 
-        var deleteStart = bodyOffset - result.DeleteBefore;
-        if (deleteStart < 0 || deleteStart > bodyOffset)
-            return false;
+        var deleteStart = plan.ReplacementStartOffset;
 
         var pendingFmt = _pendingRunFmt;
         _pendingRunFmt = null;

@@ -722,8 +722,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     protected override void OnPreviewTextInput(TextCompositionEventArgs e)
     {
-        if (AutoCorrectEnabled
-            && !string.IsNullOrEmpty(e.Text)
+        if (!string.IsNullOrEmpty(e.Text)
             && e.Text.Length == 1
             && Selection.IsEmpty
             && TryAutoCorrect(e.Text[0]))
@@ -785,7 +784,7 @@ public sealed class DocumentView : RichTextBox
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
             return false;
 
-        if (AutoCorrectEnabled && Selection.IsEmpty && TryAutoCorrect(c))
+        if (Selection.IsEmpty && TryAutoCorrect(c))
             return true;
         if (TrackChangesEnabled)
         {
@@ -819,15 +818,17 @@ public sealed class DocumentView : RichTextBox
         var start = caret.Paragraph.ContentStart;
         var textBefore = new TextRange(start, caret).Text;
 
-        // Two engines share the delete-back/insert idiom below: the AutoCorrect-tab word-completion rules
-        // (replace-text table, two-initial-caps, day names) fire when a separator ends a word; the AutoFormat
-        // As-You-Type rules (smart quotes, dashes, lists, ordinals…) fire on their own trigger characters.
-        // Try AutoCorrect first (its corrections are the user's authoritative table); fall back to AutoFormat.
-        var result = AutoCorrectEngine.Evaluate(textBefore, justTyped, AutoCorrectOptions);
-        if (!result.Applies)
-            result = AutoCorrect.Evaluate(textBefore, justTyped, AutoFormatOptions);
-        if (!result.Applies)
+        var plan = AutoCorrectTypingPlanner.Build(
+            textBefore,
+            justTyped,
+            AutoCorrectEnabled,
+            AutoCorrectOptions,
+            AutoFormatOptions,
+            suppressCapitalizationAtListStart: caret.Paragraph.Parent is WpfListItem
+                && string.IsNullOrEmpty(textBefore));
+        if (!plan.Applies)
             return false;
+        var result = plan.Result;
 
         // Walk back DeleteBefore characters (caret-relative) to find the start of the range to replace.
         var deleteStart = caret;
