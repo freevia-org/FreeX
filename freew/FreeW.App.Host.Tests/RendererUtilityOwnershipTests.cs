@@ -65,6 +65,51 @@ public sealed class RendererUtilityOwnershipTests
         mainWindow.Should().Contain("WpfRgbColorAdapter.ParseColorToken(colorHex)");
     }
 
+    [Fact]
+    public void MergeReconciliationKeepsSharedFreeWPoliciesAtRendererBoundaries()
+    {
+        var view = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var ruler = ReadSource("freew", "FreeW.App.Host", "Editing", "Ruler.cs");
+        var mainWindow = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
+        var ribbon = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var svg = ReadSource("freew", "FreeW.App.Host", "SvgRasterizerHelper.cs");
+        var zoom = ReadSource("freew", "FreeW.App.Host", "ZoomDialog.cs");
+        var snapshot = ReadSource(
+            "freew",
+            "FreeW.App.Presentation",
+            "DocumentView",
+            "AccessibleDocumentSnapshotPlanner.cs");
+        var avaloniaFileWorkflow = ReadSource(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "SisterAvaloniaFileCommandWorkflow.cs");
+
+        ruler.Should().Contain("DocumentRulerInteractionPlanner.");
+        snapshot.Should().Contain("HeaderFooterTextSelectionPlanner.Clamp(");
+
+        mainWindow.Should().Contain("new ReviewingPaneSession(");
+        mainWindow.Should().Contain("ReviewingPanePresentationPlanner.");
+        view.Should().Contain("_editingSession.Review.TryResolveAllRevisions(");
+        view.Should().Contain("private readonly OutlineCollapseState _outlineCollapse");
+        view.Should().NotContain("private readonly HashSet<int> _collapsedHeadings");
+
+        mainWindow.Should().Contain("_documentWindowPlanner.CreateNext(");
+        mainWindow.Should().Contain("newWindow._file.LoadDocumentWindow(plan)");
+        mainWindow.Should().Contain("FreeWDocumentWindowPlanner.FormatWindowSuffix(");
+
+        ribbon.Should().Contain("new FreeWPictureImportWorkflow(");
+        ribbon.Should().Contain("PictureInsertionPlanner.FitIcon(");
+        svg.Should().Contain("PictureInsertionPlanner.BuildVectorRasterSurface(");
+        svg.Should().Contain("PictureInsertionPlanner.CreatePngImage(");
+        zoom.Should().Contain("ZoomDialogFitFactors fitFactors");
+
+        avaloniaFileWorkflow.Should().Contain("string WindowSuffix = \"\"");
+        avaloniaFileWorkflow.Should().Contain("string GroupSuffix = \"\"");
+        avaloniaFileWorkflow.Should().Contain("public void ApplyDocumentState(");
+        avaloniaFileWorkflow.Should().Contain("windowSuffix: _titleSpec.WindowSuffix");
+        avaloniaFileWorkflow.Should().Contain("groupSuffix: _titleSpec.GroupSuffix");
+    }
+
     private static string ReadSource(params string[] relativePath)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");

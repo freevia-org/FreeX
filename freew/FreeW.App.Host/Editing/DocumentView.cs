@@ -293,10 +293,10 @@ public sealed partial class DocumentView : RichTextBox
     /// beneath it (down to the next same-or-higher heading), and <see cref="CommitToModel"/> re-inserts
     /// those hidden model blocks so the model document stays complete. Toggling re-renders.
     /// </summary>
-    private readonly HashSet<int> _collapsedHeadings = new();
+    private readonly OutlineCollapseState _outlineCollapse = new();
 
     /// <summary>
-    /// Model blocks the most recent <see cref="Render"/> hid because of <see cref="_collapsedHeadings"/>,
+    /// Model blocks the most recent <see cref="Render"/> hid because of <see cref="_outlineCollapse"/>,
     /// each tagged with the number of <em>visible</em> blocks that preceded it at render time. On the
     /// next <see cref="CommitToModel"/> these are spliced back into the rebuilt model at the matching
     /// visible offset, so a collapsed region survives an edit/commit cycle intact. Empty when nothing
@@ -982,6 +982,7 @@ public sealed partial class DocumentView : RichTextBox
     public void LoadModel(TextDocument document)
     {
         _editingSession.LoadDocument(document);
+        _outlineCollapse.Clear();
         _trackChangesEnabled = document.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
         ApplySpellCheckVisibility();
         Render();
@@ -3708,8 +3709,8 @@ public sealed partial class DocumentView : RichTextBox
 
         // Collapse markers are tracked by model block index; a reorder invalidates them, so expand all
         // first (purely a view concern — the model is unaffected) before relocating the subtree.
-        if (_collapsedHeadings.Count > 0)
-            _collapsedHeadings.Clear();
+        if (_outlineCollapse.Count > 0)
+            _outlineCollapse.Clear();
 
         return _editingSession.MoveHeadingSubtree(modelBlockIndex, moveUp);
     }
@@ -3742,7 +3743,7 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void CollapseHeading(int modelBlockIndex)
     {
-        if (!IsHeadingBlock(modelBlockIndex) || !_collapsedHeadings.Add(modelBlockIndex))
+        if (!_outlineCollapse.Collapse(_model.Blocks, modelBlockIndex))
             return;
         CommitToModel();
         Render();
@@ -3754,56 +3755,14 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void ExpandHeading(int modelBlockIndex)
     {
-        if (!_collapsedHeadings.Remove(modelBlockIndex))
+        if (!_outlineCollapse.Expand(modelBlockIndex))
             return;
         CommitToModel();
         Render();
     }
 
     /// <summary>True when the heading at <paramref name="modelBlockIndex"/> is currently collapsed.</summary>
-    public bool IsHeadingCollapsed(int modelBlockIndex) => _collapsedHeadings.Contains(modelBlockIndex);
-
-    // Whether the model block at the given index is a heading/title paragraph (an outline entry).
-    private bool IsHeadingBlock(int modelBlockIndex) =>
-        modelBlockIndex >= 0 && modelBlockIndex < _model.Blocks.Count
-        && _model.Blocks[modelBlockIndex] is ModelParagraph paragraph
-        && DocumentOutline.TryGetLevel(paragraph.StyleId, out _);
-
-    // Compute the set of model block indices hidden by the currently collapsed headings. For each
-    // collapsed heading, every following block is hidden until (but not including) the next heading whose
-    // level is the same or higher (a smaller-or-equal level number), matching how an outline nests.
-    // Collapsed headings nested inside another collapsed region stay tracked but contribute no extra
-    // hidden blocks (their descendants are already hidden). A heading index that no longer points at a
-    // heading (the document changed underneath us) is ignored.
-    private HashSet<int> HiddenBlockIndices()
-    {
-        var hidden = new HashSet<int>();
-        if (_collapsedHeadings.Count == 0)
-            return hidden;
-
-        var blocks = _model.Blocks;
-        // Snapshot the indices so stale ones (no longer pointing at a heading) can be pruned in place.
-        foreach (var headingIndex in _collapsedHeadings.ToArray())
-        {
-            if (headingIndex < 0 || headingIndex >= blocks.Count
-                || blocks[headingIndex] is not ModelParagraph heading
-                || !DocumentOutline.TryGetLevel(heading.StyleId, out var headingLevel))
-            {
-                _collapsedHeadings.Remove(headingIndex); // heading moved or is no longer a heading
-                continue;
-            }
-
-            for (var j = headingIndex + 1; j < blocks.Count; j++)
-            {
-                if (blocks[j] is ModelParagraph p
-                    && DocumentOutline.TryGetLevel(p.StyleId, out var level)
-                    && level <= headingLevel)
-                    break; // reached the next same-or-higher heading: the collapsed region ends here
-                hidden.Add(j);
-            }
-        }
-        return hidden;
-    }
+    public bool IsHeadingCollapsed(int modelBlockIndex) => _outlineCollapse.IsCollapsed(modelBlockIndex);
 
     /// <summary>
     /// Apply a drop cap to the caret's paragraph: the leading letter is split into its own enlarged,
@@ -4854,7 +4813,7 @@ public sealed partial class DocumentView : RichTextBox
         // CommitToModel can restore them. With nothing collapsed both collections are empty and this is
         // a no-op, leaving the original rendering path unchanged.
         var blocks = _model.Blocks;
-        var hidden = HiddenBlockIndices();
+        var hidden = _outlineCollapse.BuildHiddenBlockIndices(_model.Blocks);
         _hiddenBlocks.Clear();
         var visibleCount = 0;
 

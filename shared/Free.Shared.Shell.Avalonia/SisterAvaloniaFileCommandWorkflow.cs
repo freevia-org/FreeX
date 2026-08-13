@@ -16,7 +16,9 @@ public sealed record SisterAvaloniaFileTitleSpec(
     WindowTitleApplicationPlacement ApplicationPlacement = WindowTitleApplicationPlacement.ApplicationThenDocument,
     SisterAvaloniaFileTitleDisplayName DocumentDisplayName = SisterAvaloniaFileTitleDisplayName.FileName,
     string UntitledDisplayName = FileCommandSession.DefaultUntitledDisplayName,
-    bool CollapseCleanUntitledTitle = false)
+    bool CollapseCleanUntitledTitle = false,
+    string WindowSuffix = "",
+    string GroupSuffix = "")
 {
     public ApplicationWindowTitleSpec ToApplicationWindowTitleSpec() => new(
         ApplicationName,
@@ -106,6 +108,9 @@ public sealed class SisterAvaloniaFileCommandWorkflow
     public void MarkDirtyWithPath(string? path, Action? beforeChanged = null) =>
         _workflow.MarkDirtyWithPath(path, beforeChanged);
 
+    public void ApplyDocumentState(string? path, bool isDirty, Action? beforeChanged = null) =>
+        _workflow.ApplyDocumentState(path, isDirty, beforeChanged);
+
     public bool New(string action, Action loadNewDocument, Action? beforeChanged = null) =>
         _workflow.New(action, loadNewDocument, beforeChanged);
 
@@ -177,6 +182,8 @@ public sealed class SisterAvaloniaFileCommandWorkflow
             _titleSpec.ToApplicationWindowTitleSpec(),
             ResolveDocumentDisplayName(),
             _workflow.IsDirty,
+            windowSuffix: _titleSpec.WindowSuffix,
+            groupSuffix: _titleSpec.GroupSuffix,
             isDefaultDocument: _workflow.CurrentPath is null);
 
     private SaveChangesPrompt PromptSaveChangesSync(string action) =>

@@ -3048,16 +3048,7 @@ internal static class FreeWRibbonCommands
             if (image is null)
                 return;
 
-            // Scale down to 72 pt wide (preserving aspect ratio) if the rasteriser returned larger.
-            if (image.WidthPt > IconDefaultWidthPt && image.WidthPt > 0)
-            {
-                var scale  = IconDefaultWidthPt / image.WidthPt;
-                image = new InlineImage(image.PngBytes, IconDefaultWidthPt, image.HeightPt * scale)
-                {
-                    OriginalPixelWidth  = image.OriginalPixelWidth,
-                    OriginalPixelHeight = image.OriginalPixelHeight,
-                };
-            }
+            image = PictureInsertionPlanner.FitIcon(image, IconDefaultWidthPt);
 
             editor.Focus();
             editor.InsertImage(image);

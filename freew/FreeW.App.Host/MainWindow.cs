@@ -236,6 +236,8 @@ public sealed partial class MainWindow : Window
     private readonly IApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly IUserMessageService? _messageService;
     private readonly IPlatformClipboard _platformClipboard;
+    private readonly FreeWDocumentWindowPlanner _documentWindowPlanner;
+    private readonly int _documentWindowNumber;
 
     private FreeWRibbonHostExecutionPorts CreateRibbonHostExecutionPorts() =>
         FreeWRibbonHostExecutionPorts.Empty with
@@ -321,12 +323,19 @@ public sealed partial class MainWindow : Window
         IUserMessageService? messageService = null,
         IPlatformClipboard? platformClipboard = null,
         IReadOnlyList<string>? startupFilePaths = null,
-        bool suppressStartupRecoveryOffer = false)
+        bool suppressStartupRecoveryOffer = false,
+        FreeWDocumentWindowPlanner? documentWindowPlanner = null,
+        int documentWindowNumber = 1)
     {
+        if (documentWindowNumber < 1)
+            throw new ArgumentOutOfRangeException(nameof(documentWindowNumber));
+
         _options = options ?? new FreeWOptions();
         _optionsRuntime = new FreeWOptionsRuntimeSession(_options);
         _messageService = messageService;
         _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(Dispatcher);
+        _documentWindowPlanner = documentWindowPlanner ?? new FreeWDocumentWindowPlanner();
+        _documentWindowNumber = documentWindowNumber;
         _optionsStore = optionsStore ?? new InMemoryApplicationOptionsStore<FreeWOptions>(_options);
         Title = FreeWApplicationFrameDescriptor.Title.ApplicationName;
         Width = 1280;
@@ -1057,7 +1066,8 @@ public sealed partial class MainWindow : Window
             ApplicationName: "FreeW",
             IsDirty: _file.IsDirty,
             DirtyMarker: " *",
-            Separator: " \u2014 "));
+            Separator: " \u2014 ",
+            WindowSuffix: FreeWDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber)));
     }
 
     // Recompute the live status-bar counts. When there is a non-empty selection, show that selection's
@@ -2208,26 +2218,20 @@ public sealed partial class MainWindow : Window
         new System.Windows.Media.SolidColorBrush(
             WpfRgbColorAdapter.ParseColorToken(colorHex));
 
-    // Feature 5 — New Window: open a fresh MainWindow. If the current document has a saved path, load it
-    // into the new window (read-only by design — both windows can edit independently, last-save wins).
-    // If the document is new/unsaved, just open a new blank window. The note in the title makes it clear.
+    // Feature 5 — New Window: shared code snapshots document/file state and assigns the view number;
+    // WPF only creates the native window and loads the resulting plan.
     private void OpenNewWindow()
     {
-        var newWindow = new MainWindow(_options, messageService: _messageService);
-        var path = _file.CurrentPath;
-        if (path is not null && System.IO.File.Exists(path))
-        {
-            newWindow.Show();
-            newWindow._file.OpenRecentPath(path);
-            newWindow.Title = UiText.Format(
-                "Window_SecondView_Title_Format",
-                System.IO.Path.GetFileName(path));
-        }
-        else
-        {
-            newWindow.Title = UiText.Get("Window_SecondView_EmptyTitle");
-            newWindow.Show();
-        }
+        _editor.CommitToModel();
+        var plan = _documentWindowPlanner.CreateNext(_editor.Model, _file.CurrentPath, _file.IsDirty);
+        var newWindow = new MainWindow(
+            _options,
+            _optionsStore,
+            _messageService,
+            documentWindowPlanner: _documentWindowPlanner,
+            documentWindowNumber: plan.WindowNumber);
+        newWindow._file.LoadDocumentWindow(plan);
+        newWindow.Show();
     }
 
     // R133-remediation: AutosaveCoordinator.OfferRecovery/RecoverUnsavedDocuments call this for
@@ -3029,9 +3033,7 @@ public sealed partial class MainWindow : Window
     // size + margins. The chosen factor drives DocumentView.ZoomLevel (clamped, shared with the slider).
     private void OpenZoomDialog()
     {
-        var (pageWidthFactor, textWidthFactor, wholePageFactor) = ComputeZoomFitFactors();
-
-        var chosen = ZoomDialog.Prompt(this, _editor.ZoomLevel, pageWidthFactor, textWidthFactor, wholePageFactor);
+        var chosen = ZoomDialog.Prompt(this, _editor.ZoomLevel, ComputeZoomFitFactors());
         if (chosen is { } factor)
             _editor.ZoomLevel = factor;
     }

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -14,8 +15,6 @@ namespace FreeW.App.Host;
 /// </summary>
 internal static class SvgRasterizerHelper
 {
-    private const double PxPerPoint = 96.0 / 72.0;
-    private const double MaxWidthPt = 400;
     // Default raster resolution for SVGs that carry no explicit pixel dimensions.
     private const int DefaultPx = 400;
 
@@ -35,7 +34,7 @@ internal static class SvgRasterizerHelper
 
     /// <summary>
     /// Rasterize the SVG file at <paramref name="path"/> into a PNG-encoded <see cref="InlineImage"/>.
-    /// Aspect ratio is preserved; width is capped at <c>MaxWidthPt</c> (400 pt = ~5.6 in).
+    /// Shared presentation policy owns the raster extent and document display size.
     /// Throws <see cref="InvalidOperationException"/> if SharpVectors cannot parse the file.
     /// </summary>
     public static InlineImage RasterizeToInlineImage(string path, int maximumPixelEdge = DefaultPx)
@@ -62,23 +61,27 @@ internal static class SvgRasterizerHelper
     {
         // Determine natural SVG size from the drawing bounds or fall back to DefaultPx × DefaultPx.
         var bounds = drawing.Bounds;
-        double srcW = bounds.IsEmpty || bounds.Width <= 0 ? DefaultPx : bounds.Width;
-        double srcH = bounds.IsEmpty || bounds.Height <= 0 ? DefaultPx : bounds.Height;
-
-        // Scale so the wider dimension is DefaultPx, preserving aspect ratio.
-        double scale = maximumPixelEdge / Math.Max(srcW, srcH);
-        int pxW = Math.Max(1, (int)Math.Round(srcW * scale));
-        int pxH = Math.Max(1, (int)Math.Round(srcH * scale));
+        var surface = PictureInsertionPlanner.BuildVectorRasterSurface(
+            bounds.Width,
+            bounds.Height,
+            maximumPixelEdge);
 
         // Render WPF drawing into an off-screen bitmap.
         var drawingImage = new DrawingImage(drawing);
         drawingImage.Freeze();
 
-        var rtb = new RenderTargetBitmap(pxW, pxH, 96, 96, PixelFormats.Pbgra32);
+        var rtb = new RenderTargetBitmap(
+            surface.PixelWidth,
+            surface.PixelHeight,
+            96,
+            96,
+            PixelFormats.Pbgra32);
         var dv = new System.Windows.Media.DrawingVisual();
         using (var ctx = dv.RenderOpen())
         {
-            ctx.DrawImage(drawingImage, new System.Windows.Rect(0, 0, pxW, pxH));
+            ctx.DrawImage(
+                drawingImage,
+                new System.Windows.Rect(0, 0, surface.PixelWidth, surface.PixelHeight));
         }
         rtb.Render(dv);
         rtb.Freeze();
@@ -88,18 +91,9 @@ internal static class SvgRasterizerHelper
         encoder.Frames.Add(BitmapFrame.Create(rtb));
         encoder.Save(buffer);
 
-        // Cap width at MaxWidthPt, preserving the rasterized aspect ratio.
-        var widthPt = pxW / PxPerPoint;
-        var heightPt = pxH / PxPerPoint;
-        if (widthPt > MaxWidthPt && widthPt > 0)
-        {
-            heightPt *= MaxWidthPt / widthPt;
-            widthPt = MaxWidthPt;
-        }
-        return new InlineImage(buffer.ToArray(), widthPt, heightPt)
-        {
-            OriginalPixelWidth  = pxW,
-            OriginalPixelHeight = pxH,
-        };
+        return PictureInsertionPlanner.CreatePngImage(
+            buffer.ToArray(),
+            surface.PixelWidth,
+            surface.PixelHeight);
     }
 }
