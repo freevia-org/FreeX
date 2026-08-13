@@ -15,16 +15,30 @@ namespace FreeW.App.Avalonia;
 internal sealed class CrossReferenceDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
+    private static readonly CrossReferenceDialogVisualMetrics Layout =
+        CrossReferenceDialogPlanner.VisualMetrics;
 
     private readonly CrossReferenceDialogSession _session;
-    private readonly ListBox _typeList = new() { MinWidth = 150, Height = 170 };
-    private readonly ListBox _insertAsList = new() { MinWidth = 180, Height = 170 };
-    private readonly ListBox _targetList = new() { MinWidth = 300, Height = 200 };
+    private readonly ListBox _typeList = new()
+    {
+        MinWidth = Layout.TypeListMinWidth,
+        Height = Layout.ChoiceListHeight
+    };
+    private readonly ListBox _insertAsList = new()
+    {
+        MinWidth = Layout.InsertAsListMinWidth,
+        Height = Layout.ChoiceListHeight
+    };
+    private readonly ListBox _targetList = new()
+    {
+        MinWidth = Layout.TargetListMinWidth,
+        Height = Layout.TargetListHeight
+    };
     private readonly CheckBox _hyperlinkBox = new()
     {
         Content = CrossReferenceDialogPlanner.HyperlinkLabel,
         IsChecked = true,
-        Margin = new Thickness(0, 10, 0, 0),
+        Margin = new Thickness(0, Layout.HyperlinkTopMargin, 0, 0),
     };
     private bool _updatingControls;
 
@@ -90,9 +104,9 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
             {
                 Setters =
                 {
-                    new Setter(Layoutable.HeightProperty, 21d),
-                    new Setter(Layoutable.MinHeightProperty, 21d),
-                    new Setter(Layoutable.MaxHeightProperty, 21d),
+                    new Setter(Layoutable.HeightProperty, Layout.AvaloniaListItemHeight),
+                    new Setter(Layoutable.MinHeightProperty, Layout.AvaloniaListItemHeight),
+                    new Setter(Layoutable.MaxHeightProperty, Layout.AvaloniaListItemHeight),
                 },
             });
         }
@@ -100,16 +114,20 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
         {
             Setters =
             {
-                new Setter(TemplatedControl.BackgroundProperty, new ImmutableSolidColorBrush(Color.FromRgb(240, 240, 240))),
-                new Setter(TemplatedControl.BorderBrushProperty, new ImmutableSolidColorBrush(Color.FromRgb(171, 173, 179))),
+                new Setter(
+                    TemplatedControl.BackgroundProperty,
+                    new ImmutableSolidColorBrush(Color.Parse(Layout.AvaloniaInactiveSelectionBackgroundHex))),
+                new Setter(
+                    TemplatedControl.BorderBrushProperty,
+                    new ImmutableSolidColorBrush(Color.Parse(Layout.AvaloniaInactiveSelectionBorderHex))),
             },
         });
 
         ApplySessionChoices(includeInsertAs: true);
 
-        var topGrid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        var topGrid = new Grid { Margin = new Thickness(0, 0, 0, Layout.TopRowBottomMargin) };
         topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Layout.ColumnSpacing) });
         topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         topGrid.Children.Add(LabeledColumn(CrossReferenceDialogPlanner.ReferenceTypeLabel, _typeList, 0));
         topGrid.Children.Add(LabeledColumn(CrossReferenceDialogPlanner.InsertReferenceToLabel, _insertAsList, 2));
@@ -121,9 +139,11 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyNeutralDefaultButtonChrome(ok);
         ok.Click += async (_, _) => await AcceptAsync();
         var cancel = Button(actionPlans[1].Label, () => Close(), isCancel: actionPlans[1].IsCancel);
-        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0));
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [ok, cancel],
+            new Thickness(0, Layout.ActionRowTopMargin, 0, 0));
 
-        var body = new StackPanel { Margin = new Thickness(16) };
+        var body = new StackPanel { Margin = new Thickness(Layout.OuterMargin) };
         body.Children.Add(topGrid);
         body.Children.Add(_hyperlinkBox);
         body.Children.Add(targetColumn);
@@ -178,7 +198,11 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
     private static StackPanel LabeledColumn(string label, Control control, int column)
     {
         var stack = new StackPanel();
-        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 8, 0, 4) });
+        stack.Children.Add(new TextBlock
+        {
+            Text = label,
+            Margin = new Thickness(0, Layout.LabelTopMargin, 0, Layout.LabelBottomMargin)
+        });
         stack.Children.Add(control);
         if (column >= 0)
             Grid.SetColumn(stack, column);
@@ -188,7 +212,11 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
     private static Button Button(string label, Action? click, bool isDefault = false, bool isCancel = false)
     {
         var button = new Button { Content = label, IsDefault = isDefault, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: Layout.ActionButtonWidth,
+            isDefault: isDefault);
         if (click is not null)
             button.Click += (_, _) => click();
         return button;
