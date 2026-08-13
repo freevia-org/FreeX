@@ -5235,36 +5235,7 @@ public sealed class DocumentView : RichTextBox
     public int ReadAloudStartSegmentIndex()
     {
         CommitToModel();
-
-        var caretBlockIndex = CaretBlockIndex();
-        if (caretBlockIndex < 0)
-            return 0;
-
-        // Walk the model blocks in the controller's reading order, numbering non-empty speakable
-        // paragraphs. Stop once we reach the caret's block: the next segment to be produced is the start.
-        var segmentIndex = 0;
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (i >= caretBlockIndex)
-                break;
-
-            switch (_model.Blocks[i])
-            {
-                case ModelParagraph paragraph:
-                    if (!string.IsNullOrWhiteSpace(paragraph.PlainText))
-                        segmentIndex++;
-                    break;
-                case ModelTable table:
-                    foreach (var row in table.Rows)
-                        foreach (var cell in row.Cells)
-                            foreach (var cellParagraph in cell.Paragraphs)
-                                if (!string.IsNullOrWhiteSpace(cellParagraph.PlainText))
-                                    segmentIndex++;
-                    break;
-            }
-        }
-
-        return segmentIndex;
+        return ReadAloudController.ResolveStartSegmentIndex(_model, CaretBlockIndex());
     }
 
     private void Render()

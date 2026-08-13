@@ -110,6 +110,53 @@ public class ReadAloudControllerTests
     }
 
     [Fact]
+    public void ResolveStartSegmentIndex_uses_the_same_recursive_order_as_extraction()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Intro"));
+
+        var outerTable = Table.Create(1, 1);
+        outerTable.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("Outer cell");
+        var nestedTable = Table.Create(1, 1);
+        nestedTable.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("Nested cell");
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        doc.Blocks.Add(outerTable);
+        doc.Blocks.Add(new Paragraph("   "));
+        doc.Blocks.Add(new Paragraph("Outro"));
+
+        ReadAloudController.ResolveStartSegmentIndex(doc, -1).Should().Be(0);
+        ReadAloudController.ResolveStartSegmentIndex(doc, 0).Should().Be(0);
+        ReadAloudController.ResolveStartSegmentIndex(doc, 1).Should().Be(1);
+        ReadAloudController.ResolveStartSegmentIndex(doc, 2).Should().Be(3);
+        ReadAloudController.ResolveStartSegmentIndex(doc, 3).Should().Be(3);
+        ReadAloudController.ResolveStartSegmentIndex(doc, 4).Should().Be(4);
+        ReadAloudController.ResolveStartSegmentIndex(doc, 99).Should().Be(4);
+    }
+
+    [Fact]
+    public void ResolveStartSegmentIndex_matches_segment_count_for_every_top_level_boundary()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("One"));
+        doc.Blocks.Add(Table.Create(1, 1));
+        ((Table)doc.Blocks[1]).Rows[0].Cells[0].Paragraphs[0] = new Paragraph("Two");
+        doc.Blocks.Add(new Paragraph("Three"));
+
+        for (var boundary = 0; boundary <= doc.Blocks.Count; boundary++)
+        {
+            var prefix = TextDocument.CreateEmpty();
+            prefix.Blocks.Clear();
+            for (var blockIndex = 0; blockIndex < boundary; blockIndex++)
+                prefix.Blocks.Add(doc.Blocks[blockIndex]);
+
+            ReadAloudController.ResolveStartSegmentIndex(doc, boundary)
+                .Should().Be(ReadAloudController.ExtractSegments(prefix).Count);
+        }
+    }
+
+    [Fact]
     public void Start_SpeaksFirstSegmentAndIsPlaying()
     {
         var engine = new FakeSpeechEngine();

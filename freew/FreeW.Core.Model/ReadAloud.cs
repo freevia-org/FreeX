@@ -95,8 +95,9 @@ public interface ISpeechEngine
 /// listener expects.</para>
 ///
 /// <para><b>Start position</b> is a paragraph index into the <em>ordered, non-empty</em> segment list (Word
-/// reads from the caret, or the selection, to the end). The host maps the caret/selection to that index;
-/// the controller clamps it into range.</para>
+/// reads from the caret, or the selection, to the end). The host supplies its renderer-specific body-block
+/// caret index; <see cref="ResolveStartSegmentIndex"/> maps it through the same recursive reading order used
+/// for extraction, and the controller clamps the resulting segment index into range.</para>
 /// </summary>
 public sealed class ReadAloudController
 {
@@ -151,6 +152,34 @@ public sealed class ReadAloudController
         }
 
         return segments;
+    }
+
+    /// <summary>
+    /// Maps a renderer's top-level body-block caret index to the first speakable segment at or after that
+    /// block. All non-empty paragraphs in earlier blocks are counted in exactly the same recursive order as
+    /// <see cref="ExtractSegments"/>, including paragraphs inside tables nested to any depth. A negative
+    /// block index maps to the document start. An index beyond the body maps past all segments and is later
+    /// clamped by <see cref="Start(TextDocument, int)"/>.
+    /// </summary>
+    public static int ResolveStartSegmentIndex(TextDocument document, int bodyBlockIndex)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        if (bodyBlockIndex <= 0)
+            return 0;
+
+        var segmentIndex = 0;
+        var precedingBlockCount = Math.Min(bodyBlockIndex, document.Blocks.Count);
+        for (var blockIndex = 0; blockIndex < precedingBlockCount; blockIndex++)
+        {
+            foreach (var paragraph in EnumerateParagraphsInBlock(document.Blocks[blockIndex]))
+            {
+                if (!string.IsNullOrWhiteSpace(paragraph.PlainText))
+                    segmentIndex++;
+            }
+        }
+
+        return segmentIndex;
     }
 
     // Every paragraph reachable in the document body, in reading order: top-level paragraphs and those
