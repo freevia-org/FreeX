@@ -28,6 +28,7 @@ internal static class FontDialog
         var session = FontDialogPlanner.CreateSession(current, CultureInfo.CurrentCulture);
         var state = session.InitialState;
         var surface = FontDialogPlanner.Surface;
+        var layout = FontDialogPlanner.VisualMetrics;
 
         var dialog = new Window
         {
@@ -44,10 +45,10 @@ internal static class FontDialog
         {
             Text = state.FontFamilyText,
             MinWidth = surface.Field(FontDialogFieldKind.FontFamily).MinWidth,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = ToThickness(layout.FieldControlMargin),
         };
 
-        var sizeBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.FontSize).MinWidth, IsEditable = true, Margin = new Thickness(0, 0, 0, 8) };
+        var sizeBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.FontSize).MinWidth, IsEditable = true, Margin = ToThickness(layout.FieldControlMargin) };
         foreach (var size in FontDialogPlanner.SizeChoices)
             sizeBox.Items.Add(size.Label);
         sizeBox.Text = state.FontSizeText;
@@ -59,7 +60,11 @@ internal static class FontDialog
                 Content = spec.Label,
                 IsChecked = state.EffectValue(spec.Kind),
                 IsThreeState = spec.IsThreeState,
-                Margin = new Thickness(0, 0, spec.Kind == FontDialogEffectKind.Subscript ? 0 : 12, 4),
+                Margin = new Thickness(
+                    0,
+                    0,
+                    spec.Kind == FontDialogEffectKind.Subscript ? 0 : layout.EffectTrailingMargin,
+                    layout.EffectBottomMargin),
             });
         foreach (var spec in surface.Effects)
             AutomationProperties.SetAutomationId(effects[spec.Kind], spec.AutomationId);
@@ -87,12 +92,12 @@ internal static class FontDialog
             subCheck.IsChecked = alignment.Subscript;
         };
 
-        var colorBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.Color).MinWidth, Margin = new Thickness(0, 0, 0, 8) };
+        var colorBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.Color).MinWidth, Margin = ToThickness(layout.FieldControlMargin) };
         foreach (var color in FontDialogPlanner.ColorChoices)
             colorBox.Items.Add(color.Label);
         colorBox.SelectedIndex = state.ColorIndex;
 
-        var fontPanel = new StackPanel { Margin = new Thickness(10) };
+        var fontPanel = new StackPanel { Margin = ToThickness(layout.WpfTabContentMargin) };
         var fields = new Dictionary<FontDialogFieldKind, UIElement>
         {
             [FontDialogFieldKind.FontFamily] = familyBox,
@@ -101,22 +106,28 @@ internal static class FontDialog
         };
         foreach (var kind in surface.Tabs[0].Fields)
             FontRow(fontPanel, surface.Field(kind).Label, fields[kind]);
-        fontPanel.Children.Add(new TextBlock { Text = surface.EffectsSectionLabel, Margin = new Thickness(0, 4, 0, 2) });
+        fontPanel.Children.Add(new TextBlock { Text = surface.EffectsSectionLabel, Margin = ToThickness(layout.WpfEffectsLabelMargin) });
         var effectsWrap = new WrapPanel();
         foreach (var spec in surface.Effects)
             effectsWrap.Children.Add(effects[spec.Kind]);
         fontPanel.Children.Add(effectsWrap);
 
-        var spacingBox = NumberTextBox(state.CharacterSpacingText ?? string.Empty);
+        var spacingBox = NumberTextBox(
+            state.CharacterSpacingText ?? string.Empty,
+            surface.Field(FontDialogFieldKind.CharacterSpacing).MinWidth,
+            layout);
         var kerningBox = new TextBox
         {
             Text = state.KerningMinSizeText,
             MinWidth = surface.Field(FontDialogFieldKind.Kerning).MinWidth,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = ToThickness(layout.FieldControlMargin),
         };
-        var positionBox = NumberTextBox(state.PositionText ?? string.Empty);
+        var positionBox = NumberTextBox(
+            state.PositionText ?? string.Empty,
+            surface.Field(FontDialogFieldKind.Position).MinWidth,
+            layout);
 
-        var ligatureBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.Ligatures).MinWidth, Margin = new Thickness(0, 0, 0, 8) };
+        var ligatureBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.Ligatures).MinWidth, Margin = ToThickness(layout.FieldControlMargin) };
         foreach (var ligature in FontDialogPlanner.LigatureChoices)
             ligatureBox.Items.Add(ligature.Label);
         ligatureBox.SelectedIndex = state.LigatureIndex;
@@ -125,21 +136,21 @@ internal static class FontDialog
         {
             Text = state.StylisticSetText,
             MinWidth = surface.Field(FontDialogFieldKind.StylisticSet).MinWidth,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = ToThickness(layout.FieldControlMargin),
             ToolTip = surface.Field(FontDialogFieldKind.StylisticSet).ToolTip,
         };
 
-        var numberFormBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.NumberForm).MinWidth, Margin = new Thickness(0, 0, 0, 8) };
+        var numberFormBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.NumberForm).MinWidth, Margin = ToThickness(layout.FieldControlMargin) };
         foreach (var numberForm in FontDialogPlanner.NumberFormChoices)
             numberFormBox.Items.Add(numberForm.Label);
         numberFormBox.SelectedIndex = state.NumberFormIndex;
 
-        var numberSpacingBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.NumberSpacing).MinWidth, Margin = new Thickness(0, 0, 0, 8) };
+        var numberSpacingBox = new ComboBox { MinWidth = surface.Field(FontDialogFieldKind.NumberSpacing).MinWidth, Margin = ToThickness(layout.FieldControlMargin) };
         foreach (var numberSpacing in FontDialogPlanner.NumberSpacingChoices)
             numberSpacingBox.Items.Add(numberSpacing.Label);
         numberSpacingBox.SelectedIndex = state.NumberSpacingIndex;
 
-        var advPanel = new StackPanel { Margin = new Thickness(10) };
+        var advPanel = new StackPanel { Margin = ToThickness(layout.WpfTabContentMargin) };
         fields[FontDialogFieldKind.CharacterSpacing] = spacingBox;
         fields[FontDialogFieldKind.Kerning] = kerningBox;
         fields[FontDialogFieldKind.Position] = positionBox;
@@ -188,9 +199,12 @@ internal static class FontDialog
             dialog.DialogResult = true;
         }
 
-        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: surface.ActionButtonWidth, rowMargin: new Thickness(0, 10, 0, 0));
+        var buttons = DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: surface.ActionButtonWidth,
+            rowMargin: ToThickness(layout.ActionRowMargin));
 
-        var root = new StackPanel { Margin = new Thickness(12) };
+        var root = new StackPanel { Margin = ToThickness(layout.WpfRootMargin) };
         root.Children.Add(tabs);
         root.Children.Add(buttons);
         dialog.Content = root;
@@ -204,17 +218,23 @@ internal static class FontDialog
         panel.Children.Add(new TextBlock
         {
             Text = label,
-            Margin = new Thickness(0, 0, 0, 2),
+            Margin = ToThickness(FontDialogPlanner.VisualMetrics.FieldLabelMargin),
         });
         if (control is FrameworkElement fe)
-            fe.Margin = new Thickness(0, 0, 0, 8);
+            fe.Margin = ToThickness(FontDialogPlanner.VisualMetrics.FieldControlMargin);
         panel.Children.Add(control);
     }
 
-    private static TextBox NumberTextBox(string text) => new()
+    private static TextBox NumberTextBox(
+        string text,
+        double minWidth,
+        FontDialogVisualMetrics layout) => new()
     {
         Text = text,
-        MinWidth = 100,
-        Margin = new Thickness(0, 0, 0, 8),
+        MinWidth = minWidth,
+        Margin = ToThickness(layout.FieldControlMargin),
     };
+
+    private static Thickness ToThickness(FontDialogThickness value) =>
+        new(value.Left, value.Top, value.Right, value.Bottom);
 }

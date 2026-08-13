@@ -21,6 +21,7 @@ namespace FreeW.App.Avalonia;
 public sealed class FontDialog : FreeWDialogWindow
 {
     private static readonly FontDialogSurfaceSpec Surface = FontDialogPlanner.Surface;
+    private static readonly FontDialogVisualMetrics Layout = FontDialogPlanner.VisualMetrics;
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
@@ -161,16 +162,16 @@ public sealed class FontDialog : FreeWDialogWindow
         foreach (var spec in Surface.Fields)
             AutomationProperties.SetAutomationId(fieldControls[spec.Kind], spec.AutomationId);
 
-        var fontPanel = new StackPanel { Margin = new Thickness(12, 12, 11, 6) };
+        var fontPanel = new StackPanel { Margin = ToThickness(Layout.AvaloniaFontTabContentMargin) };
         foreach (var kind in Surface.Tabs.First(tab => tab.Kind == FontDialogTabKind.Font).Fields)
             AddField(fontPanel, Surface.Field(kind).Label, fieldControls[kind]);
-        fontPanel.Children.Add(new TextBlock { Text = Surface.EffectsSectionLabel, Margin = new Thickness(0, 3, 0, 2) });
+        fontPanel.Children.Add(new TextBlock { Text = Surface.EffectsSectionLabel, Margin = ToThickness(Layout.AvaloniaEffectsLabelMargin) });
         var effects = new WrapPanel();
         foreach (var spec in Surface.Effects)
             effects.Children.Add(EffectControlFor(spec.Kind));
         fontPanel.Children.Add(effects);
 
-        var advancedPanel = new StackPanel { Margin = new Thickness(10, 12, 10, 10) };
+        var advancedPanel = new StackPanel { Margin = ToThickness(Layout.AvaloniaAdvancedTabContentMargin) };
         foreach (var kind in Surface.Tabs.First(tab => tab.Kind == FontDialogTabKind.Advanced).Fields)
             AddField(advancedPanel, Surface.Field(kind).Label, fieldControls[kind]);
 
@@ -197,17 +198,20 @@ public sealed class FontDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             tabs,
             DialogChromeStyle,
-            contentPaneMargin: new Thickness(-12, -1, -12, 0));
+            contentPaneMargin: ToThickness(Layout.AvaloniaTabPaneMargin));
 
-        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(0, 6, 0, 0));
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(
+            _status,
+            DialogChromeStyle,
+            ToThickness(Layout.AvaloniaValidationMargin));
         var buttons = AvaloniaCompactDialogChrome.CreateOkCancelRow(
             OnOk,
             () => Close(null),
             buttonWidth: Surface.ActionButtonWidth,
-            margin: new Thickness(0, 10, 0, 0),
+            margin: ToThickness(Layout.ActionRowMargin),
             style: DialogChromeStyle);
 
-        var root = new StackPanel { Margin = new Thickness(12, 12, 11, 12) };
+        var root = new StackPanel { Margin = ToThickness(Layout.AvaloniaRootMargin) };
         root.Children.Add(tabs);
         root.Children.Add(_status);
         root.Children.Add(buttons);
@@ -353,8 +357,8 @@ public sealed class FontDialog : FreeWDialogWindow
 
     private static void AddField(Panel panel, string label, Control control)
     {
-        panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 2) });
-        control.Margin = new Thickness(0, 0, 0, 8);
+        panel.Children.Add(new TextBlock { Text = label, Margin = ToThickness(Layout.FieldLabelMargin) });
+        control.Margin = ToThickness(Layout.FieldControlMargin);
         control.HorizontalAlignment = HorizontalAlignment.Stretch;
         panel.Children.Add(control);
     }
@@ -383,12 +387,19 @@ public sealed class FontDialog : FreeWDialogWindow
         return combo;
     }
 
-    private static CheckBox Check(FontDialogEffectSpec spec, double trailingMargin = 12) => new()
+    private static CheckBox Check(FontDialogEffectSpec spec, double? trailingMargin = null) => new()
     {
         Content = spec.Label,
         IsThreeState = spec.IsThreeState,
-        Margin = new Thickness(0, 0, trailingMargin, 4),
+        Margin = new Thickness(
+            0,
+            0,
+            trailingMargin ?? Layout.EffectTrailingMargin,
+            Layout.EffectBottomMargin),
     };
+
+    private static Thickness ToThickness(FontDialogThickness value) =>
+        new(value.Left, value.Top, value.Right, value.Bottom);
 
     private CheckBox EffectControlFor(FontDialogEffectKind kind) => kind switch
     {
