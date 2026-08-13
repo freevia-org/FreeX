@@ -43,4 +43,33 @@ public sealed class DialogThemeResourceParitySourceTests
         source.Should().Contain("groupBox.Foreground = accent;");
         source.Should().Contain("Foreground = accent,");
     }
+
+    [Fact]
+    public void Compact_dialog_structural_colors_are_owned_by_the_portable_shell()
+    {
+        var portable = TestWorkspaceFileLocator.ReadAllText(
+            "shared", "Free.Shared.Shell", "CompactDialogVisualTokens.cs");
+        var avalonia = TestWorkspaceFileLocator.ReadAllText(
+            "shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogChrome.cs");
+        var wpf = TestWorkspaceFileLocator.ReadAllText(
+            "shared", "Free.Shared.Shell.Wpf", "DialogResources.xaml");
+
+        string[] tokenNames =
+        [
+            "BorderHex",
+            "FieldBorderHex",
+            "DisabledForegroundHex",
+            "DisabledBorderHex",
+        ];
+
+        foreach (var tokenName in tokenNames)
+        {
+            portable.Should().Contain($"public const string {tokenName}");
+            avalonia.Should().Contain($"CompactDialogVisualTokens.{tokenName}");
+            wpf.Should().Contain($"CompactDialogVisualTokens.{tokenName}");
+        }
+
+        wpf.Should().Contain("CompactDialogVisualTokens.PrimaryPressedHex");
+        wpf.Should().Contain("CompactDialogVisualTokens.PrimaryDisabledHex");
+    }
 }

@@ -1,0 +1,16 @@
+namespace Free.Shared.Shell;
+
+/// <summary>
+/// Renderer-neutral structural colors for compact desktop dialogs.
+/// Product accents and theme-neutral surfaces remain theme resources; these tokens cover the
+/// fixed border and disabled-state shades that WPF and Avalonia must realize identically.
+/// </summary>
+public static class CompactDialogVisualTokens
+{
+    public const string BorderHex = "#C8C8C8";
+    public const string FieldBorderHex = "#B7BCC2";
+    public const string DisabledForegroundHex = "#9AA0A6";
+    public const string DisabledBorderHex = "#E0E0E0";
+    public const string PrimaryPressedHex = "#093F52";
+    public const string PrimaryDisabledHex = "#9FC4CF";
+}

@@ -68,13 +68,15 @@ public static class AvaloniaCompactDialogChrome
     public static IBrush NeutralButtonBorderBrush => ButtonBorderBrush;
     public static IBrush DialogSeparatorBrush => DialogTabPaneBorderBrush;
 
-    private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(200, 200, 200));
+    private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(
+        Color.Parse(CompactDialogVisualTokens.BorderHex));
     private static readonly IBrush ButtonAccentBrush = new ImmutableSolidColorBrush(Color.FromRgb(15, 109, 140));
     private static readonly IBrush ButtonHoverBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(230, 246, 250));
     private static readonly IBrush ButtonPressedBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(204, 234, 242));
     // Match the shared WPF DialogFieldBorder authority (#B7BCC2), rather than
     // Fluent's darker neutral border or the legacy Windows #ABADB3 shade.
-    private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(183, 188, 194));
+    private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(
+        Color.Parse(CompactDialogVisualTokens.FieldBorderHex));
     private static readonly IBrush ComboBoxBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(240, 240, 240));
     private static readonly IBrush TextSelectionBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
     private static readonly IBrush SelectedItemBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(204, 232, 255));
@@ -82,8 +84,10 @@ public static class AvaloniaCompactDialogChrome
     private static readonly IBrush DialogForegroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x1f, 0x1f, 0x1f));
     private static readonly IBrush GroupBoxBorderBrush = ButtonBorderBrush;
     private static readonly IBrush ValidationStatusBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00));
-    private static readonly IBrush DisabledButtonForegroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x9a, 0xa0, 0xa6));
-    private static readonly IBrush DisabledButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xe0, 0xe0, 0xe0));
+    private static readonly IBrush DisabledButtonForegroundBrush = new ImmutableSolidColorBrush(
+        Color.Parse(CompactDialogVisualTokens.DisabledForegroundHex));
+    private static readonly IBrush DisabledButtonBorderBrush = new ImmutableSolidColorBrush(
+        Color.Parse(CompactDialogVisualTokens.DisabledBorderHex));
     private static readonly IBrush DialogTabPaneBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(192, 192, 192));
     private static readonly IBrush DialogInactiveTabBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 160));
     private static readonly IBrush DialogInactiveTabBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(243, 243, 243));
