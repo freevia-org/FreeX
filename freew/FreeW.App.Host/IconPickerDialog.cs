@@ -56,7 +56,7 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             Text = categoryField.Label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 6, 0)
+            Margin = new Thickness(0, 0, Surface.FieldLabelTrailingMargin, 0)
         });
 
         _categoryBox = new ComboBox
@@ -76,7 +76,7 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             Text = searchField.Label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 6, 0)
+            Margin = new Thickness(0, 0, Surface.FieldLabelTrailingMargin, 0)
         });
 
         _searchBox = new TextBox
@@ -97,12 +97,12 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Text = string.Empty,
             Foreground = SystemColors.GrayTextBrush,
             FontStyle = FontStyles.Italic,
-            Margin = new Thickness(0, 4, 0, 4),
+            Margin = new Thickness(0, Surface.StatusVerticalMargin, 0, Surface.StatusVerticalMargin),
             VerticalAlignment = VerticalAlignment.Center
         };
         AutomationProperties.SetAutomationId(_statusBar, Surface.StatusAutomationId);
 
-        var bottomRow = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var bottomRow = new DockPanel { Margin = new Thickness(0, Surface.BottomRowTopMargin, 0, 0) };
         var buttons = DialogButtonRowFactory.Create(
             Accept,
             buttonWidth: Surface.ActionButtonWidth,
@@ -127,7 +127,7 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Content = _grid,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(Surface.ScrollBorderThickness),
             BorderBrush = SystemColors.ControlDarkBrush
         };
 
@@ -187,9 +187,9 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             Width = Surface.TileSize,
             Height = Surface.TileSize,
-            Margin = new Thickness(2),
-            Padding = new Thickness(4),
-            BorderThickness = new Thickness(1),
+            Margin = new Thickness(Surface.TileMargin),
+            Padding = new Thickness(Surface.TilePadding),
+            BorderThickness = new Thickness(Surface.TileBorderThickness),
             BorderBrush = Brushes.Transparent,
             Background = Brushes.Transparent,
             Child = content,

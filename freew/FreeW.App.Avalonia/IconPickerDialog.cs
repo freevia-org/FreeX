@@ -41,7 +41,7 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
         var searchField = Surface.Field(IconPickerFieldKind.Search);
         _category = new ComboBox
         {
-            Width = categoryField.Width,
+            MinWidth = categoryField.Width,
             Margin = new Thickness(0, 0, Surface.CategoryTrailingMargin, 0)
         };
         AutomationProperties.SetAutomationId(_category, categoryField.AutomationId);
@@ -62,7 +62,7 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
             FontStyle = FontStyle.Italic,
             FontFamily = ChromeStyle.FontFamily,
             FontSize = 12,
-            Margin = new Thickness(0, 4),
+            Margin = new Thickness(0, Surface.StatusVerticalMargin),
             VerticalAlignment = VerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(_status, Surface.StatusAutomationId);
@@ -80,14 +80,14 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
         {
             Text = categoryField.Label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 6, 0),
+            Margin = new Thickness(0, 0, Surface.FieldLabelTrailingMargin, 0),
         });
         filter.Children.Add(_category);
         filter.Children.Add(new TextBlock
         {
             Text = searchField.Label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 6, 0),
+            Margin = new Thickness(0, 0, Surface.FieldLabelTrailingMargin, 0),
         });
         filter.Children.Add(_search);
 
@@ -96,8 +96,8 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
             Content = _tiles,
             VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-            BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
+            BorderThickness = new Thickness(Surface.ScrollBorderThickness),
+            BorderBrush = new SolidColorBrush(Color.Parse(Surface.AvaloniaScrollBorderHex)),
         };
         var actions = AvaloniaCompactDialogChrome.CreateOkCancelRow(
             Accept,
@@ -106,7 +106,7 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
             margin: new Thickness(0),
             style: ChromeStyle);
 
-        var bottom = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var bottom = new DockPanel { Margin = new Thickness(0, Surface.BottomRowTopMargin, 0, 0) };
         DockPanel.SetDock(actions, Dock.Right);
         bottom.Children.Add(actions);
         bottom.Children.Add(_status);
@@ -145,9 +145,9 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
                 Child = CreateThumbnail(entry),
                 Width = Surface.TileSize,
                 Height = Surface.TileSize,
-                Margin = new Thickness(2),
-                Padding = new Thickness(4),
-                BorderThickness = new Thickness(1),
+                Margin = new Thickness(Surface.TileMargin),
+                Padding = new Thickness(Surface.TilePadding),
+                BorderThickness = new Thickness(Surface.TileBorderThickness),
                 BorderBrush = Brushes.Transparent,
                 Background = Brushes.Transparent,
                 Cursor = new Cursor(StandardCursorType.Hand),
@@ -210,8 +210,9 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
             existing.BorderBrush = Brushes.Transparent;
             existing.Background = Brushes.Transparent;
         }
-        tile.BorderBrush = new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD7));
-        tile.Background = new SolidColorBrush(Color.FromArgb(0x40, 0x00, 0x78, 0xD7));
+        var highlight = Color.Parse(Surface.AvaloniaSelectionHighlightHex);
+        tile.BorderBrush = new SolidColorBrush(highlight);
+        tile.Background = new SolidColorBrush(highlight, Surface.SelectionHighlightOpacity);
     }
 
     private async void Accept()
