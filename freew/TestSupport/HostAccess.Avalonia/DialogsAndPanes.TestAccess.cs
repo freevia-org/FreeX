@@ -128,10 +128,10 @@ internal sealed partial class TableOfAuthoritiesDialog
 
 public sealed partial class CustomizeThemeColorsDialog
 {
-    internal static double WpfWidthForTests => DialogWidth;
-    internal static double WpfLabelColumnWidthForTests => LabelColumnWidth;
-    internal static double WpfColorRowHeightForTests => ColorRowHeight;
-    internal static double WpfButtonWidthForTests => ActionButtonWidth;
+    internal static double WpfWidthForTests => Layout.DialogWidth;
+    internal static double WpfLabelColumnWidthForTests => Layout.LabelColumnWidth;
+    internal static double WpfColorRowHeightForTests => Layout.AvaloniaColorRowHeight;
+    internal static double WpfButtonWidthForTests => Layout.ActionButtonWidth;
     internal bool AcceptForTests() => Accept(closeOnSuccess: false);
 }
 

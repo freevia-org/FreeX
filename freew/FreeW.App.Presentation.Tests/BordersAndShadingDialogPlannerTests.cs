@@ -58,6 +58,9 @@ public sealed class BordersAndShadingDialogPlannerTests
         avalonia.Should().NotContain("Width = 420;");
         avalonia.Should().NotContain("new TextBox { Width = 160 }");
         avalonia.Should().Contain("new TextBox { MinWidth = Layout.FieldMinWidth }");
+        avalonia.Should().Contain("IUserMessageService? messageService = null");
+        avalonia.Should().Contain("messageService ?? new AvaloniaUserMessageService(this)");
+        avalonia.Should().Contain("await _messageService.ShowWarningAsync(");
     }
 
     [Fact]

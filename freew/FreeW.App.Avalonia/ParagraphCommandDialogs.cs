@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Localization;
@@ -232,6 +233,7 @@ public sealed partial class BordersAndShadingDialog : FreeWDialogWindow
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
 
     private readonly BordersAndShadingDialogSession _session;
+    private readonly IUserMessageService _messageService;
     private readonly TabControl _tabs;
     private readonly ComboBox _paragraphSetting = Combo(BordersAndShadingDialogPlanner.SettingNames);
     private readonly ComboBox _paragraphStyle = Combo(BordersAndShadingDialogPlanner.LineStyleNames);
@@ -252,9 +254,13 @@ public sealed partial class BordersAndShadingDialog : FreeWDialogWindow
     private readonly ComboBox _shadingPattern = Combo(BordersAndShadingDialogPlanner.PatternNames);
     private readonly TextBlock _status = new() { IsVisible = false, Foreground = Brushes.Red };
 
-    public BordersAndShadingDialog(ParagraphFormatting paragraph, PageBorder? pageBorder)
+    public BordersAndShadingDialog(
+        ParagraphFormatting paragraph,
+        PageBorder? pageBorder,
+        IUserMessageService? messageService = null)
     {
         _session = new BordersAndShadingDialogSession(paragraph, pageBorder, DialogCulture);
+        _messageService = messageService ?? new AvaloniaUserMessageService(this);
         var state = _session.InitialState;
         AutomationProperties.SetAutomationId(this, BordersAndShadingDialogPlanner.AutomationId);
         Title = BordersAndShadingDialogPlanner.Title;
@@ -453,7 +459,7 @@ public sealed partial class BordersAndShadingDialog : FreeWDialogWindow
         }
     }
 
-    private void Accept()
+    private async void Accept()
     {
         var input = new BordersAndShadingDialogInput(
             ParagraphSettingIndex: _paragraphSetting.SelectedIndex,
@@ -475,8 +481,9 @@ public sealed partial class BordersAndShadingDialog : FreeWDialogWindow
         var acceptance = _session.PlanAcceptance(input);
         if (!acceptance.IsAccepted)
         {
-            _status.Text = acceptance.ValidationMessage ?? BordersAndShadingDialogPlanner.WidthValidationMessage;
-            _status.IsVisible = true;
+            _status.IsVisible = false;
+            await _messageService.ShowWarningAsync(
+                acceptance.ValidationMessage ?? BordersAndShadingDialogPlanner.WidthValidationMessage);
             return;
         }
 

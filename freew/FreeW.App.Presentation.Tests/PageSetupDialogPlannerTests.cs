@@ -38,6 +38,9 @@ public sealed class PageSetupDialogPlannerTests
         source.Should().Contain("metrics.AvaloniaLauncherLeftInset");
         source.Should().Contain("metrics.AvaloniaLauncherSpacing");
         source.Should().Contain("metrics.AvaloniaValidationMargin");
+        source.Should().Contain("IUserMessageService? messageService = null");
+        source.Should().Contain("messageService ?? new AvaloniaUserMessageService(this)");
+        source.Should().Contain("await _messageService.ShowWarningAsync(acceptance.ErrorMessage!)");
         source.Should().NotContain("AuthorityTabWidths");
         source.Should().NotContain("private const double Authority");
     }
