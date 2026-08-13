@@ -796,17 +796,17 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeMenuItemId.FontColor, \"Font Color\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_fontColorMenuItem.Menu = CreateNativeColorPaletteMenu(ColorPaletteTarget.Font, includeClearFill: false);");
         catalogSource.Should().Contain("new(NativeMenuItemId.HorizontalText, \"Horizontal\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("ApplySelectedRangeTextRotation(0, UiText.Get(\"TextRotation_HorizontalSuccessAction\"), UiText.Get(\"TextRotation_HorizontalFailed\"));");
+        source.Should().Contain("ApplySelectedRangeTextRotation(0, UiText.Get(\"TextRotation_HorizontalSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.AngleCounterclockwise, \"Angle Counterclockwise\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("ApplySelectedRangeTextRotation(45, UiText.Get(\"TextRotation_CounterclockwiseSuccessAction\"), UiText.Get(\"TextRotation_CounterclockwiseFailed\"));");
+        source.Should().Contain("ApplySelectedRangeTextRotation(45, UiText.Get(\"TextRotation_CounterclockwiseSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.AngleClockwise, \"Angle Clockwise\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("ApplySelectedRangeTextRotation(-45, UiText.Get(\"TextRotation_ClockwiseSuccessAction\"), UiText.Get(\"TextRotation_ClockwiseFailed\"));");
+        source.Should().Contain("ApplySelectedRangeTextRotation(-45, UiText.Get(\"TextRotation_ClockwiseSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.VerticalText, \"Vertical Text\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("ApplySelectedRangeTextRotation(255, UiText.Get(\"TextRotation_VerticalSuccessAction\"), UiText.Get(\"TextRotation_VerticalFailed\"));");
+        source.Should().Contain("ApplySelectedRangeTextRotation(255, UiText.Get(\"TextRotation_VerticalSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.RotateTextUp, \"Rotate Text Up\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("ApplySelectedRangeTextRotation(90, UiText.Get(\"TextRotation_UpSuccessAction\"), UiText.Get(\"TextRotation_UpFailed\"));");
+        source.Should().Contain("ApplySelectedRangeTextRotation(90, UiText.Get(\"TextRotation_UpSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.RotateTextDown, \"Rotate Text Down\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("ApplySelectedRangeTextRotation(-90, UiText.Get(\"TextRotation_DownSuccessAction\"), UiText.Get(\"TextRotation_DownFailed\"));");
+        source.Should().Contain("ApplySelectedRangeTextRotation(-90, UiText.Get(\"TextRotation_DownSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.CurrencyFormat, \"Accounting Number Format\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();");
         catalogSource.Should().Contain("new(NativeMenuItemId.PercentFormat, \"Percent Style\", RequiresGestureInSmoke: false)");
@@ -914,7 +914,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("selectedZoomPercent = CalculateZoomToSelectionPercent();");
         source.Should().Contain("private void ApplyZoomPercent(int zoomPercent, string errorMessage)");
         source.Should().Contain("var result = _session.SetZoomPercent(zoomPercent);");
-        source.Should().Contain("\"Zoom_StatusFormat\",");
+        source.Should().Contain("UiText.Get(\"MainWindow_Text_Zoom\")");
         source.Should().Contain("private int CalculateZoomToSelectionPercent()");
         source.Should().Contain("ZoomSelectionPlanner.CalculateFitWholePercent(");
         source.Should().Contain("_zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);");
@@ -1606,7 +1606,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("IsHitTestVisible = true");
         source.Should().Contain("Focusable = true");
         source.Should().Contain("AutomationProperties.SetAutomationId(container, $\"DrawingObject{drawingObject.Kind}{drawingObject.Id:N}\");");
-        source.Should().Contain("\"DrawingObject_AutomationNameFormat\",");
+        source.Should().Contain("\"RecentFile_AutomationNameFormat\",");
         source.Should().Contain("AutomationProperties.SetHelpText(container, UiText.Get(\"DrawingObject_PreviewHelpText\"));");
         source.Should().Contain("UiText.Get(selected ? \"Automation_Selected\" : \"Automation_NotSelected\"));");
         source.Should().Contain("container.PointerPressed += (_, args) =>");
@@ -2002,7 +2002,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void InsertAutoSumFormula(string functionName)");
         source.Should().Contain("var result = _session.InsertAutoSumFormula(functionName);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? UiText.Get(\"MainLoc_AutoSumFailed\"));");
-        source.Should().Contain("\"MainLoc_InsertedFunctionStatusFormat\",");
+        source.Should().Contain("\"MainLoc_ActionRangeStatusFormat\",");
         source.Should().Contain("private static bool IsAutoSumShortcut(KeyEventArgs args)");
         source.Should().Contain("args.Key == Key.OemPlus && args.KeyModifiers == KeyModifiers.Alt;");
         source.Should().Contain("InsertAutoSumFormula(\"SUM\");");
@@ -2071,7 +2071,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.SortSelectedRange(ascending);");
         source.Should().NotContain("QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range)");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? UiText.Get(\"ShellLoc_SortFailed\"));");
-        source.Should().Contain("\"MainLoc_SortedDirectionStatusFormat\",");
+        source.Should().Contain("\"MainLoc_SortedX\",");
+        source.Should().Contain("UiText.Get(ascending ? \"Sort_AtoZ\" : \"Sort_ZtoA\")");
         source.Should().Contain("private async Task ShowSortDialogAsync()");
         source.Should().Contain("var selection = await ShowSortInputDialogAsync();");
         source.Should().Contain("var sortPlan = SortDialogPlanner.CreateCommandPlan(");
@@ -2372,7 +2373,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.CommitCellText(selected, UseR1C1ReferenceStyle)");
         source.Should().Contain("_session.CancelFormulaEdit();");
         source.Should().Contain("_formulaBoxEditOriginalText = null;");
-        source.Should().Contain("\"DataValidation_PickedValueStatusFormat\",");
+        source.Should().Contain("\"MainLoc_ActionRangeStatusFormat\",");
 
         plannerSource.Should().Contain("DataValidationService.GetApplicable(sheet, activeCell)");
         plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, activeCell, workbook)");
@@ -2990,7 +2991,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var plan = await ShowDataTableInputDialogAsync();");
         source.Should().Contain("var result = _session.ExecuteDataTablePlan(plan);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? UiText.Get(\"MainLoc_DataTableFailed\"));");
-        source.Should().Contain("\"DataTable_CreatedStatusFormat\",");
+        source.Should().Contain("\"MainLoc_ActionRangeStatusFormat\",");
 
         source.Should().Contain("private async Task<DataTablePlan?> ShowDataTableInputDialogAsync(");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"DataTableCompactDialog\");");
@@ -4423,17 +4424,17 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_orientationButton.IsEnabled = isIdle;");
         source.Should().Contain("_orientationButton,");
         catalogSource.Should().Contain("new(NativeMenuItemId.HorizontalText, \"Horizontal\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("ApplySelectedRangeTextRotation(0, UiText.Get(\"TextRotation_HorizontalSuccessAction\"), UiText.Get(\"TextRotation_HorizontalFailed\"));");
+        source.Should().Contain("ApplySelectedRangeTextRotation(0, UiText.Get(\"TextRotation_HorizontalSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.AngleCounterclockwise, \"Angle Counterclockwise\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("ApplySelectedRangeTextRotation(45, UiText.Get(\"TextRotation_CounterclockwiseSuccessAction\"), UiText.Get(\"TextRotation_CounterclockwiseFailed\"));");
+        source.Should().Contain("ApplySelectedRangeTextRotation(45, UiText.Get(\"TextRotation_CounterclockwiseSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.AngleClockwise, \"Angle Clockwise\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("ApplySelectedRangeTextRotation(-45, UiText.Get(\"TextRotation_ClockwiseSuccessAction\"), UiText.Get(\"TextRotation_ClockwiseFailed\"));");
+        source.Should().Contain("ApplySelectedRangeTextRotation(-45, UiText.Get(\"TextRotation_ClockwiseSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.VerticalText, \"Vertical Text\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("ApplySelectedRangeTextRotation(255, UiText.Get(\"TextRotation_VerticalSuccessAction\"), UiText.Get(\"TextRotation_VerticalFailed\"));");
+        source.Should().Contain("ApplySelectedRangeTextRotation(255, UiText.Get(\"TextRotation_VerticalSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.RotateTextUp, \"Rotate Text Up\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("ApplySelectedRangeTextRotation(90, UiText.Get(\"TextRotation_UpSuccessAction\"), UiText.Get(\"TextRotation_UpFailed\"));");
+        source.Should().Contain("ApplySelectedRangeTextRotation(90, UiText.Get(\"TextRotation_UpSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.RotateTextDown, \"Rotate Text Down\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("ApplySelectedRangeTextRotation(-90, UiText.Get(\"TextRotation_DownSuccessAction\"), UiText.Get(\"TextRotation_DownFailed\"));");
+        source.Should().Contain("ApplySelectedRangeTextRotation(-90, UiText.Get(\"TextRotation_DownSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"));");
         source.Should().Contain("private void ApplySelectedRangeTextRotation(int textRotation, string successAction, string failureMessage)");
         source.Should().Contain("var result = _session.SetSelectedRangeTextRotation(textRotation);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? failureMessage);");
@@ -4460,8 +4461,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("textBlock.RenderTransform = transform;");
         source.Should().Contain("ClipToBounds = true,");
         source.Should().Contain("private MenuFlyout CreateTextRotationFlyout()");
-        source.Should().Contain("CreateTextRotationMenuItem(UiText.Get(\"MainWindow_Header_Horizontal\"), 0, UiText.Get(\"TextRotation_HorizontalSuccessAction\"), UiText.Get(\"TextRotation_HorizontalFailed\"))");
-        source.Should().Contain("CreateTextRotationMenuItem(UiText.Get(\"MainWindow_Header_AngleClockwise\"), -45, UiText.Get(\"TextRotation_ClockwiseSuccessAction\"), UiText.Get(\"TextRotation_ClockwiseFailed\"))");
+        source.Should().Contain("CreateTextRotationMenuItem(UiText.Get(\"MainWindow_Header_Horizontal\"), 0, UiText.Get(\"TextRotation_HorizontalSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"))");
+        source.Should().Contain("CreateTextRotationMenuItem(UiText.Get(\"MainWindow_Header_AngleClockwise\"), -45, UiText.Get(\"TextRotation_ClockwiseSuccessAction\"), UiText.Get(\"MainLoc_AlignmentFailed\"))");
         source.Should().Contain("private MenuItem CreateTextRotationMenuItem(");
         source.Should().Contain("menuItem.Click += (_, _) => ApplySelectedRangeTextRotation(textRotation, successAction, failureMessage);");
     }
