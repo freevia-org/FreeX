@@ -5,6 +5,36 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class SelectionPaneTests
 {
     [Fact]
+    public void VisualMetrics_DefineSharedSelectionPaneGeometryAndColors()
+    {
+        PresentationSelectionPaneVisualMetrics.PaneWidth.Should().Be(320);
+        PresentationSelectionPaneVisualMetrics.PaneBorderThickness.Should().Be(1);
+        PresentationSelectionPaneVisualMetrics.HeadingFontSize.Should().Be(15);
+        PresentationSelectionPaneVisualMetrics.ContentSideMargin.Should().Be(12);
+        PresentationSelectionPaneVisualMetrics.HeadingTopMargin.Should().Be(12);
+        PresentationSelectionPaneVisualMetrics.HeadingBottomMargin.Should().Be(4);
+        PresentationSelectionPaneVisualMetrics.MessageBottomMargin.Should().Be(8);
+        PresentationSelectionPaneVisualMetrics.SelectHorizontalPadding.Should().Be(8);
+        PresentationSelectionPaneVisualMetrics.SelectVerticalPadding.Should().Be(5);
+        PresentationSelectionPaneVisualMetrics.ItemVerticalMargin.Should().Be(1);
+        PresentationSelectionPaneVisualMetrics.SelectRightMargin.Should().Be(4);
+        PresentationSelectionPaneVisualMetrics.NestingIndent.Should().Be(16);
+        PresentationSelectionPaneVisualMetrics.RenameMinimumWidth.Should().Be(170);
+        PresentationSelectionPaneVisualMetrics.FieldHorizontalPadding.Should().Be(4);
+        PresentationSelectionPaneVisualMetrics.FieldVerticalPadding.Should().Be(3);
+        PresentationSelectionPaneVisualMetrics.RenameRightMargin.Should().Be(4);
+        PresentationSelectionPaneVisualMetrics.VisibilityMinimumWidth.Should().Be(50);
+        PresentationSelectionPaneVisualMetrics.VisibilityHorizontalPadding.Should().Be(5);
+        PresentationSelectionPaneVisualMetrics.VisibilityVerticalPadding.Should().Be(3);
+        PresentationSelectionPaneVisualMetrics.VisibilityRightMargin.Should().Be(8);
+        PresentationSelectionPaneVisualMetrics.MoveButtonWidth.Should().Be(22);
+        PresentationSelectionPaneVisualMetrics.MoveButtonRightMargin.Should().Be(2);
+        PresentationSelectionPaneVisualMetrics.PaneBackgroundColor.ToString().Should().Be("#FFFFFF");
+        PresentationSelectionPaneVisualMetrics.PaneBorderColor.ToString().Should().Be("#C0C0C0");
+        PresentationSelectionPaneVisualMetrics.MessageColor.ToString().Should().Be("#555555");
+    }
+
+    [Fact]
     public void Planner_ListsFrontMostObjectsAndPreservesVisibilityState()
     {
         var slide = new Slide { Title = "Selection" };
@@ -269,6 +299,14 @@ public sealed class SelectionPaneTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("PresentationSelectionPaneSession");
+            source.Should().Contain("PresentationSelectionPaneVisualMetrics.PaneWidth");
+            source.Should().Contain("PresentationSelectionPaneVisualMetrics.PaneBackgroundColor");
+            source.Should().Contain("PresentationSelectionPaneVisualMetrics.PaneBorderColor");
+            source.Should().Contain("PresentationSelectionPaneVisualMetrics.HeadingFontSize");
+            source.Should().Contain("PresentationSelectionPaneVisualMetrics.NestingIndent");
+            source.Should().Contain("PresentationSelectionPaneVisualMetrics.RenameMinimumWidth");
+            source.Should().Contain("PresentationSelectionPaneVisualMetrics.VisibilityMinimumWidth");
+            source.Should().Contain("PresentationSelectionPaneVisualMetrics.MoveButtonWidth");
             source.Should().Contain("_session.CreateItemSession(item.ShapeId)");
             source.Should().Contain("ApplyTransition(itemSession.Select())");
             source.Should().Contain("itemSession.CommitRename(rename.Text)");
@@ -293,6 +331,13 @@ public sealed class SelectionPaneTests
             source.Should().NotContain("offset:");
             source.Should().NotContain("item.IsHidden ?");
             source.Should().NotContain("item.AccessibilityStateText");
+            source.Should().NotContain("Width = 320");
+            source.Should().NotContain("FontSize = 15");
+            source.Should().NotContain("MinWidth = 170");
+            source.Should().NotContain("MinWidth = 50");
+            source.Should().NotContain("Width = 22");
+            source.Should().NotContain("Color.FromRgb(0xC0, 0xC0, 0xC0)");
+            source.Should().NotContain("Color.FromRgb(0x55, 0x55, 0x55)");
             source.Should().NotContain(".SetShapeName(");
             source.Should().NotContain(".ToggleShapeHidden(");
             source.Should().NotContain(".MoveSelectedShapeInReadingOrder(");

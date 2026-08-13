@@ -18,11 +18,15 @@ internal sealed partial class SelectionPane : Border
     {
         _session = new PresentationSelectionPaneSession(editor);
         _onAccessibilityChanged = onAccessibilityChanged;
-        Width = 320;
+        Width = PresentationSelectionPaneVisualMetrics.PaneWidth;
         Visibility = Visibility.Collapsed;
-        Background = Brushes.White;
-        BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0));
-        BorderThickness = new Thickness(1, 0, 0, 0);
+        Background = ToBrush(PresentationSelectionPaneVisualMetrics.PaneBackgroundColor);
+        BorderBrush = ToBrush(PresentationSelectionPaneVisualMetrics.PaneBorderColor);
+        BorderThickness = new Thickness(
+            PresentationSelectionPaneVisualMetrics.PaneBorderThickness,
+            0,
+            0,
+            0);
         PresentationPaneAccessibilityAdapter.ApplyPaneMetadata(
             this,
             PresentationPaneAccessibilityPlanner.SelectionPaneId,
@@ -31,12 +35,20 @@ internal sealed partial class SelectionPane : Border
         var heading = new TextBlock
         {
             Text = _session.CurrentPlan.TitleText,
-            FontSize = 15,
+            FontSize = PresentationSelectionPaneVisualMetrics.HeadingFontSize,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(12, 12, 12, 4),
+            Margin = new Thickness(
+                PresentationSelectionPaneVisualMetrics.ContentSideMargin,
+                PresentationSelectionPaneVisualMetrics.HeadingTopMargin,
+                PresentationSelectionPaneVisualMetrics.ContentSideMargin,
+                PresentationSelectionPaneVisualMetrics.HeadingBottomMargin),
         };
-        _message.Margin = new Thickness(12, 0, 12, 8);
-        _message.Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55));
+        _message.Margin = new Thickness(
+            PresentationSelectionPaneVisualMetrics.ContentSideMargin,
+            0,
+            PresentationSelectionPaneVisualMetrics.ContentSideMargin,
+            PresentationSelectionPaneVisualMetrics.MessageBottomMargin);
+        _message.Foreground = ToBrush(PresentationSelectionPaneVisualMetrics.MessageColor);
 
         var panel = new DockPanel();
         var header = new StackPanel();
@@ -84,8 +96,17 @@ internal sealed partial class SelectionPane : Border
         {
             Content = item.SelectText,
             HorizontalContentAlignment = HorizontalAlignment.Left,
-            Padding = new Thickness(8, 5, 8, 5),
-            Margin = new Thickness(8 + (item.NestingDepth * 16), 1, 4, 1),
+            Padding = new Thickness(
+                PresentationSelectionPaneVisualMetrics.SelectHorizontalPadding,
+                PresentationSelectionPaneVisualMetrics.SelectVerticalPadding,
+                PresentationSelectionPaneVisualMetrics.SelectHorizontalPadding,
+                PresentationSelectionPaneVisualMetrics.SelectVerticalPadding),
+            Margin = new Thickness(
+                PresentationSelectionPaneVisualMetrics.SelectHorizontalPadding +
+                    (item.NestingDepth * PresentationSelectionPaneVisualMetrics.NestingIndent),
+                PresentationSelectionPaneVisualMetrics.ItemVerticalMargin,
+                PresentationSelectionPaneVisualMetrics.SelectRightMargin,
+                PresentationSelectionPaneVisualMetrics.ItemVerticalMargin),
             ToolTip = item.SelectToolTipText,
         };
         select.Click += (_, _) => ApplyTransition(itemSession.Select());
@@ -93,9 +114,17 @@ internal sealed partial class SelectionPane : Border
         var rename = new TextBox
         {
             Text = item.ShapeName,
-            MinWidth = 170,
-            Padding = new Thickness(4, 3, 4, 3),
-            Margin = new Thickness(0, 1, 4, 1),
+            MinWidth = PresentationSelectionPaneVisualMetrics.RenameMinimumWidth,
+            Padding = new Thickness(
+                PresentationSelectionPaneVisualMetrics.FieldHorizontalPadding,
+                PresentationSelectionPaneVisualMetrics.FieldVerticalPadding,
+                PresentationSelectionPaneVisualMetrics.FieldHorizontalPadding,
+                PresentationSelectionPaneVisualMetrics.FieldVerticalPadding),
+            Margin = new Thickness(
+                0,
+                PresentationSelectionPaneVisualMetrics.ItemVerticalMargin,
+                PresentationSelectionPaneVisualMetrics.RenameRightMargin,
+                PresentationSelectionPaneVisualMetrics.ItemVerticalMargin),
             ToolTip = PresentationSelectionPaneItemPlan.RenameToolTipText,
         };
         void CommitName()
@@ -122,9 +151,17 @@ internal sealed partial class SelectionPane : Border
         var visibility = new Button
         {
             Content = item.VisibilityActionText,
-            MinWidth = 50,
-            Padding = new Thickness(5, 3, 5, 3),
-            Margin = new Thickness(0, 1, 8, 1),
+            MinWidth = PresentationSelectionPaneVisualMetrics.VisibilityMinimumWidth,
+            Padding = new Thickness(
+                PresentationSelectionPaneVisualMetrics.VisibilityHorizontalPadding,
+                PresentationSelectionPaneVisualMetrics.VisibilityVerticalPadding,
+                PresentationSelectionPaneVisualMetrics.VisibilityHorizontalPadding,
+                PresentationSelectionPaneVisualMetrics.VisibilityVerticalPadding),
+            Margin = new Thickness(
+                0,
+                PresentationSelectionPaneVisualMetrics.ItemVerticalMargin,
+                PresentationSelectionPaneVisualMetrics.VisibilityRightMargin,
+                PresentationSelectionPaneVisualMetrics.ItemVerticalMargin),
             ToolTip = item.VisibilityToolTipText,
         };
         visibility.Click += (_, _) =>
@@ -135,9 +172,13 @@ internal sealed partial class SelectionPane : Border
         var moveUp = new Button
         {
             Content = item.MoveUpText,
-            Width = 22,
+            Width = PresentationSelectionPaneVisualMetrics.MoveButtonWidth,
             Padding = new Thickness(0),
-            Margin = new Thickness(0, 1, 2, 1),
+            Margin = new Thickness(
+                0,
+                PresentationSelectionPaneVisualMetrics.ItemVerticalMargin,
+                PresentationSelectionPaneVisualMetrics.MoveButtonRightMargin,
+                PresentationSelectionPaneVisualMetrics.ItemVerticalMargin),
             IsEnabled = item.CanMoveUp,
             ToolTip = PresentationSelectionPaneItemPlan.MoveUpToolTipText,
         };
@@ -147,9 +188,13 @@ internal sealed partial class SelectionPane : Border
         var moveDown = new Button
         {
             Content = item.MoveDownText,
-            Width = 22,
+            Width = PresentationSelectionPaneVisualMetrics.MoveButtonWidth,
             Padding = new Thickness(0),
-            Margin = new Thickness(0, 1, 2, 1),
+            Margin = new Thickness(
+                0,
+                PresentationSelectionPaneVisualMetrics.ItemVerticalMargin,
+                PresentationSelectionPaneVisualMetrics.MoveButtonRightMargin,
+                PresentationSelectionPaneVisualMetrics.ItemVerticalMargin),
             IsEnabled = item.CanMoveDown,
             ToolTip = PresentationSelectionPaneItemPlan.MoveDownToolTipText,
         };
@@ -186,4 +231,7 @@ internal sealed partial class SelectionPane : Border
         if (transition.ShouldRefreshPane)
             Render(transition.PanePlan);
     }
+
+    private static SolidColorBrush ToBrush(FreeP.Core.Model.SrgbColor color) =>
+        new(Color.FromRgb(color.R, color.G, color.B));
 }
