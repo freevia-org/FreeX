@@ -50,6 +50,12 @@ public sealed class SlideShowRuntimeApplicationTests
             IsTopmost: false,
             AllowsResize: true,
             ShowBrowseScrollbars: true));
+        runtime.WindowPlan.PlanBrowseWindowSize(1920, 1080)
+            .Should().Be(new SlideShowBrowseWindowSizePlan(1024, 768));
+        runtime.WindowPlan.PlanBrowseWindowSize(800, 600)
+            .Should().Be(new SlideShowBrowseWindowSizePlan(680, 510));
+        runtime.WindowPlan.PlanBrowseWindowSize(double.NaN, double.PositiveInfinity)
+            .Should().Be(new SlideShowBrowseWindowSizePlan(1024, 768));
         runtime.InitialSlideMetrics.WidthDip.Should().BeGreaterThan(0);
         runtime.InitialSlideMetrics.HeightDip.Should().BeGreaterThan(0);
 

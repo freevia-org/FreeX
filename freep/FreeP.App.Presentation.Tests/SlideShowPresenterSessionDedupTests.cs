@@ -570,6 +570,7 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().Contain("_runtime.DisplaySlide");
             source.Should().Contain("_runtime.CreatePresenterViewOperations(_setSlideNotesText)");
             source.Should().Contain("var windowPlan = _runtime.WindowPlan;");
+            source.Should().Contain("windowPlan.PlanBrowseWindowSize(");
             source.Should().Contain("DispatcherTimer");
             source.Should().Contain("_screenModeOverlay");
             source.Should().Contain("_runtime.AnimationRendererSession.PlanStep(");
@@ -585,6 +586,9 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().NotContain("_presentation.ShowBrowseScrollbar");
             source.Should().NotContain("_presentation.ShowMediaControls");
             source.Should().NotContain("_presentation.ShowWithNarration");
+            source.Should().NotContain("Math.Min(1024");
+            source.Should().NotContain("Width = 1024;");
+            source.Should().NotContain("Height = 768;");
             source.Should().NotContain("private readonly SlideShowController _controller");
             source.Should().NotContain("private string _slideNumberBuffer");
             source.Should().NotContain("private SlideShowScreenMode _screenMode");

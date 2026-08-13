@@ -7,12 +7,33 @@ public sealed record SlideShowRuntimeCaptionPreference(
     uint? ShapeId = null,
     int? TrackIndex = null);
 
+public sealed record SlideShowBrowseWindowSizePlan(
+    double WidthDip,
+    double HeightDip);
+
 public sealed record SlideShowRuntimeWindowPlan(
     bool IsBrowseWindow,
     bool IsBorderless,
     bool IsTopmost,
     bool AllowsResize,
-    bool ShowBrowseScrollbars);
+    bool ShowBrowseScrollbars)
+{
+    public const double PreferredBrowseWidthDip = 1024;
+    public const double PreferredBrowseHeightDip = 768;
+    public const double WorkAreaFraction = 0.85;
+
+    public SlideShowBrowseWindowSizePlan PlanBrowseWindowSize(
+        double workAreaWidthDip,
+        double workAreaHeightDip) =>
+        new(
+            ResolveBrowseDimension(workAreaWidthDip, PreferredBrowseWidthDip),
+            ResolveBrowseDimension(workAreaHeightDip, PreferredBrowseHeightDip));
+
+    private static double ResolveBrowseDimension(double workAreaDimensionDip, double preferredDip) =>
+        double.IsFinite(workAreaDimensionDip) && workAreaDimensionDip > 0
+            ? Math.Min(preferredDip, workAreaDimensionDip * WorkAreaFraction)
+            : preferredDip;
+}
 
 public sealed record SlideShowRuntimeScreenModePlan(
     SlideShowScreenMode Mode,

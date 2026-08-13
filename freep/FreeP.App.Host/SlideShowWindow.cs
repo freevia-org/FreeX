@@ -179,8 +179,11 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         Topmost      = windowPlan.IsTopmost;
         if (isBrowseWindow)
         {
-            Width = Math.Min(1024, SystemParameters.WorkArea.Width * 0.85);
-            Height = Math.Min(768, SystemParameters.WorkArea.Height * 0.85);
+            var browseSize = windowPlan.PlanBrowseWindowSize(
+                SystemParameters.WorkArea.Width,
+                SystemParameters.WorkArea.Height);
+            Width = browseSize.WidthDip;
+            Height = browseSize.HeightDip;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
         }
         Background   = Brushes.Black;

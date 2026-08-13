@@ -190,8 +190,17 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         Topmost            = windowPlan.IsTopmost;
         if (isBrowseWindow)
         {
-            Width = 1024;
-            Height = 768;
+            var screen = Screens.Primary;
+            var scaling = screen is { Scaling: > 0 } ? screen.Scaling : 1;
+            var browseSize = windowPlan.PlanBrowseWindowSize(
+                screen is null
+                    ? double.PositiveInfinity
+                    : screen.WorkingArea.Width / scaling,
+                screen is null
+                    ? double.PositiveInfinity
+                    : screen.WorkingArea.Height / scaling);
+            Width = browseSize.WidthDip;
+            Height = browseSize.HeightDip;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             ShowInTaskbar = true;
         }
