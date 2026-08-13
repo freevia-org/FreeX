@@ -14986,18 +14986,6 @@ et {0} plus.</value>&#xD;
   <data name="Startup_RecoveryTitle" xml:space="preserve">&#xD;
     <value>Recover Unsaved Work</value>&#xD;
   </data>
-  <data name="Startup_RecoveryPrompt" xml:space="preserve">&#xD;
-    <value>FreeX found autosaved recovery files from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook?</value>&#xD;
-  </data>
-  <data name="Startup_RecoveryPromptNamed" xml:space="preserve">&#xD;
-    <value>FreeX found an autosaved recovery file for "{0}" from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook?</value>&#xD;
-  </data>
-  <data name="Startup_RecoveryPromptMultiple" xml:space="preserve">&#xD;
-    <value>FreeX found autosaved recovery files from a previous session that ended unexpectedly. There are {0} workbook(s) remaining to review. Would you like to restore this workbook?</value>&#xD;
-  </data>
-  <data name="Startup_RecoveryPromptNamedMultiple" xml:space="preserve">&#xD;
-    <value>FreeX found an autosaved recovery file for "{0}" from a previous session that ended unexpectedly. There are {1} workbook(s) remaining to review. Would you like to restore this workbook?</value>&#xD;
-  </data>
   <data name="MainWindowMessage_XlsxSaveWarningsBodyFormat" xml:space="preserve">&#xD;
     <value>Some features could not be saved to the file and may be missing:&#xD;
 &#xD;

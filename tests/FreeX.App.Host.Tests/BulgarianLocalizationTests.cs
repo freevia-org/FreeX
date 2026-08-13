@@ -94,10 +94,11 @@ public sealed class BulgarianLocalizationTests
     [Fact]
     public void BulgarianResx_MatchesNeutralKeysPlaceholdersAndAccessKeyCounts()
     {
-        var neutral = ReadResxValues("Strings.resx");
+        var neutral = ReadEffectiveNeutralValues();
         var bulgarian = ReadResxValues("Strings.bg-BG.resx");
 
-        // The Loc neutral is a superset; satellites are translated subsets.
+        // The effective neutral catalog composes app-owned and shared generic resources;
+        // satellites are translated subsets and may override keys owned by either catalog.
         // Verify: no orphan satellite keys, no blank values for keys that have neutral text,
         // placeholder tokens and access-key counts match for all keys present in the satellite.
         neutral.Keys.Should().Contain(bulgarian.Keys,

@@ -62,7 +62,8 @@ public sealed class FreeXResourceBypassTailSourceTests
         var readiness = Read("tools", "Test-MacOsAppReadiness.ps1");
 
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? UiText.Get(\"MainLoc_FormatPainterFailed\"));");
-        source.Should().Contain("HasFormatPainterButton: _formatPainterButton.Content?.ToString() == UiText.Get(\"MainWindow_TooltipTitle_FormatPainter\")");
+        source.Should().Contain("_formatPainterButton.Content = UiText.Get(\"MainWindow_TooltipTitle_FormatPainter\");");
+        source.Should().NotContain("_formatPainterButton.Content = \"Format Painter\";");
         readiness.Should().Contain("_formatPainterButton.Content = UiText.Get(`\"MainWindow_TooltipTitle_FormatPainter`\");");
         readiness.Should().NotContain("_formatPainterButton.Content = `\"Format Painter`\";");
     }

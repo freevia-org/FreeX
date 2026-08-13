@@ -37,11 +37,12 @@ public sealed class CommonMessageTextTests
 
         source.Should().Contain("ResolveDefaultAcceptContent(acceptContent)");
         source.Should().Contain("? ShellStrings.Current.Ok");
-        source.Should().Contain("var cancelContent = ShellStrings.Current.Cancel;");
+        source.Should().Contain("var resolvedCancelContent = ResolveCancelContent(cancelContent);");
         source.Should().Contain("ShellStrings.Current.CreateAutomationName(resolvedAcceptContent)");
         source.Should().Contain("SetAcceleratorKey(ok, resolvedAcceptContent);");
-        source.Should().Contain("ShellStrings.Current.CreateAutomationName(cancelContent)");
-        source.Should().Contain("SetAcceleratorKey(cancel, cancelContent);");
+        source.Should().Contain("? ShellStrings.Current.Cancel");
+        source.Should().Contain("ShellStrings.Current.CreateAutomationName(resolvedCancelContent)");
+        source.Should().Contain("SetAcceleratorKey(cancel, resolvedCancelContent);");
     }
 
     [Fact]
