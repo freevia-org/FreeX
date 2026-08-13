@@ -64,7 +64,7 @@ $contracts = @(
         validation = "PageSetupDialogPlanner validates non-negative margins/distances and positive geometry."
         resultApplication = "PageLayoutCommandPlanner applies the full result through one SetPageSettingsCommand and one layout refresh."
         sharedPolicy = "PageSetupDialogPlanner; PageLayoutCommandPlanner"
-        wpfTokens = @("PageSetupDialog.ToPresentationResult", "new SetPageSettingsCommand(settings)", 'PageSetting("freew.orientation"')
+        wpfTokens = @("PageSetupDialog.ToPresentationResult", "new SetPageSettingsCommand(settings, sectionIndex)", 'PageSetting("freew.orientation"')
         avaloniaTokens = @("PageSetupDialog.ShowAndApplyAsync", "PageLayoutCommandPlanner.ApplyPageSetupResult", "OpenMorePaperSizesDialog")
         tests = $pairedTests
     },
