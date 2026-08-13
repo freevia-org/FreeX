@@ -1185,6 +1185,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
     private CellAddress? _cellDragSelectionAnchor;
+    private bool _cellDragAddsAdditionalRange;
     // Set whenever SelectRangeFromAnchor switches the Name Box to the live "{rows}R x {cols}C"
     // dimension readout during a plain mouse-drag selection, so the drag-end handlers know to
     // revert it back to the plain range address (R69-render-active-cell-selection-6-2).
@@ -7670,7 +7671,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ? position.X >= Math.Max(0, bounds.Width - HeaderResizeHitThickness)
             : position.Y >= Math.Max(0, bounds.Height - HeaderResizeHitThickness);
 
-    private void BeginCellSelectionDrag(PointerPressedEventArgs args, Control capture, CellAddress address)
+    private void BeginCellSelectionDrag(
+        PointerPressedEventArgs args,
+        Control capture,
+        CellAddress address,
+        bool addsAdditionalRange = false)
     {
         // Defensive: drop any stale subscriptions left over from a drag that lost capture without a
         // PointerReleased (grid rebuild, alt-tab, context menu), so we never double-subscribe.
@@ -7689,6 +7694,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
         _cellSelectionDragShowedDimensionText = false;
+        _cellDragAddsAdditionalRange = addsAdditionalRange;
 
         _cellDragSelectionAnchor = address;
         // Keep _cellDragSelectionCapture for Focus() — the per-cell border is the right focus target.
@@ -7727,6 +7733,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellDragSelectionAnchor = null;
         _cellDragSelectionCapture = null;
         _cellDragSelectionPointer = null;
+        _cellDragAddsAdditionalRange = false;
         _cellDragFormulaPointCursor = null;
         _cellDragFormulaReferenceStart = null;
         _cellDragFormulaReferenceLength = null;
@@ -7915,6 +7922,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellDragSelectionAnchor = null;
         _cellDragSelectionCapture = null;
         _cellDragSelectionPointer = null;
+        _cellDragAddsAdditionalRange = false;
         _cellDragFormulaPointCursor = null;
         _cellDragFormulaReferenceStart = null;
         _cellDragFormulaReferenceLength = null;
@@ -7957,6 +7965,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellDragSelectionAnchor = null;
         _cellDragSelectionCapture = null;
         _cellDragSelectionPointer = null;
+        _cellDragAddsAdditionalRange = false;
 
         _cellDragSelectionAnchor = kind == HeaderResizeKind.Column
             ? new CellAddress(_session.ActiveSheet.Id, 1, index)
@@ -8151,7 +8160,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Pin the active cell to `anchor` (the pressed cell) rather than the range's normalized
         // top-left, so a drag that ran up/left keeps the active cell at the true starting corner --
         // which View > Split / Freeze Panes read after the gesture ends (split-creation-selection-anchor).
-        _session.SelectAnchoredRange(anchor, address);
+        if (_cellDragAddsAdditionalRange)
+        {
+            var activeRange = MergedSelectionRangePlanner.ExpandToFullyContainMerges(
+                _session.ActiveSheet,
+                new GridRange(anchor, address));
+            var ranges = SelectionAreaPlanner.AppendOrReplaceActiveArea(
+                _session.SelectedRanges,
+                _session.SelectedRange,
+                activeRange,
+                startNewArea: false);
+            _session.SelectRanges(activeRange, ranges, anchor);
+        }
+        else
+        {
+            _session.SelectAnchoredRange(anchor, address);
+        }
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(_session.SelectedRange)));
         // While a mouse-drag selection is in progress (this method is only ever invoked from
         // ContinueCellSelectionDrag), Excel's Name Box shows a live "{rows}R x {cols}C" dimension
@@ -9944,8 +9968,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            SelectClickedCell(address, args.KeyModifiers);
-            BeginCellSelectionDrag(args, border, address);
+            var additionalSelectionAnchor = SelectClickedCell(address, args.KeyModifiers);
+            BeginCellSelectionDrag(
+                args,
+                border,
+                additionalSelectionAnchor ?? address,
+                addsAdditionalRange: additionalSelectionAnchor.HasValue);
             args.Handled = true;
         };
         // PointerMoved and PointerReleased for cell-selection drag are now subscribed on _sheetGridHost
@@ -13760,12 +13788,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// plain click always collapsed the selection even with F8 armed (R68-app-selection-
     /// navigation-6-1).
     /// </summary>
-    internal void SelectClickedCell(CellAddress address, KeyModifiers modifiers)
+    internal CellAddress? SelectClickedCell(CellAddress address, KeyModifiers modifiers)
     {
         if (modifiers.HasFlag(KeyModifiers.Shift) || _keyboardSelectionMode == ExcelSelectionMode.Extend)
         {
             SelectRange(address);
-            return;
+            return null;
         }
 
         // A plain click onto a locked cell on a protected sheet with "Select locked cells"
@@ -13774,7 +13802,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // above is left ungated for now; CommandGuards.CanSelectCell already exists for exactly
         // this check (it returns true unconditionally on an unprotected sheet).
         if (!CommandGuards.CanSelectCell(_session.Workbook, _session.ActiveSheet, address))
-            return;
+            return null;
 
         // Ctrl+click (without Shift, checked above) adds the clicked cell as a disjoint SECOND
         // (or later) selection area instead of collapsing the selection down to just this cell --
@@ -13783,11 +13811,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // click here, discarding every prior area (R84-app-mouse-selection-5-1).
         if (modifiers.HasFlag(KeyModifiers.Control))
         {
-            AddAdditionalCellSelection(address);
-            return;
+            return AddAdditionalCellSelection(address);
         }
 
         SelectCell(address);
+        return null;
     }
 
     /// <summary>
@@ -13796,20 +13824,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// Selection.cs) for a fresh (non-dragging) Ctrl+click. The active cell moves to the newly
     /// added area so subsequent editing/formula-bar state targets it, matching Excel.
     /// </summary>
-    private void AddAdditionalCellSelection(CellAddress address)
+    private CellAddress? AddAdditionalCellSelection(CellAddress address)
     {
         if (!TryCommitPendingFormulaEdit())
-            return;
+            return null;
 
         ClearSelectionExtensionState();
         ClearSelectedDrawingObject();
-        var newRange = new GridRange(address, address);
-        var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
-        _session.SelectRanges(newRange, ranges, address);
+        var clickedMerge = _session.ActiveSheet.GetMergeRegion(address);
+        var newRange = clickedMerge ?? new GridRange(address, address);
+        var activeCell = clickedMerge?.Start ?? address;
+        var ranges = SelectionAreaPlanner.AppendOrReplaceActiveArea(
+            _session.SelectedRanges,
+            _session.SelectedRange,
+            newRange,
+            startNewArea: true);
+        _session.SelectRanges(newRange, ranges, activeCell);
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
         ApplyFormatPainterAfterTargetSelection();
         FocusShellRegion(ShellFocusTarget.Worksheet);
+        return activeCell;
     }
 
     private void ClearSelectionExtensionState()

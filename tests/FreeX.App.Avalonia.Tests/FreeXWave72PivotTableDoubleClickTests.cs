@@ -74,7 +74,7 @@ public sealed class FreeXWave72PivotTableDoubleClickTests
             "if (point.Properties.IsLeftButtonPressed && IsCellDoubleClick(address, args.ClickCount))",
             StringComparison.Ordinal);
         var pointerDoubleClickEnd = avaloniaGridSource.IndexOf(
-            "SelectClickedCell(address, args.KeyModifiers);",
+            "var additionalSelectionAnchor = SelectClickedCell(address, args.KeyModifiers);",
             pointerDoubleClickStart,
             StringComparison.Ordinal);
         avaloniaGridSource[pointerDoubleClickStart..pointerDoubleClickEnd]

@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -71,15 +70,8 @@ public partial class MainWindow
     // Connections"-style multi-area header selection), not wipe the existing selection down to
     // just this column the way a plain click does (R49-render-multiarea-selection-3-2).
     //
-    // This intentionally does NOT reuse AddOrMoveAdditionalSelection/CreateAdditionalSelectionRanges
-    // (the cell-area Ctrl+click machinery a few hundred lines below): a header Ctrl+click never has
-    // an analogous "extend the same click" continuation through this method (header drag-continuation
-    // is handled separately by ExtendHeaderSelection, invoked from SheetGrid_MouseMove's
-    // _dragHeaderSelectionTarget branch, never from here), so it can safely just always append
-    // (R112-render-cellarea-multiselect-append-fix: CreateAdditionalSelectionRanges now takes an
-    // explicit startNewArea flag from the mouse handlers instead of inferring it, so it no longer
-    // needs to be avoided here for correctness -- this split is kept anyway since header selection
-    // has no drag-continuation state to share with it).
+    // Header Ctrl+click has no analogous continuation through this method; it always asks the shared
+    // selection-area planner to append a fresh area. Header dragging remains in ExtendHeaderSelection.
     private void AddAdditionalColumnSelection(uint col)
     {
         var range = CreateWholeColumnRange(_currentSheetId, col);
@@ -94,7 +86,11 @@ public partial class MainWindow
         // The newly Ctrl-clicked area must also fully absorb any merge it only partially spans,
         // same as the plain-click path (R99-render-header-select-merge-expand).
         var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
-        var ranges = AppendAdditionalSelectionRange(SheetGrid.SelectedRanges, SheetGrid.SelectedRange, expandedRange);
+        var ranges = SelectionAreaPlanner.AppendOrReplaceActiveArea(
+            SheetGrid.SelectedRanges,
+            SheetGrid.SelectedRange,
+            expandedRange,
+            startNewArea: true);
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SetSelectedRangesIfChanged(ranges);
@@ -124,7 +120,11 @@ public partial class MainWindow
         // Row counterpart of AddAdditionalColumnSelection's expansion above
         // (R99-render-header-select-merge-expand).
         var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
-        var ranges = AppendAdditionalSelectionRange(SheetGrid.SelectedRanges, SheetGrid.SelectedRange, expandedRange);
+        var ranges = SelectionAreaPlanner.AppendOrReplaceActiveArea(
+            SheetGrid.SelectedRanges,
+            SheetGrid.SelectedRange,
+            expandedRange,
+            startNewArea: true);
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SetSelectedRangesIfChanged(ranges);
@@ -137,19 +137,6 @@ public partial class MainWindow
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
-    }
-
-    // Appends newRange as a fresh disjoint area, seeding the list from currentActive (the
-    // still-single selection at the time of this first Ctrl+click) when nothing has accumulated yet.
-    private static IReadOnlyList<GridRange> AppendAdditionalSelectionRange(
-        IReadOnlyList<GridRange>? selectedRanges, GridRange? currentActive, GridRange newRange)
-    {
-        var ranges = new List<GridRange>(
-            selectedRanges is { Count: > 0 } existing
-                ? existing
-                : currentActive is { } active ? [active] : []);
-        ranges.Add(newRange);
-        return ranges;
     }
 
     private void SelectAll()
@@ -959,7 +946,7 @@ public partial class MainWindow
         //
         // A Ctrl+click multi-area selection (SheetGrid.SelectedRanges has more than one entry --
         // SheetGrid.SelectedRanges already includes the active area as its own last entry, see
-        // CreateAdditionalSelectionRanges) gets the same treatment: Tab/Enter must walk the active
+        // SelectionAreaPlanner) gets the same treatment: Tab/Enter must walk the active
         // cell through the area it is currently in, and once it wraps past that area's far edge
         // (in the direction of travel), continue on to the first cell of the NEXT area in the
         // original click order -- wrapping from the last area back to the first -- instead of
@@ -1639,7 +1626,7 @@ public partial class MainWindow
         // SheetGrid_MouseMove's drag-continuation passes true) -- so pass that through explicitly
         // instead of trying to re-derive it from selection state after the fact
         // (R112-render-cellarea-multiselect-append-fix).
-        var ranges = CreateAdditionalSelectionRanges(
+        var ranges = SelectionAreaPlanner.AppendOrReplaceActiveArea(
             SheetGrid.SelectedRanges,
             SheetGrid.SelectedRange,
             activeRange,
@@ -2103,88 +2090,4 @@ public partial class MainWindow
         CompleteDragSelectionStatusRefresh();
     }
 
-    // Builds the accumulated multi-area (Ctrl+click) selection list for a cell-area click/drag.
-    // `startNewArea` -- passed straight through from AddOrMoveAdditionalSelection's `extendSelection`
-    // parameter, which the mouse handlers already set correctly (mouse-down: false/new area;
-    // Ctrl+drag continuation: true/extend) -- is the ONLY thing that decides extend-vs-append.
-    //
-    // An earlier version tried to infer this after the fact by checking whether SheetGrid.SelectedRange
-    // still equalled the accumulated list's last entry, but every call ends by setting
-    // SheetGrid.SelectedRange to exactly that same last entry, so on the NEXT call the two were always
-    // equal and it always took the "extend" branch -- a second Ctrl+click could never append a genuinely
-    // new disjoint area (R112-render-cellarea-multiselect-append-fix). It also seeded a fresh list from
-    // `activeRange` (the NEW area) instead of `currentActive` (the OLD selection that needs to be
-    // preserved as the first area), silently dropping the previous selection on the very first
-    // Ctrl+click of a session; that is fixed here too.
-    private static IReadOnlyList<GridRange> CreateAdditionalSelectionRanges(
-        IReadOnlyList<GridRange>? selectedRanges,
-        GridRange? currentActive,
-        GridRange activeRange,
-        bool startNewArea)
-    {
-        var hasExistingRanges = selectedRanges is { Count: > 0 };
-        var ranges = selectedRanges as MutableSelectionRanges ??
-            (hasExistingRanges
-                ? new MutableSelectionRanges(selectedRanges!)
-                : currentActive is { } seed
-                    ? new MutableSelectionRanges(seed)
-                    : new MutableSelectionRanges([]));
-
-        if (!startNewArea && ranges.Count > 0)
-            ranges.ReplaceLast(activeRange);
-        else
-            ranges.Add(activeRange);
-
-        return ranges;
-    }
-
-    private sealed class MutableSelectionRanges : IReadOnlyList<GridRange>
-    {
-        private GridRange[] _ranges;
-
-        public MutableSelectionRanges(GridRange range)
-        {
-            _ranges = [range];
-            Count = 1;
-        }
-
-        public MutableSelectionRanges(IReadOnlyList<GridRange> ranges)
-        {
-            Count = ranges.Count;
-            _ranges = new GridRange[Math.Max(Count, 1)];
-            for (var i = 0; i < Count; i++)
-                _ranges[i] = ranges[i];
-        }
-
-        public int Count { get; private set; }
-
-        public GridRange this[int index] => _ranges[index];
-
-        public void ReplaceLast(GridRange range)
-        {
-            if (Count == 0)
-            {
-                Add(range);
-                return;
-            }
-
-            _ranges[Count - 1] = range;
-        }
-
-        public void Add(GridRange range)
-        {
-            if (Count == _ranges.Length)
-                Array.Resize(ref _ranges, Math.Max(Count * 2, 1));
-
-            _ranges[Count++] = range;
-        }
-
-        public IEnumerator<GridRange> GetEnumerator()
-        {
-            for (var i = 0; i < Count; i++)
-                yield return _ranges[i];
-        }
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-    }
 }
