@@ -3967,7 +3967,7 @@ public sealed class DocumentView : RichTextBox
     /// or the style does not change (e.g. a non-heading paragraph, which has nothing to promote).
     /// </summary>
     public void PromoteHeading(int modelBlockIndex) =>
-        ShiftHeadingStyle(modelBlockIndex, OutlineTools.Promote);
+        ApplyOutlineMutation(() => OutlineMutationCoordinator.Promote(_commands, _model, modelBlockIndex));
 
     /// <summary>
     /// Demote the heading at <paramref name="modelBlockIndex"/> one rank toward the bottom of the outline
@@ -3976,7 +3976,7 @@ public sealed class DocumentView : RichTextBox
     /// is not a paragraph or the style does not change (already at the deepest level).
     /// </summary>
     public void DemoteHeading(int modelBlockIndex) =>
-        ShiftHeadingStyle(modelBlockIndex, OutlineTools.Demote);
+        ApplyOutlineMutation(() => OutlineMutationCoordinator.Demote(_commands, _model, modelBlockIndex));
 
     /// <summary>
     /// Set the paragraph at <paramref name="modelBlockIndex"/> directly to <c>Heading1</c> (Word's
@@ -3985,7 +3985,7 @@ public sealed class DocumentView : RichTextBox
     /// No-op when the index is not a paragraph or it is already Heading 1.
     /// </summary>
     public void PromoteHeadingToHeading1(int modelBlockIndex) =>
-        ShiftHeadingStyle(modelBlockIndex, _ => "Heading1");
+        ApplyOutlineMutation(() => OutlineMutationCoordinator.PromoteToHeading1(_commands, _model, modelBlockIndex));
 
     /// <summary>
     /// Move the heading at <paramref name="modelBlockIndex"/> — together with its whole subtree (every
@@ -3994,46 +3994,26 @@ public sealed class DocumentView : RichTextBox
     /// The reorder is computed by the pure <see cref="OutlineTools.MoveSubtree"/> and applied through the
     /// reversible <see cref="ReorderBlocksCommand"/> on the undo/redo bus, so it is a single undoable step.
     /// Returns the new block index of the moved heading (so the nav pane can re-select it), or the original
-    /// index when nothing moved (already at an outline edge, or not a heading). Any collapsed-heading view
-    /// state is dropped first so the indices cannot become stale across the reorder.
+    /// index when nothing moved (already at an outline edge, or not a heading). Before a successful move,
+    /// collapsed-heading view state is dropped so its block indices cannot become stale during re-render.
     /// </summary>
     public int MoveHeading(int modelBlockIndex, bool moveUp)
     {
         CommitToModel();
 
-        // Collapse markers are tracked by model block index; a reorder invalidates them, so expand all
-        // first (purely a view concern — the model is unaffected) before relocating the subtree.
-        if (_collapsedHeadings.Count > 0)
-            _collapsedHeadings.Clear();
-
-        var reordered = OutlineTools.MoveSubtree(_model.Blocks, modelBlockIndex, moveUp);
-        if (ReferenceEquals(reordered, _model.Blocks))
-            return modelBlockIndex; // nothing to move
-
-        var heading = _model.Blocks[modelBlockIndex];
-        _commands.Execute(new ReorderBlocksCommand(reordered));
-
-        for (var i = 0; i < reordered.Count; i++)
-        {
-            if (ReferenceEquals(reordered[i], heading))
-                return i;
-        }
-        return modelBlockIndex;
+        var result = OutlineMutationCoordinator.MoveHeading(
+            _commands,
+            _model,
+            modelBlockIndex,
+            moveUp,
+            _collapsedHeadings.Clear);
+        return result.CurrentBlockIndex;
     }
 
-    // Apply a pure style-id shift (promote/demote) to a single model paragraph via the undo/redo bus.
-    private void ShiftHeadingStyle(int modelBlockIndex, Func<string?, string?> shift)
+    private void ApplyOutlineMutation(Func<bool> mutation)
     {
         CommitToModel();
-        if (modelBlockIndex < 0 || modelBlockIndex >= _model.Blocks.Count
-            || _model.Blocks[modelBlockIndex] is not ModelParagraph paragraph)
-            return;
-
-        var next = shift(paragraph.StyleId);
-        if (string.Equals(next, paragraph.StyleId, StringComparison.Ordinal))
-            return; // no change (e.g. promoting Title, or demoting past the cap)
-
-        _commands.Execute(new SetParagraphStyleCommand(modelBlockIndex, next));
+        mutation();
     }
 
     /// <summary>
@@ -4044,14 +4024,8 @@ public sealed class DocumentView : RichTextBox
     /// requested level.
     /// </summary>
     public void SetHeadingLevel(int modelBlockIndex, int level)
-    {
-        var styleId = level < 0
-            ? "Normal"
-            : level == 0
-                ? "Title"
-                : $"Heading{Math.Min(level, OutlineTools.MaxHeadingLevel)}";
-        ShiftHeadingStyle(modelBlockIndex, _ => styleId);
-    }
+        => ApplyOutlineMutation(() =>
+            OutlineMutationCoordinator.SetHeadingLevel(_commands, _model, modelBlockIndex, level));
 
     /// <summary>
     /// Collapse the heading at <paramref name="modelBlockIndex"/>: its body blocks (everything down to
