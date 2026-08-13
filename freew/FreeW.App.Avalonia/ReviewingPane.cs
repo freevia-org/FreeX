@@ -152,15 +152,12 @@ public sealed class ReviewingPane : SidePaneBase
 
         _acceptAllButton.IsEnabled = hasRevisions;
         _rejectAllButton.IsEnabled = hasRevisions;
-        _countLabel.Text = hasRevisions
-            ? $"{revisions.Count} tracked change{(revisions.Count == 1 ? "" : "s")}"
-            : "No tracked changes";
+        var paneState = ReviewingPaneStatePlanner.BuildRefreshState(revisions.Count, previousIndex);
+        _countLabel.Text = paneState.StatusText;
 
         var items = revisions.Select(r => new RevisionItemView(r, this)).ToArray();
         _revisionList.ItemsSource = items;
-        _revisionList.SelectedIndex = revisions.Count == 0
-            ? -1
-            : Math.Clamp(previousIndex < 0 ? 0 : previousIndex, 0, revisions.Count - 1);
+        _revisionList.SelectedIndex = paneState.SelectedIndex;
     }
 
     /// <summary>Steps through tracked changes using WPF's open, refresh, and wrapping semantics.</summary>
@@ -171,13 +168,12 @@ public sealed class ReviewingPane : SidePaneBase
 
         if (refresh)
             Refresh();
-        if (_revisions.Count == 0)
+        var next = ReviewingPaneStatePlanner.ResolveStep(
+            _revisions.Count,
+            _revisionList.SelectedIndex,
+            direction);
+        if (next < 0)
             return false;
-
-        var current = _revisionList.SelectedIndex;
-        var next = current < 0
-            ? (direction < 0 ? _revisions.Count - 1 : 0)
-            : (current + Math.Sign(direction) + _revisions.Count) % _revisions.Count;
         _revisionList.SelectedIndex = next;
         return true;
     }

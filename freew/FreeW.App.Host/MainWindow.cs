@@ -1655,18 +1655,11 @@ public sealed class MainWindow : Window
         foreach (var entry in _reviewEntries)
             _reviewList.Items.Add(BuildRevisionItem(entry));
 
-        _reviewStatus.Text = _reviewEntries.Count switch
-        {
-            0 => "No tracked changes",
-            1 => "1 change",
-            var n => $"{n} changes"
-        };
-
-        if (_reviewEntries.Count == 0)
+        var paneState = ReviewingPaneStatePlanner.BuildRefreshState(_reviewEntries.Count, previousIndex);
+        _reviewStatus.Text = paneState.StatusText;
+        if (paneState.SelectedIndex < 0)
             return;
-        // Keep the cursor near where it was (the change that slid into the resolved slot, or the last one).
-        var next = previousIndex < 0 ? 0 : System.Math.Min(previousIndex, _reviewEntries.Count - 1);
-        _reviewList.SelectedIndex = next;
+        _reviewList.SelectedIndex = paneState.SelectedIndex;
     }
 
     // One reviewing-pane row: a bold "Author • Type" caption over the affected text (wrapped, dimmed).
@@ -1735,13 +1728,12 @@ public sealed class MainWindow : Window
             ToggleReviewPane();
         else
             RefreshReviewPane();
-        if (_reviewEntries.Count == 0)
+        var next = ReviewingPaneStatePlanner.ResolveStep(
+            _reviewEntries.Count,
+            _reviewList.SelectedIndex,
+            direction);
+        if (next < 0)
             return;
-
-        var current = _reviewList.SelectedIndex;
-        var next = current < 0
-            ? (direction > 0 ? 0 : _reviewEntries.Count - 1)
-            : (current + direction + _reviewEntries.Count) % _reviewEntries.Count;
         _reviewList.SelectedIndex = next;
         _reviewList.ScrollIntoView(_reviewList.SelectedItem);
     }
