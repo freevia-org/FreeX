@@ -16,8 +16,8 @@ public partial class MainWindow
 {
     /// <summary>
     /// Installs the declarative <see cref="FreeXRibbonDefinition"/> through the shared WPF renderer.
-    /// The XAML tab strip is only native shell chrome; command, keytip, and adaptive policy all come
-    /// from the shared definition and renderer before workbook and option state is applied.
+    /// Tab shells, commands, keytips, and adaptive policy all come from the shared definition before
+    /// workbook and option state is applied.
     /// </summary>
     private void TryApplyDeclarativeRibbon()
     {
@@ -26,9 +26,12 @@ public partial class MainWindow
 
         try
         {
-            // The ribbon is now declarative. Hidden backplane controls (MainWindow.RibbonBackplane.g.cs)
-            // hold state and serve as the 'sender' for handlers. Commands bind NATIVELY: each CommandId
-            // invokes its MainWindow handler method directly; the control bridge is only a fallback.
+            var definition = FreeXRibbon.Build();
+            BuildRibbonTabShells(definition);
+
+            // Hidden backplane controls (MainWindow.RibbonBackplane.g.cs) hold state and serve as the
+            // fallback sender for handlers. Definition commands bind directly to typed delegates; the
+            // control bridge remains only for non-definition backplane commands.
             InitializeRibbonControlBackplane();
             var originals = RibbonBackplaneControls;
             var registry = BuildNativeRibbonRegistry();
@@ -38,8 +41,6 @@ public partial class MainWindow
                     registry.Register(name, new WpfControlRibbonCommand(control));
             }
 
-            var definition = FreeXRibbon.Build();
-            RegisterDefinitionHandlerQualifiedCommands(registry, definition);
             foreach (var item in RibbonTabs.Items)
             {
                 if (item is not TabItem tabItem)
@@ -47,6 +48,9 @@ public partial class MainWindow
                 if (!RibbonMetadata.TryGetCatalogId(tabItem, out var catalogId))
                     continue;
                 if (definition.FindTab(catalogId) is not { } definitionTab)
+                    continue;
+
+                if (definitionTab.Groups.Count == 0)
                     continue;
 
                 var content = RibbonWpfRenderer.BuildTabContent(definitionTab, this, registry, _ribbonState);
@@ -101,11 +105,56 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>
-    /// Builds the native command registry: each CommandId is bound directly to its MainWindow
-    /// Click-handler method (via the generated <see cref="FreeXRibbonHandlerMap"/>), so command
-    /// execution no longer depends on the XAML control tree.
-    /// </summary>
+    private readonly Dictionary<string, TabItem> _ribbonTabsByCatalogId =
+        new(StringComparer.Ordinal);
+
+    private void BuildRibbonTabShells(RibbonDefinition definition)
+    {
+        var selectedCatalogId = RibbonTabs.SelectedItem is DependencyObject selected &&
+                                RibbonMetadata.TryGetCatalogId(selected, out var selectedId)
+            ? selectedId
+            : FreeXRibbonTabIds.Home;
+
+        _suppressRibbonSelectionChangedNormalization = true;
+        try
+        {
+            RibbonTabs.Items.Clear();
+            _ribbonTabsByCatalogId.Clear();
+
+            foreach (var tab in definition.Tabs)
+            {
+                var item = new TabItem
+                {
+                    Header = tab.Header,
+                    Visibility = tab.IsContextual ? Visibility.Collapsed : Visibility.Visible,
+                };
+                RibbonMetadata.SetCatalogId(item, tab.Id);
+                RibbonTooltip.SetKeyTip(item, tab.KeyTip ?? string.Empty);
+                RibbonTabs.Items.Add(item);
+                _ribbonTabsByCatalogId.Add(tab.Id, item);
+            }
+
+            RibbonTabs.SelectedItem = FindRibbonTabByCatalogId(selectedCatalogId) ??
+                                      FindRibbonTabByCatalogId(FreeXRibbonTabIds.Home);
+        }
+        finally
+        {
+            _suppressRibbonSelectionChangedNormalization = false;
+        }
+    }
+
+    private TabItem? FindRibbonTabByCatalogId(string catalogId) =>
+        _ribbonTabsByCatalogId.GetValueOrDefault(catalogId);
+
+    private TabItem? FileTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.File);
+    private TabItem? ShapeFormatTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.ShapeFormat);
+    private TabItem? PictureFormatTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.PictureFormat);
+    private TabItem? ChartDesignTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.ChartDesign);
+    private TabItem? ChartFormatTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.ChartFormat);
+    private TabItem? TableDesignTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.TableDesign);
+    private TabItem? PivotTableAnalyzeTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.PivotTableAnalyze);
+    private TabItem? PivotTableDesignTab => FindRibbonTabByCatalogId(FreeXRibbonTabIds.PivotTableDesign);
+
     /// <summary>
     /// Attaches the Excel-style split-button dropdown zone (hover highlight + click-zone handler) to every
     /// rendered menu button in a tab. The renderer already gives menu buttons a ContextMenu and a tagged
@@ -130,57 +179,43 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// Builds the native command registry from the generated typed delegate catalog, so command
+    /// execution does not depend on reflection or the XAML control tree.
+    /// </summary>
     private RibbonCommandRegistry BuildNativeRibbonRegistry()
     {
         var registry = new RibbonCommandRegistry();
-        var type = typeof(MainWindow);
-        const System.Reflection.BindingFlags flags =
-            System.Reflection.BindingFlags.Instance |
-            System.Reflection.BindingFlags.NonPublic |
-            System.Reflection.BindingFlags.Public;
-
-        foreach (var (name, methodName) in FreeXRibbonHandlerMap.Handlers)
-        {
-            var method = type.GetMethod(methodName, flags, binder: null,
-                types: new[] { typeof(object), typeof(RoutedEventArgs) }, modifiers: null)
-                ?? type.GetMethod(methodName, flags, binder: null, types: System.Type.EmptyTypes, modifiers: null);
-            if (method is not null)
-                registry.Register(name, new WpfReflectiveRibbonCommand(this, method,
-                    RibbonBackplaneControls.GetValueOrDefault(name)));
-        }
+        foreach (var (commandId, binding) in FreeXRibbonHandlers)
+            registry.Register(commandId, new WpfDelegateRibbonCommand(
+                this,
+                binding.Handler,
+                RibbonBackplaneControls.GetValueOrDefault(commandId)));
 
         return registry;
     }
 
-    /// <summary>
-    /// Registers commands whose CommandId is "Title#HandlerMethod" but are NOT in the generated
-    /// <see cref="FreeXRibbonHandlerMap"/> (it is generated from the old XAML and so omits hand-authored
-    /// declarative additions like the Help tab). Without this their buttons render disabled because the
-    /// renderer disables any command the registry cannot resolve. The handler method name after '#' is
-    /// bound by reflection, mirroring how the generated map's ambiguous ids are bound.
-    /// </summary>
-    private void RegisterDefinitionHandlerQualifiedCommands(RibbonCommandRegistry registry, RibbonDefinition definition)
+    private sealed class WpfDelegateRibbonCommand(
+        MainWindow owner,
+        Action<MainWindow, object, RoutedEventArgs> handler,
+        object? fallbackSender) : IRibbonCommand
     {
-        var type = typeof(MainWindow);
-        const System.Reflection.BindingFlags flags =
-            System.Reflection.BindingFlags.Instance |
-            System.Reflection.BindingFlags.NonPublic |
-            System.Reflection.BindingFlags.Public;
-
-        foreach (var control in definition.Tabs.SelectMany(tab => tab.Groups).SelectMany(group => group.Controls))
+        public void Execute(RibbonCommandContext context)
         {
-            var id = control.CommandId.Value;
-            var hash = id.IndexOf('#');
-            if (hash <= 0 || hash >= id.Length - 1 || registry.TryGet(control.CommandId, out _))
-                continue;
+            var sender = (context.Parameters.TryGetValue(RibbonWpfRenderer.SenderKey, out var value)
+                    ? value
+                    : null)
+                ?? fallbackSender
+                ?? owner;
 
-            var methodName = id[(hash + 1)..];
-            var method = type.GetMethod(methodName, flags, binder: null,
-                    types: new[] { typeof(object), typeof(RoutedEventArgs) }, modifiers: null)
-                ?? type.GetMethod(methodName, flags, binder: null, types: System.Type.EmptyTypes, modifiers: null);
-            if (method is not null)
-                registry.Register(id, new WpfReflectiveRibbonCommand(this, method,
-                    RibbonBackplaneControls.GetValueOrDefault(id)));
+            try
+            {
+                handler(owner, sender, new RoutedEventArgs());
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ribbon command delegate threw: {ex}");
+            }
         }
     }
 

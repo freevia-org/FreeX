@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Presentation.Ribbon;
 
@@ -36,22 +37,14 @@ public static class HomeFontBorderPopupCatalogPlanner
     ];
 
     public static readonly IReadOnlyList<HomeBorderLineColorCatalogItem> BorderLineColorSwatches =
-    [
-        BorderLineColor("Black", CellColor.Black),
-        BorderLineColor("Gray", new CellColor(128, 128, 128)),
-        BorderLineColor("Accent 1", new CellColor(68, 114, 196)),
-        BorderLineColor("Accent 2", new CellColor(237, 125, 49)),
-    ];
+        HomeBorderMenuCatalog.LineColors
+            .Select(item => new HomeBorderLineColorCatalogItem(item.CommandId, item.HexColor))
+            .ToArray();
 
     public static readonly IReadOnlyList<HomeBorderLineStyleCatalogItem> BorderLineStyles =
-    [
-        new("Thin", BorderStyle.Thin),
-        new("Medium", BorderStyle.Medium),
-        new("Thick", BorderStyle.Thick),
-        new("Dashed", BorderStyle.Dashed),
-        new("Dotted", BorderStyle.Dotted),
-        new("Double", BorderStyle.Double),
-    ];
+        HomeBorderMenuCatalog.LineStyles
+            .Select(item => new HomeBorderLineStyleCatalogItem(item.CommandId, MapBorderStyle(item.Style)))
+            .ToArray();
 
     public static readonly IReadOnlyList<HomeBorderPopupCatalogGroup> FontColorPopupGroups =
     [
@@ -61,34 +54,11 @@ public static class HomeFontBorderPopupCatalogPlanner
 
     public static readonly IReadOnlyList<HomeBorderPopupCatalogGroup> BorderPopupGroups =
     [
-        new(
-            "Presets",
-            [
-                "All Borders",
-                "Outside Borders",
-                "Inside Borders",
-                "No Border",
-                "Bottom Border",
-                "Top Border",
-                "Left Border",
-                "Right Border",
-                "Thick Bottom Border",
-                "Bottom Double Border",
-                "Thick Outside Borders",
-                "Top and Bottom Border",
-                "Top and Thick Bottom Border",
-                "Top and Double Bottom Border",
-            ]),
-        new(
-            "Draw",
-            [
-                "Draw Border",
-                "Draw Border Grid",
-                "Erase Border",
-            ]),
-        new("Line Color", BorderLineColorSwatches.Select(swatch => swatch.Label).ToArray()),
-        new("Line Style", BorderLineStyles.Select(style => style.Label).ToArray()),
-        new("Actions", ["More Borders"]),
+        Group("Presets", HomeBorderMenuCatalog.Presets),
+        Group("Draw", HomeBorderMenuCatalog.Draw),
+        Group("Line Color", HomeBorderMenuCatalog.LineColors),
+        Group("Line Style", HomeBorderMenuCatalog.LineStyles),
+        Group("Actions", HomeBorderMenuCatalog.Actions),
     ];
 
     public static IReadOnlyList<string> FontColorItems =>
@@ -108,10 +78,21 @@ public static class HomeFontBorderPopupCatalogPlanner
         string? boundCommandId = null) =>
         new(label, FormatHexColor(color), boundCommandId);
 
-    private static HomeBorderLineColorCatalogItem BorderLineColor(
-        string label,
-        CellColor color) =>
-        new(label, FormatHexColor(color));
+    private static HomeBorderPopupCatalogGroup Group(
+        string name,
+        IEnumerable<HomeBorderMenuCatalogItem> items) =>
+        new(name, items.Select(item => item.CommandId).ToArray());
+
+    private static BorderStyle MapBorderStyle(HomeBorderLineStyleKind style) => style switch
+    {
+        HomeBorderLineStyleKind.Thin => BorderStyle.Thin,
+        HomeBorderLineStyleKind.Medium => BorderStyle.Medium,
+        HomeBorderLineStyleKind.Thick => BorderStyle.Thick,
+        HomeBorderLineStyleKind.Dashed => BorderStyle.Dashed,
+        HomeBorderLineStyleKind.Dotted => BorderStyle.Dotted,
+        HomeBorderLineStyleKind.Double => BorderStyle.Double,
+        _ => throw new ArgumentOutOfRangeException(nameof(style), style, null),
+    };
 
     private static string FormatHexColor(CellColor color) =>
         $"#{color.R:X2}{color.G:X2}{color.B:X2}";

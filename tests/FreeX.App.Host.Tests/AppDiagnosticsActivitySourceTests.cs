@@ -52,9 +52,9 @@ public sealed class AppDiagnosticsActivitySourceTests
         reviewSource.Should().Contain("[\"source\"] = \"help\"");
         reviewSource.Should().Contain("OpenExternalHelpLink(updates.ReleasesPageUrl, UiText.Get(\"MainWindowMessage_CheckForUpdatesTitle\"))");
 
-        // The ribbon "Check for Updates" command moved out of MainWindow.xaml into the single-source
-        // declarative ribbon model; it wires CheckForUpdatesBtn_Click via the "Title#Handler" convention.
+        // The ribbon "Check for Updates" command is owned by the declarative model and routes through
+        // the generated typed handler binding.
         var ribbonDefinition = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
-        ribbonDefinition.Should().Contain("Check for Updates#CheckForUpdatesBtn_Click");
+        ribbonDefinition.Should().Contain("FreeXRibbonCommandIds.HelpCheckForUpdates");
     }
 }

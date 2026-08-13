@@ -1324,9 +1324,9 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         // After the ribbon XAML→declarative cutover the Borders gallery is declared in the single-source
-        // ribbon (HomeRibbonMenus.g.cs) rather than a hand-authored MainWindow.xaml ContextMenu. The
-        // expanded preset labels live there; the host source still owns the handler methods + planners.
-        var bordersMenu = DialogSourceTestSupport.ReadRibbonDefinitionSource("HomeRibbonMenus.g.cs");
+        // ribbon rather than a hand-authored MainWindow.xaml ContextMenu. The typed catalog builds the
+        // menu and projects popup evidence; the host source still owns the handlers and planners.
+        var bordersMenu = DialogSourceTestSupport.ReadRibbonDefinitionSource("HomeBorderMenuCatalog.cs");
 
         foreach (var label in new[]
         {
@@ -1424,7 +1424,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         ribbon.Should().Contain(".Large(\"Bring Forward\", \"Bring Forward\"");
         ribbon.Should().Contain(".Large(\"Send Backward\", \"Send Backward\"");
-        ribbon.Should().Contain(".Large(\"Selection Pane#SelectionPaneBtn_Click\", \"Selection Pane\"");
+        ribbon.Should().Contain(".Large(FreeXRibbonCommandIds.DrawingSelectionPane, \"Selection Pane\"");
         ribbon.Should().Contain(".Large(\"Rotate Object\", \"Rotate Object\"");
         ribbon.Should().Contain(".Large(\"Object Size\", \"Object Size\"");
         ribbon.Should().Contain(".Medium(\"Shape Fill\", \"Shape Fill\"");

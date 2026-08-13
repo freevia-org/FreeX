@@ -42,7 +42,7 @@ public sealed class HelpCommandSourceTests
         var ribbonDefinition = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
         var reviewCommands = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
-        ribbonDefinition.Should().Contain(".Large(\"Feedback#FeedbackBtn_Click\"");
+        ribbonDefinition.Should().Contain(".Large(FreeXRibbonCommandIds.HelpFeedback, \"Feedback\"");
         reviewCommands.Should().Contain("private void FeedbackBtn_Click(");
         reviewCommands.Should().NotContain("private void SendFeedbackBtn_Click(");
     }

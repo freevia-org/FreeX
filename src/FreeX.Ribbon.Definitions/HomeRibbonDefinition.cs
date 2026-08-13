@@ -6,8 +6,8 @@ namespace FreeX.Ribbon.Definitions;
 /// <summary>
 /// The Home tab authored declaratively to match the original FreeX/Excel layout: per-command preferred
 /// sizes (Paste large, Cut/Copy/Format Painter medium, Bold/Italic/… icon-only), explicit two-row groups
-/// (Font, Alignment, Number), inline separators, and a narrow font-size combo. Command ids match the
-/// catalog <c>CommandName</c>s so the registry binds them to the existing handlers.
+/// (Font, Alignment, Number), inline separators, and a narrow font-size combo. Stable command ids bind
+/// directly to the host's typed command registry.
 /// </summary>
 public static class HomeRibbonDefinition
 {

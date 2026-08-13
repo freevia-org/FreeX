@@ -460,8 +460,8 @@ public sealed partial class MainWindowSourceHygieneTests
             "PictureCropPlanner.cs");
 
         ribbon.Should().Contain("menu: m => m.Item(\"Crop\", \"Crop...\", \"C\").Item(\"Reset Crop\", \"Reset Crop\", \"R\")");
-        handlers.Should().Contain("[\"Crop\"] = \"PictureCropDialogMenuItem_Click\"");
-        handlers.Should().Contain("[\"Reset Crop\"] = \"PictureResetCropMenuItem_Click\"");
+        handlers.Should().Contain("[\"Crop\"] = new(static (owner, sender, eventArgs) => owner.PictureCropDialogMenuItem_Click");
+        handlers.Should().Contain("[\"Reset Crop\"] = new(static (owner, sender, eventArgs) => owner.PictureResetCropMenuItem_Click");
         source.Should().Contain("PictureResetCropMenuItem_Click");
         source.Should().Contain("PictureCropDialogPlanner.BuildResetCommand(");
         plannerSource.Should().Contain("public static SetPictureCropCommand BuildResetCommand");

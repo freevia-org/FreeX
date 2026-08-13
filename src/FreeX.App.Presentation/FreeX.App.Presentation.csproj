@@ -12,6 +12,7 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="..\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
     <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
     <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />

@@ -9,7 +9,7 @@ public sealed class FormulaCommandSourceTests
     // declarative model (FreeXRibbon.Build()) and their Click handler from the generated
     // FreeXRibbonHandlerMap. The InlineData below is (declarative command id, label, key tip, handler).
     [Theory]
-    [InlineData("AutoSum#FormulasAutoSumPickerBtn_Click", "AutoSum", "U", "FormulasAutoSumPickerBtn_Click")]
+    [InlineData(FreeXRibbonCommandIds.FormulasAutoSum, "AutoSum", "U", "FormulasAutoSumPickerBtn_Click")]
     [InlineData("Recently Used", "Recently Used", "RU", "FormulaRecentlyUsedBtn_Click")]
     [InlineData("Financial", "Financial", "Y", "FormulaFinancialBtn_Click")]
     [InlineData("Logical Functions", "Logical Functions", "L", "FormulaLogicalBtn_Click")]
@@ -17,7 +17,7 @@ public sealed class FormulaCommandSourceTests
     [InlineData("Date & Time", "Date & Time", "DT", "FormulaDateBtn_Click")]
     [InlineData("Lookup & Reference", "Lookup & Reference", "K", "FormulaLookupBtn_Click")]
     [InlineData("Math & Trig", "Math & Trig", "MT", "FormulaMathBtn_Click")]
-    [InlineData("More Functions#FormulaMoreBtn_Click", "More Functions", "MF", "FormulaMoreBtn_Click")]
+    [InlineData(FreeXRibbonCommandIds.FormulasMoreFunctions, "More Functions", "MF", "FormulaMoreBtn_Click")]
     public void FunctionLibraryCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string commandId,
         string label,
@@ -48,7 +48,7 @@ public sealed class FormulaCommandSourceTests
     [Theory]
     [InlineData("Trace Precedents", "Trace Precedents", "TP", "TracePrecedentsBtn_Click")]
     [InlineData("Trace Dependents", "Trace Dependents", "TD", "TraceDependentsBtn_Click")]
-    [InlineData("Remove Arrows#RemoveArrowsBtn_Click", "Remove Arrows", "RA", "RemoveArrowsBtn_Click")]
+    [InlineData(FreeXRibbonCommandIds.FormulasRemoveArrows, "Remove Arrows", "RA", "RemoveArrowsBtn_Click")]
     [InlineData("Show Formulas", "Show Formulas", "SF", "ShowFormulasBtn_Click")]
     [InlineData("Error Checking", "Error Checking", "EC", "ErrorCheckBtn_Click")]
     [InlineData("Evaluate Formula", "Evaluate Formula", "V", "EvaluateFormulaBtn_Click")]

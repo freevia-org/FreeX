@@ -214,23 +214,6 @@
                     <StackPanel Orientation="Horizontal"/>
                 </ItemsPanelTemplate>
             </TabControl.ItemsPanel>
-            <TabItem x:Name="FileTab" Header="{local:Loc Key=MainWindow_Header_File}" ribbonWpf:RibbonTooltip.KeyTip="F" ribbonWpf:RibbonMetadata.CatalogId="FileTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Home}" ribbonWpf:RibbonTooltip.KeyTip="H" ribbonWpf:RibbonMetadata.CatalogId="HomeTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Insert}" ribbonWpf:RibbonTooltip.KeyTip="N" ribbonWpf:RibbonMetadata.CatalogId="InsertTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Draw}" ribbonWpf:RibbonTooltip.KeyTip="J" ribbonWpf:RibbonMetadata.CatalogId="DrawTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_PageLayout}" ribbonWpf:RibbonTooltip.KeyTip="P" ribbonWpf:RibbonMetadata.CatalogId="PageLayoutTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Formulas}" ribbonWpf:RibbonTooltip.KeyTip="M" ribbonWpf:RibbonMetadata.CatalogId="FormulasTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Data}" ribbonWpf:RibbonTooltip.KeyTip="A" ribbonWpf:RibbonMetadata.CatalogId="DataTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Review}" ribbonWpf:RibbonTooltip.KeyTip="R" ribbonWpf:RibbonMetadata.CatalogId="ReviewTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_View}" ribbonWpf:RibbonTooltip.KeyTip="W" ribbonWpf:RibbonMetadata.CatalogId="ViewTab" />
-            <TabItem x:Name="ShapeFormatTab" Header="{local:Loc Key=MainWindow_Header_ShapeFormat}" Visibility="Collapsed" ribbonWpf:RibbonTooltip.KeyTip="JS" ribbonWpf:RibbonMetadata.CatalogId="ShapeFormatTab" />
-            <TabItem x:Name="PictureFormatTab" Header="{local:Loc Key=MainWindow_Header_PictureFormat}" Visibility="Collapsed" ribbonWpf:RibbonTooltip.KeyTip="JP" ribbonWpf:RibbonMetadata.CatalogId="PictureFormatTab" />
-            <TabItem x:Name="ChartDesignTab" Header="{local:Loc Key=MainWindow_Header_ChartDesign}" Visibility="Collapsed" ribbonWpf:RibbonTooltip.KeyTip="JC" ribbonWpf:RibbonMetadata.CatalogId="ChartDesignTab" />
-            <TabItem x:Name="ChartFormatTab" Header="{local:Loc Key=MainWindow_Text_Format}" Visibility="Collapsed" ribbonWpf:RibbonTooltip.KeyTip="JF" ribbonWpf:RibbonMetadata.CatalogId="ChartFormatTab" />
-            <TabItem x:Name="TableDesignTab" Header="{local:Loc Key=MainWindow_Header_TableDesign}" Visibility="Collapsed" ribbonWpf:RibbonTooltip.KeyTip="JT" ribbonWpf:RibbonMetadata.CatalogId="TableDesignTab" />
-            <TabItem x:Name="PivotTableAnalyzeTab" Header="{local:Loc Key=MainWindow_Header_PivotTableAnalyze}" Visibility="Collapsed" ribbonWpf:RibbonTooltip.KeyTip="JA" ribbonWpf:RibbonMetadata.CatalogId="PivotTableAnalyzeTab" />
-            <TabItem x:Name="PivotTableDesignTab" Header="{local:Loc Key=MainWindow_Header_Design}" Visibility="Collapsed" ribbonWpf:RibbonTooltip.KeyTip="JD" ribbonWpf:RibbonMetadata.CatalogId="PivotTableDesignTab" />
-            <TabItem Header="{local:Loc Key=MainWindow_Header_Help}" ribbonWpf:RibbonTooltip.KeyTip="Y" ribbonWpf:RibbonMetadata.CatalogId="HelpTab" />
         </TabControl>
 
         <Border x:Name="BelowRibbonQatRoot"

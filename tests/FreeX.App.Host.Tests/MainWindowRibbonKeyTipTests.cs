@@ -733,9 +733,9 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public void ShowPivotContextualTabs()
         {
-            if (_window.FindName("PivotTableAnalyzeTab") is TabItem analyzeTab)
+            if (FindRibbonTab("PivotTableAnalyzeTab") is { } analyzeTab)
                 analyzeTab.Visibility = Visibility.Visible;
-            if (_window.FindName("PivotTableDesignTab") is TabItem designTab)
+            if (FindRibbonTab("PivotTableDesignTab") is { } designTab)
                 designTab.Visibility = Visibility.Visible;
 
             _window.UpdateLayout();
@@ -750,7 +750,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
         }
 
         public bool ContextualTabIsVisible(string name) =>
-            (_window.FindName(name) as TabItem)?.Visibility == Visibility.Visible;
+            FindRibbonTab(name)?.Visibility == Visibility.Visible;
 
         public bool PivotFieldListPaneIsVisible =>
             (_window.FindName("PivotFieldListPane") as FrameworkElement)?.Visibility == Visibility.Visible;
@@ -1025,14 +1025,21 @@ public sealed partial class MainWindowRibbonKeyTipTests
             }
             if (_window.FindName("NumberFormatBox") is ComboBox numberFormatBox)
                 numberFormatBox.IsDropDownOpen = false;
-            if (_window.FindName("ShapeFormatTab") is TabItem shapeFormatTab)
+            if (FindRibbonTab("ShapeFormatTab") is { } shapeFormatTab)
                 shapeFormatTab.Visibility = Visibility.Collapsed;
-            if (_window.FindName("PictureFormatTab") is TabItem pictureFormatTab)
+            if (FindRibbonTab("PictureFormatTab") is { } pictureFormatTab)
                 pictureFormatTab.Visibility = Visibility.Collapsed;
             SelectActiveCell();
             _window.UpdateLayout();
             PumpDispatcher();
         }
+
+        private TabItem? FindRibbonTab(string catalogId) =>
+            (_window.FindName("RibbonTabs") as TabControl)?.Items
+                .OfType<TabItem>()
+                .FirstOrDefault(tab =>
+                    RibbonMetadata.TryGetCatalogId(tab, out var candidate) &&
+                    string.Equals(candidate, catalogId, StringComparison.Ordinal));
 
         public void Dispose()
         {
