@@ -145,18 +145,32 @@ public static class AccessibleDocumentSnapshotPlanner
         int paragraphIndex,
         int offset,
         string storyLabel)
+        => BuildHeaderFooter(
+            story,
+            new HeaderFooterTextPosition(paragraphIndex, offset),
+            selectionAnchor: null,
+            storyLabel);
+
+    public static AccessibleDocumentSnapshot BuildHeaderFooter(
+        HeaderFooter story,
+        HeaderFooterTextPosition caret,
+        HeaderFooterTextPosition? selectionAnchor,
+        string storyLabel)
     {
         ArgumentNullException.ThrowIfNull(story);
         ArgumentException.ThrowIfNullOrWhiteSpace(storyLabel);
 
         var storyDocument = new TextDocument();
         storyDocument.Blocks.AddRange(story.Paragraphs);
-        var clampedParagraph = story.Paragraphs.Count == 0
-            ? 0
-            : Math.Clamp(paragraphIndex, 0, story.Paragraphs.Count - 1);
+        caret = HeaderFooterTextSelectionPlanner.Clamp(story, caret);
+        if (selectionAnchor is { } anchor)
+            selectionAnchor = HeaderFooterTextSelectionPlanner.Clamp(story, anchor);
         var snapshot = Build(
             storyDocument,
-            AccessibleDocumentLocation.Body(clampedParagraph, offset));
+            AccessibleDocumentLocation.Body(caret.ParagraphIndex, caret.Offset),
+            selectionAnchor is { } selection
+                ? AccessibleDocumentLocation.Body(selection.ParagraphIndex, selection.Offset)
+                : null);
         return snapshot with { Status = $"{storyLabel}; {snapshot.Status}" };
     }
 

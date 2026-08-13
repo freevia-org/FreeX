@@ -117,6 +117,24 @@ public sealed class AccessibleDocumentSnapshotPlannerTests
     }
 
     [Fact]
+    public void BuildHeaderFooter_reports_cross_paragraph_selection()
+    {
+        var story = new HeaderFooter();
+        story.Paragraphs.Add(new Paragraph("Chapter title"));
+        story.Paragraphs.Add(new Paragraph("Page 4"));
+
+        var snapshot = AccessibleDocumentSnapshotPlanner.BuildHeaderFooter(
+            story,
+            new HeaderFooterTextPosition(1, 4),
+            new HeaderFooterTextPosition(0, 8),
+            "Default footer");
+
+        snapshot.Selection.Should().Be(new AccessibleTextRange(8, 10));
+        snapshot.GetText(snapshot.Selection!).Should().Be("title\nPage");
+        snapshot.Status.Should().Contain("selected 10 characters: title\nPage");
+    }
+
+    [Fact]
     public void BuildShapeText_maps_run_addresses_and_cross_paragraph_selection()
     {
         var first = new Paragraph();
@@ -180,6 +198,31 @@ public sealed class AccessibleDocumentSnapshotPlannerTests
         source.Should().Contain("var previousCellBlockSelection = SelectedCellRange;");
         source.Should().Contain("if (previousCellBlockSelection != SelectedCellRange)\n            CaretMoved?.Invoke();");
         source.Should().Contain("_selectionAnchor = null;\n        InvalidateVisual();\n        CaretMoved?.Invoke();");
+    }
+
+    [Fact]
+    public void Avalonia_header_footer_selection_routes_model_behavior_through_shared_planners()
+    {
+        var source = File.ReadAllText(RepoFile(
+                "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("HeaderFooterTextSelectionPlanner.Normalize(");
+        source.Should().Contain("HeaderFooterTextSelectionPlanner.MoveHorizontal(");
+        source.Should().Contain("HeaderFooterTextSelectionPlanner.MoveVertical(");
+        source.Should().Contain("HeaderFooterTextEditPlanner.PlanDelete(story, selection)");
+        source.Should().Contain("HfMoveCaret(-1, shift)");
+        source.Should().Contain("TryHitTestHeaderFooter(point, extendSelection: shift)");
+        source.Should().Contain("DrawHeaderFooterSelection(context, item)");
+        source.Should().Contain("if (_hfCaret is not null)\n                return HeaderFooterSelectedText();");
+        source.Should().Contain("if (_hfCaret is not null)\n            return TryDeleteHfSelection();");
+
+        File.Exists(RepoFile(
+                "freew", "FreeW.App.Avalonia", "Editing", "EditHeaderFooterParagraphCommand.cs"))
+            .Should().BeFalse("header/footer undo behavior belongs in shared presentation code");
+        File.Exists(RepoFile(
+                "freew", "FreeW.App.Avalonia", "Editing", "SpliceHeaderFooterParagraphsCommand.cs"))
+            .Should().BeFalse("header/footer splice behavior belongs in shared presentation code");
     }
 
     private static string RepoFile(params string[] parts)

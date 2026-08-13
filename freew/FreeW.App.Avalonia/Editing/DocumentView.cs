@@ -220,6 +220,11 @@ public sealed class DocumentView : Control
     // Mirrors the _cellCaret pattern but addresses the per-section HeaderFooter store instead of a
     // table cell. When set, the body caret/selection state is suppressed (drawn separately).
     private (HfTarget Target, int Offset)? _hfCaret;
+    // Fixed endpoint for a header/footer text selection. The target may address a different paragraph,
+    // but must identify the same section store + slot as _hfCaret.
+    private (HfTarget Target, int Offset)? _hfSelectionAnchor;
+    private bool _hfSelectionDragActive;
+    private IPointer? _hfSelectionDragPointer;
 
     // ── AV-FLSEL: floating-object selection + placement edit ──────────────────────────────────────
     // Selected floating object (null = no selection). Kind = "Image"|"Shape"|"Chart"|"WordArt"|"SmartArt"|"Group".
@@ -1187,8 +1192,15 @@ public sealed class DocumentView : Control
             };
             return AccessibleDocumentSnapshotPlanner.BuildHeaderFooter(
                 story,
-                headerFooterCaret.Target.ParaIdx,
-                headerFooterCaret.Offset,
+                new HeaderFooterTextPosition(
+                    headerFooterCaret.Target.ParaIdx,
+                    headerFooterCaret.Offset),
+                _hfSelectionAnchor is { } headerFooterAnchor
+                    && SameHfStory(headerFooterCaret.Target, headerFooterAnchor.Target)
+                        ? new HeaderFooterTextPosition(
+                            headerFooterAnchor.Target.ParaIdx,
+                            headerFooterAnchor.Offset)
+                        : null,
                 $"Section {sectionNumber} {storyName}");
         }
 
@@ -1970,9 +1982,9 @@ public sealed class DocumentView : Control
     internal void InsertParagraphBreakForTest() => InsertParagraphBreak();
 
     /// <summary>
-    /// Test shim for DD1/DD2: dispatches a key through the header/footer caret switch and returns whether
+    /// Test shim: dispatches a key through the header/footer caret switch and returns whether
     /// the key was handled by the H/F guard (i.e. did NOT fall through to the body switch).
-    /// Only Tab, Up, and Down are meaningful here. Mirrors the guard logic in OnKeyDown.
+    /// Mirrors the Tab and vertical-navigation guard logic in OnKeyDown.
     /// </summary>
     internal bool SimulateHfKeyForTest(Key key, bool shift = false)
     {
@@ -1984,8 +1996,11 @@ public sealed class DocumentView : Control
                 if (!shift) HfInsertText("\t");
                 return true; // consumed — body list path never reached
             case Key.Up:
+                HfMoveCaretVertical(-1, shift);
+                return true;
             case Key.Down:
-                return true; // consumed as no-op — body MoveCaretVertical never called
+                HfMoveCaretVertical(1, shift);
+                return true;
             default:
                 return false;
         }
@@ -2074,10 +2089,21 @@ public sealed class DocumentView : Control
     /// Core header/footer caret placement: clamps the offset to the paragraph's literal length, sets
     /// <c>_hfCaret</c>, and clears body/cell caret state. Used by the public helper and the hit-test path.
     /// </summary>
-    private void PlaceCaretInHeaderFooter(HfTarget target, int offset)
+    private void PlaceCaretInHeaderFooter(HfTarget target, int offset, bool extendSelection = false)
     {
         var len = HfParaLength(target);
         offset = Math.Clamp(offset, 0, len);
+        var previousCaret = _hfCaret;
+        if (extendSelection
+            && previousCaret is { } previous
+            && SameHfStory(previous.Target, target))
+        {
+            _hfSelectionAnchor ??= previous;
+        }
+        else
+        {
+            _hfSelectionAnchor = null;
+        }
         _hfCaret = (target, offset);
         // Suppress body + cell caret so only the H/F caret renders + receives edits.
         _cellCaret = null;
@@ -2103,6 +2129,9 @@ public sealed class DocumentView : Control
         if (_hfCaret is null)
             return;
         _hfCaret = null;
+        _hfSelectionAnchor = null;
+        _hfSelectionDragActive = false;
+        _hfSelectionDragPointer = null;
         ClampCaret();
         InvalidateVisual();
         CaretMoved?.Invoke();
@@ -2113,7 +2142,7 @@ public sealed class DocumentView : Control
     /// editable header/footer line, places the H/F caret at the nearest character offset and returns true.
     /// Mirrors the table-cell entry point: a click inside the region routes the caret into that region.
     /// </summary>
-    private bool TryHitTestHeaderFooter(Point point)
+    private bool TryHitTestHeaderFooter(Point point, bool extendSelection = false)
     {
         // Find the closest editable region line whose vertical band contains the click, preferring an exact
         // Y-band hit. Each item's band is [Y, Y + LineHeight); X must be within the content area.
@@ -2150,8 +2179,43 @@ public sealed class DocumentView : Control
             return false;
 
         var modelOffset = HfOffsetFromPoint(best, point.X);
-        PlaceCaretInHeaderFooter(target, modelOffset);
+        PlaceCaretInHeaderFooter(target, modelOffset, extendSelection);
         return true;
+    }
+
+    private static bool SameHfStory(HfTarget left, HfTarget right) =>
+        left.SectionIndex == right.SectionIndex
+        && left.UseFinalSectionStore == right.UseFinalSectionStore
+        && left.Slot == right.Slot;
+
+    private HeaderFooterTextRange? NormalizedHfSelection()
+    {
+        if (_hfCaret is not { } caret
+            || _hfSelectionAnchor is not { } anchor
+            || !SameHfStory(caret.Target, anchor.Target)
+            || ResolveHfStore(caret.Target) is not { } store
+            || GetHfSlot(store, caret.Target.Slot) is not { } story)
+        {
+            return null;
+        }
+
+        return HeaderFooterTextSelectionPlanner.Normalize(
+            story,
+            new HeaderFooterTextPosition(caret.Target.ParaIdx, caret.Offset),
+            new HeaderFooterTextPosition(anchor.Target.ParaIdx, anchor.Offset));
+    }
+
+    private string HeaderFooterSelectedText()
+    {
+        if (_hfCaret is not { } caret
+            || ResolveHfStore(caret.Target) is not { } store
+            || GetHfSlot(store, caret.Target.Slot) is not { } story
+            || NormalizedHfSelection() is not { } selection)
+        {
+            return string.Empty;
+        }
+
+        return HeaderFooterTextSelectionPlanner.GetText(story, selection);
     }
 
     /// <summary>Horizontal distance from <paramref name="x"/> to a rendered H/F item's drawn text range (0 when inside).</summary>
@@ -2275,9 +2339,6 @@ public sealed class DocumentView : Control
         return (atoms.Count, false);
     }
 
-    /// <summary>The model-offset length of an atom list (sum of each atom's model length).</summary>
-    private static int HfAtomsModelLength(List<HfAtom> atoms) => atoms.Sum(a => a.ModelLength);
-
     /// <summary>The active run formatting for a typed character at <paramref name="modelOffset"/> (inherits the char before, else after, else default).</summary>
     private static RunFormatting HfActiveFormatting(List<HfAtom> atoms, int modelOffset)
     {
@@ -2304,6 +2365,7 @@ public sealed class DocumentView : Control
             }));
         var len = HfParaLength(target);
         _hfCaret = (target, Math.Clamp(newOffset, 0, len));
+        _hfSelectionAnchor = null;
         // Re-layout at the current width so the H/F band + caret reflect the edit immediately.
         var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
         Relayout(width);
@@ -2316,8 +2378,15 @@ public sealed class DocumentView : Control
     {
         if (_hfCaret is not { } hc)
             return;
-        var target = hc.Target;
-        var offset = hc.Offset;
+        var ownsUndoGroup = NormalizedHfSelection() is not null && !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        if (NormalizedHfSelection() is not null)
+            TryDeleteHfSelection();
+        if (_hfCaret is not { } activeCaret)
+            return;
+        var target = activeCaret.Target;
+        var offset = activeCaret.Offset;
         HfEditParagraph(target, atoms =>
         {
             var (idx, _) = HfAtomIndexForOffset(atoms, offset);
@@ -2326,6 +2395,8 @@ public sealed class DocumentView : Control
             foreach (var ch in text)
                 atoms.Insert(at++, new HfAtom(ch, fmt, null));
         }, offset + text.Length);
+        if (ownsUndoGroup)
+            _bus.CommitUndoGroup("Replace header/footer selection");
     }
 
     private bool HfInsertFieldRun(Run run)
@@ -2333,13 +2404,23 @@ public sealed class DocumentView : Control
         if (_hfCaret is not { } caret)
             return false;
 
-        var target = caret.Target;
-        var offset = caret.Offset;
+        var ownsUndoGroup = NormalizedHfSelection() is not null && !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        if (NormalizedHfSelection() is not null)
+            TryDeleteHfSelection();
+        if (_hfCaret is not { } activeCaret)
+            return false;
+
+        var target = activeCaret.Target;
+        var offset = activeCaret.Offset;
         HfEditParagraph(target, atoms =>
         {
             var (index, _) = HfAtomIndexForOffset(atoms, offset);
             atoms.Insert(index, new HfAtom('\0', run.Formatting, run));
         }, offset + run.Text.Length);
+        if (ownsUndoGroup)
+            _bus.CommitUndoGroup("Replace header/footer selection with field");
         return true;
     }
 
@@ -2348,10 +2429,23 @@ public sealed class DocumentView : Control
     {
         if (_hfCaret is not { } hc)
             return;
+        if (TryDeleteHfSelection())
+            return;
         var target = hc.Target;
         var offset = hc.Offset;
         if (offset <= 0)
-            return; // at start of paragraph — H/F single-paragraph editing does not merge across slots
+        {
+            if (target.ParaIdx <= 0
+                || ResolveHfStore(target) is not { } previousStore
+                || GetHfSlot(previousStore, target.Slot) is not { } previousStory)
+                return;
+            var previousParagraphIndex = target.ParaIdx - 1;
+            _hfSelectionAnchor = (
+                target with { ParaIdx = previousParagraphIndex },
+                previousStory.Paragraphs[previousParagraphIndex].PlainText.Length);
+            TryDeleteHfSelection();
+            return;
+        }
         var atoms0 = GetHfParagraph(target) is { } p0 ? HfAtoms(p0) : new List<HfAtom>();
         var (idx, _) = HfAtomIndexForOffset(atoms0, offset);
         var removeIdx = idx - 1;
@@ -2370,12 +2464,22 @@ public sealed class DocumentView : Control
     {
         if (_hfCaret is not { } hc)
             return;
+        if (TryDeleteHfSelection())
+            return;
         var target = hc.Target;
         var offset = hc.Offset;
         var atoms0 = GetHfParagraph(target) is { } p0 ? HfAtoms(p0) : new List<HfAtom>();
         var (idx, _) = HfAtomIndexForOffset(atoms0, offset);
         if (idx < 0 || idx >= atoms0.Count)
+        {
+            if (ResolveHfStore(target) is not { } nextStore
+                || GetHfSlot(nextStore, target.Slot) is not { } nextStory
+                || target.ParaIdx + 1 >= nextStory.Paragraphs.Count)
+                return;
+            _hfSelectionAnchor = (target with { ParaIdx = target.ParaIdx + 1 }, 0);
+            TryDeleteHfSelection();
             return;
+        }
         HfEditParagraph(target, atoms =>
         {
             if (idx >= 0 && idx < atoms.Count)
@@ -2391,8 +2495,15 @@ public sealed class DocumentView : Control
     {
         if (_hfCaret is not { } hc)
             return;
-        var target = hc.Target;
-        var offset = hc.Offset;
+        var ownsUndoGroup = NormalizedHfSelection() is not null && !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        if (NormalizedHfSelection() is not null)
+            TryDeleteHfSelection();
+        if (_hfCaret is not { } activeCaret)
+            return;
+        var target = activeCaret.Target;
+        var offset = activeCaret.Offset;
         var store = ResolveHfStore(target);
         var hf = store is null ? null : GetHfSlot(store, target.Slot);
         if (hf is null || target.ParaIdx < 0 || target.ParaIdx >= hf.Paragraphs.Count)
@@ -2403,7 +2514,8 @@ public sealed class DocumentView : Control
 
         _bus.Execute(new SpliceHeaderFooterParagraphsCommand(
             target.SectionIndex, target.UseFinalSectionStore, (int)target.Slot, target.ParaIdx,
-            () =>
+            removeCount: 1,
+            buildReplacement: () =>
             {
                 var src = hf.Paragraphs[target.ParaIdx];
                 var srcAtoms = HfAtoms(src);
@@ -2415,19 +2527,131 @@ public sealed class DocumentView : Control
             }));
 
         _hfCaret = (target with { ParaIdx = target.ParaIdx + 1 }, 0);
+        _hfSelectionAnchor = null;
         var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
         Relayout(width);
         InvalidateVisual();
         CaretMoved?.Invoke();
+        if (ownsUndoGroup)
+            _bus.CommitUndoGroup("Replace header/footer selection with paragraph break");
     }
 
-    /// <summary>Move the H/F caret left/right by one model offset within the current paragraph (clamped to its bounds).</summary>
-    private void HfMoveCaret(int delta)
+    private bool TryDeleteHfSelection()
+    {
+        if (_hfCaret is not { } caret
+            || ResolveHfStore(caret.Target) is not { } store
+            || GetHfSlot(store, caret.Target.Slot) is not { } story
+            || NormalizedHfSelection() is not { } selection
+            || HeaderFooterTextEditPlanner.PlanDelete(story, selection) is not { } plan)
+        {
+            return false;
+        }
+
+        var startTarget = caret.Target with { ParaIdx = plan.FirstParagraphIndex };
+        _bus.Execute(new SpliceHeaderFooterParagraphsCommand(
+            startTarget.SectionIndex,
+            startTarget.UseFinalSectionStore,
+            (int)startTarget.Slot,
+            plan.FirstParagraphIndex,
+            plan.RemoveCount,
+            () => plan.ReplacementParagraphs));
+
+        _hfCaret = (
+            startTarget with { ParaIdx = plan.Caret.ParagraphIndex },
+            plan.Caret.Offset);
+        _hfSelectionAnchor = null;
+        var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
+        Relayout(width);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+        return true;
+    }
+
+    /// <summary>Move the H/F caret through the shared story model, crossing paragraph boundaries.</summary>
+    private void HfMoveCaret(int delta, bool extendSelection)
     {
         if (_hfCaret is not { } hc)
             return;
-        var len = HfParaLength(hc.Target);
-        _hfCaret = (hc.Target, Math.Clamp(hc.Offset + delta, 0, len));
+        if (ResolveHfStore(hc.Target) is not { } store
+            || GetHfSlot(store, hc.Target.Slot) is not { } story)
+            return;
+
+        HeaderFooterTextPosition position;
+        if (!extendSelection && NormalizedHfSelection() is { } selection)
+        {
+            position = delta < 0 ? selection.Start : selection.End;
+        }
+        else
+        {
+            if (extendSelection)
+                _hfSelectionAnchor ??= hc;
+            else
+                _hfSelectionAnchor = null;
+            position = HeaderFooterTextSelectionPlanner.MoveHorizontal(
+                story,
+                new HeaderFooterTextPosition(hc.Target.ParaIdx, hc.Offset),
+                delta);
+        }
+
+        _hfCaret = (hc.Target with { ParaIdx = position.ParagraphIndex }, position.Offset);
+        if (!extendSelection)
+            _hfSelectionAnchor = null;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    private void HfMoveToParagraphEdge(bool toStart, bool extendSelection)
+    {
+        if (_hfCaret is not { } hc
+            || ResolveHfStore(hc.Target) is not { } store
+            || GetHfSlot(store, hc.Target.Slot) is not { } story)
+            return;
+
+        if (extendSelection)
+            _hfSelectionAnchor ??= hc;
+        else
+            _hfSelectionAnchor = null;
+        var position = HeaderFooterTextSelectionPlanner.MoveToParagraphEdge(
+            story,
+            new HeaderFooterTextPosition(hc.Target.ParaIdx, hc.Offset),
+            toStart);
+        _hfCaret = (hc.Target with { ParaIdx = position.ParagraphIndex }, position.Offset);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    private void HfMoveCaretVertical(int paragraphDelta, bool extendSelection)
+    {
+        if (_hfCaret is not { } hc
+            || ResolveHfStore(hc.Target) is not { } store
+            || GetHfSlot(store, hc.Target.Slot) is not { } story)
+            return;
+
+        if (extendSelection)
+            _hfSelectionAnchor ??= hc;
+        else
+            _hfSelectionAnchor = null;
+        var position = HeaderFooterTextSelectionPlanner.MoveVertical(
+            story,
+            new HeaderFooterTextPosition(hc.Target.ParaIdx, hc.Offset),
+            paragraphDelta);
+        _hfCaret = (hc.Target with { ParaIdx = position.ParagraphIndex }, position.Offset);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    private void SelectAllHeaderFooterText()
+    {
+        if (_hfCaret is not { } hc
+            || ResolveHfStore(hc.Target) is not { } store
+            || GetHfSlot(store, hc.Target.Slot) is not { Paragraphs.Count: > 0 } story)
+            return;
+
+        var lastParagraphIndex = story.Paragraphs.Count - 1;
+        _hfSelectionAnchor = (hc.Target with { ParaIdx = 0 }, 0);
+        _hfCaret = (
+            hc.Target with { ParaIdx = lastParagraphIndex },
+            story.Paragraphs[lastParagraphIndex].PlainText.Length);
         InvalidateVisual();
         CaretMoved?.Invoke();
     }
@@ -9059,6 +9283,7 @@ public sealed class DocumentView : Control
                     Target           = paraTarget,
                     LineHeight       = lineH,
                     ModelStartOffset = seg.ModelStart,
+                    OwnerTarget      = paraTarget,
                 });
             }
             else if (!hasAnyTab)
@@ -9077,6 +9302,7 @@ public sealed class DocumentView : Control
                         Alignment        = pf.Alignment,
                         Target           = paraTarget,
                         LineHeight       = lineH,
+                        OwnerTarget      = paraTarget,
                     });
                 }
                 else
@@ -13728,6 +13954,7 @@ public sealed class DocumentView : Control
         {
             foreach (var item in _headerFooterItems)
             {
+                DrawHeaderFooterSelection(context, item);
                 if (item.Image is { } image)
                 {
                     var rect = new Rect(item.X, item.Y, Math.Max(1, item.Width), Math.Max(1, item.Height));
@@ -14015,6 +14242,68 @@ public sealed class DocumentView : Control
     /// the caret offset within the target paragraph's first rendered line. Returns false when no item for
     /// the target is laid out.
     /// </summary>
+    private void DrawHeaderFooterSelection(DrawingContext context, HfRenderItem item)
+    {
+        if (NormalizedHfSelection() is not { } selection
+            || _hfCaret is not { } caret
+            || (item.OwnerTarget ?? item.Target) is not { } itemTarget
+            || !SameHfStory(caret.Target, itemTarget)
+            || itemTarget.ParaIdx < selection.Start.ParagraphIndex
+            || itemTarget.ParaIdx > selection.End.ParagraphIndex)
+        {
+            return;
+        }
+
+        var selectionStart = itemTarget.ParaIdx == selection.Start.ParagraphIndex
+            ? selection.Start.Offset
+            : 0;
+        var selectionEnd = itemTarget.ParaIdx == selection.End.ParagraphIndex
+            ? selection.End.Offset
+            : int.MaxValue;
+
+        if (string.IsNullOrEmpty(item.Text))
+        {
+            if (item.Width > 0
+                && selectionStart <= item.ModelStartOffset
+                && selectionEnd > item.ModelStartOffset)
+            {
+                context.FillRectangle(
+                    SelectionBrush,
+                    new Rect(item.X, item.Y, Math.Max(2, item.Width), Math.Max(1, item.LineHeight)));
+            }
+            return;
+        }
+
+        var itemStart = item.ModelStartOffset;
+        var itemEnd = itemStart + item.Text.Length;
+        var overlapStart = Math.Max(selectionStart, itemStart);
+        var overlapEnd = Math.Min(selectionEnd, itemEnd);
+        if (overlapEnd <= overlapStart)
+            return;
+
+        var ft = Build(item.Text, item.Fmt);
+        var alignOffset = AlignmentOffset(
+            item.Alignment,
+            item.AvailableWidth,
+            ft.WidthIncludingTrailingWhitespace,
+            isLast: true);
+        var localStart = Math.Clamp(overlapStart - itemStart, 0, item.Text.Length);
+        var localEnd = Math.Clamp(overlapEnd - itemStart, localStart, item.Text.Length);
+        var prefixWidth = localStart == 0
+            ? 0
+            : Build(item.Text[..localStart], item.Fmt).WidthIncludingTrailingWhitespace;
+        var selectedWidth = localEnd == localStart
+            ? 0
+            : Build(item.Text[localStart..localEnd], item.Fmt).WidthIncludingTrailingWhitespace;
+        context.FillRectangle(
+            SelectionBrush,
+            new Rect(
+                item.X + alignOffset + prefixWidth,
+                item.Y,
+                Math.Max(2, selectedWidth),
+                Math.Max(1, item.LineHeight)));
+    }
+
     private bool TryGetHfCaretRect(out Rect rect)
     {
         rect = default;
@@ -18774,8 +19063,11 @@ public sealed class DocumentView : Control
         // AV-HFEDIT: a click inside a rendered header/footer region routes the caret into that region.
         // Only in PrintLayout (the only mode that draws H/F bands). Checked before the body hit-test
         // because H/F bands sit in the page margins, which the body hit-test does not own.
-        if (!shift && _viewMode == DocumentViewMode.PrintLayout && TryHitTestHeaderFooter(point))
+        if (_viewMode == DocumentViewMode.PrintLayout && TryHitTestHeaderFooter(point, extendSelection: shift))
         {
+            _hfSelectionDragActive = true;
+            _hfSelectionDragPointer = e.Pointer;
+            e.Pointer.Capture(this);
             CaretMoved?.Invoke();
             e.Handled = true;
             return;
@@ -18785,6 +19077,7 @@ public sealed class DocumentView : Control
         {
             // AV-HFEDIT: clicking back into the body exits any active header/footer caret.
             _hfCaret = null;
+            _hfSelectionAnchor = null;
 
             // AV-TBL2: clear any prior cross-cell block selection on a fresh (non-shift) press.
             if (!shift)
@@ -18836,6 +19129,14 @@ public sealed class DocumentView : Control
                 else
                     Cursor = hover == FloatHandle.None ? Cursor.Default : CursorForHandle(hover);
             }
+            return;
+        }
+
+        if (_hfSelectionDragActive && _hfCaret is not null)
+        {
+            if (TryHitTestHeaderFooter(point, extendSelection: true))
+                CaretMoved?.Invoke();
+            e.Handled = true;
             return;
         }
 
@@ -18903,6 +19204,8 @@ public sealed class DocumentView : Control
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         base.OnPointerCaptureLost(e);
+        _hfSelectionDragActive = false;
+        _hfSelectionDragPointer = null;
         if (_shapeTextSelectionDragState is not null)
             FinishShapeTextSelectionDrag(releasePointerCapture: false);
         if (_shapeEditPointDragState is null)
@@ -18918,6 +19221,15 @@ public sealed class DocumentView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (_hfSelectionDragActive)
+        {
+            TryHitTestHeaderFooter(e.GetPosition(this), extendSelection: true);
+            _hfSelectionDragActive = false;
+            _hfSelectionDragPointer?.Capture(null);
+            _hfSelectionDragPointer = null;
+            e.Handled = true;
+            return;
+        }
         if (_shapeTextSelectionDragState is not null)
         {
             UpdateShapeTextSelectionDrag(e.GetPosition(this));
@@ -19274,18 +19586,19 @@ public sealed class DocumentView : Control
                     e.Handled = true;
                     return;
                 case Key.Left:
-                    HfMoveCaret(-1); e.Handled = true; return;
+                    HfMoveCaret(-1, shift); e.Handled = true; return;
                 case Key.Right:
-                    HfMoveCaret(+1); e.Handled = true; return;
+                    HfMoveCaret(+1, shift); e.Handled = true; return;
                 case Key.Home:
-                    _hfCaret = (_hfCaret.Value.Target, 0); InvalidateVisual(); CaretMoved?.Invoke(); e.Handled = true; return;
+                    HfMoveToParagraphEdge(toStart: true, shift); e.Handled = true; return;
                 case Key.End:
-                    _hfCaret = (_hfCaret.Value.Target, HfParaLength(_hfCaret.Value.Target)); InvalidateVisual(); CaretMoved?.Invoke(); e.Handled = true; return;
+                    HfMoveToParagraphEdge(toStart: false, shift); e.Handled = true; return;
                 case Key.Back: Backspace(); e.Handled = true; return;
                 case Key.Delete: DeleteForward(); e.Handled = true; return;
                 case Key.Enter: InsertParagraphBreak(); e.Handled = true; return;
                 case Key.Z when ctrl: Undo(); e.Handled = true; return;
                 case Key.Y when ctrl: Redo(); e.Handled = true; return;
+                case Key.A when ctrl: SelectAllHeaderFooterText(); e.Handled = true; return;
                 // DD1 (AV-HFEDIT): Tab/Shift+Tab while H/F caret is active — insert a literal tab into the
                 // header/footer and mark handled. This prevents fall-through to the body Tab path which would
                 // fire ListTabAtItemStart and mutate body list items (or navigate table cells) instead.
@@ -19294,13 +19607,11 @@ public sealed class DocumentView : Control
                 case Key.Tab:
                     if (!shift) HfInsertText("\t");
                     e.Handled = true; return;
-                // DD2 (AV-HFEDIT): Up/Down are consumed as no-ops inside a header/footer.
-                // Previously the comment said "no-op for H/F" but both keys fell through to MoveCaretVertical
-                // which moved the BODY caret while _hfCaret stayed non-null, leaving the body caret displaced
-                // after ExitHeaderFooterCaret(). Intercept here so the body caret never moves during H/F editing.
+                // Route vertical navigation through the shared header/footer story rather than the body caret.
                 case Key.Up:
+                    HfMoveCaretVertical(-1, shift); e.Handled = true; return;
                 case Key.Down:
-                    e.Handled = true; return;
+                    HfMoveCaretVertical(1, shift); e.Handled = true; return;
             }
             // All other keys fall through to default handling below.
         }
@@ -24977,6 +25288,8 @@ public sealed class DocumentView : Control
     {
         get
         {
+            if (_hfCaret is not null)
+                return HeaderFooterSelectedText();
             if (NormalizedSelection() is not { } sel)
                 return string.Empty;
             if (sel.Start.Block == sel.End.Block && _doc.Blocks[sel.Start.Block] is Paragraph p && IsEditable(p))
@@ -25004,6 +25317,9 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return false;
 
+        if (_hfCaret is not null)
+            return TryDeleteHfSelection();
+
         if (NormalizedSelection() is null)
             return false;
         DeleteSelection();
@@ -25012,6 +25328,12 @@ public sealed class DocumentView : Control
 
     public void SelectAllText()
     {
+        if (_hfCaret is not null)
+        {
+            SelectAllHeaderFooterText();
+            return;
+        }
+
         var first = _doc.Blocks.FindIndex(block => block is Paragraph paragraph && IsEditable(paragraph));
         var last = _doc.Blocks.FindLastIndex(block => block is Paragraph paragraph && IsEditable(paragraph));
         if (first < 0 || last < 0)
