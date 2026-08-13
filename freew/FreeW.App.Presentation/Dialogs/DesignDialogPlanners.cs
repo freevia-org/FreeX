@@ -16,6 +16,29 @@ public sealed record CustomizeThemeColorsValidation(
     int SlotIndex,
     string Message);
 
+/// <summary>
+/// Renderer-neutral geometry for the paired Create New Theme Colors dialogs. Values without a
+/// renderer prefix describe the WPF authority layout; Avalonia-prefixed values compensate for
+/// native control-template measurements while preserving that layout.
+/// </summary>
+public readonly record struct CustomizeThemeColorsDialogVisualMetrics(
+    double DialogWidth,
+    double DialogMargin,
+    double HintFontSize,
+    double HintBottomMargin,
+    double LabelColumnWidth,
+    double ColorFieldMinWidth,
+    double NameFieldMinWidth,
+    double RowVerticalMargin,
+    double LabelRightMargin,
+    double SeparatorTopMargin,
+    double SeparatorBottomMargin,
+    double ActionButtonWidth,
+    double ActionRowTopMargin,
+    double AvaloniaColorRowHeight,
+    double AvaloniaSeparatorHeight,
+    double AvaloniaValidationTopMargin);
+
 public sealed record DesignDialogText(
     string InvalidThemeColorsMessage,
     string PageColorLabel,
@@ -54,6 +77,24 @@ public static class CustomizeThemeColorsDialogPlanner
     public const string Hint = "Enter RRGGBB hex values (with or without #) for each color slot.";
     public const string NameLabel = "Name:";
     public const string DefaultName = "Custom";
+
+    public static CustomizeThemeColorsDialogVisualMetrics VisualMetrics { get; } = new(
+        DialogWidth: 440,
+        DialogMargin: 14,
+        HintFontSize: 10,
+        HintBottomMargin: 10,
+        LabelColumnWidth: 190,
+        ColorFieldMinWidth: 120,
+        NameFieldMinWidth: 200,
+        RowVerticalMargin: 2,
+        LabelRightMargin: 8,
+        SeparatorTopMargin: 8,
+        SeparatorBottomMargin: 4,
+        ActionButtonWidth: 72,
+        ActionRowTopMargin: 12,
+        AvaloniaColorRowHeight: 29.4,
+        AvaloniaSeparatorHeight: 1,
+        AvaloniaValidationTopMargin: 8);
 
     public static readonly IReadOnlyList<(string Label, string FieldName)> Slots =
     [

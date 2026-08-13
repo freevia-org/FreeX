@@ -14,6 +14,9 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class CustomizeThemeColorsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private static readonly CustomizeThemeColorsDialogVisualMetrics Layout =
+        CustomizeThemeColorsDialogPlanner.VisualMetrics;
+
     private readonly TextBox[] _hexBoxes = new TextBox[12];
     private readonly TextBox _nameBox;
     private readonly DocumentTheme _currentTheme;
@@ -24,7 +27,7 @@ internal sealed class CustomizeThemeColorsDialog : Free.Shared.Ribbon.Wpf.Dialog
         Owner = owner;
         _currentTheme = currentTheme;
         Title = CustomizeThemeColorsDialogPlanner.Title;
-        Width = 440;
+        Width = Layout.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -32,9 +35,9 @@ internal sealed class CustomizeThemeColorsDialog : Free.Shared.Ribbon.Wpf.Dialog
 
         var state = CustomizeThemeColorsDialogPlanner.BuildInitialState(currentTheme);
         for (var i = 0; i < _hexBoxes.Length; i++)
-            _hexBoxes[i] = new TextBox { Text = state.ColorHexTexts[i], MinWidth = 120 };
+            _hexBoxes[i] = new TextBox { Text = state.ColorHexTexts[i], MinWidth = Layout.ColorFieldMinWidth };
 
-        _nameBox = new TextBox { Text = state.NameText, MinWidth = 200 };
+        _nameBox = new TextBox { Text = state.NameText, MinWidth = Layout.NameFieldMinWidth };
 
         Content = BuildContent();
         Loaded += (_, _) => _nameBox.Focus();
@@ -42,15 +45,15 @@ internal sealed class CustomizeThemeColorsDialog : Free.Shared.Ribbon.Wpf.Dialog
 
     private UIElement BuildContent()
     {
-        var panel = new StackPanel { Margin = new Thickness(14) };
+        var panel = new StackPanel { Margin = new Thickness(Layout.DialogMargin) };
 
         panel.Children.Add(new TextBlock
         {
             Text = CustomizeThemeColorsDialogPlanner.Hint,
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
-            FontSize = 10,
-            Margin = new Thickness(0, 0, 0, 10)
+            FontSize = Layout.HintFontSize,
+            Margin = new Thickness(0, 0, 0, Layout.HintBottomMargin)
         });
 
         // Color slot rows.
@@ -60,10 +63,16 @@ internal sealed class CustomizeThemeColorsDialog : Free.Shared.Ribbon.Wpf.Dialog
             panel.Children.Add(grid);
         }
 
-        panel.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 4) });
+        panel.Children.Add(new Separator
+        {
+            Margin = new Thickness(0, Layout.SeparatorTopMargin, 0, Layout.SeparatorBottomMargin)
+        });
         panel.Children.Add(SlotRow("Name:", _nameBox));
 
-        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
+        var buttons = DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: Layout.ActionButtonWidth,
+            rowMargin: new Thickness(0, Layout.ActionRowTopMargin, 0, 0));
         panel.Children.Add(buttons);
 
         return panel;
@@ -71,14 +80,14 @@ internal sealed class CustomizeThemeColorsDialog : Free.Shared.Ribbon.Wpf.Dialog
 
     private static Grid SlotRow(string label, UIElement field)
     {
-        var grid = new Grid { Margin = new Thickness(0, 2, 0, 2) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
+        var grid = new Grid { Margin = new Thickness(0, Layout.RowVerticalMargin, 0, Layout.RowVerticalMargin) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Layout.LabelColumnWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var lbl = new TextBlock
         {
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 0)
+            Margin = new Thickness(0, 0, Layout.LabelRightMargin, 0)
         };
         Grid.SetColumn(lbl, 0);
         Grid.SetColumn(field, 1);
