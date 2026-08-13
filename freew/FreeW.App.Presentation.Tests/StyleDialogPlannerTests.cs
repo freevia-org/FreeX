@@ -15,6 +15,9 @@ public sealed class StyleDialogPlannerTests
         StyleDialogMetrics.FieldBottomMargin.Should().Be(10);
         StyleDialogMetrics.NameTextBoxHeight.Should().Be(20);
         StyleDialogMetrics.ActionRowTopMargin.Should().Be(12);
+        new StyleDialogStyleChoice("Normal", "Normal").ToString().Should().Be("Normal");
+        StyleDialogPlanner.FontSizes[0].ToString().Should().Be(StyleDialogPlanner.FontSizes[0].Label);
+        StyleDialogPlanner.Colors[0].ToString().Should().Be(StyleDialogPlanner.Colors[0].Label);
     }
 
     [Fact]

@@ -196,7 +196,7 @@ internal sealed partial class OutlineView : Border
 
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_list.SelectedItem is OutlineRowItem selected)
+        if (_list.SelectedItem is OutlineDisplayRow selected)
             _controller.SelectBlock(selected.Row.BlockIndex, navigate: true);
         else
             _controller.ClearSelection();
@@ -218,13 +218,11 @@ internal sealed partial class OutlineView : Border
         try
         {
             _list.Items.Clear();
-            OutlineRowItem? toSelect = null;
-            foreach (var projectedRow in _controller.ProjectedRows)
+            OutlineDisplayRow? toSelect = null;
+            foreach (var item in OutlineViewPlanner.BuildDisplayRows(_controller.ProjectedRows, RowMarkers))
             {
-                var row = projectedRow.Row;
-                var item = new OutlineRowItem(projectedRow);
                 _list.Items.Add(item);
-                if (row.BlockIndex == _controller.SelectedBlockIndex)
+                if (item.Row.BlockIndex == _controller.SelectedBlockIndex)
                     toSelect = item;
             }
             _list.SelectedItem = toSelect;
@@ -243,7 +241,7 @@ internal sealed partial class OutlineView : Border
 
         foreach (var listItem in _list.Items)
         {
-            if (listItem is OutlineRowItem item && item.Row.BlockIndex == blockIndex)
+            if (listItem is OutlineDisplayRow item && item.Row.BlockIndex == blockIndex)
             {
                 _list.SelectedItem = item;
                 return;
@@ -251,12 +249,4 @@ internal sealed partial class OutlineView : Border
         }
     }
 
-    // One outline row: indents the text by its outline level, prefixes a heading marker (collapsed
-    // headings get a "+"), and remembers the source row so a command can map back to the model block index.
-    private sealed class OutlineRowItem(OutlineProjectedRow projectedRow)
-    {
-        public OutlineRow Row => projectedRow.Row;
-
-        public override string ToString() => OutlineViewPlanner.FormatRow(projectedRow, RowMarkers);
-    }
 }

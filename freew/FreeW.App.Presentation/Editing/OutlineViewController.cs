@@ -30,6 +30,13 @@ public readonly record struct OutlineRowMarkers(
 
 public readonly record struct OutlineProjectedRow(OutlineRow Row, bool IsCollapsed);
 
+public sealed record OutlineDisplayRow(OutlineProjectedRow ProjectedRow, string DisplayText)
+{
+    public OutlineRow Row => ProjectedRow.Row;
+
+    public override string ToString() => DisplayText;
+}
+
 /// <summary>
 /// Canonical labels, option catalogs, toolbar ordering, and row text projection for the outline surface.
 /// Native renderers retain control construction and choose only their heading marker glyphs.
@@ -79,6 +86,14 @@ public static class OutlineViewPlanner
             ? row.Text
             : row.IsHeading ? "(untitled heading)" : string.Empty;
         return indent + marker + text;
+    }
+
+    public static IReadOnlyList<OutlineDisplayRow> BuildDisplayRows(
+        IEnumerable<OutlineProjectedRow> rows,
+        OutlineRowMarkers markers)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        return rows.Select(row => new OutlineDisplayRow(row, FormatRow(row, markers))).ToArray();
     }
 
     private static IReadOnlyList<OutlineLevelOption> BuildShowLevelOptions()

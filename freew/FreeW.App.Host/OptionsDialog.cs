@@ -269,14 +269,13 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // Commit any in-progress cell edit so the last-typed row is captured before we read the rows.
         _replacements.CommitEdit(DataGridEditingUnit.Row, true);
 
-        var input = new OptionsDialogInput(
+        var input = OptionsDialogInput.Capture(
             _recentFilesCap.Text,
             (_defaultFormat.SelectedItem as ComboBoxItem)?.Tag as string,
             _uiLanguage.Text,
-            CheckedToggles(),
+            kind => ToggleFor(kind).IsChecked == true,
             _replacementRows
-                .Select(row => new OptionsDialogReplacementInput(row.Replace, row.With))
-                .ToArray());
+                .Select(row => new OptionsDialogReplacementInput(row.Replace, row.With)));
         var plan = _session.PlanAcceptance(input);
         if (!plan.ShouldApply)
         {
@@ -289,9 +288,6 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Result = plan.Result!;
         DialogResult = true;
     }
-
-    private OptionsDialogToggleKind[] CheckedToggles() =>
-        _toggles.Where(entry => entry.Value.IsChecked == true).Select(entry => entry.Key).ToArray();
 
     // WPF can settle star columns at MinWidth while a DataGrid is measured inside a size-to-content dialog.
     // Realize the declared 1:2 weights against the current viewport once it is available, and again only

@@ -213,6 +213,22 @@ public sealed class OutlineViewControllerTests
             .Should().Be("    body copy");
     }
 
+    [Fact]
+    public void Planner_builds_renderer_ready_display_rows_without_losing_identity()
+    {
+        var projected = new OutlineProjectedRow(
+            new OutlineRow(7, 1, "Heading", IsHeading: true),
+            IsCollapsed: false);
+
+        var display = OutlineViewPlanner.BuildDisplayRows(
+            [projected],
+            new OutlineRowMarkers("open ", "closed ", "body ")).Single();
+
+        display.ProjectedRow.Should().Be(projected);
+        display.Row.BlockIndex.Should().Be(7);
+        display.ToString().Should().Be("    open Heading");
+    }
+
     private static OutlineViewController CreateController(
         TextDocument document,
         Action<int>? navigateToBlock = null) =>

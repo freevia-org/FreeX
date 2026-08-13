@@ -71,6 +71,9 @@ public sealed class SourceManagementDialogPlannerTests
     {
         var choices = SourceManagementDialogPlanner.BuildSourceTypeChoices();
 
+        choices.Select(choice => choice.ToString()).Should().Equal(
+            choices.Select(choice => choice.Label));
+
         choices.Select(choice => choice.Type).Should().Equal(
             SourceType.Book,
             SourceType.JournalArticle,

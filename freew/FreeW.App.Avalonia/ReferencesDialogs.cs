@@ -702,7 +702,7 @@ internal sealed class SourceEntryDialog : FreeWDialogWindow
             .BuildEntryFieldPlans(entry)
             .ToDictionary(plan => plan.Field, plan => NewField(plan.Text));
 
-        _typeBox.ItemsSource = _typeChoices.Select(choice => choice.Label).ToArray();
+        _typeBox.ItemsSource = _typeChoices;
         _typeBox.SelectedIndex = SourceManagementDialogPlanner.SourceTypeSelectedIndex(entry.Type);
         _typeBox.SelectionChanged += (_, _) => RefreshFields();
         AvaloniaCompactDialogChrome.ApplyComboBox(_typeBox, DialogChromeStyle);

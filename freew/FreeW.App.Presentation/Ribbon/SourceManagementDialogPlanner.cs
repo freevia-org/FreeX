@@ -216,7 +216,10 @@ public sealed record SourceManagementSourceEntry(
     }
 }
 
-public sealed record SourceManagementSourceTypeChoice(SourceType Type, string Label);
+public sealed record SourceManagementSourceTypeChoice(SourceType Type, string Label)
+{
+    public override string ToString() => Label;
+}
 
 public sealed record SourceManagementSourceFieldPlan(
     SourceManagementSourceField Field,

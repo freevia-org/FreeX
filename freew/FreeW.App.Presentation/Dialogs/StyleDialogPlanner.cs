@@ -14,9 +14,20 @@ public enum StyleDialogValidationError
     EmptyName,
 }
 
-public sealed record StyleDialogFontSizeChoice(string Label, double? Points);
+public sealed record StyleDialogFontSizeChoice(string Label, double? Points)
+{
+    public override string ToString() => Label;
+}
 
-public sealed record StyleDialogColorChoice(string Label, string? Hex);
+public sealed record StyleDialogColorChoice(string Label, string? Hex)
+{
+    public override string ToString() => Label;
+}
+
+public sealed record StyleDialogStyleChoice(string Key, string Value)
+{
+    public override string ToString() => Key;
+}
 
 public sealed record StyleDialogTextCatalog(
     string NewTitle,
@@ -162,9 +173,9 @@ public sealed record StyleDialogInitialState(
     string Title,
     string Name,
     bool NameIsReadOnly,
-    IReadOnlyList<KeyValuePair<string, string>> BasedOnOptions,
+    IReadOnlyList<StyleDialogStyleChoice> BasedOnOptions,
     int BasedOnIndex,
-    IReadOnlyList<KeyValuePair<string, string>> NextStyleOptions,
+    IReadOnlyList<StyleDialogStyleChoice> NextStyleOptions,
     int NextStyleIndex,
     bool Bold,
     bool Italic,
@@ -286,10 +297,10 @@ public sealed class StyleDialogSession
                 StyleDialogField.Name);
     }
 
-    private static string? SelectedId(IReadOnlyList<KeyValuePair<string, string>> entries, int index) =>
+    private static string? SelectedId(IReadOnlyList<StyleDialogStyleChoice> entries, int index) =>
         index > 0 && index < entries.Count ? entries[index].Value : null;
 
-    private static int IndexOfId(IReadOnlyList<KeyValuePair<string, string>> entries, string? id)
+    private static int IndexOfId(IReadOnlyList<StyleDialogStyleChoice> entries, string? id)
     {
         if (string.IsNullOrEmpty(id))
             return 0;
@@ -633,16 +644,16 @@ public static class StyleDialogPlanner
         _ => 0,
     };
 
-    public static IReadOnlyList<KeyValuePair<string, string>> BuildStyleOptions(
+    public static IReadOnlyList<StyleDialogStyleChoice> BuildStyleOptions(
         IReadOnlyDictionary<string, string> styleNamesById,
         string emptyLabel)
     {
         ArgumentNullException.ThrowIfNull(styleNamesById);
 
-        var result = new List<KeyValuePair<string, string>> { new(emptyLabel, string.Empty) };
+        var result = new List<StyleDialogStyleChoice> { new(emptyLabel, string.Empty) };
         result.AddRange(styleNamesById
             .OrderBy(kv => kv.Value, StringComparer.OrdinalIgnoreCase)
-            .Select(kv => new KeyValuePair<string, string>(kv.Value, kv.Key)));
+            .Select(kv => new StyleDialogStyleChoice(kv.Value, kv.Key)));
         return result;
     }
 

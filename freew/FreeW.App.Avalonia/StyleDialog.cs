@@ -61,9 +61,9 @@ internal sealed partial class StyleDialog : FreeWDialogWindow
 
         _name.Text = state.Name;
         _name.IsReadOnly = state.NameIsReadOnly;
-        _basedOn.ItemsSource = state.BasedOnOptions.Select(e => e.Key).ToArray();
+        _basedOn.ItemsSource = state.BasedOnOptions;
         _basedOn.SelectedIndex = state.BasedOnIndex;
-        _nextStyle.ItemsSource = state.NextStyleOptions.Select(e => e.Key).ToArray();
+        _nextStyle.ItemsSource = state.NextStyleOptions;
         _nextStyle.SelectedIndex = state.NextStyleIndex;
         foreach (var spec in Surface.Effects)
         {
@@ -71,9 +71,9 @@ internal sealed partial class StyleDialog : FreeWDialogWindow
             checkBox.IsChecked = state.EffectValue(spec.Kind);
             AutomationProperties.SetAutomationId(checkBox, spec.AutomationId);
         }
-        _size.ItemsSource = StyleDialogPlanner.FontSizes.Select(s => s.Label).ToArray();
+        _size.ItemsSource = StyleDialogPlanner.FontSizes;
         _size.SelectedIndex = state.FontSizeIndex;
-        _color.ItemsSource = StyleDialogPlanner.Colors.Select(c => c.Label).ToArray();
+        _color.ItemsSource = StyleDialogPlanner.Colors;
         _color.SelectedIndex = state.ColorIndex;
         _alignment.ItemsSource = StyleDialogPlanner.AlignmentLabels.ToArray();
         _alignment.SelectedIndex = state.AlignmentIndex;

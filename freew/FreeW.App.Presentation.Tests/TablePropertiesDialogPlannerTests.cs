@@ -243,6 +243,34 @@ public sealed class TablePropertiesDialogPlannerTests
         session.PlanAcceptance(ValidInput()).Result.Should().NotBeNull();
     }
 
+    [Fact]
+    public void CaptureInput_UsesTheSharedSemanticFieldProtocol()
+    {
+        var requested = new List<string>();
+        var input = TablePropertiesDialogInput.Capture(
+            id =>
+            {
+                requested.Add(id);
+                return id == TablePropertiesDialogPlanner.AllowOverlapAutomationId ? null : true;
+            },
+            id =>
+            {
+                requested.Add(id);
+                return id;
+            },
+            id =>
+            {
+                requested.Add(id);
+                return id == TablePropertiesDialogPlanner.WrappingAutomationId ? 1 : 0;
+            });
+
+        requested.Should().OnlyHaveUniqueItems();
+        input.PreferredWidthText.Should().Be(TablePropertiesDialogPlanner.PreferredWidthAutomationId);
+        input.WrappingIndex.Should().Be(1);
+        input.CellWrapText.Should().BeTrue();
+        input.FloatingTableAllowsOverlap.Should().BeNull();
+    }
+
     [Theory]
     [InlineData(TablePropertiesDialogTabKind.Table, TablePropertiesDialogTabKind.Table, TablePropertiesDialogPlanner.PreferredWidthAutomationId)]
     [InlineData(TablePropertiesDialogTabKind.Row, TablePropertiesDialogTabKind.Row, TablePropertiesDialogPlanner.RowHeightAutomationId)]
@@ -436,6 +464,8 @@ public sealed class TablePropertiesDialogSessionOwnershipTests
         source.Should().Contain("_session.InitialState");
         source.Should().Contain("_session.PlanEnabledState(");
         source.Should().Contain("_session.PlanAcceptance(");
+        source.Should().Contain("_session.CaptureInput(");
+        source.Should().NotContain("new TablePropertiesDialogInput(");
         source.Should().Contain("_session.InitialFocusPlan");
         source.Should().Contain("ResolveFocusTarget(");
         source.Should().NotContain("TablePropertiesDialogPlanner.BuildInitialState(");

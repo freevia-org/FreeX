@@ -120,7 +120,59 @@ public sealed record TablePropertiesDialogInput(
     string? FloatingDistanceLeftText = null,
     string? FloatingDistanceBottomText = null,
     string? FloatingDistanceRightText = null,
-    bool? FloatingTableAllowsOverlap = null);
+    bool? FloatingTableAllowsOverlap = null)
+{
+    public static TablePropertiesDialogInput Capture(
+        Func<string, bool?> toggleValue,
+        Func<string, string?> textValue,
+        Func<string, int> selectedIndex)
+    {
+        ArgumentNullException.ThrowIfNull(toggleValue);
+        ArgumentNullException.ThrowIfNull(textValue);
+        ArgumentNullException.ThrowIfNull(selectedIndex);
+
+        return new TablePropertiesDialogInput(
+            toggleValue(TablePropertiesDialogPlanner.PreferredWidthToggleAutomationId) == true,
+            textValue(TablePropertiesDialogPlanner.PreferredWidthAutomationId),
+            selectedIndex(TablePropertiesDialogPlanner.AlignmentAutomationId),
+            selectedIndex(TablePropertiesDialogPlanner.WrappingAutomationId),
+            textValue(TablePropertiesDialogPlanner.IndentAutomationId),
+            textValue(TablePropertiesDialogPlanner.DefaultMarginTopAutomationId),
+            textValue(TablePropertiesDialogPlanner.DefaultMarginLeftAutomationId),
+            textValue(TablePropertiesDialogPlanner.DefaultMarginBottomAutomationId),
+            textValue(TablePropertiesDialogPlanner.DefaultMarginRightAutomationId),
+            toggleValue(TablePropertiesDialogPlanner.CellSpacingToggleAutomationId) == true,
+            textValue(TablePropertiesDialogPlanner.CellSpacingAutomationId),
+            toggleValue(TablePropertiesDialogPlanner.RowHeightToggleAutomationId) == true,
+            textValue(TablePropertiesDialogPlanner.RowHeightAutomationId),
+            selectedIndex(TablePropertiesDialogPlanner.RowRuleAutomationId),
+            toggleValue(TablePropertiesDialogPlanner.AllowRowBreakAutomationId) == true,
+            toggleValue(TablePropertiesDialogPlanner.RepeatHeaderAutomationId) == true,
+            toggleValue(TablePropertiesDialogPlanner.ColumnWidthToggleAutomationId) == true,
+            textValue(TablePropertiesDialogPlanner.ColumnWidthAutomationId),
+            toggleValue(TablePropertiesDialogPlanner.CellWidthToggleAutomationId) == true,
+            textValue(TablePropertiesDialogPlanner.CellWidthAutomationId),
+            selectedIndex(TablePropertiesDialogPlanner.CellVerticalAlignmentAutomationId),
+            toggleValue(TablePropertiesDialogPlanner.SameMarginsAutomationId) == true,
+            textValue(TablePropertiesDialogPlanner.CellMarginTopAutomationId),
+            textValue(TablePropertiesDialogPlanner.CellMarginLeftAutomationId),
+            textValue(TablePropertiesDialogPlanner.CellMarginBottomAutomationId),
+            textValue(TablePropertiesDialogPlanner.CellMarginRightAutomationId),
+            toggleValue(TablePropertiesDialogPlanner.CellWrapTextAutomationId) == true,
+            toggleValue(TablePropertiesDialogPlanner.CellFitTextAutomationId) == true,
+            selectedIndex(TablePropertiesDialogPlanner.HorizontalAnchorAutomationId),
+            selectedIndex(TablePropertiesDialogPlanner.HorizontalModeAutomationId),
+            textValue(TablePropertiesDialogPlanner.HorizontalOffsetAutomationId),
+            selectedIndex(TablePropertiesDialogPlanner.VerticalAnchorAutomationId),
+            selectedIndex(TablePropertiesDialogPlanner.VerticalModeAutomationId),
+            textValue(TablePropertiesDialogPlanner.VerticalOffsetAutomationId),
+            textValue(TablePropertiesDialogPlanner.DistanceTopAutomationId),
+            textValue(TablePropertiesDialogPlanner.DistanceLeftAutomationId),
+            textValue(TablePropertiesDialogPlanner.DistanceBottomAutomationId),
+            textValue(TablePropertiesDialogPlanner.DistanceRightAutomationId),
+            toggleValue(TablePropertiesDialogPlanner.AllowOverlapAutomationId));
+    }
+}
 
 public sealed record TablePropertiesDialogEnabledState(
     bool FloatingControlsEnabled,
@@ -204,6 +256,12 @@ public sealed class TablePropertiesDialogSession
         TablePropertiesDialogPlanner.TryBuildResult(input, _culture, out var result, out var error)
             ? new TablePropertiesDialogAcceptance(result, ValidationMessage: null)
             : new TablePropertiesDialogAcceptance(null, error ?? TablePropertiesDialogPlanner.ValidationMessage);
+
+    public TablePropertiesDialogInput CaptureInput(
+        Func<string, bool?> toggleValue,
+        Func<string, string?> textValue,
+        Func<string, int> selectedIndex) =>
+        TablePropertiesDialogInput.Capture(toggleValue, textValue, selectedIndex);
 }
 
 public static class TablePropertiesDialogPlanner

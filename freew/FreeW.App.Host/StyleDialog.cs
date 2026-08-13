@@ -77,14 +77,12 @@ internal static class StyleDialog
 
         var basedOn = new ComboBox { MinWidth = surface.Field(StyleDialogFieldKind.BasedOn).MinWidth, Height = StyleDialogMetrics.ComboBoxHeight };
         basedOn.ItemsSource = state.BasedOnOptions;
-        basedOn.DisplayMemberPath = "Key";
         basedOn.SelectedIndex = state.BasedOnIndex;
 
         // "Style for following paragraph" (Word's w:next): the style the next paragraph takes when Enter is
         // pressed at the end of one carrying this style. "(same style)" maps to null (keep this style).
         var nextStyle = new ComboBox { MinWidth = surface.Field(StyleDialogFieldKind.NextStyle).MinWidth, Height = StyleDialogMetrics.ComboBoxHeight };
         nextStyle.ItemsSource = state.NextStyleOptions;
-        nextStyle.DisplayMemberPath = "Key";
         nextStyle.SelectedIndex = state.NextStyleIndex;
 
         var effectControls = surface.Effects.ToDictionary(
@@ -104,11 +102,11 @@ internal static class StyleDialog
         }
 
         var size = new ComboBox { MinWidth = surface.Field(StyleDialogFieldKind.FontSize).MinWidth, Height = StyleDialogMetrics.ComboBoxHeight };
-        size.ItemsSource = StyleDialogPlanner.FontSizes.Select(s => s.Label).ToList();
+        size.ItemsSource = StyleDialogPlanner.FontSizes;
         size.SelectedIndex = state.FontSizeIndex;
 
         var color = new ComboBox { MinWidth = surface.Field(StyleDialogFieldKind.TextColor).MinWidth, Height = StyleDialogMetrics.ComboBoxHeight };
-        color.ItemsSource = StyleDialogPlanner.Colors.Select(c => c.Label).ToList();
+        color.ItemsSource = StyleDialogPlanner.Colors;
         color.SelectedIndex = state.ColorIndex;
 
         var alignment = new ComboBox { MinWidth = surface.Field(StyleDialogFieldKind.Alignment).MinWidth, Height = StyleDialogMetrics.ComboBoxHeight };

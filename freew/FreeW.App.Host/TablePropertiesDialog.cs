@@ -397,46 +397,10 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
 
     private void Accept()
     {
-        var input = new TablePropertiesDialogInput(
-            PreferredWidthOn: _preferredWidthOn.IsChecked == true,
-            PreferredWidthText: _preferredWidth.Text,
-            AlignmentIndex: _alignment.SelectedIndex,
-            WrappingIndex: _wrapping.SelectedIndex,
-            IndentText: _indent.Text,
-            DefaultCellMarginTopText: _cellMarginTop.Text,
-            DefaultCellMarginLeftText: _cellMarginLeft.Text,
-            DefaultCellMarginBottomText: _cellMarginBottom.Text,
-            DefaultCellMarginRightText: _cellMarginRight.Text,
-            CellSpacingOn: _cellSpacingOn.IsChecked == true,
-            CellSpacingText: _cellSpacing.Text,
-            RowHeightOn: _rowHeightOn.IsChecked == true,
-            RowHeightText: _rowHeight.Text,
-            RowRuleIndex: _rowRule.SelectedIndex,
-            AllowRowBreak: _allowRowBreak.IsChecked == true,
-            RepeatHeaderRow: _repeatHeader.IsChecked == true,
-            ColumnWidthOn: _columnWidthOn.IsChecked == true,
-            ColumnWidthText: _columnWidth.Text,
-            CellWidthOn: _cellWidthOn.IsChecked == true,
-            CellWidthText: _cellWidth.Text,
-            CellVerticalAlignmentIndex: _cellVAlign.SelectedIndex,
-            CellMarginsSameAsTable: _cellMarginsOn.IsChecked == true,
-            CellMarginTopText: _cmTop.Text,
-            CellMarginLeftText: _cmLeft.Text,
-            CellMarginBottomText: _cmBottom.Text,
-            CellMarginRightText: _cmRight.Text,
-            CellWrapText: _cellWrapText.IsChecked == true,
-            CellFitText: _cellFitText.IsChecked == true,
-            FloatingHorizontalAnchorIndex: _floatingHorizontalAnchor.SelectedIndex,
-            FloatingHorizontalModeIndex: _floatingHorizontalMode.SelectedIndex,
-            FloatingHorizontalOffsetText: _floatingHorizontalOffset.Text,
-            FloatingVerticalAnchorIndex: _floatingVerticalAnchor.SelectedIndex,
-            FloatingVerticalModeIndex: _floatingVerticalMode.SelectedIndex,
-            FloatingVerticalOffsetText: _floatingVerticalOffset.Text,
-            FloatingDistanceTopText: _floatingDistanceTop.Text,
-            FloatingDistanceLeftText: _floatingDistanceLeft.Text,
-            FloatingDistanceBottomText: _floatingDistanceBottom.Text,
-            FloatingDistanceRightText: _floatingDistanceRight.Text,
-            FloatingTableAllowsOverlap: _allowFloatingOverlap.IsChecked);
+        var input = _session.CaptureInput(
+            automationId => Control<CheckBox>(automationId).IsChecked,
+            automationId => Control<TextBox>(automationId).Text,
+            automationId => Control<ComboBox>(automationId).SelectedIndex);
 
         var acceptance = _session.PlanAcceptance(input);
         if (!acceptance.IsAccepted)
@@ -447,6 +411,27 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
 
         _result = acceptance.Result;
         Close();
+    }
+
+    private T Control<T>(string automationId) where T : DependencyObject
+    {
+        foreach (var control in LogicalDescendants(this).OfType<T>())
+        {
+            if (AutomationProperties.GetAutomationId(control) == automationId)
+                return control;
+        }
+
+        throw new InvalidOperationException($"Table Properties control '{automationId}' is unavailable.");
+    }
+
+    private static IEnumerable<DependencyObject> LogicalDescendants(DependencyObject root)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            yield return child;
+            foreach (var descendant in LogicalDescendants(child))
+                yield return descendant;
+        }
     }
 
     public static TablePropertiesValues? Prompt(

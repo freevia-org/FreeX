@@ -4807,7 +4807,6 @@ internal static class FreeWRibbonCommands
             var typeBox = new System.Windows.Controls.ComboBox
             {
                 ItemsSource = typeChoices,
-                DisplayMemberPath = nameof(SourceManagementSourceTypeChoice.Label),
                 SelectedIndex = SourceManagementDialogPlanner.SourceTypeSelectedIndex(entry.Type),
                 MinWidth = 320,
                 Margin = new Thickness(0, 0, 0, 10)

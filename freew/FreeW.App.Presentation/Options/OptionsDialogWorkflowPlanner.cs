@@ -9,7 +9,26 @@ public sealed record OptionsDialogInput(
     string? Format,
     string? UiLanguage,
     IReadOnlyCollection<OptionsDialogToggleKind> CheckedToggles,
-    IReadOnlyCollection<OptionsDialogReplacementInput> Replacements);
+    IReadOnlyCollection<OptionsDialogReplacementInput> Replacements)
+{
+    public static OptionsDialogInput Capture(
+        string? recentFilesCapText,
+        string? format,
+        string? uiLanguage,
+        Func<OptionsDialogToggleKind, bool> isChecked,
+        IEnumerable<OptionsDialogReplacementInput> replacements)
+    {
+        ArgumentNullException.ThrowIfNull(isChecked);
+        ArgumentNullException.ThrowIfNull(replacements);
+
+        return new OptionsDialogInput(
+            recentFilesCapText,
+            format,
+            uiLanguage,
+            Enum.GetValues<OptionsDialogToggleKind>().Where(isChecked).ToArray(),
+            replacements.ToArray());
+    }
+}
 
 public sealed record OptionsDialogEnabledState(
     bool AutoFormatRulesEnabled,

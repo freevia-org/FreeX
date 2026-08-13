@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Interactivity;
 using Avalonia.Input;
@@ -480,46 +481,10 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
 
     private TablePropertiesValues? TryAccept(bool close)
     {
-        var input = new TablePropertiesDialogInput(
-            _preferredWidthOn.IsChecked == true,
-            _preferredWidth.Text,
-            _alignment.SelectedIndex,
-            _wrapping.SelectedIndex,
-            _indent.Text,
-            _cellMarginTop.Text,
-            _cellMarginLeft.Text,
-            _cellMarginBottom.Text,
-            _cellMarginRight.Text,
-            _cellSpacingOn.IsChecked == true,
-            _cellSpacing.Text,
-            _rowHeightOn.IsChecked == true,
-            _rowHeight.Text,
-            _rowRule.SelectedIndex,
-            _allowRowBreak.IsChecked == true,
-            _repeatHeader.IsChecked == true,
-            _columnWidthOn.IsChecked == true,
-            _columnWidth.Text,
-            _cellWidthOn.IsChecked == true,
-            _cellWidth.Text,
-            _cellVAlign.SelectedIndex,
-            _cellMarginsOn.IsChecked == true,
-            _cmTop.Text,
-            _cmLeft.Text,
-            _cmBottom.Text,
-            _cmRight.Text,
-            _cellWrapText.IsChecked == true,
-            _cellFitText.IsChecked == true,
-            _floatingHorizontalAnchor.SelectedIndex,
-            _floatingHorizontalMode.SelectedIndex,
-            _floatingHorizontalOffset.Text,
-            _floatingVerticalAnchor.SelectedIndex,
-            _floatingVerticalMode.SelectedIndex,
-            _floatingVerticalOffset.Text,
-            _floatingDistanceTop.Text,
-            _floatingDistanceLeft.Text,
-            _floatingDistanceBottom.Text,
-            _floatingDistanceRight.Text,
-            _allowFloatingOverlap.IsChecked);
+        var input = _session.CaptureInput(
+            automationId => Control<CheckBox>(automationId).IsChecked,
+            automationId => Control<TextBox>(automationId).Text,
+            automationId => Control<ComboBox>(automationId).SelectedIndex);
 
         var acceptance = _session.PlanAcceptance(input);
         if (!acceptance.IsAccepted)
@@ -536,6 +501,11 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
             Close();
         return Result;
     }
+
+    private T Control<T>(string automationId) where T : Control =>
+        this.GetLogicalDescendants()
+            .OfType<T>()
+            .Single(control => AutomationProperties.GetAutomationId(control) == automationId);
 
     private void FocusInitialField()
     {

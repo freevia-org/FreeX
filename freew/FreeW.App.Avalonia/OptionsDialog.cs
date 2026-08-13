@@ -152,14 +152,13 @@ internal sealed partial class OptionsDialog : FreeWDialogWindow
     private void Accept()
     {
         _status.IsVisible = false;
-        var input = new OptionsDialogInput(
+        var input = OptionsDialogInput.Capture(
             _recentFilesCap.Text,
             (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension,
             _uiLanguage.Text,
-            CheckedToggles(),
+            kind => ToggleFor(kind).IsChecked == true,
             _replacementEditors
-                .Select(row => new OptionsDialogReplacementInput(row.Replace.Text, row.With.Text))
-                .ToArray());
+                .Select(row => new OptionsDialogReplacementInput(row.Replace.Text, row.With.Text)));
         var plan = _session.PlanAcceptance(input);
         if (!plan.ShouldApply)
         {
@@ -173,9 +172,6 @@ internal sealed partial class OptionsDialog : FreeWDialogWindow
         Result = plan.Result!;
         Close();
     }
-
-    private OptionsDialogToggleKind[] CheckedToggles() =>
-        _toggles.Where(entry => entry.Value.IsChecked == true).Select(entry => entry.Key).ToArray();
 
     private Control BuildGeneralTab()
     {

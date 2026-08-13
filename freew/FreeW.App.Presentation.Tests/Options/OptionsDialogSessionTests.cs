@@ -7,6 +7,28 @@ namespace FreeW.App.Presentation.Tests.Options;
 public sealed class OptionsDialogSessionTests
 {
     [Fact]
+    public void Input_capture_enumerates_typed_toggle_choices_and_snapshots_replacements()
+    {
+        var replacements = new List<OptionsDialogReplacementInput>
+        {
+            new("teh", "the"),
+        };
+
+        var input = OptionsDialogInput.Capture(
+            "8",
+            FreeWOptions.DocxDefaultFormat,
+            "uk-UA",
+            kind => kind is OptionsDialogToggleKind.AutoCorrectEnabled or OptionsDialogToggleKind.ReplaceText,
+            replacements);
+        replacements.Clear();
+
+        input.CheckedToggles.Should().Equal(
+            OptionsDialogToggleKind.AutoCorrectEnabled,
+            OptionsDialogToggleKind.ReplaceText);
+        input.Replacements.Should().Equal(new OptionsDialogReplacementInput("teh", "the"));
+    }
+
+    [Fact]
     public void Session_owns_initial_surface_toggle_and_replacement_projection()
     {
         var options = new FreeWOptions

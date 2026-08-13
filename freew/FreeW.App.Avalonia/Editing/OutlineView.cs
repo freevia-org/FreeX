@@ -176,7 +176,7 @@ internal sealed partial class OutlineView : Border
 
     private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (_list.SelectedItem is not OutlineRowItem selected)
+        if (_list.SelectedItem is not OutlineDisplayRow selected)
         {
             _controller.ClearSelection();
             UpdateOutlineLevelCombo();
@@ -210,13 +210,11 @@ internal sealed partial class OutlineView : Border
         try
         {
             _list.Items.Clear();
-            OutlineRowItem? toSelect = null;
-            foreach (var projectedRow in _controller.ProjectedRows)
+            OutlineDisplayRow? toSelect = null;
+            foreach (var item in OutlineViewPlanner.BuildDisplayRows(_controller.ProjectedRows, RowMarkers))
             {
-                var row = projectedRow.Row;
-                var item = new OutlineRowItem(projectedRow);
                 _list.Items.Add(item);
-                if (row.BlockIndex == _controller.SelectedBlockIndex)
+                if (item.Row.BlockIndex == _controller.SelectedBlockIndex)
                     toSelect = item;
             }
             _list.SelectedItem = toSelect;
@@ -233,7 +231,7 @@ internal sealed partial class OutlineView : Border
         if (!_controller.SelectBlock(blockIndex))
             return;
 
-        foreach (var item in _list.Items.OfType<OutlineRowItem>())
+        foreach (var item in _list.Items.OfType<OutlineDisplayRow>())
         {
             if (item.Row.BlockIndex == blockIndex)
             {
@@ -243,10 +241,4 @@ internal sealed partial class OutlineView : Border
         }
     }
 
-    private sealed class OutlineRowItem(OutlineProjectedRow projectedRow)
-    {
-        public OutlineRow Row => projectedRow.Row;
-
-        public override string ToString() => OutlineViewPlanner.FormatRow(projectedRow, RowMarkers);
-    }
 }
