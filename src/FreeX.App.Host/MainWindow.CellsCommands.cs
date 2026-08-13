@@ -388,7 +388,12 @@ public partial class MainWindow
     /// </summary>
     private void InsertRows(uint beforeRow)
     {
-        if (!TryExecuteWorksheetStructure(() => _session.InsertRows(beforeRow), out var result))
+        Func<WorkbookWorksheetStructureResult> execute =
+            SheetGrid.SelectedRanges is { Count: > 1 } ranges &&
+            ranges.All(SelectionRangeService.IsWholeRowSelection)
+            ? _session.InsertSelectedRows
+            : () => _session.InsertRows(beforeRow);
+        if (!TryExecuteWorksheetStructure(execute, out var result))
             return;
 
         CompleteWorksheetStructureEdit(result, recalculateWorkbook: true);
@@ -397,7 +402,12 @@ public partial class MainWindow
     /// <summary>Column counterpart of InsertRows above (R123-cellscmds-multiarea-insert-1).</summary>
     private void InsertColumns(uint beforeCol)
     {
-        if (!TryExecuteWorksheetStructure(() => _session.InsertColumns(beforeCol), out var result))
+        Func<WorkbookWorksheetStructureResult> execute =
+            SheetGrid.SelectedRanges is { Count: > 1 } ranges &&
+            ranges.All(SelectionRangeService.IsWholeColumnSelection)
+            ? _session.InsertSelectedColumns
+            : () => _session.InsertColumns(beforeCol);
+        if (!TryExecuteWorksheetStructure(execute, out var result))
             return;
 
         CompleteWorksheetStructureEdit(result, recalculateWorkbook: true);

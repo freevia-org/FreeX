@@ -214,7 +214,8 @@ public sealed partial class MainWindowFormulaBarSyncTests
             harness.CellText(2, 1).Should().BeNull();
             harness.CellFormula(2, 1).Should().BeNull();
             harness.SheetGridFocused.Should().BeTrue();
-            harness.StatusReadyText.Should().Be(UiText.Get("MainWindow_Text_Ready"));
+            harness.FormulaRangeEntryMode.Should().BeFalse();
+            harness.FormulaEditCell.Should().BeNull();
         });
     }
 

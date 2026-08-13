@@ -162,7 +162,12 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public void DefineNamedRange(string name, GridRange range)
         {
-            Workbook.DefineNamedRange(name, range);
+            _window.ExecuteWorkbookCommandForTest(
+                    new DefineNamedRangeCommand(name, range),
+                    "Define Name")
+                .Should()
+                .BeTrue();
+            PumpDispatcher();
         }
 
         public void SelectActiveCell(uint row, uint col)

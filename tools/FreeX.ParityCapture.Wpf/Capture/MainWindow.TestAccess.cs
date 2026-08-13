@@ -144,6 +144,9 @@ public partial class MainWindow
 
     internal void ExecuteClearSelectionForTest() => ExecuteClearSelection();
 
+    internal bool ExecuteWorkbookCommandForTest(IWorkbookCommand command, string title) =>
+        TryExecuteCommand(command, title);
+
     internal void RaiseFormulaBarKeyDownForTest(KeyEventArgs e) => FormulaBar_KeyDown(FormulaBar, e);
 
     internal void RaiseInlineEditorKeyDownForTest(KeyEventArgs e)

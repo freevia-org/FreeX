@@ -114,8 +114,8 @@ public sealed partial class MainWindowFormulaBarSyncTests
     }
 
     [Theory]
-    [InlineData("inline", "row", 4u, 0u, "=SUM(A4:XFD4", 4u, 1u, 4u, CellAddress.MaxCol)]
-    [InlineData("formulaBar", "column", 0u, 3u, "=SUM(C1:C1048576", 1u, 3u, CellAddress.MaxRow, 3u)]
+    [InlineData("inline", "row", 4u, 0u, "=SUM(4:4", 4u, 1u, 4u, CellAddress.MaxCol)]
+    [InlineData("formulaBar", "column", 0u, 3u, "=SUM(C:C", 1u, 3u, CellAddress.MaxRow, 3u)]
     [InlineData("inline", "grid", 0u, 0u, "=SUM(A1:XFD1048576", 1u, 1u, CellAddress.MaxRow, CellAddress.MaxCol)]
     public void Issue130FormulaRangeSelection_WholeHeaderOrGridSelection_InsertsReferenceAndKeepsEditing(
         string editor,

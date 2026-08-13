@@ -2,13 +2,11 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using FluentAssertions;
-using FreeX.App.UI;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using Microsoft.Extensions.Logging.Abstractions;
-using SheetGridView = FreeX.App.UI.GridView;
 using static FreeX.App.Host.Tests.DispatcherTestPump;
 
 namespace FreeX.App.Host.Tests;
@@ -48,12 +46,13 @@ public sealed class FreeXR13S7Tests
                 window.Activate();
                 PumpDispatcher();
 
-                var sheet = workbook.GetSheetAt(0);
+                var sheet = window.Session.Workbook.GetSheetAt(0);
                 var cellAddress = new CellAddress(sheet.Id, 1, 1);
-                sheet.SetCell(cellAddress, new NumberValue(10));
+                window.ExecuteWorkbookCommandForTest(
+                    EditCellsCommand.ForValue(sheet.Id, cellAddress, new NumberValue(10)),
+                    "Edit Cell").Should().BeTrue();
 
-                var grid = (SheetGridView)window.FindName("SheetGrid");
-                grid.SelectedRange = new GridRange(cellAddress, cellAddress);
+                window.SetActiveCellForTest(cellAddress);
                 PumpDispatcher();
 
                 InvokeInstanceMethod(window, "RefreshStatusBar");

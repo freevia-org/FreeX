@@ -166,7 +166,7 @@ public partial class MainWindow
 
     private bool TryExecuteAutoFilterMutation(WorksheetFilterMutationPlan plan)
     {
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+        if (!TryExecuteRepeatablePlannedRangeCommand(
                 plan.HistoryLabel,
                 plan.Range,
                 plan.CreateCommand))
@@ -391,7 +391,7 @@ public partial class MainWindow
         }
 
         var clearPlan = _filterWorkflowSession.CreateClearAllPlan(sheet, range);
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+        if (!TryExecuteRepeatablePlannedRangeCommand(
                 "Clear Filter",
                 range,
                 currentRange => _filterWorkflowSession.CreateClearAllPlan(sheet, currentRange).Command))

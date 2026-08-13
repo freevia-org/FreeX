@@ -107,10 +107,14 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     [Fact]
     public void ContextMenuStateSkipsValidationLookupWhenSheetHasNoValidationRules()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        hostSource.Should().Contain("WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address)");
+
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Services", "Ribbon", "WorksheetContextMenuPlanner.cs"));
 
         var stateMethod = source[
-            source.IndexOf("private WorksheetContextMenuState GetWorksheetContextMenuState", StringComparison.Ordinal)..];
+            source.IndexOf("public static WorksheetContextMenuState ResolveWorksheetState", StringComparison.Ordinal)..];
 
         stateMethod.Should().Contain("sheet.DataValidations.Count > 0 &&");
         stateMethod.IndexOf("sheet.DataValidations.Count > 0 &&", StringComparison.Ordinal)
@@ -134,13 +138,17 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     [Fact]
     public void PivotTableContextMenuStateUsesClickedCell()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        hostSource.Should().Contain("WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address)");
+
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Services", "Ribbon", "WorksheetContextMenuPlanner.cs"));
 
         var stateMethod = source[
-            source.IndexOf("private WorksheetContextMenuState GetWorksheetContextMenuState", StringComparison.Ordinal)..];
+            source.IndexOf("public static WorksheetContextMenuState ResolveWorksheetState", StringComparison.Ordinal)..];
 
         stateMethod.Should().Contain("PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null");
-        stateMethod.Should().Contain("HasPivotTableTarget: hasPivotTableTarget");
+        stateMethod.Should().Contain("HasPivotTableTarget: PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null");
     }
 
     [Fact]

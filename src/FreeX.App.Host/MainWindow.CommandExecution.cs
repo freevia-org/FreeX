@@ -285,6 +285,25 @@ public partial class MainWindow
         Func<GridRange, IWorkbookCommand> createCommand) =>
         TryExecuteRepeatableCurrentRangeCommand(title, fallbackRange, createCommand, out _);
 
+    private bool TryExecuteRepeatablePlannedRangeCommand(
+        string title,
+        GridRange initialRange,
+        Func<GridRange, IWorkbookCommand> createCommand)
+    {
+        var isInitialExecution = true;
+        return TryExecuteRepeatableCommand(
+            () =>
+            {
+                var range = isInitialExecution
+                    ? initialRange
+                    : SheetGrid.SelectedRange ?? initialRange;
+                isInitialExecution = false;
+                return createCommand(range);
+            },
+            title,
+            out _);
+    }
+
     private bool TryExecuteRepeatableChartLayout(
         string caption,
         string missingMessage,
