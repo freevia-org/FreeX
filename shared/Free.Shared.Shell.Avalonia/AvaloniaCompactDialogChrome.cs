@@ -17,20 +17,22 @@ namespace Free.Shared.Shell.Avalonia;
 
 public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
 {
-    public double ControlHeight { get; init; } = 24;
+    public double ControlHeight { get; init; } = CompactDialogVisualTokens.ControlHeight;
     public double? TextBoxHeight { get; init; }
     public double? ComboBoxHeight { get; init; }
     public double? TabHeight { get; init; }
     public double CompactRadioButtonHeight { get; init; } = 20;
-    public double ButtonHeight { get; init; } = 26;
-    public double FontSize { get; init; } = 12;
-    public Thickness ButtonPadding { get; init; } = new(12, 3);
+    public double ButtonHeight { get; init; } = CompactDialogVisualTokens.ButtonHeight;
+    public double FontSize { get; init; } = CompactDialogVisualTokens.FontSize;
+    public Thickness ButtonPadding { get; init; } = new(
+        CompactDialogVisualTokens.ButtonPaddingHorizontal,
+        CompactDialogVisualTokens.ButtonPaddingVertical);
     public Thickness TextBoxPadding { get; init; } = new(4, 1);
     public Thickness ComboBoxPadding { get; init; } = new(5, 0, 4, 0);
     public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
-    public double ListBoxItemMinHeight { get; init; } = 24;
+    public double ListBoxItemMinHeight { get; init; } = CompactDialogVisualTokens.ControlHeight;
     public double ActionSpacing { get; init; } = 8;
-    public CornerRadius ButtonCornerRadius { get; init; } = new(3);
+    public CornerRadius ButtonCornerRadius { get; init; } = new(CompactDialogVisualTokens.ButtonCornerRadius);
     public IBrush? ButtonBackgroundBrush { get; init; }
     public IBrush? ButtonHoverBackgroundBrush { get; init; }
     public IBrush? ButtonPressedBackgroundBrush { get; init; }
@@ -226,7 +228,7 @@ public static class AvaloniaCompactDialogChrome
                 new Setter(Button.BorderBrushProperty, restingBorder),
             },
         });
-        button.BorderThickness = new Thickness(1);
+        button.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
         button.FontSize = style.FontSize;
         button.FontFamily = style.FontFamily;
         if (isDefault)
@@ -286,7 +288,7 @@ public static class AvaloniaCompactDialogChrome
         textBox.Foreground = ThemeTextBrush(style);
         textBox.Background = textBoxBackground;
         textBox.BorderBrush = inputBorder;
-        textBox.BorderThickness = new Thickness(1);
+        textBox.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
         textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>())
         {
             Setters =
@@ -294,7 +296,7 @@ public static class AvaloniaCompactDialogChrome
                 new Setter(TextBox.ForegroundProperty, ThemeTextBrush(style)),
                 new Setter(TextBox.BackgroundProperty, textBoxBackground),
                 new Setter(TextBox.BorderBrushProperty, inputBorder),
-                new Setter(TextBox.BorderThicknessProperty, new Thickness(1)),
+                new Setter(TextBox.BorderThicknessProperty, new Thickness(CompactDialogVisualTokens.BorderThickness)),
             },
         });
         textBox.SelectionBrush = style.TextSelectionBrush ?? TextSelectionBrush;
@@ -307,7 +309,7 @@ public static class AvaloniaCompactDialogChrome
             Setters =
             {
                 new Setter(TextBox.BorderBrushProperty, focusedBorder),
-                new Setter(TextBox.BorderThicknessProperty, new Thickness(1)),
+                new Setter(TextBox.BorderThicknessProperty, new Thickness(CompactDialogVisualTokens.BorderThickness)),
             },
         });
         textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>().Class(":pointerover"))
@@ -395,7 +397,7 @@ public static class AvaloniaCompactDialogChrome
             Setters =
             {
                 new Setter(TextBox.BorderBrushProperty, ReadOnlyDocumentFocusedBorderBrush),
-                new Setter(TextBox.BorderThicknessProperty, new Thickness(1)),
+                new Setter(TextBox.BorderThicknessProperty, new Thickness(CompactDialogVisualTokens.BorderThickness)),
             },
         });
         textBox.Styles.Add(new Style(selector => selector
@@ -408,7 +410,7 @@ public static class AvaloniaCompactDialogChrome
             Setters =
             {
                 new Setter(Border.BorderBrushProperty, ReadOnlyDocumentFocusedBorderBrush),
-                new Setter(Border.BorderThicknessProperty, new Thickness(1)),
+                new Setter(Border.BorderThicknessProperty, new Thickness(CompactDialogVisualTokens.BorderThickness)),
                 new Setter(Border.BackgroundProperty, Brushes.White),
             },
         });
@@ -429,7 +431,7 @@ public static class AvaloniaCompactDialogChrome
         ArgumentNullException.ThrowIfNull(button);
 
         button.BorderBrush = ButtonBorderBrush;
-        button.BorderThickness = new Thickness(1);
+        button.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
     }
 
     /// <summary>
@@ -482,7 +484,7 @@ public static class AvaloniaCompactDialogChrome
         var comboBackground = style.ComboBoxBackgroundBrush ?? ComboBoxBackgroundBrush;
         comboBox.Background = comboBackground;
         comboBox.BorderBrush = style.InputBorderBrush ?? InputBorderBrush;
-        comboBox.BorderThickness = new Thickness(1);
+        comboBox.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
         comboBox.VerticalContentAlignment = VerticalAlignment.Center;
         if (comboBox.Classes.Contains(CompactComboBoxClass))
             return;
@@ -630,7 +632,7 @@ public static class AvaloniaCompactDialogChrome
                 Height = 13,
                 Background = white,
                 BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
-                BorderThickness = new Thickness(1),
+                BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness),
                 Child = checkMark,
             };
             var content = new ContentPresenter
@@ -689,7 +691,7 @@ public static class AvaloniaCompactDialogChrome
                 Height = 13,
                 Background = white,
                 BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
-                BorderThickness = new Thickness(1),
+                BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness),
                 CornerRadius = new CornerRadius(7),
                 Child = dot,
             };
@@ -747,7 +749,7 @@ public static class AvaloniaCompactDialogChrome
                 Height = 18,
                 Background = white,
                 BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
-                BorderThickness = new Thickness(1),
+                BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness),
                 CornerRadius = new CornerRadius(9),
                 Child = arrow,
             };
@@ -836,7 +838,7 @@ public static class AvaloniaCompactDialogChrome
         groupBox.FontSize = style.FontSize;
         groupBox.Foreground = accent;
         groupBox.BorderBrush = borderBrush ?? GroupBoxBorderBrush;
-        groupBox.BorderThickness = new Thickness(1);
+        groupBox.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
         groupBox.HeaderTemplate = new FuncDataTemplate<object>((header, _) => new TextBlock
         {
             Text = header?.ToString() ?? string.Empty,
@@ -882,7 +884,7 @@ public static class AvaloniaCompactDialogChrome
         listBox.Background = ThemeWhiteBrush();
         listBox.Foreground = ThemeTextBrush(style);
         listBox.BorderBrush = style.InputBorderBrush ?? InputBorderBrush;
-        listBox.BorderThickness = new Thickness(1);
+        listBox.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
         var itemTemplate = new FuncControlTemplate<ListBoxItem>((item, _) =>
         {
             var presenter = new ContentPresenter
@@ -917,7 +919,7 @@ public static class AvaloniaCompactDialogChrome
             {
                 new Setter(TemplatedControl.BackgroundProperty, SelectedItemBackgroundBrush),
                 new Setter(TemplatedControl.BorderBrushProperty, SelectedItemBorderBrush),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(CompactDialogVisualTokens.BorderThickness)),
             },
         });
     }
