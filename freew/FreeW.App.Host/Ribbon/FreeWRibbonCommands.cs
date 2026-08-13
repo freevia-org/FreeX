@@ -3504,15 +3504,12 @@ internal static class FreeWRibbonCommands
     // Insert > Illustrations > Picture: pick an image (including SVG), normalise to PNG, insert as an inline image run.
     private sealed class InsertPictureCommand(DocumentView editor) : IRibbonCommand
     {
-        private const double PxPerPoint = 96.0 / 72.0;
-        private const double MaxWidthPt = 400;
-
         public void Execute(RibbonCommandContext context)
         {
             var owner = Window.GetWindow(editor);
             var result = WpfFileDialogService.ShowOpenDialog(
                 owner,
-                "Images (*.png;*.jpg;*.jpeg;*.svg)|*.png;*.jpg;*.jpeg;*.svg|All files (*.*)|*.*",
+                PictureInsertionPlanner.BuildWindowsFileDialogFilter(),
                 title: "Insert Picture");
             if (!result.Chosen)
                 return;
@@ -3549,22 +3546,9 @@ internal static class FreeWRibbonCommands
             encoder.Frames.Add(BitmapFrame.Create(source));
             encoder.Save(buffer);
 
-            // Convert device-independent pixels to points, capping the width so large photos fit.
             var origPxW = source.PixelWidth;
             var origPxH = source.PixelHeight;
-            var widthPt = origPxW / PxPerPoint;
-            var heightPt = origPxH / PxPerPoint;
-            if (widthPt > MaxWidthPt && widthPt > 0)
-            {
-                heightPt *= MaxWidthPt / widthPt;
-                widthPt = MaxWidthPt;
-            }
-            // Store original pixel dimensions so Reset Size can restore the 100% natural size.
-            return new InlineImage(buffer.ToArray(), widthPt, heightPt)
-            {
-                OriginalPixelWidth  = origPxW,
-                OriginalPixelHeight = origPxH,
-            };
+            return PictureInsertionPlanner.CreatePngImage(buffer.ToArray(), origPxW, origPxH);
         }
     }
 
@@ -3574,9 +3558,6 @@ internal static class FreeWRibbonCommands
     // Insert Picture insert. Inserted at a sensible default size (≤ 72 pt = 1 inch square).
     private sealed class InsertIconCommand(DocumentView editor) : IRibbonCommand
     {
-        // Icons are decorative items — 72 pt (1 inch) is a sane default; the user can resize after.
-        private const double IconDefaultWidthPt = 72;
-
         public void Execute(RibbonCommandContext context)
         {
             var owner = Window.GetWindow(editor);
@@ -3584,16 +3565,7 @@ internal static class FreeWRibbonCommands
             if (image is null)
                 return;
 
-            // Scale down to 72 pt wide (preserving aspect ratio) if the rasteriser returned larger.
-            if (image.WidthPt > IconDefaultWidthPt && image.WidthPt > 0)
-            {
-                var scale  = IconDefaultWidthPt / image.WidthPt;
-                image = new InlineImage(image.PngBytes, IconDefaultWidthPt, image.HeightPt * scale)
-                {
-                    OriginalPixelWidth  = image.OriginalPixelWidth,
-                    OriginalPixelHeight = image.OriginalPixelHeight,
-                };
-            }
+            image = PictureInsertionPlanner.FitIcon(image);
 
             editor.Focus();
             editor.InsertImage(image);

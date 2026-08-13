@@ -747,8 +747,8 @@ public sealed partial class MainWindow : Window
             var selection = await IconPickerDialog.ShowAsync(this);
             if (selection is null)
                 return;
-            var bytes = SvgIconRasterizer.RasterizeFileToPng(selection.Path);
-            _editor.InsertInlineImage(bytes, 72, 72, ImageFormat.Png);
+            var image = PictureInsertionPlanner.FitIcon(CreatePictureInlineImage(selection.Path));
+            _editor.InsertInlineImage(image);
             _editor.Focus();
         }
         catch (Exception ex)
@@ -3783,15 +3783,15 @@ public sealed partial class MainWindow : Window
     private static readonly FilePickerFileType ImageFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType(
             FreeWFileTextResources.PictureFileTypeName,
-            ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff"],
-            ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"]);
+            PictureInsertionPlanner.SupportedFilePatterns,
+            PictureInsertionPlanner.SupportedMimeTypes);
     private static readonly FilePickerFileType EmbeddedObjectFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType("All files", ["*.*"]);
 
     /// <summary>
     /// Insert &gt; Picture (AV-INSERT): open a file picker, read the chosen image, and insert it at the
-    /// caret as an inline image. The display size is derived from the image's natural pixel dimensions
-    /// (96 DPI → points), capped so a large photo does not overflow the page; the bytes are stored verbatim.
+    /// caret as an inline image. The host decodes or rasterizes to PNG while the shared insertion planner
+    /// owns display sizing, width capping, aspect ratio and reset-size metadata for both renderers.
     /// </summary>
     private async Task InsertPictureAsync()
     {
@@ -3806,9 +3806,7 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var bytes = await File.ReadAllBytesAsync(path);
-            var (widthPt, heightPt) = MeasureImagePoints(bytes);
-            _editor.InsertInlineImage(bytes, widthPt, heightPt);
+            _editor.InsertInlineImage(CreatePictureInlineImage(path));
             _editor.Focus();
         }
         catch (Exception ex)
@@ -3845,34 +3843,29 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Decode <paramref name="bytes"/> to recover the natural pixel size, convert to points at 96 DPI, and
-    /// cap the longest edge so the image fits a typical page body. Falls back to a sensible default size
-    /// when the bytes cannot be decoded (e.g. EMF/WMF, which Avalonia's Bitmap cannot read).
+    /// Toolkit adapter for a selected picture. It only decodes/rasterizes to PNG; shared code owns the
+    /// document size, width cap, aspect ratio, format and reset-size metadata.
     /// </summary>
-    private static (double WidthPt, double HeightPt) MeasureImagePoints(byte[] bytes)
+    private static InlineImage CreatePictureInlineImage(string path)
     {
-        const double maxEdgePt = 360.0; // ~5 inches — fits the body of a Letter/A4 page with 1in margins
-        try
+        if (path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
         {
-            using var ms = new MemoryStream(bytes);
-            var bitmap = new Bitmap(ms);
-            var widthPt = bitmap.PixelSize.Width * 72.0 / 96.0;
-            var heightPt = bitmap.PixelSize.Height * 72.0 / 96.0;
-            if (widthPt <= 0 || heightPt <= 0)
-                return (200, 150);
-            var longest = Math.Max(widthPt, heightPt);
-            if (longest > maxEdgePt)
-            {
-                var scale = maxEdgePt / longest;
-                widthPt *= scale;
-                heightPt *= scale;
-            }
-            return (widthPt, heightPt);
+            var drawing = SvgIconRasterizer.LoadFile(path);
+            var drawingModel = drawing.Drawing
+                ?? throw new InvalidDataException($"The selected SVG has no drawing content: {path}");
+            var bounds = drawingModel.GetBounds();
+            var surface = PictureInsertionPlanner.BuildVectorRasterSurface(bounds.Width, bounds.Height);
+            var pngBytes = SvgIconRasterizer.RasterizeToPng(drawing, surface.PixelWidth, surface.PixelHeight);
+            return PictureInsertionPlanner.CreatePngImage(pngBytes, surface.PixelWidth, surface.PixelHeight);
         }
-        catch
-        {
-            return (200, 150); // undecodable (metafile) → default box; bytes still round-trip verbatim
-        }
+
+        using var bitmap = new Bitmap(path);
+        using var stream = new MemoryStream();
+        bitmap.Save(stream);
+        return PictureInsertionPlanner.CreatePngImage(
+            stream.ToArray(),
+            bitmap.PixelSize.Width,
+            bitmap.PixelSize.Height);
     }
 
     private async Task OpenSymbolPickerAsync()

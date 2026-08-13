@@ -23054,6 +23054,14 @@ public sealed class DocumentView : Control
             OriginalPixelWidth = Math.Max(0, originalPixelWidth),
             OriginalPixelHeight = Math.Max(0, originalPixelHeight),
         };
+        InsertInlineImage(image);
+    }
+
+    /// <summary>Inserts a fully planned shared image model through Avalonia's undoable object-run adapter.</summary>
+    public void InsertInlineImage(InlineImage image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        image.Wrapping = ImageWrapping.Inline;
         InsertObjectRun(new Run(string.Empty, RunFormatting.Default) { Image = image });
     }
 
