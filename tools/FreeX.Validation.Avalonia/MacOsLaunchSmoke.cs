@@ -909,7 +909,6 @@ internal sealed record MacOsLaunchSmokeSnapshot(
 }
 internal static class MacOsLaunchSmokeCoordinator
 {
-    private const string SheetTabContextHelpText = "Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
 
     private static async Task<MacOsLaunchSmokeDialogSnapshot> CaptureDialogEvidenceAsync(
         MainWindow.RendererValidationAccess access)
@@ -1660,12 +1659,17 @@ internal static class MacOsLaunchSmokeCoordinator
                 access.ActiveSheetTab?.Focusable == true &&
                 _zoomText.Focusable,
             HasSheetTabContextKeyboardHelp: access.HasSheetTab(button =>
-                string.Equals(AutomationProperties.GetHelpText(button), SheetTabContextHelpText, StringComparison.Ordinal)),
-            HasSheetTabContextRenameMenuItem: access.HasSheetTabContextMenuItem("Rename..."),
-            HasSheetTabContextTabColorMenuItem: access.HasSheetTabContextMenuItem("Tab Color"),
-            HasSheetTabContextNoColorMenuItem: access.HasSheetTabContextSubmenuItem("Tab Color", "No Color"),
-            HasSheetTabContextSelectAllSheetsMenuItem: access.HasSheetTabContextMenuItem("Select All Sheets"),
-            HasSheetTabContextUngroupSheetsMenuItem: access.HasSheetTabContextMenuItem("Ungroup Sheets"),
+                string.Equals(
+                    AutomationProperties.GetHelpText(button),
+                    UiText.Get("SheetTabs_ContextHelpText"),
+                    StringComparison.Ordinal)),
+            HasSheetTabContextRenameMenuItem: access.HasSheetTabContextMenuItem(UiText.Get("MainWindow_Header_Rename")),
+            HasSheetTabContextTabColorMenuItem: access.HasSheetTabContextMenuItem(UiText.Get("MainWindow_Header_TabColor")),
+            HasSheetTabContextNoColorMenuItem: access.HasSheetTabContextSubmenuItem(
+                UiText.Get("MainWindow_Header_TabColor"),
+                UiText.Get("RibbonWire_TabColorNone")),
+            HasSheetTabContextSelectAllSheetsMenuItem: access.HasSheetTabContextMenuItem(UiText.Get("MainWindow_Header_SelectAllSheets")),
+            HasSheetTabContextUngroupSheetsMenuItem: access.HasSheetTabContextMenuItem(UiText.Get("MainWindow_Header_UngroupSheets")),
             NativeTopLevelMenuOrder: nativeTopLevelMenuOrder,
             NativeDockTopLevelMenuOrder: nativeDockTopLevelMenuOrder,
             HasNativeDockMenu: hasNativeDockMenu,

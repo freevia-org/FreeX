@@ -21,6 +21,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CFBundleName");
         script.Should().Contain("Name = ApplicationTitle;");
         script.Should().Contain("NativeDock.SetMenu(app, menu);");
+        script.Should().Contain("Path = \"tools\\FreeX.Validation.Avalonia\\RendererHost\\MainWindow.RendererValidationAccess.cs\"");
+        script.Should().Contain("internal NativeMenu? NativeDockMenu =>");
         script.Should().Contain("NativeDock.GetMenu(app)");
         script.Should().Contain("CFBundleIconFile");
         script.Should().Contain("FreeX.icns");
@@ -1936,6 +1938,42 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
+            "tools/FreeX.Validation.Avalonia/RendererHost/MainWindow.RendererValidationAccess.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            public sealed partial class MainWindow
+            {
+                internal sealed class RendererValidationAccess
+                {
+                    internal NativeMenu? NativeDockMenu =>
+                        global::Avalonia.Application.Current is { } app ? NativeDock.GetMenu(app) : null;
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "tools/FreeX.Validation.Avalonia/RendererHost/MainWindow.DialogInspectionAccess.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            public sealed partial class MainWindow
+            {
+                private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogInspection> inspectionCallback) =>
+                    await ShowFindInputDialogAsync();
+
+                private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogInspection> inspectionCallback) =>
+                    await ShowReplaceInputDialogAsync();
+
+                private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(
+                    Action<GoToSpecialDialogInspection> inspectionCallback) =>
+                    await ShowGoToSpecialInputDialogAsync();
+            }
+            """);
+
+        WriteFile(
+            root,
             "shared/Free.Shared.Shell.Avalonia/SisterAvaloniaApplicationStartupRunner.cs",
             """
             namespace Free.Shared.Shell.Avalonia;
@@ -2193,7 +2231,6 @@ public sealed class MacOsAppReadinessPreflightTests
                 private IWorkbookFileAccessService _fileAccess = WorkbookFileAccessServiceFactory.Create(App.Diagnostics);
                 private void InstallNativeMenu(NativeMenu menu)
                 NativeDock.SetMenu(app, menu);
-                NativeDock.GetMenu(app);
                 NativeMenu.SetMenu(this, menu);
                 InstallNativeMenu(_nativeMenu);
                 ConfigureNativeCatalogMenuItems();
@@ -2454,8 +2491,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     DrawingObjectRenderPlanner.Plan(viewport);
                     CreateSelectableDrawingObjectVisual(renderPlan, width, height);
                     AutomationProperties.SetAutomationId(container, $"DrawingObject{drawingObject.Kind}{drawingObject.Id:N}");
-                    AutomationProperties.SetHelpText(container, "Selects this drawing object preview in the workbook viewport.");
-                    AutomationProperties.SetItemStatus(container, selected ? "Selected" : "Not selected");
+                    AutomationProperties.SetHelpText(container, UiText.Get("DrawingObject_PreviewHelpText"));
+                    AutomationProperties.SetItemStatus(
+                        container,
+                        UiText.Get(selected ? "Automation_Selected" : "Automation_NotSelected"));
                     container.PointerPressed += (_, args) => { };
                     if (args.Key is Key.Enter or Key.Space) { }
                     CreateDrawingObjectSelectionAdorner();
@@ -2726,17 +2765,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeNextCommentMenuItem: HasNativeMenuItem(_nextCommentMenuItem, "Next Comment", requireGesture: false)
                     HasNativePreviousCommentMenuItem: HasNativeMenuItem(_previousCommentMenuItem, "Previous Comment", requireGesture: false)
                     private async Task ShowFindDialogAsync()
-                    private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogInspection>? inspectionCallback = null)
                     private void NavigateToFindAllMatch(WorkbookFindAllMatch match)
                     FindOptions? options = null,
                     private Task ShowReplaceDialogAsync()
                     {
                         return ShowFindReplaceTabbedDialogAsync(replaceMode: true);
                     }
-                    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogInspection>? inspectionCallback = null)
                     private async Task ShowGoToDialogAsync()
                     private async Task ShowGoToSpecialDialogAsync()
-                    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogInspection>? inspectionCallback = null)
                     private static AvaloniaGrid CreateGoToSpecialChoiceGrid(
                     private static GoToSpecialChoice[] CreateGoToSpecialChoices()
                     private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
@@ -2825,7 +2861,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers)) { }
                     case WorkbookApplicationCommandIntent.FillDown:
                     case WorkbookApplicationCommandIntent.FillRight:
-                    Header = "(No Recent Workbooks)";
+                    Header = UiText.Get("Backstage_Home_NoRecentWorkbooks");
                     OpenRecentWorkbookMenuPlanner.Create(
                     _recentFiles.Snapshot()
                     File.Exists
@@ -2932,9 +2968,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     ShowRenameSheetDialogAsync(currentName).ToString();
                     AutomationProperties.SetAutomationId(nameBox, "RenameSheetNameBox");
                     var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);
-                    private const string SheetTabContextHelpText = "Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
                     _sheetGridHost.Focusable = true;
-                    AutomationProperties.SetName(_sheetGridHost, "Worksheet");
+                    AutomationProperties.SetName(_sheetGridHost, UiText.Get("MainWindow_AutomationName_Worksheet"));
                     _zoomText.Focusable = true;
                     AutomationProperties.SetName(_zoomText, UiText.CreateAutomationName(UiText.Get("Common_Zoom")));
                     Focusable = true,
@@ -2943,18 +2978,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     button.DoubleTapped += async (_, args) => await RenameSheetFromTabAsync(tab.Id, args);
                     button.KeyDown += (_, args) => HandleSheetTabKeyDown(tab.Id, button, args);
                     AutomationProperties.SetName(button, tab.Name);
-                    AutomationProperties.SetHelpText(button, SheetTabContextHelpText);
+                    AutomationProperties.SetHelpText(button, UiText.Get("SheetTabs_ContextHelpText"));
                     ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle, sheetTabIndex).ToArray();
-                    CreateSheetTabContextMenuItem(tab, "Rename...", async () => await RenameActiveSheetAsync(), isIdle);
-                    CreateSheetTabContextMenuItem(tab, "Insert Sheet", AddNewSheet, isIdle);
-                    CreateSheetTabContextMenuItem(tab, "Duplicate", DuplicateActiveSheet, isIdle);
-                    CreateSheetTabContextMenuItem(tab, "Delete Sheet", DeleteActiveSheet, isIdle);
-                    CreateSheetTabContextMenuItem(tab, "Hide", HideActiveSheet, isIdle && _session.SheetTabs.Count > 1);
-                    CreateSheetTabContextMenuItem(tab, "Unhide...", async () => await UnhideSheetAsync(), isIdle && _session.HiddenSheets.Count > 0);
-                    CreateSheetTabColorContextMenuItem(tab, isIdle);
-                    CreateSheetTabContextMenuItem(tab, "Select All Sheets", SelectAllVisibleSheets, isIdle && _session.SheetTabs.Count > 1);
-                    CreateSheetTabContextMenuItem(tab, "Ungroup Sheets", UngroupSheets, isIdle && _session.IsWorkbookGrouped);
-                    CreateSheetTabContextMenuItem(tab, "Move Left", MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
+                    SheetTabContextMenuPlanner.BuildSheetTabCommands(
+                    string Header(SheetTabContextMenuAction action) => UiText.Get(Common(action).ResourceKey);
+                    bool Enabled(SheetTabContextMenuAction action) => isIdle && Common(action).IsEnabled;
+                    CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename));
+                    CreateSheetTabColorContextMenuItem(tab, Header(SheetTabContextMenuAction.TabColor), Enabled(SheetTabContextMenuAction.TabColor));
+                    CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_MoveLeft"), MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
                     button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);
                     args.Key == Key.Apps;
                     args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.Shift;
@@ -3047,9 +3078,9 @@ public sealed class MacOsAppReadinessPreflightTests
                         SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false);
                     case WorkbookApplicationCommandIntent.ActivateNextSheet:
                         SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false);
-                    _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
-                    _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback");
-                    _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates");
+                    _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"));
+                    _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"));
+                    _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"));
                     _aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();
                     _legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();
                     _minimizeWindowMenuItem.Gesture = new KeyGesture(Key.M, KeyModifiers.Meta);
@@ -3200,12 +3231,17 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, "Merge & Center", requireGesture: false);
                     HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, "Unmerge Cells", requireGesture: false);
                     HasSheetTabContextKeyboardHelp: access.HasSheetTab(button =>
-                    string.Equals(AutomationProperties.GetHelpText(button), SheetTabContextHelpText, StringComparison.Ordinal));
-                    HasSheetTabContextRenameMenuItem: access.HasSheetTabContextMenuItem("Rename...")
-                    HasSheetTabContextTabColorMenuItem: access.HasSheetTabContextMenuItem("Tab Color")
-                    HasSheetTabContextNoColorMenuItem: access.HasSheetTabContextSubmenuItem("Tab Color", "No Color")
-                    HasSheetTabContextSelectAllSheetsMenuItem: access.HasSheetTabContextMenuItem("Select All Sheets")
-                    HasSheetTabContextUngroupSheetsMenuItem: access.HasSheetTabContextMenuItem("Ungroup Sheets")
+                    string.Equals(
+                        AutomationProperties.GetHelpText(button),
+                        UiText.Get("SheetTabs_ContextHelpText"),
+                        StringComparison.Ordinal));
+                    HasSheetTabContextRenameMenuItem: access.HasSheetTabContextMenuItem(UiText.Get("MainWindow_Header_Rename"))
+                    HasSheetTabContextTabColorMenuItem: access.HasSheetTabContextMenuItem(UiText.Get("MainWindow_Header_TabColor"))
+                    HasSheetTabContextNoColorMenuItem: access.HasSheetTabContextSubmenuItem(
+                        UiText.Get("MainWindow_Header_TabColor"),
+                        UiText.Get("RibbonWire_TabColorNone"))
+                    HasSheetTabContextSelectAllSheetsMenuItem: access.HasSheetTabContextMenuItem(UiText.Get("MainWindow_Header_SelectAllSheets"))
+                    HasSheetTabContextUngroupSheetsMenuItem: access.HasSheetTabContextMenuItem(UiText.Get("MainWindow_Header_UngroupSheets"))
                 }
                 private MenuFlyout CreateBorderPresetFlyout() => new();
                 private MenuItem CreateBorderPresetMenuItem(CellBorderPreset preset)

@@ -89,7 +89,7 @@ try {
 </root>
 '@
     Write-Utf8Fixture -Path (Join-Path $fixtureRoot "shared/Free.Shared.Localization/Resources/Strings.resx") -Content ($catalogTemplate -f "Shared only")
-    Write-Utf8Fixture -Path (Join-Path $fixtureRoot "src/FreeX.App.Localization/Resources/Strings.resx") -Content ($catalogTemplate -f "FreeX only")
+    Write-Utf8Fixture -Path (Join-Path $fixtureRoot "src/FreeX.App.Localization/Resources/Strings.resx") -Content ($catalogTemplate -f "Count")
     Write-Utf8Fixture -Path (Join-Path $fixtureRoot "freew/FreeW.App.Localization/Resources/Strings.resx") -Content ($catalogTemplate -f "FreeW only")
     Write-Utf8Fixture -Path (Join-Path $fixtureRoot "freep/FreeP.App.Localization/Resources/Strings.resx") -Content ($catalogTemplate -f "FreeP only")
 
@@ -113,6 +113,8 @@ try {
     Assert-Condition ($report.sharedProjects.count -eq 1) "The shared project count must exclude nothing from the valid fixture project."
     $freeXFreeW = @($report.localization.pairwiseValueOverlap | Where-Object { $_.catalogA -eq "FreeX" -and $_.catalogB -eq "FreeW" })[0]
     Assert-Condition ($freeXFreeW.commonValueCount -eq 1) "Localization value overlap must identify the shared fixture value."
+    $freeXCatalog = @($report.localization.catalogs | Where-Object { $_.name -eq "FreeX" })[0]
+    Assert-Condition ($freeXCatalog.uniqueValueCount -eq 2) "Localization unique-value counts must remain numeric when a catalog contains the value 'Count'."
     Assert-Condition ($report.repository.campaignLocDelta.allCSharp.addedLines -eq 2) "Campaign C# LOC delta must use the merge base."
     Assert-Condition ((Get-Content -LiteralPath $markdownPath -Raw) -match 'Renderer\.cs:\d+-\d+') "Markdown candidates must include file and line ranges."
 

@@ -537,7 +537,7 @@ function Get-LocalizationCatalog {
         path = $Path.Replace('\', '/')
         fullPath = $fullPath
         keyCount = $keyCount
-        uniqueValueCount = $values.Count
+        uniqueValueCount = $values.get_Count()
         values = $values
         sha256 = Get-Sha256File -Path $fullPath
     }
