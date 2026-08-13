@@ -16,14 +16,13 @@ public static class FreeWAboutDialogPresentation
     // harness frame. Avalonia needs the measured one-DIP right-edge reserve.
     public const double AvaloniaRootRightMargin = AboutDialogMetrics.FreeWAvaloniaRootRightMargin;
 
-    public static AboutDialogPresentation Create(Assembly assembly, string uiFramework)
+    public static AboutDialogPresentation Create(Assembly assembly)
     {
         ArgumentNullException.ThrowIfNull(assembly);
-        ArgumentException.ThrowIfNullOrWhiteSpace(uiFramework);
 
         return new AboutDialogPresentation(
             WindowTitle,
-            FreeWProductInfo.CreateAboutText(assembly, uiFramework),
+            FreeWProductInfo.CreateAboutText(assembly),
             DialogAutomationId,
             TextAutomationId,
             OkAutomationId,

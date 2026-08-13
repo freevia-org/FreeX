@@ -53,7 +53,7 @@ public sealed class WpfAuthoritySurfaceParityTests
                 AboutDialogMetrics.RootMargin));
             text.FontSize.Should().Be(AboutDialogMetrics.AvaloniaTextFontSize);
             text.Text.Should().Contain("A free word processor for DOCX editing and format-fidelity work.");
-            text.Text.Should().Contain("Built with .NET 10 and Avalonia.");
+            text.Text.Should().Contain(FreeWProductInfo.DesktopRendererDescription);
             text.Text.Should().Contain("Help > Legal Notices");
             text.Text.Should().NotContain("Microsoft 365");
             AssertDefaultCancelButtons(dialog);
