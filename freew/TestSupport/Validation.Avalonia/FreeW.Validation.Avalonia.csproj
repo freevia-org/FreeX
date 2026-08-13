@@ -18,7 +18,6 @@
 
   <ItemGroup>
     <Compile Remove="Program.ValidationHost.cs" />
-    <Compile Remove="App.ValidationHost.cs" />
     <Compile Remove="MainWindow.ValidationAccessAdapter.cs" />
     <Compile Remove="AvaloniaSpeechEngine.ValidationAccess.cs" />
   </ItemGroup>

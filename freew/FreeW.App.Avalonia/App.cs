@@ -10,38 +10,33 @@ namespace FreeW.App.Avalonia;
 
 public sealed partial class App : Application
 {
-    public static IReadOnlyList<string> StartupArguments { get; set; } = [];
     internal static Theme ActiveTheme { get; private set; } = FreeWApplicationStartup.Theme.DefaultTheme;
+
+    internal static SisterAvaloniaStandardDesktopProfile<App, MainWindow, FreeWOptions> DesktopProfile { get; } =
+        new(
+            FreeWApplicationStartup.ProductIdentity,
+            new SisterAvaloniaLocalizationStartupDescriptor(
+                () => AvaloniaAppLocalizationBootstrap.InstallSharedSeams(
+                    UiText.Get,
+                    UiText.Format,
+                    UiText.CreateAutomationName)),
+            new SisterAvaloniaThemeStartupDescriptor<Theme>(
+                FreeWApplicationStartup.Theme,
+                theme => ActiveTheme = theme,
+                (application, theme, resourceKeyPrefix) =>
+                    application.Resources.MergedDictionaries.Add(
+                        AvaloniaThemeApplier.BuildResources(theme, resourceKeyPrefix))),
+            new SisterAvaloniaOptionsStartupDescriptor<FreeWOptions>(
+                () => ApplicationOptionsStore<FreeWOptions>.Create(
+                    PlatformApplicationDataPathProvider.LocalInstance)),
+            new SisterAvaloniaWindowStartupDescriptor<MainWindow, FreeWOptions>(
+                (startupArguments, options, optionsStore) =>
+                    new MainWindow(startupArguments, options, optionsStore)));
 
     public override void OnFrameworkInitializationCompleted()
     {
-        AvaloniaAppLocalizationBootstrap.InstallSharedSeams(
-            UiText.Get,
-            UiText.Format,
-            UiText.CreateAutomationName);
-
-        FreeWApplicationStartup.Theme.Apply(
-            Environment.GetEnvironmentVariable,
-            theme => ActiveTheme = theme,
-            (theme, resourceKeyPrefix) =>
-                Resources.MergedDictionaries.Add(
-                    AvaloniaThemeApplier.BuildResources(theme, resourceKeyPrefix)));
-
-        var optionsStore = ApplicationOptionsStore<FreeWOptions>.Create(
-            PlatformApplicationDataPathProvider.LocalInstance);
-        var loadedOptions = optionsStore.Load();
-        Action<MainWindow>? afterMainWindowCreated = null;
-        ConfigureAfterMainWindowCreated(ref afterMainWindowCreated);
-
-        SisterAvaloniaAppBootstrap.Initialize(
-            this,
-            new SisterAvaloniaAppBootstrapSpec<MainWindow>(
-                StartupArguments,
-                args => new MainWindow(args, loadedOptions, optionsStore),
-                afterMainWindowCreated));
+        SisterAvaloniaStandardDesktopFactory.Initialize(this, DesktopProfile);
 
         base.OnFrameworkInitializationCompleted();
     }
-
-    partial void ConfigureAfterMainWindowCreated(ref Action<MainWindow>? callback);
 }

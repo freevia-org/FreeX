@@ -1,6 +1,4 @@
-using Avalonia;
 using Free.Shared.Shell.Avalonia;
-using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
@@ -14,12 +12,13 @@ internal static partial class Program
         IReadOnlyList<string> startupArguments,
         Action<MainWindow> coordinator)
     {
-        App.ConfigureToolHost(startupArguments, coordinator);
-        return SisterAvaloniaProgramRunner.Run(
+        ArgumentNullException.ThrowIfNull(startupArguments);
+        ArgumentNullException.ThrowIfNull(coordinator);
+        return SisterAvaloniaStandardDesktopFactory.Run(
             [],
-            new SisterAvaloniaProgramSpec(
-                FreePApplicationStartupDescriptor.ProductIdentity,
-                arguments => SisterAvaloniaLaunchPreparation.Continue(arguments),
-                arguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(arguments)));
+            App.DesktopProfile,
+            new SisterAvaloniaStandardDesktopLaunch<MainWindow>(
+                startupArguments.ToArray(),
+                coordinator));
     }
 }

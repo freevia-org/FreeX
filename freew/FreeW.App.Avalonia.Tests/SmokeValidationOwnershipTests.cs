@@ -63,7 +63,6 @@ public sealed class SmokeValidationOwnershipTests
         foreach (var fileName in new[]
                  {
                      "Program.ValidationHost.cs",
-                     "App.ValidationHost.cs",
                      "MainWindow.ValidationAccessAdapter.cs",
                      "AvaloniaSpeechEngine.ValidationAccess.cs",
                  })

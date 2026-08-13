@@ -1,6 +1,4 @@
-using Avalonia;
 using Free.Shared.Shell.Avalonia;
-using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia;
 
@@ -12,13 +10,11 @@ internal static partial class Program
     {
         ArgumentNullException.ThrowIfNull(startupArguments);
         ArgumentNullException.ThrowIfNull(coordinator);
-        App.StartupArguments = startupArguments.ToArray();
-        App.ExternalStartupCoordinator = window => coordinator(window.CreateValidationAccessAdapter());
-        return SisterAvaloniaProgramRunner.Run(
+        return SisterAvaloniaStandardDesktopFactory.Run(
             [],
-            new SisterAvaloniaProgramSpec(
-                FreeWApplicationStartup.ProductIdentity,
-                arguments => SisterAvaloniaLaunchPreparation.Continue(arguments),
-                arguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(arguments)));
+            App.DesktopProfile,
+            new SisterAvaloniaStandardDesktopLaunch<MainWindow>(
+                startupArguments.ToArray(),
+                window => coordinator(window.CreateValidationAccessAdapter())));
     }
 }

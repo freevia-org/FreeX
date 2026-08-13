@@ -43,8 +43,6 @@
   </PropertyGroup>
 
   <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true' Or '$(FreePValidationHost)' == 'true'">
-    <Compile Include="..\TestSupport\AvaloniaToolHost\App.ToolHost.cs"
-             Link="App.ToolHost.cs" />
     <Compile Include="..\TestSupport\AvaloniaToolHost\Program.ToolHost.cs"
              Link="Program.ToolHost.cs" />
   </ItemGroup>

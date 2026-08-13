@@ -34,15 +34,16 @@ public sealed class SharedLaunchSmokeBootstrapTests
             "Validation.Avalonia",
             "Program.cs"));
 
-        app.Should().Contain("FreeWApplicationStartup.Theme.Apply(");
+        app.Should().Contain("new SisterAvaloniaThemeStartupDescriptor<Theme>(");
+        app.Should().Contain("FreeWApplicationStartup.Theme,");
         app.Should().Contain("AvaloniaThemeApplier.BuildResources(theme, resourceKeyPrefix)");
-        app.Should().Contain("SisterAvaloniaAppBootstrap.Initialize(");
-        app.Should().Contain("new SisterAvaloniaAppBootstrapSpec<MainWindow>(");
+        app.Should().Contain("SisterAvaloniaStandardDesktopFactory.Initialize(this, DesktopProfile)");
         app.Should().NotContain("Styles.Add(new FluentTheme())");
         app.Should().NotContain("desktop.MainWindow = mainWindow;");
 
         app.Should().NotContain("LaunchSmokeOptions");
         program.Should().NotContain("--launch-smoke");
+        program.Should().Contain("SisterAvaloniaStandardDesktopFactory.Run(args, App.DesktopProfile)");
         validationProgram.Should().Contain("SisterAppLaunchSmokeOptions.TryParse(");
         validationProgram.Should().Contain("FreeW.App.Avalonia.Program.RunToolHost(");
         smoke.Should().Contain("access.StartLaunchSmoke(");

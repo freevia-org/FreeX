@@ -204,7 +204,7 @@ public sealed class SisterAvaloniaProgramRunnerTests
     }
 
     [Fact]
-    public void SisterPrograms_DelegateCommonLifecycleToSharedRunner()
+    public void StandardSisterPrograms_UseDesktopFactoryWhileFreeXKeepsSpecializedRunner()
     {
         var freeWProgram = ReadSource("freew", "FreeW.App.Avalonia", "Program.cs");
         var freePProgram = ReadSource("freep", "FreeP.App.Avalonia", "Program.cs");
@@ -214,6 +214,10 @@ public sealed class SisterAvaloniaProgramRunnerTests
             "shared",
             "Free.Shared.Shell.Avalonia",
             "SisterAvaloniaProgramRunner.cs");
+        var sharedDesktopFactory = ReadSource(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "SisterAvaloniaStandardDesktopFactory.cs");
         var sharedApplicationRunner = ReadSource(
             "shared",
             "Free.Shared.Shell.Avalonia",
@@ -221,8 +225,8 @@ public sealed class SisterAvaloniaProgramRunnerTests
 
         foreach (var source in new[] { freeWProgram, freePProgram })
         {
-            source.Should().Contain("SisterAvaloniaProgramRunner.Run(");
-            source.Should().Contain("SisterAvaloniaLaunchPreparation.Continue(args)");
+            source.Should().Contain("SisterAvaloniaStandardDesktopFactory.Run(args, App.DesktopProfile)");
+            source.Should().NotContain("SisterAvaloniaProgramRunner.Run(");
             source.Should().NotContain("LocalAppDiagnostics.CreateDefault");
             source.Should().NotContain("diagnostics.RegisterCrashHandlers");
             source.Should().NotContain("diagnostics.RecordCrash");
@@ -235,6 +239,9 @@ public sealed class SisterAvaloniaProgramRunnerTests
             .And.Contain("CompletedExitCode = 0")
             .And.NotContain("RibbonCommandFaultReporter.Handler");
         freeXApp.Should().NotContain("RibbonCommandFaultReporter.Handler");
+        sharedDesktopFactory.Should().Contain("SisterAvaloniaProgramRunner.Run(")
+            .And.Contain("CreateAppBuilder<TApplication>()")
+            .And.Contain("SisterAvaloniaAppBootstrap.Initialize(");
         sharedProgramRunner.Should().Contain("SisterAvaloniaApplicationStartupRunner.Run(")
             .And.NotContain("catch (Exception ex)");
         sharedApplicationRunner.Should().Contain("spec.RegisterRibbonCommandFaultHandler(")

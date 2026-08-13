@@ -84,11 +84,10 @@ public sealed class FreeWApplicationStartupTests : IDisposable
         var wpfProgram = ReadSource("freew", "FreeW.App.Host", "Program.cs");
         var neutralStartup = ReadSource("freew", "FreeW.App.Presentation", "Shell", "FreeWApplicationStartup.cs");
 
-        avaloniaProgram.Should().Contain("SisterAvaloniaProgramRunner.Run(");
-        avaloniaProgram.Should().Contain("FreeWApplicationStartup.ProductIdentity");
+        avaloniaProgram.Should().Contain("SisterAvaloniaStandardDesktopFactory.Run(args, App.DesktopProfile)");
+        avaloniaApp.Should().Contain("FreeWApplicationStartup.ProductIdentity");
         avaloniaApp.Should().Contain("FreeWApplicationStartup.Theme");
-        avaloniaApp.Should().Contain("SisterAvaloniaAppBootstrap.Initialize(");
-        avaloniaProgram.Should().Contain("BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)");
+        avaloniaApp.Should().Contain("SisterAvaloniaStandardDesktopFactory.Initialize(this, DesktopProfile)");
         avaloniaWindow.Should().Contain("FreeWApplicationStartup.TryOpenStartupDocument(");
         avaloniaWindow.Should().NotContain("LoadStartupDocument(");
 
@@ -119,10 +118,7 @@ public sealed class FreeWApplicationStartupTests : IDisposable
         source.Should().NotContain("PackagingSmoke.TryRun");
         source.Should().NotContain("ReadAloudPauseSmoke.TryRun");
         source.Should().NotContain("SisterAppLaunchSmokeOptions.TryParse");
-        SourceIndex(source, "App.StartupArguments = args")
-            .Should().BeLessThan(SourceIndex(source, "SisterAvaloniaLaunchPreparation.Continue(args)"));
-        source.Should().Contain("SisterAvaloniaProgramRunner.Run(");
-        source.Should().Contain("FreeWApplicationStartup.ProductIdentity");
+        source.Should().Contain("SisterAvaloniaStandardDesktopFactory.Run(args, App.DesktopProfile)");
         validation.Should().Contain("PackagingSmoke.TryRun");
         validation.Should().Contain("ReadAloudPauseSmoke.TryRun");
         validation.Should().Contain("SisterAppLaunchSmokeOptions.TryParse");
@@ -133,13 +129,6 @@ public sealed class FreeWApplicationStartupTests : IDisposable
         var path = Path.Combine(TempDirectory, fileName);
         File.WriteAllText(path, text);
         return path;
-    }
-
-    private static int SourceIndex(string source, string value)
-    {
-        var index = source.IndexOf(value, StringComparison.Ordinal);
-        index.Should().BeGreaterThanOrEqualTo(0, $"the source should contain {value}");
-        return index;
     }
 
     private static string ReadSource(params string[] parts)

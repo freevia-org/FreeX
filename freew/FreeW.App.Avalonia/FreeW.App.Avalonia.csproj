@@ -46,8 +46,6 @@
   <ItemGroup Condition="'$(FreeWValidationHost)' == 'true'">
     <Compile Include="..\TestSupport\Validation.Avalonia\Program.ValidationHost.cs"
              Link="Program.ValidationHost.cs" />
-    <Compile Include="..\TestSupport\Validation.Avalonia\App.ValidationHost.cs"
-             Link="App.ValidationHost.cs" />
     <Compile Include="..\TestSupport\Validation.Avalonia\MainWindow.ValidationAccessAdapter.cs"
              Link="MainWindow.ValidationAccessAdapter.cs" />
     <Compile Include="..\TestSupport\Validation.Avalonia\AvaloniaSpeechEngine.ValidationAccess.cs"

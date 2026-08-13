@@ -12,7 +12,10 @@
     <ProjectReference Include="..\Free.Shared.IO\Free.Shared.IO.csproj" />
     <ProjectReference Include="..\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\Free.Shared.Shell\Free.Shared.Shell.csproj" />
+    <ProjectReference Include="..\Free.Shared.Theme\Free.Shared.Theme.csproj" />
     <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
   </ItemGroup>
 

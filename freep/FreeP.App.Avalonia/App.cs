@@ -9,8 +9,25 @@ namespace FreeP.App.Avalonia;
 
 public sealed partial class App : Application
 {
-    public static IReadOnlyList<string> StartupArguments { get; set; } = [];
     internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeP;
+
+    internal static SisterAvaloniaStandardDesktopProfile<App, MainWindow, FreePOptions> DesktopProfile { get; } =
+        new(
+            FreePApplicationStartupDescriptor.ProductIdentity,
+            new SisterAvaloniaLocalizationStartupDescriptor(
+                () => AvaloniaAppLocalizationBootstrap.InstallSharedSeams(
+                    UiText.Get,
+                    UiText.Format,
+                    UiText.CreateAutomationName)),
+            new SisterAvaloniaThemeStartupDescriptor<Theme>(
+                FreePApplicationStartupDescriptor.Theme,
+                theme => ActiveTheme = theme,
+                (application, theme, resourceKeyPrefix) =>
+                    application.Resources.MergedDictionaries.Add(
+                        AvaloniaThemeApplier.BuildResources(theme, resourceKeyPrefix))),
+            new SisterAvaloniaOptionsStartupDescriptor<FreePOptions>(
+                () => ApplicationOptionsStore<FreePOptions>.Create()),
+            new SisterAvaloniaWindowStartupDescriptor<MainWindow, FreePOptions>(CreateMainWindow));
 
     public override void OnFrameworkInitializationCompleted()
     {
@@ -20,23 +37,7 @@ public sealed partial class App : Application
         // ShellStrings.Current default — mirrors the WPF host's
         // AppLocalization.Bootstrap.InstallSharedSeams() (App.xaml.cs). Must run before any
         // window/dialog can be shown, so it goes first.
-        AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName);
-
-        FreePApplicationStartupDescriptor.Theme.Apply(
-            Environment.GetEnvironmentVariable,
-            theme => ActiveTheme = theme,
-            (theme, resourceKeyPrefix) =>
-                Resources.MergedDictionaries.Add(
-                    AvaloniaThemeApplier.BuildResources(theme, resourceKeyPrefix)));
-        var optionsStore = ApplicationOptionsStore<FreePOptions>.Create();
-        var options = optionsStore.Load();
-
-        SisterAvaloniaAppBootstrap.Initialize(
-            this,
-            new SisterAvaloniaAppBootstrapSpec<MainWindow>(
-                StartupArguments,
-                args => CreateMainWindow(args, options, optionsStore),
-                mainWindow => CoordinateToolHostStartup(mainWindow)));
+        SisterAvaloniaStandardDesktopFactory.Initialize(this, DesktopProfile);
 
         base.OnFrameworkInitializationCompleted();
     }
@@ -50,6 +51,4 @@ public sealed partial class App : Application
             loadRecentFilesStore: null,
             options: options,
             optionsStore: optionsStore);
-
-    static partial void CoordinateToolHostStartup(MainWindow mainWindow);
 }

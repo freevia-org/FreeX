@@ -1,7 +1,4 @@
-using Avalonia;
-using Avalonia.Fonts.Inter;
 using Free.Shared.Shell.Avalonia;
-using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia;
 
@@ -15,22 +12,5 @@ internal static partial class Program
 {
     [STAThread]
     public static int Main(string[] args) =>
-        SisterAvaloniaProgramRunner.Run(
-            args,
-            new SisterAvaloniaProgramSpec(
-                FreeWApplicationStartup.ProductIdentity,
-                PrepareLaunch,
-                startupArguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)));
-
-    private static SisterAvaloniaLaunchPreparation PrepareLaunch(string[] args)
-    {
-        App.StartupArguments = args;
-        return SisterAvaloniaLaunchPreparation.Continue(args);
-    }
-
-    public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<App>()
-            .UsePlatformDetect()
-            .WithInterFont()
-            .LogToTrace();
+        SisterAvaloniaStandardDesktopFactory.Run(args, App.DesktopProfile);
 }

@@ -31,9 +31,9 @@ public sealed class ApplicationStartupDescriptorTests
         var avaloniaApp = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "App.cs"));
 
         wpfProgram.Should().Contain("FreePApplicationStartupDescriptor.ProductIdentity");
-        avaloniaProgram.Should().Contain("FreePApplicationStartupDescriptor.ProductIdentity");
+        avaloniaApp.Should().Contain("FreePApplicationStartupDescriptor.ProductIdentity");
         wpfProgram.Should().Contain("Plan: FreePApplicationStartupDescriptor.Theme");
-        avaloniaApp.Should().Contain("FreePApplicationStartupDescriptor.Theme.Apply(");
+        avaloniaApp.Should().Contain("FreePApplicationStartupDescriptor.Theme,");
 
         foreach (var source in new[] { wpfProgram, avaloniaProgram, avaloniaApp })
         {
