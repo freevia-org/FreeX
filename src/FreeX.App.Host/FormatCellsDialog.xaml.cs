@@ -134,14 +134,14 @@ public partial class FormatCellsDialog : Window
         PopulateBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, s.BorderRight);
         PopulateBorder(DlgBorderBottomStyleBox, DlgBorderBottomColorBox, s.BorderBottom);
         PopulateBorder(DlgBorderLeftStyleBox, DlgBorderLeftColorBox, s.BorderLeft);
-        var borderStyleNames = Enum.GetNames(typeof(BorderStyle));
-        DlgBorderLineStyleBox.ItemsSource = borderStyleNames;
-        DlgBorderLineStyleList.ItemsSource = borderStyleNames;
+        DlgBorderLineStyleBox.ItemsSource = FormatCellsBorderPalettePlanner.StyleChoices;
+        DlgBorderLineStyleList.ItemsSource = FormatCellsBorderPalettePlanner.StyleChoices;
         DlgBorderLineStyleBox.SelectedItem = s.BorderBottom.Style == BorderStyle.None
-            ? nameof(BorderStyle.Thin)
-            : s.BorderBottom.Style.ToString();
+            ? FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.Thin)
+            : FormatCellsBorderPalettePlanner.ChoiceFor(s.BorderBottom.Style);
         DlgBorderLineStyleList.SelectedItem = DlgBorderLineStyleBox.SelectedItem;
         DlgBorderLineColorBox.Text = ColorInputParser.FormatRgbColor(s.BorderBottom.Color);
+        PopulateBorderColorPalette();
 
         DlgLockedCheck.IsChecked = s.Locked;
         DlgHiddenCheck.IsChecked = s.Hidden;
@@ -282,10 +282,10 @@ public partial class FormatCellsDialog : Window
                 DlgMergeCellsCheck.IsChecked),
             Border: new FormatCellsDialogBorderInput(
                 DlgBorderLineColorBox.Text,
-                new FormatCellsDialogBorderSideInput(DlgBorderTopStyleBox.SelectedItem as string, DlgBorderTopColorBox.Text),
-                new FormatCellsDialogBorderSideInput(DlgBorderRightStyleBox.SelectedItem as string, DlgBorderRightColorBox.Text),
-                new FormatCellsDialogBorderSideInput(DlgBorderBottomStyleBox.SelectedItem as string, DlgBorderBottomColorBox.Text),
-                new FormatCellsDialogBorderSideInput(DlgBorderLeftStyleBox.SelectedItem as string, DlgBorderLeftColorBox.Text),
+                new FormatCellsDialogBorderSideInput(SelectedBorderStyle(DlgBorderTopStyleBox.SelectedItem).ToString(), DlgBorderTopColorBox.Text),
+                new FormatCellsDialogBorderSideInput(SelectedBorderStyle(DlgBorderRightStyleBox.SelectedItem).ToString(), DlgBorderRightColorBox.Text),
+                new FormatCellsDialogBorderSideInput(SelectedBorderStyle(DlgBorderBottomStyleBox.SelectedItem).ToString(), DlgBorderBottomColorBox.Text),
+                new FormatCellsDialogBorderSideInput(SelectedBorderStyle(DlgBorderLeftStyleBox.SelectedItem).ToString(), DlgBorderLeftColorBox.Text),
                 _borderPresetClearRequested,
                 _borderPresetOutline,
                 _borderPresetInside),

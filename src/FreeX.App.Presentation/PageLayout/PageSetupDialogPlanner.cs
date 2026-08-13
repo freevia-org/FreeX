@@ -334,12 +334,22 @@ public static class PageSetupDialogPlanner
                 PageSetupDialogModel.HeaderPresetChoices,
                 selectedIndex));
 
+    public static WorksheetHeaderFooter ApplyHeaderPreset(
+        WorksheetHeaderFooter header,
+        HeaderFooterPresetChoice choice) =>
+        HeaderFooterEditorPlanner.ApplyCenterPreset(header, choice.Value);
+
     public static WorksheetHeaderFooter ApplyFooterPreset(WorksheetHeaderFooter footer, int selectedIndex) =>
         HeaderFooterEditorPlanner.ApplyCenterPreset(
             footer,
             PageSetupDialogModel.HeaderFooterPresetValue(
                 PageSetupDialogModel.FooterPresetChoices,
                 selectedIndex));
+
+    public static WorksheetHeaderFooter ApplyFooterPreset(
+        WorksheetHeaderFooter footer,
+        HeaderFooterPresetChoice choice) =>
+        HeaderFooterEditorPlanner.ApplyCenterPreset(footer, choice.Value);
 
     public static int ResolveHeaderPresetIndex(WorksheetHeaderFooter header) =>
         PageSetupDialogModel.HeaderFooterPresetExactIndex(
@@ -437,6 +447,16 @@ public static class PageSetupDialogPlanner
 
     public static IReadOnlyList<string> ResolveChoiceLabels<T>(
         IReadOnlyList<PageSetupChoice<T>> choices,
+        Func<string, string> textProvider)
+    {
+        ArgumentNullException.ThrowIfNull(choices);
+        ArgumentNullException.ThrowIfNull(textProvider);
+
+        return choices.Select(choice => textProvider(choice.LabelResourceKey)).ToArray();
+    }
+
+    public static IReadOnlyList<string> ResolveChoiceLabels(
+        IReadOnlyList<HeaderFooterPresetChoice> choices,
         Func<string, string> textProvider)
     {
         ArgumentNullException.ThrowIfNull(choices);

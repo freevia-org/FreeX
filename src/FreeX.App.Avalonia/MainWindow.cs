@@ -16986,42 +16986,47 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // MIDDLE: Line group — scrollable line-sample list + color picker.
         Control CreateBorderPalette(FormatCellsColorPicker picker)
         {
-            var palette = CellColorPalettePlanner.BuildDefaultSwatches();
-            var wanted = new (byte R, byte G, byte B)[]
-            {
-                (0, 0, 0), (127, 127, 127), (255, 0, 0), (255, 192, 0),
-                (0, 176, 80), (0, 176, 240), (0, 112, 192), (112, 48, 160),
-            };
-            var swatches = wanted
-                .Select(rgb => palette.FirstOrDefault(s => s.Color is { R: var r, G: var g, B: var b } && r == rgb.R && g == rgb.G && b == rgb.B))
-                .Where(swatch => swatch is not null)
-                .Cast<CellColorSwatch>()
-                .ToList();
             var row = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 1,
                 Height = 20,
             };
-            foreach (var swatch in swatches)
+            foreach (var entry in FormatCellsBorderPalettePlanner.ColorEntries)
             {
-                var swatchButton = new Button
+                var label = UiText.Get(entry.ResourceKey);
+                if (entry.Color is { } color)
                 {
+                    var swatchButton = new Button
+                    {
+                        Width = 22,
+                        Height = 18,
+                        Padding = new Thickness(0),
+                        Background = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)),
+                        BorderBrush = Brushes.Gray,
+                        BorderThickness = new Thickness(1),
+                        Tag = entry,
+                    };
+                    AutomationProperties.SetName(swatchButton, label);
+                    ToolTip.SetTip(swatchButton, label);
+                    swatchButton.Click += (_, _) => picker.SelectColor(color);
+                    row.Children.Add(swatchButton);
+                    continue;
+                }
+
+                var moreButton = new Button
+                {
+                    Content = "...",
                     Width = 22,
                     Height = 18,
                     Padding = new Thickness(0),
-                    Background = new SolidColorBrush(Color.FromRgb(swatch.Color.R, swatch.Color.G, swatch.Color.B)),
-                    BorderBrush = Brushes.Gray,
-                    BorderThickness = new Thickness(1),
+                    Tag = entry,
                 };
-                AutomationProperties.SetName(swatchButton, swatch.Hex);
-                swatchButton.Click += (_, _) => picker.SelectColor(swatch.Color);
-                row.Children.Add(swatchButton);
+                AutomationProperties.SetName(moreButton, label);
+                ToolTip.SetTip(moreButton, label);
+                moreButton.Click += (_, _) => picker.Flyout?.ShowAt(moreButton);
+                row.Children.Add(moreButton);
             }
-            var moreButton = new Button { Content = "...", Width = 22, Height = 18, Padding = new Thickness(0) };
-            AutomationProperties.SetName(moreButton, UiText.Get("FormatCells_MoreBorderColors"));
-            moreButton.Click += (_, _) => picker.Flyout?.ShowAt(moreButton);
-            row.Children.Add(moreButton);
             return row;
         }
 
@@ -17549,40 +17554,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             .Select(metadata => new FormatCellsNullableChoice<CellBorderPreset>(metadata.DisplayName, metadata.Preset)),
     ];
 
-    private static IReadOnlyList<FormatCellsNullableChoice<BorderStyle>> CreateFormatCellsBorderStyleChoices() =>
-    [
-        new("Thin", BorderStyle.Thin),
-        new("Medium", BorderStyle.Medium),
-        new("Thick", BorderStyle.Thick),
-        new("Dashed", BorderStyle.Dashed),
-        new("Dotted", BorderStyle.Dotted),
-        new("Double", BorderStyle.Double),
-    ];
-
-    // The Windows Format Cells "Line" group renders the available border styles as a
-    // scrollable textual list. The SelectedItem stays a
-    // FormatCellsNullableChoice<BorderStyle> so the existing Accept()/SelectedBorderLineStyle()
-    // reads are unchanged.  All 14 BorderStyle values (plus the "None" sentinel) are listed so
-    // that opening FormatCells on a cell whose edge carries Hair / MediumDashed / DashDot / etc.
-    // seeds the correct entry instead of falling back to "None" and silently losing a
-    // subsequent color-only edit.
+    // The native controls retain their nullable wrapper, but their order, labels, and typed values
+    // project exclusively from the portable catalog shared with WPF.
     internal static IReadOnlyList<FormatCellsNullableChoice<BorderStyle>> CreateFormatCellsBorderStyleListChoices() =>
-    [
-        new("None",              null),
-        new("Thin",              BorderStyle.Thin),
-        new("Medium",            BorderStyle.Medium),
-        new("Thick",             BorderStyle.Thick),
-        new("Dashed",            BorderStyle.Dashed),
-        new("Dotted",            BorderStyle.Dotted),
-        new("Double",            BorderStyle.Double),
-        new("Hair",              BorderStyle.Hair),
-        new("Medium Dashed",     BorderStyle.MediumDashed),
-        new("Dash Dot",          BorderStyle.DashDot),
-        new("Medium Dash Dot",   BorderStyle.MediumDashDot),
-        new("Dash Dot Dot",      BorderStyle.DashDotDot),
-        new("Medium Dash Dot Dot", BorderStyle.MediumDashDotDot),
-        new("Slant Dash Dot",    BorderStyle.SlantDashDot),
-    ];
+        FormatCellsBorderPalettePlanner.StyleChoices
+            .Select(choice => new FormatCellsNullableChoice<BorderStyle>(
+                choice.DisplayName,
+                choice.Style == BorderStyle.None ? null : choice.Style))
+            .ToArray();
 
     private static ListBox CreateFormatCellsBorderStyleListBox(string automationId, BorderStyle currentValue)
     {

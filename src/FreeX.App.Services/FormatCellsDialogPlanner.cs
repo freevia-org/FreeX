@@ -502,10 +502,16 @@ public static class FormatCellsDialogPlanner
     public static CellBorder CreateSelectedBorderLine(string? styleText, string? colorText) =>
         new(ResolveBorderLineStyle(styleText), TryParseColor(colorText) ?? CellColor.Black);
 
+    public static CellBorder CreateSelectedBorderLine(BorderStyle style, string? colorText) =>
+        new(style, TryParseColor(colorText) ?? CellColor.Black);
+
     public static BorderStyle NextBorderSideStyle(string? currentSideStyleText, string? selectedLineStyleText) =>
         BorderSideNeedsColor(currentSideStyleText)
             ? BorderStyle.None
             : ResolveBorderLineStyle(selectedLineStyleText);
+
+    public static BorderStyle NextBorderSideStyle(BorderStyle currentSideStyle, BorderStyle selectedLineStyle) =>
+        currentSideStyle != BorderStyle.None ? BorderStyle.None : selectedLineStyle;
 
     public static bool BorderSideNeedsColor(string? styleText) =>
         !string.Equals(styleText, nameof(BorderStyle.None), StringComparison.Ordinal);

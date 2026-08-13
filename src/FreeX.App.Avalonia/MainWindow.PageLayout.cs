@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -42,6 +43,9 @@ public sealed partial class MainWindow
     private static readonly IBrush PageBreakLineBrush = Brush(11, 112, 116);
     private static readonly IBrush PageBreakWatermarkBrush = Brush(60, 11, 112, 116);
     private static AvaloniaCompactDialogChromeStyle PageLayoutDialogChromeStyle => new(FormulaBarFontFamily);
+
+    private static FuncDataTemplate<HeaderFooterPresetChoice> HeaderFooterPresetTemplate() =>
+        new((choice, _) => new TextBlock { Text = UiText.Get(choice.LabelResourceKey) }, supportsRecycling: true);
 
     private async Task ShowPageSetupDialogAsync(
         PageLayoutPageSetupOpenSource source = PageLayoutPageSetupOpenSource.DialogButton,
@@ -484,20 +488,22 @@ public sealed partial class MainWindow
         var footerPresetChoices = PageSetupDialogModel.FooterPresetChoices;
         var headerPresetBox = new ComboBox
         {
-            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(headerPresetChoices, UiText.Get),
+            ItemsSource = headerPresetChoices,
             SelectedIndex = surface.ChoiceIndexes.HeaderPreset,
             MinWidth = PageSetupDialogPlanner.HeaderFooterPresetMinWidth,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
+        headerPresetBox.ItemTemplate = HeaderFooterPresetTemplate();
         ApplyPageLayoutComboBoxChrome(headerPresetBox);
         AutomationProperties.SetAutomationId(headerPresetBox, PageSetupDialogPlanner.HeaderPresetBoxAutomationId);
         var footerPresetBox = new ComboBox
         {
-            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(footerPresetChoices, UiText.Get),
+            ItemsSource = footerPresetChoices,
             SelectedIndex = surface.ChoiceIndexes.FooterPreset,
             MinWidth = PageSetupDialogPlanner.HeaderFooterPresetMinWidth,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
+        footerPresetBox.ItemTemplate = HeaderFooterPresetTemplate();
         ApplyPageLayoutComboBoxChrome(footerPresetBox);
         AutomationProperties.SetAutomationId(footerPresetBox, PageSetupDialogPlanner.FooterPresetBoxAutomationId);
 
@@ -533,18 +539,18 @@ public sealed partial class MainWindow
 
         headerPresetBox.SelectionChanged += (_, _) =>
         {
-            if (headerPresetBox.SelectedIndex < 0)
+            if (headerPresetBox.SelectedItem is not HeaderFooterPresetChoice choice)
                 return;
 
-            header = PageSetupDialogPlanner.ApplyHeaderPreset(header, headerPresetBox.SelectedIndex);
+            header = PageSetupDialogPlanner.ApplyHeaderPreset(header, choice);
             UpdateHeaderFooterPreview();
         };
         footerPresetBox.SelectionChanged += (_, _) =>
         {
-            if (footerPresetBox.SelectedIndex < 0)
+            if (footerPresetBox.SelectedItem is not HeaderFooterPresetChoice choice)
                 return;
 
-            footer = PageSetupDialogPlanner.ApplyFooterPreset(footer, footerPresetBox.SelectedIndex);
+            footer = PageSetupDialogPlanner.ApplyFooterPreset(footer, choice);
             UpdateHeaderFooterPreview();
         };
 
@@ -1308,18 +1314,20 @@ public sealed partial class MainWindow
 
         var headerPreset = new ComboBox
         {
-            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(PageSetupDialogModel.HeaderPresetChoices, UiText.Get),
+            ItemsSource = HeaderFooterPresetCatalog.HeaderChoices,
             SelectedIndex = PageSetupDialogPlanner.ResolveHeaderPresetIndex(initial.Header),
             MinWidth = 320,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
+        headerPreset.ItemTemplate = HeaderFooterPresetTemplate();
         var footerPreset = new ComboBox
         {
-            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(PageSetupDialogModel.FooterPresetChoices, UiText.Get),
+            ItemsSource = HeaderFooterPresetCatalog.FooterChoices,
             SelectedIndex = PageSetupDialogPlanner.ResolveFooterPresetIndex(initial.Footer),
             MinWidth = 320,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
+        footerPreset.ItemTemplate = HeaderFooterPresetTemplate();
         ApplyPageLayoutComboBoxChrome(headerPreset);
         ApplyPageLayoutComboBoxChrome(footerPreset);
         AutomationProperties.SetAutomationId(headerPreset, "HeaderFooterHeaderPresetBox");
@@ -1466,19 +1474,19 @@ public sealed partial class MainWindow
         oddEvenCheck.IsCheckedChanged += (_, _) => RefreshOptionalSections();
         headerPreset.SelectionChanged += (_, _) =>
         {
-            if (headerPreset.SelectedIndex >= 0)
+            if (headerPreset.SelectedItem is HeaderFooterPresetChoice choice)
             {
                 var current = ReadEditorScope(HeaderFooterEditorScope.Header);
-                var value = PageSetupDialogPlanner.ApplyHeaderPreset(current, headerPreset.SelectedIndex);
+                var value = PageSetupDialogPlanner.ApplyHeaderPreset(current, choice);
                 editors[new HeaderFooterEditorTarget(HeaderFooterEditorScope.Header, HeaderFooterEditorSection.Center)].Text = value.Center;
             }
         };
         footerPreset.SelectionChanged += (_, _) =>
         {
-            if (footerPreset.SelectedIndex >= 0)
+            if (footerPreset.SelectedItem is HeaderFooterPresetChoice choice)
             {
                 var current = ReadEditorScope(HeaderFooterEditorScope.Footer);
-                var value = PageSetupDialogPlanner.ApplyFooterPreset(current, footerPreset.SelectedIndex);
+                var value = PageSetupDialogPlanner.ApplyFooterPreset(current, choice);
                 editors[new HeaderFooterEditorTarget(HeaderFooterEditorScope.Footer, HeaderFooterEditorSection.Center)].Text = value.Center;
             }
         };

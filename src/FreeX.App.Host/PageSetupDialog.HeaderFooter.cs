@@ -83,7 +83,7 @@ public partial class PageSetupDialog
 
     private static void PopulatePresetBox(
         ComboBox comboBox,
-        IReadOnlyList<PageSetupChoice<string>> choices)
+        IReadOnlyList<HeaderFooterPresetChoice> choices)
     {
         if (comboBox.ItemsSource is not null)
             return;

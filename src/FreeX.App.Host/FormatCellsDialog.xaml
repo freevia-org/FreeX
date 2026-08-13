@@ -219,16 +219,7 @@
                             <Button x:Name="DlgBorderLineColorPickerButton" DockPanel.Dock="Right" Content="{local:Loc Key=FormatCells_Pick2}" Width="54" Margin="6,0,0,0" Click="DlgBorderLineColorPickerButton_Click"/>
                             <TextBox x:Name="DlgBorderLineColorBox" Height="24" TextChanged="BorderPreviewInput_Changed"/>
                         </DockPanel>
-                        <UniformGrid x:Name="DlgBorderLinePalettePanel" Columns="8" Rows="2" Margin="0,6,0,0">
-                            <Button Width="22" Height="18" ToolTip="{local:Loc Key=FormatCells_BlackBorder}" AutomationProperties.Name="{local:Loc Key=FormatCells_BlackBorder}" Tag="0,0,0" Click="DlgBorderLineColorSwatchButton_Click" Background="Black" BorderBrush="Gray"/>
-                            <Button Width="22" Height="18" ToolTip="{local:Loc Key=FormatCells_GrayBorder}" AutomationProperties.Name="{local:Loc Key=FormatCells_GrayBorder}" Tag="128,128,128" Click="DlgBorderLineColorSwatchButton_Click" Background="Gray" BorderBrush="Gray"/>
-                            <Button Width="22" Height="18" ToolTip="{local:Loc Key=FormatCells_RedBorder}" AutomationProperties.Name="{local:Loc Key=FormatCells_RedBorder}" Tag="255,0,0" Click="DlgBorderLineColorSwatchButton_Click" Background="Red" BorderBrush="Gray"/>
-                            <Button Width="22" Height="18" ToolTip="{local:Loc Key=FormatCells_GoldBorder}" AutomationProperties.Name="{local:Loc Key=FormatCells_GoldBorder}" Tag="255,192,0" Click="DlgBorderLineColorSwatchButton_Click" Background="#FFC000" BorderBrush="Gray"/>
-                            <Button Width="22" Height="18" ToolTip="{local:Loc Key=FormatCells_GreenBorder}" AutomationProperties.Name="{local:Loc Key=FormatCells_GreenBorder}" Tag="0,176,80" Click="DlgBorderLineColorSwatchButton_Click" Background="#00B050" BorderBrush="Gray"/>
-                            <Button Width="22" Height="18" ToolTip="{local:Loc Key=FormatCells_BlueBorder}" AutomationProperties.Name="{local:Loc Key=FormatCells_BlueBorder}" Tag="0,112,192" Click="DlgBorderLineColorSwatchButton_Click" Background="#0070C0" BorderBrush="Gray"/>
-                            <Button Width="22" Height="18" ToolTip="{local:Loc Key=FormatCells_PurpleBorder}" AutomationProperties.Name="{local:Loc Key=FormatCells_PurpleBorder}" Tag="112,48,160" Click="DlgBorderLineColorSwatchButton_Click" Background="#7030A0" BorderBrush="Gray"/>
-                            <Button Width="22" Height="18" ToolTip="{local:Loc Key=FormatCells_MoreBorderColors}" AutomationProperties.Name="{local:Loc Key=FormatCells_MoreBorderColors}" Click="DlgBorderLineColorPickerButton_Click" Content="..."/>
-                        </UniformGrid>
+                        <UniformGrid x:Name="DlgBorderLinePalettePanel" Columns="8" Rows="2" Margin="0,6,0,0"/>
                         <Border x:Name="DlgBorderLineColorPreview" Height="20" Margin="0,6,0,0"
                                 BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
                                 BorderThickness="1" Background="Black"/>

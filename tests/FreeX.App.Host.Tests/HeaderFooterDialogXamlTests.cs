@@ -114,18 +114,41 @@ public sealed class HeaderFooterDialogXamlTests
     {
         var document = XamlLocalizationTestHelper.LoadLocalizedXaml("HeaderFooterDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         document.Descendants(presentation + "ComboBox")
             .Select(element => element.Attributes().FirstOrDefault(a => a.Name.LocalName == "Name")?.Value)
             .Should()
             .Contain(["HeaderPresetBox", "FooterPresetBox"]);
+        document.Descendants(presentation + "ComboBoxItem").Should().BeEmpty();
 
-        var headerPresets = GetPresetContents(document, presentation, x, "HeaderPresetBox");
-        var footerPresets = GetPresetContents(document, presentation, x, "FooterPresetBox");
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new HeaderFooterDialog(new Sheet(SheetId.New(), "Sheet1"));
+            dialog.Show();
+            try
+            {
+                var headerBox = DialogSourceTestSupport.GetPrivateField<ComboBox>(dialog, "HeaderPresetBox");
+                var footerBox = DialogSourceTestSupport.GetPrivateField<ComboBox>(dialog, "FooterPresetBox");
+                var headerChoices = headerBox.Items.Cast<ComboBoxItem>()
+                    .Select(item => item.Tag.Should().BeOfType<HeaderFooterPresetChoice>().Subject)
+                    .ToArray();
+                var footerChoices = footerBox.Items.Cast<ComboBoxItem>()
+                    .Select(item => item.Tag.Should().BeOfType<HeaderFooterPresetChoice>().Subject)
+                    .ToArray();
 
-        headerPresets.Should().Contain(["Book1.xlsx, Sheet1", "Confidential, Page 1", "Date, Page 1", "File path"]);
-        footerPresets.Should().Contain(["Book1.xlsx, Sheet1", "Time", "Date, Page 1", "File name"]);
+                headerChoices.Should().Equal(HeaderFooterPresetCatalog.HeaderChoices);
+                footerChoices.Should().Equal(HeaderFooterPresetCatalog.FooterChoices);
+
+                headerBox.SelectedItem = headerBox.Items.Cast<ComboBoxItem>()
+                    .Single(item => ((HeaderFooterPresetChoice)item.Tag).Id == HeaderFooterPresetId.ConfidentialPage);
+                DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "HeaderCenterBox").Text
+                    .Should().Be("Confidential, Page &[Page]");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -479,18 +502,6 @@ public sealed class HeaderFooterDialogXamlTests
             }
         });
     }
-
-    private static IReadOnlyList<string?> GetPresetContents(
-        XDocument document,
-        XNamespace presentation,
-        XNamespace x,
-        string comboBoxName) =>
-        document
-            .Descendants(presentation + "ComboBox")
-            .Single(element => element.Attribute(x + "Name")?.Value == comboBoxName)
-            .Elements(presentation + "ComboBoxItem")
-            .Select(element => element.Attribute("Content")?.Value)
-            .ToList();
 
     private static string ReadHeaderFooterDialogSource() =>
         DialogSourceTestSupport.ReadHostSources(

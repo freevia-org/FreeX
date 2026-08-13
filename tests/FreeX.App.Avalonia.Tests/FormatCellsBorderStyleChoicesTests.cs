@@ -1,4 +1,5 @@
 using FreeX.App.Avalonia;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -14,6 +15,17 @@ namespace FreeX.App.Avalonia.Tests;
 /// </summary>
 public sealed class FormatCellsBorderStyleChoicesTests
 {
+    [Fact]
+    public void Choices_ProjectTheCanonicalPortableCatalog()
+    {
+        var choices = MainWindow.CreateFormatCellsBorderStyleListChoices();
+
+        choices.Select(choice => choice.Label)
+            .Should().Equal(FormatCellsBorderPalettePlanner.StyleChoices.Select(choice => choice.DisplayName));
+        choices.Select(choice => choice.Value ?? BorderStyle.None)
+            .Should().Equal(FormatCellsBorderPalettePlanner.StyleChoices.Select(choice => choice.Style));
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>

@@ -55,6 +55,8 @@ public partial class HeaderFooterDialog : Window
         ArgumentNullException.ThrowIfNull(initial);
 
         InitializeComponent();
+        PopulatePresetBox(HeaderPresetBox, HeaderFooterPresetCatalog.HeaderChoices);
+        PopulatePresetBox(FooterPresetBox, HeaderFooterPresetCatalog.FooterChoices);
         Header = initial.Header;
         Footer = initial.Footer;
         FirstPageHeader = initial.FirstPageHeader;

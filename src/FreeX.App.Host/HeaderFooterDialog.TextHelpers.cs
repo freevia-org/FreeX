@@ -5,12 +5,26 @@ namespace FreeX.App.Host;
 
 public partial class HeaderFooterDialog
 {
+    private static void PopulatePresetBox(
+        ComboBox comboBox,
+        IReadOnlyList<HeaderFooterPresetChoice> choices)
+    {
+        foreach (var choice in choices)
+        {
+            comboBox.Items.Add(new ComboBoxItem
+            {
+                Content = UiText.Get(choice.EditorLabelResourceKey),
+                Tag = choice
+            });
+        }
+    }
+
     private static void ApplyPreset(TextBox target, object? selectedItem)
     {
-        if (selectedItem is not ComboBoxItem { Tag: string preset })
+        if (selectedItem is not ComboBoxItem { Tag: HeaderFooterPresetChoice choice })
             return;
 
-        target.Text = preset;
+        target.Text = choice.Value;
         target.CaretIndex = target.Text.Length;
         target.Focus();
     }
