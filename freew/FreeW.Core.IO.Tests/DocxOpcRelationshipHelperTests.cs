@@ -95,6 +95,7 @@ public sealed class DocxOpcRelationshipHelperTests
     {
         var readerSource = ReadRepoText("freew", "FreeW.Core.IO", "DocxReader.cs");
         var writerSource = ReadRepoText("freew", "FreeW.Core.IO", "DocxWriter.cs");
+        var ooxmlSource = ReadRepoText("freew", "FreeW.Core.IO", "OoxmlWordprocessing.cs");
 
         readerSource.Should()
             .Contain("OpcPackageProperties.ExtendedPropertiesZipEntry")
@@ -118,6 +119,10 @@ public sealed class DocxOpcRelationshipHelperTests
             .And.NotContain("\"docProps/core.xml\"")
             .And.NotContain("\"docProps/app.xml\"")
             .And.NotContain("\"docProps/custom.xml\"");
+
+        ooxmlSource.Should()
+            .NotContain("ToW3CDtf(")
+            .And.NotContain("ParseW3CDtf(");
     }
 
     private static MemoryStream BuildDocxWithNonCanonicalHeaderFooterTargets()

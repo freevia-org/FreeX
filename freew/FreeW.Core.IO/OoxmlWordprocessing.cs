@@ -362,11 +362,6 @@ internal static class Ooxml
                 ? contentType
                 : "image/png";
 
-    /// <summary>W3CDTF as used by dcterms:created/modified (UTC, second precision, trailing 'Z').</summary>
-    public static string ToW3CDtf(DateTimeOffset value) => OpcPackageProperties.ToW3CDtf(value);
-
-    public static DateTimeOffset? ParseW3CDtf(string? value) => OpcPackageProperties.ParseW3CDtf(value);
-
     // ── Unit conversions — delegates to Free.Shared.Drawing.DrawingMlCoordinateUnits ───────────
 
     /// <summary>DrawingML "EMU" = English Metric Units; 914400 per inch, 12700 per point.</summary>

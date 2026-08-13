@@ -120,9 +120,12 @@ public sealed class RibbonMetadataConvergenceTests
             .OnlyContain(id => MainWindow.FreeXRibbonHandlers.ContainsKey(id));
 
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDeclarative.cs");
+        var adapterSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonWpfCommandAdapters.cs");
         hostSource.Should().NotContain("GetMethod(");
         hostSource.Should().NotContain("WpfReflectiveRibbonCommand");
         hostSource.Should().NotContain("IndexOf('#')");
+        adapterSource.Should().NotContain("class WpfReflectiveRibbonCommand");
+        adapterSource.Should().Contain("class WpfControlRibbonCommand");
     }
 
     [Fact]

@@ -39,6 +39,7 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         var exportPickerPlanner = Read(repoRoot, "src", "FreeX.App.Services", "ExportFilePickerPlanner.cs");
         var exportOptionsPlanner = Read(repoRoot, "src", "FreeX.App.Services", "ExportOptionsDialogSurfacePlanner.cs");
         var exportPrintPlanner = Read(repoRoot, "src", "FreeX.App.Services", "WorkbookExportPrintPlanner.cs");
+        var exportWorkflow = Read(repoRoot, "src", "FreeX.App.Services", "WorkbookExportWorkflow.cs");
         var printJobPlanner = Read(repoRoot, "src", "FreeX.App.Services", "PrintJobPlanner.cs");
         var fileWorkflow = Read(repoRoot, "src", "FreeX.App.Services", "WorkbookFileWorkflow.cs");
 
@@ -53,6 +54,7 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         exportOptionsPlanner.Should().Contain("CreateFormatAvailability(");
         exportOptionsPlanner.Should().Contain("CreateResult(");
         exportPrintPlanner.Should().Contain("CreatePlanFromPageSetup(");
+        exportWorkflow.Should().NotContain("CreateScopePlan(");
         printJobPlanner.Should().Contain("CreatePlanFromPageSetup(");
         fileWorkflow.Should().Contain("public async Task<WorkbookOpenWorkflowResult> OpenAsync(");
         fileWorkflow.Should().Contain("public async Task<WorkbookSaveWorkflowResult> SaveTargetAsync(");

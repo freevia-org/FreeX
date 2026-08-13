@@ -19,6 +19,8 @@ public sealed class PageLayoutCommandSourceTests
         var policySource = DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PageLayoutRibbonPolicyPlanner.cs");
         var actionSource = DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PageLayoutRibbonActionPlanner.cs");
         var sessionSource = DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PageLayoutCommandSession.cs");
+        var commandPlannerSource = DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PageLayoutRibbonCommandPlanner.cs");
+        var inputParserSource = DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PageLayoutInputParser.cs");
 
         source.Should().Contain("WorkbookThemeCatalog.FreeXColorfulThemePreset.CreateTheme()");
         source.Should().Contain("WorkbookThemeCatalog.GrayscaleThemePreset.CreateTheme()");
@@ -91,6 +93,9 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().NotContain("PageBreakActionPlanner.ResetAll()");
         source.Should().NotContain("PageLayoutRibbonCommandPlanner.PlanInsertPageBreaks(");
         source.Should().NotContain("PageLayoutRibbonCommandPlanner.PlanRemovePageBreaks(");
+        commandPlannerSource.Should().NotContain("PlanInsertPageBreaks(");
+        commandPlannerSource.Should().NotContain("PlanRemovePageBreaks(");
+        inputParserSource.Should().NotContain("TryParseAbsoluteR1C1CellReference(");
         source.Should().Contain("PageBreakDialogPlanner.BuildDefaultInput(SheetGrid.SelectedRange)");
         source.Should().Contain("PageBreakDialogPlanner.PlanPageBreaks(");
         source.Should().Contain("CreatePageLayoutCommandSession().PlanPageBreaks(plan)");

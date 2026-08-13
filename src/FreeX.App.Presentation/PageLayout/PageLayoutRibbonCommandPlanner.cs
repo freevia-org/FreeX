@@ -79,18 +79,6 @@ public static class PageLayoutRibbonCommandPlanner
         bool printHeadings) =>
         new SetPrintOptionsCommand(sheetId, printGridlines, printHeadings);
 
-    public static PageBreakSelectionPlan PlanInsertPageBreaks(
-        GridRange selection,
-        IEnumerable<uint> existingRowBreaks,
-        IEnumerable<uint> existingColumnBreaks) =>
-        PageBreakSelectionPlanner.Insert(selection, existingRowBreaks, existingColumnBreaks);
-
-    public static PageBreakSelectionPlan PlanRemovePageBreaks(
-        GridRange selection,
-        IEnumerable<uint> existingRowBreaks,
-        IEnumerable<uint> existingColumnBreaks) =>
-        PageBreakSelectionPlanner.Remove(selection, existingRowBreaks, existingColumnBreaks);
-
     public static PageBreakSelectionPlan PlanResetPageBreaks() =>
         new([], []);
 

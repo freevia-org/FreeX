@@ -119,6 +119,11 @@ public sealed class FreePTableCloneHelperSourceTests
             "freep",
             "FreeP.Core.Model",
             "SlideCloner.cs"));
+        var helperSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.Core.Model",
+            "PresentationModelCloneHelper.cs"));
         var avaloniaSource = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -139,6 +144,7 @@ public sealed class FreePTableCloneHelperSourceTests
         clonerSource.Should().NotContain("private static TextBody CloneTextBody");
         clonerSource.Should().NotContain("private static TableShape CloneTable");
         clonerSource.Should().NotContain("private static TableCell CloneTableCell");
+        helperSource.Should().NotContain("RowGridWidth(");
 
         avaloniaSource.Should().Contain("pending.Rows[index].Clone()");
         avaloniaSource.Should().NotContain("private static TableRow CloneTableRow");

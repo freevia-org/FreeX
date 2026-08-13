@@ -35,9 +35,6 @@ internal static class PresentationModelCloneHelper
         return gridPos;
     }
 
-    internal static int RowGridWidth(TableRow row) =>
-        row.Cells.Sum(c => Math.Max(1, c.GridSpan));
-
     internal static TableShape CloneTable(TableShape source)
     {
         var copy = new TableShape

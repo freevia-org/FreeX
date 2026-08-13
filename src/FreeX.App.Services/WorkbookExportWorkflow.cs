@@ -23,12 +23,6 @@ public sealed record WorkbookExportExecutionResult(
 /// </summary>
 public static class WorkbookExportWorkflow
 {
-    public static WorkbookExportScopePlan CreateScopePlan(
-        FreeX.Core.Model.Workbook workbook,
-        bool hasSelection,
-        WorkbookExportPrintSurface surface) =>
-        WorkbookExportScopePlanner.Build(workbook, hasSelection, surface);
-
     public static async Task<WorkbookExportExecutionResult> ExecuteBooleanAsync(
         ExportRequest request,
         Func<ExportRequest, CancellationToken, Task<bool>> exportAsync,
