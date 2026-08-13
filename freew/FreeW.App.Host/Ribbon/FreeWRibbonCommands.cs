@@ -4933,23 +4933,44 @@ internal static class FreeWRibbonCommands
                 Content = SourceManagementDialogPlanner.PersonalAuthorModeLabel,
                 GroupName = "PrimaryAuthorMode",
                 IsChecked = initial.Mode == SourceManagementAuthorEditorMode.Personal,
-                Margin = new Thickness(0, 0, 0, 6)
+                Margin = new Thickness(
+                    0,
+                    0,
+                    0,
+                    SourceManagementAuthorEditorVisualMetrics.PersonalModeBottomMargin)
             };
             var corporateMode = new System.Windows.Controls.RadioButton
             {
                 Content = SourceManagementDialogPlanner.CorporateAuthorModeLabel,
                 GroupName = "PrimaryAuthorMode",
                 IsChecked = initial.Mode == SourceManagementAuthorEditorMode.Corporate,
-                Margin = new Thickness(0, 8, 0, 6)
+                Margin = new Thickness(
+                    0,
+                    SourceManagementAuthorEditorVisualMetrics.CorporateModeTopMargin,
+                    0,
+                    SourceManagementAuthorEditorVisualMetrics.PersonalModeBottomMargin)
             };
-            var peoplePanel = new System.Windows.Controls.StackPanel { Margin = new Thickness(18, 0, 0, 0) };
+            var peoplePanel = new System.Windows.Controls.StackPanel
+            {
+                Margin = new Thickness(
+                    SourceManagementAuthorEditorVisualMetrics.PeoplePanelIndent,
+                    0,
+                    0,
+                    0)
+            };
             var rowsPanel = new System.Windows.Controls.StackPanel();
             var corporateLabel = new System.Windows.Controls.TextBlock
             {
                 Text = SourceManagementDialogPlanner.CorporateAuthorLabel,
-                Margin = new Thickness(18, 0, 0, 4)
+                Margin = new Thickness(
+                    SourceManagementAuthorEditorVisualMetrics.PeoplePanelIndent,
+                    0,
+                    0,
+                    SourceManagementAuthorEditorVisualMetrics.CorporateLabelBottomMargin)
             };
-            var corporateBox = NewAuthorTextBox(initial.CorporateAuthor, minWidth: 360);
+            var corporateBox = NewAuthorTextBox(
+                initial.CorporateAuthor,
+                minWidth: SourceManagementAuthorEditorVisualMetrics.CorporateFieldMinimumWidth);
 
             var personRows = new SourceManagementAuthorRowCollection<RowControls>(
                 row =>
@@ -4957,7 +4978,9 @@ internal static class FreeWRibbonCommands
                     var grid = CreatePersonRowGrid();
                     var first = NewAuthorTextBox(row.First);
                     var middle = NewAuthorTextBox(row.Middle);
-                    var last = NewAuthorTextBox(row.Last, minWidth: 140);
+                    var last = NewAuthorTextBox(
+                        row.Last,
+                        minWidth: SourceManagementAuthorEditorVisualMetrics.LastNameFieldMinimumWidth);
                     AddGridChild(grid, first, 0);
                     AddGridChild(grid, middle, 1);
                     AddGridChild(grid, last, 2);
@@ -4989,8 +5012,12 @@ internal static class FreeWRibbonCommands
             var addRow = new System.Windows.Controls.Button
             {
                 Content = SourceManagementDialogPlanner.AddAuthorRowButtonLabel,
-                MinWidth = 72,
-                Margin = new Thickness(0, 4, 8, 0)
+                MinWidth = SourceManagementAuthorEditorVisualMetrics.ButtonMinimumWidth,
+                Margin = new Thickness(
+                    0,
+                    SourceManagementAuthorEditorVisualMetrics.InlineActionTopMargin,
+                    SourceManagementAuthorEditorVisualMetrics.ActionSpacing,
+                    0)
             };
             addRow.Click += (_, _) => personRows.Render(session.AddPersonalAuthorRow(
                 personRows.Read(),
@@ -4998,8 +5025,12 @@ internal static class FreeWRibbonCommands
             var removeRow = new System.Windows.Controls.Button
             {
                 Content = SourceManagementDialogPlanner.RemoveAuthorRowButtonLabel,
-                MinWidth = 72,
-                Margin = new Thickness(0, 4, 0, 0)
+                MinWidth = SourceManagementAuthorEditorVisualMetrics.ButtonMinimumWidth,
+                Margin = new Thickness(
+                    0,
+                    SourceManagementAuthorEditorVisualMetrics.InlineActionTopMargin,
+                    0,
+                    0)
             };
             removeRow.Click += (_, _) => personRows.Render(session.RemoveFinalPersonalAuthorRow(
                 personRows.Read(),
@@ -5019,8 +5050,23 @@ internal static class FreeWRibbonCommands
                 personRows.Read(),
                 corporateBox.Text));
 
-            var ok = new System.Windows.Controls.Button { Content = text.OkButtonLabel, IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = text.CancelButtonLabel, IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button
+            {
+                Content = text.OkButtonLabel,
+                IsDefault = true,
+                MinWidth = SourceManagementAuthorEditorVisualMetrics.ButtonMinimumWidth,
+                Margin = new Thickness(
+                    0,
+                    0,
+                    SourceManagementAuthorEditorVisualMetrics.ActionSpacing,
+                    0)
+            };
+            var cancel = new System.Windows.Controls.Button
+            {
+                Content = text.CancelButtonLabel,
+                IsCancel = true,
+                MinWidth = SourceManagementAuthorEditorVisualMetrics.ButtonMinimumWidth
+            };
             ok.Click += (_, _) =>
             {
                 result = session.Accept(personRows.Read(), corporateBox.Text);
@@ -5031,12 +5077,19 @@ internal static class FreeWRibbonCommands
             {
                 Orientation = System.Windows.Controls.Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 14, 0, 0)
+                Margin = new Thickness(
+                    0,
+                    SourceManagementAuthorEditorVisualMetrics.DialogActionTopMargin,
+                    0,
+                    0)
             };
             buttons.Children.Add(ok);
             buttons.Children.Add(cancel);
 
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            var panel = new System.Windows.Controls.StackPanel
+            {
+                Margin = new Thickness(SourceManagementAuthorEditorVisualMetrics.BodyInset)
+            };
             panel.Children.Add(personalMode);
             panel.Children.Add(peoplePanel);
             panel.Children.Add(corporateMode);
@@ -5051,18 +5104,53 @@ internal static class FreeWRibbonCommands
 
         private static System.Windows.Controls.Grid CreatePersonRowGrid()
         {
-            var grid = new System.Windows.Controls.Grid { Margin = new Thickness(0, 0, 0, 4) };
-            grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(110) });
-            grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(110) });
-            grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(140) });
+            var grid = new System.Windows.Controls.Grid
+            {
+                Margin = new Thickness(
+                    0,
+                    0,
+                    0,
+                    SourceManagementAuthorEditorVisualMetrics.PersonRowBottomMargin)
+            };
+            grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+            {
+                Width = new GridLength(SourceManagementAuthorEditorVisualMetrics.FirstNameColumnWidth)
+            });
+            grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+            {
+                Width = new GridLength(SourceManagementAuthorEditorVisualMetrics.MiddleNameColumnWidth)
+            });
+            grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+            {
+                Width = new GridLength(SourceManagementAuthorEditorVisualMetrics.LastNameColumnWidth)
+            });
             return grid;
         }
 
         private static System.Windows.Controls.TextBlock NewHeader(string text) =>
-            new() { Text = text, Margin = new Thickness(0, 0, 6, 2) };
+            new()
+            {
+                Text = text,
+                Margin = new Thickness(
+                    0,
+                    0,
+                    SourceManagementAuthorEditorVisualMetrics.HeaderRightMargin,
+                    SourceManagementAuthorEditorVisualMetrics.HeaderBottomMargin)
+            };
 
-        private static System.Windows.Controls.TextBox NewAuthorTextBox(string? text, double minWidth = 104) =>
-            new() { Text = text ?? string.Empty, MinWidth = minWidth, Margin = new Thickness(0, 0, 6, 0) };
+        private static System.Windows.Controls.TextBox NewAuthorTextBox(
+            string? text,
+            double minWidth = SourceManagementAuthorEditorVisualMetrics.DefaultNameFieldMinimumWidth) =>
+            new()
+            {
+                Text = text ?? string.Empty,
+                MinWidth = minWidth,
+                Margin = new Thickness(
+                    0,
+                    0,
+                    SourceManagementAuthorEditorVisualMetrics.FieldRightMargin,
+                    0)
+            };
 
         private static void AddGridChild(
             System.Windows.Controls.Grid grid,

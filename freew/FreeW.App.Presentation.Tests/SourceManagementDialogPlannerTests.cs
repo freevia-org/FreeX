@@ -5,6 +5,86 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class SourceManagementDialogPlannerTests
 {
     [Fact]
+    public void PrimaryAuthorEditorVisualMetrics_PreserveSharedWpfAuthorityGeometry()
+    {
+        SourceManagementAuthorEditorVisualMetrics.AvaloniaWindowWidth.Should().Be(460);
+        SourceManagementAuthorEditorVisualMetrics.BodyInset.Should().Be(16);
+        SourceManagementAuthorEditorVisualMetrics.PersonalModeBottomMargin.Should().Be(6);
+        SourceManagementAuthorEditorVisualMetrics.CorporateModeTopMargin.Should().Be(8);
+        SourceManagementAuthorEditorVisualMetrics.PeoplePanelIndent.Should().Be(18);
+        SourceManagementAuthorEditorVisualMetrics.CorporateLabelBottomMargin.Should().Be(4);
+        SourceManagementAuthorEditorVisualMetrics.CorporateFieldMinimumWidth.Should().Be(360);
+        SourceManagementAuthorEditorVisualMetrics.DefaultNameFieldMinimumWidth.Should().Be(104);
+        SourceManagementAuthorEditorVisualMetrics.LastNameFieldMinimumWidth.Should().Be(140);
+        SourceManagementAuthorEditorVisualMetrics.FirstNameColumnWidth.Should().Be(110);
+        SourceManagementAuthorEditorVisualMetrics.MiddleNameColumnWidth.Should().Be(110);
+        SourceManagementAuthorEditorVisualMetrics.LastNameColumnWidth.Should().Be(140);
+        SourceManagementAuthorEditorVisualMetrics.PersonRowBottomMargin.Should().Be(4);
+        SourceManagementAuthorEditorVisualMetrics.HeaderRightMargin.Should().Be(6);
+        SourceManagementAuthorEditorVisualMetrics.HeaderBottomMargin.Should().Be(2);
+        SourceManagementAuthorEditorVisualMetrics.FieldRightMargin.Should().Be(6);
+        SourceManagementAuthorEditorVisualMetrics.ButtonMinimumWidth.Should().Be(72);
+        SourceManagementAuthorEditorVisualMetrics.InlineActionTopMargin.Should().Be(4);
+        SourceManagementAuthorEditorVisualMetrics.DialogActionTopMargin.Should().Be(14);
+        SourceManagementAuthorEditorVisualMetrics.ActionSpacing.Should().Be(8);
+    }
+
+    [Fact]
+    public void PrimaryAuthorEditorRenderers_ConsumeSharedVisualMetricsWithoutLocalGeometryPolicy()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var avaloniaSource = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "ReferencesDialogs.cs"));
+        var wpfSource = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Host",
+            "Ribbon",
+            "FreeWRibbonCommands.cs"));
+        var avalonia = Slice(
+            avaloniaSource,
+            "internal sealed class SourceAuthorEditorDialog",
+            "internal sealed class ManageSourcesDialog");
+        var wpf = Slice(
+            wpfSource,
+            "private static class AuthorEditorDialog",
+            "private static class ManageSourcesDialog");
+
+        foreach (var source in new[] { avalonia, wpf })
+        {
+            source.Should().Contain("SourceManagementAuthorEditorVisualMetrics.BodyInset");
+            source.Should().Contain("SourceManagementAuthorEditorVisualMetrics.PeoplePanelIndent");
+            source.Should().Contain("SourceManagementAuthorEditorVisualMetrics.CorporateFieldMinimumWidth");
+            source.Should().Contain("SourceManagementAuthorEditorVisualMetrics.LastNameFieldMinimumWidth");
+            source.Should().Contain("SourceManagementAuthorEditorVisualMetrics.FirstNameColumnWidth");
+            source.Should().Contain("SourceManagementAuthorEditorVisualMetrics.ButtonMinimumWidth");
+            source.Should().Contain("SourceManagementAuthorEditorVisualMetrics.ActionSpacing");
+            source.Should().NotContain("minWidth: 360");
+            source.Should().NotContain("minWidth: 140");
+            source.Should().NotContain("minWidth = 104");
+            source.Should().NotContain("MinWidth = 72");
+            source.Should().NotContain("new GridLength(110)");
+            source.Should().NotContain("new GridLength(140)");
+            source.Should().NotContain("new Thickness(16)");
+        }
+
+        avalonia.Should().Contain("SourceManagementAuthorEditorVisualMetrics.AvaloniaWindowWidth");
+        avalonia.Should().NotContain("Width = 460");
+
+        static string Slice(string source, string startMarker, string endMarker)
+        {
+            var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+            start.Should().BeGreaterThanOrEqualTo(0);
+            var end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
+            end.Should().BeGreaterThan(start);
+            return source[start..end];
+        }
+    }
+
+    [Fact]
     public void BuildEntryFieldPlans_UsesSourceDialogOrderLabelsAndSeedValues()
     {
         var source = new Source

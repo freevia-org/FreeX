@@ -875,7 +875,11 @@ internal sealed class SourceEntryDialog : FreeWDialogWindow
 
 internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ActionSpacing = SourceManagementAuthorEditorVisualMetrics.ActionSpacing,
+        };
 
     private sealed record RowControls(
         TextBox First,
@@ -892,7 +896,7 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
         var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
 
         Title = SourceManagementDialogPlanner.PrimaryAuthorEditorTitle;
-        Width = 460;
+        Width = SourceManagementAuthorEditorVisualMetrics.AvaloniaWindowWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -903,26 +907,47 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
             Content = SourceManagementDialogPlanner.PersonalAuthorModeLabel,
             GroupName = "PrimaryAuthorMode",
             IsChecked = initial.Mode == SourceManagementAuthorEditorMode.Personal,
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = new Thickness(
+                0,
+                0,
+                0,
+                SourceManagementAuthorEditorVisualMetrics.PersonalModeBottomMargin),
         };
         var corporateMode = new RadioButton
         {
             Content = SourceManagementDialogPlanner.CorporateAuthorModeLabel,
             GroupName = "PrimaryAuthorMode",
             IsChecked = initial.Mode == SourceManagementAuthorEditorMode.Corporate,
-            Margin = new Thickness(0, 8, 0, 6),
+            Margin = new Thickness(
+                0,
+                SourceManagementAuthorEditorVisualMetrics.CorporateModeTopMargin,
+                0,
+                SourceManagementAuthorEditorVisualMetrics.PersonalModeBottomMargin),
         };
         AvaloniaCompactDialogChrome.ApplyRadioButton(personalMode, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyRadioButton(corporateMode, DialogChromeStyle);
 
-        var peoplePanel = new StackPanel { Margin = new Thickness(18, 0, 0, 0) };
+        var peoplePanel = new StackPanel
+        {
+            Margin = new Thickness(
+                SourceManagementAuthorEditorVisualMetrics.PeoplePanelIndent,
+                0,
+                0,
+                0),
+        };
         var rowsPanel = new StackPanel();
         var corporateLabel = new TextBlock
         {
             Text = SourceManagementDialogPlanner.CorporateAuthorLabel,
-            Margin = new Thickness(18, 0, 0, 4),
+            Margin = new Thickness(
+                SourceManagementAuthorEditorVisualMetrics.PeoplePanelIndent,
+                0,
+                0,
+                SourceManagementAuthorEditorVisualMetrics.CorporateLabelBottomMargin),
         };
-        var corporateBox = NewAuthorTextBox(initial.CorporateAuthor, minWidth: 360);
+        var corporateBox = NewAuthorTextBox(
+            initial.CorporateAuthor,
+            minWidth: SourceManagementAuthorEditorVisualMetrics.CorporateFieldMinimumWidth);
 
         var personRows = new SourceManagementAuthorRowCollection<RowControls>(
             row =>
@@ -930,7 +955,9 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
                 var grid = CreatePersonRowGrid();
                 var first = NewAuthorTextBox(row.First);
                 var middle = NewAuthorTextBox(row.Middle);
-                var last = NewAuthorTextBox(row.Last, minWidth: 140);
+                var last = NewAuthorTextBox(
+                    row.Last,
+                    minWidth: SourceManagementAuthorEditorVisualMetrics.LastNameFieldMinimumWidth);
                 AddGridChild(grid, first, 0);
                 AddGridChild(grid, middle, 1);
                 AddGridChild(grid, last, 2);
@@ -969,7 +996,11 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
                 corporateBox.Text).PersonalRows));
         peoplePanel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
             [addRow, removeRow],
-            new Thickness(0, 4, 0, 0)));
+            new Thickness(
+                0,
+                SourceManagementAuthorEditorVisualMetrics.InlineActionTopMargin,
+                0,
+                0)));
 
         personalMode.Click += (_, _) => ApplyMode(session.SelectMode(
             SourceManagementAuthorEditorMode.Personal,
@@ -987,13 +1018,22 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
         }, isDefault: true);
         var cancel = Button(text.CancelButtonLabel, () => Close(), isCancel: true);
 
-        var body = new StackPanel { Margin = new Thickness(16) };
+        var body = new StackPanel
+        {
+            Margin = new Thickness(SourceManagementAuthorEditorVisualMetrics.BodyInset),
+        };
         body.Children.Add(personalMode);
         body.Children.Add(peoplePanel);
         body.Children.Add(corporateMode);
         body.Children.Add(corporateLabel);
         body.Children.Add(corporateBox);
-        body.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0)));
+        body.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
+            [ok, cancel],
+            new Thickness(
+                0,
+                SourceManagementAuthorEditorVisualMetrics.DialogActionTopMargin,
+                0,
+                0)));
         Content = body;
 
         ApplyMode(initial);
@@ -1001,23 +1041,53 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
 
     private static Grid CreatePersonRowGrid()
     {
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+        var grid = new Grid
+        {
+            Margin = new Thickness(
+                0,
+                0,
+                0,
+                SourceManagementAuthorEditorVisualMetrics.PersonRowBottomMargin),
+        };
+        grid.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(SourceManagementAuthorEditorVisualMetrics.FirstNameColumnWidth),
+        });
+        grid.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(SourceManagementAuthorEditorVisualMetrics.MiddleNameColumnWidth),
+        });
+        grid.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(SourceManagementAuthorEditorVisualMetrics.LastNameColumnWidth),
+        });
         return grid;
     }
 
     private static TextBlock NewHeader(string text) =>
-        new() { Text = text, Margin = new Thickness(0, 0, 6, 2) };
+        new()
+        {
+            Text = text,
+            Margin = new Thickness(
+                0,
+                0,
+                SourceManagementAuthorEditorVisualMetrics.HeaderRightMargin,
+                SourceManagementAuthorEditorVisualMetrics.HeaderBottomMargin),
+        };
 
-    private static TextBox NewAuthorTextBox(string? text, double minWidth = 104)
+    private static TextBox NewAuthorTextBox(
+        string? text,
+        double minWidth = SourceManagementAuthorEditorVisualMetrics.DefaultNameFieldMinimumWidth)
     {
         var box = new TextBox
         {
             Text = text ?? string.Empty,
             MinWidth = minWidth,
-            Margin = new Thickness(0, 0, 6, 0),
+            Margin = new Thickness(
+                0,
+                0,
+                SourceManagementAuthorEditorVisualMetrics.FieldRightMargin,
+                0),
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
         return box;
@@ -1026,7 +1096,11 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
     private static Button Button(string label, Action click, bool isDefault = false, bool isCancel = false)
     {
         var button = new Button { Content = label, IsDefault = isDefault, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 72, isDefault: isDefault);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: SourceManagementAuthorEditorVisualMetrics.ButtonMinimumWidth,
+            isDefault: isDefault);
         button.Click += (_, _) => click();
         return button;
     }
