@@ -577,7 +577,11 @@ public sealed partial class RibbonScreenshotTourPlannerTests
     [Fact]
     public void MainWindowScreenshotTour_CapturesAccentBarVisualEvidence()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs", "MainWindow.Startup.cs");
+        var source = string.Join(
+            Environment.NewLine,
+            DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs", "MainWindow.Startup.cs"),
+            WorkspaceFileLocator.ReadAllText(
+                "tools", "FreeX.ParityCapture.Wpf", "Capture", "MainWindow.ParityCaptureOwnership.cs"));
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing", "ui-test-catalog.md");
 
         source.Should().Contain("FREEX_ACCENT_BAR_TOUR");
@@ -624,7 +628,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("freex_insert_new_note_inline_popup");
         source.Should().Contain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("freex_insert_comments_list_surface");
-        source.Should().Contain("ReviewShowNotesBtn_Click(this, new RoutedEventArgs())");
+        source.Should().Contain("ShowNotesListForParityCapture();");
         source.Should().Contain("freex_insert_notes_list_surface");
         source.Should().Contain("InsertObjectsLinksTourManifest");
         source.Should().Contain("UI-CAT-INSERT-003");

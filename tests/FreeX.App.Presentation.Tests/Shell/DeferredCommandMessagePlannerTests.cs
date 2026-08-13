@@ -94,10 +94,11 @@ public sealed class DeferredCommandMessagePlannerTests
         {
             "MainWindow.Backstage.cs",
             "MainWindow.PageLayout.cs",
-            "MainWindow.ScreenshotTour.cs",
             "OptionsDialog.xaml.cs"
         }
             .Select(fileName => File.ReadAllText(Path.Combine(hostRoot, fileName)))
+            .Append(File.ReadAllText(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+                "tools", "FreeX.ParityCapture.Wpf", "Capture", "MainWindow.ScreenshotTour.cs")))
             .ToArray();
         var combinedConsumers = string.Join(Environment.NewLine, consumerSources);
 

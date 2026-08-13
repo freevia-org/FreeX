@@ -57,14 +57,13 @@ public sealed class WorksheetContextMenuRemoveHyperlinkRoutingSourceTests
     [Fact]
     public void RibbonClearHyperlinksHandler_UsesFormatStrippingCommand()
     {
-        // The ribbon command id "Clear Hyperlinks" (Ribbon/FreeXRibbonHandlerMap.g.cs) resolves
-        // by reflection to this exact method name, so it cannot be renamed without regenerating
-        // that generated map -- but its body must perform Excel's format-stripping behavior.
+        // The generated typed ribbon map dispatches "Clear Hyperlinks" to this exact handler.
+        // Its body must continue to perform Excel's format-stripping behavior.
         var handlerMapSource = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Host", "Ribbon", "FreeXRibbonHandlerMap.g.cs");
         handlerMapSource.Should().Contain(
-            "[\"Clear Hyperlinks\"] = \"ClearHyperlinksMenuItem_Click\",",
-            "the ribbon's Clear Hyperlinks command id must still resolve to ClearHyperlinksMenuItem_Click by reflection");
+            "[\"Clear Hyperlinks\"] = new(static (owner, sender, eventArgs) => owner.ClearHyperlinksMenuItem_Click(sender, eventArgs), nameof(ClearHyperlinksMenuItem_Click)),",
+            "the ribbon's Clear Hyperlinks command id must use the typed ClearHyperlinksMenuItem_Click binding");
 
         var source = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Host", "MainWindow.HomeEditing.cs");

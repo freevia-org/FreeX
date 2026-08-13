@@ -426,8 +426,8 @@ public sealed class XlsxFileAdapterFormatTests
         worksheetMergeHelpersSource.Should().Contain(".Where(shouldRetain)");
         drawingPartMergerSource.Should().Contain("ReadWorksheetDrawingRelId(worksheetEntry, worksheetNs, relNs)");
         drawingPartMergerSource.Should().Contain("XmlReader.Create");
-        pivotReferencePreserverSource.Should().Contain("GetWorksheetPathsWithPivotTableRelationships(sourceArchive, context)");
-        pivotReferencePreserverSource.Should().Contain("PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, context, pivotWorksheetPaths)");
+        pivotReferencePreserverSource.Should().Contain("GetWorksheetPathsWithPivotTableRelationships(context)");
+        pivotReferencePreserverSource.Should().Contain("PreserveWorksheetPivotTableDefinitions(context, pivotWorksheetPaths)");
         tableReferencePreserverSource.Should().Contain("GetWorksheetPathsWithTableRelationships(sourceArchive, context)");
         adapterSource.Should().Contain("XlsxClosedXmlLoadPackageSanitizer.Create(");
         sanitizerSource.Should().Contain("styleOnlyWorksheetPathsToStrip is not { Count: 0 }");

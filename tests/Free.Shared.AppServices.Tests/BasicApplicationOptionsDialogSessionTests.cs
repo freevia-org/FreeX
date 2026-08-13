@@ -83,6 +83,7 @@ public sealed class BasicApplicationOptionsDialogSessionTests
         var freeWPlanner = Read("freew", "FreeW.App.Presentation", "Options", "OptionsDialogPlanner.cs");
         var freePSession = Read("freep", "FreeP.App.Presentation", "Options", "OptionsDialogSession.cs");
         var freePPlanner = Read("freep", "FreeP.App.Presentation", "Options", "OptionsDialogPlanner.cs");
+        var freePResources = Read("freep", "FreeP.App.Localization", "Resources", "Strings.resx");
 
         foreach (var session in new[] { freeWSession, freePSession })
         {
@@ -96,7 +97,8 @@ public sealed class BasicApplicationOptionsDialogSessionTests
         shared.Should().NotContain("Presentation (*.fxp)");
         shared.Should().NotContain("AutoCorrect");
         freeWPlanner.Should().Contain("Word Document (*.docx)");
-        freePPlanner.Should().Contain("Presentation (*.fxp)");
+        freePPlanner.Should().Contain("Loc.Get(\"Options_PresentationFormat\")");
+        freePResources.Should().Contain("<value>Presentation (*.fxp)</value>");
         freeWWorkflow.Should().Contain("result.AutoCorrectEnabled");
         freeWWorkflow.Should().Contain("result.AutoCorrect = autoCorrect");
         freeWWorkflow.Should().NotContain("TryParseRecentFilesCap");

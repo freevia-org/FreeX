@@ -54,7 +54,12 @@ public sealed class SheetTabsOverflowParityFixtureTests
     {
         var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var capture = File.ReadAllText(Path.Combine(repoRoot, "tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
-        var backstage = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var ownership = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "tools",
+            "FreeX.ParityCapture.Wpf",
+            "Capture",
+            "MainWindow.ParityCaptureOwnership.cs"));
         var startup = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.Startup.cs"));
         var adoptionIndex = capture.IndexOf(
             "window.AdoptWorkbookForParityCapture(ParityDemoWorkbookFactory.Create())",
@@ -65,8 +70,9 @@ public sealed class SheetTabsOverflowParityFixtureTests
         capture.Should().NotContain("InvokePrivate(window, \"InsertNewSheet\")");
         adoptionIndex.Should().BeGreaterThanOrEqualTo(0);
         showIndex.Should().BeGreaterThan(adoptionIndex);
-        backstage.Should().Contain("sheet.Id.Value == Guid.Empty");
-        backstage.Should().Contain("_parityCaptureWorkbookPrepared = true;");
-        startup.Should().Contain("else if (!_parityCaptureWorkbookPrepared)");
+        ownership.Should().Contain("sheet.Id.Value == Guid.Empty");
+        ownership.Should().Contain("_parityCaptureWorkbookPrepared = true;");
+        ownership.Should().Contain("AdjustExternalInitialWorkbookCreation(ref bool shouldCreate)");
+        startup.Should().Contain("AdjustExternalInitialWorkbookCreation(ref shouldCreateInitialWorkbook)");
     }
 }

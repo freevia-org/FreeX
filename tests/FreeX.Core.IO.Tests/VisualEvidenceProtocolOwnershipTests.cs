@@ -10,7 +10,9 @@ public sealed class VisualEvidenceProtocolOwnershipTests
         var protocol = TestWorkspaceFiles.ReadRepoText(
             "shared", "Free.Shared.AppServices", "VisualEvidence", "VisualEvidenceProtocol.cs");
         var freeP = TestWorkspaceFiles.ReadRepoText(
-            "tools", "FreeP.RenderCompare", "VisualEvidenceCaptureOrchestration.cs");
+            "freep", "TestSupport", "VisualEvidence", "VisualEvidenceCaptureOrchestration.cs");
+        var sharedOrchestrator = TestWorkspaceFiles.ReadRepoText(
+            "tools", "Free.ToolsShared", "VisualEvidenceCaptureOrchestrator.cs");
         var freeXWpf = TestWorkspaceFiles.ReadRepoText(
             "tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs");
         var freeXAvalonia = TestWorkspaceFiles.ReadRepoText(
@@ -18,7 +20,7 @@ public sealed class VisualEvidenceProtocolOwnershipTests
         var freeXParityCore = TestWorkspaceFiles.ReadRepoText(
             "tools", "FreeX.ParityCompare.Core", "ParityComparison.cs");
         var freeW = TestWorkspaceFiles.ReadRepoText(
-            "freew", "FreeW.App.Presentation", "DocumentView", "VisualEvidenceManifestNormalizer.cs");
+            "freew", "tests", "FreeW.VisualEvidence.TestSupport", "VisualEvidenceManifestNormalizer.cs");
         var freeWRibbonShot = TestWorkspaceFiles.ReadRepoText(
             "freew", "tools", "FreeW.RibbonShot", "Program.cs");
         var freeWDialogHarness = TestWorkspaceFiles.ReadRepoText(
@@ -46,9 +48,10 @@ public sealed class VisualEvidenceProtocolOwnershipTests
 
         freeP.Should().Contain("VisualEvidenceArgumentParser.ReadFirst(");
         freeP.Should().Contain("VisualEvidencePathPolicy.ResolveContainedPath(");
-        freeP.Should().Contain("VisualEvidenceProgressLog.Append(");
         freeP.Should().Contain("VisualEvidenceManifestIO.Write(");
         freeP.Should().NotContain("SHA256.HashData(");
+        sharedOrchestrator.Should().Contain("VisualEvidenceProgressLog.Append(");
+        sharedOrchestrator.Should().Contain("VisualEvidenceManifestIO.Write(");
 
         freeXWpf.Should().Contain("VisualEvidenceArgumentParser.ReadFirst(");
         freeXWpf.Should().Contain("VisualEvidenceManifestIO.Write(");

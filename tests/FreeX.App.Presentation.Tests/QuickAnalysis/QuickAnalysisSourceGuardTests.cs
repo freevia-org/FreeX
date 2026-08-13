@@ -91,11 +91,10 @@ public sealed class QuickAnalysisSourceGuardTests
         avaloniaSource.Should().Contain("ShowEditIssue(exception.Message)");
         hostSource.Should().Contain("ShowCfDialog(dialogPlan.Title)");
         avaloniaSource.Should().Contain("dialogPlan.Seed");
-        avaloniaSource.Should().Contain("_quickAnalysisSession.FindOpenItem(");
+        avaloniaSource.Should().Contain("CreateQuickAnalysisItemButton(flyout, item)");
+        avaloniaSource.Should().Contain("ApplyQuickAnalysisItemAsync(item)");
         avaloniaSource.Replace("\r\n", "\n", StringComparison.Ordinal).Should().Contain(
-            "var built = await ShowConditionalFormatRuleEditorAsync(\n"
-            + "            dialogPlan.Seed,\n"
-            + "            _interactionValidationConditionalFormatRuleProbe);");
+            "var built = await ShowConditionalFormatRuleEditorAsync(dialogPlan.Seed);");
         shellSources.Should().NotContain("QuickAnalysisConditionalFormatDialogPlanner.Plan(");
         avaloniaSource.Should().Contain("ConditionalFormatCommandPlanner.PlanApplyRule(");
         avaloniaSource.Should().Contain("_session.GetCurrentGroupedEditSheetIds()");
@@ -126,7 +125,6 @@ public sealed class QuickAnalysisSourceGuardTests
         sessionSource.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
         sessionSource.Should().Contain("QuickAnalysisHostOperationPlanner.Plan(item)");
         sessionSource.Should().Contain("QuickAnalysisOperationExecutor.ExecuteAsync(operation, handlers)");
-        sessionSource.Should().Contain("public QuickAnalysisShellItemPlan? FindOpenItem(");
         sessionSource.Should().Contain("var preview = item.HoverPreview");
         hostOperationSource.Should().Contain("public sealed record QuickAnalysisConditionalFormatDialogPlan(");
         hostOperationSource.Should().Contain("QuickAnalysisConditionalFormatCommand Command");

@@ -37,6 +37,8 @@ public sealed class ApplicationOptionsStoreOwnershipSourceTests
         var freePProgram = Read("freep", "FreeP.App.Host", "Program.cs");
         var freeWApp = Read("freew", "FreeW.App.Avalonia", "App.cs");
         var freePApp = Read("freep", "FreeP.App.Avalonia", "App.cs");
+        var avaloniaFactory = Read(
+            "shared", "Free.Shared.Shell.Avalonia", "SisterAvaloniaStandardDesktopFactory.cs");
 
         wpfRunner.Should().Contain("ApplicationOptionsStore<TOptions>.Create(");
         freeWProgram.Should().Contain("WpfApplicationStartupRunner.Run");
@@ -44,12 +46,14 @@ public sealed class ApplicationOptionsStoreOwnershipSourceTests
 
         freeWApp.Should().Contain("ApplicationOptionsStore<FreeWOptions>.Create(");
         freeWApp.Should().Contain("PlatformApplicationDataPathProvider.LocalInstance");
-        freeWApp.Should().Contain("var loadedOptions = optionsStore.Load();");
-        freeWApp.Should().Contain("new MainWindow(args, loadedOptions, optionsStore)");
+        freeWApp.Should().Contain("new SisterAvaloniaOptionsStartupDescriptor<FreeWOptions>(");
+        freeWApp.Should().Contain("new MainWindow(startupArguments, options, optionsStore)");
 
-        freePApp.Should().Contain("ApplicationOptionsStore<FreePOptions>.Create();");
-        freePApp.Should().Contain("var options = optionsStore.Load();");
+        freePApp.Should().Contain("ApplicationOptionsStore<FreePOptions>.Create()");
+        freePApp.Should().Contain("new SisterAvaloniaOptionsStartupDescriptor<FreePOptions>(");
         freePApp.Should().Contain("optionsStore: optionsStore");
+        avaloniaFactory.Should().Contain("return (store.Load(), store);");
+        avaloniaFactory.Should().Contain("var (options, optionsStore) = profile.Options.Load();");
     }
 
     private static string Read(params string[] parts) =>
