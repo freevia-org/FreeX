@@ -54,7 +54,7 @@ public sealed class WorkbookTitleFormatterTests
             "WorkbookTitleFormatter.cs"));
 
         source.Should().Contain("ApplicationWindowTitlePolicy.Compose(")
-            .And.Contain("ApplicationWindowTitleSpec")
+            .And.Contain("ApplicationFrameDescriptor.Create(")
             .And.NotContain("WindowTitlePlanner.Compose(");
     }
 }

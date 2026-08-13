@@ -9,15 +9,16 @@ namespace FreeW.App.Presentation.Shell;
 /// </summary>
 public static class FreeWApplicationStartup
 {
-    public static AppProductIdentity ProductIdentity { get; } =
-        new("FreeW", "FREEW_DIAGNOSTICS", "FreeW");
+    private static ApplicationStartupDescriptor<Theme> Descriptor { get; } =
+        ApplicationStartupDescriptor<Theme>.Create(
+            productName: "FreeW",
+            environmentVariablePrefix: "FREEW",
+            defaultTheme: BrandThemes.FreeW,
+            alternateTheme: BrandThemes.FreeXMidnight);
 
-    public static ApplicationThemeStartupPlan<Theme> Theme { get; } = new(
-        EnvironmentVariableName: "FREEW_THEME",
-        AlternateThemeValue: "midnight",
-        DefaultTheme: BrandThemes.FreeW,
-        AlternateTheme: BrandThemes.FreeXMidnight,
-        ResourceKeyPrefix: "FreeW");
+    public static AppProductIdentity ProductIdentity => Descriptor.ProductIdentity;
+
+    public static ApplicationThemeStartupPlan<Theme> Theme => Descriptor.Theme;
 
     /// <summary>
     /// Opens the first existing, supported startup argument. An unreadable startup document silently

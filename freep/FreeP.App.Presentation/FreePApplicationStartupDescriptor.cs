@@ -6,13 +6,14 @@ namespace FreeP.App.Compositor;
 /// <summary>Canonical product identity and startup theme policy shared by both FreeP hosts.</summary>
 public static class FreePApplicationStartupDescriptor
 {
-    public static AppProductIdentity ProductIdentity { get; } =
-        new("FreeP", "FREEP_DIAGNOSTICS", "FreeP");
+    private static ApplicationStartupDescriptor<Theme> Descriptor { get; } =
+        ApplicationStartupDescriptor<Theme>.Create(
+            productName: "FreeP",
+            environmentVariablePrefix: "FREEP",
+            defaultTheme: BrandThemes.FreeP,
+            alternateTheme: BrandThemes.FreeXMidnight);
 
-    public static ApplicationThemeStartupPlan<Theme> Theme { get; } = new(
-        EnvironmentVariableName: "FREEP_THEME",
-        AlternateThemeValue: "midnight",
-        DefaultTheme: BrandThemes.FreeP,
-        AlternateTheme: BrandThemes.FreeXMidnight,
-        ResourceKeyPrefix: "FreeP");
+    public static AppProductIdentity ProductIdentity => Descriptor.ProductIdentity;
+
+    public static ApplicationThemeStartupPlan<Theme> Theme => Descriptor.Theme;
 }
