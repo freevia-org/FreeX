@@ -1056,11 +1056,19 @@ public sealed class CanvasEditingTests
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
-            var registry = FreePRibbonCommands.Build(
-                new RibbonStateStore(),
+            var registry = FreePRibbonTestRegistry.Compose(
                 window.Editor,
-                getEditPointsEnabled: () => window.SlideCanvas.EditPointsEnabled,
-                setEditPointsEnabled: enabled => window.SlideCanvas.SetEditPointsMode(enabled));
+                new FreePRibbonHostPorts
+                {
+                    ActionEndpoints = new FreePRibbonHostActionEndpoints
+                    {
+                        SetEditPointsEnabled = window.SlideCanvas.SetEditPointsMode,
+                    },
+                    QueryEndpoints = new FreePRibbonHostQueryEndpoints
+                    {
+                        EditPointsEnabled = () => window.SlideCanvas.EditPointsEnabled,
+                    },
+                });
             registry.TryGet(PresentationEditPointsModePlanner.CommandId, out var registered)
                 .Should().BeTrue();
             var command = registered.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;

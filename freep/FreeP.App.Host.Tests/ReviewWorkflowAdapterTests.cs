@@ -1783,10 +1783,15 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.CurrentSlide.Shapes.Add(group);
             window.Editor.Select(chart.Id);
 
-            var registry = FreePRibbonCommands.Build(
-                new RibbonStateStore(),
+            var registry = FreePRibbonTestRegistry.Compose(
                 window.Editor,
-                onReviewReadingOrder: () => window.ShowReadingOrderPane());
+                new FreePRibbonHostPorts
+                {
+                    ActionEndpoints = new FreePRibbonHostActionEndpoints
+                    {
+                        ShowReadingOrderPane = () => window.ShowReadingOrderPane(),
+                    },
+                });
             registry.TryGet(PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId, out var command)
                 .Should().BeTrue();
 
@@ -2360,7 +2365,7 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
-    public void FreePRibbonCommands_RegistersSharedReviewWorkflowCommandIds()
+    public void TypedHostProfile_RegistersSharedReviewWorkflowCommandIds()
     {
         var presentation = Presentation.CreateEmpty();
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
@@ -2375,19 +2380,24 @@ public sealed class ReviewWorkflowAdapterTests
         var previousInvoked = false;
         var nextInvoked = false;
 
-        var registry = FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        var registry = FreePRibbonTestRegistry.Compose(
             editor,
-            onReviewAccessibility: () => invoked = true,
-            onReviewAltText: () => altTextInvoked = true,
-            onReviewReadingOrder: () => readingOrderInvoked = true,
-            onReviewProofing: () => proofingInvoked = true,
-            onAddComment: () => addInvoked = true,
-            onEditComment: () => editInvoked = true,
-            onReplyComment: () => replyInvoked = true,
-            onDeleteComment: () => deleteInvoked = true,
-            onPreviousComment: () => previousInvoked = true,
-            onNextComment: () => nextInvoked = true);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    ShowAccessibilityPane = () => invoked = true,
+                    ShowAltTextPane = () => altTextInvoked = true,
+                    ShowReadingOrderPane = () => readingOrderInvoked = true,
+                    ShowProofingPane = () => proofingInvoked = true,
+                    AddComment = () => addInvoked = true,
+                    EditComment = () => editInvoked = true,
+                    ReplyComment = () => replyInvoked = true,
+                    DeleteComment = () => deleteInvoked = true,
+                    PreviousComment = () => previousInvoked = true,
+                    NextComment = () => nextInvoked = true,
+                },
+            });
 
         registry.TryGet(PresentationReviewWorkflowPlanner.AccessibilityCommandId, out var command)
             .Should()

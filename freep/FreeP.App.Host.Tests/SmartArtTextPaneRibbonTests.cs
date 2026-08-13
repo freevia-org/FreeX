@@ -12,10 +12,15 @@ public sealed class SmartArtTextPaneRibbonTests
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
         var invoked = false;
 
-        var registry = FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        var registry = FreePRibbonTestRegistry.Compose(
             editor,
-            onOpenSmartArtTextPane: () => invoked = true);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    OpenSmartArtTextPane = () => invoked = true,
+                },
+            });
 
         registry.TryGet(SmartArtEditingPlanner.OpenTextPaneCommandId, out var command)
             .Should().BeTrue();
@@ -31,10 +36,15 @@ public sealed class SmartArtTextPaneRibbonTests
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
         var invoked = false;
 
-        var registry = FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        var registry = FreePRibbonTestRegistry.Compose(
             editor,
-            onConvertSmartArtToShapes: () => invoked = true);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    ConvertSmartArtToShapes = () => invoked = true,
+                },
+            });
 
         registry.TryGet(SmartArtAuthoringPlanner.ConvertToShapesCommandId, out var command)
             .Should().BeTrue();

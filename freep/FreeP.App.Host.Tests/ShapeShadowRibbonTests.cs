@@ -31,7 +31,7 @@ public sealed class ShapeShadowRibbonTests
         var editor = new EditingSession(presentation, bus);
         editor.Select(shape.Id);
 
-        var registry = FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+        var registry = FreePRibbonTestRegistry.Compose(editor);
         registry.TryGet(ShapeEffectAuthoringPlanner.SubtleCommandId, out var command).Should().BeTrue();
         command!.Execute(RibbonCommandContext.Empty);
 
@@ -65,7 +65,7 @@ public sealed class ShapeShadowRibbonTests
         var editor = new EditingSession(presentation, bus);
         editor.Select(shape.Id);
 
-        var registry = FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+        var registry = FreePRibbonTestRegistry.Compose(editor);
         registry.TryGet(ShapeEffectAuthoringPlanner.GlowSubtleCommandId, out var command).Should().BeTrue();
         command!.Execute(RibbonCommandContext.Empty);
 
@@ -99,7 +99,7 @@ public sealed class ShapeShadowRibbonTests
         var editor = new EditingSession(presentation, bus);
         editor.Select(shape.Id);
 
-        var registry = FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+        var registry = FreePRibbonTestRegistry.Compose(editor);
         registry.TryGet(ShapeEffectAuthoringPlanner.SoftEdgeSubtleCommandId, out var command).Should().BeTrue();
         command!.Execute(RibbonCommandContext.Empty);
 
@@ -133,7 +133,7 @@ public sealed class ShapeShadowRibbonTests
         var editor = new EditingSession(presentation, bus);
 
         editor.Select(shape.Id);
-        var registry = FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+        var registry = FreePRibbonTestRegistry.Compose(editor);
         registry.TryGet(ShapeEffectAuthoringPlanner.BevelSubtleCommandId, out var command).Should().BeTrue();
         command!.Execute(RibbonCommandContext.Empty);
 
@@ -167,7 +167,7 @@ public sealed class ShapeShadowRibbonTests
         var editor = new EditingSession(presentation, bus);
         editor.Select(shape.Id);
 
-        var registry = FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+        var registry = FreePRibbonTestRegistry.Compose(editor);
         registry.TryGet(ShapeEffectAuthoringPlanner.Shape3dSubtleCommandId, out var command).Should().BeTrue();
         command!.Execute(RibbonCommandContext.Empty);
 

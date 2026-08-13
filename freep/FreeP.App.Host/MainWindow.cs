@@ -380,92 +380,10 @@ public sealed partial class MainWindow : Window,
         // Ribbon. Wave 4C passes the slideshow launch Actions into the command registry;
         // StartSlideShow (Wave 4B) opens the fullscreen SlideShowWindow.
         var stateStore = new RibbonStateStore();
-        // Wave 10A: pass a lazy canvas getter so the ribbon format commands can route to the
-        // active RichTextBox editor when it is open.  SlideCanvas is created inside BuildBody
-        // (called below) and stored in the SlideCanvas field; the lambda captures the field
-        // reference via `this`, so it always resolves at call-time after body construction.
-        var commands = FreePRibbonCommands.Build(
-            stateStore,
+        var commands = FreePRibbonHostRegistryComposer.Build(
             Editor,
-            onStartFromStart:   () => StartSlideShow(true),
-            onStartFromCurrent: () => StartSlideShow(false),
-            onRehearseTimings:  () => StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent.RehearseTimings),
-            onRecordTimings:    () => StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent.RecordTimings),
-            onSlideShowSettings: () => OpenSlideShowSettingsDialog(),
-            onEditChartData:    () => OpenChartDataDialog(),
-            onEditChartOptions: () => OpenChartDisplayOptionsDialog(),
-            onEditChartAxisOptions: () => OpenChartAxisOptionsDialog(),
-            onEditChartSeriesOptions: () => OpenChartSeriesOptionsDialog(),
-            onEditChartPointOptions: () => OpenChartPointOptionsDialog(),
-            onEditChartLayoutOptions: () => OpenChartLayoutOptionsDialog(),
-            onEditChartExSeriesLayout: () => OpenChartExSeriesLayoutDialog(),
-            onEditChartDataTableOptions: () => OpenChartDataTableOptionsDialog(),
-            onEditChartBubbleOptions: () => OpenChartBubbleOptionsDialog(),
-            onEditChartPieOptions: () => OpenChartPieOptionsDialog(),
-            onEditChartPlotStyleOptions: () => OpenChartPlotStyleOptionsDialog(),
-            onEditChart3DViewOptions: () => OpenChart3DViewOptionsDialog(),
-            onEditChartTextOptions: () => OpenChartTextOptionsDialog(),
-            onEditChartAreaOptions: () => OpenChartAreaOptionsDialog(),
-            onEditChartProtectionOptions: () => OpenChartProtectionOptionsDialog(),
-            onEditRotationOptions: () => OpenRotationOptionsDialog(),
-            onInsertEmbeddedObject: () => InsertEmbeddedObjectFromFile(),
-            tryOpenInlineEmbeddedObject: () => SlideCanvas.TextEditor?.TryActivateInlineOleObject() == true,
-            getSlideCanvas:     () => SlideCanvas,
-            tryApplyNotesTextFormat: TryApplyCurrentSlideNotesTextFormat,
-            tryApplyNotesValueFormat: TryApplyCurrentSlideNotesValueFormat,
-            tryApplyNotesParagraphFormat: TryApplyCurrentSlideNotesParagraphFormat,
-            onEditPoints:       () => SlideCanvas.SetEditPointsMode(!SlideCanvas.EditPointsEnabled),
-            // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
-            onCustomSlideSize:  () => OpenSlideSizeDialog(),
-            onLayoutPicker:     () => OpenLayoutPicker(),
-            // Wave 10B: OS-clipboard service for ribbon Copy/Cut/Paste buttons.
-            osClipboard:        _osClipboard,
-            // Wave 11A: Insert Hyperlink dialog.
-            onInsertLink:       () => OpenHyperlinkDialog(),
-            onInsertSlideZoom:  () => OpenSlideZoomDialog(),
-            onInsertSectionZoom: () => OpenSectionZoomDialog(),
-            onInsertSummaryZoom: () => OpenSummaryZoomDialog(),
-            onEditZoomTarget: () => OpenZoomTargetDialog(),
-            onEditSummaryZoomTargets: () => OpenSummaryZoomTargetsDialog(),
-            onOpenSmartArtTextPane: () => ShowSmartArtTextPane(),
-            onConvertSmartArtToShapes: () => ConvertSelectedSmartArtToShapes(),
-            onFormatZoom:       () => OpenZoomObjectPropertiesDialog(),
-            onSetZoomCoverImage: () => OpenZoomCoverImagePicker(),
-            onResetZoomCoverImage: () => RestoreZoomPreview(),
-            // Wave 12B: Find & Replace dialogs.
-            onFind:             () => OpenFindDialog(),
-            onFindReplace:      () => OpenFindReplaceDialog(),
-            onReviewCommentsPane: () => ShowReviewCommentsPane(),
-            onReviewAccessibility: () => ShowAccessibilityCheckerPane(),
-            onReviewAltText: () => ShowAltTextPane(),
-            onReviewReadingOrder: () => ShowReadingOrderPane(),
-            onSelectionPane: () => ShowSelectionPane(),
-            onReviewProofing: () => ShowProofingPane(),
-            onAddComment: () => AddComment(PresentationPaneTextResources.NewCommentDefault),
-            onEditComment: () => EditSelectedComment(GetSelectedCommentText()),
-            onReplyComment: () => ReplyToSelectedComment(PresentationPaneTextResources.NewReplyDefault),
-            onDeleteComment: () => DeleteSelectedComment(),
-            onPreviousComment: () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment),
-            onNextComment: () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment),
-            onResolveComment: () => ResolveSelectedComment(),
-            onReopenComment: () => ReopenSelectedComment(),
-            // Wave 16B: Animation pane toggle.
-            onAnimPane:         () => ToggleAnimationPane(),
-            onTransitionSound:  () => PickTransitionSound(),
-            getEditPointsEnabled: () => SlideCanvas?.EditPointsEnabled ?? true,
-            setEditPointsEnabled: enabled => SlideCanvas?.SetEditPointsMode(enabled),
-            onTablePicker:      () => OpenTablePicker(),
-            onHeaderFooter:     focus => OpenHeaderFooterDialog(focus),
-            getViewShowState:   () => _viewShowState,
-            applyViewShowState: ApplyPresentationViewShowState,
-            getViewZoomState:   () => _viewZoomState,
-            applyViewZoomState: ApplyPresentationViewZoomState,
-            onCustomShows:      () => OpenCustomShowDialog(),
-            onSmartArtColorPreset: preset => ApplySmartArtColorPreset(preset),
-            onSmartArtLayoutPreset: preset => ApplySmartArtLayoutPreset(preset),
-            onSmartArtQuickStylePreset: preset => ApplySmartArtQuickStylePreset(preset),
-            importAsset: ImportPresentationAssetAsync,
-            onClipboardWriteFailed: ReportClipboardWriteFailure);
+            stateStore,
+            CreateRibbonHostProfile()).Registry;
         var ribbon = BuildRibbon(FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -3291,7 +3209,7 @@ public sealed partial class MainWindow : Window,
 
     // ── Wave 16B: Animation pane show/hide ───────────────────────────────────────
     //
-    // ToggleAnimationPane is called by FreePRibbonCommands when the freep.anim.pane
+    // ToggleAnimationPane is called by the ribbon host profile when the freep.anim.pane
     // toggle button is pressed.  It lazily constructs the AnimationPane on first show
     // and toggles _animPaneHost visibility.
     //

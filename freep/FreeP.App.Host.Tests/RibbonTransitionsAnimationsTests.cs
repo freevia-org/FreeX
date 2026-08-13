@@ -12,7 +12,7 @@ namespace FreeP.App.Host.Tests;
 ///
 /// Verifies:
 /// - FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf) includes the expected tabs, groups and command ids.
-/// - FreePRibbonCommands: invoking transition commands sets Editor.CurrentSlideTransition correctly.
+/// - The portable host composer sets Editor.CurrentSlideTransition correctly.
 /// - Invoking an animation command adds to Editor.CurrentSlideAnimations.
 /// - "Apply To All" propagates the current slide's transition to every slide.
 /// - Reorder (Move Earlier / Move Later) reorders the animation list.
@@ -41,16 +41,21 @@ public class RibbonTransitionsAnimationsTests
         Action? onStart = null, Action? onCurrent = null, Action? onCustomShows = null,
         Action? onRehearseTimings = null, Action? onRecordTimings = null,
         Action? onTransitionSound = null, Action? onSlideShowSettings = null)
-        => FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        => FreePRibbonTestRegistry.Compose(
             editor,
-            onStart,
-            onCurrent,
-            onRehearseTimings,
-            onRecordTimings,
-            onCustomShows: onCustomShows,
-            onTransitionSound: onTransitionSound,
-            onSlideShowSettings: onSlideShowSettings);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    StartSlideShowFromBeginning = onStart,
+                    StartSlideShowFromCurrent = onCurrent,
+                    RehearseTimings = onRehearseTimings,
+                    RecordTimings = onRecordTimings,
+                    OpenCustomShows = onCustomShows,
+                    PickTransitionSound = onTransitionSound,
+                    OpenSlideShowSettings = onSlideShowSettings,
+                },
+            });
 
     /// <summary>Executes a registered command by id.</summary>
     private static void Exec(RibbonCommandRegistry registry, string id, RibbonCommandContext? context = null)

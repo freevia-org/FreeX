@@ -162,7 +162,8 @@ public sealed class FreePRibbonCommandWorkflowTests
     public void RendererSourcesDelegateCommonRegistrationOwnership()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
-        var wpf = Read(root, "freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
+        var wpf = Read(root, "freep", "FreeP.App.Host", "MainWindow.RibbonProfile.cs");
+        var wpfMain = Read(root, "freep", "FreeP.App.Host", "MainWindow.cs");
         var avalonia = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var avaloniaWorkareaEndpoint = Read(
             root,
@@ -174,8 +175,9 @@ public sealed class FreePRibbonCommandWorkflowTests
             "internal RibbonCommandRegistry BuildCommandRegistry()",
             "private void OnCustomSlideSizeRequested");
 
-        wpf.Should().Contain("FreePRibbonHostRegistryComposer.Build(editor, stateStore, profile)")
-            .And.Contain("FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts")
+        wpfMain.Should().Contain("FreePRibbonHostRegistryComposer.Build(")
+            .And.Contain("CreateRibbonHostProfile()");
+        wpf.Should().Contain("FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts")
             .And.Contain("new FreePRibbonOleCommandEndpoints")
             .And.Contain("FreePRibbonTextActionTargets");
         wpf.Should().NotContain("registry.Register(")
@@ -187,6 +189,8 @@ public sealed class FreePRibbonCommandWorkflowTests
             .And.NotContain("ApplyBuiltInInsertion")
             .And.NotContain("ExecuteHeaderFooter")
             .And.NotContain("ExecuteDesignRequest");
+        File.Exists(Path.Combine(root, "freep", "FreeP.App.Host", "FreePRibbonCommands.cs"))
+            .Should().BeFalse("WPF composes the portable host profile directly");
         avaloniaRegistry.Should().Contain("FreePRibbonHostRegistryComposer.Build(")
             .And.Contain("FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts")
             .And.Contain("new FreePRibbonFileCommandEndpoints")

@@ -18,7 +18,7 @@ public sealed class SlideObjectInsertionRoutingSourceTests
             root,
             "freep",
             "FreeP.App.Host",
-            "FreePRibbonCommands.cs"));
+            "MainWindow.RibbonProfile.cs"));
         var adapter = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -33,7 +33,7 @@ public sealed class SlideObjectInsertionRoutingSourceTests
         workflow.Should().Contain("SlideObjectInsertionPlanner.BuiltInPlans");
         workflow.Should().Contain("plan.CommandId == SlideObjectInsertionPlanner.Table3x3CommandId");
         workflow.Should().Contain("FreePRibbonHostActionKind.InsertPicture");
-        host.Should().Contain("QueueAssetImport(importAsset, PresentationAssetImportKind.Picture)");
+        host.Should().Contain("QueueAssetImport(PresentationAssetImportKind.Picture)");
         adapter.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         adapter.Should().Contain("new PresentationAssetImportWorkflow(");
         adapter.Should().Contain("new PresentationAssetImportExecutionPort(");

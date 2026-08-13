@@ -111,10 +111,15 @@ public sealed class WpfClipboardCommandTests
 
     private static void ExecuteRibbonCut(EditingSession editor, OsClipboardService service)
     {
-        var registry = FreePRibbonCommands.Build(
-            new Free.Shared.Ribbon.RibbonStateStore(),
+        var registry = FreePRibbonTestRegistry.Compose(
             editor,
-            osClipboard: service);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    Cut = () => service.Cut(editor),
+                },
+            });
 
         registry.TryGet("freep.cut", out var command).Should().BeTrue();
         command!.Execute(Free.Shared.Ribbon.RibbonCommandContext.Empty);

@@ -32,36 +32,62 @@ public class RibbonEditorCompleteness5BTests
         Func<TableCellTextFormatKind, bool>? tryApplyNotesTextFormat = null,
         Func<TableCellTextValueFormatKind, object?, bool>? tryApplyNotesValueFormat = null,
         Func<TableCellParagraphFormatKind, object?, bool>? tryApplyNotesParagraphFormat = null)
-        => FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        => FreePRibbonTestRegistry.Compose(
             editor,
-            tryApplyNotesTextFormat: tryApplyNotesTextFormat,
-            tryApplyNotesValueFormat: tryApplyNotesValueFormat,
-            tryApplyNotesParagraphFormat: tryApplyNotesParagraphFormat);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = FreePRibbonTestRegistry.CreateModelActionEndpoints(editor),
+                TextActionTargets = new FreePRibbonTextActionTargets
+                {
+                    Notes = FreePRibbonTextActionEndpointFactory.CreateFormattingTarget(
+                        tryApplyNotesTextFormat,
+                        tryApplyNotesValueFormat,
+                        tryApplyNotesParagraphFormat),
+                },
+            });
 
     private static RibbonCommandRegistry MakeRegistry(
         EditingSession editor,
         Func<PresentationPictureBulletPayload?> pickPictureBulletPayload)
-        => FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        => FreePRibbonTestRegistry.Compose(
             editor,
-            pickPictureBulletPayload: pickPictureBulletPayload);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    PickPictureBullet = () =>
+                    {
+                        if (pickPictureBulletPayload() is { } payload)
+                            editor.TryApplyActiveTableCellParagraphPictureBullet(payload);
+                    },
+                },
+            });
 
     private static RibbonCommandRegistry MakeSmartArtRegistry(
         EditingSession editor,
         Action<SmartArtLayoutPreset> onSmartArtLayoutPreset)
-        => FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        => FreePRibbonTestRegistry.Compose(
             editor,
-            onSmartArtLayoutPreset: onSmartArtLayoutPreset);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    ApplySmartArtLayout = onSmartArtLayoutPreset,
+                },
+            });
 
     private static RibbonCommandRegistry MakeSmartArtQuickStyleRegistry(
         EditingSession editor,
         Action<SmartArtQuickStylePreset> onSmartArtQuickStylePreset)
-        => FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        => FreePRibbonTestRegistry.Compose(
             editor,
-            onSmartArtQuickStylePreset: onSmartArtQuickStylePreset);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    ApplySmartArtQuickStyle = onSmartArtQuickStylePreset,
+                },
+            });
 
     private static void Exec(RibbonCommandRegistry registry, string id,
         RibbonCommandContext? context = null)
@@ -578,9 +604,19 @@ public class RibbonEditorCompleteness5BTests
         ed.Select(shape.Id);
 
         OleObjectInfo? opened = null;
-        var registry = FreePRibbonCommands.Build(
-            new RibbonStateStore(), ed,
-            onOpenEmbeddedObject: ole => opened = ole);
+        var registry = FreePRibbonTestRegistry.Compose(
+            ed,
+            new FreePRibbonHostPorts
+            {
+                OleCommands = new FreePRibbonOleCommandEndpoints
+                {
+                    TryOpenSelectedEmbeddedObject = ole =>
+                    {
+                        opened = ole;
+                        return true;
+                    },
+                },
+            });
 
         Exec(registry, OleActivationPlanner.OpenEmbeddedObjectCommandId);
 
@@ -593,15 +629,24 @@ public class RibbonEditorCompleteness5BTests
         var (ed, _) = MakeSession();
         bool inlineOpened = false;
         bool slideOpened = false;
-        var registry = FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        var registry = FreePRibbonTestRegistry.Compose(
             ed,
-            tryOpenInlineEmbeddedObject: () =>
+            new FreePRibbonHostPorts
             {
-                inlineOpened = true;
-                return true;
-            },
-            onOpenEmbeddedObject: _ => slideOpened = true);
+                OleCommands = new FreePRibbonOleCommandEndpoints
+                {
+                    TryOpenInlineEmbeddedObject = () =>
+                    {
+                        inlineOpened = true;
+                        return true;
+                    },
+                    TryOpenSelectedEmbeddedObject = _ =>
+                    {
+                        slideOpened = true;
+                        return true;
+                    },
+                },
+            });
 
         Exec(registry, OleActivationPlanner.OpenEmbeddedObjectCommandId);
 
@@ -614,10 +659,15 @@ public class RibbonEditorCompleteness5BTests
     {
         var (ed, _) = MakeSession();
         var invoked = false;
-        var registry = FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        var registry = FreePRibbonTestRegistry.Compose(
             ed,
-            onInsertEmbeddedObject: () => invoked = true);
+            new FreePRibbonHostPorts
+            {
+                OleCommands = new FreePRibbonOleCommandEndpoints
+                {
+                    InsertEmbeddedObject = () => invoked = true,
+                },
+            });
 
         Exec(registry, OleInsertionPlanner.InsertEmbeddedObjectCommandId);
 
@@ -708,7 +758,15 @@ public class RibbonEditorCompleteness5BTests
     {
         var (ed, _) = MakeSession();
         var invoked = false;
-        var reg = FreePRibbonCommands.Build(new RibbonStateStore(), ed, onCustomSlideSize: () => invoked = true);
+        var reg = FreePRibbonTestRegistry.Compose(
+            ed,
+            new FreePRibbonHostPorts
+            {
+                DesignCommands = new FreePRibbonDesignCommandEndpoints
+                {
+                    OpenCustomSlideSize = _ => invoked = true,
+                },
+            });
 
         Exec(reg, "freep.slide-size-custom");
 
@@ -720,7 +778,15 @@ public class RibbonEditorCompleteness5BTests
     {
         var (ed, _) = MakeSession();
         var invoked = false;
-        var reg = FreePRibbonCommands.Build(new RibbonStateStore(), ed, onLayoutPicker: () => invoked = true);
+        var reg = FreePRibbonTestRegistry.Compose(
+            ed,
+            new FreePRibbonHostPorts
+            {
+                DesignCommands = new FreePRibbonDesignCommandEndpoints
+                {
+                    OpenLayoutPicker = _ => invoked = true,
+                },
+            });
 
         Exec(reg, PresentationDesignCommandPlanner.LayoutCommandId);
 
@@ -732,7 +798,15 @@ public class RibbonEditorCompleteness5BTests
     {
         var (ed, _) = MakeSession();
         var invoked = false;
-        var reg = FreePRibbonCommands.Build(new RibbonStateStore(), ed, onTablePicker: () => invoked = true);
+        var reg = FreePRibbonTestRegistry.Compose(
+            ed,
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    OpenTablePicker = () => invoked = true,
+                },
+            });
 
         Exec(reg, SlideObjectInsertionPlanner.Table3x3CommandId);
 
@@ -744,10 +818,15 @@ public class RibbonEditorCompleteness5BTests
     {
         var (ed, _) = MakeSession();
         HeaderFooterCommandFocus? focus = null;
-        var reg = FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        var reg = FreePRibbonTestRegistry.Compose(
             ed,
-            onHeaderFooter: value => focus = value);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    OpenHeaderFooter = value => focus = value,
+                },
+            });
 
         Exec(reg, HeaderFooterCommandPlanner.DateTimeCommandId);
 
@@ -759,10 +838,15 @@ public class RibbonEditorCompleteness5BTests
     {
         var (ed, _) = MakeSession();
         var invoked = false;
-        var reg = FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        var reg = FreePRibbonTestRegistry.Compose(
             ed,
-            onResetZoomCoverImage: () => invoked = true);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    ResetZoomCoverImage = () => invoked = true,
+                },
+            });
 
         Exec(reg, FreeP.App.Compositor.ZoomCoverImagePlanner.ResetCommandId);
 
@@ -775,11 +859,20 @@ public class RibbonEditorCompleteness5BTests
         var (ed, _) = MakeSession();
         var stateStore = new RibbonStateStore();
         var state = PresentationViewShowState.Default;
-        var reg = FreePRibbonCommands.Build(
-            stateStore,
+        var reg = FreePRibbonTestRegistry.Compose(
             ed,
-            getViewShowState: () => state,
-            applyViewShowState: next => state = next);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    ApplyViewShowState = next => state = next,
+                },
+                QueryEndpoints = new FreePRibbonHostQueryEndpoints
+                {
+                    ViewShowState = () => state,
+                },
+            },
+            stateStore);
 
         Exec(reg, PresentationViewShowPlanner.GridlinesCommandId);
 
@@ -799,11 +892,19 @@ public class RibbonEditorCompleteness5BTests
     {
         var (ed, _) = MakeSession();
         var state = PresentationViewZoomState.FitToWindow;
-        var reg = FreePRibbonCommands.Build(
-            new RibbonStateStore(),
+        var reg = FreePRibbonTestRegistry.Compose(
             ed,
-            getViewZoomState: () => state,
-            applyViewZoomState: next => state = next);
+            new FreePRibbonHostPorts
+            {
+                ActionEndpoints = new FreePRibbonHostActionEndpoints
+                {
+                    ApplyViewZoomState = next => state = next,
+                },
+                QueryEndpoints = new FreePRibbonHostQueryEndpoints
+                {
+                    ViewZoomState = () => state,
+                },
+            });
 
         Exec(
             reg,

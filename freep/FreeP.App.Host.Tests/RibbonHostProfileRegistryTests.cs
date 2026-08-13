@@ -13,14 +13,19 @@ public sealed class RibbonHostProfileRegistryTests
         var expectedCommon = FreePRibbonCommandWorkflow.Build(
             editor,
             new RibbonStateStore()).CommonCommandIds;
-        var registry = FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+        var result = FreePRibbonHostRegistryComposer.Build(
+            editor,
+            new RibbonStateStore(),
+            FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts
+            {
+                OleCommands = new FreePRibbonOleCommandEndpoints(),
+            }));
 
         foreach (var commandId in expectedCommon)
-            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} is portable");
-        foreach (var commandId in FreePRibbonHostRegistryComposer.OleCommandIds)
-            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} is WPF-native OLE");
+            result.Registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} is portable");
+        result.NativeCommandIds.Should().Equal(FreePRibbonHostRegistryComposer.OleCommandIds);
         foreach (var commandId in FreePRibbonHostRegistryComposer.FileCommandIds)
-            registry.TryGet(commandId, out _).Should().BeFalse($"{commandId} stays in WPF Backstage");
+            result.Registry.TryGet(commandId, out _).Should().BeFalse($"{commandId} stays in WPF Backstage");
     }
 
     private static EditingSession MakeEditor()
