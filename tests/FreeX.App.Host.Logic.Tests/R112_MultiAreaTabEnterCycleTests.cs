@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
 using FluentAssertions;
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -19,7 +20,7 @@ namespace FreeX.App.Host.Tests;
 /// (single-area only), excluding the multi-area case entirely.
 ///
 /// Backward (Shift+Tab) cycling is exercised at the unit level via
-/// <see cref="AdvanceActiveCellWithinRange_ForwardAndBackward_ReportWrapAtOppositeCorners"/>
+/// <see cref="SharedPlanner_ForwardAndBackward_ReportWrapAtOppositeCorners"/>
 /// instead of through the full MainWindow_KeyDown dispatch: unlike the existing F8
 /// "ExcelSelectionMode.Extend" precedent (see R87_ProtectionExtendSelectionTests /
 /// R68_F8ExtendSelectionMouseClickTests) that stands in for Shift when the code being tested reads
@@ -170,42 +171,32 @@ public sealed class R112_MultiAreaTabEnterCycleTests
     }
 
     // Unit-level coverage for the backward (Shift+Tab / Shift+Enter) direction, which reverses
-    // which corner counts as "finished" -- exercised directly against the actual private static
-    // helper the fix extended (rather than through the full KeyDown dispatch, since faking a
+    // which corner counts as "finished" -- exercised directly against the shared planner
+    // (rather than through the full KeyDown dispatch, since faking a
     // physical Shift modifier is not reliably possible in a headless WPF test: see the class-level
-    // remarks). Confirms `wrappedPastEnd` fires at the OPPOSITE corner when going backward, which is
-    // the piece of logic the multi-area area-switch decision in MainWindow_KeyDown depends on.
+    // remarks). Confirms the target wraps at the opposite corner when going backward, which is
+    // the behavior the multi-area area-switch decision depends on.
     [Fact]
-    public void AdvanceActiveCellWithinRange_ForwardAndBackward_ReportWrapAtOppositeCorners()
+    public void SharedPlanner_ForwardAndBackward_ReportWrapAtOppositeCorners()
     {
         var sheetId = new Workbook("Book1").AddSheet("Sheet1").Id;
         var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)); // A1:B2
-        var method = typeof(MainWindow).GetMethod(
-            "AdvanceActiveCellWithinRange", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new MissingMethodException(nameof(MainWindow), "AdvanceActiveCellWithinRange");
 
-        // Forward Tab from the range's bottom-right corner (B2) must report wrappedPastEnd = true.
-        var forwardArgs = new object?[] { range, new CellAddress(sheetId, 2, 2), true, true, null };
-        var forwardResult = (CellAddress)method.Invoke(null, forwardArgs)!;
-        forwardResult.Should().Be(new CellAddress(sheetId, 1, 1));
-        ((bool)forwardArgs[4]!).Should().BeTrue("B2 is the range's last cell going forward");
+        SelectionNavigationPlanner.TryAdvanceWithinSelection(
+            [range], null, new CellAddress(sheetId, 2, 2), isTab: true, forward: true, out var forwardPlan).Should().BeTrue();
+        forwardPlan.Target.Should().Be(new CellAddress(sheetId, 1, 1));
 
-        // Forward Tab from a non-corner cell (A1) must NOT report a wrap.
-        var forwardMidArgs = new object?[] { range, new CellAddress(sheetId, 1, 1), true, true, null };
-        method.Invoke(null, forwardMidArgs);
-        ((bool)forwardMidArgs[4]!).Should().BeFalse("A1 is not yet the range's last cell going forward");
+        SelectionNavigationPlanner.TryAdvanceWithinSelection(
+            [range], null, new CellAddress(sheetId, 1, 1), isTab: true, forward: true, out var forwardMidPlan).Should().BeTrue();
+        forwardMidPlan.Target.Should().Be(new CellAddress(sheetId, 1, 2));
 
-        // Backward (Shift+Tab) from the range's TOP-LEFT corner (A1) must report wrappedPastEnd =
-        // true -- the opposite corner from the forward case.
-        var backwardArgs = new object?[] { range, new CellAddress(sheetId, 1, 1), true, false, null };
-        var backwardResult = (CellAddress)method.Invoke(null, backwardArgs)!;
-        backwardResult.Should().Be(new CellAddress(sheetId, 2, 2));
-        ((bool)backwardArgs[4]!).Should().BeTrue("A1 is the range's last cell going backward");
+        SelectionNavigationPlanner.TryAdvanceWithinSelection(
+            [range], null, new CellAddress(sheetId, 1, 1), isTab: true, forward: false, out var backwardPlan).Should().BeTrue();
+        backwardPlan.Target.Should().Be(new CellAddress(sheetId, 2, 2));
 
-        // Backward Tab from a non-corner cell (B2) must NOT report a wrap.
-        var backwardMidArgs = new object?[] { range, new CellAddress(sheetId, 2, 2), true, false, null };
-        method.Invoke(null, backwardMidArgs);
-        ((bool)backwardMidArgs[4]!).Should().BeFalse("B2 is not yet the range's last cell going backward");
+        SelectionNavigationPlanner.TryAdvanceWithinSelection(
+            [range], null, new CellAddress(sheetId, 2, 2), isTab: true, forward: false, out var backwardMidPlan).Should().BeTrue();
+        backwardMidPlan.Target.Should().Be(new CellAddress(sheetId, 2, 1));
     }
 
     // Directly assigns a finished two-area multi-selection (SheetGrid.SelectedRanges = both areas,

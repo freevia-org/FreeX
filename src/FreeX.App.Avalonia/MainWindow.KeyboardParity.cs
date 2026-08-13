@@ -595,15 +595,7 @@ public sealed partial class MainWindow
     private void CycleSelectionCorner()
     {
         var range = _session.SelectedRanges.Count == 1 ? _session.SelectedRanges[0] : _session.SelectedRange;
-        var corners = new[]
-        {
-            range.Start,
-            new CellAddress(range.Start.Sheet, range.Start.Row, range.End.Col),
-            range.End,
-            new CellAddress(range.Start.Sheet, range.End.Row, range.Start.Col),
-        }.Distinct().ToList();
-        var index = corners.IndexOf(_session.ActiveCell);
-        var next = index < 0 ? range.Start : corners[(index + 1) % corners.Count];
+        var next = SelectionNavigationPlanner.GetNextCorner(range, _session.ActiveCell);
 
         // Keep the full rectangle selected while moving only the active cell to the requested corner --
         // matching Excel and WPF's CycleSelectionCorner. The old form passed a 1x1 GridRange(next, next)

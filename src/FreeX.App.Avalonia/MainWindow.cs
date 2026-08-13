@@ -29071,25 +29071,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_endMode)
             _endMode = false;
 
-        // R78-render-selection-namebox-5-2: when a single multi-cell rectangular range is already
-        // selected (no Ctrl-added extra areas), Enter/Tab should move the active cell WITHIN the
-        // range -- wrapping at its edges -- and keep the whole range highlighted, matching Excel
-        // and the WPF host (MainWindow.Selection.cs), instead of collapsing the selection down to
-        // one cell. A lone selected MERGED cell also satisfies Start != End but is logically a
-        // single cell, not a real multi-cell selection -- Tab/Enter skips past it instead (see
-        // IsSingleMergedCellRange), falling through to the plain move-active-cell path below.
+        // Enter/Tab moves the active cell within the current selection without changing its areas.
+        // The shared planner also carries movement across Ctrl-selected areas in original selection
+        // order, matching WPF, and treats a lone merged region as one logical cell.
         if (moveOnly &&
-            _session.SelectedRanges.Count <= 1 &&
-            _session.SelectedRange is { } activeMultiRange &&
-            activeMultiRange.Start != activeMultiRange.End &&
-            !IsSingleMergedCellRange(sheet, activeMultiRange))
-        {
-            var withinRangeTarget = AdvanceActiveCellWithinRange(
-                activeMultiRange,
+            SelectionNavigationPlanner.TryAdvanceWithinSelection(
+                _session.SelectedRanges,
+                sheet,
                 current,
                 isTab: navigationKey == ExcelWorksheetNavigationKey.Tab,
-                forward: !extendSelection);
-            _session.MoveActiveCellWithinSelection(withinRangeTarget);
+                forward: !extendSelection,
+                out var withinSelectionPlan))
+        {
+            _session.MoveActiveCellWithinSelection(withinSelectionPlan.Target);
             ClearSelectedDrawingObject();
             e.Handled = true;
             RefreshShell("Ready");
@@ -29213,85 +29207,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         return candidate;
-    }
-
-    // True when `range` is exactly the merged region anchored at its own Start -- i.e. the
-    // "selection" is really just one logical merged cell, not a genuine multi-cell range
-    // (mirrors the WPF host's MainWindow.Selection.cs IsSingleMergedCellRange, R51-render-merged-
-    // cell-edit-nav-3-2).
-    private static bool IsSingleMergedCellRange(Sheet? sheet, GridRange range)
-    {
-        if (sheet is not { MergedRegions.Count: > 0 })
-            return false;
-
-        return sheet.GetMergeRegion(range.Start) is { } merge &&
-            merge.Start == range.Start &&
-            merge.End == range.End;
-    }
-
-    // Advances the active cell within an already-selected multi-cell range for Enter/Tab (and
-    // their Shift-reversed variants), wrapping at the range's edges the way Excel does: Tab moves
-    // right and wraps to the start of the next row; Enter moves down and wraps to the top of the
-    // next column; reaching the last cell in the direction of travel wraps back around to the
-    // opposite edge of the range (R78-render-selection-namebox-5-2, mirrors the WPF host's
-    // MainWindow.Selection.cs AdvanceActiveCellWithinRange).
-    private static CellAddress AdvanceActiveCellWithinRange(GridRange range, CellAddress current, bool isTab, bool forward)
-    {
-        var minRow = range.Start.Row;
-        var maxRow = range.End.Row;
-        var minCol = range.Start.Col;
-        var maxCol = range.End.Col;
-        var row = Math.Clamp(current.Row, minRow, maxRow);
-        var col = Math.Clamp(current.Col, minCol, maxCol);
-
-        if (isTab)
-        {
-            if (forward)
-            {
-                if (col < maxCol)
-                    col++;
-                else
-                {
-                    col = minCol;
-                    row = row < maxRow ? row + 1 : minRow;
-                }
-            }
-            else
-            {
-                if (col > minCol)
-                    col--;
-                else
-                {
-                    col = maxCol;
-                    row = row > minRow ? row - 1 : maxRow;
-                }
-            }
-        }
-        else
-        {
-            if (forward)
-            {
-                if (row < maxRow)
-                    row++;
-                else
-                {
-                    row = minRow;
-                    col = col < maxCol ? col + 1 : minCol;
-                }
-            }
-            else
-            {
-                if (row > minRow)
-                    row--;
-                else
-                {
-                    row = maxRow;
-                    col = col > minCol ? col - 1 : maxCol;
-                }
-            }
-        }
-
-        return new CellAddress(current.Sheet, row, col);
     }
 
     private CellAddress OffsetAddress(CellAddress current, int rowDelta, int colDelta) =>

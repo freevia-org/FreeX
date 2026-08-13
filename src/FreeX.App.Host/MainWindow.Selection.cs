@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Services;
@@ -980,34 +981,19 @@ public partial class MainWindow
             : SheetGrid.SelectedRange is { } soleRange ? new[] { soleRange }
             : null;
 
-        bool eligibleForWithinSelectionMove =
-            multiAreaCandidate is { Count: > 1 } ||
-            (multiAreaCandidate is { Count: 1 } soleAreaList &&
-             soleAreaList[0].Start != soleAreaList[0].End &&
-             !IsSingleMergedCellRange(sheet, soleAreaList[0]));
-
-        if (moveOnly && _selectionMode == ExcelSelectionMode.Normal && eligibleForWithinSelectionMove)
+        if (moveOnly &&
+            _selectionMode == ExcelSelectionMode.Normal &&
+            multiAreaCandidate is { Count: > 0 } areas &&
+            SelectionNavigationPlanner.TryAdvanceWithinSelection(
+                areas,
+                sheet,
+                _selectionAnchor ?? areas[^1].Start,
+                isTab: e.Key == Key.Tab,
+                forward: !shiftHeld,
+                out var withinSelectionPlan))
         {
-            var areas = multiAreaCandidate!;
-            var withinRangeCurrent = _selectionAnchor ?? areas[^1].Start;
-            int areaIndex = FindContainingAreaIndex(areas, withinRangeCurrent);
-            if (areaIndex < 0)
-                areaIndex = areas.Count - 1;
-
-            var withinRangeTarget = AdvanceActiveCellWithinRange(
-                areas[areaIndex], withinRangeCurrent, isTab: e.Key == Key.Tab, forward: !shiftHeld,
-                out var wrappedPastAreaEnd);
-
-            if (wrappedPastAreaEnd && areas.Count > 1)
-            {
-                int areaStep = shiftHeld ? -1 : 1;
-                int nextAreaIndex = ((areaIndex + areaStep) % areas.Count + areas.Count) % areas.Count;
-                var nextArea = areas[nextAreaIndex];
-                withinRangeTarget = shiftHeld ? nextArea.End : nextArea.Start;
-            }
-
-            MoveActiveCellWithinSelection(withinRangeTarget);
-            EnsureCellVisible(withinRangeTarget);
+            MoveActiveCellWithinSelection(withinSelectionPlan.Target);
+            EnsureCellVisible(withinSelectionPlan.Target);
             e.Handled = true;
             return;
         }
@@ -1177,110 +1163,6 @@ public partial class MainWindow
         return candidate;
     }
 
-    // True when `range` is exactly the merged region anchored at its own Start -- i.e. the
-    // "selection" is really just one logical merged cell, not a genuine multi-cell range
-    // (R51-render-merged-cell-edit-nav-3-2).
-    private static bool IsSingleMergedCellRange(Sheet? sheet, GridRange range)
-    {
-        if (sheet is not { MergedRegions.Count: > 0 })
-            return false;
-
-        return sheet.GetMergeRegion(range.Start) is { } merge &&
-               merge.Start == range.Start &&
-               merge.End == range.End;
-    }
-
-    // Finds which area of a multi-area (Ctrl+click) selection currently contains `cell`, so
-    // Tab/Enter cycling can resume advancing within the RIGHT area after a previous keypress
-    // already moved the active cell into a non-last area (R112-app-keyboard-nav-multiarea-tab-1).
-    // Falls back to -1 (caller defaults to the last/active area) if none contain it, which can
-    // only happen if the active cell and the selection ever fall out of sync.
-    private static int FindContainingAreaIndex(IReadOnlyList<GridRange> areas, CellAddress cell)
-    {
-        for (int i = 0; i < areas.Count; i++)
-        {
-            if (areas[i].Contains(cell))
-                return i;
-        }
-
-        return -1;
-    }
-
-    // Advances the active cell within an already-selected multi-cell range for Enter/Tab
-    // (and their Shift-reversed variants), wrapping at the range's edges the way Excel does:
-    // Tab moves right and wraps to the start of the next row; Enter moves down and wraps to the
-    // top of the next column; reaching the last cell in the direction of travel wraps back
-    // around to the opposite edge of the range.
-    //
-    // `wrappedPastEnd` reports whether `current` was ALREADY at the range's final cell in the
-    // direction of travel (its bottom-right corner going forward, top-left going backward) before
-    // this call -- i.e. this range is now "finished" and, for a multi-area selection, the caller
-    // should continue on to the next disjoint area instead of using the wrapped-within-range
-    // result this method still returns (R112-app-keyboard-nav-multiarea-tab-1).
-    private static CellAddress AdvanceActiveCellWithinRange(
-        GridRange range, CellAddress current, bool isTab, bool forward, out bool wrappedPastEnd)
-    {
-        var minRow = range.Start.Row;
-        var maxRow = range.End.Row;
-        var minCol = range.Start.Col;
-        var maxCol = range.End.Col;
-        var row = Math.Clamp(current.Row, minRow, maxRow);
-        var col = Math.Clamp(current.Col, minCol, maxCol);
-
-        wrappedPastEnd = forward
-            ? row == maxRow && col == maxCol
-            : row == minRow && col == minCol;
-
-        if (isTab)
-        {
-            if (forward)
-            {
-                if (col < maxCol)
-                    col++;
-                else
-                {
-                    col = minCol;
-                    row = row < maxRow ? row + 1 : minRow;
-                }
-            }
-            else
-            {
-                if (col > minCol)
-                    col--;
-                else
-                {
-                    col = maxCol;
-                    row = row > minRow ? row - 1 : maxRow;
-                }
-            }
-        }
-        else
-        {
-            if (forward)
-            {
-                if (row < maxRow)
-                    row++;
-                else
-                {
-                    row = minRow;
-                    col = col < maxCol ? col + 1 : minCol;
-                }
-            }
-            else
-            {
-                if (row > minRow)
-                    row--;
-                else
-                {
-                    row = maxRow;
-                    col = col > minCol ? col - 1 : maxCol;
-                }
-            }
-        }
-
-        return new CellAddress(current.Sheet, row, col);
-    }
-
     // Moves the active cell to `addr` within the CURRENT selection without touching
     // SheetGrid.SelectedRange, so the pre-existing multi-cell marquee stays highlighted
     // (unlike SetActiveCell, which always collapses the selection to a single cell).
@@ -1311,7 +1193,7 @@ public partial class MainWindow
             return;
 
         var currentCorner = _selectionCursor ?? _selectionAnchor ?? range.Start;
-        var nextCorner = SelectionCornerNavigator.GetNextCorner(range, currentCorner);
+        var nextCorner = SelectionNavigationPlanner.GetNextCorner(range, currentCorner);
         _selectionAnchor = nextCorner;
         _selectionCursor = nextCorner;
         SheetGrid.SelectedRange = range;
