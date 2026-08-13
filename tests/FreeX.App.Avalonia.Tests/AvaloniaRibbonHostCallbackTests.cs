@@ -61,12 +61,11 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("Table")]
     [InlineData("Conditional Formatting")]
     [InlineData(FreeXRibbonCommandIds.DataSortAscending)]
-    public void BuildRegistry_WithoutCallbacks_LeavesNoOp(string commandId)
+    public void BuildRegistry_WithoutCallbacks_LeavesCommandUnregistered(string commandId)
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
-        Assert.True(registry.TryGet(Canonical(commandId), out var command));
-        Assert.IsType<EmptyRibbonCommand>(command);
+        Assert.False(registry.TryGet(Canonical(commandId), out _));
     }
 
     [Fact]
@@ -300,12 +299,13 @@ public sealed class AvaloniaRibbonHostCallbackTests
     [InlineData("Top 10 Items")]
     public void NewTabCommands_AreRealCommandIds_AndBindViaExtraCommands(string commandId)
     {
-        // The canonical id exists in the shared definition (so it seeds a NoOp default to begin with) ...
+        // The canonical id exists in the shared definition, but an absent host callback must not
+        // masquerade as an enabled command.
         var defaults = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
-        Assert.True(defaults.TryGet(Canonical(commandId), out var noOp));
-        Assert.IsType<EmptyRibbonCommand>(noOp);
+        Assert.True(FreeXRibbonCommandCatalog.TryGet(commandId, out _));
+        Assert.False(defaults.TryGet(Canonical(commandId), out _));
 
-        // ... and ExtraCommands (how MainWindow wires the new tabs) overrides it with a real command.
+        // ExtraCommands (how MainWindow wires the new tabs) registers a real command.
         var wired = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
         {
             ExtraCommands = new Dictionary<string, Action> { [commandId] = () => { } },
@@ -322,8 +322,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
             Assert.True(FreeXRibbonCommandCatalog.TryGet(item.CommandId, out _));
 
             var defaults = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
-            Assert.True(defaults.TryGet(Canonical(item.CommandId), out var noOp), $"Conditional-format popup id '{item.CommandId}' is not in the shared definition.");
-            Assert.IsType<EmptyRibbonCommand>(noOp);
+            Assert.False(defaults.TryGet(Canonical(item.CommandId), out _));
 
             var wired = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
             {
@@ -339,14 +338,13 @@ public sealed class AvaloniaRibbonHostCallbackTests
     {
         // MainWindow wires the Home ▸ Styles ▸ Cell Styles gallery items by looping CellStylePreset and using
         // each preset's display name as the canonical ribbon menu id. Verify every display name is a real id
-        // the shared definition emits (seeded NoOp) and that wiring it via ExtraCommands overrides the NoOp.
+        // the shared definition emits and that wiring it via ExtraCommands registers a real command.
         foreach (var preset in System.Enum.GetValues<FreeX.App.Services.CellStylePreset>())
         {
             var id = FreeX.App.Services.CellStyleDiffPlanner.GetCellStylePresetDisplayName(preset);
 
             var defaults = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
-            Assert.True(defaults.TryGet(Canonical(id), out var noOp), $"Cell-style id '{id}' is not in the shared definition.");
-            Assert.IsType<EmptyRibbonCommand>(noOp);
+            Assert.False(defaults.TryGet(Canonical(id), out _));
 
             var wired = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
             {
@@ -413,12 +411,11 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
-    public void WithoutSetFontSize_FontSizeComboStaysNoOp()
+    public void WithoutSetFontSize_FontSizeComboStaysUnregistered()
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
-        Assert.True(registry.TryGet(Canonical("Font Size"), out var command));
-        Assert.IsType<EmptyRibbonCommand>(command);
+        Assert.False(registry.TryGet(Canonical("Font Size"), out _));
     }
 
     [Fact]
@@ -436,12 +433,11 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
-    public void WithoutSetFontName_FontNameComboStaysNoOp()
+    public void WithoutSetFontName_FontNameComboStaysUnregistered()
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
-        Assert.True(registry.TryGet(Canonical("Font"), out var command));
-        Assert.IsType<EmptyRibbonCommand>(command);
+        Assert.False(registry.TryGet(Canonical("Font"), out _));
     }
 
     [Theory]
@@ -509,19 +505,16 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
-    public void DrawCommands_DefaultToEnabledAndBindThroughTheSharedExtraCommandPath()
+    public void DrawCommands_DefaultToUnavailableAndBindThroughTheSharedExtraCommandPath()
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
-        Assert.True(registry.TryGet(new RibbonCommandId("Bring Forward"), out var bringForward));
-        Assert.IsType<EmptyRibbonCommand>(bringForward);
-        Assert.True(registry.TryGet(new RibbonCommandId("Shape Fill"), out var shapeFill));
-        Assert.IsType<EmptyRibbonCommand>(shapeFill);
+        Assert.False(registry.TryGet(new RibbonCommandId("Bring Forward"), out _));
+        Assert.False(registry.TryGet(new RibbonCommandId("Shape Fill"), out _));
 
         foreach (var commandId in new[] { "Crop Picture", "Shape Gradient", "Shape Effects" })
         {
-            Assert.True(registry.TryGet(new RibbonCommandId(commandId), out var defaultCommand));
-            Assert.IsType<EmptyRibbonCommand>(defaultCommand);
+            Assert.False(registry.TryGet(new RibbonCommandId(commandId), out _));
 
             var wired = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
             {
@@ -643,7 +636,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
-    public void StaticDeclarativeMenuActions_AreRegisteredByTheAvaloniaComposition()
+    public void StaticDeclarativeMenuActions_AreCanonicalAndNeverSeededWithNoOps()
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new());
         var menuIds = FreeXRibbonDefinition.Build().Tabs
@@ -654,7 +647,11 @@ public sealed class AvaloniaRibbonHostCallbackTests
             .Distinct(StringComparer.Ordinal);
 
         foreach (var id in menuIds)
-            Assert.True(registry.TryGet(new RibbonCommandId(id), out _), id);
+        {
+            Assert.True(FreeXRibbonCommandCatalog.TryGet(id, out _), id);
+            if (registry.TryGet(new RibbonCommandId(id), out var command))
+                Assert.IsNotType<EmptyRibbonCommand>(command);
+        }
     }
     private static AvaloniaRibbonHostCallbacks AllWired() => new()
     {

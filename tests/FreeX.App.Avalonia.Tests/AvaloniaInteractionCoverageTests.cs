@@ -383,7 +383,6 @@ public sealed class AvaloniaInteractionCoverageTests
             {
                 Assert.True(registry.TryGet(new RibbonCommandId(commandId), out var drawCommand));
                 Assert.IsNotType<EmptyRibbonCommand>(drawCommand);
-                Assert.IsNotType<DisabledNoOpRibbonCommand>(drawCommand);
                 Assert.IsAssignableFrom<IRibbonStatefulCommand>(drawCommand);
             }
             var unresolved = FreeXRibbonCommandCatalog

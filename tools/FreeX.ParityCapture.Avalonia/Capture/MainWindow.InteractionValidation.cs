@@ -163,8 +163,7 @@ public sealed partial class MainWindow
             IRibbonCommand? command = null;
             var resolved = registry is not null && registry.TryGet(row.CommandId, out command) && command is not null;
             var functional = resolved && command is not EmptyRibbonCommand;
-            var explicitlyDisabled = command is DisabledNoOpRibbonCommand ||
-                command is IRibbonStatefulCommand stateful && !stateful.GetState().IsEnabled;
+            var explicitlyDisabled = command is IRibbonStatefulCommand stateful && !stateful.GetState().IsEnabled;
             results.Add(new InteractionValidationResult(
                 Id: row.RowId,
                 Category: "ribbon-command",
@@ -173,7 +172,9 @@ public sealed partial class MainWindow
                 Evidence: $"{row.CommandId.Value} | {row.TabHeader} > {row.GroupHeader} > {row.Label} | {command?.GetType().Name ?? "unregistered"}",
                 Note: functional || explicitlyDisabled
                     ? row.ActivationKey is null ? "" : $"Context: {row.ActivationKey}."
-                    : "Command resolves to EmptyRibbonCommand."));
+                    : resolved
+                        ? "Command resolves to EmptyRibbonCommand."
+                        : "Command is not registered by the Avalonia host."));
         }
 
         foreach (var tab in definition.Tabs)

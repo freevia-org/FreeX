@@ -262,19 +262,6 @@ internal sealed class StatefulValueRibbonCommand : IRibbonStatefulCommand
     public RibbonCommandState GetState() => _getState() ?? RibbonCommandState.Default;
 }
 
-/// <summary>A disabled placeholder for shared ribbon commands that are intentionally unavailable.</summary>
-internal sealed class DisabledNoOpRibbonCommand : IRibbonStatefulCommand
-{
-    public static readonly DisabledNoOpRibbonCommand Instance = new();
-
-    public void Execute(RibbonCommandContext context)
-    {
-        // Intentionally empty: unavailable commands render disabled and ignore activation.
-    }
-
-    public RibbonCommandState GetState() => new(IsEnabled: false);
-}
-
 /// <summary>
 /// Inserts a chart of a fixed <see cref="ChartType"/> over the live session's selection by running the
 /// shared Core <see cref="FreeX.Core.Commands.AddChartCommand"/> (built by
@@ -282,7 +269,7 @@ internal sealed class DisabledNoOpRibbonCommand : IRibbonStatefulCommand
 /// chart paints in the drawing-object overlay; on failure the Core guard message is surfaced on the
 /// status bar. The session is read each time (it may be replaced on open/new).
 /// </summary>
-internal sealed class InsertChartRibbonCommand : IRibbonCommand
+internal sealed class InsertChartRibbonCommand : IRibbonStatefulCommand
 {
     private readonly Func<WorkbookSession?> _session;
     private readonly ChartType _chartType;
@@ -309,6 +296,8 @@ internal sealed class InsertChartRibbonCommand : IRibbonCommand
             ? UiText.Format("ChartLoc_InsertedChartStatusFormat", _chartType)
             : result.ErrorMessage ?? UiText.Get("ChartLoc_InsertChartFailed"));
     }
+
+    public RibbonCommandState GetState() => new(IsEnabled: _session() is not null);
 }
 
 /// <summary>
@@ -365,14 +354,10 @@ internal static class AvaloniaRibbonComposition
     {
         var registry = new RibbonCommandRegistry();
 
-        // Seed every canonical id the shared definition emits with the shared no-op stub, so the shared
-        // definition's richer surface (Draw/Help tabs, deeper menus) renders enabled without a crash even
-        // before any real handler is wired. Real handlers below override the relevant ids.
-        var definition = BuildDefinition();
-        foreach (var id in FreeXRibbonCommandCatalog.Enumerate(definition))
-            registry.Register(id, EmptyRibbonCommand.Instance);
-
-        // Override the representative formatting toggles with the shared, platform-neutral commands so the
+        // Register only executable commands. AvaloniaRibbonRenderer deliberately disables controls whose
+        // canonical id is absent from the registry, so an omitted host callback remains visibly unavailable
+        // instead of being presented as an enabled command that silently does nothing.
+        // Register the representative formatting toggles with the shared, platform-neutral commands so the
         // Avalonia ribbon performs real edits (the same WorkbookSession logic the WPF host runs).
         Register(registry, "Bold", WorkbookFormatRibbonCommands.Bold(session, ApplyStatus(setStatus, "Bold")));
         Register(registry, "Italic", WorkbookFormatRibbonCommands.Italic(session, ApplyStatus(setStatus, "Italic")));
@@ -393,7 +378,7 @@ internal static class AvaloniaRibbonComposition
 
     /// <summary>
     /// Binds each non-null host callback to its canonical command id(s) via an <see cref="ActionRibbonCommand"/>,
-    /// replacing the no-op registration. Null callbacks leave the no-op so the smoke harness still builds.
+    /// Null callbacks leave the command unregistered so the renderer exposes the unavailable state honestly.
     /// </summary>
     private static void ApplyHostCallbacks(IRibbonCommandRegistry registry, AvaloniaRibbonHostCallbacks callbacks)
     {
