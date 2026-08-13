@@ -13,6 +13,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Themes.Fluent;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.AppServices;
 using Free.Shared.AppServices.Printing;
@@ -93,6 +94,20 @@ public sealed class MainWindowHeadlessTests : IDisposable
             // Headless drawing unavailable in this CI environment; skip gracefully.
             return false;
         }
+    }
+
+    private static async Task<T> AwaitWithUiPumps<T>(Task<T> task)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        while (!task.IsCompleted)
+        {
+            await Session.Dispatch(
+                static () => Dispatcher.UIThread.RunJobs(),
+                timeout.Token);
+            await Task.Delay(1, timeout.Token);
+        }
+
+        return await task.ConfigureAwait(false);
     }
 
     // ── Construction ────────────────────────────────────────────────────────────
@@ -275,11 +290,11 @@ public sealed class MainWindowHeadlessTests : IDisposable
         PresentationPrintRequest? printedRequest = null;
         IReadOnlyList<(string AutomationId, bool IsEnabled)> actions = [];
         MainWindow? window = null;
-        PrintSubmissionResult? result = null;
+        Task<PrintSubmissionResult>? printOperation = null;
         var capabilities = new LinuxNativeOutputCapabilities(
             LinuxVideoEncoderCapability.Unavailable("no encoder"));
 
-        var ran = await OnUiThreadAsync(async () =>
+        var ran = await OnUiThread(() =>
         {
             window = new MainWindow(
                 Array.Empty<string>(),
@@ -300,11 +315,12 @@ public sealed class MainWindowHeadlessTests : IDisposable
             actions.Should().HaveCount(window.LastPrintBackstagePlan!.LayoutChoices.Count);
             actions.Should().OnlyContain(action => action.IsEnabled);
             window.InvokeBackstagePrintActionForTests(actions[0].AutomationId).Should().BeTrue();
-            result = await window.BackstagePrintOperationForTests;
+            printOperation = window.BackstagePrintOperationForTests;
         });
 
         if (!ran) return;
-        result!.Succeeded.Should().BeTrue(result.Message);
+        var result = await AwaitWithUiPumps(printOperation!);
+        result.Succeeded.Should().BeTrue(result.Message);
         printedRequest.Should().NotBeNull();
         printedRequest!.Layout.Should().Be(
             window!.LastPrintBackstagePlan!.LayoutChoices[0].Layout.Layout);
