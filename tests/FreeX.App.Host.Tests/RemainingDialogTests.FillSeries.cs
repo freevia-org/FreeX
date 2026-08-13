@@ -108,10 +108,10 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
 
-        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this,");
-        source.Should().Contain("error ?? UiText.Get(\"FillSeriesStep_InvalidStepMessage\")");
-        source.Should().Contain("ResolveInvalidInput(inputError)");
-        source.Should().Contain("private TextBox ResolveInvalidInput(FillSeriesInputError inputError)");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(");
+        source.Should().Contain("FillSeriesPlanner.DescribeInputError(");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
+        source.Should().Contain("presentation.FocusTarget == FillSeriesInputFocusTarget.StopValue ? _stopBox : _stepBox");
     }
 
     [Fact]
@@ -136,8 +136,8 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
 
-        source.Should().Contain("UiText.Get(\"FillSeriesStep_InvalidStopMessage\")");
-        source.Should().Contain("FillSeriesPlanner.FocusTargetFor(inputError) == FillSeriesInputFocusTarget.StopValue");
+        source.Should().Contain("FillSeriesValidationTextProfile.Wpf");
+        source.Should().Contain("presentation.FocusTarget == FillSeriesInputFocusTarget.StopValue");
         source.Should().NotContain("string.Equals(error, UiText.Get(\"FillSeriesStep_InvalidStopMessage\")");
     }
 

@@ -26,8 +26,10 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("GridThreadedCommentReplyBox");
         source.Should().Contain("GridCommentInlineSaveButton");
         source.Should().Contain("GridCommentInlineCancelButton");
-        source.Should().Contain("existing is null ? \"Save\" : \"Apply\"");
-        source.Should().Contain("Content = \"Cancel\"");
+        source.Should().Contain("UiText.Get(existing is null");
+        source.Should().Contain("? \"GridInlineComment_SaveButton\"");
+        source.Should().Contain(": \"GridInlineComment_ApplyButton\"");
+        source.Should().Contain("Content = UiText.Get(\"GridInlineComment_CancelButton\")");
         source.Should().Contain("row.Children.Add(saveButton);");
         source.Should().Contain("row.Children.Add(cancelButton);");
         source.Should().Contain("Width = 72");
@@ -73,7 +75,7 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("ReviewSessionController.ToggleAllNotesVisibility()");
         source.Should().NotContain("new ShowHideCommentCommand");
         source.Should().NotContain("new ShowAllNotesCommand");
-        source.Should().Contain("CommentListWindow.CreateNoteItems(sheet.Comments)");
+        source.Should().Contain("ExecuteShowAllNotes();");
         source.Should().NotContain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
         source.Should().NotContain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
         source.Should().NotContain("_messageService.ShowInfo(text, UiText.Get(\"MainWindowMessage_CommentsTitle\"))");

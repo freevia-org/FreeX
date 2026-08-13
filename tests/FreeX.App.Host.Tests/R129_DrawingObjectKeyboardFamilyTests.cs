@@ -37,7 +37,7 @@ public sealed class R129_DrawingObjectKeyboardFamilyTests
         {
             using var harness = DrawingObjectKeyboardHarness.Create();
             var sheet = harness.Sheet;
-            var activeCell = new CellAddress(sheet.Id, 0, 0);
+            var activeCell = new CellAddress(sheet.Id, 1, 1);
             harness.SetActiveCell(activeCell);
 
             var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 5, 5), Width = 100, Height = 60 };

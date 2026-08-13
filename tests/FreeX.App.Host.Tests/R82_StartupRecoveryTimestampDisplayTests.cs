@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO;
-using System.Reflection;
 using FluentAssertions;
 using Free.Shared.AppServices;
 
@@ -10,24 +9,14 @@ namespace FreeX.App.Host.Tests;
 /// Regression coverage for R82-services-autosave-recovery-5-3: the startup recovery prompt must
 /// surface the autosave timestamp (Excel's Document Recovery pane always shows "last autosaved at
 /// HH:MM" next to each recovered file) instead of leaving the user to guess how fresh/stale an
-/// offered snapshot is. App.FormatRecoveryTimestampForDisplay produces that display string, reusing
-/// GetCandidateTimestamp's parse-with-fallback-to-file-mtime logic so it always matches what
-/// dedup/ordering already compute internally.
+/// offered snapshot is. AutosaveRecoveryOfferPlanner.FormatTimestamp produces that display string,
+/// reusing the shared candidate processor's parse-with-fallback-to-file-mtime logic so it always
+/// matches what dedup/ordering already compute internally.
 /// </summary>
 public sealed class R82_StartupRecoveryTimestampDisplayTests
 {
-    private static string InvokeFormatRecoveryTimestampForDisplay(AutosaveRecoveryCandidate candidate)
-    {
-        var method = typeof(App).GetMethod(
-            "FormatRecoveryTimestampForDisplay",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-
-        return (string)method!.Invoke(null, [candidate])!;
-    }
-
     [Fact]
-    public void FormatRecoveryTimestampForDisplay_UsesSidecarTimestamp_FormattedInLocalTime()
+    public void FormatTimestamp_UsesSidecarTimestamp_FormattedInLocalTime()
     {
         // The sidecar stores the autosave time as UTC ISO-8601 (see AutosaveSnapshotCoordinator's
         // "TimestampUtc = DateTimeOffset.UtcNow.ToString("O")"). Before this fix, that value never
@@ -44,13 +33,13 @@ public sealed class R82_StartupRecoveryTimestampDisplayTests
         var candidate = new AutosaveRecoveryCandidate(
             @"C:\nonexistent\recovery-1-w0.fxl", @"C:\nonexistent\recovery-1-w0.sidecar.json", sidecar);
 
-        var display = InvokeFormatRecoveryTimestampForDisplay(candidate);
+        var display = AutosaveRecoveryOfferPlanner.FormatTimestamp(candidate);
 
         display.Should().Be(timestampUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture));
     }
 
     [Fact]
-    public void FormatRecoveryTimestampForDisplay_FallsBackToSnapshotFileMtime_WhenSidecarTimestampMissing()
+    public void FormatTimestamp_FallsBackToSnapshotFileMtime_WhenSidecarTimestampMissing()
     {
         // No-regression sibling: when the sidecar's TimestampUtc is missing/unparseable (e.g. a
         // corrupt or legacy sidecar), the DISPLAYED timestamp must still fall back to the
@@ -72,7 +61,7 @@ public sealed class R82_StartupRecoveryTimestampDisplayTests
         var candidate = new AutosaveRecoveryCandidate(
             snapshotPath, snapshotPath + ".sidecar.json", sidecar);
 
-        var display = InvokeFormatRecoveryTimestampForDisplay(candidate);
+        var display = AutosaveRecoveryOfferPlanner.FormatTimestamp(candidate);
 
         var expected = new DateTimeOffset(mtimeUtc, TimeSpan.Zero).ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
         display.Should().Be(expected);

@@ -200,7 +200,8 @@ public sealed partial class RemainingDialogTests
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("TryCreateResult(input, out var result, out var error)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, error ?? UiText.Get(\"Zoom_EnterAValidZoomPercent\")");
+        source.Should().Contain("error ?? UiText.Get(ZoomDialogPlanner.ValidationFallbackResourceKey)");
+        source.Should().Contain("UiText.Get(validationError.ResourceKey)");
         source.Should().Contain("_customZoomButton.IsChecked = true");
         source.Should().Contain("DialogFocus.FocusAndSelect(_zoomBox);");
     }
