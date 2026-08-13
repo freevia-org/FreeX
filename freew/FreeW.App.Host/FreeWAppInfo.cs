@@ -5,7 +5,7 @@ namespace FreeW.App.Host;
 public static class FreeWAppInfo
 {
     public static AboutDialogPresentation AboutPresentation { get; } =
-        FreeWAboutDialogPresentation.Create(typeof(FreeWAppInfo).Assembly, "WPF");
+        FreeWAboutDialogPresentation.Create(typeof(FreeWAppInfo).Assembly);
 
     public static string AboutText => AboutPresentation.AboutText;
 

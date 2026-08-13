@@ -12,6 +12,8 @@ public static class FreeWProductInfo
     public const string HelpUrl = "https://github.com/tony-xmelon/FreeX/tree/main/freew";
     public const string FeedbackUrl = "https://github.com/tony-xmelon/FreeX/issues/new?title=FreeW%20feedback";
     public const string LatestReleaseUrl = "https://github.com/tony-xmelon/FreeX/actions/workflows/freew-release.yml";
+    public const string DesktopRendererDescription =
+        "Built with .NET 10. FreeW provides WPF and Avalonia desktop renderers.";
     public const string TrademarkNotice = "FreeW is not affiliated with, endorsed by, or sponsored by Microsoft. Microsoft Word is a trademark of Microsoft Corporation.";
     public const string ProjectLicenseNotice = "FreeW Source License: Copyright (c) 2026 FreeX contributors. All rights reserved. Tester binaries may be downloaded and run for personal evaluation and testing. Redistribution or commercial distribution requires separate written permission from the copyright holder.";
     public const string PrivacyNotice = "Privacy: FreeW is a local desktop app. Documents are opened, edited, and saved on this machine unless the user explicitly chooses an external sharing path. Local tester diagnostics stay on the user's machine unless the user chooses to share them. FreeW does not intentionally collect document contents, filenames, or file paths in diagnostics or crash reports.";
@@ -32,10 +34,9 @@ public static class FreeWProductInfo
             version.AssemblyVersion);
     }
 
-    public static string CreateAboutText(Assembly assembly, string uiFramework)
+    public static string CreateAboutText(Assembly assembly)
     {
         ArgumentNullException.ThrowIfNull(assembly);
-        ArgumentException.ThrowIfNullOrWhiteSpace(uiFramework);
 
         return $"""
                {ProductName}
@@ -43,7 +44,7 @@ public static class FreeWProductInfo
 
                A free word processor for DOCX editing and format-fidelity work.
 
-               Built with .NET 10 and {uiFramework}.
+               {DesktopRendererDescription}
 
                {TrademarkNotice}
 

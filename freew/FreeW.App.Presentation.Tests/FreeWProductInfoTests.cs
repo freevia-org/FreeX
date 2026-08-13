@@ -6,15 +6,15 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class FreeWProductInfoTests
 {
     [Fact]
-    public void About_text_shares_product_content_and_varies_only_the_true_host_framework()
+    public void About_text_is_renderer_neutral_for_paired_hosts()
     {
         var assembly = typeof(FreeWProductInfoTests).Assembly;
-        var wpf = FreeWProductInfo.CreateAboutText(assembly, "WPF");
-        var avalonia = FreeWProductInfo.CreateAboutText(assembly, "Avalonia");
+        var wpf = FreeWProductInfo.CreateAboutText(assembly);
+        var avalonia = FreeWProductInfo.CreateAboutText(assembly);
 
-        wpf.Should().Contain("Built with .NET 10 and WPF.");
-        avalonia.Should().Contain("Built with .NET 10 and Avalonia.");
-        wpf.Replace("WPF", "Avalonia", StringComparison.Ordinal).Should().Be(avalonia);
+        wpf.Should().Contain(FreeWProductInfo.DesktopRendererDescription);
+        wpf.Should().Contain("WPF and Avalonia desktop renderers");
+        wpf.Should().Be(avalonia);
         avalonia.Should().Contain(FreeWProductInfo.ProjectLicenseNotice);
         avalonia.Should().Contain(FreeWProductInfo.PrivacyNotice);
         avalonia.Should().Contain(FreeWProductInfo.SourceNotice);
@@ -25,8 +25,8 @@ public sealed class FreeWProductInfoTests
     public void About_presentation_contract_is_shared_by_both_hosts()
     {
         var assembly = typeof(FreeWProductInfoTests).Assembly;
-        var wpf = FreeWAboutDialogPresentation.Create(assembly, "WPF");
-        var avalonia = FreeWAboutDialogPresentation.Create(assembly, "Avalonia");
+        var wpf = FreeWAboutDialogPresentation.Create(assembly);
+        var avalonia = FreeWAboutDialogPresentation.Create(assembly);
 
         wpf.WindowTitle.Should().Be(FreeWAboutDialogPresentation.WindowTitle);
         avalonia.DialogAutomationId.Should().Be(wpf.DialogAutomationId);
@@ -34,7 +34,7 @@ public sealed class FreeWProductInfoTests
         avalonia.OkAutomationId.Should().Be(wpf.OkAutomationId);
         avalonia.HelpText.Should().Be(wpf.HelpText);
         avalonia.AvaloniaRootRightMargin.Should().Be(17);
-        wpf.AboutText.Replace("WPF", "Avalonia", StringComparison.Ordinal).Should().Be(avalonia.AboutText);
+        wpf.AboutText.Should().Be(avalonia.AboutText);
     }
 
     [Fact]

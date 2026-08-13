@@ -6,7 +6,7 @@ namespace FreeW.App.Avalonia;
 internal sealed class AboutDialog : AvaloniaAboutDialog
 {
     public AboutDialog()
-        : base(FreeWAboutDialogPresentation.Create(typeof(AboutDialog).Assembly, "Avalonia"))
+        : base(FreeWAboutDialogPresentation.Create(typeof(AboutDialog).Assembly))
     {
     }
 }
